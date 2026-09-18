@@ -192,3 +192,60 @@ export function canonicalBusinessModel(raw: unknown): BusinessModelCode {
   }
   return ai && delivery === "saas" ? "ai_saas" : "unknown";
 }
+
+// ── DOES THE COMPANY'S OWN QUOTE SUPPORT THE CODE? (P5.2) ──────────────────
+//
+// Canary d7012ba5: dot.cards was accepted as b2b_saas on its own words —
+// "We operate across consumer software, B2B SaaS, subscriptions, ecommerce,
+// and connected hardware". The quote was real and correctly cited; it simply
+// did not say the company IS a B2B SaaS business. The verifier checks that a
+// quote exists; this checks that the quote does not argue against the code.
+//
+// Read with the same vocabulary, whole words:
+//
+//   mixed_audience       a quote names both B2B and consumer
+//   mixed_delivery       a quote names services beside SaaS/software
+//   contradicts_value    the quotes name an audience or delivery the code
+//                        excludes, and never the one it claims
+//
+// A quote that names no facet ("a collaborative platform for event
+// organizers") says nothing against the code and leaves the reading standing.
+// A quote with a negation ("not an agency") is not read for facets at all —
+// silence, never a contradiction. The direction of every error here is
+// review, never a false proof.
+
+const VALUE_FACETS: Readonly<Record<BusinessModelCode, { audience: Audience | null; delivery: Delivery | null }>> = {
+  b2b_saas: { audience: "b2b", delivery: "saas" },
+  ai_saas: { audience: null, delivery: "saas" },
+  b2b_software: { audience: "b2b", delivery: "software" },
+  b2b_service: { audience: "b2b", delivery: "service" },
+  consumer: { audience: "consumer", delivery: null },
+  unknown: { audience: null, delivery: null },
+};
+
+export type ExcerptInconsistency = "mixed_audience" | "mixed_delivery" | "contradicts_value";
+
+export function excerptInconsistency(
+  code: BusinessModelCode, excerpts: readonly string[],
+): ExcerptInconsistency | null {
+  const audiences = new Set<Audience>();
+  const deliveries = new Set<Delivery>();
+  for (const e of excerpts) {
+    const words = tokens(normalise(e));
+    if (words.length === 0 || words.some((w) => NEGATION.has(w))) continue;
+    for (const w of words) {
+      if (AUDIENCE[w]) audiences.add(AUDIENCE[w]);
+      if (DELIVERY[w]) deliveries.add(DELIVERY[w]);
+    }
+  }
+  if (audiences.size > 1) return "mixed_audience";
+  if (deliveries.has("service") && (deliveries.has("saas") || deliveries.has("software"))) return "mixed_delivery";
+  const want = VALUE_FACETS[code];
+  if (want.audience && audiences.size > 0 && !audiences.has(want.audience)) return "contradicts_value";
+  if (want.delivery && deliveries.size > 0) {
+    const software = want.delivery === "saas" || want.delivery === "software";
+    const said = software ? (deliveries.has("saas") || deliveries.has("software")) : deliveries.has(want.delivery);
+    if (!said) return "contradicts_value";
+  }
+  return null;
+}

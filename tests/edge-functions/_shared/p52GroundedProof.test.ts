@@ -11,6 +11,8 @@
 //            c584fd77) the whole-company verdict blocked every business model;
 //            the business-model claim now has its own decision
 //   HEAD-0   LinkedIn's employeeCount 0 ("no number") became a verified FAIL
+//   EXCERPT-1 (canary d7012ba5) "consumer software, B2B SaaS, …" was accepted as
+//            b2b_saas: the quote was real but did not support the code
 //   MATCH-1  industry matching was substring: "AI" matched "Retail"
 //   E2E-1    persistence was checked by grepping source; this runs the real
 //            engine through checkpoint → restore → Stage-2 rebuild → view
@@ -32,10 +34,10 @@ import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/e
 import type { EvidenceDimension, EvidenceItem } from "../../../supabase/functions/_shared/candidateObservation.ts";
 import { checkCriterion, evaluateEligibility } from "../../../supabase/functions/_shared/candidateEligibility.ts";
 import {
-  BUSINESS_MODEL_CODES, canonicalBusinessModel, matchBusinessModel,
+  BUSINESS_MODEL_CODES, canonicalBusinessModel, excerptInconsistency, matchBusinessModel,
 } from "../../../supabase/functions/_shared/businessModelMatch.ts";
 import {
-  GROUNDED_CLASSIFIER_PROMPT, GROUNDED_RESPONSE_SHAPE, parseGroundedResult,
+  businessModelDecision, GROUNDED_CLASSIFIER_PROMPT, GROUNDED_RESPONSE_SHAPE, parseGroundedResult,
 } from "../../../supabase/functions/_shared/groundedClaims.ts";
 import {
   BATCH_EVALUATION_PROMPT, buildBatchPayload, evaluateBatchResponse,
@@ -570,4 +572,53 @@ Deno.test("HEAD-0: LinkedIn's employeeCount 0 is a missing number — unknown at
   assertEquals(size(4000), "fail");
   assertEquals(size(20), "pass");
   assertFalse(evaluateEligibility(sized, graphOf([US(), grounded("b2b saas", "accepted"), ev("headcount", 0)])).eligibility === "ineligible");
+});
+
+
+// ═════════════════════════════════════════════════════════════ EXCERPT-1 ══
+
+Deno.test("EXCERPT-1: an accepted business model must not be argued against by its own quotes", () => {
+  // The live excerpts from canaries d7012ba5 / c584fd77, verbatim.
+  const DOT = "We operate across consumer software, B2B SaaS, subscriptions, ecommerce, and connected hardware";
+  const cases: Array<[string, string[], string | null]> = [
+    ["b2b_saas", [DOT], "mixed_audience"],
+    ["b2b_saas", ["Eventeny’s real-time collaborative platform empowers organizers"], null],
+    ["b2b_saas", ["WelcomeHome is a CRM built specifically for senior living and home care sales and marketing teams"], null],
+    ["consumer", ["the free Propel app"], null],
+    ["b2b_service", ["content-driven commerce platform"], null],
+    ["ai_saas", ["DualEntry is the first ERP built AI-native from the ground up."], null],
+    // Synthetic: each rule on its own.
+    ["b2b_saas", ["a consumer app for teens"], "contradicts_value"],
+    ["consumer", ["B2B SaaS for revenue teams"], "contradicts_value"],
+    ["b2b_saas", ["We are a B2B marketing agency"], "contradicts_value"],
+    ["b2b_service", ["a SaaS platform"], "contradicts_value"],
+    ["b2b_software", ["software and services for law firms"], "mixed_delivery"],
+    ["b2b_saas", ["Built for B2B teams", "loved by consumers"], "mixed_audience"],
+    // Not a contradiction: negations are not read; AI SaaS names no audience.
+    ["b2b_saas", ["We are not a consumer app"], null],
+    ["ai_saas", ["an AI app consumers love"], null],
+  ];
+  for (const [code, ex, want] of cases) assertEquals(excerptInconsistency(code as never, ex), want, `${code} ← ${ex.join(" | ")}`);
+
+  // Through the decision and into eligibility, on the live dot.cards verification.
+  const verification = (value: string, excerpt: string) => ({
+    version: "grounded-claims-v1",
+    classifier_result: { business_model: { value, confidence: 0.9, claims: [] } },
+    validated_claims: [{ claim: "self-description", claim_type: "business_model", evidence_ids: ["company_description:linkedin:d1"],
+      evidence_excerpts: [{ evidence_id: "company_description:linkedin:d1", excerpt }] }],
+    rejected_claims: [], grounding_score: 0.6667, final_grounded_decision: "review", downgrade_reasons: [], unacknowledged_conflicts: [],
+  }) as never;
+  assertEquals(businessModelDecision(verification("b2b_saas", DOT)), { decision: "review", reasons: ["self_description_mixed_audience"] });
+  assertEquals(businessModelDecision(verification("b2b_saas", "Eventeny’s real-time collaborative platform empowers organizers")).decision, "accepted");
+
+  const company = (value: string, excerpt: string) => ({
+    key: "c1", company: { company_name: "x", linkedin_company_url: null, canonical_domain: null, website: null, geography: null, external_source_id: "x" },
+    observations: [], evidence_registry: null, hiring_jobs: [], hiring_assessment: null, first_in_function: null,
+    enriched: null, identity: null, found_by: [], grounded: verification(value, excerpt),
+  }) as never;
+  const cs = deriveMissionCriteria(compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission);
+  const industry = (value: string, excerpt: string) =>
+    evaluateEligibility(cs, graphOf([US(), ...companyEvidenceItems(company(value, excerpt))])).hard_checks.industry;
+  assertEquals(industry("b2b_saas", DOT), "unknown", "dot.cards: a mixed self-description is not proof — pending");
+  assertEquals(industry("b2b_saas", "Eventeny’s real-time collaborative platform empowers organizers"), "pass");
 });

@@ -25,7 +25,7 @@
 //
 // PURE. No network, provider, model or database access.
 
-import { canonicalBusinessModel } from "./businessModelMatch.ts";
+import { canonicalBusinessModel, excerptInconsistency } from "./businessModelMatch.ts";
 import {
   abstractSourceLabel, findEvidence, hardFactsForPrompt,
   type EvidenceItem, type EvidenceRegistry, type EvidenceType,
@@ -479,7 +479,9 @@ export function verifyGroundedResult(i: VerifyInput): GroundedVerification {
 //   accepted   a business model was named (not unknown), at least one
 //              business-model claim survived verification, no business-model
 //              claim was caught misquoting or mis-citing, the model's own
-//              confidence is at least BUSINESS_MODEL_MIN_CONFIDENCE, and no
+//              confidence is at least BUSINESS_MODEL_MIN_CONFIDENCE, the
+//              claims' own quotes do not argue against the code (mixed
+//              audience, mixed delivery, or a contradicting facet), and no
 //              unacknowledged conflict sits on evidence that can carry one
 //   review     anything else
 //
@@ -508,6 +510,13 @@ export function businessModelDecision(v: GroundedVerification): BusinessModelDec
     }
   }
   if (bm && Number(bm.confidence) < BUSINESS_MODEL_MIN_CONFIDENCE) reasons.push("low_model_confidence");
+  // THE QUOTES MUST NOT ARGUE AGAINST THE CODE (canary d7012ba5: "consumer
+  // software, B2B SaaS, …" accepted as b2b_saas). See `excerptInconsistency`.
+  if (bm && bm.value !== "unknown" && validated.length > 0) {
+    const excerpts = validated.flatMap((c) => c.evidence_excerpts.map((x) => x.excerpt));
+    const inconsistency = excerptInconsistency(bm.value, excerpts);
+    if (inconsistency) reasons.push(`self_description_${inconsistency}`);
+  }
   const carriers = CLAIM_EVIDENCE_RULES.business_model.allowed as readonly string[];
   for (const id of v.unacknowledged_conflicts ?? []) {
     if (carriers.includes(String(id).split(":")[0])) reasons.push(`unacknowledged_conflict:${id}`);
