@@ -191,7 +191,7 @@ import {
   COMPANY_EMPLOYEES_SCRAPER_MODES, PROFILE_SEARCH_SCRAPER_MODES,
 } from "./hiringActorCatalog.ts";
 import {
-  CAPABILITY_REGISTRY, CapabilityContainmentError, firstInFunctionRequested, onCapabilityExhausted,
+  CAPABILITY_REGISTRY, CapabilityContainmentError, firstInFunctionRequested, isProviderAllowedForCapability, onCapabilityExhausted,
   type CapabilityId, type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
 import { normalizeLocationName } from "./harvestApiPeople.ts";
@@ -5013,6 +5013,26 @@ export async function runCapabilityPlan(
           const provider = sel.actor_key;
           if (schemaFailure) break;
           if (discoveryStoppedByControl) break;
+          // ── CONTAINMENT IS CHECKED BEFORE THE CALL, NOT BY THROWING ──────
+          //
+          // A discovery REPLAN proposes actors from the closed catalog, which
+          // is wider than this mission's capability graph: canary 849d6782 had
+          // the replan propose memo23 for a job_discovery mission, and the only
+          // thing that noticed was `guardedInvoker` — which throws, and an
+          // unhandled CapabilityContainmentError ends the whole mission. The
+          // graph is the boundary, so it is consulted here and the selection is
+          // refused, exactly like any other policy refusal.
+          if (!isProviderAllowedForCapability(opts.plan, provider, cap)) {
+            tried.push(provider);
+            state.provider_attempts.push({
+              capability: cap, provider,
+              attempt: state.provider_attempts.filter((a) => a.capability === cap && a.provider === provider).length + 1,
+              outcome: "refused_policy", rows: 0, cost_units: 0,
+              reason: `${provider} is outside this mission's capability graph for ${cap}`,
+            });
+            log("discovery_actor_outside_graph", { provider, capability: cap });
+            continue;
+          }
           // P4: a route stopped by an amendment stays stopped; its siblings run.
           if (routeStoppedFor(provider)) {
             tried.push(provider);

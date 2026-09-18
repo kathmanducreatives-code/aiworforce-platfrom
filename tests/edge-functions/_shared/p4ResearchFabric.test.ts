@@ -35,7 +35,7 @@ import { parseRouteControlProposal } from "../../../supabase/functions/_shared/g
 import {
   CHECKPOINT_RESULT_KEY, readCheckpointCompanies, RESUME_STATE_VERSION,
 } from "../../../supabase/functions/_shared/leadResumeState.ts";
-import { emptyDiscoverySelector } from "./discoverySelectorFixture.ts";
+import { emptyDiscoverySelector, stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 globalThis.fetch = () => { throw new Error("P4 fabric tests must not reach the network"); };
 
@@ -489,4 +489,48 @@ Deno.test("stopRoutes is a pure version bump over exactly the named routes", () 
   assertEquals(plan.routes[1].refused, null, "the input plan is not mutated");
   assertEquals([v2.version, v2.amendment!.approved_by, v2.amendment!.component], [2, "code_policy", "retrieval_controller"]);
   assertEquals(v2.routes[0], plan.routes[0]);
+});
+
+Deno.test("engine: a discovery actor outside the mission's graph is refused, not thrown (canary 849d6782)", async () => {
+  // The replan proposes from the closed CATALOG, which is wider than this
+  // mission's graph. memo23 is a real, carded actor — and not reachable here.
+  const { sent, result } = await engine({
+    steps: [jobStep(JOB_A), ...tail],
+    control: (i) => i.summary.wave === 1
+      ? { action: "add_route", capability: "job_discovery", actor_key: "apify_yc_companies_memo23", input: { maxItems: 10 }, trigger: "insufficient_candidates", rationale: "widen" }
+      : { action: "continue" },
+  });
+  // The run SURVIVES: before this fix the containment guard threw and the whole
+  // mission ended `failed:unhandled_exception`.
+  assert(result.companies.length > 0, "the mission still has its pool");
+  assertEquals(sent.filter((x) => x.actor === "apify_yc_companies_memo23").length, 0, "it was never invoked");
+  const rec = result.state.route_controls[0];
+  assertEquals([rec.accepted, rec.reason], [false, "actor_not_ready"], "route control refuses it first");
+});
+
+Deno.test("engine: a DISCOVERY PLANNER proposal outside the graph is refused by the stage, and the run survives", async () => {
+  // No job_discovery step in the chain, so the stage asks `planDiscovery` —
+  // which proposes memo23: carded, validated by the catalog, and not in this
+  // mission's graph. This is the exact shape that ended canary 849d6782 as
+  // `failed:unhandled_exception`.
+  const sent: Sent[] = [];
+  const d = engineDeps(sent, { steps: [] });
+  // No chain planner at all, so the stage asks `planDiscovery` itself — the
+  // path a live replan takes.
+  const deps = { ...d.deps, planDiscovery: stubDiscoverySelector() as never } as Record<string, unknown>;
+  delete deps.planExecution;
+  const result = await runCapabilityPlan(deps as never, {
+    mission: MISSION, plan: GRAPH, maxCandidates: 10,
+    readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
+    specMode: "enforce", specScope: { workspace_id: "ws-p4c", lineage_id: "lineage-p4c" },
+  } as never) as never as { state: Record<string, any>; companies: EngineCompany[] };
+
+  assertEquals(sent.filter((x) => x.actor === "apify_yc_companies_memo23").length, 0, "never invoked");
+  const attempts = (result.state.provider_attempts as Array<Record<string, unknown>>)
+    .filter((a) => a.provider === "apify_yc_companies_memo23");
+  assert(attempts.length > 0, "the refusal is recorded, not silent");
+  for (const a of attempts) {
+    assertEquals(a.outcome, "refused_policy");
+    assert(String(a.reason).includes("outside this mission's capability graph"));
+  }
 });
