@@ -225,7 +225,8 @@ import {
 import { hiringActorCard } from "./hiringActorCatalog.ts";
 // ── P2: the execution spine ──────────────────────────────────────────────────
 import {
-  compactObservation, entityHintFromCompany, observationFromCompany, type CandidateObservation, type EvidenceDimension,
+  CANDIDATE_OBSERVATION_VERSION, compactObservation, entityHintFromCompany, observationFromCompany,
+  type CandidateObservation, type EvidenceItem, type EvidenceDimension,
   type ObservationContext,
 } from "./candidateObservation.ts";
 import {
@@ -8078,6 +8079,26 @@ export async function runCapabilityPlan(
           break;
         }
         c.grounded = grounded ?? null;
+        // P5.2 — THE VERIFIED SELF-DESCRIPTION OUTLIVES THE SLICE. `grounded`
+        // is not in the checkpoint snapshot, so a restored company would lose
+        // the only thing that can prove its business model. Recorded as an
+        // observation, which the snapshot does carry, keyed on the same
+        // evidence id so the graph never counts it twice.
+        {
+          const bmItem = groundedBusinessModelItem(c, opts.identity?.task_id ?? null, new Date().toISOString());
+          if (bmItem) {
+            recordObservation(c, {
+              version: CANDIDATE_OBSERVATION_VERSION,
+              observation_id: `obs_grd_${bmItem.evidence_id}`.slice(0, 64),
+              capability: "company_brain_qualification", actor_key: "grounded_evidence_evaluation",
+              provider: "engine", route_id: null, plan_version: currentPlan()?.version ?? null,
+              provider_call_id: null, source_record_id: null, source_url: null,
+              observed_at: bmItem.observed_at,
+              entity_hint: entityHintFromCompany(c.company),
+              evidence: [bmItem],
+            });
+          }
+        }
 
         // ── ENFORCE ONLY, AND ENFORCE MEANS ENFORCE ─────────────────────────
         //
@@ -10418,6 +10439,45 @@ export interface ResearchFabricProjection {
   route_controls: RouteControlRecord[];
 }
 
+/**
+ * The business model, when the company's own words established it.
+ *
+ * The registry holds the description, the YC record and any fetched page as
+ * HARD FACTS; `groundedClaims` then checks every excerpt against that text and
+ * drops what it cannot find. What survives is the company's own statement,
+ * quoted and verified — admitted as proof at `model_extraction`, which
+ * `compareEvidence` ranks below any provider field that disagrees.
+ *
+ * Null when the verification failed, when no business-model claim survived, or
+ * when the grounder itself said the model is unknown — the honest answer for a
+ * company whose description does not say what it sells.
+ */
+export function groundedBusinessModelItem(
+  c: EngineCompany, missionId: string | null, at: string,
+): EvidenceItem | null {
+  const g = c.grounded;
+  const bm = g?.classifier_result?.business_model;
+  const claims = (g?.validated_claims ?? []).filter((x) => x.claim_type === "business_model");
+  if (!g || !bm || bm.value === "unknown" || claims.length === 0 || g.final_grounded_decision === "fail") {
+    return null;
+  }
+  const excerpt = claims.flatMap((x) => x.evidence_excerpts).map((x) => x.excerpt).find(Boolean) ?? null;
+  return {
+    evidence_id: `grd_${c.key}_business_model`, company_key: c.key, dimension: "business_model",
+    value: bm.value.replace(/_/g, " "), status: "proven",
+    source: {
+      provider: "engine", actor: "grounded_evidence_evaluation", provider_call_id: null,
+      url: null, excerpt: excerpt ? excerpt.slice(0, 280) : null,
+    },
+    method: "model_extraction", observed_at: at, valid_until: null,
+    // NEVER `high`: a verified reading of a self-description is weaker than a
+    // provider field, and the graph must rank it that way.
+    confidence: g.final_grounded_decision === "pass" ? "medium" : "low",
+    derived_from: [...new Set(claims.flatMap((x) => x.evidence_ids))],
+    mission_id: missionId, origin: "web",
+  };
+}
+
 /** Every evidence item for one company: route observations, the registry, derived verdict facts. */
 export function companyEvidenceItems(c: EngineCompany, missionId: string | null = null) {
   const items = [
@@ -10444,26 +10504,8 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
   // model that survives THAT is not a model's opinion — it is the company's own
   // statement, quoted and verified — so it is admitted as proof, at medium
   // confidence, ranked below any provider field that disagrees.
-  const g = c.grounded;
-  const bm = g?.classifier_result?.business_model;
-  const bmClaims = (g?.validated_claims ?? []).filter((x) => x.claim_type === "business_model");
-  if (g && bm && bm.value !== "unknown" && bmClaims.length > 0 && g.final_grounded_decision !== "fail") {
-    const excerpt = bmClaims.flatMap((x) => x.evidence_excerpts).map((x) => x.excerpt).find(Boolean) ?? null;
-    items.push({
-      evidence_id: `grd_${c.key}_business_model`, company_key: c.key, dimension: "business_model",
-      value: bm.value.replace(/_/g, " "), status: "proven",
-      source: {
-        provider: "engine", actor: "grounded_evidence_evaluation", provider_call_id: null,
-        url: null, excerpt: excerpt ? excerpt.slice(0, 280) : null,
-      },
-      method: "model_extraction", observed_at: at, valid_until: null,
-      // NEVER `high`: a verified reading of a self-description is weaker than a
-      // provider field, and `compareEvidence` must rank it that way.
-      confidence: g.final_grounded_decision === "pass" ? "medium" : "low",
-      derived_from: [...new Set(bmClaims.flatMap((x) => x.evidence_ids))],
-      mission_id: missionId, origin: "web",
-    });
-  }
+  const groundedItem = groundedBusinessModelItem(c, missionId, at);
+  if (groundedItem) items.push(groundedItem);
   if (c.hiring_assessment?.verdict === "hiring_verified") {
     derived("hiring", true, "proven", c.hiring_jobs.map((j) => j.job_url ?? "").filter(Boolean).slice(0, 5), "high");
   }

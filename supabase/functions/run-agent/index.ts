@@ -6123,7 +6123,12 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             // the evidence that set it.
             workbench_mission_view: capabilityRun && persistedMission ? await (async () => {
               try {
-                const criteria = persistedMission.criteria ?? deriveMissionCriteria(persistedMission);
+                // DERIVED, NEVER READ BACK. `criteria` is a projection of the
+                // mission, not part of its hash — and a mission approved before
+                // a semantics change carries the OLD projection. Canary
+                // 62c8b188 still enforced "Company kind: startup" as provable
+                // from a card compiled before P5.2 said it was not.
+                const criteria = deriveMissionCriteria(persistedMission);
                 const anchor = anchorForCapability(String(missionPlan?.entry_capability ?? "")) ?? null;
                 const candidates = missionCandidatesFrom(capabilityRun, {
                   missionId: String(task.id),

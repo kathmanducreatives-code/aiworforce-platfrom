@@ -525,3 +525,35 @@ Deno.test("P5.2: only a VERIFIED self-description becomes evidence, and never as
   assertFalse(has({ ...pass, classifier_result: { business_model: { value: "unknown", confidence: 0.2, claims: [] } } }));
   assertFalse(has(null));
 });
+
+Deno.test("P5.2: the view derives criteria from the mission, so an approved card cannot enforce a stale rule", () => {
+  // A mission APPROVED before P5.2 carries the old projection, in which the
+  // company kind was a provable hard rule. Canary 62c8b188 enforced exactly
+  // that and stranded all 19 candidates.
+  const stale = JSON.parse(JSON.stringify(MISSION)) as typeof MISSION & { criteria: MissionCriterion[] };
+  stale.criteria = deriveMissionCriteria(MISSION).map((c) =>
+    c.label === "Company kind: startup" ? { ...c, status: "ok" as const } : c);
+
+  const fresh = deriveMissionCriteria(stale);
+  assertEquals(fresh.find((c) => c.label === "Company kind: startup")!.status, "unprovable_today",
+    "deriving again gives today's truth, not the card's");
+
+  const g = graphOf([...hardProven(), ev("hiring", true)]);
+  assertEquals(evaluateEligibility(stale.criteria, g).eligibility, "pending", "the stale projection still gates");
+  assertEquals(evaluateEligibility(fresh, g).eligibility, "eligible", "the derived criteria do not");
+
+  // run-agent derives rather than reading the stored array.
+  const src = Deno.readTextFileSync(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
+  assert(/const criteria = deriveMissionCriteria\(persistedMission\);/.test(src));
+  assertFalse(/persistedMission\.criteria \?\? deriveMissionCriteria/.test(src));
+});
+
+Deno.test("P5.2: a verified business model is recorded as an observation, so it survives a continuation", () => {
+  const src = Deno.readTextFileSync(new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url));
+  const site = src.slice(src.indexOf("c.grounded = grounded ?? null;"), src.indexOf("// ── ENFORCE ONLY, AND ENFORCE MEANS ENFORCE"));
+  assert(/groundedBusinessModelItem\(/.test(site), "the item is built where the verification lands");
+  assert(/recordObservation\(c, \{/.test(site), "and kept as an observation, which the snapshot carries");
+  // The evidence id is stable, so the graph cannot count the live item and the
+  // restored observation as two separate claims.
+  assert(/`grd_\$\{c\.key\}_business_model`/.test(src));
+});
