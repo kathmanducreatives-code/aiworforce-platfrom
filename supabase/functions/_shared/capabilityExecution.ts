@@ -224,8 +224,17 @@ export function structuredRowsLookIntact(
     return { intact: false, reason: "rows are not objects" };
   }
   const r = first as Record<string, unknown>;
-  const identityish = ["id", "name", "companyName", "website", "linkedinUrl", "domain"]
-    .some((k) => r[k] !== undefined);
+  const IDENTITY = ["id", "name", "companyName", "website", "linkedinUrl", "linkedin_url", "domain"];
+  const carriesIdentity = (o: unknown) =>
+    !!o && typeof o === "object" && IDENTITY.some((k) => (o as Record<string, unknown>)[k] !== undefined);
+  // KNOWN-COMPANY LOOKUPS NEST THEIR COMPANY. atomus returns
+  // `{ input, status, summary: {linkedin_url, domain}, company: {…} }` and
+  // pvalyou `{ query, domain, record: {…} }`; both echo the company they were
+  // asked about (`input` / `query`), which is identity even on a not-found row.
+  // A job row carries none of these, so the transport check still catches one.
+  const identityish = carriesIdentity(r) ||
+    ["summary", "company", "record"].some((k) => carriesIdentity(r[k])) ||
+    typeof r.input === "string" || typeof r.query === "string";
   return identityish
     ? { intact: true, reason: "" }
     : { intact: false, reason: "no company identity field on the first row" };

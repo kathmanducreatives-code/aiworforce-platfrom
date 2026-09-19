@@ -364,3 +364,16 @@ Deno.test("run-agent runs the verifiers on canonical gaps, before the view, boun
     "(capabilityRun?.state.verifier_pending_runs?.length ?? 0)",
   ]) assert(src.includes(wired), `run-agent must carry: ${wired}`);
 });
+
+Deno.test("atomus and pvalyou rows are company-shaped to the transport check (no false shape violation)", async () => {
+  const { structuredRowsLookIntact } = await import("../../../supabase/functions/_shared/capabilityExecution.ts");
+  // The canary f9b5ad8e logged `provider_response_shape_violation` for atomus:
+  // its identity is nested under summary/company, and the check looked only
+  // at the top level. The real rows, from the live probes:
+  for (const row of FX.atomus as Row[]) assert(structuredRowsLookIntact([row]).intact, `atomus ${row.input}`);
+  for (const row of FX.pvalyou as Row[]) assert(structuredRowsLookIntact([row]).intact, `pvalyou ${row.query}`);
+  // A not-found lookup still names what it was asked about.
+  assert(structuredRowsLookIntact([{ input: "https://www.linkedin.com/company/nobody", status: "not_found" }]).intact);
+  // …and a job-shaped row is still a violation.
+  assertFalse(structuredRowsLookIntact([{ title: "Account Executive", location: "NYC" }]).intact);
+});
