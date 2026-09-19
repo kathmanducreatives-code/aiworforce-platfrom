@@ -55,6 +55,12 @@ export interface ClaimRoute {
   /** The engine turns this route's result into a new canonical decision for a PENDING claim. */
   canonical_executor: boolean;
   executor_note: string;
+  /**
+   * Expected spend to answer ONE company through this route, from the actor
+   * card(s). Among executable routes the cheapest is taken first (§23: "cheap
+   * deterministic evidence before expensive routes").
+   */
+  cost_hint_usd: number;
 }
 
 export interface ClaimDefinition {
@@ -74,6 +80,7 @@ const LINKEDIN_DETAILS: ClaimRoute = {
   purpose: "the company's LinkedIn page (HQ, headcount, description)",
   evidence_actors: ["linkedin", "apify_linkedin_company_details"],
   canonical_executor: true, executor_note: "in-slice enrichment of every investigated company",
+  cost_hint_usd: 0.004,
 };
 const FIRST_PARTY_PAGES: ClaimRoute = {
   actor: "firecrawl", capability: "web_evidence",
@@ -84,6 +91,8 @@ const FIRST_PARTY_PAGES: ClaimRoute = {
   // business model, so a route chosen here can actually close the gap.
   canonical_executor: true,
   executor_note: "first-party pages are re-grounded into the canonical business-model claim",
+  // Three /scrape pages at the budgeting rate, plus a grounding call.
+  cost_hint_usd: 0.0192,
 };
 const freshness = (d: EvidenceDimension): number | null => EVIDENCE_VALIDITY_DAYS[d] ?? null;
 
@@ -110,6 +119,8 @@ export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
       evidence_actors: ["apify_funding_atomus", "apify_funding_pvalyou", "funding_corroboration"],
       canonical_executor: true,
       executor_note: "atomus completeness + pvalyou citations decide the funding stage (fundingStageVerifier)",
+      // atomus always; pvalyou only when atomus cannot settle it alone.
+      cost_hint_usd: 0.0235,
     }],
   },
   {
@@ -118,6 +129,7 @@ export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
       actor: "apify_linkedin_job_search", capability: "hiring_verification",
       purpose: "the company's open roles on LinkedIn", evidence_actors: ["apify_linkedin_job_search", "linkedin_jobs"],
       canonical_executor: true, executor_note: "in-slice hiring verification",
+      cost_hint_usd: 0.011,
     }],
   },
   {
@@ -127,6 +139,7 @@ export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
       actor: "apify_linkedin_company_employees", capability: "hiring_verification",
       purpose: "current staff in the function", evidence_actors: ["apify_linkedin_company_employees"],
       canonical_executor: false, executor_note: "opt-in actor; zero results are never proof",
+      cost_hint_usd: 0.05,
     }],
   },
   { claim: "recently_funded", criterion_dimensions: ["funding"], evidence: ["funding"], freshness_days: freshness("funding"), routes: [], deferred_to: "P6" },
@@ -147,6 +160,7 @@ export function claimFor(
 export interface GapRoute {
   actor: string; capability: string; purpose: string; readiness: ActorReadiness;
   tried: boolean; executable: boolean; why: string;
+  cost_hint_usd: number;
 }
 
 export interface EvidenceGap {
@@ -183,7 +197,7 @@ function judgeRoutes(
       : tried ? `${r.actor} already answered for this company`
       : !r.canonical_executor ? r.executor_note
       : "ready";
-    return { actor: r.actor, capability: r.capability, purpose: r.purpose, readiness, tried, executable, why };
+    return { actor: r.actor, capability: r.capability, purpose: r.purpose, readiness, tried, executable, why, cost_hint_usd: r.cost_hint_usd };
   });
 }
 
@@ -198,7 +212,9 @@ export function evidenceGapsFor(
   return checks.filter((c) => c.result === "unknown").map((c) => {
     const def = claimFor(c.dimension, registry);
     const considered = judgeRoutes(def, graph, attempted);
-    const route = considered.find((r) => r.executable) ?? null;
+    // CHEAPEST FIRST among the routes that can actually answer it.
+    const route = [...considered].filter((r) => r.executable)
+      .sort((a, b) => a.cost_hint_usd - b.cost_hint_usd)[0] ?? null;
     return {
       criterion_id: c.criterion_id, dimension: c.dimension, claim: def?.claim ?? null, missing: c.reason,
       next: route ? "verify" : "blocked", route, considered,

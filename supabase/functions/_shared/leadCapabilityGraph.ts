@@ -34,6 +34,7 @@ import type { LeadMissionV1 } from "./leadMission.ts";
 import { evidenceCoversPopulation, evidenceProducedBy } from "./actorEvidenceCapability.ts";
 import { isMonitoringMission } from "./monitoringMission.ts";
 import { cohortRefusalFor } from "./leadDiscoveryStrategy.ts";
+import { readinessOf } from "./actorIntelligence.ts";
 import { hiringActorCard } from "./hiringActorCatalog.ts";
 
 export const CAPABILITY_GRAPH_VERSION = "lead-capability-graph-v1" as const;
@@ -694,6 +695,16 @@ export interface CapabilityPlan {
    * mode, which keeps V1 and Signals monitoring plans byte-identical.
    */
   executability?: { mode: "enforce"; unexecutable: UnexecutableCapability[] };
+  /**
+   * V2 only: every entry candidate considered, in order, and the chosen entry's
+   * readiness in Actor Intelligence. Absent in legacy mode.
+   */
+  entry_selection?: { considered: EntryConsideration[]; readiness: string };
+}
+
+export interface EntryConsideration {
+  capability: CapabilityId;
+  applies: boolean;
 }
 
 /** A capability the gate kept out of the plan, and why. */
@@ -864,6 +875,17 @@ export function buildCapabilityGraph(
   const unexecutable: UnexecutableCapability[] = [];
   const usable = (id: CapabilityId, role: UnexecutableCapability["role"]): boolean => {
     if (!isCapabilitySupported(id)) return false;
+    // ONE READINESS AUTHORITY (V2). The engine being able to execute a
+    // capability is not enough to ENTER through it: one of its actors must be
+    // able to run at all per Actor Intelligence — READY, or carded and
+    // executable but not yet live (said so in an advisory below).
+    if (enforceExecutability && role === "entry" && isCapabilityExecutable(id) && !entryProvidersCanRun(id)) {
+      if (!unexecutable.some((u) => u.capability === id)) {
+        unexecutable.push({ capability: id, role, state: "executable",
+          reason: "no actor for it can run: every provider is NEEDS_*, LEGACY_ONLY or NOT_PRESENT in Actor Intelligence" });
+      }
+      return false;
+    }
     if (!enforceExecutability || isCapabilityExecutable(id)) return true;
     if (!unexecutable.some((u) => u.capability === id)) {
       const e = capabilityExecutability(id);
@@ -887,140 +909,59 @@ export function buildCapabilityGraph(
   const missionSaysSo = requested.length > 0;
   const strategy = mission.directives?.source_strategy ?? [];
 
-  let entry: CapabilityId;
-  let entryReason: string;
-
-  // DISCOVERY WINS OVER RESOLUTION WHEN BOTH ARE ASKED FOR.
+  // ── ENTRY SELECTION, AS AN ORDERED TABLE ──────────────────────────────────
   //
-  // `known_company_identity_resolution` in the catalogue expands to TWO internal
-  // stages — `known_company_resolution` and `company_identity_resolution` —
-  // because resolving a named company and resolving a discovered one are the
-  // same work. A startup mission legitimately asks for it as a PIPELINE step,
-  // and reading that as "the user named the companies" sent every YC query to
-  // the known-company entry and skipped discovery entirely.
+  // One discovery entry, chosen from what the mission asks for: named companies
+  // skip discovery; otherwise the most SELECTIVE requested claim that a usable
+  // discovery route can enumerate by — an open role, then a funding round, an
+  // expansion, a launch, a startup cohort, and finally the company profile.
+  // Evaluated lazily and in order (a candidate's `usable` check records why an
+  // unexecutable capability was passed over), and every candidate considered is
+  // recorded so "why did it enter through X?" has an answer.
   const asksDiscovery = asked("startup_company_discovery") ||
     asked("general_company_discovery");
-
-  if (known.length > 0) {
-    entry = "known_company_resolution";
-    entryReason = `${known.length} company identifier(s) supplied by the user — discovery is skipped`;
-  } else if (missionSaysSo && asked("known_company_resolution") && !asksDiscovery) {
-    entry = "known_company_resolution";
-    entryReason = "the mission names the companies to evaluate — no discovery is needed";
-  } else if (mission.requested_output === "job_listings") {
-    entry = "job_discovery";
-    entryReason = "the requested output is job listings";
-  // ── P3: A HIRING-LED MISSION STARTS FROM THE OPEN ROLE ────────────────────
-  //
-  // "seed-stage B2B SaaS startup hiring its first growth marketer" is found
-  // through the posting, not through a startup directory filtered afterwards
-  // for a role it may not list (P0 canonical run: YC-first, the role never
-  // searched). Taken only when the hiring requirement names a ROLE to search,
-  // the user named no cohort, and the job route is executable — and before the
-  // model's own capability list, so a compiled `startup_company_discovery`
-  // cannot quietly turn a hiring question back into a directory crawl.
-  // V2 ONLY: taken where the executability gate is enforced (Lead V2). Legacy
-  // plans — V1 workspaces, Signals monitoring — keep their entry exactly.
-  } else if (enforceExecutability && hiringLedMission(mission) && usable("job_discovery", "entry")) {
-    entry = "job_discovery";
-    entryReason = `the mission is hiring-led: an open ${hiringRoleOf(mission)} role is how these companies are found`;
-
-  // ── WHAT USED TO SIT HERE, AND WHY IT IS GONE ─────────────────────────────
-  //
-  //     else if (strategy.includes("job_signal_first"))
-  //       entry = "general_company_discovery";
-  //
-  // A hiring-first mission was rerouted to profile discovery, on the honest
-  // reasoning that the four job-board Actors are uncarded and cannot be given a
-  // bounded, priced input. The reasoning was sound. Expressing it as a ROUTE
-  // OVERRIDE was not, for three reasons that run 25f3ff57 (2026-08-18)
-  // demonstrated in one pass:
-  //
-  //   1. It tested MEMBERSHIP, not order. The mission's own preference was
-  //      ["startup_cohort_first", "job_signal_first"] — startup cohort FIRST —
-  //      and the second entry silently won.
-  //   2. It overrode a capability the gate had already APPROVED.
-  //      `capability_decision` recorded `requested: [startup_company_discovery]`,
-  //      `approved: [startup_company_discovery]`, `rejected: []` — and then the
-  //      plan ran general discovery. Nothing in the record said otherwise.
-  //   3. `general_company_discovery` declared one provider, so the override was
-  //      not a route change but a tool change: a concept cohort was handed to a
-  //      company-NAME matcher, which returned newsletters.
-  //
-  // The constraint it encoded is REAL and has not been discarded — it is now
-  // knowledge rather than a branch. `routing_advisories` below carries it into
-  // the planner briefing, where the model can weigh "no carded actor discovers
-  // open job postings" against everything else it knows, and answer with an
-  // Actor that carries embedded hiring evidence instead. That is the same fact
-  // reaching the same decision, at a layer that can act on it intelligently.
-  } else if (missionSaysSo && asked("startup_company_discovery")) {
-    entry = "startup_company_discovery";
-    entryReason = "the mission requires startup-cohort discovery";
-  } else if (missionSaysSo && asked("general_company_discovery")) {
-    entry = "general_company_discovery";
-    entryReason = "the mission requires general company discovery outside startup cohorts";
-  // ── A SIGNAL NO LONGER PICKS AN ENTRY THAT CANNOT DISCOVER ────────────────
-  //
-  // These two branches used to fire unconditionally, and the result was the
-  // worst outcome in the graph: not a wasted call, but NO CALL AT ALL.
-  // `ENGINE_DRIVEN_DISCOVERY` holds only the two real discovery capabilities,
-  // so entering at `funding_signal_discovery` or `expansion_signal_discovery`
-  // produced `skipped_no_input` for the ENTRY step — discovery never ran, the
-  // pool was empty, and the mission returned zero companies while reporting
-  // the signal as served.
-  //
-  // It also inverted the routing. `hasSignal(expansion)` was tested BEFORE the
-  // profile branches, so adding an expansion requirement to a cybersecurity
-  // mission REPLACED profile discovery with a company-name matcher. The mission
-  // got worse at finding the companies it asked for because it asked for more
-  // evidence about them.
-  //
-  // Guarded by `isCapabilitySupported`, both fall through to real discovery and
-  // the signal is carried as a qualifier — which is what `SIGNAL_RESEARCH_ROLES`
-  // has always said expansion is. The reason reaches the planner below.
-  // ── A SIGNAL ENTRY MUST AGREE WITH THE DECLARED RESEARCH SHAPE ────────────
-  //
-  // Funding discovery became real in Phase 4, and the first thing that exposed
-  // was an alignment problem the old `supported: false` had been hiding. A
-  // mission may carry a funding signal while its declared strategy is `hiring`
-  // — "B2B SaaS companies hiring RevOps that recently raised" is exactly that.
-  // Entering at funding discovery there makes the GRAPH disagree with the
-  // PLAYBOOK, and `authorizePlaybookExecution` then correctly refuses a mission
-  // that was never wrong.
-  //
-  // So the funding entry is taken only when funding is genuinely the research
-  // shape: the mission declared it, or it declared nothing and the signal is
-  // the only basis for discovery. A hiring-shaped mission keeps its profile
-  // entry and proves funding as a qualifier over the pool it finds.
-  } else if (
-    hasSignal(mission, "funding") &&
-    ((mission.strategies ?? []).length === 0 ||
-      (mission.strategies ?? []).includes("funding")) &&
-    usable("funding_signal_discovery", "entry")
-  ) {
-    entry = "funding_signal_discovery";
-    entryReason = "the mission requires a funding signal";
-  } else if (hasSignal(mission, "expansion") && usable("expansion_signal_discovery", "entry")) {
-    entry = "expansion_signal_discovery";
-    entryReason = "the mission requires an expansion signal";
-  } else if (
-    hasSignal(mission, "product_launch") &&
-    (mission.strategies ?? []).length === 0 &&
-    usable("product_launch_discovery", "entry")
-  ) {
-    // Same rule as funding and expansion: a signal may choose the entry only
-    // when it is genuinely the research shape. A mission that declared a
-    // different strategy keeps its own entry and proves the launch as a
-    // qualifier over the pool that shape produces.
-    entry = "product_launch_discovery";
-    entryReason = "the mission requires a product-launch signal";
-  } else if (mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s))) {
-    entry = "startup_company_discovery";
-    entryReason = "the mission targets startups";
-  } else {
-    entry = "general_company_discovery";
-    entryReason = "the mission targets companies by profile";
+  const ENTRY_TABLE: Array<{ capability: CapabilityId; applies: () => boolean; reason: () => string }> = [
+    { capability: "known_company_resolution", applies: () => known.length > 0,
+      reason: () => `${known.length} company identifier(s) supplied by the user — discovery is skipped` },
+    { capability: "known_company_resolution",
+      applies: () => missionSaysSo && asked("known_company_resolution") && !asksDiscovery,
+      reason: () => "the mission names the companies to evaluate — no discovery is needed" },
+    { capability: "job_discovery", applies: () => mission.requested_output === "job_listings",
+      reason: () => "the requested output is job listings" },
+    { capability: "job_discovery",
+      applies: () => enforceExecutability && hiringLedMission(mission) && usable("job_discovery", "entry"),
+      reason: () => `the mission is hiring-led: an open ${hiringRoleOf(mission)} role is how these companies are found` },
+    { capability: "startup_company_discovery", applies: () => missionSaysSo && asked("startup_company_discovery"),
+      reason: () => "the mission requires startup-cohort discovery" },
+    { capability: "general_company_discovery", applies: () => missionSaysSo && asked("general_company_discovery"),
+      reason: () => "the mission requires general company discovery outside startup cohorts" },
+    { capability: "funding_signal_discovery",
+      applies: () => hasSignal(mission, "funding") &&
+        ((mission.strategies ?? []).length === 0 || (mission.strategies ?? []).includes("funding")) &&
+        usable("funding_signal_discovery", "entry"),
+      reason: () => "the mission requires a funding signal" },
+    { capability: "expansion_signal_discovery",
+      applies: () => hasSignal(mission, "expansion") && usable("expansion_signal_discovery", "entry"),
+      reason: () => "the mission requires an expansion signal" },
+    { capability: "product_launch_discovery",
+      applies: () => hasSignal(mission, "product_launch") && (mission.strategies ?? []).length === 0 &&
+        usable("product_launch_discovery", "entry"),
+      reason: () => "the mission requires a product-launch signal" },
+    { capability: "startup_company_discovery",
+      applies: () => mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s)),
+      reason: () => "the mission targets startups" },
+    { capability: "general_company_discovery", applies: () => true,
+      reason: () => "the mission targets companies by profile" },
+  ];
+  const considered: EntryConsideration[] = [];
+  let chosen = ENTRY_TABLE[ENTRY_TABLE.length - 1];
+  for (const candidate of ENTRY_TABLE) {
+    const applies = candidate.applies();
+    considered.push({ capability: candidate.capability, applies });
+    if (applies) { chosen = candidate; break; }
   }
+  const entry: CapabilityId = chosen.capability;
+  let entryReason: string = chosen.reason();
 
   let order = 0;
   steps.push(step(entry, order++, entryReason));
@@ -1056,10 +997,12 @@ export function buildCapabilityGraph(
         // FIRST IN THE FUNCTION is a claim about the TEAM, not the posting. It
         // may need the company's current staff in that function — on
         // shortlisted companies only, and only for this mission.
-        if (enforceExecutability && firstInFunctionRequested(mission) && usable("hiring_verification", "verification")) {
-          hv.providers.push("apify_linkedin_company_employees");
-          hv.reason += "; 'first in the function' may need the current team, shortlisted companies only";
-        }
+        // A TARGET NEVER BUYS EXPENSIVE VERIFICATION. "First in the function"
+        // is a qualifier on the hiring signal — a target that ranks, never one
+        // that rejects — so it is judged from the posting's own words and the
+        // paid team lookup (opt-in, and refused live on every canary) is not
+        // scheduled. It was only ever granted under the V2 gate; legacy plans
+        // never carried it and are unchanged.
         steps.push(hv);
       }
       // THE SAME QUALIFIER VERIFICATIONS AS THE PROFILE ROUTE. A hiring-led
@@ -1334,8 +1277,8 @@ export function buildCapabilityGraph(
       "Stage, company size and industry are judged afterwards from enrichment and ranked; a target " +
       "criterion is evidence for ranking, never a reason to plan fewer steps.",
       ...(firstInFunctionRequested(mission)
-        ? ["'First in the function' is checked by the engine during hiring verification on shortlisted " +
-          "companies — from the posting's own words first, then a bounded team lookup. No extra step is needed."]
+        ? ["'First in the function' is a target: it is read from the posting's own words during hiring " +
+          "verification, and no paid team lookup is scheduled for it. No extra step is needed."]
         : []),
     );
   } else if (strategy.includes("job_signal_first") || hasSignal(mission, "hiring")) {
@@ -1414,6 +1357,16 @@ export function buildCapabilityGraph(
     );
   }
 
+  if (enforceExecutability) {
+    const readiness = entryReadiness(entry);
+    if (readiness !== "READY" && readiness !== "none") {
+      routing_advisories.push(
+        `This mission enters through ${entry}, whose actors are ${readiness} in Actor Intelligence: ` +
+        "carded and executable, but never run live under Lead V2. This run is their first live proof; " +
+        "treat its yield as unverified until it has been checked.",
+      );
+    }
+  }
   return {
     version: CAPABILITY_GRAPH_VERSION,
     steps: admissibleSteps,
@@ -1425,7 +1378,32 @@ export function buildCapabilityGraph(
     routing_reason: entryReason,
     routing_advisories,
     ...(enforceExecutability ? { executability: { mode: "enforce" as const, unexecutable } } : {}),
+    ...(enforceExecutability ? { entry_selection: { considered, readiness: entryReadiness(entry) } } : {}),
   };
+}
+
+/** Actor Intelligence states in which an entry actor can run at all. */
+const RUNNABLE: ReadonlySet<string> = new Set(["READY", "CARDED_BUT_NOT_LIVE"]);
+
+/**
+ * Does at least one of this capability's providers run? A provider-less
+ * capability (known companies) does. Today every executable entry has one, so
+ * this guards the day a card is demoted without its capability being gated.
+ */
+export function entryProvidersCanRun(
+  id: CapabilityId,
+  readiness: (actor: string, capability: CapabilityId) => string = (a, c) => readinessOf(a, c).readiness,
+): boolean {
+  const providers = CAPABILITY_REGISTRY[id]?.providers ?? [];
+  return providers.length === 0 || providers.some((p) => RUNNABLE.has(readiness(p, id)));
+}
+
+/** The best readiness among an entry's providers; `none` when it buys nothing. */
+function entryReadiness(id: CapabilityId): string {
+  const providers = CAPABILITY_REGISTRY[id]?.providers ?? [];
+  if (providers.length === 0) return "none";
+  const states = providers.map((p) => readinessOf(p, id).readiness);
+  return states.includes("READY") ? "READY" : states.includes("CARDED_BUT_NOT_LIVE") ? "CARDED_BUT_NOT_LIVE" : states[0];
 }
 
 // ------------------------------------------------------------ invariants ----

@@ -231,6 +231,14 @@ const VERDICT: Record<string, { value: string; decision: "pass" | "review" | "fa
   "Bobyard": { value: "b2b_saas", decision: "review", confidence: 0.4 },
 };
 
+function withTeamLookup<T>(plan: T): T {
+  const g = JSON.parse(JSON.stringify(plan));
+  const hv = g.steps.find((s: { capability: string }) => s.capability === "hiring_verification");
+  if (hv && !hv.providers.includes("apify_linkedin_company_employees")) hv.providers.push("apify_linkedin_company_employees");
+  g.allowed_providers = [...new Set([...(g.allowed_providers ?? []), "apify_linkedin_company_employees"])];
+  return g;
+}
+
 function harness(specMode: "enforce" | "off", employees: "disabled" | "empty" = "disabled") {
   const byUrl = new Map(ROWS.map((r) => [(r.company as { linkedinUrl: string }).linkedinUrl, r.company as Record<string, unknown>]));
   const calls: Array<{ actor: string; input: string; ok: boolean }> = [];
@@ -290,7 +298,9 @@ function harness(specMode: "enforce" | "off", employees: "disabled" | "empty" = 
     ...(restored ? { restoredGroundedResults: restored } : {}),
   });
   const opts = (extra: Record<string, unknown> = {}) => ({
-    mission: MISSION, plan: buildCapabilityGraph(MISSION, { executability: "enforce" }), maxCandidates: 10,
+    // The team lookup is PLANNED here (V2 no longer grants it for a first-hire
+    // target), so the once-per-mission refusal guarantee stays exercised.
+    mission: MISSION, plan: withTeamLookup(buildCapabilityGraph(MISSION, { executability: "enforce" })), maxCandidates: 10,
     readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
     specMode, specScope: { workspace_id: "ws-inv", lineage_id: "lineage-inv" }, identity: { task_id: "task-inv", workspace_id: "ws-inv" }, ...extra,
   });
