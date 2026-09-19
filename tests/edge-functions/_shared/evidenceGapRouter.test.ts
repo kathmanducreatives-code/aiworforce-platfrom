@@ -64,13 +64,31 @@ Deno.test("a route an actor already answered for this company is not taken again
   assertEquals(g.considered.map((r) => [r.actor, r.tried]), [["apify_linkedin_company_details", true]]);
 });
 
-Deno.test("business model: Firecrawl is READY, but nothing re-grounds a pending claim on its pages yet — blocked, said so", () => {
+Deno.test("business model: Firecrawl is the executable route — PHASE C gave it a canonical executor", () => {
+  // Was `blocked` with "not re-grounded yet": the pages fed only the legacy
+  // evidence debt. `webEvidenceRegrounding` rebuilds the registry with them,
+  // re-runs the grounder and re-decides the claim, so the route can now close
+  // the gap it is chosen for. LinkedIn details has already answered for this
+  // company, which is why Firecrawl is the one left to try.
   const [g] = evidenceGapsFor([unknown("industry")], LANCEDB);
   assertEquals(g.claim, "business_model");
-  assertEquals(g.next, "blocked");
+  assertEquals(g.next, "verify");
+  assertEquals(g.route?.actor, "firecrawl");
   const web = g.considered.find((r) => r.actor === "firecrawl")!;
-  assertEquals([web.readiness, web.tried, web.executable], ["READY", false, false]);
-  assert(web.why.includes("not re-grounded"), web.why);
+  assertEquals([web.readiness, web.tried, web.executable], ["READY", false, true]);
+  assert(web.why === "ready", web.why);
+});
+
+Deno.test("business model: once the pages are in the registry, the route is tried and the gap is blocked again", () => {
+  // No new evidence to buy — the honest state after a re-grounding that could
+  // not settle the claim. It must not re-buy the same pages every slice.
+  const withPages = buildCompanyEvidenceGraph("lancedb", [
+    item("geography", "San Francisco, CA, United States", "linkedin"),
+    item("web_claim", "A platform for financial firms.", "company_website"),
+  ], { now: NOW });
+  const [g] = evidenceGapsFor([unknown("industry")], withPages);
+  assertEquals(g.next, "blocked");
+  assert(g.considered.find((r) => r.actor === "firecrawl")!.why.includes("already answered"));
 });
 
 Deno.test("funding stage: no READY route exists — a capability gap deferred to P6, never guessed", () => {
@@ -124,8 +142,16 @@ Deno.test("an executor is not enough: a route whose actor is not READY in Actor 
   assertEquals([g.next, g.considered[0].readiness], ["blocked", "NOT_PRESENT"]);
 });
 
-Deno.test("today no production route is executable against a pending canonical claim — the rule is dormant, not faked", () => {
+Deno.test("PHASE C: the business model is the one canonical claim a production route can settle today", () => {
+  // Was 0 — the rule was dormant. Firecrawl is now a canonical executor, so a
+  // pending business model routes to verification; funding and first-in-function
+  // are still blocked (P6 / the opt-in actor), and say so.
   const every = CLAIM_REGISTRY.flatMap((c) => c.criterion_dimensions).map(unknown);
-  const s = summarizeGaps([{ gaps: evidenceGapsFor(every, LANCEDB) }]);
-  assertEquals(s.with_executable_route, 0);
+  const gaps = evidenceGapsFor(every, LANCEDB);
+  const s = summarizeGaps([{ gaps }]);
+  assertEquals(s.with_executable_route, 1);
+  const verifiable = gaps.filter((g) => g.next === "verify");
+  assertEquals([...new Set(verifiable.map((g) => g.claim))], ["business_model"]);
+  assertEquals([...new Set(verifiable.map((g) => g.route?.actor))], ["firecrawl"]);
+  assert(s.capability_gaps.some((c) => c.claim === "funding_stage" && c.deferred_to === "P6"));
 });

@@ -23,13 +23,18 @@
 //   blocked   every route is not READY, already tried, or has no canonical
 //             executor yet — recorded as a capability gap, never guessed past
 //
-// `canonical_executor` is the honest part. Firecrawl is READY and the plan's
-// primary business-model verifier, but today the pages it buys feed only the
-// legacy evidence-debt path; a pending grounded claim is not re-grounded on
-// them. Until that executor exists (Phase C), a business-model gap is BLOCKED —
-// and continuation, which reads `with_executable_route`, will not pretend a
-// verification slice could close it. Each P6–P9 route plugs in here: register
-// it, prove its executor, and the same gate starts routing to it.
+// `canonical_executor` is the honest part: a route counts only when the engine
+// turns its result into a new canonical decision. Firecrawl earned that flag in
+// Phase C (`webEvidenceRegrounding`); the funding and team routes have not, so
+// their gaps are still BLOCKED and continuation, which reads
+// `with_executable_route`, will not pretend a verification slice could close
+// them. Each P6–P9 route plugs in here: register it, prove its executor, and
+// the same gate starts routing to it.
+//
+// `tried` keeps a route from being chosen twice for the same company: once the
+// first-party pages are in the registry, re-buying them would return the same
+// text, so a claim still pending AFTER the re-grounding is blocked — honestly,
+// because no new evidence is available, not because nothing was tried.
 //
 // Pure. No provider, model or database.
 
@@ -74,8 +79,11 @@ const FIRST_PARTY_PAGES: ClaimRoute = {
   actor: "firecrawl", capability: "web_evidence",
   purpose: "the company's product, pricing and customers pages",
   evidence_actors: ["firecrawl", "firecrawl_scrape", "company_website"],
-  canonical_executor: false,
-  executor_note: "pages feed the legacy evidence debt; a pending grounded claim is not re-grounded on them yet (Phase C)",
+  // PHASE C: the pages now resolve the claim. `webEvidenceRegrounding` rebuilds
+  // the registry with them, re-runs the grounder and re-decides the canonical
+  // business model, so a route chosen here can actually close the gap.
+  canonical_executor: true,
+  executor_note: "first-party pages are re-grounded into the canonical business-model claim",
 };
 const freshness = (d: EvidenceDimension): number | null => EVIDENCE_VALIDITY_DAYS[d] ?? null;
 

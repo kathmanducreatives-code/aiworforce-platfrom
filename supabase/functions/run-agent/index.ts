@@ -153,6 +153,10 @@ import { formatFunnel, unbalancedStages } from "../_shared/leadMissionFunnel.ts"
 import { computeEvidenceDebts } from "../_shared/webEvidenceDebt.ts";
 import { runEvidenceCollection } from "../_shared/webEvidenceRunner.ts";
 import { reevaluateWithWebEvidence } from "../_shared/webEvidenceReevaluation.ts";
+import { regroundPendingClaims } from "../_shared/webEvidenceRegrounding.ts";
+import { selectCompanyPages } from "../_shared/webEvidenceSelection.ts";
+import { applyRegroundedVerification } from "../_shared/leadCapabilityEngine.ts";
+import { evaluateEligibility } from "../_shared/candidateEligibility.ts";
 import {
   evaluationInputFromContext, MISSION_REEVALUATION_PROMPT,
 } from "../_shared/missionEvaluation.ts";
@@ -4686,11 +4690,90 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                       qualified_total: engineRun.state.qualified_company_keys.length,
                     });
                   }
+                  // ── PHASE C: THE PAGES RESOLVE THE CLAIM THEY WERE BOUGHT FOR ──
+                  //
+                  // The re-evaluation above updates the legacy mission verdict.
+                  // This updates the CANONICAL claim: for every company whose
+                  // business model is still pending, the registry is rebuilt
+                  // with the stored first-party pages, the grounder reads them
+                  // again, and `applyRegroundedVerification` re-decides the
+                  // claim under its stable evidence id.
+                  //
+                  // Canary c5e281c9 bought Dioptra's /product, /pricing and
+                  // /customers and still reported "the quote does not state
+                  // saas delivery", because nothing ever re-read them.
+                  let regroundReport: Awaited<ReturnType<typeof regroundPendingClaims>> | null = null;
+                  try {
+                    const phaseCCriteria = deriveMissionCriteria(persistedMission!);
+                    const phaseCCandidates = missionCandidatesFrom(engineRun, { missionId: String(task.id) });
+                    const pendingByKey = new Map(phaseCCandidates.map((cand) => {
+                      const e = evaluateEligibility(phaseCCriteria, cand.graph);
+                      // Only the business-model claim: `industry` is the
+                      // criterion dimension it answers (candidateEligibility).
+                      const pending = e.eligibility === "pending" &&
+                        e.checks.some((x) => x.kind === "hard" && x.result === "unknown" &&
+                          (x.dimension === "industry" || x.dimension === "business_model"));
+                      return [cand.company_key, pending] as const;
+                    }));
+                    regroundReport = await regroundPendingClaims({
+                      requiresCommercialSignal: (persistedMission!.required_signals ?? [])
+                        .some((sig) => String(sig.type) === "hiring"),
+                      candidates: engineRun.companies.map((c) => ({
+                        company_key: c.key,
+                        business_model_pending: pendingByKey.get(c.key) === true,
+                        // The pages the CURRENT reading already saw.
+                        grounded_source_urls: (c.evidence_registry?.items ?? [])
+                          .filter((it) => it.evidence_type === "web_page")
+                          .map((it) => it.source_url ?? "")
+                          .filter(Boolean),
+                      })),
+                      deps: {
+                        pagesFor: async (key) => {
+                          const c = engineRun.companies.find((x) => x.key === key);
+                          const domain = c?.enriched?.canonical_domain ?? c?.company.canonical_domain ?? null;
+                          if (!domain) return [];
+                          const fresh = await readFreshPages(supabase, { workspace_id: String(workspace_id ?? ""), domain });
+                          const usable = [...fresh.values()].filter((pg) => pg.status === "ok" && pg.source_text);
+                          // The same evidence hygiene the re-evaluation uses.
+                          return selectCompanyPages(usable).pages.map((pg) => ({
+                            source_url: pg.source_url, page_intent: pg.page_intent,
+                            source_text: pg.source_text, fetched_at: pg.fetched_at ?? null,
+                          }));
+                        },
+                        rebuildRegistry: (key, pages) => engineRun.rebuild_registry(key, pages.map((pg) => ({
+                          source_url: pg.source_url, page_intent: pg.page_intent,
+                          source_text: pg.source_text, fetched_at: pg.fetched_at,
+                        }))),
+                        ground: groundedBinding.groundCompany
+                          ? (({ registry, requiresCommercialSignal }) =>
+                            groundedBinding.groundCompany!({
+                              registry: registry as never, requiresCommercialSignal,
+                            }))
+                          : null,
+                        apply: (key, verification) => {
+                          const c = engineRun.companies.find((x) => x.key === key);
+                          if (!c) return { item: null, decision: null };
+                          return applyRegroundedVerification(
+                            c, verification, String(task.id), new Date().toISOString());
+                        },
+                        log: (event, meta) => console.log(`[run-agent][phase-c][${event}]`, { task_id: task.id, ...meta }),
+                      },
+                    });
+                    console.log("[run-agent][phase-c] regrounded", {
+                      task_id: task.id, considered: regroundReport.considered,
+                      regrounded: regroundReport.regrounded, resolved: regroundReport.resolved,
+                      contradicted: regroundReport.contradicted, still_pending: regroundReport.still_pending,
+                      skips: regroundReport.outcomes.filter((o) => o.skipped).map((o) => o.skipped),
+                    });
+                  } catch (e) {
+                    console.error("[run-agent][phase-c][failed]", String(e));
+                  }
+
                   // `resume_records` was built inside the engine BEFORE this
                   // ran, so it still describes the pre-re-evaluation world. The
                   // checkpoint is written from it, and a stale record would
                   // resume a company whose verdict has since changed.
-                  if (reappliedCount > 0 || opKeysRecorded > 0) {
+                  if (reappliedCount > 0 || opKeysRecorded > 0 || (regroundReport?.regrounded ?? 0) > 0) {
                     engineRun.resume_records = engineRun.companies.map(toResumeRecord);
                   }
                   console.log("[run-agent][evidence-reevaluation]", {

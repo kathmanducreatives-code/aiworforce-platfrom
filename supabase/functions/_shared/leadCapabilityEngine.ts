@@ -10753,10 +10753,50 @@ export function projectResearchFabric(
 /** Adds a non-discovery observation (enrichment, verification). Not a `found_by` entry. */
 function recordObservation(c: EngineCompany, o: CandidateObservation): void {
   const obs = c.observations ?? [];
-  if (!obs.some((x) => x.observation_id === o.observation_id) && obs.length < MAX_OBSERVATIONS_PER_COMPANY + 2) {
-    obs.push(withCompanyKey(o, c.key));
-  }
+  // REPLACED, NOT SKIPPED. An observation id is stable per source, so a second
+  // recording is a RE-reading of the same source — re-grounding a claim on
+  // pages the first reading never saw (Phase C). `companyEvidenceItems` lists
+  // observation items before the live ones and the graph keeps the first of an
+  // evidence id, so leaving the old copy in place would let the stale reading
+  // win over the fresh one.
+  const at = obs.findIndex((x) => x.observation_id === o.observation_id);
+  if (at >= 0) obs[at] = withCompanyKey(o, c.key);
+  else if (obs.length < MAX_OBSERVATIONS_PER_COMPANY + 2) obs.push(withCompanyKey(o, c.key));
   c.observations = obs;
+}
+
+/**
+ * P5 PHASE C — A RE-READING OF THE COMPANY'S OWN PAGES REPLACES THE OLD ONE.
+ *
+ * The verification route bought `/product`, `/pricing`, `/customers`; the
+ * registry was rebuilt with them and the grounder read them again. This is
+ * where that answer becomes the canonical claim: `c.grounded` is replaced, the
+ * business-model item is recomputed under its STABLE evidence id, and the
+ * observation carrying it is replaced rather than appended — so the evidence
+ * graph holds exactly one business-model claim, the newest one, and a
+ * checkpoint restores that instead of the reading it superseded.
+ *
+ * Claim-level only (the plan §11): the item's status comes from
+ * `businessModelDecision`, never from the whole-company verdict.
+ */
+export function applyRegroundedVerification(
+  c: EngineCompany, verification: GroundedVerification, missionId: string | null, at: string,
+): { item: EvidenceItem | null; decision: string | null } {
+  c.grounded = verification;
+  const item = groundedBusinessModelItem(c, missionId, at);
+  if (!item) return { item: null, decision: null };
+  recordObservation(c, {
+    version: CANDIDATE_OBSERVATION_VERSION,
+    observation_id: `obs_grd_${item.evidence_id}`.slice(0, 64),
+    capability: "web_evidence_verification", actor_key: "grounded_evidence_evaluation",
+    provider: "engine", route_id: null, plan_version: null,
+    provider_call_id: null, source_record_id: null, source_url: item.source.url,
+    observed_at: item.observed_at,
+    entity_hint: entityHintFromCompany(c.company),
+    evidence: [item],
+  });
+  const a = item.assessment as { business_model_decision?: string } | undefined;
+  return { item, decision: a?.business_model_decision ?? null };
 }
 
 /** Every identifier the pool knows for this company, from the row and every observation. */
