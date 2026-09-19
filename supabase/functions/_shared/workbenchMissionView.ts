@@ -23,6 +23,7 @@
 //
 // Pure.
 
+import type { ReadinessPolicy } from "./routeReadiness.ts";
 import { evidenceGapsFor, summarizeGaps, type EvidenceGap, type GapSummary } from "./evidenceGapRouter.ts";
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import type { MissionCriterion } from "./missionCriteria.ts";
@@ -134,6 +135,8 @@ export interface ViewInput {
   cost?: Partial<WorkbenchMissionView["cost"]>;
   /** A reasoner's proposals by company key. Absent ⇒ code's own reasons. */
   reasoning?: Record<string, { label?: unknown; why_surfaced?: unknown } | undefined>;
+  /** The mission's readiness policy, so a gap shown as routable is one the run may take. */
+  readiness?: ReadinessPolicy;
 }
 
 /** Which bucket a candidate belongs to. First match wins, so exactly one. */
@@ -286,7 +289,7 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
       signal_strength: ceiling.signal_strength,
       next_action: c.next_action ?? null,
       evidence_gaps: bucket === "pending"
-        ? evidenceGapsFor(hardChecks, c.graph, undefined, new Set(c.attempted_routes ?? []))
+        ? evidenceGapsFor(hardChecks, c.graph, undefined, new Set(c.attempted_routes ?? []), i.readiness)
         : [],
     });
   }

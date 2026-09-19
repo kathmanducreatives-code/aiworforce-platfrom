@@ -34,6 +34,8 @@ import {
   decideFundingStage, normalizeRoundType, stageRank,
   type FundingRecordFact, type FundingRoundFact, type FundingStageDecision,
 } from "./fundingStageClaim.ts";
+import type { EvidenceItem } from "./candidateObservation.ts";
+import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 
 export const FUNDING_CORROBORATION_VERSION = "funding-corroboration-v1" as const;
 
@@ -130,6 +132,107 @@ export function normalizePvalyouFunding(row: Record<string, unknown>): ProviderF
   };
 }
 
+// ─────────────────────────────────────────────────── funding discovery ──
+//
+// A funding-event feed (datahyena) returns ROUNDS: a company, a stage, a date,
+// an amount, investors and the articles that reported it. That row is funding
+// evidence the mission already paid for, and it must reach the funding-stage
+// claim instead of being re-bought:
+//
+//   a dated LATER round        → contradicts an earlier stage at once (FAIL)
+//   the stage the mission asked → supports it, never proves it: a feed shows
+//                                 events, not a company's whole history, so
+//                                 `history_complete: false` keeps it PENDING
+//                                 until atomus supplies completeness
+//   its article URLs           → cite the round, so a matching atomus Seed
+//                                 needs no pvalyou purchase to PASS
+//
+// "Discovered by a Seed feed" is never "Seed PASS".
+
+/** The round a funding-event feed reported, as the engine normalized it. */
+export interface DiscoveredFundingRound {
+  company_name: string | null;
+  canonical_domain: string | null;
+  linkedin_company_url: string | null;
+  round_stage: string | null;
+  announced_date: string | null;
+  amount_usd: number | null;
+  investors: readonly string[];
+  source_articles: readonly string[];
+}
+
+/** One discovered round → the funding record the stage claim reads. Never complete. */
+export function fundingRecordFromDiscoveredRound(
+  r: DiscoveredFundingRound, i: { actor: string; provider_call_id: string | null; observed_at: string | null },
+): FundingRecordFact {
+  return {
+    provider: "apify", actor: i.actor,
+    rounds: [{
+      round_type: r.round_stage, announced_date: r.announced_date, amount_usd: r.amount_usd,
+      investors: [...r.investors], source_urls: [...r.source_articles], method: "provider_field",
+    }],
+    // A FEED OF EVENTS IS NOT A HISTORY. It says this round happened; it cannot
+    // say no later round did.
+    reported_round_count: null,
+    history_complete: false,
+    observed_at: i.observed_at,
+    source_url: r.source_articles[0] ?? null,
+    provider_call_id: i.provider_call_id,
+    company: { name: r.company_name, domain: r.canonical_domain, linkedin_url: r.linkedin_company_url },
+  };
+}
+
+/** The value a `funding` EvidenceItem carries when it IS a funding record. */
+export interface FundingRecordEvidenceValue {
+  claim: "funding_record";
+  round_type: string | null;
+  announced_date: string | null;
+  amount_usd: number | null;
+  record: FundingRecordFact;
+}
+
+/** The funding EVENT as evidence: proven when dated (the feed admits no undated row). */
+export function fundingRecordEvidenceItem(i: {
+  company_key: string; record: FundingRecordFact; mission_id: string | null; observed_at: string;
+}): EvidenceItem {
+  const r = i.record.rounds[0] ?? null;
+  const value: FundingRecordEvidenceValue = {
+    claim: "funding_record", round_type: normalizeRoundType(r?.round_type ?? null),
+    announced_date: r?.announced_date ?? null, amount_usd: r?.amount_usd ?? null, record: i.record,
+  };
+  const cited = (r?.source_urls.length ?? 0) > 0;
+  return {
+    evidence_id: `fdr_${i.company_key}_${i.record.actor}_${r?.announced_date ?? "undated"}_${value.round_type ?? "x"}`.slice(0, 64),
+    company_key: i.company_key, dimension: "funding", value,
+    status: r?.announced_date ? "proven" : "plausible",
+    source: {
+      provider: i.record.provider, actor: i.record.actor, provider_call_id: i.record.provider_call_id ?? null,
+      url: i.record.source_url, excerpt: null,
+    },
+    method: "provider_field", observed_at: i.observed_at, valid_until: null,
+    confidence: cited ? "high" : "medium", derived_from: [], mission_id: i.mission_id, origin: "lead_mission",
+  };
+}
+
+/** Every funding record the company's evidence already carries — reused, never re-bought. */
+export function fundingRecordsInGraph(graph: CompanyEvidenceGraph): FundingRecordFact[] {
+  const out: FundingRecordFact[] = [];
+  const seen = new Set<string>();
+  for (const claim of graph.claims) {
+    if (claim.dimension !== "funding") continue;
+    const items = [claim.current, ...claim.supporting, ...claim.conflicting, ...claim.stale]
+      .filter((x): x is EvidenceItem => !!x);
+    for (const it of items) {
+      const v = it.value as Partial<FundingRecordEvidenceValue> | null;
+      if (!v || typeof v !== "object" || v.claim !== "funding_record" || !v.record) continue;
+      if (seen.has(it.evidence_id)) continue;
+      seen.add(it.evidence_id);
+      out.push(v.record);
+    }
+  }
+  return out;
+}
+
 // ─────────────────────────────────────────────────────────── the merge ──
 
 export interface CorroboratedFunding {
@@ -161,21 +264,35 @@ function days(a: string | null, b: string | null): number | null {
 export function corroborateFunding(i: {
   atomus: FundingRecordFact | null;
   pvalyou: FundingRecordFact | null;
+  /**
+   * Records the mission already holds — funding discovery's rounds. They CITE
+   * (their article URLs) exactly as pvalyou's do, and like pvalyou they never
+   * supply completeness.
+   */
+  discovered?: readonly FundingRecordFact[];
 }): CorroboratedFunding {
   const base = { version: FUNDING_CORROBORATION_VERSION, corroborated_rounds: 0, conflicts: [] as string[] };
+  const citing = [i.pvalyou, ...(i.discovered ?? [])].filter((x): x is FundingRecordFact => !!x);
   const sources: string[] = [];
   if (i.atomus) sources.push(ATOMUS_FUNDING_ACTOR_KEY);
-  if (i.pvalyou) sources.push(PVALYOU_FUNDING_ACTOR_KEY);
-  if (!i.atomus && !i.pvalyou) return { ...base, record: null, sources };
-  // One provider alone: its record, as it is. atomus alone cites nothing, so a
-  // PASS that must cite cannot happen; pvalyou alone carries no completeness.
-  if (!i.atomus) return { ...base, record: { ...i.pvalyou!, reported_round_count: null, history_complete: null }, sources };
-  if (!i.pvalyou) return { ...base, record: i.atomus, sources };
+  for (const c of citing) if (!sources.includes(c.actor)) sources.push(c.actor);
+  if (!i.atomus && citing.length === 0) return { ...base, record: null, sources };
+  // Citing records alone: their rounds, and NO completeness — none of them can
+  // say no later round exists. atomus alone cites nothing, so a PASS that must
+  // cite cannot happen.
+  if (!i.atomus) {
+    return { ...base, sources, record: {
+      ...citing[0], actor: citing.length > 1 ? FUNDING_CORROBORATION_ACTOR : citing[0].actor,
+      rounds: citing.flatMap((c) => c.rounds.map((r) => ({ ...r, source_urls: [...r.source_urls] }))),
+      reported_round_count: null, history_complete: null,
+    } };
+  }
+  if (citing.length === 0) return { ...base, record: i.atomus, sources };
 
   const rounds: FundingRoundFact[] = i.atomus.rounds.map((r) => ({ ...r, source_urls: [...r.source_urls] }));
   const conflicts: string[] = [];
   let corroborated = 0;
-  for (const p of i.pvalyou.rounds) {
+  for (const p of citing.flatMap((c) => c.rounds)) {
     const pType = normalizeRoundType(p.round_type);
     const pRank = stageRank(pType);
     if (pRank === null) continue; // accelerator, grant, debt, "Other": no rung to confirm or contradict
@@ -204,7 +321,7 @@ export function corroborateFunding(i: {
       // Completeness is atomus's TRUE count — withdrawn the moment the two disagree.
       reported_round_count: conflicts.length === 0 ? i.atomus.reported_round_count : null,
       history_complete: null,
-      observed_at: i.pvalyou.observed_at ?? i.atomus.observed_at,
+      observed_at: citing[0].observed_at ?? i.atomus.observed_at,
       source_url: i.atomus.source_url,
     },
   };
@@ -215,8 +332,9 @@ export function decideCorroboratedFundingStage(i: {
   required_stage: string | null;
   atomus: FundingRecordFact | null;
   pvalyou: FundingRecordFact | null;
+  discovered?: readonly FundingRecordFact[];
 }): { decision: FundingStageDecision; corroboration: CorroboratedFunding } {
-  const corroboration = corroborateFunding({ atomus: i.atomus, pvalyou: i.pvalyou });
+  const corroboration = corroborateFunding({ atomus: i.atomus, pvalyou: i.pvalyou, discovered: i.discovered });
   return {
     corroboration,
     decision: decideFundingStage({

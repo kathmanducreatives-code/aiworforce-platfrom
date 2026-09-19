@@ -57,6 +57,7 @@ import {
   executabilityStateOf, isCapabilityExecutable,
   type ExecutabilityGateMode, type ExecutabilityState,
 } from "./capabilityExecutability.ts";
+import { capabilityRunnable, PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 
 export const FEASIBILITY_VERSION = "request-feasibility-v1" as const;
 
@@ -159,6 +160,8 @@ export interface FeasibilityReport {
 export interface FeasibilityOptions {
   /** `enforce` grades against engine executability; default `legacy` is unchanged. */
   executability?: ExecutabilityGateMode;
+  /** V2: the mission's readiness policy (`routeReadiness.ts`). Default production. */
+  readiness?: ReadinessPolicy;
 }
 
 const NOT_EXECUTABLE: ReadonlySet<RequirementStatus> = new Set<RequirementStatus>([
@@ -271,8 +274,26 @@ export function assessRequestFeasibility(
   //
   // In legacy mode `provingSteps` is every scheduled step, exactly as before.
   const enforce = opts.executability === "enforce";
+  // ONE READINESS AUTHORITY: a step proves something only if the engine runs
+  // it AND one of its actors may run under the mission's policy. A step the
+  // graph left with no runnable actor is judged on its catalogue actors.
+  const policy = opts.readiness ?? PRODUCTION_READINESS;
+  const registryProviders = (capability: string): string[] =>
+    [...((CAPABILITY_REGISTRY as Record<string, { providers: readonly string[] }>)[capability]?.providers ?? [])].map(String);
+  const runs = (capability: string, providers: readonly string[] = []): boolean =>
+    capabilityRunnable(policy, capability, providers.length ? providers : registryProviders(capability)).runnable;
+  /** Why a capability cannot run: the engine's state, or the readiness class of its actors. */
+  const deadState = (capability: string): string =>
+    isCapabilityExecutable(capability)
+      ? capabilityRunnable(policy, capability, registryProviders(capability)).readiness
+      : executabilityStateOf(capability);
+  /** The engine's own words for an engine gap; a readiness gap says it may not run yet. */
+  const cannot = (capability: string, state: string): string =>
+    isCapabilityExecutable(capability)
+      ? `which may not run yet (${state}: no actor for it is proven live)`
+      : `which the engine cannot execute yet (${state})`;
   const provingSteps = enforce
-    ? steps.filter((s) => isCapabilityExecutable(s.capability))
+    ? steps.filter((s) => runs(s.capability, s.providers))
     : steps;
   const keptOut = enforce ? (plan.executability?.unexecutable ?? []) : [];
   const catalogueStep = (capability: string): Step => ({
@@ -299,19 +320,19 @@ export function assessRequestFeasibility(
       };
     }
     const scheduledDead = steps.find((s) =>
-      !isCapabilityExecutable(s.capability) && stepProves(s, event, subject, cohort));
+      !runs(s.capability, s.providers) && stepProves(s, event, subject, cohort));
     const keptDead = scheduledDead
       ? null
       : keptOut.find((u) => stepProves(catalogueStep(u.capability), event, subject, null));
     const dead = scheduledDead?.capability ?? keptDead?.capability ?? null;
     if (!dead) return null;
-    const state = executabilityStateOf(dead);
+    const state = deadState(dead);
     return {
       requirement: phrase,
-      status: (state === "executable" || state === "unsupported" ? "unsupported" : state) as RequirementStatus,
+      status: (NOT_EXECUTABLE.has(state as RequirementStatus) ? state : "unsupported") as RequirementStatus,
       message:
-        `"${event}" would be established by ${dead}, which the engine cannot execute yet ` +
-        `(${state}). Nothing executable in this plan proves it.`,
+        `"${event}" would be established by ${dead}, ${cannot(dead, state)}. ` +
+        `Nothing executable in this plan proves it.`,
       detail: { ...detail, capability: dead, state },
     };
   };
@@ -502,13 +523,16 @@ export function assessRequestFeasibility(
   // run and hand back nothing the user asked for.
   const jobsAsDeliverable = plan.entry_capability === "job_discovery" &&
     (mission as { requested_output?: string }).requested_output === "job_listings";
-  if (enforce && (jobsAsDeliverable || !isCapabilityExecutable(String(plan.entry_capability)))) {
-    const state = jobsAsDeliverable ? "needs_engine_work" : executabilityStateOf(String(plan.entry_capability));
+  const entryRuns = plan.entry_selection
+    ? plan.entry_selection.runnable
+    : runs(String(plan.entry_capability));
+  if (enforce && (jobsAsDeliverable || !entryRuns)) {
+    const state = jobsAsDeliverable ? "needs_engine_work" : deadState(String(plan.entry_capability));
     report.refusals.push({
       code: "entry_not_executable", requirement: `entry:${plan.entry_capability}`,
       message:
-        `This plan starts with ${plan.entry_capability}, which the engine cannot execute yet ` +
-        `(${state}), so it would find nothing.`,
+        `This plan starts with ${plan.entry_capability}, ${cannot(String(plan.entry_capability), state)}, ` +
+        `so it would find nothing.`,
       detail: { entry_capability: plan.entry_capability, state },
     });
   }
@@ -529,8 +553,8 @@ export function assessRequestFeasibility(
       mode: "enforce",
       unexecutable: keptOut.map((u) => ({ capability: u.capability, role: u.role, state: u.state })),
       scheduled_unexecutable: steps
-        .filter((s) => !isCapabilityExecutable(s.capability))
-        .map((s) => ({ capability: s.capability, state: executabilityStateOf(s.capability) })),
+        .filter((s) => !runs(s.capability, s.providers))
+        .map((s) => ({ capability: s.capability, state: deadState(s.capability) as ExecutabilityState })),
     };
   }
   report.ok = report.refusals.length === 0;

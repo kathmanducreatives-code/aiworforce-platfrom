@@ -31,6 +31,7 @@
 //
 // Pure.
 
+import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import type { CallPurpose, Ceilings, CostModelLike } from "./budgetPolicy.ts";
 import { affordableRows, callCeilingFor, estimateCallUsd } from "./budgetPolicy.ts";
 import {
@@ -126,6 +127,11 @@ export interface SpecCompileInput {
   /** memo23 size enum ceiling for a hard bound. Injected (lives in the engine). */
   size_ceiling?: (max: number | null) => string | null;
   page?: number;
+  /**
+   * Who may run (`routeReadiness.ts`). The last gate before money: a spec for
+   * an actor the policy does not allow is compiled REFUSED, whatever planned it.
+   */
+  readiness?: ReadinessPolicy;
 }
 
 const isTemplate = (v: unknown): boolean =>
@@ -431,7 +437,11 @@ export function compileProviderCallSpec(i: SpecCompileInput): ProviderCallSpec {
     `${i.scope.workspace_id}:${i.scope.lineage_id}:apify:${i.actorKey}:${i.purpose}:${canonicalJson(pageless)}:${page}`);
   let status: ProviderCallSpec["status"] = "intended";
   let refusal: ProviderCallSpec["refusal"] = null;
-  if (i.plan.route_refused) {
+  const ready = (i.readiness ?? PRODUCTION_READINESS).decide(i.actorKey, i.capability);
+  if (!ready.executable) {
+    status = "refused_policy";
+    refusal = { code: "route_not_ready", detail: ready.reason };
+  } else if (i.plan.route_refused) {
     status = "refused_policy";
     refusal = { code: "route_refused", detail: i.plan.route_refused };
   } else if (estimate > ceiling + 1e-9) {

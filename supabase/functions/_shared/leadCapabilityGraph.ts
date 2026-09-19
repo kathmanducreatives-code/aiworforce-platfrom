@@ -27,14 +27,13 @@
 // PURE. No network, provider, model or database access.
 
 import {
-  capabilityExecutability, isCapabilityExecutable,
-  type ExecutabilityGateMode, type ExecutabilityState,
+  executabilityStateOf, type ExecutabilityGateMode, type ExecutabilityState,
 } from "./capabilityExecutability.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 import { evidenceCoversPopulation, evidenceProducedBy } from "./actorEvidenceCapability.ts";
 import { isMonitoringMission } from "./monitoringMission.ts";
 import { cohortRefusalFor } from "./leadDiscoveryStrategy.ts";
-import { readinessOf } from "./actorIntelligence.ts";
+import { capabilityRunnable, PRODUCTION_READINESS, type ReadinessPolicy, type RouteMode } from "./routeReadiness.ts";
 import { hiringActorCard } from "./hiringActorCatalog.ts";
 
 export const CAPABILITY_GRAPH_VERSION = "lead-capability-graph-v1" as const;
@@ -696,10 +695,13 @@ export interface CapabilityPlan {
    */
   executability?: { mode: "enforce"; unexecutable: UnexecutableCapability[] };
   /**
-   * V2 only: every entry candidate considered, in order, and the chosen entry's
-   * readiness in Actor Intelligence. Absent in legacy mode.
+   * V2 only: every entry candidate considered, in order; the chosen entry's
+   * readiness; whether ANY entry could run under the mission's readiness
+   * policy (`routeReadiness.ts`). Absent in legacy mode.
    */
-  entry_selection?: { considered: EntryConsideration[]; readiness: string };
+  entry_selection?: {
+    considered: EntryConsideration[]; readiness: string; runnable: boolean; mode: RouteMode;
+  };
 }
 
 export interface EntryConsideration {
@@ -713,6 +715,8 @@ export interface UnexecutableCapability {
   role: "entry" | "verification";
   state: ExecutabilityState;
   reason: string;
+  /** Set when the engine could run it but no actor for it may (`routeReadiness.ts`). */
+  readiness?: string;
 }
 
 export interface CapabilityGraphOptions {
@@ -722,6 +726,11 @@ export interface CapabilityGraphOptions {
    * unchanged — used by V1 and by Signals monitoring.
    */
   executability?: ExecutabilityGateMode;
+  /**
+   * V2 only: who may run. Defaults to production (READY actors only); a
+   * provider probe is passed explicitly, never inferred. Ignored in legacy mode.
+   */
+  readiness?: ReadinessPolicy;
 }
 
 function step(
@@ -872,27 +881,32 @@ export function buildCapabilityGraph(
   // reported instead of producing a silent empty run. In legacy mode `usable`
   // is exactly `isCapabilitySupported`, so the plan is unchanged.
   const enforceExecutability = opts.executability === "enforce";
+  const readiness = opts.readiness ?? PRODUCTION_READINESS;
   const unexecutable: UnexecutableCapability[] = [];
+  // ONE READINESS AUTHORITY (V2). A capability may be entered or scheduled
+  // only when `routeReadiness` says it can run: the engine executes it AND at
+  // least one of its actors may run under this mission's policy — READY in
+  // production; a carded actor only inside an explicit provider probe.
+  // A READY actor gated off this mission (a YC directory for a mission that
+  // names no YC cohort) cannot serve it either, so it does not count.
+  const inCohort = (key: string) => {
+    const card = hiringActorCard(String(key));
+    return card ? cohortRefusalFor(card, mission) === null : true;
+  };
+  const runnable = (id: CapabilityId) =>
+    capabilityRunnable(readiness, id, (CAPABILITY_REGISTRY[id]?.providers ?? []).filter(inCohort));
   const usable = (id: CapabilityId, role: UnexecutableCapability["role"]): boolean => {
     if (!isCapabilitySupported(id)) return false;
-    // ONE READINESS AUTHORITY (V2). The engine being able to execute a
-    // capability is not enough to ENTER through it: one of its actors must be
-    // able to run at all per Actor Intelligence — READY, or carded and
-    // executable but not yet live (said so in an advisory below).
-    if (enforceExecutability && role === "entry" && isCapabilityExecutable(id) && !entryProvidersCanRun(id)) {
-      if (!unexecutable.some((u) => u.capability === id)) {
-        unexecutable.push({ capability: id, role, state: "executable",
-          reason: "no actor for it can run: every provider is NEEDS_*, LEGACY_ONLY or NOT_PRESENT in Actor Intelligence" });
-      }
-      return false;
-    }
-    if (!enforceExecutability || isCapabilityExecutable(id)) return true;
+    if (!enforceExecutability) return true;
+    const r = runnable(id);
+    if (r.runnable) return true;
     if (!unexecutable.some((u) => u.capability === id)) {
-      const e = capabilityExecutability(id);
-      unexecutable.push({ capability: id, role, state: e.state, reason: e.reason });
+      unexecutable.push({ capability: id, role, state: executabilityStateOf(id), reason: r.reason, readiness: r.readiness });
     }
     return false;
   };
+  /** V2 gates every entry row on readiness; legacy rows are exactly as they were. */
+  const entryGate = (id: CapabilityId) => !enforceExecutability || usable(id, "entry");
   const known = mission.company_profile.known_companies ?? [];
   const wantsPeople = mission.requested_output === "contact_ready_leads" ||
     mission.target_entity === "person";
@@ -921,19 +935,22 @@ export function buildCapabilityGraph(
   const asksDiscovery = asked("startup_company_discovery") ||
     asked("general_company_discovery");
   const ENTRY_TABLE: Array<{ capability: CapabilityId; applies: () => boolean; reason: () => string }> = [
-    { capability: "known_company_resolution", applies: () => known.length > 0,
+    { capability: "known_company_resolution", applies: () => known.length > 0 && entryGate("known_company_resolution"),
       reason: () => `${known.length} company identifier(s) supplied by the user — discovery is skipped` },
     { capability: "known_company_resolution",
-      applies: () => missionSaysSo && asked("known_company_resolution") && !asksDiscovery,
+      applies: () => missionSaysSo && asked("known_company_resolution") && !asksDiscovery &&
+        entryGate("known_company_resolution"),
       reason: () => "the mission names the companies to evaluate — no discovery is needed" },
-    { capability: "job_discovery", applies: () => mission.requested_output === "job_listings",
+    { capability: "job_discovery", applies: () => mission.requested_output === "job_listings" && entryGate("job_discovery"),
       reason: () => "the requested output is job listings" },
     { capability: "job_discovery",
       applies: () => enforceExecutability && hiringLedMission(mission) && usable("job_discovery", "entry"),
       reason: () => `the mission is hiring-led: an open ${hiringRoleOf(mission)} role is how these companies are found` },
-    { capability: "startup_company_discovery", applies: () => missionSaysSo && asked("startup_company_discovery"),
+    { capability: "startup_company_discovery",
+      applies: () => missionSaysSo && asked("startup_company_discovery") && entryGate("startup_company_discovery"),
       reason: () => "the mission requires startup-cohort discovery" },
-    { capability: "general_company_discovery", applies: () => missionSaysSo && asked("general_company_discovery"),
+    { capability: "general_company_discovery",
+      applies: () => missionSaysSo && asked("general_company_discovery") && entryGate("general_company_discovery"),
       reason: () => "the mission requires general company discovery outside startup cohorts" },
     { capability: "funding_signal_discovery",
       applies: () => hasSignal(mission, "funding") &&
@@ -948,17 +965,23 @@ export function buildCapabilityGraph(
         usable("product_launch_discovery", "entry"),
       reason: () => "the mission requires a product-launch signal" },
     { capability: "startup_company_discovery",
-      applies: () => mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s)),
+      applies: () => mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s)) &&
+        entryGate("startup_company_discovery"),
       reason: () => "the mission targets startups" },
-    { capability: "general_company_discovery", applies: () => true,
+    { capability: "general_company_discovery", applies: () => entryGate("general_company_discovery"),
       reason: () => "the mission targets companies by profile" },
   ];
+  // NOTHING RUNNABLE IS AN ANSWER, NOT A FALLBACK. Legacy always reaches the
+  // last row. Under V2 every row is gated on readiness, so a mission no ready
+  // route can serve ends here with `runnable: false` — refused by feasibility,
+  // never quietly entered through an actor that has not been proven.
   const considered: EntryConsideration[] = [];
   let chosen = ENTRY_TABLE[ENTRY_TABLE.length - 1];
+  let entryRunnable = false;
   for (const candidate of ENTRY_TABLE) {
     const applies = candidate.applies();
     considered.push({ capability: candidate.capability, applies });
-    if (applies) { chosen = candidate; break; }
+    if (applies) { chosen = candidate; entryRunnable = true; break; }
   }
   const entry: CapabilityId = chosen.capability;
   let entryReason: string = chosen.reason();
@@ -1252,7 +1275,21 @@ export function buildCapabilityGraph(
   // Filtered FIRST, so `allowed_providers` and the steps cannot disagree: a
   // provider allowed but scheduled nowhere is exactly the drift
   // `providerFilterAndProvenance` refuses.
-  const admissibleSteps = withAdmissibleProviders(steps, mission);
+  // V2: a step keeps only the actors that may run under the readiness policy,
+  // so the engine is never handed one that may not — and `allowed_providers`,
+  // built from these steps, cannot name one either.
+  const admissibleSteps = withAdmissibleProviders(steps, mission).map((s) => {
+    if (!enforceExecutability || s.providers.length === 0) return s;
+    const r = runnable(s.capability);
+    // Each scheduled actor, asked of the readiness authority directly.
+    const kept = s.providers.filter((p) => inCohort(String(p)) && readiness.decide(String(p), s.capability).executable);
+    if (kept.length === s.providers.length) return s;
+    if (kept.length === 0 && s.capability !== entry && !unexecutable.some((u) => u.capability === s.capability)) {
+      unexecutable.push({ capability: s.capability, role: "verification", state: executabilityStateOf(s.capability),
+        reason: r.reason, readiness: r.readiness });
+    }
+    return { ...s, providers: kept };
+  });
   const allowed_providers = [...new Set(admissibleSteps.flatMap((s) => s.providers))];
 
   // ── WHAT THE ROUTER KNOWS AND THE MODEL CANNOT INFER ──────────────────────
@@ -1357,15 +1394,13 @@ export function buildCapabilityGraph(
     );
   }
 
-  if (enforceExecutability) {
-    const readiness = entryReadiness(entry);
-    if (readiness !== "READY" && readiness !== "none") {
-      routing_advisories.push(
-        `This mission enters through ${entry}, whose actors are ${readiness} in Actor Intelligence: ` +
-        "carded and executable, but never run live under Lead V2. This run is their first live proof; " +
-        "treat its yield as unverified until it has been checked.",
-      );
-    }
+  const entryRun = runnable(entry);
+  if (enforceExecutability && readiness.mode === "provider_probe" && entryRunnable &&
+      readiness.decide(entryRun.providers[0] ?? null, entry).via === "provider_probe") {
+    routing_advisories.push(
+      `PROVIDER PROBE: this mission enters through ${entry} on ${entryRun.providers.join(", ")}, which has not ` +
+      "been proven live; it runs only because this probe opened it. Its yield is the evidence the probe exists to collect.",
+    );
   }
   return {
     version: CAPABILITY_GRAPH_VERSION,
@@ -1378,32 +1413,10 @@ export function buildCapabilityGraph(
     routing_reason: entryReason,
     routing_advisories,
     ...(enforceExecutability ? { executability: { mode: "enforce" as const, unexecutable } } : {}),
-    ...(enforceExecutability ? { entry_selection: { considered, readiness: entryReadiness(entry) } } : {}),
+    ...(enforceExecutability
+      ? { entry_selection: { considered, readiness: entryRun.readiness, runnable: entryRunnable, mode: readiness.mode } }
+      : {}),
   };
-}
-
-/** Actor Intelligence states in which an entry actor can run at all. */
-const RUNNABLE: ReadonlySet<string> = new Set(["READY", "CARDED_BUT_NOT_LIVE"]);
-
-/**
- * Does at least one of this capability's providers run? A provider-less
- * capability (known companies) does. Today every executable entry has one, so
- * this guards the day a card is demoted without its capability being gated.
- */
-export function entryProvidersCanRun(
-  id: CapabilityId,
-  readiness: (actor: string, capability: CapabilityId) => string = (a, c) => readinessOf(a, c).readiness,
-): boolean {
-  const providers = CAPABILITY_REGISTRY[id]?.providers ?? [];
-  return providers.length === 0 || providers.some((p) => RUNNABLE.has(readiness(p, id)));
-}
-
-/** The best readiness among an entry's providers; `none` when it buys nothing. */
-function entryReadiness(id: CapabilityId): string {
-  const providers = CAPABILITY_REGISTRY[id]?.providers ?? [];
-  if (providers.length === 0) return "none";
-  const states = providers.map((p) => readinessOf(p, id).readiness);
-  return states.includes("READY") ? "READY" : states.includes("CARDED_BUT_NOT_LIVE") ? "CARDED_BUT_NOT_LIVE" : states[0];
 }
 
 // ------------------------------------------------------------ invariants ----

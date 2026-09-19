@@ -83,7 +83,12 @@ export type CacheReader = (domain: string) => Promise<Map<string, {
 
 export interface EvidenceRunnerDeps {
   plan: (payload: Record<string, unknown>) => Promise<unknown>;
-  extract: (payload: Record<string, unknown>) => Promise<unknown>;
+  /**
+   * Optional. The legacy route extracts claims for its mission re-evaluation;
+   * a claim verifier re-grounds the canonical claim from the stored pages
+   * instead, so it collects without extracting (no model call).
+   */
+  extract?: ((payload: Record<string, unknown>) => Promise<unknown>) | null;
   fetchPage: PageFetcher;
   /** Optional. Omitted, every page is bought — the pre-fix behaviour. */
   readCache?: CacheReader | null;
@@ -411,6 +416,9 @@ export async function runEvidenceCollection(i: {
         )
         ? "site_unavailable"
         : "no_useful_pages";
+    } else if (!i.deps.extract) {
+      // Collected and stored; the caller re-reads them.
+      outcome.outcome = "collected";
     } else {
       try {
         const raw = await i.deps.extract(

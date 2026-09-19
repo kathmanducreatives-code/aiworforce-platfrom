@@ -241,13 +241,19 @@ import {
 import {
   summarizeResearchWave, validateRouteControl, type ResearchWaveSummary, type RouteCallStat,
 } from "./researchFeedback.ts";
-import { ACTOR_READINESS, readinessOf, routeActorReady } from "./actorIntelligence.ts";
+import { ACTOR_READINESS, readinessOf } from "./actorIntelligence.ts";
+import { PRODUCTION_READINESS, routeActorReady, type ReadinessPolicy } from "./routeReadiness.ts";
 import { markProviderUnavailable, unavailableProvider, type UnavailableProvider } from "./providerAvailability.ts";
 import {
   attemptedRoutes, verifyOpKey, type ClaimVerifier, type PendingVerifierRun, type VerifierFinding,
 } from "./claimVerifier.ts";
 import { candidateDecision, decisionCounts, decisionSummary, type CandidateDecision, type MissionCandidate } from "./workbenchMissionView.ts";
 import { deriveMissionCriteria } from "./missionCriteria.ts";
+import { fundingRecordEvidenceItem, fundingRecordFromDiscoveredRound } from "./fundingCorroboration.ts";
+import {
+  decideFundingStage, fundingStageEvidenceItem, normalizeRoundType, stageRank,
+  type FundingRecordFact, type FundingStageDecision,
+} from "./fundingStageClaim.ts";
 import {
   amendRetrievalPlan, anchorForCapability, buildRetrievalPlan, planEntryForCall, purposeForCapability, continuationAmendmentRefusal,
   type AmendmentTrigger, type RetrievalPlan,
@@ -2106,6 +2112,12 @@ export interface CapabilityEngineOpts {
    * only. Absent/`off`: today's behaviour, unchanged (V1, Signals monitoring).
    */
   specMode?: "enforce" | "off";
+  /**
+   * Who may run (`routeReadiness.ts`), read under `specMode: "enforce"` by the
+   * discovery selector, RetrievalPlan validation, the route controller and the
+   * spec compiler — one decision. Default: production (READY only).
+   */
+  readiness?: ReadinessPolicy;
   /** Idempotency scope when no resume scope exists. */
   specScope?: { workspace_id: string; lineage_id: string };
   ceilings?: Partial<Ceilings>;
@@ -2614,6 +2626,13 @@ export async function runCapabilityPlan(
 
   // ── P2: THE EXECUTION SPINE ─────────────────────────────────────────────────
   const specOn = opts.specMode === "enforce";
+  const routePolicy: ReadinessPolicy = opts.readiness ?? PRODUCTION_READINESS;
+  /** The funding rung the mission asks for, when it asks for one — what a discovered round is judged against. */
+  const requiredRoundStage: string | null = (() => {
+    const c = deriveMissionCriteria(opts.mission).find((x) => x.dimension === "company_stage" &&
+      typeof x.value === "string" && stageRank(normalizeRoundType(x.value)) !== null);
+    return c ? String(c.value) : null;
+  })();
   const criteriaPolicy = specOn ? criteriaExecutionPolicy(opts.mission) : null;
   const p2MissionHash = specOn ? await missionHash(opts.mission) : "";
   const p2Scope = {
@@ -3507,6 +3526,7 @@ export async function runCapabilityPlan(
             ? [{ value: engineCount, changed_by: "budget_policy" as const, reason: "engine batch sizing for this stage" }]
             : []),
         size_ceiling: memo23MaxSizeCeiling,
+        readiness: routePolicy,
       });
       state.provider_call_specs!.push(specSummary(callSpec));
       lastCallRef = { route_id: callSpec.route_id, plan_version: callSpec.plan_version, provider_call_id: callSpec.provider_call_id };
@@ -4236,6 +4256,7 @@ export async function runCapabilityPlan(
     const plan = buildRetrievalPlan({
       mission: opts.mission, mission_hash: p2MissionHash, graph: opts.plan,
       execution_plan: executionPlan, policy: criteriaPolicy, ceilings: state.spend_ledger!.ceilings,
+      readiness: routePolicy,
     });
     state.retrieval_plans!.push(plan);
     appendTrace(state.mission_trace!, "retrieval_plan_created", {
@@ -4300,6 +4321,7 @@ export async function runCapabilityPlan(
         mission: opts.mission, mission_hash: p2MissionHash, graph: opts.plan,
         execution_plan: amendedPlan, policy: criteriaPolicy, ceilings: current.ceilings,
         extra_routes: [...priorAdjacent, ...newRoutes.map((r) => ({ ...r, purpose: "adjacent" as const }))],
+        readiness: routePolicy,
       },
       trigger, component: "retrieval_controller",
       rationale: amendedPlan?.reasoning ?? "discovery replan",
@@ -4972,7 +4994,7 @@ export async function runCapabilityPlan(
         try {
           proposal = await deps.controlRoutes({
             summary, mission: opts.mission, plan, capability: cap,
-            ready_actors: ACTOR_READINESS.filter((r) => r.capability === cap && r.readiness === "READY").map((r) => r.actor),
+            ready_actors: ACTOR_READINESS.filter((r) => r.capability === cap && routePolicy.decide(r.actor, cap).executable).map((r) => r.actor),
           });
         } catch (e) {
           log("route_control_failed", { error: String(e).slice(0, 200) });
@@ -4982,7 +5004,7 @@ export async function runCapabilityPlan(
         const decision = validateRouteControl(proposal, {
           summary, plan, continuation: resumedOntoPlan,
           routeReady: (actor, capability) => capability === cap
-            ? routeActorReady(actor, capability)
+            ? routeActorReady(actor, capability, routePolicy)
             : { ready: false, reason: `this discovery stage is ${cap}; ${capability} routes are added by their own stage` },
           estimateUsd: (actor, input) => {
             const card = hiringActorCard(actor);
@@ -5431,8 +5453,15 @@ export async function runCapabilityPlan(
               // arising.
               if (!round.is_evidence) continue;
               const fundedCompany = fundingRoundToCompany(round);
-              const fundedHolder = addCompany(companies, fundedCompany, [], null, undefined, observedBy(cap, provider));
+              const fundedCtx = observedBy(cap, provider);
+              const fundedHolder = addCompany(companies, fundedCompany, [], null, undefined, fundedCtx);
               fundingRounds.push(round);
+              // THE ROUND IS FUNDING EVIDENCE, NOT JUST A WAY IN. Recorded on
+              // the company as a FundingRecordFact (never a complete history),
+              // so the funding-stage claim reads what was already bought — a
+              // dated later round contradicts the asked stage now; the asked
+              // stage itself stays PENDING until completeness is proven.
+              if (fundedHolder) recordDiscoveredFunding(fundedHolder, round, fundedCtx, requiredRoundStage);
               // KEYED THE WAY THE POOL KEYS IT. `fundingRounds` was pushed to
               // and never read, so the round — stage, amount, announced date,
               // investors, articles — was collected, paid for and discarded,
@@ -10819,6 +10848,43 @@ export function applyVerifierFinding(
     if (!c.completed_operations.includes(op)) c.completed_operations.push(op);
   }
   return recorded;
+}
+
+/**
+ * A funding-discovery round, recorded where the funding-stage claim reads it.
+ *
+ * Always: the round as a `funding` item carrying its FundingRecordFact. Only
+ * when the round already CONTRADICTS the asked stage (a dated later round):
+ * the `company_stage` item that says so, under the same stable id and
+ * observation the funding-stage verifier writes — so a later verifier answer
+ * replaces it rather than standing beside it. A round AT the asked stage writes
+ * no stage item: one event is not a history, so the claim stays PENDING.
+ */
+export function recordDiscoveredFunding(
+  c: EngineCompany, round: NormalizedFundingRound, ctx: ObservationContext, requiredStage: string | null,
+): { record: FundingRecordFact; stage: FundingStageDecision | null } {
+  const record = fundingRecordFromDiscoveredRound(round, {
+    actor: ctx.actor_key, provider_call_id: ctx.provider_call_id, observed_at: ctx.observed_at,
+  });
+  const item = fundingRecordEvidenceItem({ company_key: c.key, record, mission_id: ctx.mission_id, observed_at: ctx.observed_at });
+  recordObservation(c, {
+    version: CANDIDATE_OBSERVATION_VERSION,
+    observation_id: `obs_fdr_${item.evidence_id}`.slice(0, 64),
+    capability: ctx.capability, actor_key: ctx.actor_key, provider: ctx.provider,
+    route_id: ctx.route_id, plan_version: ctx.plan_version, provider_call_id: ctx.provider_call_id,
+    source_record_id: null, source_url: record.source_url, observed_at: ctx.observed_at,
+    entity_hint: entityHintFromCompany(c.company), evidence: [item],
+  });
+  if (!requiredStage) return { record, stage: null };
+  const stage = decideFundingStage({ required_stage: requiredStage, record, pass_requires_source_url: true });
+  const stageItem = fundingStageEvidenceItem({
+    company_key: c.key, decision: stage, record, mission_id: ctx.mission_id,
+    provider_call_id: ctx.provider_call_id, observed_at: ctx.observed_at,
+  });
+  // `answered: false` — discovery is not the verifier. A company it could not
+  // settle still gets the verifier's completeness check.
+  if (stageItem) applyVerifierFinding(c, { company_key: c.key, item: stageItem, answered: false, detail: {} }, { key: "funding_discovery", route_actor: ctx.actor_key });
+  return { record, stage };
 }
 
 export function applyRegroundedVerification(

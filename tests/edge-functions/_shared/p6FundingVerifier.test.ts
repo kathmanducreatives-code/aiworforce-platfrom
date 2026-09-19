@@ -28,6 +28,7 @@ import {
 import { newSpendLedger, DEFAULT_CEILINGS } from "../../../supabase/functions/_shared/budgetPolicy.ts";
 import { CLAIM_REGISTRY, evidenceGapsFor, type ClaimDefinition } from "../../../supabase/functions/_shared/evidenceGapRouter.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
+import type { EvidenceItem } from "../../../supabase/functions/_shared/candidateObservation.ts";
 import { applyVerifierFinding, missionCandidatesFrom } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { checkCriterion } from "../../../supabase/functions/_shared/candidateEligibility.ts";
 import { fundingVerifierReady } from "../../../supabase/functions/_shared/missionCriteria.ts";
@@ -137,9 +138,10 @@ function fakeDeps(o: {
 const ok = (rows: Row[], id = "pc_x"): VerifierCallOutcome => ({ status: "ok", rows, provider_call_id: id });
 const atomusRow = (slug: string) => (FX.atomus as Row[]).find((r) => r.input === slug)!;
 const pvRow = (domain: string) => (FX.pvalyou as Row[]).find((r) => r.query === domain)!;
-const target = (key: string, li: string | null, domain: string | null): VerificationTarget => ({
+const target = (key: string, li: string | null, domain: string | null, evidence: EvidenceItem[] = []): VerificationTarget => ({
   company_key: key, name: key, domain, linkedin_url: li,
   criterion: { criterion_id: "company_stage:seed", dimension: "company_stage", value: "seed" },
+  graph: buildCompanyEvidenceGraph(key, evidence),
 });
 /** atomus echoes the input it was sent; the fixture rows were read by slug. */
 const echo = (row: Row, sent: string): Row => ({ ...row, input: sent });
@@ -348,15 +350,17 @@ Deno.test("a round stage stays unprovable until the funding verifier is READY", 
 
 Deno.test("run-agent runs the verifiers on canonical gaps, before the view, bound to the ledger, with a kill switch", () => {
   const src = Deno.readTextFileSync(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
-  const block = src.indexOf("// ── CLAIM VERIFIERS: EVIDENCE GAPS CHOOSE THE NEXT ROUTE");
+  const block = src.indexOf("// ── CLAIM VERIFIERS: CANONICAL GAPS → VERIFIER → PURCHASE");
   const view = src.indexOf("const p5View = (p2Specs && capabilityRun && persistedMission)");
   assert(block > 0 && view > block, "verifiers run before the canonical view is built");
   for (const wired of [
     `readEnvSafe("LEAD_V2_CLAIM_VERIFIERS")`,
-    "const targets = verificationTargets(verifier, vCandidates,",
+    "const phase = await runClaimVerificationPhase({",
+    "verifiers: [fundingStageVerifier(), businessModel],",
+    "readiness: leadReadiness,",
     "call: ledgerBoundCall({",
-    "applyVerifierFinding(company, f, verifier);",
-    "capabilityRun.resume_records = capabilityRun.companies.map(toResumeRecord)",
+    "return company ? applyVerifierFinding(company, f, verifier) : false;",
+    "engineRun.resume_records = engineRun.companies.map(toResumeRecord)",
     "(capabilityRun?.state.verifier_pending_runs?.length ?? 0)",
   ]) assert(src.includes(wired), `run-agent must carry: ${wired}`);
 });

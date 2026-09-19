@@ -31,6 +31,7 @@ import { canonicalJson, sha256Hex } from "./providerInputFingerprint.ts";
 import type { EvidenceItem } from "./candidateObservation.ts";
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import { evidenceGapsFor, type ClaimDefinition, CLAIM_REGISTRY } from "./evidenceGapRouter.ts";
+import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 
 export const CLAIM_VERIFIER_VERSION = "claim-verifier-v1" as const;
 
@@ -51,6 +52,11 @@ export interface VerificationTarget {
   linkedin_url: string | null;
   /** The hard criterion this verification answers. */
   criterion: { criterion_id: string; dimension: string; value: unknown };
+  /**
+   * What the mission already holds about this company. A verifier reads it
+   * before it buys anything — evidence discovery carried is never re-bought.
+   */
+  graph: CompanyEvidenceGraph;
 }
 
 export interface VerifierCall {
@@ -143,16 +149,19 @@ export function verificationTargets(
   candidates: readonly VerifiableCandidate[],
   criteriaValue: (criterionId: string) => unknown,
   registry: readonly ClaimDefinition[] = CLAIM_REGISTRY,
+  /** The same readiness decision the router and the planner read. */
+  policy: ReadinessPolicy = PRODUCTION_READINESS,
 ): VerificationTarget[] {
   const out: Array<VerificationTarget & { open: number }> = [];
   for (const c of candidates) {
     if (c.eligibility !== "pending") continue;
-    const gaps = evidenceGapsFor(c.hard_checks, c.graph, registry, new Set(c.attempted_routes));
+    const gaps = evidenceGapsFor(c.hard_checks, c.graph, registry, new Set(c.attempted_routes), policy);
     const mine = gaps.find((g) => g.next === "verify" && g.route?.actor === verifier.route_actor);
     if (!mine) continue;
     out.push({
       company_key: c.company_key, name: c.name, domain: c.domain, linkedin_url: c.linkedin_url,
       criterion: { criterion_id: mine.criterion_id, dimension: mine.dimension, value: criteriaValue(mine.criterion_id) },
+      graph: c.graph,
       open: gaps.length,
     });
   }

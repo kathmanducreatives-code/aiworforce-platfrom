@@ -29,6 +29,7 @@ import { buildCapabilityGraph, type CapabilityPlan } from "../_shared/leadCapabi
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
 import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
 import { executabilityGateFor } from "../_shared/capabilityExecutability.ts";
+import { readinessPolicyFor } from "../_shared/routeReadiness.ts";
 import { validateV2KickoffBody } from "../_shared/leadMissionV2Request.ts";
 import {
   resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, spendRefusalMessage,
@@ -826,6 +827,7 @@ Deno.serve(async (req) => {
       // cannot execute. V1 workspaces keep today's graph (legacy).
       const graph: CapabilityPlan = buildCapabilityGraph(approvedMission, {
         executability: executabilityGateFor(workspace_id, (k) => Deno.env.get(k)),
+        readiness: readinessPolicyFor(workspace_id, (k) => Deno.env.get(k)),
       });
       const missionStep = mkStep(
         0,

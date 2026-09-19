@@ -40,7 +40,7 @@
 //
 // Pure. No network, no model, no database. Not part of `missionHash`.
 
-import { readinessOf } from "./actorIntelligence.ts";
+import { PRODUCTION_READINESS } from "./routeReadiness.ts";
 import {
   canonicalSignalType, containsPhrase, isHiringSignal,
   type FieldProvenance, type LeadMissionV1, type MissionSignal,
@@ -852,7 +852,12 @@ export function criteriaSections(
   return sections;
 }
 
-/** Is the known-company funding-stage route live? (`evidenceGapRouter`, `fundingStageVerifier`.) */
+/**
+ * Is the known-company funding-stage route live IN PRODUCTION? Criteria are
+ * derived without a mission's policy (every reader derives them the same way),
+ * so provability follows the production decision of the one readiness
+ * authority — a provider probe never makes a criterion look answerable.
+ */
 export function fundingVerifierReady(): boolean {
-  return readinessOf("apify_funding_atomus", "funding_verification").readiness === "READY";
+  return PRODUCTION_READINESS.decide("apify_funding_atomus", "funding_verification").executable;
 }

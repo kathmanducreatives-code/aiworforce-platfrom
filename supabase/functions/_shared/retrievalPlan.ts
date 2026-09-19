@@ -25,7 +25,7 @@
 import type { CapabilityPlan } from "./leadCapabilityGraph.ts";
 import type { ExecutionPlan } from "./leadExecutionPlan.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
-import { isCapabilityExecutable } from "./capabilityExecutability.ts";
+import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import { canonicalJson, sha256Hex } from "./providerInputFingerprint.ts";
 import type { CallPurpose, Ceilings } from "./budgetPolicy.ts";
 import {
@@ -192,6 +192,8 @@ export interface BuildPlanInput {
   execution_limit?: number | null;
   /** Discovery selections proposed outside the execution plan (a replan). */
   extra_routes?: Array<{ capability: string; provider: string; input: Record<string, unknown>; purpose: "exact" | "adjacent" }>;
+  /** Who may run (`routeReadiness.ts`). Not plan content: never hashed. */
+  readiness?: ReadinessPolicy;
 }
 
 function contentOf(p: Omit<RetrievalPlan, "content_hash">) {
@@ -279,7 +281,7 @@ export function buildRetrievalPlan(i: BuildPlanInput): RetrievalPlan {
     created_by: "retrieval_planner",
     amendment: null,
   };
-  const violations = validateRetrievalPlan({ ...draft, content_hash: "" }, i.policy);
+  const violations = validateRetrievalPlan({ ...draft, content_hash: "" }, i.policy, i.readiness);
   for (const v of violations) {
     if (!v.blocking) continue;
     const r = routes.find((x) => x.route_id === v.route_id);
@@ -288,13 +290,17 @@ export function buildRetrievalPlan(i: BuildPlanInput): RetrievalPlan {
   return { ...draft, content_hash: planContentHash(draft) };
 }
 
-export function validateRetrievalPlan(plan: RetrievalPlan, policy: CriteriaExecutionPolicy): PlanViolation[] {
+export function validateRetrievalPlan(
+  plan: RetrievalPlan, policy: CriteriaExecutionPolicy, readiness: ReadinessPolicy = PRODUCTION_READINESS,
+): PlanViolation[] {
   const out: PlanViolation[] = [];
   const hardGeo = hardLocations(policy);
   for (const r of plan.routes) {
-    if (!isCapabilityExecutable(r.capability)) {
-      out.push({ code: "route_not_executable", route_id: r.route_id, blocking: true,
-        detail: `${r.capability} is not executable by the engine` });
+    // THE ONE READINESS AUTHORITY: the engine executes the capability AND this
+    // actor may run for it under the mission's policy.
+    const d = readiness.decide(r.provider || null, r.capability);
+    if (!d.executable) {
+      out.push({ code: "route_not_executable", route_id: r.route_id, blocking: true, detail: d.reason });
     }
     if (r.route_ceiling_usd > plan.ceilings.mission_provider_usd + 1e-9) {
       out.push({ code: "route_ceiling_above_mission", route_id: r.route_id, blocking: true,

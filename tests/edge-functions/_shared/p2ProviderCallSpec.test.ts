@@ -1,5 +1,6 @@
 // LEAD V2 P2 — THE PROVIDER CALL SPEC. WHAT IS COMPILED IS WHAT IS SENT.
 
+import { PRODUCTION_READINESS, readinessPolicy, type ReadinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
 import { assert, assertEquals, assertFalse, assertNotEquals, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { compileProviderCallSpec, type SpecCompileInput } from "../../../supabase/functions/_shared/providerCallSpec.ts";
 import { ACTOR_INPUT_CONTRACTS } from "../../../supabase/functions/_shared/actorInputContracts.ts";
@@ -38,6 +39,17 @@ const HARD_SIZE = mission("Find 3 B2B SaaS startups in the US with 10 to 50 empl
   employee_range: { min: 10, max: 50 }, preferred_signals: ["hiring software engineers"],
 });
 
+/**
+ * This file pins INPUT compilation. Whether an actor may run is the readiness
+ * authority's question (`p6ClaimDrivenReadiness.test.ts`), so these specs are
+ * compiled under a fixture that opens every pair; the readiness refusal itself
+ * is pinned at the end of this file.
+ */
+const openAll: ReadinessPolicy = {
+  mode: "production",
+  describe: () => ({ mode: "production", probe_routes: [], allow_experimental: [], overrides: ["*"] }),
+  decide: (actor, capability) => ({ actor, capability, readiness: "READY", executable: true, via: "ready", reason: "fixture" }),
+};
 function input(actor: string, over: Partial<SpecCompileInput> & { mission?: typeof US_SAAS } = {}): SpecCompileInput {
   const card = hiringActorCard(actor);
   const m = over.mission ?? US_SAAS;
@@ -49,6 +61,7 @@ function input(actor: string, over: Partial<SpecCompileInput> & { mission?: type
     ceilings: { ...DEFAULT_CEILINGS }, cost_model: card?.cost_model ?? null,
     contract_fields: ACTOR_INPUT_CONTRACTS[actor]?.fields ?? null,
     card_enums: card?.verified_enums, card_limits: card?.input_limits, size_ceiling: memo23MaxSizeCeiling,
+    readiness: openAll,
     ...over,
   } as SpecCompileInput;
 }
@@ -243,4 +256,19 @@ Deno.test("the spec is frozen and its idempotency identity is stable and input-s
     proposed: { mode: "companies", queries: ["B2B SaaS"] }, scope: { workspace_id: "ws-1", lineage_id: "lin-2" },
   }));
   assertNotEquals(a.idempotency_key, otherLineage.idempotency_key);
+});
+
+Deno.test("READINESS: a spec for an actor production may not run is compiled REFUSED, whatever planned it", () => {
+  // datahyena has never run live in Lead V2: a plan naming it gets no spec to send.
+  const refused = compileProviderCallSpec(input("apify_funding_rounds_datahyena", {
+    capability: "funding_signal_discovery", readiness: PRODUCTION_READINESS,
+  }));
+  assertEquals(refused.status, "refused_policy");
+  assertEquals(refused.refusal?.code, "route_not_ready");
+  // The same call inside a probe that opened exactly that route is intended.
+  const probed = compileProviderCallSpec(input("apify_funding_rounds_datahyena", {
+    capability: "funding_signal_discovery",
+    readiness: readinessPolicy({ mode: "provider_probe", probe_routes: ["apify_funding_rounds_datahyena|funding_signal_discovery"] }),
+  }));
+  assert(probed.refusal?.code !== "route_not_ready", JSON.stringify(probed.refusal));
 });

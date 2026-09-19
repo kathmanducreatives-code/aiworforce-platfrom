@@ -5,6 +5,7 @@
 // P2 specs enforced; and an invoker serving the rows the actor-audit probe
 // actually returned on 2026-09-16 (tests/fixtures/lead-v2/p3-job-discovery-probe.json).
 
+import { readinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { runCapabilityPlan, functionTitlesFor, teamFunctionMembers } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { buildCapabilityGraph, firstInFunctionRequested, hiringLedMission } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
@@ -46,6 +47,12 @@ const GRAPH = buildCapabilityGraph(MISSION, { executability: "enforce" });
  * first-hire TARGET (a target never buys expensive verification); these tests
  * keep proving what the engine does when a lookup is planned.
  */
+/**
+ * …and whose team actor may run. It is NEEDS_PROVIDER_WORK in production, so
+ * the spec compiler refuses it there before any call (pinned below); these
+ * tests open it by fixture to keep the engine's team mechanism proven.
+ */
+const TEAM_READY = readinessPolicy({ overrides: { "apify_linkedin_company_employees|hiring_verification": "READY" } });
 const TEAM_PLAN = (() => {
   const g = JSON.parse(JSON.stringify(GRAPH));
   g.steps.find((s: { capability: string }) => s.capability === "hiring_verification").providers.push("apify_linkedin_company_employees");
@@ -273,7 +280,7 @@ Deno.test("job discovery sends GPT's JSON exactly, takes identity from the rows 
 });
 
 Deno.test("hiring verification buys nothing it holds; the team check runs only where the posting is silent", async () => {
-  const { sent, result } = await run({ plan: TEAM_PLAN });
+  const { sent, result } = await run({ plan: TEAM_PLAN, readiness: TEAM_READY });
   const verificationSearches = byActor(sent, "apify_linkedin_job_search").filter((s) => "company" in s.input);
   assertEquals(verificationSearches.length, 0);
   const pipewise = result.companies.find((c) => c.company.linkedin_company_url === "https://www.linkedin.com/company/pipewise")!;
@@ -328,7 +335,7 @@ Deno.test("a first-hire TARGET buys no team lookup: the posting's words decide, 
 });
 
 Deno.test("a team lookup the tool layer refuses is tried once, releases its reservation and blocks no company", async () => {
-  const { sent, result } = await run({ plan: TEAM_PLAN }, { refuseTeam: true });
+  const { sent, result } = await run({ plan: TEAM_PLAN, readiness: TEAM_READY }, { refuseTeam: true });
   assertEquals(byActor(sent, "apify_linkedin_company_employees").length, 1, "an unavailable provider is not retried per company");
   const team = result.state.spend_ledger.reservations.filter((r: { purpose: string }) => r.purpose === "hiring_evidence");
   assertEquals(team.map((r: { status: string }) => r.status), ["released"], "refused before any run: nothing booked");
@@ -354,7 +361,7 @@ Deno.test("a spent job-first pool widens by the next page on continuation, as a 
 });
 
 Deno.test("the first-hire check still runs when GPT's chain omits hiring verification (canary 2a215d44)", async () => {
-  const { sent, result } = await run({ plan: TEAM_PLAN }, { chainOmitsHiring: true });
+  const { sent, result } = await run({ plan: TEAM_PLAN, readiness: TEAM_READY }, { chainOmitsHiring: true });
   assertEquals(byActor(sent, "apify_linkedin_job_search").length, 1, "no paid job re-search is added back");
   assertEquals(byActor(sent, "apify_linkedin_company_employees").length, 2, "the bounded team checks run");
   const hv = result.capability_outcomes.find((o) => o.capability === "hiring_verification");
@@ -396,4 +403,21 @@ Deno.test("an explicit numeric Company Brain size is a hard Brain rule on the ca
   assert(runAgent.includes("compileCompanyBrainContext({ workspace_id, profile: brain as unknown as Record<string, unknown> })"));
   const labelled = compileCompanyBrainContext({ workspace_id: "", profile: { icp: { company_size: "Founder-led to early-stage teams; lean GTM or recruiting ops" } } }).icp;
   assertEquals([labelled.company_size_min, labelled.company_size_max], [1, 150]);
+});
+
+Deno.test("PRODUCTION: a planned team lookup is refused by readiness before any call is sent", async () => {
+  const { sent, result } = await run({ plan: TEAM_PLAN });
+  assertEquals(byActor(sent, "apify_linkedin_company_employees").length, 0, "never sent");
+  const refused = (result.state.provider_attempts as Array<Record<string, unknown>>)
+    .filter((a) => a.provider === "apify_linkedin_company_employees");
+  assert(refused.length > 0 && refused.every((a) => a.outcome === "refused_policy" && String(a.reason).startsWith("route_not_ready")),
+    JSON.stringify(refused));
+});
+
+Deno.test("a first-hire TARGET schedules no team lookup even were the team actor READY — the target rule, not readiness", () => {
+  const plan = buildCapabilityGraph(MISSION, { executability: "enforce",
+    readiness: readinessPolicy({ overrides: { "apify_linkedin_company_employees|hiring_verification": "READY" } }) });
+  assert(firstInFunctionRequested(MISSION), "this mission does ask for a first hire");
+  assertFalse(plan.allowed_providers.includes("apify_linkedin_company_employees"));
+  assertFalse(plan.steps.some((st) => st.providers.includes("apify_linkedin_company_employees")));
 });

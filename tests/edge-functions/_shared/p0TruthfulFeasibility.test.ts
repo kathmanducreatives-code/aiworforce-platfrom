@@ -22,6 +22,20 @@ import { compileFirstProviderCall } from "../../../supabase/functions/_shared/le
 import { isCapabilityExecutable } from "../../../supabase/functions/_shared/capabilityExecutability.ts";
 import { buildMissionPreview } from "../../../supabase/functions/_shared/missionPreview.ts";
 import { parseLeadMissionDeterministic, type LeadMissionV1 } from "../../../supabase/functions/_shared/leadMission.ts";
+import { readinessPolicy, type ReadinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
+
+/**
+ * P0 asked "can the ENGINE execute this?". Since the readiness authority,
+ * production also asks "has an actor for it run live?" — so the carded routes
+ * these tests call "working" run only inside an explicit provider probe that
+ * opens them. Production refusal of the same missions is pinned below.
+ */
+const PROBE: ReadinessPolicy = readinessPolicy({ mode: "provider_probe", probe_routes: [
+  "apify_funding_rounds_datahyena|funding_signal_discovery",
+  "apify_linkedin_company_search|general_company_discovery",
+  "apify_google_news|expansion_signal_verification",
+  "apify_google_news|product_launch_verification",
+] });
 
 // deno-lint-ignore no-explicit-any
 type Json = any;
@@ -37,12 +51,12 @@ const legacyOf = (id: string) =>
 
 globalThis.fetch = () => { throw new Error("P0 feasibility must not reach the network"); };
 
-function enforce(m: LeadMissionV1): { plan: CapabilityPlan; f: FeasibilityReport; preflightBlocks: string[] } {
-  const plan = buildCapabilityGraph(m, { executability: "enforce" });
-  const f = assessRequestFeasibility(m, plan, { executability: "enforce" });
+function enforce(m: LeadMissionV1, readiness: ReadinessPolicy = PROBE): { plan: CapabilityPlan; f: FeasibilityReport; preflightBlocks: string[] } {
+  const plan = buildCapabilityGraph(m, { executability: "enforce", readiness });
+  const f = assessRequestFeasibility(m, plan, { executability: "enforce", readiness });
   const first = compileFirstProviderCall(plan);
   const preflight = buildPaidExecutionPreflight({
-    mission: m, plan, executability: "enforce",
+    mission: m, plan, executability: "enforce", readiness,
     firstProvider: first.provider,
     firstProviderInput: first.compiled?.ok ? first.compiled.input : null,
     firstProviderCompileOk: first.compiled ? first.compiled.ok : undefined,
@@ -53,7 +67,35 @@ function enforce(m: LeadMissionV1): { plan: CapabilityPlan; f: FeasibilityReport
 const statuses = (f: FeasibilityReport) => f.requirements.map((r) => r.status);
 const codes = (f: FeasibilityReport) => f.refusals.map((r) => r.code);
 
-// ── working routes stay feasible ─────────────────────────────────────────────
+// ── production: a route never proven live is refused, before any spend ───────
+
+Deno.test("PRODUCTION: profile and funding-first missions are refused while their discovery actors are unproven", () => {
+  const prod = readinessPolicy();
+  for (const [m, entry] of [
+    [parseLeadMissionDeterministic("Find US B2B SaaS companies."), "general_company_discovery"],
+    [mission("q4"), "general_company_discovery"],
+  ] as Array<[LeadMissionV1, string]>) {
+    const { plan, f, preflightBlocks } = enforce(m, prod);
+    assertFalse(plan.entry_selection!.runnable, "no READY entry");
+    assertEquals(plan.entry_capability, entry);
+    assertFalse(f.ok);
+    const refusal = f.refusals.find((r) => r.code === "entry_not_executable")!;
+    assert(refusal && /CARDED_BUT_NOT_LIVE/.test(refusal.message), refusal?.message);
+    assert(preflightBlocks.includes("request_not_feasible"), "blocked before the first paid call");
+    assertEquals(plan.steps.find((s) => s.capability === entry)!.providers, [], "no unproven actor is handed to the engine");
+  }
+  // The same missions under a probe that opens the routes run (below).
+  assert(enforce(mission("q4"), PROBE).f.ok);
+});
+
+Deno.test("PRODUCTION: a hiring mission still runs — its whole route is READY", () => {
+  const { plan, f } = enforce(mission("q1"), readinessPolicy());
+  assert(f.ok);
+  assertEquals(plan.entry_capability, "job_discovery");
+  assertEquals(plan.entry_selection!.mode, "production");
+});
+
+// ── working routes stay feasible (under a probe that opens their carded actors) ──
 
 Deno.test("company-profile mission stays feasible", () => {
   const { plan, f, preflightBlocks } = enforce(parseLeadMissionDeterministic("Find US B2B SaaS companies."));

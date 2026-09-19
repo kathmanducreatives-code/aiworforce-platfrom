@@ -91,6 +91,10 @@ export interface FundingRecordFact {
   history_complete: boolean | null;
   observed_at: string | null;
   source_url: string | null;
+  /** The paid call that returned it, when one did — so a claim can cite the purchase. */
+  provider_call_id?: string | null;
+  /** Who the record is about, as the provider named them. Identity, not evidence. */
+  company?: { name: string | null; domain: string | null; linkedin_url: string | null } | null;
 }
 
 export type FundingStageVerdict = "pass" | "fail" | "pending";

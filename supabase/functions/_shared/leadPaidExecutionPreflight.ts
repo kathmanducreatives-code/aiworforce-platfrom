@@ -37,6 +37,7 @@ import type { ContractCompatibility } from "./leadRuntimeIdentity.ts";
 import {
   CAPABILITY_REGISTRY, type CapabilityId, type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
+import type { ReadinessPolicy } from "./routeReadiness.ts";
 import { assessRequestFeasibility, type FeasibilityReport } from "./requestFeasibility.ts";
 
 export const PREFLIGHT_VERSION = "paid-execution-preflight-v1" as const;
@@ -162,6 +163,8 @@ export interface BuildPreflightInput {
   playbook?: PlaybookAuthorization | null;
   /** P0 — grade feasibility against engine executability (Lead V2 only). */
   executability?: ExecutabilityGateMode;
+  /** The mission's readiness policy (`routeReadiness.ts`); production by default. */
+  readiness?: ReadinessPolicy;
 }
 
 function isStartupMission(m: LeadMissionV1): boolean {
@@ -452,7 +455,7 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
   // proof path is not a weak plan, it is a false one: it would spend on
   // discovery, enrichment and qualification and then report success for a fact
   // nothing investigated.
-  const feasibility = assessRequestFeasibility(mission, plan, { executability: i.executability });
+  const feasibility = assessRequestFeasibility(mission, plan, { executability: i.executability, readiness: i.readiness });
   for (const r of feasibility.refusals) {
     block("request_not_feasible", `${r.requirement} — ${r.message}`);
   }

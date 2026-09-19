@@ -27,7 +27,8 @@ import {
 import {
   stopRoutes, summarizeResearchWave, validateRouteControl, type ResearchWaveSummary,
 } from "../../../supabase/functions/_shared/researchFeedback.ts";
-import { readinessOf, routeActorReady } from "../../../supabase/functions/_shared/actorIntelligence.ts";
+import { readinessOf } from "../../../supabase/functions/_shared/actorIntelligence.ts";
+import { routeActorReady } from "../../../supabase/functions/_shared/routeReadiness.ts";
 import { buildRetrievalPlan, type RetrievalPlan } from "../../../supabase/functions/_shared/retrievalPlan.ts";
 import { criteriaExecutionPolicy } from "../../../supabase/functions/_shared/criteriaExecutionPolicy.ts";
 import { DEFAULT_CEILINGS } from "../../../supabase/functions/_shared/budgetPolicy.ts";

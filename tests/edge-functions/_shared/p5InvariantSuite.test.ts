@@ -8,6 +8,7 @@
 // capability engine over three slices with stubbed providers — no network, no
 // model, no database.
 
+import { readinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 import { mergeCompanyBrainIntoMission } from "../../../supabase/functions/_shared/leadMission.ts";
@@ -301,6 +302,8 @@ function harness(specMode: "enforce" | "off", employees: "disabled" | "empty" = 
     // The team lookup is PLANNED here (V2 no longer grants it for a first-hire
     // target), so the once-per-mission refusal guarantee stays exercised.
     mission: MISSION, plan: withTeamLookup(buildCapabilityGraph(MISSION, { executability: "enforce" })), maxCandidates: 10,
+    // …and let it run: the team actor is NEEDS_PROVIDER_WORK in production.
+    readiness: readinessPolicy({ overrides: { "apify_linkedin_company_employees|hiring_verification": "READY" } }),
     readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
     specMode, specScope: { workspace_id: "ws-inv", lineage_id: "lineage-inv" }, identity: { task_id: "task-inv", workspace_id: "ws-inv" }, ...extra,
   });

@@ -5,8 +5,13 @@
 // PENDING, route READY, not yet answered); this decides WHAT the funding record
 // says, cheapest first:
 //
+//   0. what the mission already holds: funding discovery's rounds, read from
+//        the company's evidence graph (never re-bought). They cite, and they
+//        can contradict; they never prove completeness.
 //   1. atomus, one batch, by LinkedIn page                       ~$0.0035 each
 //        a verified later round (Series A+)  → FAIL, done
+//        complete history, latest = Seed, and a DISCOVERED round cites that
+//        same Seed round                     → PASS, no pvalyou purchase
 //   2. pvalyou, batches of 2, only for Seed / pre-seed / unclear    $0.02 each
 //        corroborated by `fundingCorroboration`, decided with
 //        `pass_requires_source_url`:
@@ -26,7 +31,7 @@ import {
   type VerifierDeps, type VerifierFinding,
 } from "./claimVerifier.ts";
 import {
-  ATOMUS_FUNDING_ACTOR_KEY, atomusSettles, decideCorroboratedFundingStage,
+  ATOMUS_FUNDING_ACTOR_KEY, atomusSettles, decideCorroboratedFundingStage, fundingRecordsInGraph,
   normalizeAtomusFunding, normalizePvalyouFunding, PVALYOU_FUNDING_ACTOR_KEY,
 } from "./fundingCorroboration.ts";
 import { fundingStageEvidenceItem, type FundingRecordFact, type FundingStageDecision } from "./fundingStageClaim.ts";
@@ -75,7 +80,12 @@ interface PvalyouCarry {
   atomus: Record<string, FundingRecordFact | null>;
   inputs: Record<string, string>;
   atomus_call_id: string | null;
+  /** The funding records each company's graph already carried (discovery). */
+  discovered?: Record<string, FundingRecordFact[]>;
 }
+
+/** The records discovery already bought for this company. */
+const discoveredOf = (t: VerificationTarget): FundingRecordFact[] => (t.graph ? fundingRecordsInGraph(t.graph) : []);
 
 export function fundingStageVerifier(): ClaimVerifier {
   return {
@@ -99,6 +109,7 @@ export function fundingStageVerifier(): ClaimVerifier {
           const atomus = carry.atomus[t.company_key] ?? null;
           const { decision, corroboration } = decideCorroboratedFundingStage({
             required_stage: String(t.criterion.value ?? ""), atomus, pvalyou: pv?.record ?? null,
+            discovered: carry.discovered?.[t.company_key] ?? [],
           });
           findings.push(finding(t, decision, corroboration.record, {
             mission_id: ctx.mission_id, provider_call_id: callId ?? carry.atomus_call_id, at,
@@ -164,18 +175,34 @@ export function fundingStageVerifier(): ClaimVerifier {
         }
       }
 
-      // ── 3. what atomus settles alone: a verified later round ─────────────
+      // ── 3. what atomus settles alone, or with what discovery carried ─────
       const needCitation: VerificationTarget[] = [];
+      const discovered: Record<string, FundingRecordFact[]> = {};
       for (const t of fresh) {
         const atomus = atomusRecords[t.company_key] ?? null;
+        discovered[t.company_key] = discoveredOf(t);
         const failed = atomusSettles(String(t.criterion.value ?? ""), atomus);
         if (failed) {
           findings.push(finding(t, failed, atomus, {
             mission_id: ctx.mission_id, provider_call_id: atomusCallId, at, stage: "atomus_later_round",
           }));
-        } else {
-          needCitation.push(t);
+          continue;
         }
+        // NOT RE-BOUGHT: a discovered round that cites the decisive round —
+        // or cites a later one — decides the claim without pvalyou.
+        if (atomus && discovered[t.company_key].length > 0) {
+          const { decision, corroboration } = decideCorroboratedFundingStage({
+            required_stage: String(t.criterion.value ?? ""), atomus, pvalyou: null, discovered: discovered[t.company_key],
+          });
+          if (decision.verdict !== "pending") {
+            findings.push(finding(t, decision, corroboration.record, {
+              mission_id: ctx.mission_id, provider_call_id: atomusCallId, at, stage: "atomus_with_discovery",
+              conflicts: corroboration.conflicts,
+            }));
+            continue;
+          }
+        }
+        needCitation.push(t);
       }
 
       // ── 4. pvalyou cites, for Seed / pre-seed / unclear ──────────────────
@@ -190,12 +217,12 @@ export function fundingStageVerifier(): ClaimVerifier {
         // Nothing can cite these this mission: decide on atomus alone (PENDING at best).
         settleWithPvalyou({
           targets: deps.ready(PVALYOU_FUNDING_ACTOR_KEY) ? uncitable : needCitation,
-          atomus: atomusRecords, inputs, atomus_call_id: atomusCallId,
+          atomus: atomusRecords, inputs, atomus_call_id: atomusCallId, discovered,
         }, null, null);
       }
       if (deps.ready(PVALYOU_FUNDING_ACTOR_KEY)) {
         for (const group of batches(citable, PVALYOU_BATCH)) {
-          await runPvalyou({ targets: group, atomus: atomusRecords, inputs, atomus_call_id: atomusCallId });
+          await runPvalyou({ targets: group, atomus: atomusRecords, inputs, atomus_call_id: atomusCallId, discovered });
         }
       }
       return { findings, pending };

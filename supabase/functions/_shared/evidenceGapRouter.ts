@@ -38,7 +38,7 @@
 //
 // Pure. No provider, model or database.
 
-import { readinessOf, type ActorReadiness } from "./actorIntelligence.ts";
+import { PRODUCTION_READINESS, type ReadinessPolicy, type RouteReadinessDecision } from "./routeReadiness.ts";
 import { EVIDENCE_VALIDITY_DAYS, type EvidenceDimension } from "./candidateObservation.ts";
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 
@@ -158,7 +158,7 @@ export function claimFor(
 }
 
 export interface GapRoute {
-  actor: string; capability: string; purpose: string; readiness: ActorReadiness;
+  actor: string; capability: string; purpose: string; readiness: RouteReadinessDecision["readiness"];
   tried: boolean; executable: boolean; why: string;
   cost_hint_usd: number;
 }
@@ -179,6 +179,7 @@ export interface EvidenceGap {
 /** The routes for a claim, judged for one company. */
 function judgeRoutes(
   def: ClaimDefinition | null, graph: CompanyEvidenceGraph, attempted: ReadonlySet<string>,
+  policy: ReadinessPolicy,
 ): GapRoute[] {
   if (!def) return [];
   // TRIED means the actor has already answered for this company on ANY
@@ -186,14 +187,17 @@ function judgeRoutes(
   // bought, and asking again returns the same page.
   const answered = new Set(graph.claims.flatMap((c) => c.sources));
   return def.routes.map((r) => {
-    const readiness = readinessOf(r.actor, r.capability).readiness;
+    // THE ONE READINESS AUTHORITY: the same decision the planner, the verifier
+    // runner and the spec compiler read (`routeReadiness.ts`).
+    const decision = policy.decide(r.actor, r.capability);
+    const readiness = decision.readiness;
     // …or a claim verifier has already answered through this route, whatever
     // its verdict: a PENDING funding stage writes no evidence item, and without
     // the mark the router would send the same company to the same verifier on
     // every slice (`verifyOpKey` in `claimVerifier`).
     const tried = attempted.has(r.actor) || r.evidence_actors.some((a) => answered.has(a));
-    const executable = readiness === "READY" && !tried && r.canonical_executor;
-    const why = readiness !== "READY" ? `${r.actor} is ${readiness}`
+    const executable = decision.executable && !tried && r.canonical_executor;
+    const why = !decision.executable ? decision.reason
       : tried ? `${r.actor} already answered for this company`
       : !r.canonical_executor ? r.executor_note
       : "ready";
@@ -208,10 +212,12 @@ export function evidenceGapsFor(
   registry: readonly ClaimDefinition[] = CLAIM_REGISTRY,
   /** Route actors a claim verifier has already answered through for this company. */
   attempted: ReadonlySet<string> = new Set(),
+  /** Who may run (`routeReadiness.ts`). Production unless a probe says otherwise. */
+  policy: ReadinessPolicy = PRODUCTION_READINESS,
 ): EvidenceGap[] {
   return checks.filter((c) => c.result === "unknown").map((c) => {
     const def = claimFor(c.dimension, registry);
-    const considered = judgeRoutes(def, graph, attempted);
+    const considered = judgeRoutes(def, graph, attempted, policy);
     // CHEAPEST FIRST among the routes that can actually answer it.
     const route = [...considered].filter((r) => r.executable)
       .sort((a, b) => a.cost_hint_usd - b.cost_hint_usd)[0] ?? null;

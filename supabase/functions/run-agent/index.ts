@@ -92,13 +92,14 @@ import { resolveIndustryExclusions } from "../_shared/industryPrecedence.ts";
 import { AUTO_RESUME_SUPPRESSED_KEY } from "../_shared/stalledLeadResume.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 import { executabilityGateFor } from "../_shared/capabilityExecutability.ts";
+import { readinessPolicyFor } from "../_shared/routeReadiness.ts";
 // GPT chooses the discovery Actors. `validateDiscoveryStrategy` in the engine
 // decides which of its choices are allowed; this only supplies the proposal.
 import { makeGptDiscoveryPlanner } from "../_shared/gptDiscoveryPlanner.ts";
 import { DiscoveryStrategyBlockedError } from "../_shared/leadDiscoveryStrategy.ts";
 import { makeGptExecutionPlanner } from "../_shared/gptExecutionPlanner.ts";
 import { makeGptRouteController } from "../_shared/gptRouteController.ts";
-import { canonicalDecisions, projectResearchFabric } from "../_shared/leadCapabilityEngine.ts";
+import { canonicalDecisions, canonicalQualifiedKeys, projectResearchFabric } from "../_shared/leadCapabilityEngine.ts";
 import { requiredEvidenceDimensions } from "../_shared/evidenceGraph.ts";
 import { criteriaSections, deriveMissionCriteria } from "../_shared/missionCriteria.ts";
 import { effectiveRequestedCount as p5RequestedCount } from "../_shared/leadMission.ts";
@@ -163,9 +164,13 @@ import {
 import { emptyEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
 import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
 import { applyVerifierFinding } from "../_shared/leadCapabilityEngine.ts";
-import { ledgerBoundCall, verificationTargets } from "../_shared/claimVerifier.ts";
+import { ledgerBoundCall } from "../_shared/claimVerifier.ts";
+import { runClaimVerificationPhase } from "../_shared/claimVerificationPhase.ts";
+import { buildClaimPlan } from "../_shared/claimPlan.ts";
+import {
+  businessModelVerifier, claimPageBudget, claimPageDebts, claimPagePlan,
+} from "../_shared/businessModelVerifier.ts";
 import { fundingStageVerifier } from "../_shared/fundingStageVerifier.ts";
-import { readinessOf } from "../_shared/actorIntelligence.ts";
 import { hiringActorCard } from "../_shared/hiringActorCatalog.ts";
 import { estimateCallUsd } from "../_shared/budgetPolicy.ts";
 import { hashInput as claimVerifierHashInput } from "../_shared/hiringActorInputs.ts";
@@ -2226,8 +2231,12 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // (Lead V2). LEAD_V2_SPECS=off is the rollback.
         const p2Specs = leadExecutabilityGate === "enforce" &&
           String(readEnvSafe("LEAD_V2_SPECS") ?? "").trim().toLowerCase() !== "off";
+        // ONE READINESS AUTHORITY for the whole run: the graph, feasibility,
+        // the engine's spec compiler, the gap router and the claim verifiers
+        // all read this. Production unless this workspace is a named probe.
+        const leadReadiness = readinessPolicyFor(workspace_id, (k) => Deno.env.get(k));
         const missionPlan = persistedMission
-          ? buildCapabilityGraph(persistedMission, { executability: leadExecutabilityGate })
+          ? buildCapabilityGraph(persistedMission, { executability: leadExecutabilityGate, readiness: leadReadiness })
           : null;
         console.log("[run-agent][lead-mission]", {
           task_id: task.id,
@@ -2236,6 +2245,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           mission_type: persistedMission?.mission_type ?? null,
           requested_output: persistedMission?.requested_output ?? null,
           entry_capability: missionPlan?.entry_capability ?? null,
+          readiness: leadReadiness.describe(),
           bound_referents: persistedBindings.length,
           capabilities: missionPlan?.steps.map((s) => s.capability) ?? null,
           allowed_providers: missionPlan?.allowed_providers ?? null,
@@ -2605,6 +2615,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           : { provider: null, compiled: null };
         const paidPreflight = buildPaidExecutionPreflight({
           executability: leadExecutabilityGate,
+          readiness: leadReadiness,
           mission: persistedMission,
           plan: missionPlan,
           firstProvider: firstCall.provider,
@@ -3797,6 +3808,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               mission: roundMission,
               plan: roundGraph,
               specMode: p2Specs ? "enforce" : "off",
+              readiness: leadReadiness,
               specScope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
               // ── WHICH REAL COMPANY EACH REFERENT MEANT ──────────────────
               //
@@ -4076,7 +4088,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     const roundMission = plan
                       ? applyRoundPlanToMission(persistedMission, plan)
                       : persistedMission;
-                    const roundGraph = buildCapabilityGraph(roundMission, { executability: leadExecutabilityGate });
+                    const roundGraph = buildCapabilityGraph(roundMission, { executability: leadExecutabilityGate, readiness: leadReadiness });
                     latest = await executeRound(
                       roundMission, roundGraph,
                       // WHAT THE PREVIOUS ROUND ALREADY PROVED, so identity and
@@ -4340,8 +4352,84 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             //
             // OFF unless explicitly enabled, so a deploy cannot start doing
             // anything new by accident.
+            // ── THE WEB-EVIDENCE PAGE FETCHER ──────────────────────────────
+            //
+            // One paid path for every first-party page, shared by the legacy
+            // (V1) evidence route and the V2 business-model claim verifier:
+            // under P2 every page is a spec'd, reserved, recorded call on the
+            // mission's own ledger — or it is not bought.
+            const webEvidencePageFetcher = () => {
+                      const fetchOne = async (
+                        { url, request_id, spec }: {
+                          url: string; request_id: string;
+                          spec?: import("../_shared/providerCallSpec.ts").ProviderCallSpec;
+                        },
+                      ): ReturnType<import("../_shared/webEvidenceRunner.ts").PageFetcher> => {
+                        const r = await runTool("scrape_url", {
+                          // P2: under specs, EXACTLY the spec's input.
+                          ...(spec ? spec.serialized_input : {
+                            url,
+                            extraction_goal: "requirement evidence",
+                            max_pages: 1,
+                          }),
+                          capability_key: "web_evidence_verification",
+                          compiled_input_hash: request_id,
+                          ...(spec ? { provider_call_spec: spec } : {}),
+                          // The ledger's own vocabulary: this enriches a company
+                          // with evidence, and the reason it runs at all is that
+                          // a required piece of evidence is missing.
+                          audit_stage: "company_enrichment",
+                          audit_reason: "fill_required_evidence",
+                          actor_id: "firecrawl_scrape",
+                          ...auditOwnership(),
+                        }, baseCtx);
+                        const data = (r.data ?? {}) as Record<string, unknown>;
+                        const md = typeof data.markdown === "string"
+                          ? data.markdown
+                          : Array.isArray(data.pages) && data.pages.length > 0
+                          ? String((data.pages[0] as Record<string, unknown>)?.markdown ?? "")
+                          : "";
+                        const meta = (data.metadata ?? {}) as Record<string, unknown>;
+                        const code = typeof meta.statusCode === "number"
+                          ? meta.statusCode
+                          : null;
+                        return {
+                          ok: r.ok === true,
+                          markdown: md,
+                          final_url: (typeof meta.sourceURL === "string"
+                            ? meta.sourceURL
+                            : typeof data.source_url === "string"
+                            ? data.source_url
+                            : null) ?? url,
+                          status_code: code,
+                          status: r.ok === true
+                            ? (md.trim() ? "ok" : "empty")
+                            : String(r.error ?? "").includes("timeout")
+                            ? "timeout"
+                            : "not_found",
+                        };
+                      };
+                      // P2: every page is a spec'd, reserved, recorded call on
+                      // the mission's own ledger — or it is not bought.
+                      if (p2Specs && capabilityRun) {
+                        return specGovernedPageFetcher({
+                          state: capabilityRun.state as never,
+                          scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
+                          usd_per_credit: webEvidenceCreditRate(readEnvSafe).usd_per_credit,
+                          send: (spec) => fetchOne({
+                            url: String(spec.serialized_input.url), request_id: spec.idempotency_key, spec,
+                          }),
+                          log: (event, meta) => console.log(`[run-agent][${event}]`, { task_id: task.id, ...meta }),
+                        });
+                      }
+                      return ({ url, request_id }: { url: string; request_id: string; company_key: string }) =>
+                        fetchOne({ url, request_id });
+            };
             const evidenceMode = Deno.env.get("EVIDENCE_ENRICHMENT") ?? "off";
-            if (evidenceMode === "plan_only" || evidenceMode === "execute") {
+            // V1 ONLY. Under Lead V2 the legacy Brain's evidence debt may not
+            // decide which companies get paid pages: the business-model claim
+            // verifier below buys them, for exactly the canonical gaps.
+            if ((evidenceMode === "plan_only" || evidenceMode === "execute") && !p2Specs) {
               try {
                 const debtCandidates = capabilityRun.companies.map((c) => ({
                   key: c.key,
@@ -4488,73 +4576,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                       // orphan — the exact defect (D2) that cost run a5c1616e
                       // a paid job search. One synchronous page per call means
                       // there is never an in-flight fetch to strand.
-                      fetchPage: (() => {
-                      const fetchOne = async (
-                        { url, request_id, spec }: {
-                          url: string; request_id: string;
-                          spec?: import("../_shared/providerCallSpec.ts").ProviderCallSpec;
-                        },
-                      ): ReturnType<import("../_shared/webEvidenceRunner.ts").PageFetcher> => {
-                        const r = await runTool("scrape_url", {
-                          // P2: under specs, EXACTLY the spec's input.
-                          ...(spec ? spec.serialized_input : {
-                            url,
-                            extraction_goal: "requirement evidence",
-                            max_pages: 1,
-                          }),
-                          capability_key: "web_evidence_verification",
-                          compiled_input_hash: request_id,
-                          ...(spec ? { provider_call_spec: spec } : {}),
-                          // The ledger's own vocabulary: this enriches a company
-                          // with evidence, and the reason it runs at all is that
-                          // a required piece of evidence is missing.
-                          audit_stage: "company_enrichment",
-                          audit_reason: "fill_required_evidence",
-                          actor_id: "firecrawl_scrape",
-                          ...auditOwnership(),
-                        }, baseCtx);
-                        const data = (r.data ?? {}) as Record<string, unknown>;
-                        const md = typeof data.markdown === "string"
-                          ? data.markdown
-                          : Array.isArray(data.pages) && data.pages.length > 0
-                          ? String((data.pages[0] as Record<string, unknown>)?.markdown ?? "")
-                          : "";
-                        const meta = (data.metadata ?? {}) as Record<string, unknown>;
-                        const code = typeof meta.statusCode === "number"
-                          ? meta.statusCode
-                          : null;
-                        return {
-                          ok: r.ok === true,
-                          markdown: md,
-                          final_url: (typeof meta.sourceURL === "string"
-                            ? meta.sourceURL
-                            : typeof data.source_url === "string"
-                            ? data.source_url
-                            : null) ?? url,
-                          status_code: code,
-                          status: r.ok === true
-                            ? (md.trim() ? "ok" : "empty")
-                            : String(r.error ?? "").includes("timeout")
-                            ? "timeout"
-                            : "not_found",
-                        };
-                      };
-                      // P2: every page is a spec'd, reserved, recorded call on
-                      // the mission's own ledger — or it is not bought.
-                      if (p2Specs && capabilityRun) {
-                        return specGovernedPageFetcher({
-                          state: capabilityRun.state as never,
-                          scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
-                          usd_per_credit: webEvidenceCreditRate(readEnvSafe).usd_per_credit,
-                          send: (spec) => fetchOne({
-                            url: String(spec.serialized_input.url), request_id: spec.idempotency_key, spec,
-                          }),
-                          log: (event, meta) => console.log(`[run-agent][${event}]`, { task_id: task.id, ...meta }),
-                        });
-                      }
-                      return ({ url, request_id }: { url: string; request_id: string; company_key: string }) =>
-                        fetchOne({ url, request_id });
-                      })(),
+                      fetchPage: webEvidencePageFetcher(),
                     },
                   });
                   // P2: the evidence pages' specs and spend, written down.
@@ -4836,25 +4858,31 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               }
             }
 
-            // ── CLAIM VERIFIERS: EVIDENCE GAPS CHOOSE THE NEXT ROUTE ───────
+            // ── CLAIM VERIFIERS: CANONICAL GAPS → VERIFIER → PURCHASE ──────
             //
-            // For every PENDING company whose hard gap the router routes to a
-            // registered verifier, buy exactly that claim's evidence, through
-            // the mission ledger, and record the canonical answer before the
-            // Workbench view is built below. Independent of the legacy
-            // evidence debt above: targets come ONLY from canonical gaps.
+            // The ONE place a Lead V2 mission buys verification. For every
+            // PENDING company whose hard gap the router routes to a registered
+            // verifier, that verifier buys exactly its claim's evidence through
+            // the mission ledger, and the canonical answer is written before the
+            // Workbench view is built below (`claimVerificationPhase.ts`).
             //
-            // Today: the funding-stage verifier (atomus + pvalyou). A route is
-            // taken only when Actor Intelligence says READY, so this is dormant
-            // until the pair is proven live; `LEAD_V2_CLAIM_VERIFIERS=off` is
-            // the kill switch. Never throws into the run: a failed verifier
-            // leaves every claim exactly as pending as it was.
+            //   business model   first-party pages, re-grounded (firecrawl)
+            //   funding stage    atomus completeness + pvalyou / discovery citations
+            //
+            // Cheapest route first; nothing more is bought once the request is
+            // met; a route is taken only when the run's readiness policy allows
+            // it. `LEAD_V2_CLAIM_VERIFIERS=off` is the kill switch, and
+            // `EVIDENCE_ENRICHMENT` other than `execute` still stops web spend.
+            // Never throws into the run: a failed verifier leaves every claim
+            // exactly as pending as it was.
             if (p2Specs && capabilityRun && persistedMission && capabilityRun.state.spend_ledger &&
                 String(readEnvSafe("LEAD_V2_CLAIM_VERIFIERS") ?? "").trim().toLowerCase() !== "off") {
               try {
-                const vState = capabilityRun.state;
-                const vCriteria = deriveMissionCriteria(persistedMission);
-                const vCandidates = missionCandidatesFrom(capabilityRun, { missionId: String(task.id) }).map((cand) => {
+                const engineRun = capabilityRun;
+                const vState = engineRun.state;
+                const vMission = persistedMission;
+                const vCriteria = deriveMissionCriteria(vMission);
+                const vCandidates = () => missionCandidatesFrom(engineRun, { missionId: String(task.id) }).map((cand) => {
                   const e = evaluateEligibility(vCriteria, cand.graph);
                   return {
                     company_key: cand.company_key, name: cand.name, domain: cand.domain, linkedin_url: cand.linkedin_url,
@@ -4863,57 +4891,140 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     attempted_routes: cand.attempted_routes ?? [],
                   };
                 });
-                const readiness = (actorKey: string) => readinessOf(actorKey, "funding_verification").readiness;
-                const deps = {
-                  call: ledgerBoundCall({
-                    ledger: vState.spend_ledger!,
-                    scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
-                    estimate: (actorKey, input) => {
-                      const card = hiringActorCard(actorKey);
-                      return card?.cost_model ? estimateCallUsd(actorKey, card.cost_model, input) : Number.POSITIVE_INFINITY;
-                    },
-                    actorIdFor: (actorKey) => hiringActorCard(actorKey)?.actor_id ?? null,
-                    invoke: (call) => capabilityInvoke(call),
-                    hash: (input, actorKey) => claimVerifierHashInput(input, actorKey),
-                    onRefused: (actorKey, reason) => {
-                      vState.unavailable_providers = markProviderUnavailable(vState.unavailable_providers, {
-                        provider: actorKey, capability: "funding_verification", reason,
-                        refused_at: new Date().toISOString(), readiness_at_refusal: readiness(actorKey),
-                      });
-                    },
-                  }),
-                  ready: (actorKey: string) => readiness(actorKey) === "READY" &&
-                    !unavailableProvider(vState.unavailable_providers, actorKey, readiness(actorKey), readEnvSafe),
-                  now: () => new Date().toISOString(),
-                  log: (event: string, meta?: Record<string, unknown>) =>
-                    console.log(`[run-agent][claim-verifier][${event}]`, { task_id: task.id, ...(meta ?? {}) }),
-                };
-                let changed = 0;
-                for (const verifier of [fundingStageVerifier()]) {
-                  const mine = (vState.verifier_pending_runs ?? []).filter((r) => r.verifier === verifier.key);
-                  const targets = verificationTargets(verifier, vCandidates,
-                    (id) => vCriteria.find((c) => c.id === id)?.value ?? null);
-                  if (targets.length === 0 && mine.length === 0) continue;
-                  const result = await verifier.verify(targets, deps, { mission_id: String(task.id), pending: mine });
-                  for (const f of result.findings) {
-                    const company = capabilityRun.companies.find((c) => c.key === f.company_key);
-                    if (!company) continue;
-                    applyVerifierFinding(company, f, verifier);
-                    changed++;
-                  }
-                  vState.verifier_pending_runs = [
-                    ...(vState.verifier_pending_runs ?? []).filter((r) => r.verifier !== verifier.key),
-                    ...result.pending,
-                  ];
-                  console.log("[run-agent][claim-verifier]", {
-                    task_id: task.id, verifier: verifier.key, targets: targets.length, adopted: mine.length,
-                    findings: result.findings.map((f) => ({ company: f.company_key, ...f.detail })),
-                    pending_runs: result.pending.length,
-                  });
-                }
+                const verifierLog = (event: string, meta?: Record<string, unknown>) =>
+                  console.log(`[run-agent][claim-verifier][${event}]`, { task_id: task.id, ...(meta ?? {}) });
+                const unavailable = (actorKey: string) => unavailableProvider(vState.unavailable_providers, actorKey,
+                  leadReadiness.decide(actorKey, "funding_verification").readiness, readEnvSafe) !== null;
+                const businessModel = businessModelVerifier({
+                  collect: async (targets, intents, maxPages) => {
+                    // Web spend is still switched by EVIDENCE_ENRICHMENT.
+                    if (evidenceMode !== "execute") return {};
+                    const debts = claimPageDebts(targets);
+                    const run = await runEvidenceCollection({
+                      workspace_id, debts, budget: claimPageBudget(debts.length, intents, maxPages),
+                      deps: {
+                        plan: () => Promise.resolve(claimPagePlan(debts, intents)),
+                        extract: null,
+                        db: supabase,
+                        readCache: async (domain: string) => {
+                          const rows = await readFreshPages(supabase, { workspace_id, domain });
+                          return new Map([...rows].map(([intent, r]) => [intent, {
+                            source_url: r.source_url, source_text: r.source_text, fetched_at: r.fetched_at, status: r.status,
+                          }]));
+                        },
+                        fetchPage: webEvidencePageFetcher(),
+                        log: (event, meta) => verifierLog(`pages:${event}`, meta),
+                      },
+                    });
+                    if (p2Specs) {
+                      const spine = await persistP2Spine(supabase as unknown as SpineDb, {
+                        workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId),
+                      }, vState as SpineState);
+                      if (spine.errors.length) console.log("[run-agent][p2-spine][claim-pages]", spine.errors);
+                    }
+                    return Object.fromEntries(run.companies.map((c) => [c.company_key, { pages_ok: c.pages_ok, outcome: c.outcome }]));
+                  },
+                  reground: async (key) => {
+                    const r = await regroundPendingClaims({
+                      requiresCommercialSignal: (vMission.required_signals ?? []).some((sig) => String(sig.type) === "hiring"),
+                      candidates: [{
+                        company_key: key, business_model_pending: true,
+                        grounded_source_urls: (engineRun.companies.find((c) => c.key === key)?.evidence_registry?.items ?? [])
+                          .filter((it) => it.evidence_type === "web_page").map((it) => it.source_url ?? "").filter(Boolean),
+                      }],
+                      limit: 1,
+                      deps: {
+                        pagesFor: async (k) => {
+                          const c = engineRun.companies.find((x) => x.key === k);
+                          const domain = c?.enriched?.canonical_domain ?? c?.company.canonical_domain ?? null;
+                          if (!domain) return [];
+                          const fresh = await readFreshPages(supabase, { workspace_id: String(workspace_id ?? ""), domain });
+                          const usable = [...fresh.values()].filter((pg) => pg.status === "ok" && pg.source_text);
+                          return selectCompanyPages(usable).pages.map((pg) => ({
+                            source_url: pg.source_url, page_intent: pg.page_intent,
+                            source_text: pg.source_text, fetched_at: pg.fetched_at ?? null,
+                          }));
+                        },
+                        rebuildRegistry: (k, pages) => engineRun.rebuild_registry(k, pages.map((pg) => ({
+                          source_url: pg.source_url, page_intent: pg.page_intent,
+                          source_text: pg.source_text, fetched_at: pg.fetched_at,
+                        }))),
+                        ground: groundedBinding.groundCompany
+                          ? (({ registry, requiresCommercialSignal }) => groundedBinding.groundCompany!({
+                            registry: registry as never, requiresCommercialSignal,
+                          }))
+                          : null,
+                        apply: (k, verification) => {
+                          const c = engineRun.companies.find((x) => x.key === k);
+                          if (!c) return { item: null, decision: null };
+                          return applyRegroundedVerification(c, verification, String(task.id), new Date().toISOString());
+                        },
+                        log: (event, meta) => verifierLog(`reground:${event}`, meta),
+                      },
+                    });
+                    const o = r.outcomes[0];
+                    return { status: o?.status ?? null, decision: o?.decision ?? null, skipped: o?.skipped ?? null };
+                  },
+                });
+                // THE CLAIM PLAN: which HARD claims the mission needs, which the
+                // entry already carries, and which READY routes can answer the
+                // rest. Only verifiers answering a hard claim are run.
+                const claimPlan = buildClaimPlan(vCriteria, missionPlan?.entry_capability ?? null, leadReadiness);
+                console.log("[run-agent][claim-plan]", {
+                  task_id: task.id, entry: claimPlan.entry_capability,
+                  hard: claimPlan.hard.map((h) => ({ claim: h.claim, dimension: h.dimension, status: h.status, routes: h.routes.map((r) => r.actor) })),
+                  targets: claimPlan.targets.map((t) => t.dimension), unprovable: claimPlan.unprovable.map((u) => u.label),
+                });
+                const phase = await runClaimVerificationPhase({
+                  mission_id: String(task.id),
+                  claim_plan: claimPlan,
+                  requested_count: p5RequestedCount(vMission),
+                  candidates: vCandidates,
+                  qualified: () => canonicalQualifiedKeys(engineRun.companies, {
+                    mission: vMission, plan: { entry_capability: missionPlan?.entry_capability ?? null },
+                    identity: { task_id: String(task.id) },
+                  }).length,
+                  criteriaValue: (id) => vCriteria.find((c) => c.id === id)?.value ?? null,
+                  verifiers: [fundingStageVerifier(), businessModel],
+                  readiness: leadReadiness,
+                  unavailable,
+                  pending: vState.verifier_pending_runs ?? [],
+                  deps: {
+                    call: ledgerBoundCall({
+                      ledger: vState.spend_ledger!,
+                      scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
+                      estimate: (actorKey, input) => {
+                        const card = hiringActorCard(actorKey);
+                        return card?.cost_model ? estimateCallUsd(actorKey, card.cost_model, input) : Number.POSITIVE_INFINITY;
+                      },
+                      actorIdFor: (actorKey) => hiringActorCard(actorKey)?.actor_id ?? null,
+                      invoke: (call) => capabilityInvoke(call),
+                      hash: (input, actorKey) => claimVerifierHashInput(input, actorKey),
+                      onRefused: (actorKey, reason) => {
+                        vState.unavailable_providers = markProviderUnavailable(vState.unavailable_providers, {
+                          provider: actorKey, capability: "funding_verification", reason,
+                          refused_at: new Date().toISOString(),
+                          readiness_at_refusal: leadReadiness.decide(actorKey, "funding_verification").readiness,
+                        });
+                      },
+                    }),
+                    now: () => new Date().toISOString(),
+                    log: verifierLog,
+                  },
+                  apply: (f, verifier) => {
+                    const company = engineRun.companies.find((c) => c.key === f.company_key);
+                    return company ? applyVerifierFinding(company, f, verifier) : false;
+                  },
+                  log: verifierLog,
+                });
+                vState.verifier_pending_runs = phase.pending;
+                console.log("[run-agent][claim-verifier]", {
+                  task_id: task.id, order: phase.order, ran: phase.ran, stopped: phase.stopped, irrelevant: phase.irrelevant,
+                  pending_runs: phase.pending.length,
+                });
                 // The checkpoint is written from the resume records; rebuild them
                 // so the verification marks and evidence survive into the next slice.
-                if (changed > 0) capabilityRun.resume_records = capabilityRun.companies.map(toResumeRecord);
+                if (phase.changed > 0) engineRun.resume_records = engineRun.companies.map(toResumeRecord);
               } catch (e) {
                 console.error("[run-agent][claim-verifier][failed]", String(e));
               }
@@ -5988,6 +6099,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   candidates,
                   // Settled after the continuation decision; see the result write.
                   stage: "reasoning",
+                  // Gaps shown as routable — and counted by continuation — are
+                  // the ones this run's readiness policy lets it take.
+                  readiness: leadReadiness,
                   waves: capabilityRun.state.research_waves ?? [],
                   // `check()` is the ledger's own priced total — never a second sum.
                   cost: { model_usd: modelCalls.check().priced_usd ?? 0 },

@@ -10,6 +10,7 @@
 // actor/capability pair is READY here; anything else is refused before a spec
 // is compiled. The classes are the P4 brief's:
 //   READY                  carded, executable, live-proven in V2
+//   EXPERIMENTAL           live once, not yet trusted: runs only when explicitly allowed
 //   CARDED_BUT_NOT_LIVE    carded and executable, never run live in V2
 //   LEGACY_ONLY            exists only in the V1 tool registry, uncarded
 //   NEEDS_CONTRACT_WORK    no verified input/output contract
@@ -24,12 +25,11 @@
 // Pure.
 
 import { hiringActorCard } from "./hiringActorCatalog.ts";
-import { isCapabilityExecutable } from "./capabilityExecutability.ts";
 
 export const ACTOR_INTELLIGENCE_VERSION = "actor-intelligence-v1" as const;
 
 export type ActorReadiness =
-  | "READY" | "CARDED_BUT_NOT_LIVE" | "LEGACY_ONLY" | "NEEDS_CONTRACT_WORK"
+  | "READY" | "EXPERIMENTAL" | "CARDED_BUT_NOT_LIVE" | "LEGACY_ONLY" | "NEEDS_CONTRACT_WORK"
   | "NEEDS_EXTRACTION_WORK" | "NEEDS_PROVIDER_WORK" | "NOT_PRESENT";
 
 export interface ActorReadinessRecord {
@@ -110,17 +110,8 @@ export function readinessOf(actor: string, capability: string): ActorReadinessRe
   };
 }
 
-/**
- * May a route through this actor be added? READY, carded, and the capability
- * executable today. The record's own evidence travels with a refusal.
- */
-export function routeActorReady(actor: string, capability: string): { ready: true } | { ready: false; reason: string } {
-  const r = readinessOf(actor, capability);
-  if (r.readiness !== "READY") return { ready: false, reason: `${actor} for ${capability} is ${r.readiness}: ${r.reason}` };
-  if (!hiringActorCard(actor)) return { ready: false, reason: `${actor} has no actor card` };
-  if (!isCapabilityExecutable(capability)) return { ready: false, reason: `${capability} is not executable by the engine` };
-  return { ready: true };
-}
+// Whether a route through a pair may RUN is decided in `routeReadiness.ts`,
+// the one readiness authority; this table only declares each pair's class.
 
 /** Measured route performance. Empty until a real mission reports a wave. */
 export interface ObservedRoutePerformance {

@@ -111,5 +111,10 @@ Deno.test("lead call sites take the gate from the workspace, never a hardcoded e
   }
   assert(ra.includes('inProcess.continuationOwner === "v2_queue"'), "worker execution is V2 by definition");
   assert(/buildPaidExecutionPreflight\(\{\s*executability: leadExecutabilityGate/.test(ra), "run-agent preflight graded by the gate");
-  assert(pilot.includes("assessRequestFeasibility(mission, previewPlan, { executability: previewGate })"));
+  assert(pilot.includes("assessRequestFeasibility(mission, previewPlan, { executability: previewGate, readiness: previewReadiness })"));
+  // ONE READINESS AUTHORITY: every lead call site reads the workspace's policy
+  // (production unless the workspace is a named provider probe).
+  for (const [name, src] of [["run-agent", ra], ["orchestrate", orch], ["pilot-chat", pilot]] as const) {
+    assert(src.includes("readinessPolicyFor("), `${name} resolves the readiness policy`);
+  }
 });
