@@ -105,7 +105,9 @@ export type FundingStageReason =
   | "later_round_unverified"
   | "required_stage_not_verified"
   | "required_stage_verified_and_latest"
-  | "model_extraction_only";
+  | "model_extraction_only"
+  /** PASS was asked to rest on a CITED round, and the decisive round carries no source URL. */
+  | "required_stage_uncorroborated";
 
 export interface FundingStageDecision {
   version: typeof FUNDING_STAGE_CLAIM_VERSION;
@@ -176,6 +178,16 @@ function label(rank: number): string {
 export function decideFundingStage(i: {
   required_stage: string | null;
   record: FundingRecordFact | null;
+  /**
+   * PASS MUST CITE. A round is "verified" by a source URL OR an announced date,
+   * which is enough to CONTRADICT a stage (one dated Series A is a later round)
+   * but not enough to PROVE one: a dated Seed row from a firmographics feed is
+   * the provider's word, not a citation. When true, PASS additionally requires
+   * the decisive round to carry a source URL; otherwise the claim is PENDING
+   * (`required_stage_uncorroborated`). FAIL is unchanged. Default false keeps
+   * every existing caller exactly as it was.
+   */
+  pass_requires_source_url?: boolean;
 }): FundingStageDecision {
   const required = normalizeRoundType(i.required_stage);
   const requiredRank = stageRank(required);
@@ -262,8 +274,13 @@ export function decideFundingStage(i: {
         : `a verified ${required} round was found, but ${i.record.provider} reports ${i.record.reported_round_count} rounds and returned ${held}` };
   }
 
+  const decisive = verified.filter((x) => x.rank === requiredRank).map((x) => x.r);
+  if (i.pass_requires_source_url && !decisive.some((r) => (r.source_urls?.length ?? 0) > 0)) {
+    return { ...base, reasons: ["required_stage_uncorroborated"], carrier_rounds: decisive,
+      explanation: `the latest round is ${required} in a complete history, but no source cites that round` };
+  }
   return { ...base, verdict: "pass", reasons: ["required_stage_verified_and_latest"],
-    carrier_rounds: verified.filter((x) => x.rank === requiredRank).map((x) => x.r),
+    carrier_rounds: decisive,
     explanation: `the latest verified round is ${required}, with no later round in a complete history` };
 }
 

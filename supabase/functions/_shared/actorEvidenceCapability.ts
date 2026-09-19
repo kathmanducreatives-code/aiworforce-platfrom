@@ -176,6 +176,42 @@ export const ACTOR_EVIDENCE: readonly ActorEvidenceRecord[] = Object.freeze([
     ],
   },
   {
+    // P6 KNOWN-COMPANY FUNDING VERIFICATION. Takes the company's LinkedIn page
+    // and returns ITS rounds — so, unlike datahyena, it can answer "did THIS
+    // company raise, and what was its latest round". No citation per round.
+    actor_key: "apify_funding_atomus",
+    unlock_gated: false,
+    cohort_scope: null,
+    produces: [
+      {
+        event: "funding", subject: "company", power: "verification",
+        evidence_fields: ["rounds[].type", "rounds[].announced_at", "rounds[].raised_amount", "num_funding_rounds"],
+        qualifiers: ["round_type"],
+        basis:
+          "live probe 2026-09-19 (wordware, stripe, cal-com, dioptra, 37signals): company.financial.funding " +
+          "carries dated typed rounds and a TRUE num_funding_rounds; no per-round source URL.",
+      },
+    ],
+  },
+  {
+    // P6 corroboration: the same company's rounds WITH a citation per round,
+    // but an incomplete history — it confirms, it never completes.
+    actor_key: "apify_funding_pvalyou",
+    unlock_gated: false,
+    cohort_scope: null,
+    produces: [
+      {
+        event: "funding", subject: "company", power: "verification",
+        evidence_fields: ["rounds[].round_type", "rounds[].round_date", "rounds[].source_urls[]"],
+        qualifiers: ["round_type"],
+        basis:
+          "live probe 2026-09-19 (wordware, stripe, plausible): record.funding.rounds[] with round_type, " +
+          "round_date + precision and source_urls (the company's own announcement among them); rounds_count " +
+          "is only what it holds.",
+      },
+    ],
+  },
+  {
     actor_key: "apify_funding_rounds_datahyena",
     unlock_gated: false,
     cohort_scope: null,

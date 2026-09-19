@@ -19,6 +19,7 @@ import {
 import { checkCriterion } from "../../../supabase/functions/_shared/candidateEligibility.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
 import { CLAIM_REGISTRY } from "../../../supabase/functions/_shared/evidenceGapRouter.ts";
+import { readinessOf } from "../../../supabase/functions/_shared/actorIntelligence.ts";
 import { HIRING_ACTOR_CATALOG } from "../../../supabase/functions/_shared/hiringActorCatalog.ts";
 import { ACTOR_INPUT_CONTRACTS } from "../../../supabase/functions/_shared/actorInputContracts.ts";
 import type { MissionCriterion } from "../../../supabase/functions/_shared/missionCriteria.ts";
@@ -257,10 +258,14 @@ Deno.test("a missing funding claim leaves the criterion unknown — absence is n
 
 // ── The route is carded honestly and stays non-executable ────────────────────
 
-Deno.test("no funding route may execute until a verifier is proven", () => {
+Deno.test("no funding route may execute until a verifier is proven LIVE — readiness, not the executor, is the gate", () => {
+  // P6 built the executor (`fundingStageVerifier`), so the route now carries
+  // `canonical_executor: true`. What keeps it closed is Actor Intelligence:
+  // the pair was probed outside this pipeline, never through it.
   const claim = CLAIM_REGISTRY.find((c) => c.claim === "funding_stage")!;
-  assertEquals(claim.routes.every((r) => r.canonical_executor === false), true);
-  assertEquals(claim.deferred_to, "P6");
+  assertEquals(claim.routes.map((r) => [r.actor, r.canonical_executor]), [["apify_funding_atomus", true]]);
+  assertEquals(readinessOf("apify_funding_atomus", "funding_verification").readiness, "CARDED_BUT_NOT_LIVE");
+  assertEquals(readinessOf("apify_funding_pvalyou", "funding_verification").readiness, "CARDED_BUT_NOT_LIVE");
 });
 
 Deno.test("the datahyena card carries the price and schema the Store actually publishes", () => {

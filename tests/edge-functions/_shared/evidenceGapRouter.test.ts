@@ -91,13 +91,24 @@ Deno.test("business model: once the pages are in the registry, the route is trie
   assert(g.considered.find((r) => r.actor === "firecrawl")!.why.includes("already answered"));
 });
 
-Deno.test("funding stage: no READY route exists — a capability gap deferred to P6, never guessed", () => {
+Deno.test("funding stage: the P6 executor exists but is not READY — a capability gap, never guessed", () => {
   const [g] = evidenceGapsFor([unknown("company_stage")], LANCEDB);
   assertEquals([g.claim, g.next], ["funding_stage", "blocked"]);
-  assertEquals(g.considered[0].readiness, "CARDED_BUT_NOT_LIVE");
+  assertEquals([g.considered[0].actor, g.considered[0].readiness], ["apify_funding_atomus", "CARDED_BUT_NOT_LIVE"]);
+  assert(g.considered[0].why.includes("CARDED_BUT_NOT_LIVE"), g.considered[0].why);
   const s = summarizeGaps([{ gaps: [g] }]);
   assertEquals([s.pending, s.with_executable_route, s.blocked], [1, 0, 1]);
-  assertEquals(s.capability_gaps[0].deferred_to, "P6");
+});
+
+Deno.test("a route a claim verifier already answered is not taken again, even with no evidence item", () => {
+  // A PENDING funding stage writes no item; the verifier's mark is what stops a
+  // second purchase. A READY route stands in for the funding verifier here.
+  const READY: ClaimDefinition[] = CLAIM_REGISTRY.map((c) => c.claim !== "funding_stage" ? c : {
+    ...c, routes: [{ ...c.routes[0], actor: "apify_linkedin_job_search", capability: "hiring_verification" }],
+  });
+  assertEquals(evidenceGapsFor([unknown("company_stage")], LANCEDB, READY)[0].next, "verify");
+  const [g] = evidenceGapsFor([unknown("company_stage")], LANCEDB, READY, new Set(["apify_linkedin_job_search"]));
+  assertEquals([g.next, g.considered[0].tried], ["blocked", true]);
 });
 
 Deno.test("THE PLAN'S LANCEDB CASE: with an executable funding route, continuation verifies — it does not buy discovery", () => {
@@ -153,5 +164,6 @@ Deno.test("PHASE C: the business model is the one canonical claim a production r
   const verifiable = gaps.filter((g) => g.next === "verify");
   assertEquals([...new Set(verifiable.map((g) => g.claim))], ["business_model"]);
   assertEquals([...new Set(verifiable.map((g) => g.route?.actor))], ["firecrawl"]);
-  assert(s.capability_gaps.some((c) => c.claim === "funding_stage" && c.deferred_to === "P6"));
+  assert(s.capability_gaps.some((c) => c.claim === "funding_stage" &&
+    c.routes.some((r) => r.actor === "apify_funding_atomus" && r.why.includes("CARDED_BUT_NOT_LIVE"))));
 });

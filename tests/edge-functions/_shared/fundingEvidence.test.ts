@@ -276,12 +276,14 @@ Deno.test("11. the funding capability's claim is now keepable", () => {
     "a capability nothing drives is not a capability");
 });
 
-Deno.test("12. funding is DISCOVERY-only — it can never be a verification path", () => {
+Deno.test("12. datahyena is DISCOVERY-only; known-company verification is atomus + pvalyou (P6)", () => {
   const support = resolveSignalSupport(describeSignal("funding", "company"));
   assertEquals(support.status, "supported");
-  assertEquals(support.discovery_actors, [KEY]);
-  assertEquals(support.verification_actors, [],
-    "no source can confirm funding for a company set already in hand");
+  assertEquals(support.discovery_actors, [KEY], "datahyena finds companies BY a round, nothing else");
+  // P6: two actors take a company we already hold and return ITS rounds. Neither
+  // is datahyena — a missing datahyena row still proves nothing about anyone.
+  assertEquals([...support.verification_actors].sort(), ["apify_funding_atomus", "apify_funding_pvalyou"]);
+  assertFalse(support.verification_actors.includes(KEY));
 
   // A funding mission that discovered its pool some OTHER way must be told so,
   // or an uncollected requirement looks like a served one.

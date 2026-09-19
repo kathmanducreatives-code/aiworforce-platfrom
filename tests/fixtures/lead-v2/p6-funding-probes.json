@@ -1,0 +1,454 @@
+{
+ "source": "live Apify probes 2026-09-19 (production token, ~$0.10): atomus/linkedin-company-scraper and pvalyou/company-record, trimmed to the funding fields",
+ "atomus": [
+  {
+   "input": "wordware",
+   "status": "success",
+   "summary": {
+    "name": "Wordware (YC S24)",
+    "linkedin_url": "https://www.linkedin.com/company/wordware",
+    "domain": "wordware.ai",
+    "last_updated": "2026-08-22"
+   },
+   "company": {
+    "financial": {
+     "funding": {
+      "type": "SEED",
+      "total_amount": 31850000,
+      "last_amount": 30000000,
+      "num_investor": 52,
+      "num_funding_rounds": 3,
+      "rounds": [
+       {
+        "announced_at": "2024-11-21",
+        "raised_amount": 30000000,
+        "type": "SEED_ROUND",
+        "investors": [
+         "Soleio \u200e\u200f\u200f\u200e \u200e\u200e \u200e",
+         "Shawn swyx W",
+         "Jason Boehmig",
+         "Theory Forge Ventures",
+         "Bartek Pucek",
+         "Day One Ventures",
+         "Theo Browne",
+         "Paul Stahura",
+         "Jay Reno",
+         "Brian Jacobs"
+        ]
+       },
+       {
+        "announced_at": "2024-04-30",
+        "raised_amount": 500000,
+        "type": "PRE_SEED_ROUND"
+       },
+       {
+        "announced_at": "2023-01-01",
+        "raised_amount": 1350000,
+        "type": "PRE_SEED_ROUND"
+       }
+      ],
+      "date": "2024-11-21"
+     }
+    }
+   }
+  },
+  {
+   "input": "stripe",
+   "status": "success",
+   "summary": {
+    "name": "Stripe",
+    "linkedin_url": "https://www.linkedin.com/company/stripe",
+    "domain": "stripe.com",
+    "last_updated": "2026-08-22"
+   },
+   "company": {
+    "financial": {
+     "funding": {
+      "type": "SECONDARY_MARKET",
+      "total_amount": 9440247725,
+      "last_amount": 694159778,
+      "num_investor": 69,
+      "num_funding_rounds": 23,
+      "rounds": [
+       {
+        "announced_at": "2026-03-09",
+        "type": "SECONDARY_MARKET",
+        "investors": [
+         "Robinhood Ventures",
+         "Irving Investors"
+        ]
+       },
+       {
+        "announced_at": "2026-02-24",
+        "type": "SECONDARY_MARKET",
+        "investors": [
+         "Andreessen Horowitz",
+         "Thrive Capital",
+         "Coatue"
+        ]
+       },
+       {
+        "announced_at": "2025-02-27",
+        "type": "SECONDARY_MARKET"
+       },
+       {
+        "announced_at": "2024-04-12",
+        "raised_amount": 694159778,
+        "type": "SECONDARY_MARKET",
+        "investors": [
+         "Ventioneers",
+         "E1 Ventures"
+        ]
+       },
+       {
+        "announced_at": "2024-03-01",
+        "type": "VENTURE_ROUND",
+        "investors": [
+         "Richard Cooperstein"
+        ]
+       },
+       {
+        "announced_at": "2023-04-25",
+        "raised_amount": 11087947,
+        "type": "GRANT",
+        "investors": [
+         "IDA Ireland"
+        ]
+       },
+       {
+        "announced_at": "2023-03-15",
+        "raised_amount": 6500000000,
+        "type": "SERIES_I",
+        "investors": [
+         "Thrive Capital"
+        ]
+       },
+       {
+        "announced_at": "2021-03-14",
+        "raised_amount": 600000000,
+        "type": "SERIES_H"
+       },
+       {
+        "announced_at": "2020-04-16",
+        "raised_amount": 600000000,
+        "type": "SERIES_G"
+       },
+       {
+        "announced_at": "2019-09-19",
+        "raised_amount": 250000000,
+        "type": "SERIES_G"
+       }
+      ],
+      "date": "2026-03-09"
+     }
+    }
+   }
+  },
+  {
+   "input": "plausible-insights",
+   "status": "not_found"
+  },
+  {
+   "input": "37signals",
+   "status": "success",
+   "summary": {
+    "name": "37signals",
+    "linkedin_url": "https://www.linkedin.com/company/37signals",
+    "domain": "37signals.com",
+    "last_updated": "2026-08-22"
+   },
+   "company": {
+    "financial": {}
+   }
+  },
+  {
+   "input": "dioptra",
+   "status": "success",
+   "summary": {
+    "name": "Dioptra",
+    "linkedin_url": "https://www.linkedin.com/company/dioptra",
+    "domain": "dioptrageomatics.com",
+    "last_updated": "2026-08-22"
+   },
+   "company": {
+    "financial": {}
+   }
+  },
+  {
+   "input": "cal-com",
+   "status": "success",
+   "summary": {
+    "name": "Cal.com",
+    "linkedin_url": "https://www.linkedin.com/company/cal-com",
+    "domain": "cal.com",
+    "last_updated": "2026-08-22"
+   },
+   "company": {
+    "financial": {
+     "funding": {
+      "type": "SERIES_A",
+      "total_amount": 32400000,
+      "last_amount": 25000000,
+      "num_investor": 30,
+      "num_funding_rounds": 2,
+      "rounds": [
+       {
+        "announced_at": "2022-04-15",
+        "raised_amount": 25000000,
+        "type": "SERIES_A",
+        "investors": [
+         "Tobias L\u00fctke",
+         "Daily.co",
+         "Jack Altman",
+         "Adam Carrigan",
+         "OSS Capital L.P.",
+         "Sarona Ventures",
+         "Anthony Pompliano",
+         "Obvious Ventures",
+         "Seven Seven Six",
+         "Ironwood Ventures"
+        ]
+       },
+       {
+        "announced_at": "2021-12-16",
+        "raised_amount": 7400000,
+        "type": "SEED_ROUND"
+       }
+      ],
+      "date": "2022-04-15"
+     }
+    }
+   }
+  }
+ ],
+ "pvalyou": [
+  {
+   "query": "stripe.com",
+   "status": "active",
+   "domain": "stripe.com",
+   "record_as_of": "2026-09-17T18:49:48.727838+03:00",
+   "record": {
+    "funding": {
+     "rounds_count": 7,
+     "last_round_date": "2026-02-12",
+     "rounds": [
+      {
+       "round_index": 1,
+       "round_type": "Series H",
+       "round_title": "Series H",
+       "round_date": "2021-01-01",
+       "round_date_precision": "year",
+       "round_amount_m_usd": 600,
+       "is_non_equity": false,
+       "source_urls": [
+        "https://www.crunchbase.com/organization/stripe",
+        "https://en.wikipedia.org/wiki/Stripe,_Inc.",
+        "https://fortune.com/2025/02/27/stripe-valuation-tech-venture-capital-silicon-valley/"
+       ],
+       "investors": [
+        {
+         "name": "Baillie Gifford"
+        },
+        {
+         "name": "Fidelity"
+        },
+        {
+         "name": "AXA Group"
+        },
+        {
+         "name": "Allianz X"
+        }
+       ]
+      },
+      {
+       "round_index": 2,
+       "round_type": "Other",
+       "round_title": "Series I",
+       "round_date": "2023-03-15",
+       "round_date_precision": "day",
+       "round_amount_m_usd": 6500,
+       "is_non_equity": false,
+       "source_urls": [
+        "https://www.cnbc.com/2023/03/15/stripe-raises-series-i-billion-at-sharply-reduced-50-billion-valuation.html",
+        "https://www.crunchbase.com/organization/stripe",
+        "https://salestools.io/en/report/stripe-6-5b-series-i-july-2025"
+       ],
+       "investors": [
+        {
+         "name": "Baillie Gifford"
+        },
+        {
+         "name": "Goldman Sachs"
+        },
+        {
+         "name": "Temasek"
+        },
+        {
+         "name": "Andreessen Horowitz"
+        }
+       ]
+      },
+      {
+       "round_index": 3,
+       "round_type": "Series Unknown",
+       "round_title": "Later Stage VC",
+       "round_date": "2024-04-29",
+       "round_date_precision": "day",
+       "round_amount_m_usd": null,
+       "is_non_equity": false,
+       "source_urls": [
+        "https://pitchbook.com/profiles/company/54782-29"
+       ],
+       "investors": []
+      },
+      {
+       "round_index": 4,
+       "round_type": "Secondary",
+       "round_title": "Secondary",
+       "round_date": "2025-02-27",
+       "round_date_precision": "day",
+       "round_amount_m_usd": 694.2,
+       "is_non_equity": true,
+       "source_urls": [
+        "https://www.fintechfutures.com/venture-capital-funding/stripe-raises-694m-through-share-sale-to-provide-employee-liquidity",
+        "https://pitchbook.com/profiles/company/54782-29",
+        "https://fortune.com/2025/02/27/stripe-valuation-tech-venture-capital-silicon-valley/",
+        "https://techcrunch.com/2026/02/24/stripes-valuation-soars-74-to-159-billion/",
+        "https://www.crunchbase.com/organization/stripe",
+        "https://techcrunch.com/2025/02/27/stripe-finalizes-tender-sale-at-a-91-5b-valuation-says-payment-volumes-grew-to-1-4t-in-2024/"
+       ],
+       "investors": [
+        {
+         "name": "Thrive Capital"
+        },
+        {
+         "name": "Founders Fund"
+        },
+        {
+         "name": "Andreessen Horowitz"
+        },
+        {
+         "name": "Coatue"
+        }
+       ]
+      },
+      {
+       "round_index": 5,
+       "round_type": "Series Unknown",
+       "round_title": "Later Stage VC",
+       "round_date": "2026-02-12",
+       "round_date_precision": "day",
+       "round_amount_m_usd": null,
+       "is_non_equity": false,
+       "source_urls": [
+        "https://pitchbook.com/profiles/company/54782-29"
+       ],
+       "investors": []
+      },
+      {
+       "round_index": 6,
+       "round_type": "Debt Financing",
+       "round_title": "Debt Financing",
+       "round_date": null,
+       "round_date_precision": "unknown",
+       "round_amount_m_usd": 0.252,
+       "is_non_equity": true,
+       "source_urls": [
+        "https://pitchbook.com/profiles/company/54782-29"
+       ],
+       "investors": []
+      },
+      {
+       "round_index": 7,
+       "round_type": "Grant",
+       "round_title": "Grant",
+       "round_date": null,
+       "round_date_precision": "unknown",
+       "round_amount_m_usd": null,
+       "is_non_equity": true,
+       "source_urls": [
+        "https://www.crunchbase.com/organization/stripe"
+       ],
+       "investors": []
+      }
+     ]
+    }
+   }
+  },
+  {
+   "query": "plausible.io",
+   "status": "active",
+   "domain": "plausible.io",
+   "record_as_of": "2026-09-17T18:49:37.046473+03:00",
+   "record": {
+    "funding": {
+     "rounds_count": null,
+     "last_round_date": null,
+     "rounds": []
+    }
+   }
+  },
+  {
+   "query": "wordware.ai",
+   "status": "active",
+   "domain": "wordware.ai",
+   "record_as_of": "2026-09-19T13:05:16.875383+03:00",
+   "record": {
+    "funding": {
+     "rounds_count": 2,
+     "last_round_date": "2024-11-21",
+     "rounds": [
+      {
+       "round_index": 1,
+       "round_type": "Accelerator",
+       "round_title": "Y Combinator S24",
+       "round_date": "2024-07-01",
+       "round_date_precision": "month",
+       "round_amount_m_usd": 0.5,
+       "is_non_equity": true,
+       "source_urls": [
+        "https://www.billiondollarpitchdecks.com/startups/wordware-yc",
+        "https://www.crunchbase.com/organization/wordware-6b65",
+        "https://pitchbook.com/profiles/company/483819-22"
+       ],
+       "investors": [
+        {
+         "name": "Y Combinator"
+        }
+       ]
+      },
+      {
+       "round_index": 2,
+       "round_type": "Seed",
+       "round_title": "Seed (largest seed round in YC history)",
+       "round_date": "2024-11-21",
+       "round_date_precision": "day",
+       "round_amount_m_usd": 30,
+       "is_non_equity": false,
+       "source_urls": [
+        "https://blog.wordware.ai/seed-round",
+        "https://www.thesaasnews.com/news/wordware-raises-30-million-in-seed-round/",
+        "https://www.caplight.com/company/wordware",
+        "https://www.crunchbase.com/organization/wordware-6b65"
+       ],
+       "investors": [
+        {
+         "name": "Spark Capital"
+        },
+        {
+         "name": "Felicis"
+        },
+        {
+         "name": "Y Combinator"
+        },
+        {
+         "name": "Day One Ventures"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

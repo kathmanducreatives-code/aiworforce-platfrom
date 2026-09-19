@@ -200,6 +200,42 @@ export const ACTOR_INPUT_CONTRACTS: Readonly<Record<string, ActorInputContract>>
       quality: { total_runs: 1381328, monthly_users: 707, success_rate_pct: null, rating: null,
         note: "Heavily used (1,381,328 runs, 707 monthly users). Mature and predictable; its edges are well explored." },
     },
+    // Live input schemas, read from the Store 2026-09-19.
+    apify_funding_atomus: {
+      verified_at: "2026-09-19",
+      fields: [
+        // LinkedIn company URLs or slugs. Bare domains are NOT supported (schema note).
+        { name: "companies", type: "array" },
+      ],
+      example: { companies: ["https://www.linkedin.com/company/wordware"] },
+      quality: {
+        total_runs: null, monthly_users: 27, success_rate_pct: null, rating: 5,
+        note:
+          "62 total / 27 monthly users, 3 ratings at 5.0 (Store, 2026-09-19). Output observed " +
+          "live 2026-09-19 on 6 companies: funding nested under company.financial.funding with " +
+          "rounds[].{type,announced_at,raised_amount,investors} and a TRUE num_funding_rounds " +
+          "(Stripe 23 reported, 10 returned). No per-round source URL. Charged only per company " +
+          "found ($0.0035); not_found is free.",
+      },
+    },
+    apify_funding_pvalyou: {
+      verified_at: "2026-09-19",
+      fields: [
+        { name: "tier", type: "string", enum: ["basic", "full"], default: "basic" },
+        // Domain, website, LinkedIn company URL or name; up to 200 per run.
+        { name: "companies", type: "array" },
+      ],
+      example: { tier: "basic", companies: ["wordware.ai"] },
+      quality: {
+        total_runs: null, monthly_users: 2, success_rate_pct: null, rating: null,
+        note:
+          "VERY LOW ADOPTION: 3 total / 2 monthly users (Store, 2026-09-19). Output observed live " +
+          "2026-09-19: record.funding.rounds[].{round_type,round_date,round_date_precision," +
+          "round_amount_m_usd,source_urls,investors}. rounds_count is only what it HOLDS (Stripe 7 " +
+          "vs ~23), so it never proves completeness. A company not on file is read live: one cold " +
+          "read exceeded 600s, a warm one took 43s. Basic tier $0.02 per company.",
+      },
+    },
     apify_funding_rounds_datahyena: {
       verified_at: "2026-09-19",
       fields: [

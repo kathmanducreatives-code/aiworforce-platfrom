@@ -162,6 +162,14 @@ import {
 } from "../_shared/missionEvaluation.ts";
 import { emptyEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
 import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
+import { applyVerifierFinding } from "../_shared/leadCapabilityEngine.ts";
+import { ledgerBoundCall, verificationTargets } from "../_shared/claimVerifier.ts";
+import { fundingStageVerifier } from "../_shared/fundingStageVerifier.ts";
+import { readinessOf } from "../_shared/actorIntelligence.ts";
+import { hiringActorCard } from "../_shared/hiringActorCatalog.ts";
+import { estimateCallUsd } from "../_shared/budgetPolicy.ts";
+import { hashInput as claimVerifierHashInput } from "../_shared/hiringActorInputs.ts";
+import { markProviderUnavailable, unavailableProvider } from "../_shared/providerAvailability.ts";
 import {
   persistP2Spine, settleAndPersistP2Spine, type SpineDb, type SpineState,
 } from "../_shared/p2SpinePersistence.ts";
@@ -4828,6 +4836,89 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               }
             }
 
+            // ── CLAIM VERIFIERS: EVIDENCE GAPS CHOOSE THE NEXT ROUTE ───────
+            //
+            // For every PENDING company whose hard gap the router routes to a
+            // registered verifier, buy exactly that claim's evidence, through
+            // the mission ledger, and record the canonical answer before the
+            // Workbench view is built below. Independent of the legacy
+            // evidence debt above: targets come ONLY from canonical gaps.
+            //
+            // Today: the funding-stage verifier (atomus + pvalyou). A route is
+            // taken only when Actor Intelligence says READY, so this is dormant
+            // until the pair is proven live; `LEAD_V2_CLAIM_VERIFIERS=off` is
+            // the kill switch. Never throws into the run: a failed verifier
+            // leaves every claim exactly as pending as it was.
+            if (p2Specs && capabilityRun && persistedMission && capabilityRun.state.spend_ledger &&
+                String(readEnvSafe("LEAD_V2_CLAIM_VERIFIERS") ?? "").trim().toLowerCase() !== "off") {
+              try {
+                const vState = capabilityRun.state;
+                const vCriteria = deriveMissionCriteria(persistedMission);
+                const vCandidates = missionCandidatesFrom(capabilityRun, { missionId: String(task.id) }).map((cand) => {
+                  const e = evaluateEligibility(vCriteria, cand.graph);
+                  return {
+                    company_key: cand.company_key, name: cand.name, domain: cand.domain, linkedin_url: cand.linkedin_url,
+                    graph: cand.graph, eligibility: e.eligibility,
+                    hard_checks: e.checks.filter((x) => x.kind === "hard"),
+                    attempted_routes: cand.attempted_routes ?? [],
+                  };
+                });
+                const readiness = (actorKey: string) => readinessOf(actorKey, "funding_verification").readiness;
+                const deps = {
+                  call: ledgerBoundCall({
+                    ledger: vState.spend_ledger!,
+                    scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
+                    estimate: (actorKey, input) => {
+                      const card = hiringActorCard(actorKey);
+                      return card?.cost_model ? estimateCallUsd(actorKey, card.cost_model, input) : Number.POSITIVE_INFINITY;
+                    },
+                    actorIdFor: (actorKey) => hiringActorCard(actorKey)?.actor_id ?? null,
+                    invoke: (call) => capabilityInvoke(call),
+                    hash: (input, actorKey) => claimVerifierHashInput(input, actorKey),
+                    onRefused: (actorKey, reason) => {
+                      vState.unavailable_providers = markProviderUnavailable(vState.unavailable_providers, {
+                        provider: actorKey, capability: "funding_verification", reason,
+                        refused_at: new Date().toISOString(), readiness_at_refusal: readiness(actorKey),
+                      });
+                    },
+                  }),
+                  ready: (actorKey: string) => readiness(actorKey) === "READY" &&
+                    !unavailableProvider(vState.unavailable_providers, actorKey, readiness(actorKey), readEnvSafe),
+                  now: () => new Date().toISOString(),
+                  log: (event: string, meta?: Record<string, unknown>) =>
+                    console.log(`[run-agent][claim-verifier][${event}]`, { task_id: task.id, ...(meta ?? {}) }),
+                };
+                let changed = 0;
+                for (const verifier of [fundingStageVerifier()]) {
+                  const mine = (vState.verifier_pending_runs ?? []).filter((r) => r.verifier === verifier.key);
+                  const targets = verificationTargets(verifier, vCandidates,
+                    (id) => vCriteria.find((c) => c.id === id)?.value ?? null);
+                  if (targets.length === 0 && mine.length === 0) continue;
+                  const result = await verifier.verify(targets, deps, { mission_id: String(task.id), pending: mine });
+                  for (const f of result.findings) {
+                    const company = capabilityRun.companies.find((c) => c.key === f.company_key);
+                    if (!company) continue;
+                    applyVerifierFinding(company, f, verifier);
+                    changed++;
+                  }
+                  vState.verifier_pending_runs = [
+                    ...(vState.verifier_pending_runs ?? []).filter((r) => r.verifier !== verifier.key),
+                    ...result.pending,
+                  ];
+                  console.log("[run-agent][claim-verifier]", {
+                    task_id: task.id, verifier: verifier.key, targets: targets.length, adopted: mine.length,
+                    findings: result.findings.map((f) => ({ company: f.company_key, ...f.detail })),
+                    pending_runs: result.pending.length,
+                  });
+                }
+                // The checkpoint is written from the resume records; rebuild them
+                // so the verification marks and evidence survive into the next slice.
+                if (changed > 0) capabilityRun.resume_records = capabilityRun.companies.map(toResumeRecord);
+              } catch (e) {
+                console.error("[run-agent][claim-verifier][failed]", String(e));
+              }
+            }
+
             // ── THE SAME RESULT, ALSO INTO THE CANONICAL LEAD LIBRARY ───────
             //
             // The mission path produced `tasks.result.workbench_*` and nothing
@@ -5991,7 +6082,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           // cannot describe one moment differently — which is what let run
           // 783fa163 report `no_progress` while Apify run Zs5bYFGlnua1hJWYg
           // was still executing, and then abandon its 1,394 rows.
-          pendingRuns: capabilityRun?.state.pending_runs?.length ?? 0,
+          // …and a claim verifier's provider run still executing (a pvalyou cold
+          // read outlives a slice): adopted next slice, never re-bought.
+          pendingRuns: (capabilityRun?.state.pending_runs?.length ?? 0) +
+            (capabilityRun?.state.verifier_pending_runs?.length ?? 0),
           // ── CAN ANYTHING STILL WIDEN THE POOL? ──────────────────────────
           //
           // Read from the engine's own record of how discovery ended, never

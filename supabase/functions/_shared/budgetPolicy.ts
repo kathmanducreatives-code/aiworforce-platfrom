@@ -286,6 +286,10 @@ export function billableRows(actorKey: string, input: Record<string, unknown>): 
   switch (actorKey) {
     case "apify_linkedin_company_details":
       return len(input.companies) + len(input.searches);
+    // One charge per company delivered (atomus: not-found is free).
+    case "apify_funding_atomus":
+    case "apify_funding_pvalyou":
+      return len(input.companies);
     case "apify_linkedin_job_search":
       // "maxItems PER jobTitle PER location"
       return n(input.maxItems) * Math.max(1, len(input.jobTitles)) * Math.max(1, len(input.locations));

@@ -56,6 +56,8 @@ export interface MissionCandidate {
   investigated: boolean;
   graph: CompanyEvidenceGraph;
   next_action?: string | null;
+  /** Route actors a claim verifier has already answered through (`claimVerifier`). */
+  attempted_routes?: readonly string[];
 }
 
 export interface WorkbenchLead {
@@ -283,7 +285,9 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
       evidence_coverage: ceiling.evidence_coverage,
       signal_strength: ceiling.signal_strength,
       next_action: c.next_action ?? null,
-      evidence_gaps: bucket === "pending" ? evidenceGapsFor(hardChecks, c.graph) : [],
+      evidence_gaps: bucket === "pending"
+        ? evidenceGapsFor(hardChecks, c.graph, undefined, new Set(c.attempted_routes ?? []))
+        : [],
     });
   }
 

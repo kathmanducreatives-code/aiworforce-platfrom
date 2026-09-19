@@ -40,6 +40,7 @@
 //
 // Pure. No network, no model, no database. Not part of `missionHash`.
 
+import { readinessOf } from "./actorIntelligence.ts";
 import {
   canonicalSignalType, containsPhrase, isHiringSignal,
   type FieldProvenance, type LeadMissionV1, type MissionSignal,
@@ -618,7 +619,10 @@ export function deriveMissionCriteria(mission: LeadMissionV1): MissionCriterion[
   }
   if (stageIntent) {
     const funded = (mission.required_signals ?? []).some((s) => kindOfSignal(s) === "funding");
-    const unprovable = ROUND_STAGES.has(stageIntent.value) && !funded;
+    // P6: a round stage is provable for a company ALREADY in the pool once a
+    // known-company funding verifier is READY (Actor Intelligence) — not before,
+    // so an unproven route can never make a criterion look answerable.
+    const unprovable = ROUND_STAGES.has(stageIntent.value) && !funded && !fundingVerifierReady();
     push({
       kind: stageIntent.kind, dimension: "company_stage", value: stageIntent.value,
       label: `Stage: ${stageIntent.value.replace(/_/g, " ")}` +
@@ -846,4 +850,9 @@ export function criteriaSections(
   }
   for (const g of extraUnsupported) add(sections.unsupported, String(g));
   return sections;
+}
+
+/** Is the known-company funding-stage route live? (`evidenceGapRouter`, `fundingStageVerifier`.) */
+export function fundingVerifierReady(): boolean {
+  return readinessOf("apify_funding_atomus", "funding_verification").readiness === "READY";
 }

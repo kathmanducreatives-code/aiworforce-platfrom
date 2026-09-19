@@ -430,7 +430,10 @@ Deno.test("22. every capability card carries limits, defects and a verified buil
   // verified against the live Store schema on 2026-08-23. It had previously
   // been REFUSED registration for want of exactly that — see the REJECTED entry
   // in `apifyIntelligenceRegistry`.
-  assertEquals(keys.length, 14, "all fourteen catalogued Actors must be present");
+  // 14 → 16: P6 known-company funding verification — `apify_funding_atomus`
+  // and `apify_funding_pvalyou`, both read against the live Store schema and
+  // probed live on 2026-09-19.
+  assertEquals(keys.length, 16, "all sixteen catalogued Actors must be present");
   for (const k of keys) {
     const c = HIRING_ACTOR_CATALOG[k];
     assert(c.actor_id.includes("/"), `${k}: actor_id must be the full slug`);

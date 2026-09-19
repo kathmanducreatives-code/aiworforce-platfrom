@@ -40,6 +40,8 @@ export type ActorPurpose =
    * directory scraper be declared the provider of `funding_event`.
    */
   | "funding_discovery"
+  /** Read the funding record of a company ALREADY in the pool (P6). */
+  | "funding_verification"
   /**
    * LEAD V2 P3 — discover companies BY an open role, and carry the posting as
    * hiring evidence. The row names its employer with a LinkedIn company record.
@@ -558,6 +560,112 @@ export const HIRING_ACTOR_CATALOG: Readonly<Record<string, HiringActorCard>> = O
   //
   // datahyena wins on the one axis that matters most here: it returns the
   // EVIDENCE, one row per funding event, with the amount ungated.
+  // ── P6: KNOWN-COMPANY FUNDING VERIFICATION ─────────────────────────────────
+  //
+  // datahyena (below) finds companies BY a round and takes no company input, so
+  // it can never verify a company already in the pool. These two can, and each
+  // holds half of what a Seed PASS needs (`fundingCorroboration`): atomus a TRUE
+  // round count, pvalyou a citation per round. Probed live 2026-09-19.
+  apify_funding_atomus: {
+    actor_key: "apify_funding_atomus",
+    actor_id: "atomus/linkedin-company-scraper",
+    purposes: ["funding_verification"],
+    supported_filters: ["companies"],
+    verified_enums: {},
+    input_limits: {
+      companies: "LinkedIn company URLs or vanity slugs; up to 5,000 per run. Bare domains are NOT supported.",
+    },
+    outputs: [
+      "input", "status", "summary.linkedin_url", "summary.domain", "summary.last_updated",
+      "company.financial.funding.num_funding_rounds", "company.financial.funding.type",
+      "company.financial.funding.date", "company.financial.funding.rounds[].type",
+      "company.financial.funding.rounds[].announced_at", "company.financial.funding.rounds[].raised_amount",
+      "company.financial.funding.rounds[].investors",
+    ],
+    best_for: [
+      "the funding rounds of a company identified by its LinkedIn page",
+      "a TRUE total round count, so a returned history can be checked for completeness",
+      "settling a later round (Series A+) in one cheap call",
+    ],
+    not_for: [
+      "citing a round — no per-round source URL, so it can never PASS a stage alone",
+      "a company known only by domain or name",
+      "fresh rounds — the data lags by weeks",
+    ],
+    cost_model: {
+      tier: "BRONZE", start_usd: 0.00005, per_result_usd: 0.0035,
+      events_usd: { "actor-start": 0.00005, "company-enriched": 0.0035 },
+      cost_multiplier_fields: ["companies (one charge per company FOUND; not-found is free)"],
+    },
+    normalizer_key: "atomus_funding",
+    schema_build: "store-modified-2026-09-18",
+    last_verified_at: "2026-09-19",
+    confidence: "medium",
+    known_defects: [
+      { id: "atomus_partial_history",
+        summary: "Returns only part of a long history: Stripe reported 23 rounds and returned 10.",
+        mitigation: "`num_funding_rounds` is the true total; a history shorter than it can never PASS.",
+        evidence_ref: "probe 2026-09-19, stripe" },
+      { id: "atomus_no_citation",
+        summary: "No per-round source URL.",
+        mitigation: "PASS requires pvalyou (or another cited source) to confirm the decisive round.",
+        evidence_ref: "probe 2026-09-19, wordware / cal-com" },
+      { id: "atomus_staleness",
+        summary: "Data observed to lag the public record by about four weeks.",
+        mitigation: "A cited later round from pvalyou that atomus lacks withdraws completeness and FAILS the claim.",
+        evidence_ref: "probe 2026-09-19" },
+    ],
+    requires_enrichment_before_qualification: false,
+  },
+  apify_funding_pvalyou: {
+    actor_key: "apify_funding_pvalyou",
+    actor_id: "pvalyou/company-record",
+    purposes: ["funding_verification"],
+    supported_filters: ["tier", "companies"],
+    verified_enums: { tier: ["basic", "full"] },
+    input_limits: {
+      companies: "domain, website URL, LinkedIn company URL or name; up to 200 per run",
+      tier: "basic ($0.02) carries funding rounds; full ($0.10) adds people and patents — never needed here",
+    },
+    outputs: [
+      "query", "status", "domain", "record_as_of", "record.funding.rounds_count",
+      "record.funding.rounds[].round_type", "record.funding.rounds[].round_date",
+      "record.funding.rounds[].round_date_precision", "record.funding.rounds[].round_amount_m_usd",
+      "record.funding.rounds[].source_urls", "record.funding.rounds[].investors[].name",
+    ],
+    best_for: [
+      "a citation per funding round, often the company's own announcement",
+      "confirming the decisive round atomus reports",
+    ],
+    not_for: [
+      "completeness — rounds_count is only what it holds (Stripe 7 vs ~23)",
+      "anything time-critical: a company not on file is read live and can take many minutes",
+    ],
+    cost_model: {
+      tier: "BRONZE", start_usd: 0.00005, per_result_usd: 0.02,
+      events_usd: { "actor-start": 0.00005, "basic-company-profile": 0.02, "full-company-profile": 0.1 },
+      cost_multiplier_fields: ["companies (one charge per company delivered)"],
+    },
+    normalizer_key: "pvalyou_funding",
+    schema_build: "store-modified-2026-09-17",
+    last_verified_at: "2026-09-19",
+    confidence: "low",
+    known_defects: [
+      { id: "pvalyou_incomplete_history",
+        summary: "Holds a subset of a company's rounds; rounds_count counts only those.",
+        mitigation: "Never read completeness from it; atomus supplies the count.",
+        evidence_ref: "probe 2026-09-19, stripe" },
+      { id: "pvalyou_cold_read_latency",
+        summary: "A company not on file is read live: one cold read exceeded a 600s run; a warm read took 43s.",
+        mitigation: "Runs are adopted across slices (resume_run_id), never waited on inside one.",
+        evidence_ref: "probe 2026-09-19, wordware" },
+      { id: "pvalyou_low_adoption",
+        summary: "3 total / 2 monthly users on the Store.",
+        mitigation: "Corroboration only; it can FAIL a stage with a cited later round but never PASS one alone.",
+        evidence_ref: "Store stats 2026-09-19" },
+    ],
+    requires_enrichment_before_qualification: false,
+  },
   apify_funding_rounds_datahyena: {
     actor_key: "apify_funding_rounds_datahyena",
     actor_id: "datahyena/company-funding-rounds",

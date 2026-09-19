@@ -243,6 +243,9 @@ import {
 } from "./researchFeedback.ts";
 import { ACTOR_READINESS, readinessOf, routeActorReady } from "./actorIntelligence.ts";
 import { markProviderUnavailable, unavailableProvider, type UnavailableProvider } from "./providerAvailability.ts";
+import {
+  attemptedRoutes, verifyOpKey, type ClaimVerifier, type PendingVerifierRun, type VerifierFinding,
+} from "./claimVerifier.ts";
 import { candidateDecision, decisionCounts, decisionSummary, type CandidateDecision, type MissionCandidate } from "./workbenchMissionView.ts";
 import { deriveMissionCriteria } from "./missionCriteria.ts";
 import {
@@ -593,6 +596,11 @@ export interface CapabilityExecutionState {
    * continuation does not ask again. See providerAvailability.ts.
    */
   unavailable_providers?: UnavailableProvider[];
+  /**
+   * Claim-verifier provider runs still executing when a slice ended — adopted
+   * by run id on the next slice, never bought twice (`claimVerifier`).
+   */
+  verifier_pending_runs?: PendingVerifierRun[];
   /** Every route-control proposal and what code decided about it. */
   route_controls?: RouteControlRecord[];
   /** Binds this state to the mission it was produced for. */
@@ -10661,6 +10669,7 @@ export function missionCandidatesFrom(
         c.brain !== null || c.hiring_assessment !== null,
       graph,
       next_action: null,
+      attempted_routes: attemptedRoutes(c.completed_operations),
     };
   });
 }
@@ -10779,6 +10788,39 @@ function recordObservation(c: EngineCompany, o: CandidateObservation): void {
  * Claim-level only (the plan §11): the item's status comes from
  * `businessModelDecision`, never from the whole-company verdict.
  */
+/**
+ * A claim verifier's answer for one company (`claimVerifier`).
+ *
+ * The item is recorded as an observation under a STABLE id, so a later, better
+ * answer replaces it rather than standing beside it. `answered` marks the
+ * company with the verifier's route, whatever the verdict — a PENDING funding
+ * stage writes no item, and without the mark the gap router would send the same
+ * company to the same verifier on every slice.
+ */
+export function applyVerifierFinding(
+  c: EngineCompany, f: VerifierFinding, verifier: Pick<ClaimVerifier, "key" | "route_actor">,
+): boolean {
+  let recorded = false;
+  if (f.item) {
+    recordObservation(c, {
+      version: CANDIDATE_OBSERVATION_VERSION,
+      observation_id: `obs_vfy_${f.item.evidence_id}`.slice(0, 64),
+      capability: "claim_verification", actor_key: f.item.source.actor,
+      provider: f.item.source.provider, route_id: null, plan_version: null,
+      provider_call_id: f.item.source.provider_call_id, source_record_id: null, source_url: f.item.source.url,
+      observed_at: f.item.observed_at,
+      entity_hint: entityHintFromCompany(c.company),
+      evidence: [f.item],
+    });
+    recorded = true;
+  }
+  if (f.answered) {
+    const op = verifyOpKey(verifier.route_actor);
+    if (!c.completed_operations.includes(op)) c.completed_operations.push(op);
+  }
+  return recorded;
+}
+
 export function applyRegroundedVerification(
   c: EngineCompany, verification: GroundedVerification, missionId: string | null, at: string,
 ): { item: EvidenceItem | null; decision: string | null } {

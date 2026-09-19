@@ -73,6 +73,11 @@ export const STRUCTURED_COMPANY_ACTOR_KEYS: ReadonlySet<string> = new Set([
   // broken until a live run caught it. Registered WITH the capability that
   // reads them, so the two cannot ship apart.
   "apify_google_news",
+  // P6 funding verification: an atomus company row and a pvalyou company record
+  // must reach their normalizers as the provider wrote them — the funding rounds
+  // are nested (`company.financial.funding`, `record.funding`).
+  "apify_funding_atomus",
+  "apify_funding_pvalyou",
 ]);
 
 export const STRUCTURED_COMPANY_ACTOR_IDS: ReadonlySet<string> = new Set([
@@ -85,6 +90,8 @@ export const STRUCTURED_COMPANY_ACTOR_IDS: ReadonlySet<string> = new Set([
   // carries the key.
   "datahyena/company-funding-rounds",
   "data_xplorer/google-news-scraper-fast",
+  "atomus/linkedin-company-scraper",
+  "pvalyou/company-record",
 ]);
 
 /** Source-type aliases that genuinely mean "company row". */

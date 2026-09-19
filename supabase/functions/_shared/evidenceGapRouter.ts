@@ -97,22 +97,19 @@ export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
   { claim: "headcount", criterion_dimensions: ["company_size"], evidence: ["headcount"], freshness_days: freshness("headcount"), routes: [LINKEDIN_DETAILS] },
   {
     claim: "funding_stage", criterion_dimensions: ["company_stage"], evidence: ["funding", "company_stage"],
-    freshness_days: freshness("funding"), deferred_to: "P6",
+    freshness_days: freshness("funding"),
     routes: [{
-      actor: "apify_funding_rounds_datahyena", capability: "funding_signal_discovery",
-      purpose: "structured funding rounds", evidence_actors: ["apify_funding_rounds_datahyena"],
-      // NO PROVEN VERIFIER YET, so this route stays non-executable and the
-      // claim stays PENDING rather than being decided by a provider that
-      // cannot answer it. `fundingStageClaim.ts` holds the decision the moment
-      // one does. Verified 2026-09-19:
-      //   * datahyena takes no company input at all — absence of a row for a
-      //     company we already hold proves nothing about that company;
-      //   * memo23/crunchbase-scraper returns a round's TYPE anonymously but
-      //     no announced date, no amount and a truncated history (10 of
-      //     Stripe's 25 rounds), which is exactly the completeness PASS needs;
-      //   * enrich-crm is out of vendor credit.
-      canonical_executor: false,
-      executor_note: "P6: no verifier proven — datahyena cannot take a company, memo23 cannot date a round",
+      // P6: KNOWN-COMPANY FUNDING VERIFICATION. atomus (LinkedIn identity,
+      // true round count) settles a later round alone; for Seed/unclear it is
+      // corroborated by pvalyou's per-round citations (`fundingCorroboration`).
+      // The executor exists (`fundingStageVerifier`); READINESS in Actor
+      // Intelligence decides whether the route is taken, so it stays blocked
+      // until the pair is proven live through this pipeline.
+      actor: "apify_funding_atomus", capability: "funding_verification",
+      purpose: "the company's funding rounds, corroborated by cited announcements",
+      evidence_actors: ["apify_funding_atomus", "apify_funding_pvalyou", "funding_corroboration"],
+      canonical_executor: true,
+      executor_note: "atomus completeness + pvalyou citations decide the funding stage (fundingStageVerifier)",
     }],
   },
   {
@@ -166,7 +163,9 @@ export interface EvidenceGap {
 }
 
 /** The routes for a claim, judged for one company. */
-function judgeRoutes(def: ClaimDefinition | null, graph: CompanyEvidenceGraph): GapRoute[] {
+function judgeRoutes(
+  def: ClaimDefinition | null, graph: CompanyEvidenceGraph, attempted: ReadonlySet<string>,
+): GapRoute[] {
   if (!def) return [];
   // TRIED means the actor has already answered for this company on ANY
   // dimension: LinkedIn details that returned a headcount but no HQ were
@@ -174,7 +173,11 @@ function judgeRoutes(def: ClaimDefinition | null, graph: CompanyEvidenceGraph): 
   const answered = new Set(graph.claims.flatMap((c) => c.sources));
   return def.routes.map((r) => {
     const readiness = readinessOf(r.actor, r.capability).readiness;
-    const tried = r.evidence_actors.some((a) => answered.has(a));
+    // …or a claim verifier has already answered through this route, whatever
+    // its verdict: a PENDING funding stage writes no evidence item, and without
+    // the mark the router would send the same company to the same verifier on
+    // every slice (`verifyOpKey` in `claimVerifier`).
+    const tried = attempted.has(r.actor) || r.evidence_actors.some((a) => answered.has(a));
     const executable = readiness === "READY" && !tried && r.canonical_executor;
     const why = readiness !== "READY" ? `${r.actor} is ${readiness}`
       : tried ? `${r.actor} already answered for this company`
@@ -189,10 +192,12 @@ export function evidenceGapsFor(
   checks: ReadonlyArray<{ criterion_id: string; dimension: string; result: string; reason: string }>,
   graph: CompanyEvidenceGraph,
   registry: readonly ClaimDefinition[] = CLAIM_REGISTRY,
+  /** Route actors a claim verifier has already answered through for this company. */
+  attempted: ReadonlySet<string> = new Set(),
 ): EvidenceGap[] {
   return checks.filter((c) => c.result === "unknown").map((c) => {
     const def = claimFor(c.dimension, registry);
-    const considered = judgeRoutes(def, graph);
+    const considered = judgeRoutes(def, graph, attempted);
     const route = considered.find((r) => r.executable) ?? null;
     return {
       criterion_id: c.criterion_id, dimension: c.dimension, claim: def?.claim ?? null, missing: c.reason,

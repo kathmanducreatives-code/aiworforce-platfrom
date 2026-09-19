@@ -930,7 +930,7 @@ Deno.test("run-agent feeds the engine's own pending_runs into the decision", () 
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url),
   );
   assert(
-    /pendingRuns:\s*capabilityRun\?\.state\.pending_runs\?\.length/.test(RUN),
+    /pendingRuns:\s*\(capabilityRun\?\.state\.pending_runs\?\.length \?\? 0\) \+\s*\(capabilityRun\?\.state\.verifier_pending_runs\?\.length \?\? 0\)/.test(RUN),
     "re-deriving the list is how the two components disagreed in the first place",
   );
 });

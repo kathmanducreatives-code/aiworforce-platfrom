@@ -356,7 +356,7 @@ Deno.test("GPT receives the Actor limitations as content, not only as a hash", (
   // briefing is DERIVED from the catalog, so a new Actor is briefed the moment
   // it is carded — this count is the assertion that nobody added one whose
   // limitations GPT never hears.
-  assertEquals(brief.length, 14, "all fourteen catalogued Actors must be briefed");
+  assertEquals(brief.length, 16, "all sixteen catalogued Actors must be briefed (P6 added the two funding verifiers)");
   const all = JSON.stringify(brief).toLowerCase();
   for (const required of [
     "linkedin company identity",        // memo23 has no LinkedIn URL

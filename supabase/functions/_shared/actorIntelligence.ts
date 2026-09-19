@@ -61,6 +61,14 @@ export const ACTOR_READINESS: readonly ActorReadinessRecord[] = Object.freeze([
     reason: "carded (low confidence); never run live in V2", live_evidence: null, gated_by: "mission names the YC cohort" },
   { actor: "apify_funding_rounds_datahyena", capability: "funding_signal_discovery", readiness: "CARDED_BUT_NOT_LIVE",
     reason: "carded and executable; not run under the V2 spec spine ($0.045/record); hybrid is P6", live_evidence: null },
+  // P6 known-company funding verification. Both actors were probed live on
+  // 2026-09-19 OUTSIDE this pipeline (Wordware PASS, Stripe/Cal.com FAIL,
+  // Dioptra/37signals no rounds); neither has run through the V2 spec spine,
+  // so the route stays blocked until a canary proves the pair end to end.
+  { actor: "apify_funding_atomus", capability: "funding_verification", readiness: "CARDED_BUT_NOT_LIVE",
+    reason: "atomus/linkedin-company-scraper: round types, dates and a TRUE round count; probed live, not yet run in V2", live_evidence: null },
+  { actor: "apify_funding_pvalyou", capability: "funding_verification", readiness: "CARDED_BUT_NOT_LIVE",
+    reason: "pvalyou/company-record: per-round source URLs, incomplete history, slow cold reads; probed live, not yet run in V2", live_evidence: null },
   { actor: "apify_linkedin_company_employees", capability: "hiring_verification", readiness: "NEEDS_PROVIDER_WORK",
     reason: "opt-in only at the tool layer (apify_actor_disabled_by_default); first-hire team check refused live", live_evidence: null },
   { actor: "apify_people_search", capability: "founder_discovery", readiness: "NEEDS_PROVIDER_WORK",
