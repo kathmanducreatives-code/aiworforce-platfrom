@@ -1,4 +1,4 @@
-import { canonicalSummary, readMissionView } from './missionView';
+import { canonicalSummary, readMissionView } from './missionView.ts';
 // THE RUN, WHILE IT IS STILL RUNNING.
 //
 // The Workbench used to be binary: empty until the run finished, then fully

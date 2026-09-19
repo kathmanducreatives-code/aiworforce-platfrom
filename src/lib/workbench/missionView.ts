@@ -38,6 +38,17 @@ export interface CanonicalHardCheck {
   provenance: CanonicalCheckProvenance | null;
 }
 
+/** One unknown hard check on a pending lead, and what could close it (`evidenceGapRouter`). */
+export interface CanonicalEvidenceGap {
+  dimension: string;
+  claim: string | null;
+  next: 'verify' | 'blocked';
+  /** What the next route reads, when there is one. */
+  route: string | null;
+  /** Why each considered route cannot be taken, when blocked. */
+  blocked_by: string[];
+}
+
 export interface CanonicalLead {
   company: { key: string; name: string | null; domain: string | null; linkedin_url: string | null };
   label: string | null;
@@ -50,6 +61,7 @@ export interface CanonicalLead {
   missing_evidence: string[];
   caveats: string[];
   evidence_coverage: number;
+  evidence_gaps: CanonicalEvidenceGap[];
 }
 
 export interface CanonicalCounts {
@@ -134,6 +146,19 @@ export function readMissionView(result: unknown): CanonicalMissionView | null {
         missing_evidence: strArr(l.missing_evidence),
         caveats: strArr(l.caveats),
         evidence_coverage: num(l.evidence_coverage),
+        evidence_gaps: Array.isArray(l.evidence_gaps)
+          ? (l.evidence_gaps as Array<Record<string, unknown>>).filter((g) => !!g && typeof g === 'object').map((g) => {
+            const route = g.route && typeof g.route === 'object' ? g.route as Record<string, unknown> : null;
+            const considered = Array.isArray(g.considered) ? g.considered as Array<Record<string, unknown>> : [];
+            return {
+              dimension: String(g.dimension ?? ''),
+              claim: str(g.claim),
+              next: g.next === 'verify' ? 'verify' as const : 'blocked' as const,
+              route: route ? str(route.purpose) : null,
+              blocked_by: considered.map((r) => `${String(r.purpose ?? r.actor ?? '')}: ${String(r.why ?? '')}`),
+            };
+          })
+          : [],
       };
     });
   return { version: String(r.version ?? ''), stage: String(r.stage ?? ''), counts, leads };

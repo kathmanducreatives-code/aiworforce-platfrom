@@ -15,19 +15,16 @@
 // engine's resume state must not be, and the reassembled `result` must stay
 // shaped the way every consuming module already expects.
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { projectTaskListRow, TASK_LIST_COLUMNS } from "../../src/lib/taskListProjection.ts";
 
+// The column list and the rebuild are ONE table (`taskListProjection.ts`), so
+// these read the shipped values and run the shipped mapper rather than
+// grepping source. `tests/frontend/workbenchFetchPath.test.ts` drives the same
+// path with a real stored result.
 const SOURCE = await Deno.readTextFile(
   new URL("../../src/lib/orchestration.ts", import.meta.url),
 );
-
-/** The `TASK_LIST_COLUMNS` literal, as shipped. */
-const COLUMNS = (() => {
-  const start = SOURCE.indexOf("const TASK_LIST_COLUMNS = [");
-  assert(start > -1, "TASK_LIST_COLUMNS must exist");
-  const end = SOURCE.indexOf("].join(',')", start);
-  assert(end > -1, "TASK_LIST_COLUMNS must be a joined array");
-  return SOURCE.slice(start, end);
-})();
+const COLUMNS = TASK_LIST_COLUMNS;
 
 /** The body of `fetchTasksForPlan`. */
 const FETCH_TASKS = (() => {
@@ -37,6 +34,11 @@ const FETCH_TASKS = (() => {
   assert(end > -1, "fetchTaskResult must follow it");
   return SOURCE.slice(start, end);
 })();
+
+/** Every projected alias set to a marker, as PostgREST would return it. */
+const ALL_ALIASES = Object.fromEntries(
+  COLUMNS.split(",").filter((c) => c.includes(":result->")).map((c) => [c.split(":")[0], { marker: c }]),
+);
 
 Deno.test("1. the task list never asks for every column", () => {
   // The regression itself. `select('*')` on `tasks` is the 15 GB.
@@ -48,6 +50,7 @@ Deno.test("1. the task list never asks for every column", () => {
     FETCH_TASKS.includes("TASK_LIST_COLUMNS"),
     "fetchTasksForPlan must use the explicit projection",
   );
+  assert(FETCH_TASKS.includes("projectTaskListRow"), "and rebuild each row with the one mapper");
 });
 
 Deno.test("2. the engine's resume state is never shipped to the browser", () => {
@@ -100,6 +103,8 @@ Deno.test("4. every result key the UI reads is projected", () => {
     "result->workbench_progress": "workbenchProgress.readWorkbenchProgress",
     "result->workbench_evaluation_rows": "evaluationRows.readEvaluationRows",
     "result->workbench_portfolio": "portfolioView.readPortfolio",
+    // Canary 9b1b70a2: missing, and every Workbench number fell back to legacy.
+    "result->workbench_mission_view": "missionView.readMissionView",
   };
   for (const [path, reader] of Object.entries(required)) {
     assert(COLUMNS.includes(path), `${path} is read by ${reader} and must be projected`);
@@ -108,39 +113,30 @@ Deno.test("4. every result key the UI reads is projected", () => {
 
 Deno.test("5. the reassembled result keeps the shape its readers expect", () => {
   // The projection returns flat aliases; the components read a nested object.
-  // Reassembly is what keeps every downstream module unchanged.
+  const row = projectTaskListRow({ id: "t", status: "complete", ...ALL_ALIASES }) as { result: Record<string, any> };
   for (
     const key of [
-      "task_status:", "terminal_status:", "quota:", "company_first:",
-      "workbench_progress:", "workbench_evaluation_rows:", "workbench_portfolio:",
-      "company_first_state:", "capability_execution_state:",
+      "task_status", "terminal_status", "quota", "company_first",
+      "workbench_progress", "workbench_evaluation_rows", "workbench_portfolio", "workbench_mission_view",
     ]
   ) {
-    assert(FETCH_TASKS.includes(key), `the rebuilt result must carry ${key}`);
+    assert(row.result[key]?.marker, `the rebuilt result must carry ${key}`);
   }
-  assert(
-    FETCH_TASKS.includes("candidate_diagnostics: r_candidate_diagnostics"),
-    "candidate_diagnostics must be rebuilt at the path readDiagnosticsFromResult expects",
-  );
-  assert(
-    FETCH_TASKS.includes("provider_attempts: r_provider_attempts"),
-    "provider_attempts must be rebuilt at the path hasStoredCompanyRun expects",
-  );
+  assert(row.result.company_first_state.candidate_diagnostics.marker,
+    "candidate_diagnostics must be rebuilt at the path readDiagnosticsFromResult expects");
+  assert(row.result.capability_execution_state.provider_attempts.marker,
+    "provider_attempts must be rebuilt at the path hasStoredCompanyRun expects");
+  assertEquals(Object.keys(row.result.company_first_state), ["candidate_diagnostics"], "narrowed, not the parent");
+  assert(!Object.keys(row).some((k) => k.startsWith("r_")), "no alias leaks onto the task");
 });
 
 Deno.test("6. a task with no result stays null, not an empty object", () => {
   // `taskResultIsPartial` and `taskQuotaUnmet` both return false for a
   // non-object. Handing them `{}` would make a task that never ran look like
   // one that ran and reported nothing — a different claim entirely.
-  assert(
-    FETCH_TASKS.includes("present"),
-    "the mapper must distinguish an absent result from an empty one",
-  );
-  assert(
-    /result:\s*present\s*\n?\s*\?/.test(FETCH_TASKS) || FETCH_TASKS.includes("present"),
-    "result must be null when no projected key came back",
-  );
-  assert(FETCH_TASKS.includes(": null"), "the absent case must be null");
+  const nulls = Object.fromEntries(Object.keys(ALL_ALIASES).map((k) => [k, null]));
+  assertEquals(projectTaskListRow({ id: "t", ...nulls }).result, null);
+  assertEquals(projectTaskListRow({ id: "t" }).result, null);
 });
 
 Deno.test("7. the full result is still reachable on demand", () => {

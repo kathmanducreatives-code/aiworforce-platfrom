@@ -66,6 +66,8 @@ export interface EvidenceItem {
     /** The business-model claim's own decision (`businessModelDecision`). This is what proves. */
     business_model_decision?: "accepted" | "review";
     business_model_reasons?: string[];
+    /** The business-model facets the quotes state (`statedFacets`) — the proof, itemised. */
+    business_model_facets?: string[];
   };
 }
 

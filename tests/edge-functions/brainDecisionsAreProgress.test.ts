@@ -114,7 +114,11 @@ Deno.test("run-agent reports the decided count from the working set", async () =
   );
   const i = src.indexOf("brainDecidedInPool:");
   assert(i > 0, "the caller must report it");
-  const block = src.slice(i, i + 200);
+  const block = src.slice(i, i + 400);
+  // Lead V2 counts the CANONICAL decisions (qualified + pending + ineligible);
+  // every other path still counts per-company Brain state, as before.
+  assert(block.includes("p5Decision.qualified + p5Decision.pending + p5Decision.ineligible"),
+    "on Lead V2 a canonical decision is the progress");
   assert(block.includes("c.brain !== null"),
     "counted from per-company Brain state, deduplicated by the working set");
 });

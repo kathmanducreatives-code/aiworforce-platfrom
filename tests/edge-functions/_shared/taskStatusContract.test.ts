@@ -238,8 +238,10 @@ Deno.test("WIRING: run-agent prefers the RPC and falls back only when it is abse
   // candidates were still on the frontier. When work remains and the quota is
   // unmet the run is `continuation_required`; otherwise this IS `cf.status`.
   assertStringIncludes(src, "const statuses = projectStatus(");
-  assertStringIncludes(src, "effectiveTerminal, cf.writeBoundary.invariantViolation, {");
-  assertStringIncludes(src, "const effectiveTerminal = autoDecision.continue");
+  // Lead V2 reads its own settled outcome (the canonical qualified count when
+  // the company is the deliverable); everything else keeps the CONTACT quota.
+  assertStringIncludes(src, "effectiveTerminal, cf.writeBoundary.invariantViolation, v2Outcome ? v2Outcome.quota : {");
+  assertStringIncludes(src, ": autoDecision.continue ? \"continuation_required\" : cf.status;");
   assertStringIncludes(src, "contactReady: cf.quota.eligible_leads,");
   assertStringIncludes(src, "requested: cf.quota.requested_leads,");
   assertStringIncludes(src, "status: statuses.rowStatus,");

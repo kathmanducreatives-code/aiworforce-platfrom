@@ -43,7 +43,7 @@ import { EMPTY_WORKBENCH_MESSAGE } from '@/lib/workbench/workbenchSession';
 import { buildRunSummary } from '@/lib/workbench/runSummary';
 import {
   LEAD_TAB_EMPTY, type LeadTabId, notReachedCompanies, partitionLeads, tabsFor,
-  partitionAllRows, bucketReasonFor,
+  partitionAllRows, bucketReasonFor, resultTabCounts,
 } from '@/lib/workbench/leadTabs';
 import type { PortfolioView } from '@/lib/workbench/portfolioView';
 import type { WorkbenchProgress } from '@/lib/workbench/workbenchProgress';
@@ -187,13 +187,20 @@ export default function LeadResultsView({
   const allBuckets = useMemo(
     () => partitionAllRows(evaluationRows as never), [evaluationRows]);
   const ruledOut = allBuckets.rejected;
+  // Lead V2: a company the backend holds as pending is an evaluation row, not a
+  // lead row, and still belongs under In review. See `resultTabCounts`.
+  const tabCounts = useMemo(() => resultTabCounts({
+    qualifiedLeads: partition.qualified.length,
+    inReviewLeads: partition.inReview.length,
+    evaluationRows: evaluationRows as never,
+  }), [partition, evaluationRows]);
   const tabs = useMemo(() => tabsFor({
-    qualified: partition.qualified.length,
-    inReview: partition.inReview.length,
-    rejected: ruledOut.length,
-    notReached: notReached.length,
+    qualified: tabCounts.qualified,
+    inReview: tabCounts.inReview,
+    rejected: tabCounts.rejected,
+    notReached: tabCounts.notReached,
     hasInsights: !!insightsSlot,
-  }), [partition, ruledOut.length, notReached, insightsSlot]);
+  }), [tabCounts, insightsSlot]);
 
   // OPEN ON WHERE THE RESULTS ACTUALLY ARE.
   //
@@ -304,7 +311,11 @@ export default function LeadResultsView({
     portfolio,
     progress,
     rows: { total: items.length, qualified: 0, pending: 0 },
-  }), [partition, items.length, runQuota, portfolio, progress]);
+    // Lead V2: the canonical decision is the only answer when the run wrote one.
+    canonical: tabCounts.canonical && progress
+      ? { qualifiedCompanies: progress.qualified_companies, reviewed: progress.evaluated, pending: tabCounts.inReview }
+      : null,
+  }), [partition, items.length, runQuota, portfolio, progress, tabCounts]);
 
   // The qualification diagnostics were computed here and rendered inline above
   // the table. They are DIAGNOSTIC — read when a number looks wrong — so phase 2
@@ -592,7 +603,38 @@ export default function LeadResultsView({
       {/* ── SECONDARY TABS ─────────────────────────────────────────────────
           Scrolled, bounded, and outside the lead-table branch entirely, so
           nothing about them can affect the space the leads get. */}
-      {tab === 'not_reached' ? (
+      {tab === 'in_review' && tabCounts.pendingEvidence.length > 0 && partition.inReview.length === 0 ? (
+        <div className="flex-1 min-h-0 overflow-auto px-6 py-5">
+          <p className="text-[13px] text-[#8b949e] leading-relaxed mb-4 max-w-xl">
+            These {tabCounts.pendingEvidence.length} companies match everything we could check so
+            far, but a required fact is still unproven. They are not matches yet and not ruled out.
+          </p>
+          <ul className="space-y-px">
+            {tabCounts.pendingEvidence.map((c) => (
+              <li key={c.company_key} className="py-2.5 border-b border-white/[0.04]">
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="text-[13.5px] text-[#C9D1D9] truncate">{c.company_name}</span>
+                  <span className="text-[12px] text-[#6e7681] shrink-0 truncate max-w-[55%]">
+                    {bucketReasonFor(c)}
+                  </span>
+                </div>
+                {(c.canonical?.missing_evidence.length ?? 0) > 0 && (
+                  <div className="text-[11.5px] text-[#6e7681] mt-0.5">
+                    Missing: {c.canonical!.missing_evidence.slice(0, 3).join('; ')}
+                  </div>
+                )}
+                {(c.canonical?.evidence_gaps ?? []).map((g) => (
+                  <div key={g.dimension} className="text-[11.5px] text-[#6e7681] mt-0.5">
+                    {g.next === 'verify'
+                      ? <>Next check ({g.dimension.replace(/_/g, ' ')}): {g.route}</>
+                      : <>Can't verify {g.dimension.replace(/_/g, ' ')} yet — {g.blocked_by.join('; ') || 'no source can establish it'}</>}
+                  </div>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : tab === 'not_reached' ? (
         <div className="flex-1 min-h-0 overflow-auto px-6 py-5">
           <p className="text-[13px] text-[#8b949e] leading-relaxed mb-4 max-w-xl">
             The run stopped before checking these {notReached.length} companies.

@@ -278,3 +278,26 @@ export function readStatuses(row: LegacyStatusRow | null | undefined): ReadStatu
     legacy: legacyOverloaded || !!cfStatus,
   };
 }
+
+/**
+ * WHICH PLAN STATUS A FINISHED TASK MAY WRITE.
+ *
+ * `partial` is a CHECKPOINT on the plan, not an ending: a Lead V2 mission
+ * checkpoints its plan as `partial` after every slice that continues. The
+ * writer used to refuse every transition out of a non-`executing` plan, so a
+ * mission that checkpointed once could never be marked `complete` — the plan
+ * disagreed with the queue, the task and the lineage for ever.
+ *
+ * A checkpointed plan may now be finished (`complete` / `failed`). A finished
+ * plan is never re-opened or demoted, and a repeated write is a no-op.
+ * Returns the status to write, or null to leave the row alone.
+ */
+export function nextPlanStatus(
+  current: string | null | undefined,
+  target: "complete" | "failed" | "partial",
+): "complete" | "failed" | "partial" | null {
+  if (current === target) return null;
+  if (!current || current === "executing") return target;
+  if (current === "partial" && (target === "complete" || target === "failed")) return target;
+  return null;
+}

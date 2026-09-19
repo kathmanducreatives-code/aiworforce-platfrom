@@ -282,9 +282,14 @@ function checkBusinessModel(
   const why = seen.item.status === "proven"
     ? "neither shows nor rules out"
     : seen.match === "pass" ? "suggests, but is not verified as," : seen.match === "fail" ? "suggests otherwise, but is not verified, for" : "neither shows nor rules out";
+  // Which fact the company's own words left unstated — the gap a verification
+  // route (the product / pricing / customers pages) has to close.
+  const unstated = (seen.item.assessment?.business_model_reasons ?? [])
+    .filter((r) => r.startsWith("quote_does_not_state_"))
+    .map((r) => r.slice("quote_does_not_state_".length).replace(/_/g, " "));
   return {
     ...base, result: "unknown", evidence_ids: [seen.item.evidence_id], provenance: provenanceOf(seen.item),
-    reason: `${say(seen)} ${why} ${want}`,
+    reason: `${say(seen)} ${why} ${want}` + (unstated.length ? ` (the quote does not state ${unstated.join(" or ")})` : ""),
   };
 }
 

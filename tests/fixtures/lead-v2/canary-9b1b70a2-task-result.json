@@ -1,0 +1,4978 @@
+{
+ "source": "prod task 967a739d (canary 9b1b70a2, commit 383633cd, 2026-09-19); result keys the browser reads, plus a backend-only marker",
+ "row": {
+  "id": "967a739d-1260-4298-b4ae-87dd4590844c",
+  "status": "complete",
+  "plan_id": "34595c42-706b-4186-8617-b583a9c460d8",
+  "agent_slug": "scout",
+  "created_at": "2026-09-19T07:04:28.579056+00:00",
+  "step_index": 0
+ },
+ "result": {
+  "run_outcome": {
+   "gaps": [],
+   "spend": {
+    "usd_reported": 0.0361,
+    "provider_calls": 10,
+    "credits_charged": 9,
+    "reused_operations": 0,
+    "unsettled_operations": 0
+   },
+   "state": "SATISFIED",
+   "funnel": {
+    "deferred": 0,
+    "enriched": 6,
+    "excluded": [
+     {
+      "count": 11,
+      "reason": "employee_size"
+     }
+    ],
+    "cited_rows": 5,
+    "discovered": 20,
+    "shortlisted": 6,
+    "hiring_refuted": 0,
+    "hiring_verified": 5,
+    "identity_resolved": 6,
+    "hiring_evidence_unavailable": 0
+   },
+   "version": "run-outcome-v1",
+   "requested": 1,
+   "persistence": {
+    "leads_written": 1,
+    "signals_written": 0
+   },
+   "continuation": {
+    "reason": null,
+    "required": false,
+    "resumable": true
+   },
+   "qualification": {
+    "eligible": 9,
+    "rejected": 5,
+    "evaluated": 6,
+    "qualified": 1,
+    "not_reached": 3,
+    "not_reached_reason": null
+   },
+   "completed_capabilities": [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "persistence"
+   ]
+  },
+  "task_status": "partial",
+  "company_first": {
+   "items": [],
+   "quota": {
+    "quota_policy": "contact_only",
+    "eligible_leads": 0,
+    "remaining_leads": 1,
+    "requested_leads": 1,
+    "requested_count_source": "explicit"
+   },
+   "counts": {
+    "watch": 0,
+    "reject": 0,
+    "contact": 0,
+    "rawJobs": 0,
+    "persisted": 0,
+    "candidates": 0,
+    "needsReview": 0,
+    "verifiedCompanies": 0
+   },
+   "rounds": [],
+   "status": "round_limit_reached",
+   "routing": {
+    "company_first": true,
+    "execution_mode": "company_first",
+    "job_search_spec": {
+     "location": "United States",
+     "keyword_queries": [],
+     "company_vertical": "saas",
+     "compilation_status": "insufficient"
+    },
+    "original_user_query": "Find 1 seed-stage B2B SaaS startup in the US hiring its first growth marketer.",
+    "requested_person_role": null
+   },
+   "bottlenecks": [],
+   "diagnostics": {
+    "jobsInvoked": false,
+    "peopleCalls": 0,
+    "budgetStopped": false
+   },
+   "idempotency": [],
+   "continuation": {
+    "required": false,
+    "next_round": null,
+    "next_action": "finalize",
+    "checkpoint_at": "2026-09-19T07:08:30.790Z",
+    "continuation_token": null,
+    "resumed_from_round": 1
+   },
+   "plan_sources": [],
+   "stage_funnel": {
+    "contact_ready": 0,
+    "quota_counted": 0,
+    "hiring_checked": 0,
+    "hiring_verified": 0,
+    "company_fit_pass": 0,
+    "founder_mismatch": 0,
+    "founder_searched": 0,
+    "founder_verified": 0,
+    "identity_pending": 0,
+    "company_fit_reject": 0,
+    "enrichment_pending": 0,
+    "company_fit_pending": 0,
+    "enrichment_complete": 0,
+    "hiring_not_verified": 0,
+    "qualified_companies": 0,
+    "candidates_discovered": 0,
+    "company_fit_evaluated": 0
+   },
+   "writeBoundary": {
+    "peopleResults": 0,
+    "normalizedJobs": 0,
+    "persistedRecords": 0,
+    "rawProviderItems": 0,
+    "verifiedCompanies": 0,
+    "invariantViolation": null,
+    "providerSideWrites": 0,
+    "rejectedCandidates": 0,
+    "persistenceAttempts": 0,
+    "qualifiedCandidates": 0
+   },
+   "provider_calls": 0,
+   "budget_consumed": 0,
+   "terminal_reason": "the legacy sourcing loop is disabled for this run; the capability engine owns sourcing and this loop reports no rounds of its own",
+   "planner_metadata": [],
+   "rounds_attempted": 0,
+   "continuation_owner": "v2_queue",
+   "expansions_attempted": [],
+   "lead_quota_provenance": {
+    "source": "v2_canary",
+    "execution_quota": 1,
+    "mission_requested": 1
+   },
+   "executed_sourcing_mode": "company_first",
+   "semantic_classification": {
+    "skipped": {},
+    "calls_made": 0,
+    "calls_allowed": 10,
+    "calls_remaining": 10,
+    "budget_exhausted": false,
+    "companies_classified": 0
+   }
+  },
+  "terminal_status": "round_limit_reached",
+  "auto_continuation": {
+   "detail": "1 of 1 qualified \u2014 the request is met",
+   "version": "lead-auto-continuation-v1",
+   "decision": "quota_met",
+   "dispatch": null,
+   "continuing": false,
+   "user_message": null
+  },
+  "workbench_progress": {
+   "stage": "qualified",
+   "evaluated": 20,
+   "in_progress": false,
+   "shortlisted": 6,
+   "accounts_found": 20,
+   "hiring_verified": 5,
+   "exclusion_reasons": {
+    "employee_size": 11
+   },
+   "identity_resolved": 6,
+   "companies_enriched": 6,
+   "identity_unresolved": 0,
+   "open_jobs_evaluated": 0,
+   "qualified_companies": 1,
+   "awaiting_external_run": false,
+   "eligible_opportunities": 9,
+   "decision_makers_verified": 0
+  },
+  "company_first_state": {
+   "terminal_status": "round_limit_reached",
+   "candidate_diagnostics": []
+  },
+  "workbench_portfolio": {
+   "counts": {
+    "watch": 0,
+    "review": 1,
+    "tier_a": 1,
+    "tier_b": 0,
+    "tier_c": 0,
+    "delivered": 1,
+    "qualified": 0,
+    "contact_ready": 0,
+    "opportunities": 1,
+    "rejected_by_floor": 16
+   },
+   "entries": [
+    {
+     "rank": 1,
+     "tier": "A",
+     "brain": "review",
+     "round": null,
+     "score": 75,
+     "state": "review",
+     "active": true,
+     "domain": "feathery.io",
+     "reason": "Likely fit; one or more non-critical facts are still unknown.",
+     "actionable": false,
+     "source_url": "https://feathery.io",
+     "company_key": "https://www.linkedin.com/company/feathery-ai",
+     "b2b_use_case": true,
+     "company_name": "Feathery",
+     "geography_ok": true,
+     "contact_ready": false,
+     "identity_status": "verified_match",
+     "source_evidence": true,
+     "has_factual_signal": true
+    }
+   ],
+   "targets": {
+    "interpretation": "legacy_lead_count",
+    "requested_lead_count": 1,
+    "requested_opportunity_count": 1,
+    "requested_contact_ready_count": null
+   },
+   "version": "opportunity-portfolio-v1",
+   "shortfall": {
+    "contact_ready": 0,
+    "opportunities": 0,
+    "opportunity_reason": null,
+    "contact_ready_reason": null
+   }
+  },
+  "workbench_mission_view": {
+   "cost": {
+    "credits": 0,
+    "model_usd": 0.036981,
+    "unknown_cost_calls": 0,
+    "provider_pending_usd": 0.022,
+    "provider_settled_usd": 0
+   },
+   "leads": [
+    {
+     "label": "worth_considering",
+     "bucket": "worth_considering",
+     "caveats": [
+      "sources disagree about industry"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/feathery-ai",
+      "name": "Feathery",
+      "domain": "feathery.io",
+      "linkedin_url": "https://www.linkedin.com/company/feathery-ai"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search#4"
+     ],
+     "hard_checks": {
+      "industry": "pass",
+      "geography": "pass",
+      "company_size": "pass"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "b2b saas",
+       "status": "proven",
+       "sources": [
+        "grounded_evidence_evaluation"
+       ],
+       "dimension": "business_model",
+       "evidence_id": "grd_https://www.linkedin.com/company/feathery-ai_business_model"
+      },
+      {
+       "value": "Feathery is an agentic data intake platform for financial firms.\n\nWe automate onboarding and risk assessment while syncing client data across CRMs, custodians, policy management systems, and internal systems.\n\nFirms use Feathery to replace manual processes with scalable workflows that accelerate onboarding, reduce operational friction, and keep data consistent across their stack.",
+       "status": "plausible",
+       "sources": [
+        "yc"
+       ],
+       "dimension": "company_stage",
+       "evidence_id": "reg_yc_company_record:startup_directory:950088cf"
+      },
+      {
+       "value": "San Francisco, CA, United States",
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin"
+       ],
+       "dimension": "geography",
+       "evidence_id": "reg_company_location:linkedin:4217ecd2"
+      },
+      {
+       "value": 57,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "reg_employee_count:linkedin:3f8c9324"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "deterministic_verdict"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "drv_https://www.linkedin.com/company/feathery-ai_hiring"
+      },
+      {
+       "value": {
+        "name": "Feathery",
+        "domain": "feathery.io",
+        "linkedin_company_url": "https://www.linkedin.com/company/feathery-ai"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_c3b8074746c423f1bfece8e8"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin",
+        "provider_label"
+       ],
+       "dimension": "industry",
+       "evidence_id": "reg_company_industry:linkedin:067d7496"
+      },
+      {
+       "value": {
+        "title": "Product Marketing Manager (US Remote)",
+        "location": "United States",
+        "posted_date": "2026-09-19T04:32:25.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "harvestapi/linkedin-job-search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_a0d68a27a7db2903ab2f6166"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "Feathery is a US-based B2B SaaS company with a Product Marketing Manager role posted in the United States, making it relevant to a marketing-focused outreach list.",
+       "evidence_ids": [
+        "grd_https://www.linkedin.com/company/feathery-ai_business_model",
+        "reg_company_location:linkedin:4217ecd2",
+        "ev_a0d68a27a7db2903ab2f6166"
+       ]
+      },
+      {
+       "text": "Its company-stage evidence describes its product and market but does not establish seed stage, while the available team-composition evidence does not verify that this would be the first growth-marketing hire.",
+       "evidence_ids": [
+        "reg_yc_company_record:startup_directory:950088cf",
+        "drv_https://www.linkedin.com/company/feathery-ai_team_composition"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [],
+     "evidence_coverage": 1,
+     "hard_check_details": [
+      {
+       "reason": "business model \"b2b saas\" matches b2b saas",
+       "result": "pass",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "grounded_evidence_evaluation",
+        "method": "model_extraction",
+        "status": "proven",
+        "excerpt": "Feathery is an agentic data intake platform for financial firms.",
+        "dimension": "business_model",
+        "confidence": "medium",
+        "evidence_id": "grd_https://www.linkedin.com/company/feathery-ai_business_model",
+        "grounding_decision": "review",
+        "business_model_decision": "accepted"
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "business model \"b2b saas\" matches saas",
+       "result": "pass",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "grounded_evidence_evaluation",
+        "method": "model_extraction",
+        "status": "proven",
+        "excerpt": "Feathery is an agentic data intake platform for financial firms.",
+        "dimension": "business_model",
+        "confidence": "medium",
+        "evidence_id": "grd_https://www.linkedin.com/company/feathery-ai_business_model",
+        "grounding_decision": "review",
+        "business_model_decision": "accepted"
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography San Francisco, CA, United States matches United States",
+       "result": "pass",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "proven",
+        "excerpt": "San Francisco, CA, United States",
+        "dimension": "geography",
+        "confidence": "high",
+        "evidence_id": "reg_company_location:linkedin:4217ecd2",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 57 is within range",
+       "result": "pass",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "proven",
+        "excerpt": "57 employees",
+        "dimension": "headcount",
+        "confidence": "high",
+        "evidence_id": "reg_employee_count:linkedin:3f8c9324",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "pending",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/dualentry",
+      "name": "DualEntry",
+      "domain": "dualentry.com",
+      "linkedin_url": "https://www.linkedin.com/company/dualentry"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "pass",
+      "company_size": "pass"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "ai saas",
+       "status": "proven",
+       "sources": [
+        "grounded_evidence_evaluation"
+       ],
+       "dimension": "business_model",
+       "evidence_id": "grd_https://www.linkedin.com/company/dualentry_business_model"
+      },
+      {
+       "value": "DualEntry is the first ERP built AI-native from the ground up. \n\nYou can close the books faster by automating most of your manual tasks with DualEntry AI, freeing up time to focus on strategy and helping your business scale without adding to headcount. A one-person finance team? It's possible with DualEntry.\n\nMid-market enterprises that have outgrown starter cloud and on-premise finance systems choose DualEntry to scale to IPO. You can handle multiple entities, multiple currencies, real-time reporting, and high transaction volumes on one customizable platform. Our customers range from enterprises with $5M in annual revenue to NYSE-listed businesses. \n\nDualEntry is based in New York City and was founded by two experienced entrepreneurs who previously built a $100M-revenue business. In October 2025 we announced a $90M Series A from Lightspeed Venture Partners, Khosla Ventures, and GV (Google Ventures).",
+       "status": "plausible",
+       "sources": [
+        "yc"
+       ],
+       "dimension": "company_stage",
+       "evidence_id": "reg_yc_company_record:startup_directory:99346208"
+      },
+      {
+       "value": "New York City, NY, United States",
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin"
+       ],
+       "dimension": "geography",
+       "evidence_id": "reg_company_location:linkedin:dbdf39ac"
+      },
+      {
+       "value": 90,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "reg_employee_count:linkedin:832fb3ea"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "deterministic_verdict"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "drv_https://www.linkedin.com/company/dualentry_hiring"
+      },
+      {
+       "value": {
+        "name": "DualEntry",
+        "domain": "dualentry.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/dualentry"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_64967308b7a5037b6fa87216"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin",
+        "provider_label"
+       ],
+       "dimension": "industry",
+       "evidence_id": "reg_company_industry:linkedin:05a4035f"
+      },
+      {
+       "value": {
+        "title": "Growth Marketing Manager, Socials",
+        "location": "New York, NY",
+        "posted_date": "2026-09-18T11:35:45.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "harvestapi/linkedin-job-search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_b735ffe9a65ff547d3fa552d"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by deterministic_verdict",
+       "evidence_ids": [
+        "drv_https://www.linkedin.com/company/dualentry_hiring"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_b735ffe9a65ff547d3fa552d"
+       ]
+      },
+      {
+       "text": "team composition is proven by deterministic_verdict",
+       "evidence_ids": [
+        "drv_https://www.linkedin.com/company/dualentry_team_composition"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 business model \"ai saas\" neither shows nor rules out b2b saas"
+     ],
+     "evidence_coverage": 0.8,
+     "hard_check_details": [
+      {
+       "reason": "business model \"ai saas\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "grounded_evidence_evaluation",
+        "method": "model_extraction",
+        "status": "proven",
+        "excerpt": "DualEntry is the first ERP built AI-native from the ground up.",
+        "dimension": "business_model",
+        "confidence": "medium",
+        "evidence_id": "grd_https://www.linkedin.com/company/dualentry_business_model",
+        "grounding_decision": "review",
+        "business_model_decision": "accepted"
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "business model \"ai saas\" matches saas",
+       "result": "pass",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "grounded_evidence_evaluation",
+        "method": "model_extraction",
+        "status": "proven",
+        "excerpt": "DualEntry is the first ERP built AI-native from the ground up.",
+        "dimension": "business_model",
+        "confidence": "medium",
+        "evidence_id": "grd_https://www.linkedin.com/company/dualentry_business_model",
+        "grounding_decision": "review",
+        "business_model_decision": "accepted"
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography New York City, NY, United States matches United States",
+       "result": "pass",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "proven",
+        "excerpt": "New York City, NY, United States",
+        "dimension": "geography",
+        "confidence": "high",
+        "evidence_id": "reg_company_location:linkedin:dbdf39ac",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 90 is within range",
+       "result": "pass",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "proven",
+        "excerpt": "90 employees",
+        "dimension": "headcount",
+        "confidence": "high",
+        "evidence_id": "reg_employee_count:linkedin:832fb3ea",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "pending",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/tristar-ai",
+      "name": "Tristar AI",
+      "domain": "tristar.ai",
+      "linkedin_url": "https://www.linkedin.com/company/tristar-ai"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "pass",
+      "company_size": "pass"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "ai saas",
+       "status": "proven",
+       "sources": [
+        "grounded_evidence_evaluation"
+       ],
+       "dimension": "business_model",
+       "evidence_id": "grd_https://www.linkedin.com/company/tristar-ai_business_model"
+      },
+      {
+       "value": "Manufacturers depend on reliable operations to produce goods, in industries that require precision such as plastics, automotive, and chemicals. \n\nTristar AI provides manufacturers with the world's most advanced computer vision AI system that keeps track of when things go wrong in production, quality, and maintenance.\n\nOur AI-powered cameras and software collect production data, allowing plant managers to receive alerts about operations issues in real-time, preventing monetary losses.\n\nExplore our state-of-the-art technology to optimize your manufacturing processes and achieve operational excellence.",
+       "status": "plausible",
+       "sources": [
+        "yc"
+       ],
+       "dimension": "company_stage",
+       "evidence_id": "reg_yc_company_record:startup_directory:de61d9f3"
+      },
+      {
+       "value": "Boston, MA, United States",
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin"
+       ],
+       "dimension": "geography",
+       "evidence_id": "reg_company_location:linkedin:f16d30a8"
+      },
+      {
+       "value": 34,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "reg_employee_count:linkedin:835d20d0"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "deterministic_verdict"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "drv_https://www.linkedin.com/company/tristar-ai_hiring"
+      },
+      {
+       "value": {
+        "name": "Tristar AI",
+        "domain": "tristar.ai",
+        "linkedin_company_url": "https://www.linkedin.com/company/tristar-ai"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_601814c64eb52f820fae2948"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin",
+        "provider_label"
+       ],
+       "dimension": "industry",
+       "evidence_id": "reg_company_industry:linkedin:c57e5507"
+      },
+      {
+       "value": {
+        "title": "Growth Marketing Manager",
+        "location": "Cambridge, MA",
+        "posted_date": "2026-09-18T16:22:27.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "harvestapi/linkedin-job-search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_da72ac64d2d90750bcf4d8d1"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by deterministic_verdict",
+       "evidence_ids": [
+        "drv_https://www.linkedin.com/company/tristar-ai_hiring"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_da72ac64d2d90750bcf4d8d1"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 business model \"ai saas\" neither shows nor rules out b2b saas"
+     ],
+     "evidence_coverage": 0.8,
+     "hard_check_details": [
+      {
+       "reason": "business model \"ai saas\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "grounded_evidence_evaluation",
+        "method": "model_extraction",
+        "status": "proven",
+        "excerpt": "Tristar AI provides manufacturers with the world's most advanced computer vision AI system",
+        "dimension": "business_model",
+        "confidence": "medium",
+        "evidence_id": "grd_https://www.linkedin.com/company/tristar-ai_business_model",
+        "grounding_decision": "review",
+        "business_model_decision": "accepted"
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "business model \"ai saas\" matches saas",
+       "result": "pass",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "grounded_evidence_evaluation",
+        "method": "model_extraction",
+        "status": "proven",
+        "excerpt": "Tristar AI provides manufacturers with the world's most advanced computer vision AI system",
+        "dimension": "business_model",
+        "confidence": "medium",
+        "evidence_id": "grd_https://www.linkedin.com/company/tristar-ai_business_model",
+        "grounding_decision": "review",
+        "business_model_decision": "accepted"
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography Boston, MA, United States matches United States",
+       "result": "pass",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "proven",
+        "excerpt": "Boston, MA, United States",
+        "dimension": "geography",
+        "confidence": "high",
+        "evidence_id": "reg_company_location:linkedin:f16d30a8",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 34 is within range",
+       "result": "pass",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "proven",
+        "excerpt": "34 employees",
+        "dimension": "headcount",
+        "confidence": "high",
+        "evidence_id": "reg_employee_count:linkedin:835d20d0",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "pending",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/zoobook-systems-llc",
+      "name": "Zoobook Systems LLC",
+      "domain": "zoobooksystems.com",
+      "linkedin_url": "https://www.linkedin.com/company/zoobook-systems-llc"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search#4"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "pass",
+      "company_size": "pass"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "b2b software",
+       "status": "plausible",
+       "sources": [
+        "grounded_evidence_evaluation"
+       ],
+       "dimension": "business_model",
+       "evidence_id": "grd_https://www.linkedin.com/company/zoobook-systems-llc_business_model"
+      },
+      {
+       "value": "Zoobook Team works with behavioral health, mental health and addiction treatment facilities to grow their monthly revenue, cut their expenses and improve their clinical outcomes.\n\nUnlike other software development companies, Zoobook Team brings a very deep understanding of the business and clinical process as well as what is needed for building an efficient operation by improving the effectiveness and efficiency, compliance with State and DMHAS regulations, clinical outcomes for your clients with actual and measurable results, help facilities overcome audit problems, ensure documentation guidelines compliance and secure revenue.\n\nZoobook EHR was designed for behavioral, mental health and addiction service providers of all types (outpatient, inpatient, residential, detox).",
+       "status": "plausible",
+       "sources": [
+        "yc"
+       ],
+       "dimension": "company_stage",
+       "evidence_id": "reg_yc_company_record:startup_directory:ca410b20"
+      },
+      {
+       "value": "Perth Amboy, NJ, United States",
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin"
+       ],
+       "dimension": "geography",
+       "evidence_id": "reg_company_location:linkedin:da280b28"
+      },
+      {
+       "value": 63,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "reg_employee_count:linkedin:a71642c2"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_65a127acaa85e7cb68ae2a19"
+      },
+      {
+       "value": {
+        "name": "Zoobook Systems LLC",
+        "domain": "zoobooksystems.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/zoobook-systems-llc"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_7bf55397774afc628e821b46"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin",
+        "provider_label"
+       ],
+       "dimension": "industry",
+       "evidence_id": "reg_company_industry:linkedin:b34ede97"
+      },
+      {
+       "value": {
+        "title": "Senior SEO & AI Search Optimization Specialist - Remote Worldwide",
+        "location": "United States",
+        "posted_date": "2026-09-19T06:24:23.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "harvestapi/linkedin-job-search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_e6cbf58477e60bb958438140"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_65a127acaa85e7cb68ae2a19"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_e6cbf58477e60bb958438140"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 business model \"b2b software\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 business model \"b2b software\" neither shows nor rules out saas"
+     ],
+     "evidence_coverage": 0.6,
+     "hard_check_details": [
+      {
+       "reason": "business model \"b2b software\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "grounded_evidence_evaluation",
+        "method": "model_extraction",
+        "status": "plausible",
+        "excerpt": "Zoobook EHR was designed for behavioral, mental health and addiction service providers",
+        "dimension": "business_model",
+        "confidence": "low",
+        "evidence_id": "grd_https://www.linkedin.com/company/zoobook-systems-llc_business_model",
+        "grounding_decision": "review",
+        "business_model_decision": "review"
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "business model \"b2b software\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "grounded_evidence_evaluation",
+        "method": "model_extraction",
+        "status": "plausible",
+        "excerpt": "Zoobook EHR was designed for behavioral, mental health and addiction service providers",
+        "dimension": "business_model",
+        "confidence": "low",
+        "evidence_id": "grd_https://www.linkedin.com/company/zoobook-systems-llc_business_model",
+        "grounding_decision": "review",
+        "business_model_decision": "review"
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography Perth Amboy, NJ, United States matches United States",
+       "result": "pass",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "proven",
+        "excerpt": "Perth Amboy, NJ, United States",
+        "dimension": "geography",
+        "confidence": "high",
+        "evidence_id": "reg_company_location:linkedin:da280b28",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 63 is within range",
+       "result": "pass",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "proven",
+        "excerpt": "63 employees",
+        "dimension": "headcount",
+        "confidence": "high",
+        "evidence_id": "reg_employee_count:linkedin:a71642c2",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "pending",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/remotehunter",
+      "name": "RemoteHunter",
+      "domain": "remotehunter.com",
+      "linkedin_url": "https://www.linkedin.com/company/remotehunter"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "pass"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "RemoteHunter is your dedicated AI job search assistant, turning the job hunt from a slow, individual effort into a quicker, smarter, and guided experience by streamlining each step of the process and speeding up your path to the right career opportunities.",
+       "status": "plausible",
+       "sources": [
+        "yc"
+       ],
+       "dimension": "company_stage",
+       "evidence_id": "reg_yc_company_record:startup_directory:abc3f223"
+      },
+      {
+       "value": 2,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "reg_employee_count:linkedin:e9bcd3fd"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "deterministic_verdict"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "drv_https://www.linkedin.com/company/remotehunter_hiring"
+      },
+      {
+       "value": {
+        "name": "RemoteHunter",
+        "domain": "remotehunter.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/remotehunter"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_6a78dace4a6949f419bed8b5"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin",
+        "provider_label"
+       ],
+       "dimension": "industry",
+       "evidence_id": "reg_company_industry:linkedin:de194d29"
+      },
+      {
+       "value": {
+        "title": "Coordinator, Growth Marketing - Paid Social",
+        "location": "United States",
+        "posted_date": "2026-09-18T16:29:56.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "harvestapi/linkedin-job-search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_074f5f9951a85d84f4041818"
+      },
+      {
+       "value": {
+        "quote": null,
+        "source": "none",
+        "first_in_function": "unverified"
+       },
+       "status": "unknown",
+       "sources": [
+        "deterministic_verdict"
+       ],
+       "dimension": "team_composition",
+       "evidence_id": "drv_https://www.linkedin.com/company/remotehunter_team_composition"
+      },
+      {
+       "value": "RemoteHunter is your dedicated AI job search assistant, turning the job hunt from a slow, individual effort into a quicker, smarter, and guided experience by streamlining each step of the process and speeding up your path to the right career opportunities.",
+       "status": "proven",
+       "sources": [
+        "linkedin"
+       ],
+       "dimension": "web_claim",
+       "evidence_id": "reg_company_description:linkedin:e4069f9f"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by deterministic_verdict",
+       "evidence_ids": [
+        "drv_https://www.linkedin.com/company/remotehunter_hiring"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_074f5f9951a85d84f4041818"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Software Development\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Software Development\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography is not established"
+     ],
+     "evidence_coverage": 0.4,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": "Software Development",
+        "dimension": "industry",
+        "confidence": "medium",
+        "evidence_id": "reg_company_industry:linkedin:de194d29",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": "Software Development",
+        "dimension": "industry",
+        "confidence": "medium",
+        "evidence_id": "reg_company_industry:linkedin:de194d29",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography is not established",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": null,
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 2 is within range",
+       "result": "pass",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "proven",
+        "excerpt": "2 employees",
+        "dimension": "headcount",
+        "confidence": "high",
+        "evidence_id": "reg_employee_count:linkedin:e9bcd3fd",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "ineligible",
+     "caveats": [],
+     "company": {
+      "key": "https://www.linkedin.com/company/join-outsmart",
+      "name": "Outsmart",
+      "domain": "joinoutsmart.com",
+      "linkedin_url": "https://www.linkedin.com/company/join-outsmart"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search#4"
+     ],
+     "hard_checks": {
+      "industry": "fail",
+      "geography": "pass",
+      "company_size": "pass"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "consumer",
+       "status": "proven",
+       "sources": [
+        "grounded_evidence_evaluation"
+       ],
+       "dimension": "business_model",
+       "evidence_id": "grd_https://www.linkedin.com/company/join-outsmart_business_model"
+      },
+      {
+       "value": "Rebuilding higher education for the AI era \u2014 smarter, faster, and way more fun than lectures and debt.",
+       "status": "plausible",
+       "sources": [
+        "yc"
+       ],
+       "dimension": "company_stage",
+       "evidence_id": "reg_yc_company_record:startup_directory:f1a2b8be"
+      },
+      {
+       "value": "San Francisco, CA, United States",
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin"
+       ],
+       "dimension": "geography",
+       "evidence_id": "reg_company_location:linkedin:f7cef1df"
+      },
+      {
+       "value": 32,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "reg_employee_count:linkedin:696aa3ea"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "deterministic_verdict"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "drv_https://www.linkedin.com/company/join-outsmart_hiring"
+      },
+      {
+       "value": {
+        "name": "Outsmart",
+        "domain": "joinoutsmart.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/join-outsmart"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_19fffe1926941ebe0c246208"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details",
+        "linkedin",
+        "provider_label"
+       ],
+       "dimension": "industry",
+       "evidence_id": "reg_company_industry:linkedin:e5a6be23"
+      },
+      {
+       "value": {
+        "title": "Founding Marketing Lead",
+        "location": "Los Angeles, CA",
+        "posted_date": "2026-09-19T01:57:13.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search",
+        "harvestapi/linkedin-job-search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_a2913968b69fe52db13aed1b"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by deterministic_verdict",
+       "evidence_ids": [
+        "drv_https://www.linkedin.com/company/join-outsmart_hiring"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_a2913968b69fe52db13aed1b"
+       ]
+      },
+      {
+       "text": "team composition is proven by deterministic_verdict",
+       "evidence_ids": [
+        "drv_https://www.linkedin.com/company/join-outsmart_team_composition"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: saas \u2014 business model \"consumer\" neither shows nor rules out saas"
+     ],
+     "evidence_coverage": 0.8,
+     "hard_check_details": [
+      {
+       "reason": "verified business model \"consumer\" rules out b2b saas",
+       "result": "fail",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "grounded_evidence_evaluation",
+        "method": "model_extraction",
+        "status": "proven",
+        "excerpt": "Rebuilding higher education for the AI era",
+        "dimension": "business_model",
+        "confidence": "medium",
+        "evidence_id": "grd_https://www.linkedin.com/company/join-outsmart_business_model",
+        "grounding_decision": "fail",
+        "business_model_decision": "accepted"
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "business model \"consumer\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "grounded_evidence_evaluation",
+        "method": "model_extraction",
+        "status": "proven",
+        "excerpt": "Rebuilding higher education for the AI era",
+        "dimension": "business_model",
+        "confidence": "medium",
+        "evidence_id": "grd_https://www.linkedin.com/company/join-outsmart_business_model",
+        "grounding_decision": "fail",
+        "business_model_decision": "accepted"
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography San Francisco, CA, United States matches United States",
+       "result": "pass",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "proven",
+        "excerpt": "San Francisco, CA, United States",
+        "dimension": "geography",
+        "confidence": "high",
+        "evidence_id": "reg_company_location:linkedin:f7cef1df",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 32 is within range",
+       "result": "pass",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "linkedin",
+        "method": "provider_field",
+        "status": "proven",
+        "excerpt": "32 employees",
+        "dimension": "headcount",
+        "confidence": "high",
+        "evidence_id": "reg_employee_count:linkedin:696aa3ea",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/aramark",
+      "name": "Aramark",
+      "domain": "aramark.com",
+      "linkedin_url": "https://www.linkedin.com/company/aramark"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search#4"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "Philadelphia, PA, United States",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_1302d9af496464fbddf6030c"
+      },
+      {
+       "value": 57971,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_cb08b7e4213c16b974b76c6d"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_b48118ddc44206d4bba6d77d"
+      },
+      {
+       "value": {
+        "name": "Aramark",
+        "domain": "aramark.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/aramark"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_2a287af65ddd05aa83bce9a3"
+      },
+      {
+       "value": "Hospitality",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_3834d73a9735aeaa1868fd7a"
+      },
+      {
+       "value": {
+        "title": "Marketing Specialist",
+        "location": "Philadelphia, PA",
+        "posted_date": "2026-09-19T06:50:47.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_a57d1108d2f8bb8d74c0c18f"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_b48118ddc44206d4bba6d77d"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_a57d1108d2f8bb8d74c0c18f"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Hospitality\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Hospitality\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography Philadelphia, PA, United States is reported, not proven",
+      "Company size: 1\u2013150 employees \u2014 headcount 57971 is reported outside the range, not verified"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Hospitality\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_3834d73a9735aeaa1868fd7a",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Hospitality\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_3834d73a9735aeaa1868fd7a",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography Philadelphia, PA, United States is reported, not proven",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_1302d9af496464fbddf6030c",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 57971 is reported outside the range, not verified",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_cb08b7e4213c16b974b76c6d",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/askethos",
+      "name": "Ethos",
+      "domain": "askethos.com",
+      "linkedin_url": "https://www.linkedin.com/company/askethos"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": 463,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_387c8958f0149a3d815906e2"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_b84ce89c2471b89388599225"
+      },
+      {
+       "value": {
+        "name": "Ethos",
+        "domain": "askethos.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/askethos"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_b22ae588f17f580f0c053e5d"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_e362cd5f86828181dfa6ab23"
+      },
+      {
+       "value": {
+        "title": "Expert Opportunity - Growth Marketing Manager ($70/hr, up to $1,400/week)",
+        "location": "San Francisco, CA",
+        "posted_date": "2026-09-18T12:02:25.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_7699e39ffcfdfdf20e7568f5"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_b84ce89c2471b89388599225"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_7699e39ffcfdfdf20e7568f5"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Software Development\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Software Development\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography is not established",
+      "Company size: 1\u2013150 employees \u2014 headcount 463 is reported outside the range, not verified"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_e362cd5f86828181dfa6ab23",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_e362cd5f86828181dfa6ab23",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography is not established",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": null,
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 463 is reported outside the range, not verified",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_387c8958f0149a3d815906e2",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/coderabbitai",
+      "name": "CodeRabbit",
+      "domain": "coderabbit.ai",
+      "linkedin_url": "https://www.linkedin.com/company/coderabbitai"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "San Francisco, CA, United States",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_cf254358bb1ae01554845371"
+      },
+      {
+       "value": 308,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_7be1316f18bdbe7e0f46ea5b"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_a8dc843eba2668ed7de44c26"
+      },
+      {
+       "value": {
+        "name": "CodeRabbit",
+        "domain": "coderabbit.ai",
+        "linkedin_company_url": "https://www.linkedin.com/company/coderabbitai"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_435d0828e6f0b1a454ddb553"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_c755105ba719743a74de0108"
+      },
+      {
+       "value": {
+        "title": "VP Growth Marketing",
+        "location": "San Francisco, CA",
+        "posted_date": "2026-09-17T20:07:44.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_10fc3feb206ad6b8cce5da93"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_a8dc843eba2668ed7de44c26"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_10fc3feb206ad6b8cce5da93"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Software Development\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Software Development\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography San Francisco, CA, United States is reported, not proven",
+      "Company size: 1\u2013150 employees \u2014 headcount 308 is reported outside the range, not verified"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_c755105ba719743a74de0108",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_c755105ba719743a74de0108",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography San Francisco, CA, United States is reported, not proven",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_cf254358bb1ae01554845371",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 308 is reported outside the range, not verified",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_7be1316f18bdbe7e0f46ea5b",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/heidi",
+      "name": "Heidi",
+      "domain": "heidihealth.com",
+      "linkedin_url": "https://www.linkedin.com/company/heidi"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "Melbourne, Australia",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_d3278036302671eeb8648c56"
+      },
+      {
+       "value": 600,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_11414c9a4bc91772193664c9"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_861d5bbc4993ded8ffdf50a1"
+      },
+      {
+       "value": {
+        "name": "Heidi",
+        "domain": "heidihealth.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/heidi"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_1735b5ca1bddf090ecb7f2cc"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_ade5a48597d3f36a50b13f7e"
+      },
+      {
+       "value": {
+        "title": "Director of Growth Marketing",
+        "location": "New York, United States",
+        "posted_date": "2026-09-18T21:17:57.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_fd9d1f7989aecbca1a721949"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_861d5bbc4993ded8ffdf50a1"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_fd9d1f7989aecbca1a721949"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Software Development\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Software Development\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography Melbourne, Australia is reported outside United States, not verified",
+      "Company size: 1\u2013150 employees \u2014 headcount 600 is reported outside the range, not verified"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_ade5a48597d3f36a50b13f7e",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_ade5a48597d3f36a50b13f7e",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography Melbourne, Australia is reported outside United States, not verified",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_d3278036302671eeb8648c56",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 600 is reported outside the range, not verified",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_11414c9a4bc91772193664c9",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/instacart",
+      "name": "Instacart",
+      "domain": "instacart.com",
+      "linkedin_url": "https://www.linkedin.com/company/instacart"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search#4"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "San Francisco, CA, United States",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_b42bed7ac3592ac93ddaf058"
+      },
+      {
+       "value": 25344,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_b10fa0bb5b619ac2481f42b6"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_7c83b431919dbf58a7d6ca74"
+      },
+      {
+       "value": {
+        "name": "Instacart",
+        "domain": "instacart.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/instacart"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_28a80ea0f4689cdb7d7c6ad8"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_09d4e96593002250afa7fd10"
+      },
+      {
+       "value": {
+        "title": "Senior Product Marketing Manager, Instacart+",
+        "location": "United States",
+        "posted_date": "2026-09-19T01:47:17.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_c09c0b16047bfb717446042b"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_7c83b431919dbf58a7d6ca74"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_c09c0b16047bfb717446042b"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Software Development\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Software Development\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography San Francisco, CA, United States is reported, not proven",
+      "Company size: 1\u2013150 employees \u2014 headcount 25344 is reported outside the range, not verified"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_09d4e96593002250afa7fd10",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_09d4e96593002250afa7fd10",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography San Francisco, CA, United States is reported, not proven",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_b42bed7ac3592ac93ddaf058",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 25344 is reported outside the range, not verified",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_b10fa0bb5b619ac2481f42b6",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/jackandjillai",
+      "name": "Jack & Jill",
+      "domain": "jackandjill.ai",
+      "linkedin_url": "https://www.linkedin.com/company/jackandjillai"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": 156,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_2a02b60777125c5386c70c91"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_69619820d5fe69c3335c057e"
+      },
+      {
+       "value": {
+        "name": "Jack & Jill",
+        "domain": "jackandjill.ai",
+        "linkedin_company_url": "https://www.linkedin.com/company/jackandjillai"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_1e14f6f0a63e3fbb3e52cf2c"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_571c53eea7652c285f729cce"
+      },
+      {
+       "value": {
+        "title": "Growth Marketer at Infrawatch",
+        "location": "United States",
+        "posted_date": "2026-09-18T10:56:25.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_a10636e8d04ddc0f22292659"
+      },
+      {
+       "value": {
+        "quote": "ure and fraud before attacks materialize. Job Description As the first Growth Marketer at Infrawatch, you will build our marketing engine",
+        "source": "job_posting",
+        "first_in_function": "supported"
+       },
+       "status": "proven",
+       "sources": [
+        "deterministic_verdict"
+       ],
+       "dimension": "team_composition",
+       "evidence_id": "drv_https://www.linkedin.com/company/jackandjillai_team_composition"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_69619820d5fe69c3335c057e"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_a10636e8d04ddc0f22292659"
+       ]
+      },
+      {
+       "text": "team composition is proven by deterministic_verdict",
+       "evidence_ids": [
+        "drv_https://www.linkedin.com/company/jackandjillai_team_composition"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Software Development\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Software Development\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography is not established",
+      "Company size: 1\u2013150 employees \u2014 headcount 156 is reported outside the range, not verified"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_571c53eea7652c285f729cce",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_571c53eea7652c285f729cce",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography is not established",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": null,
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 156 is reported outside the range, not verified",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_2a02b60777125c5386c70c91",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/mr-booster-agency",
+      "name": "mr.Booster Agency",
+      "domain": "mrbooster.com",
+      "linkedin_url": "https://www.linkedin.com/company/mr-booster-agency"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search#4"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "Limassol, Cyprus",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_9f5e08a824410ab96d8b06d6"
+      },
+      {
+       "value": 53,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_6e74dec50939b8e97125d788"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_99e2f18ba859a73c32868edf"
+      },
+      {
+       "value": {
+        "name": "mr.Booster Agency",
+        "domain": "mrbooster.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/mr-booster-agency"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_9423a0b4586609205099cb95"
+      },
+      {
+       "value": "Advertising Services",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_f0a668b444dec92b8868e633"
+      },
+      {
+       "value": {
+        "title": "SEO Specialist",
+        "location": "United States",
+        "posted_date": "2026-09-19T06:07:21.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_eb5eab84d3187b1643c8eb3e"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_99e2f18ba859a73c32868edf"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_eb5eab84d3187b1643c8eb3e"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Advertising Services\" suggests otherwise, but is not verified, for b2b saas",
+      "Industry: saas \u2014 industry \"Advertising Services\" suggests otherwise, but is not verified, for saas",
+      "Geography: United States \u2014 geography Limassol, Cyprus is reported outside United States, not verified",
+      "Company size: 1\u2013150 employees \u2014 headcount 53 is advisory, not proven"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Advertising Services\" suggests otherwise, but is not verified, for b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_f0a668b444dec92b8868e633",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Advertising Services\" suggests otherwise, but is not verified, for saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_f0a668b444dec92b8868e633",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography Limassol, Cyprus is reported outside United States, not verified",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_9f5e08a824410ab96d8b06d6",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 53 is advisory, not proven",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_6e74dec50939b8e97125d788",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/naya-applicator",
+      "name": "Naya",
+      "domain": "naya-applicator.com",
+      "linkedin_url": "https://www.linkedin.com/company/naya-applicator"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search#4"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "Seattle, WA, United States",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_d09efe6b5f75b8cefc95a52e"
+      },
+      {
+       "value": 2,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_d21a8b10fa8bd10fee4b60ed"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_08f9976048254f905b82aa23"
+      },
+      {
+       "value": {
+        "name": "Naya",
+        "domain": "naya-applicator.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/naya-applicator"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_e42eeeab823e5b618a9ca852"
+      },
+      {
+       "value": "Personal Care Product Manufacturing",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_ebc449c206758ac33f1d78d1"
+      },
+      {
+       "value": {
+        "title": "Growth Marketer, Part-Time",
+        "location": "Seattle, WA",
+        "posted_date": "2026-09-19T05:35:53.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_77e80edcfcfbb58b24bdf29e"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_08f9976048254f905b82aa23"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_77e80edcfcfbb58b24bdf29e"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Personal Care Product Manufacturing\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Personal Care Product Manufacturing\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography Seattle, WA, United States is reported, not proven",
+      "Company size: 1\u2013150 employees \u2014 headcount 2 is advisory, not proven"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Personal Care Product Manufacturing\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_ebc449c206758ac33f1d78d1",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Personal Care Product Manufacturing\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_ebc449c206758ac33f1d78d1",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography Seattle, WA, United States is reported, not proven",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_d09efe6b5f75b8cefc95a52e",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 2 is advisory, not proven",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_d21a8b10fa8bd10fee4b60ed",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/nortonrosefulbright",
+      "name": "Norton Rose Fulbright",
+      "domain": "nortonrosefulbright.com",
+      "linkedin_url": "https://www.linkedin.com/company/nortonrosefulbright"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search#4"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "Global",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_da2bc0b1c24e26b09eeacdc7"
+      },
+      {
+       "value": 8856,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_06e9962d8d1e3c1ebbf9d6f2"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_a9af6677bddbac82afa29d8d"
+      },
+      {
+       "value": {
+        "name": "Norton Rose Fulbright",
+        "domain": "nortonrosefulbright.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/nortonrosefulbright"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_33b0ea462fcc25fdfe7b36a6"
+      },
+      {
+       "value": "Law Practice",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_1fbbafbe1e7433e7d962dbf9"
+      },
+      {
+       "value": {
+        "title": "Manager, Marketing Database",
+        "location": "Greater Houston",
+        "posted_date": "2026-09-19T04:34:36.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_40e77c778bc3851bcf2d2193"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_a9af6677bddbac82afa29d8d"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_40e77c778bc3851bcf2d2193"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Law Practice\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Law Practice\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography Global is reported outside United States, not verified",
+      "Company size: 1\u2013150 employees \u2014 headcount 8856 is reported outside the range, not verified"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Law Practice\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_1fbbafbe1e7433e7d962dbf9",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Law Practice\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_1fbbafbe1e7433e7d962dbf9",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography Global is reported outside United States, not verified",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_da2bc0b1c24e26b09eeacdc7",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 8856 is reported outside the range, not verified",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_06e9962d8d1e3c1ebbf9d6f2",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/opengov-inc",
+      "name": "OpenGov Inc.",
+      "domain": "opengov.com",
+      "linkedin_url": "https://www.linkedin.com/company/opengov-inc"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "San Francisco, CA, United States",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_b92766d9510cb9b318112ab2"
+      },
+      {
+       "value": 1027,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_d03ddfb4e8144e7cef0fe8ba"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_72b97c5085d1e499bace7449"
+      },
+      {
+       "value": {
+        "name": "OpenGov Inc.",
+        "domain": "opengov.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/opengov-inc"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_2c00cee8cfa5c61e01d0f4e8"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_16150bb6af0b90f7c42b9be5"
+      },
+      {
+       "value": {
+        "title": "Senior Growth Marketing Specialist",
+        "location": "Illinois, United States",
+        "posted_date": "2026-09-18T16:44:36.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_b999b2703ffd242297f5dce0"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_72b97c5085d1e499bace7449"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_b999b2703ffd242297f5dce0"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Software Development\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Software Development\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography San Francisco, CA, United States is reported, not proven",
+      "Company size: 1\u2013150 employees \u2014 headcount 1027 is reported outside the range, not verified"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_16150bb6af0b90f7c42b9be5",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_16150bb6af0b90f7c42b9be5",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography San Francisco, CA, United States is reported, not proven",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_b92766d9510cb9b318112ab2",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 1027 is reported outside the range, not verified",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_d03ddfb4e8144e7cef0fe8ba",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/ridewithvia",
+      "name": "Via",
+      "domain": "ridewithvia.com",
+      "linkedin_url": "https://www.linkedin.com/company/ridewithvia"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "New York City, NY, United States",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_ca844174bed146589e3d9393"
+      },
+      {
+       "value": 2105,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_6d0c69f1376d60096c8b61e4"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_8a74b8796d3a9ada8bb42cda"
+      },
+      {
+       "value": {
+        "name": "Via",
+        "domain": "ridewithvia.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/ridewithvia"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_b994f33e66c4225953a4f51e"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_5bc46d784c48293f75b541ad"
+      },
+      {
+       "value": {
+        "title": "Consumer Growth Marketing Principal",
+        "location": "New York City Metropolitan Area",
+        "posted_date": "2026-09-19T03:37:02.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_fcd556d418747abb8f87008a"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_8a74b8796d3a9ada8bb42cda"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_fcd556d418747abb8f87008a"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Software Development\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Software Development\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography New York City, NY, United States is reported, not proven",
+      "Company size: 1\u2013150 employees \u2014 headcount 2105 is reported outside the range, not verified"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_5bc46d784c48293f75b541ad",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_5bc46d784c48293f75b541ad",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography New York City, NY, United States is reported, not proven",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_ca844174bed146589e3d9393",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 2105 is reported outside the range, not verified",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_6d0c69f1376d60096c8b61e4",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/stealth-startup-community",
+      "name": "Stealth Startup",
+      "domain": "harmonic.ai",
+      "linkedin_url": "https://www.linkedin.com/company/stealth-startup-community"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search#4"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "San Francisco, CA, United States",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_81a06faf8d1781ae14c64ead"
+      },
+      {
+       "value": 37438,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_104f420666780ba3ca50cc8c"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_ac92afdf298b5980cf4f38c8"
+      },
+      {
+       "value": {
+        "name": "Stealth Startup",
+        "domain": "harmonic.ai",
+        "linkedin_company_url": "https://www.linkedin.com/company/stealth-startup-community"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_8980949bd9b618912e1d3310"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_374fe74168b81624b8300f4b"
+      },
+      {
+       "value": {
+        "title": "Field & Event Marketing Manager",
+        "location": "San Francisco, CA",
+        "posted_date": "2026-09-19T05:12:33.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_f08be08836c792b123c1b101"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_ac92afdf298b5980cf4f38c8"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_f08be08836c792b123c1b101"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Software Development\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Software Development\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography San Francisco, CA, United States is reported, not proven",
+      "Company size: 1\u2013150 employees \u2014 headcount 37438 is reported outside the range, not verified"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_374fe74168b81624b8300f4b",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_374fe74168b81624b8300f4b",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography San Francisco, CA, United States is reported, not proven",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_81a06faf8d1781ae14c64ead",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 37438 is reported outside the range, not verified",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_104f420666780ba3ca50cc8c",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/t-mobile",
+      "name": "T-Mobile",
+      "domain": "t-mobile.com",
+      "linkedin_url": "https://www.linkedin.com/company/t-mobile"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search#4"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "Bellevue, WA, United States",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_ce9eac84cc0bcf0575b62e1f"
+      },
+      {
+       "value": 95436,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_01707e28ee84e09ebc1265d8"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_77e3526825f3bbc0c1a2f83c"
+      },
+      {
+       "value": {
+        "name": "T-Mobile",
+        "domain": "t-mobile.com",
+        "linkedin_company_url": "https://www.linkedin.com/company/t-mobile"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_47cf0a5efa74baa6061ab99b"
+      },
+      {
+       "value": "Telecommunications",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_ce905520066b2d8033741b09"
+      },
+      {
+       "value": {
+        "title": "Digital Marketing Manager, Advertising",
+        "location": "New York, NY",
+        "posted_date": "2026-09-19T03:55:42.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_7b3a17aa9f2cc6c81a9d6bb5"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_77e3526825f3bbc0c1a2f83c"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_7b3a17aa9f2cc6c81a9d6bb5"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Telecommunications\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Telecommunications\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography Bellevue, WA, United States is reported, not proven",
+      "Company size: 1\u2013150 employees \u2014 headcount 95436 is reported outside the range, not verified"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Telecommunications\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_ce905520066b2d8033741b09",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Telecommunications\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_ce905520066b2d8033741b09",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography Bellevue, WA, United States is reported, not proven",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_ce9eac84cc0bcf0575b62e1f",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 95436 is reported outside the range, not verified",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_01707e28ee84e09ebc1265d8",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    },
+    {
+     "label": null,
+     "bucket": "screened_out",
+     "caveats": [
+      "a required fact is still unproven \u2014 this is not a match yet"
+     ],
+     "company": {
+      "key": "https://www.linkedin.com/company/trymirage",
+      "name": "Mirage",
+      "domain": "mirage.app",
+      "linkedin_url": "https://www.linkedin.com/company/trymirage"
+     },
+     "found_by": [
+      "job_discovery:apify_linkedin_job_search"
+     ],
+     "hard_checks": {
+      "industry": "unknown",
+      "geography": "unknown",
+      "company_size": "unknown"
+     },
+     "next_action": null,
+     "key_evidence": [
+      {
+       "value": "New York City, NY, United States",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "geography",
+       "evidence_id": "ev_33cdb3f2b5f8d8dd531bd801"
+      },
+      {
+       "value": 136,
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "headcount",
+       "evidence_id": "ev_995e2f6f7ba6f7e41c46b6c5"
+      },
+      {
+       "value": true,
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "hiring",
+       "evidence_id": "ev_bd909895fa24bdf78f12a2b3"
+      },
+      {
+       "value": {
+        "name": "Mirage",
+        "domain": "mirage.app",
+        "linkedin_company_url": "https://www.linkedin.com/company/trymirage"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "identity",
+       "evidence_id": "ev_5099eeb0511aeaa3b54449fe"
+      },
+      {
+       "value": "Software Development",
+       "status": "plausible",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "industry",
+       "evidence_id": "ev_8eb5b9dab9b99994cc8b0bba"
+      },
+      {
+       "value": {
+        "title": "Growth Marketing Manager",
+        "location": "New York, NY",
+        "posted_date": "2026-09-18T13:55:36.000Z"
+       },
+       "status": "proven",
+       "sources": [
+        "apify_linkedin_job_search"
+       ],
+       "dimension": "job",
+       "evidence_id": "ev_298729ce26880924b1c68e8d"
+      }
+     ],
+     "why_surfaced": [
+      {
+       "text": "hiring is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_bd909895fa24bdf78f12a2b3"
+       ]
+      },
+      {
+       "text": "job is proven by apify_linkedin_job_search",
+       "evidence_ids": [
+        "ev_298729ce26880924b1c68e8d"
+       ]
+      }
+     ],
+     "signal_strength": 0.6,
+     "missing_evidence": [
+      "Industry: b2b saas \u2014 industry \"Software Development\" neither shows nor rules out b2b saas",
+      "Industry: saas \u2014 industry \"Software Development\" neither shows nor rules out saas",
+      "Geography: United States \u2014 geography New York City, NY, United States is reported, not proven",
+      "Company size: 1\u2013150 employees \u2014 headcount 136 is advisory, not proven"
+     ],
+     "evidence_coverage": 0.2,
+     "hard_check_details": [
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out b2b saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_8eb5b9dab9b99994cc8b0bba",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:b2b_saas"
+      },
+      {
+       "reason": "industry \"Software Development\" neither shows nor rules out saas",
+       "result": "unknown",
+       "dimension": "industry",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "industry",
+        "confidence": "low",
+        "evidence_id": "ev_8eb5b9dab9b99994cc8b0bba",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "industry:saas"
+      },
+      {
+       "reason": "geography New York City, NY, United States is reported, not proven",
+       "result": "unknown",
+       "dimension": "geography",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "geography",
+        "confidence": "medium",
+        "evidence_id": "ev_33cdb3f2b5f8d8dd531bd801",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "geography:united_states"
+      },
+      {
+       "reason": "headcount 136 is advisory, not proven",
+       "result": "unknown",
+       "dimension": "company_size",
+       "provenance": {
+        "url": null,
+        "actor": "apify_linkedin_job_search",
+        "method": "provider_field",
+        "status": "plausible",
+        "excerpt": null,
+        "dimension": "headcount",
+        "confidence": "medium",
+        "evidence_id": "ev_995e2f6f7ba6f7e41c46b6c5",
+        "grounding_decision": null,
+        "business_model_decision": null
+       },
+       "criterion_id": "company_size:_min_1_max_150_"
+      }
+     ]
+    }
+   ],
+   "stage": "complete",
+   "counts": {
+    "pending": 4,
+    "discovered": 20,
+    "ineligible": 1,
+    "exact_match": 0,
+    "low_priority": 0,
+    "screened_out": 14,
+    "investigating": 0,
+    "worth_considering": 1,
+    "strong_opportunity": 0,
+    "identity_unresolved": 0
+   },
+   "routes": [
+    {
+     "raw": 20,
+     "anchor": "job_discovery",
+     "unique": 10,
+     "useful": 1,
+     "route_id": "job_discovery:apify_linkedin_job_search#4",
+     "spend_usd": 0,
+     "duplicates": 0,
+     "stop_reason": null,
+     "hard_eligible": 5
+    },
+    {
+     "raw": 0,
+     "anchor": "job_discovery",
+     "unique": 10,
+     "useful": 0,
+     "route_id": "job_discovery:apify_linkedin_job_search",
+     "spend_usd": 0,
+     "duplicates": 0,
+     "stop_reason": null,
+     "hard_eligible": 4
+    }
+   ],
+   "mission": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "hard",
+      "label": "Industry: b2b saas",
+      "source": "user_explicit",
+      "status": "ok",
+      "window": null
+     },
+     {
+      "id": "industry:saas",
+      "kind": "hard",
+      "label": "Industry: saas",
+      "source": "user_explicit",
+      "status": "ok",
+      "window": null
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "window": null
+     },
+     {
+      "id": "company_size:_min_1_max_150_",
+      "kind": "hard",
+      "label": "Company size: 1\u2013150 employees",
+      "source": "company_brain_policy",
+      "status": "ok",
+      "window": null
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_growth_ma",
+      "kind": "target",
+      "label": "Hiring: growth marketer \u00b7 first hire in the function",
+      "source": "user_explicit",
+      "status": "ok",
+      "window": "last 30 days"
+     }
+    ],
+    "unsupported": [
+     "Industry preference: founder-led or small teams (target) \u2014 no current source proves it",
+     "Company kind: startup (hard) \u2014 no current source proves it",
+     "Stage: seed (target) \u2014 no current source proves it"
+    ],
+    "execution_limit": 1,
+    "requested_count": 1
+   },
+   "version": "workbench-mission-view-v1"
+  },
+  "lead_library_persistence": {
+   "planned": 1,
+   "results": [
+    {
+     "ok": true,
+     "key": "domain:feathery.io",
+     "lead_candidate_id": "d7c084c1-fcd7-4988-b342-8c6049fea092"
+    }
+   ],
+   "skipped": [],
+   "version": "lead-mission-persistence-projection-v1",
+   "persisted": 1
+  },
+  "workbench_evaluation_rows": [
+   {
+    "domain": "feathery.io",
+    "status": "held_for_evidence",
+    "decided": false,
+    "reasons": [
+     "exact headcount 57 is inside the target range",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": null,
+    "resumable": true,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/feathery-ai",
+    "explanation": "Evaluated, but the evidence did not support a decision either way.",
+    "signal_tier": null,
+    "company_name": "Feathery",
+    "employee_count": 57,
+    "triage_reasons": [
+     "US-based 57-person software company explicitly offering a B2B data-intake platform for financial firms; a product marketing role strongly aligns with early B2B SaaS marketing hiring, though seed stage and first-hire status require verification."
+    ],
+    "decision_source": "gpt_evaluation",
+    "enrichment_state": "success",
+    "mission_decision": "insufficient_evidence",
+    "strongest_signal": null,
+    "triage_relevance": "relevant",
+    "mission_reasoning": "Feathery is located in the United States, has 57 employees, and has a current Product Marketing Manager opening that matches the mission's marketing-role vocabulary. The company describes a platform used by financial firms, but the evidence does not explicitly establish that it is a B2B SaaS company or that it is seed-stage. The opening is for Product Marketing Manager rather than explicitly the company's first growth marketer; it matches a permitted marketing signal but does not prove the 'first' qualifier.",
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": 78,
+    "shortlist_exclusion": null,
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "prequalification_score": 75,
+    "triage_signal_strength": 88,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": null
+   },
+   {
+    "domain": "joinoutsmart.com",
+    "status": "held_for_evidence",
+    "decided": false,
+    "reasons": [
+     "exact headcount 32 is inside the target range",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": null,
+    "resumable": true,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/join-outsmart",
+    "explanation": "Evaluated, but the evidence did not support a decision either way.",
+    "signal_tier": null,
+    "company_name": "Outsmart",
+    "employee_count": 32,
+    "triage_reasons": [
+     "US-based 32-person software startup with a Founding Marketing Lead role, strongly signaling an early marketing hire; B2B SaaS orientation and seed stage are not explicit, so investigation is warranted."
+    ],
+    "decision_source": "gpt_evaluation",
+    "enrichment_state": "success",
+    "mission_decision": "insufficient_evidence",
+    "strongest_signal": null,
+    "triage_relevance": "relevant",
+    "mission_reasoning": "Outsmart is verified to have 32 employees, a United States location, and a current opening for Founding Marketing Lead, which matches the Mission's growth-marketing role vocabulary. However, the supplied evidence does not establish that the company is B2B SaaS or SaaS, and it does not establish seed stage. The company description refers to rebuilding higher education but does not identify its business model or customer type. Therefore the Mission cannot be passed, but there is no clear contradiction requiring failure.",
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": 78,
+    "shortlist_exclusion": null,
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "prequalification_score": 75,
+    "triage_signal_strength": 78,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": null
+   },
+   {
+    "domain": "remotehunter.com",
+    "status": "held_for_evidence",
+    "decided": false,
+    "reasons": [
+     "exact headcount 2 is inside the target range",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": null,
+    "resumable": true,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/remotehunter",
+    "explanation": "Evaluated, but the evidence did not support a decision either way.",
+    "signal_tier": null,
+    "company_name": "RemoteHunter",
+    "employee_count": 2,
+    "triage_reasons": [
+     "Very small software company with two employees and a growth marketing role, which could indicate an early-stage first marketer; however, location is missing and the product description does not establish B2B SaaS."
+    ],
+    "decision_source": "gpt_evaluation",
+    "enrichment_state": "success",
+    "mission_decision": "insufficient_evidence",
+    "strongest_signal": null,
+    "triage_relevance": "uncertain",
+    "mission_reasoning": "RemoteHunter has two employees, which is consistent with an early startup, and its description identifies an AI job search assistant. Two independent company-description records support a software product, but the evidence does not clearly establish the specific B2B SaaS business model. A current United States posting matches growth marketing, though the evidence does not establish that this is the company's first growth marketer. Therefore the mission requires review rather than pass.",
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": 78,
+    "shortlist_exclusion": null,
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "prequalification_score": 75,
+    "triage_signal_strength": 58,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": null
+   },
+   {
+    "domain": "tristar.ai",
+    "status": "held_for_evidence",
+    "decided": false,
+    "reasons": [
+     "exact headcount 34 is inside the target range",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": null,
+    "resumable": true,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/tristar-ai",
+    "explanation": "Evaluated, but the evidence did not support a decision either way.",
+    "signal_tier": null,
+    "company_name": "Tristar AI",
+    "employee_count": 34,
+    "triage_reasons": [
+     "US-based 34-person software company selling AI software to manufacturers, plausibly B2B SaaS and startup-sized; a Growth Marketing Manager role is a strong signal, though seed stage and whether this is the first marketer are unverified."
+    ],
+    "decision_source": "gpt_evaluation",
+    "enrichment_state": "success",
+    "mission_decision": "insufficient_evidence",
+    "strongest_signal": null,
+    "triage_relevance": "relevant",
+    "mission_reasoning": "Tristar AI is located in the United States, has 34 employees, and has a current Growth Marketing Manager opening. Two independent sources support that it is a startup-sized company. However, the available evidence does not establish the required B2B SaaS vertical, and the available hiring evidence does not establish that this is the company's first growth marketer. Therefore the mission requires review rather than a pass.",
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": 78,
+    "shortlist_exclusion": null,
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "prequalification_score": 75,
+    "triage_signal_strength": 86,
+    "mission_failed_requirements": [
+     "b2b saas: The evidence describes AI-powered cameras and software for manufacturers but does not establish that the company is a B2B SaaS business."
+    ],
+    "shortlist_exclusion_explanation": null
+   },
+   {
+    "domain": "dualentry.com",
+    "status": "not_qualified",
+    "decided": true,
+    "reasons": [
+     "exact headcount 90 is inside the target range",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": null,
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/dualentry",
+    "explanation": "Evaluated against the mission and did not meet it.",
+    "signal_tier": null,
+    "company_name": "DualEntry",
+    "employee_count": 90,
+    "triage_reasons": [
+     "AI-native ERP is plausibly B2B SaaS and the US location and growth marketing role align strongly; 90 employees and a Series A indicate it may be beyond seed stage and the role may not be the first growth marketer."
+    ],
+    "decision_source": "gpt_evaluation",
+    "enrichment_state": "success",
+    "mission_decision": "not_qualified",
+    "strongest_signal": null,
+    "triage_relevance": "uncertain",
+    "mission_reasoning": "DualEntry is located in the United States, has 90 employees, and has a current opening titled Growth Marketing Manager, Socials. However, the Mission requires a seed-stage startup, and the company's own description states that it announced a $90M Series A in October 2025. The hiring evidence supports a growth-marketing role but does not establish that this is the company's first growth marketer.",
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": 72,
+    "shortlist_exclusion": null,
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "prequalification_score": 75,
+    "triage_signal_strength": 82,
+    "mission_failed_requirements": [
+     "seed-stage: The company states that it announced a $90M Series A in October 2025, which is clear evidence against seed-stage status."
+    ],
+    "shortlist_exclusion_explanation": null
+   },
+   {
+    "domain": "zoobooksystems.com",
+    "status": "not_qualified",
+    "decided": true,
+    "reasons": [
+     "exact headcount 63 is inside the target range",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": null,
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/zoobook-systems-llc",
+    "explanation": "Evaluated against the mission and did not meet it.",
+    "signal_tier": null,
+    "company_name": "Zoobook Systems LLC",
+    "employee_count": 63,
+    "triage_reasons": [
+     "US-based 63-person software company serving behavioral-health organizations, plausibly B2B SaaS, but the only listed role is SEO rather than a clearly relevant growth-marketing hire and seed stage is unverified."
+    ],
+    "decision_source": "gpt_evaluation",
+    "enrichment_state": "success",
+    "mission_decision": "not_qualified",
+    "strongest_signal": null,
+    "triage_relevance": "uncertain",
+    "mission_reasoning": "The company is in the United States and has 63 employees, but the evidence does not establish that it is a seed-stage B2B SaaS startup. More importantly, the current opening is for a Senior SEO & AI Search Optimization Specialist rather than a first growth marketer. Because the required hiring role is contradicted by the cited posting, the Mission fails.",
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": 35,
+    "shortlist_exclusion": null,
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "prequalification_score": 75,
+    "triage_signal_strength": 35,
+    "mission_failed_requirements": [
+     "company is a seed-stage B2B SaaS startup: The company describes itself as working with behavioral health, mental health and addiction treatment facilities and says Zoobook EHR was designed for service providers; the evidence does not establish B2B SaaS or seed stage.",
+     "company is hiring its first growth marketer: The posted role is \"Senior SEO & AI Search Optimization Specialist - Remote Worldwide,\" not a first growth marketer role."
+    ],
+    "shortlist_exclusion_explanation": null
+   },
+   {
+    "domain": "mirage.app",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 136 is inside the target range",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": null,
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/trymirage",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "Mirage",
+    "employee_count": 136,
+    "triage_reasons": [
+     "Consumer video creation company with 136 employees and 20 million creators, making it unlikely to be a seed-stage B2B SaaS startup or hiring its first marketer."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "triage_irrelevant",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 75,
+    "triage_signal_strength": 10,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Mission triage read this as not what the mission asked for."
+   },
+   {
+    "domain": "mrbooster.com",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 53 is inside the target range",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": null,
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/mr-booster-agency",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "mr.Booster Agency",
+    "employee_count": 53,
+    "triage_reasons": [
+     "Marketing agency with 53 employees and an SEO role; the mission seeks a B2B SaaS product company hiring a first growth marketer."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "triage_irrelevant",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 75,
+    "triage_signal_strength": 5,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Mission triage read this as not what the mission asked for."
+   },
+   {
+    "domain": "naya-applicator.com",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 2 is inside the target range",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": null,
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/naya-applicator",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "Naya",
+    "employee_count": 2,
+    "triage_reasons": [
+     "US-based two-person company with a growth marketer role, but it makes a physical personal-care product rather than B2B SaaS."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "triage_irrelevant",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 75,
+    "triage_signal_strength": 18,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Mission triage read this as not what the mission asked for."
+   },
+   {
+    "domain": "aramark.com",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 57971 exceeds the maximum \u2014 excluded before identity resolution and enrichment, which is two paid calls this row already answered",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": "employee_size",
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/aramark",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "Aramark",
+    "employee_count": 57971,
+    "triage_reasons": [
+     "Large hospitality and facilities-services company with 57,971 employees; it is not a seed-stage B2B SaaS startup."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "mission_constraint:employee_size",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 45,
+    "triage_signal_strength": 2,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Not investigated: mission_constraint:employee_size."
+   },
+   {
+    "domain": "coderabbit.ai",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 308 exceeds the maximum \u2014 excluded before identity resolution and enrichment, which is two paid calls this row already answered",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": "employee_size",
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/coderabbitai",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "CodeRabbit",
+    "employee_count": 308,
+    "triage_reasons": [
+     "B2B software company with a relevant growth role but 308 employees and over a thousand organizational customers, making seed stage and a first marketer implausible."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "mission_constraint:employee_size",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 45,
+    "triage_signal_strength": 12,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Not investigated: mission_constraint:employee_size."
+   },
+   {
+    "domain": "askethos.com",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 463 exceeds the maximum \u2014 excluded before identity resolution and enrichment, which is two paid calls this row already answered",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": "employee_size",
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/askethos",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "Ethos",
+    "employee_count": 463,
+    "triage_reasons": [
+     "The company reports 463 employees and the listed opportunity appears to be an expert opportunity at an hourly rate rather than a direct company marketing hire; it is not plausibly a seed-stage first-marketer search."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "mission_constraint:employee_size",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 45,
+    "triage_signal_strength": 8,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Not investigated: mission_constraint:employee_size."
+   },
+   {
+    "domain": "heidihealth.com",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 600 exceeds the maximum \u2014 excluded before identity resolution and enrichment, which is two paid calls this row already answered",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": "employee_size",
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/heidi",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "Heidi",
+    "employee_count": 600,
+    "triage_reasons": [
+     "Australian-founded company with 600 employees and substantial funding, plainly not a seed-stage US startup hiring its first growth marketer."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "mission_constraint:employee_size",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 45,
+    "triage_signal_strength": 4,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Not investigated: mission_constraint:employee_size."
+   },
+   {
+    "domain": "instacart.com",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 25344 exceeds the maximum \u2014 excluded before identity resolution and enrichment, which is two paid calls this row already answered",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": "employee_size",
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/instacart",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "Instacart",
+    "employee_count": 25344,
+    "triage_reasons": [
+     "Public, very large grocery technology company with 25,344 employees, plainly not a seed-stage startup hiring its first growth marketer."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "mission_constraint:employee_size",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 45,
+    "triage_signal_strength": 3,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Not investigated: mission_constraint:employee_size."
+   },
+   {
+    "domain": "jackandjill.ai",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 156 exceeds the maximum \u2014 excluded before identity resolution and enrichment, which is two paid calls this row already answered",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": "employee_size",
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/jackandjillai",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "Jack & Jill",
+    "employee_count": 156,
+    "triage_reasons": [
+     "The listed role is for another company, Infrawatch, rather than clearly for Jack & Jill; the company has 156 employees and its recruiting marketplace description does not establish a seed-stage B2B SaaS first-marketer opportunity."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "uncertain",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "mission_constraint:employee_size",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 45,
+    "triage_signal_strength": 25,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Not investigated: mission_constraint:employee_size."
+   },
+   {
+    "domain": "nortonrosefulbright.com",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 8856 exceeds the maximum \u2014 excluded before identity resolution and enrichment, which is two paid calls this row already answered",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": "employee_size",
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/nortonrosefulbright",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "Norton Rose Fulbright",
+    "employee_count": 8856,
+    "triage_reasons": [
+     "Global law firm with 8,856 employees, not a B2B SaaS startup; the marketing database role is not the requested growth-marketing startup signal."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "mission_constraint:employee_size",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 45,
+    "triage_signal_strength": 1,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Not investigated: mission_constraint:employee_size."
+   },
+   {
+    "domain": "opengov.com",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 1027 exceeds the maximum \u2014 excluded before identity resolution and enrichment, which is two paid calls this row already answered",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": "employee_size",
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/opengov-inc",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "OpenGov Inc.",
+    "employee_count": 1027,
+    "triage_reasons": [
+     "Established government enterprise software company with 1,027 employees and a broad customer base, plainly not a seed-stage startup hiring its first growth marketer."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "mission_constraint:employee_size",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 45,
+    "triage_signal_strength": 3,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Not investigated: mission_constraint:employee_size."
+   },
+   {
+    "domain": "harmonic.ai",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 37438 exceeds the maximum \u2014 excluded before identity resolution and enrichment, which is two paid calls this row already answered",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": "employee_size",
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/stealth-startup-community",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "Stealth Startup",
+    "employee_count": 37438,
+    "triage_reasons": [
+     "The description identifies a stealth-startup network and the marketing role is relevant, but the listed 37,438 employees and harmonic.ai identity create severe data inconsistency; the actual target company and B2B SaaS status cannot be determined."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "uncertain",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "mission_constraint:employee_size",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 45,
+    "triage_signal_strength": 20,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Not investigated: mission_constraint:employee_size."
+   },
+   {
+    "domain": "t-mobile.com",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 95436 exceeds the maximum \u2014 excluded before identity resolution and enrichment, which is two paid calls this row already answered",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": "employee_size",
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/t-mobile",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "T-Mobile",
+    "employee_count": 95436,
+    "triage_reasons": [
+     "Large telecommunications company with 95,436 employees, plainly not a seed-stage B2B SaaS startup hiring its first growth marketer."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "mission_constraint:employee_size",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 45,
+    "triage_signal_strength": 2,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Not investigated: mission_constraint:employee_size."
+   },
+   {
+    "domain": "ridewithvia.com",
+    "status": "not_investigated",
+    "decided": false,
+    "reasons": [
+     "exact headcount 2105 exceeds the maximum \u2014 excluded before identity resolution and enrichment, which is two paid calls this row already answered",
+     "already carries a LinkedIn identity \u2014 no resolution to pay for",
+     "carries a description \u2014 the field the ICP gate reasons from"
+    ],
+    "exclusion": "employee_size",
+    "resumable": false,
+    "actionable": false,
+    "company_key": "https://www.linkedin.com/company/ridewithvia",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "signal_tier": null,
+    "company_name": "Via",
+    "employee_count": 2105,
+    "triage_reasons": [
+     "Large established transportation technology company with 2,105 employees, not plausibly seed-stage; open role is consumer growth marketing rather than evidence of a first growth marketer at a seed B2B SaaS startup."
+    ],
+    "decision_source": "not_evaluated",
+    "enrichment_state": "not_attempted",
+    "mission_decision": null,
+    "strongest_signal": null,
+    "triage_relevance": "irrelevant",
+    "mission_reasoning": null,
+    "supporting_job_url": null,
+    "counts_as_qualified": false,
+    "mission_match_score": null,
+    "shortlist_exclusion": "mission_constraint:employee_size",
+    "supporting_job_title": null,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "prequalification_score": 45,
+    "triage_signal_strength": 5,
+    "mission_failed_requirements": [],
+    "shortlist_exclusion_explanation": "Not investigated: mission_constraint:employee_size."
+   }
+  ],
+  "capability_execution_state": {
+   "provider_attempts": [
+    {
+     "rows": 10,
+     "reason": null,
+     "attempt": 1,
+     "outcome": "ok",
+     "provider": "apify_linkedin_job_search",
+     "capability": "job_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "f40718dc"
+    },
+    {
+     "rows": 0,
+     "reason": "kept 10 open posting(s) with the employer's LinkedIn page \u2014 identity taken from the posting, no Company Search",
+     "attempt": 2,
+     "outcome": "rows_dropped",
+     "provider": "apify_linkedin_job_search",
+     "capability": "job_discovery",
+     "cost_units": 0
+    },
+    {
+     "rows": 0,
+     "reason": "spec pc_cc8cc5134af314ee04eb925e1b already executed in this lineage",
+     "attempt": 3,
+     "outcome": "skipped_idempotent",
+     "provider": "apify_linkedin_job_search",
+     "capability": "job_discovery",
+     "cost_units": 0,
+     "input_fingerprint": "f40718dc"
+    },
+    {
+     "rows": 0,
+     "reason": "spec pc_cc8cc5134af314ee04eb925e1b already executed in this lineage",
+     "attempt": 4,
+     "outcome": "skipped_idempotent",
+     "provider": "apify_linkedin_job_search",
+     "capability": "job_discovery",
+     "cost_units": 0,
+     "input_fingerprint": "f40718dc"
+    },
+    {
+     "rows": 10,
+     "reason": null,
+     "attempt": 5,
+     "outcome": "ok",
+     "provider": "apify_linkedin_job_search",
+     "capability": "job_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "2d9b0fa0"
+    },
+    {
+     "rows": 0,
+     "reason": "kept 10 open posting(s) with the employer's LinkedIn page \u2014 identity taken from the posting, no Company Search",
+     "attempt": 6,
+     "outcome": "rows_dropped",
+     "provider": "apify_linkedin_job_search",
+     "capability": "job_discovery",
+     "cost_units": 0
+    },
+    {
+     "rows": 6,
+     "reason": null,
+     "attempt": 1,
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_details",
+     "capability": "company_enrichment",
+     "cost_units": 1,
+     "input_fingerprint": "24e6a8ef"
+    },
+    {
+     "rows": 0,
+     "reason": "Error: apify_actor_disabled_by_default",
+     "attempt": 1,
+     "outcome": "error",
+     "provider": "apify_linkedin_company_employees",
+     "capability": "hiring_verification",
+     "cost_units": 0,
+     "input_fingerprint": "9ddd51e6"
+    }
+   ]
+  },
+  "lead_resume_checkpoint": {
+   "version": "fixture-marker",
+   "companies": [
+    {
+     "company_key": "marker"
+    }
+   ]
+  }
+ }
+}

@@ -101,8 +101,26 @@ export function terminalViolations(queue: QueueTerminalStatus, rows: TerminalRow
     if (!failed && LIVE_PLAN_STATUSES.has(String(p.status ?? "")) && p.status !== "partial") {
       v.push(`plan.status=${p.status} is live`);
     }
+    // A SATISFIED MISSION IS COMPLETE EVERYWHERE (canary 9b1b70a2: queue,
+    // task and lineage complete, plan `partial`). `partial` stays a legitimate
+    // ending only for a mission that stopped short of what was asked.
+    if (!failed && p.status === "partial" && taskCompleted(t)) {
+      v.push("plan.status=partial but the task completed");
+    }
   }
   return v;
+}
+
+/**
+ * The task delivered what was asked. Its own result says so (`task_status:
+ * completed`); a result that predates `task_status` falls back to the row's
+ * lifecycle status, as the reconciliation always did.
+ */
+function taskCompleted(t: TerminalRows["task"]): boolean {
+  if (!t) return false;
+  const stated = (t.result as Record<string, unknown> | null)?.task_status;
+  if (stated != null) return stated === "completed";
+  return t.status === "completed" || t.status === "complete";
 }
 
 /**
@@ -158,11 +176,16 @@ export function planTerminalReconciliation(
 
   const p = rows.plan;
   if (p) {
+    // Judged on the task AS IT WILL READ after this patch, so the plan and the
+    // task are written in agreement rather than one step apart.
+    const task = patch.task ?? t;
+    const satisfied = taskCompleted(task);
     if (failed && p.status !== "failed") {
       patch.plan = { status: "failed", completed_at: nowIso };
     } else if (!failed && LIVE_PLAN_STATUSES.has(String(p.status ?? "")) && p.status !== "partial") {
-      const done = t?.status === "completed" || t?.status === "complete";
-      patch.plan = { status: done ? "complete" : "partial", completed_at: nowIso };
+      patch.plan = { status: satisfied ? "complete" : "partial", completed_at: nowIso };
+    } else if (!failed && p.status === "partial" && satisfied) {
+      patch.plan = { status: "complete", completed_at: nowIso };
     }
   }
   return patch;

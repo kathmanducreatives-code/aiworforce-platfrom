@@ -186,12 +186,19 @@ export interface AutoContinuationInput {
    * the candidates can be true yet.
    */
   pendingRuns?: number;
+  /**
+   * Lead V2: PENDING candidates at least one of whose missing hard claims an
+   * EXECUTABLE verification route can close — the canonical evidence-gap
+   * router's `with_executable_route`. Verified before discovery is widened.
+   * Absent or 0 keeps the previous behaviour exactly.
+   */
+  verificationRoutesRemain?: number;
 }
 
 export interface AutoContinuationDecision {
   continue: boolean;
   reason: StopReason | "quota_unmet_frontier_remains" | "awaiting_provider_run"
-    | "replenishment_required";
+    | "replenishment_required" | "verification_required";
   /**
    * HOW the next slice should be started.
    *
@@ -272,6 +279,27 @@ export function decideAutoContinuation(
   // ceiling below still gets to stop it, and a replenishing lineage is bounded
   // exactly as a normal one is.
   if (!awaiting && i.frontierRemaining <= 0) {
+    // ── VERIFY BEFORE DISCOVERING (the plan, §7 / §22) ──────────────────────
+    //
+    // Candidates already in the pool that are PENDING on a hard claim an
+    // executable route can verify are closer to a lead than any company the
+    // next discovery page might find. "0 qualified" must never mean "buy
+    // another job-search page" while one of them waits. The count comes from
+    // the canonical evidence-gap router, and only routes with a canonical
+    // executor count — a READY actor whose result cannot move the claim does
+    // not. Bounded by the same ceilings as every other slice.
+    const verifiable = Math.max(0, Math.trunc(i.verificationRoutesRemain ?? 0));
+    if (verifiable > 0 && i.continuationsUsed < i.maxContinuations && i.costUnitsUsed < i.maxCostUnits) {
+      return {
+        continue: true,
+        reason: "verification_required",
+        dispatch_mode: "immediate",
+        detail:
+          `${verifiable} pending candidate${verifiable === 1 ? "" : "s"} can be verified by a ready route; ` +
+          `${i.qualified} of ${i.requestedCount} qualified — verifying before widening discovery`,
+        user_message: `Still working — checking the missing facts on ${verifiable} promising ${verifiable === 1 ? "company" : "companies"} before searching for more.`,
+      };
+    }
     if (!i.discoveryRoutesRemain) {
       return stop("frontier_exhausted",
         `every discovered candidate has been investigated; ` +
@@ -630,19 +658,29 @@ export function readLineageProgress(raw: unknown): LineageProgress {
 }
 
 /**
- * LEAD V2: A STOP IS A STOP.
+ * LEAD V2: THE CANONICAL STOP DECIDES THE TERMINAL STATUS.
  *
- * When the canonical decision above says the mission is over, the legacy
- * quota controller's own status may still read `continuation_required` — its
- * counter never saw the Workbench's answer. Persisting that would mark the task
- * resumable and the V2 queue would claim it again: the "Workbench says done,
- * worker keeps buying" failure. On V2 the stop reason decides the terminal
- * status; any other legacy status is kept as it was.
+ * The legacy quota controller writes its own status from its own ROUND COUNT
+ * and its own CONTACT quota. Neither ever saw the Workbench's answer:
+ *
+ *   - `continuation_required` after the canonical decision stopped would mark
+ *     the task resumable and the V2 queue would claim it again ("Workbench says
+ *     done, worker keeps buying");
+ *   - `round_limit_reached` after `quota_met` (canary 9b1b70a2) made a mission
+ *     that delivered 1 of 1 read `partial` on the plan and the task.
+ *
+ * So on V2 the stop reason decides. The legacy status survives only when it
+ * records something the canonical decision cannot see: a request the platform
+ * refused (`invalid_request`) or a paid round that could not be folded into
+ * source state (`source_transition_failed`). A provider failure the mission
+ * recovered from is not a failed mission when the request was met.
  */
+const LEGACY_FAILURES_KEPT: ReadonlySet<string> = new Set(["invalid_request", "source_transition_failed"]);
+
 export function settleV2Terminal<T extends string>(
   stopReason: string, legacyStatus: T,
 ): T | "completed" | "search_exhausted" | "budget_exhausted" | "provider_failure" {
-  if (legacyStatus !== "continuation_required") return legacyStatus;
+  if (LEGACY_FAILURES_KEPT.has(legacyStatus)) return legacyStatus;
   switch (stopReason) {
     case "quota_met": return "completed";
     case "frontier_exhausted":
@@ -650,6 +688,50 @@ export function settleV2Terminal<T extends string>(
     case "continuation_ceiling":
     case "cost_ceiling": return "budget_exhausted";
     case "provider_failure": return "provider_failure";
+    // `cancelled` and anything unforeseen: the cancellation path reconciles
+    // the records itself, and an unknown reason is not guessed at.
     default: return legacyStatus;
   }
+}
+
+/**
+ * LEAD V2: ONE OUTCOME FOR EVERY TERMINAL SURFACE.
+ *
+ * The task status, the plan status, `company_first.quota` (read by the
+ * browser's `taskQuotaUnmet`) and the completion message all used to be fed
+ * the legacy CONTACT quota — `eligible_leads: 0` for a mission whose
+ * deliverable is the qualified company and which had delivered it. When the
+ * company is the deliverable, the canonical qualified count IS the quota.
+ * A mission that asked for contact-ready leads keeps the contact quota.
+ */
+export interface V2Outcome {
+  terminal: string;
+  quota: { contactReady: number; requested: number };
+  /** What the deliverable is counted in, for the words the user reads. */
+  deliverable: "company" | "contact";
+  delivered: number;
+  requested: number;
+}
+
+export function settleV2Outcome(i: {
+  continuing: boolean;
+  stopReason: string;
+  legacyStatus: string;
+  legacyQuota: { eligible_leads: number; requested_leads: number };
+  canonicalQualified: number;
+  requestedCount: number;
+  companyIsDeliverable: boolean;
+}): V2Outcome {
+  const terminal = i.continuing ? "continuation_required" : settleV2Terminal(i.stopReason, i.legacyStatus);
+  if (i.companyIsDeliverable) {
+    const requested = i.requestedCount;
+    return {
+      terminal, deliverable: "company", delivered: i.canonicalQualified, requested,
+      quota: { contactReady: i.canonicalQualified, requested },
+    };
+  }
+  return {
+    terminal, deliverable: "contact", delivered: i.legacyQuota.eligible_leads, requested: i.legacyQuota.requested_leads,
+    quota: { contactReady: i.legacyQuota.eligible_leads, requested: i.legacyQuota.requested_leads },
+  };
 }

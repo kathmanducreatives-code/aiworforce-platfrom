@@ -403,7 +403,7 @@ import {
   releaseLineageLease, type RpcDb as LeaseRpcDb,
 } from "../_shared/lineageLease.ts";
 import {
-  decideAutoContinuation, settleV2Terminal, foldSlice, readLineageProgress, lineageIsFinished,
+  decideAutoContinuation, settleV2Outcome, foldSlice, readLineageProgress, lineageIsFinished,
   resolveMaxContinuations, resolveMaxLineageCostUnits,
   AUTO_CONTINUATION_VERSION, LINEAGE_PROGRESS_KEY, type LineageProgress,
 } from "../_shared/leadAutoContinuation.ts";
@@ -412,7 +412,7 @@ import {
 } from "../_shared/leadContinuationDispatch.ts";
 import { isFrontier, isUnfinishedFrontier, wasInvestigated } from "../_shared/leadInvestigationBudget.ts";
 import {
-  projectStatus, RESUMABLE_ROW_STATUS, holdsResumableWork,
+  projectStatus, RESUMABLE_ROW_STATUS, holdsResumableWork, nextPlanStatus,
 } from "../_shared/taskStatusContract.ts";
 import { compileJobIntent } from "../_shared/jobIntentTaxonomy.ts";
 import { emptyCompanyEnrichmentObservability } from "../_shared/companyEnrichmentObservability.ts";
@@ -523,6 +523,8 @@ async function persistLeadResultsPanel(
   uiPanel: Record<string, unknown>,
   summary: {
     eligible: number; requested: number; rawJobs: number; terminalStatus: string;
+    /** What `eligible` counts. Lead V2 missions deliver qualified companies. */
+    deliverable?: "company" | "contact";
     /**
      * The task that owns this Workbench.
      *
@@ -645,7 +647,9 @@ async function persistLeadResultsPanel(
       return;
     }
 
-    const delivered = `${summary.eligible} of ${summary.requested} CONTACT-ready ${summary.requested === 1 ? "lead" : "leads"}`;
+    const delivered = summary.deliverable === "company"
+      ? `${summary.eligible} of ${summary.requested} qualified ${summary.requested === 1 ? "company" : "companies"}`
+      : `${summary.eligible} of ${summary.requested} CONTACT-ready ${summary.requested === 1 ? "lead" : "leads"}`;
     const m = summary.mission ?? null;
     // EVERY CLAIM BELOW THAT IS ABOUT THE WORLD READS THE WORLD. Built from the
     // task's own persisted state plus the lineage's ledger, so a sentence about
@@ -708,7 +712,8 @@ async function persistLeadResultsPanel(
     // claim as "nothing is there to look at".
     const tail = m && m.shortlisted > 0 && summary.eligible === 0
       ? ` The shortlisted ${m.shortlisted === 1 ? "company is" : "companies are"} in Workbench for review, marked not qualified.`
-      : summary.eligible > 0 ? "" : " None produced a contact-ready lead yet.";
+      : summary.eligible > 0 ? ""
+      : summary.deliverable === "company" ? " None qualified yet." : " None produced a contact-ready lead yet.";
     const content = `I opened the results in Workbench — ${delivered}. ${evidence}${tail} Nothing was sent.`;
 
     await db.from("messages").insert({
@@ -759,8 +764,9 @@ async function finalizeCompanyFirstPlan(
     const { data: current } = await db.from("task_plans")
       .select("status").eq("id", planId).maybeSingle();
     const currentStatus = (current as { status?: string } | null)?.status ?? null;
-    if (currentStatus && currentStatus !== "executing" && currentStatus !== planStatus) return;
-    if (currentStatus === planStatus) return;
+    // A `partial` plan is a checkpoint a later slice may finish; a finished
+    // plan is never re-opened. See `nextPlanStatus`.
+    if (nextPlanStatus(currentStatus, planStatus) === null) return;
 
     await db.from("task_plans").update({
       status: planStatus,
@@ -5869,7 +5875,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           // Without this, lineage 744644ab spent its last three slices carrying
           // companies to verdicts and draining the frontier from sixteen to
           // zero, and every one of them counted as having achieved nothing.
-          brainDecidedInPool: capabilityRun
+          // LEAD V2: a canonical decision is the progress, not a Brain verdict
+          // — the companies the view holds as qualified, pending or ineligible.
+          brainDecidedInPool: p5Decision
+            ? p5Decision.qualified + p5Decision.pending + p5Decision.ineligible
+            : capabilityRun
             ? capabilityRun.companies.filter((c) => c.brain !== null).length
             : 0,
         });
@@ -5882,6 +5892,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           // ONE. The view is recomputed over the whole restored pool every
           // slice, so it is already cumulative.
           qualified: p5Decision ? p5Decision.qualified : progress.qualified_high_water,
+          // LEAD V2: pending candidates a READY, executable route can verify —
+          // verified before discovery is widened (`evidenceGapRouter`).
+          verificationRoutesRemain: p5View?.evidence_gaps.with_executable_route ?? 0,
           requestedCount: quota.requestedLeadCount,
           frontierRemaining: sliceFrontier,
           continuationsUsed: progress.continuations_used,
@@ -5921,12 +5934,25 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           })(),
         });
         // The status the REST of this branch persists and projects from.
-        const effectiveTerminal = autoDecision.continue
-          ? "continuation_required"
-          // Lead V2: the canonical stop decides; a legacy
-          // `continuation_required` must not re-open a finished mission.
-          : p5Decision ? settleV2Terminal(autoDecision.reason, cf.status)
-          : cf.status;
+        // LEAD V2: ONE OUTCOME FOR EVERY TERMINAL SURFACE — the task status, the
+        // plan, `company_first.quota` and the completion message. The legacy
+        // controller's round count and CONTACT quota never saw the Workbench's
+        // answer (canary 9b1b70a2: 1 of 1 delivered, `round_limit_reached`,
+        // plan `partial`). See `settleV2Outcome`.
+        const v2Outcome = p5Decision
+          ? settleV2Outcome({
+            continuing: autoDecision.continue,
+            stopReason: autoDecision.reason,
+            legacyStatus: cf.status,
+            legacyQuota: cf.quota,
+            canonicalQualified: p5Decision.qualified,
+            requestedCount: quota.requestedLeadCount,
+            companyIsDeliverable: !!persistedMission && companyIsTheDeliverable(persistedMission),
+          })
+          : null;
+        const effectiveTerminal = v2Outcome
+          ? v2Outcome.terminal
+          : autoDecision.continue ? "continuation_required" : cf.status;
         if (effectiveTerminal !== cf.status) {
           console.log("[run-agent][auto-continuation] terminal_status_overridden", {
             task_id: task.id, from: cf.status, to: effectiveTerminal,
@@ -5936,7 +5962,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           });
         }
         const statuses = projectStatus(
-          effectiveTerminal, cf.writeBoundary.invariantViolation, {
+          effectiveTerminal, cf.writeBoundary.invariantViolation, v2Outcome ? v2Outcome.quota : {
             contactReady: cf.quota.eligible_leads,
             requested: cf.quota.requested_leads,
           });
@@ -6054,12 +6080,29 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 resumable: false,
               }
               : {}),
-            output: `Company-first sourcing (${cf.status}): ${cf.quota.eligible_leads}/${cf.quota.requested_leads} eligible leads across ${cf.rounds_attempted} round(s); ${cf.counts.verifiedCompanies} verified companies. ${cf.terminal_reason}`,
+            output: v2Outcome
+              ? `Lead mission (${effectiveTerminal}): ${v2Outcome.delivered}/${v2Outcome.requested} ${v2Outcome.deliverable === "company" ? "qualified companies" : "contact-ready leads"} (${autoDecision.reason}).`
+              : `Company-first sourcing (${cf.status}): ${cf.quota.eligible_leads}/${cf.quota.requested_leads} eligible leads across ${cf.rounds_attempted} round(s); ${cf.counts.verifiedCompanies} verified companies. ${cf.terminal_reason}`,
             executed_sourcing_mode: "company_first",
             // Carried INSIDE `company_first` too: the browser's task projection
             // reads that block and not arbitrary result keys.
             company_first: {
               ...cf,
+              // Lead V2: the browser reads this block (`taskQuotaUnmet`), so it
+              // carries the canonical outcome, never the legacy contact count.
+              ...(v2Outcome
+                ? {
+                  status: effectiveTerminal,
+                  quota: {
+                    ...cf.quota,
+                    eligible_leads: v2Outcome.delivered,
+                    requested_leads: v2Outcome.requested,
+                    remaining_leads: Math.max(0, v2Outcome.requested - v2Outcome.delivered),
+                    quota_basis: v2Outcome.deliverable === "company"
+                      ? "p5_canonical_qualified_companies" : "contact_ready_leads",
+                  },
+                }
+                : {}),
               ...(inProcess.continuationOwner ? { continuation_owner: inProcess.continuationOwner } : {}),
               lead_quota_provenance: quotaProvenance,
             },
@@ -6114,6 +6157,16 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   terminal_status: null,
                   terminal_reason: null,
                   next_action: "start_round",
+                },
+              }
+              // Lead V2, stopped: the copy the resume gate reads agrees with
+              // the top-level terminal status instead of keeping the legacy
+              // controller's round count.
+              : v2Outcome
+              ? {
+                company_first_state: {
+                  ...((priorTaskResult.company_first_state ?? {}) as Record<string, unknown>),
+                  terminal_status: effectiveTerminal,
                 },
               }
               : {}),
@@ -6809,10 +6862,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // below, so it carries it.
 
         await persistLeadResultsPanel(supabase, plan_id, uiPanel, {
-          eligible: cf.quota.eligible_leads,
-          requested: cf.quota.requested_leads,
+          eligible: v2Outcome ? v2Outcome.delivered : cf.quota.eligible_leads,
+          requested: v2Outcome ? v2Outcome.requested : cf.quota.requested_leads,
+          deliverable: v2Outcome?.deliverable ?? "contact",
           rawJobs: cf.counts.rawJobs,
-          terminalStatus: cf.status,
+          terminalStatus: effectiveTerminal,
           taskId: task.id,
           // THE ROW AS COMMITTED, and the LINEAGE's ledger. Read here so the
           // panel's sentences are derived from what is stored rather than from

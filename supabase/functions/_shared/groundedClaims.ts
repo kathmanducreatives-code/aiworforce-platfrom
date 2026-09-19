@@ -25,7 +25,9 @@
 //
 // PURE. No network, provider, model or database access.
 
-import { canonicalBusinessModel, excerptInconsistency } from "./businessModelMatch.ts";
+import {
+  type BusinessModelFacet, canonicalBusinessModel, excerptInconsistency, statedFacets, unstatedFacets,
+} from "./businessModelMatch.ts";
 import {
   abstractSourceLabel, findEvidence, hardFactsForPrompt,
   type EvidenceItem, type EvidenceRegistry, type EvidenceType,
@@ -496,6 +498,8 @@ export const BUSINESS_MODEL_MIN_CONFIDENCE = 0.6;
 export interface BusinessModelDecision {
   decision: "accepted" | "review";
   reasons: string[];
+  /** The facets the claim's quotes state, read deterministically (`statedFacets`). */
+  facets_stated: BusinessModelFacet[];
 }
 
 export function businessModelDecision(v: GroundedVerification): BusinessModelDecision {
@@ -512,16 +516,29 @@ export function businessModelDecision(v: GroundedVerification): BusinessModelDec
   if (bm && Number(bm.confidence) < BUSINESS_MODEL_MIN_CONFIDENCE) reasons.push("low_model_confidence");
   // THE QUOTES MUST NOT ARGUE AGAINST THE CODE (canary d7012ba5: "consumer
   // software, B2B SaaS, …" accepted as b2b_saas). See `excerptInconsistency`.
+  const excerpts = validated.flatMap((c) => c.evidence_excerpts.map((x) => x.excerpt));
+  // The facets may be stated by the business-model claim itself or by a
+  // validated claim about WHO buys (`customer_type`) or WHAT it is
+  // (`product_type`) — each quoted from the company's own words and checked.
+  const facetExcerpts = (v.validated_claims ?? [])
+    .filter((c) => c.claim_type === "business_model" || c.claim_type === "customer_type" || c.claim_type === "product_type")
+    .flatMap((c) => c.evidence_excerpts.map((x) => x.excerpt));
   if (bm && bm.value !== "unknown" && validated.length > 0) {
-    const excerpts = validated.flatMap((c) => c.evidence_excerpts.map((x) => x.excerpt));
     const inconsistency = excerptInconsistency(bm.value, excerpts);
     if (inconsistency) reasons.push(`self_description_${inconsistency}`);
+    // THE QUOTES MUST STATE WHAT THE CODE ASSERTS (canary 9b1b70a2: "a platform
+    // for financial firms" accepted as b2b_saas; "rebuilding higher education"
+    // accepted as consumer). Silence is not support. See `unstatedFacets`.
+    for (const f of unstatedFacets(bm.value, facetExcerpts)) reasons.push(`quote_does_not_state_${f}`);
   }
   const carriers = CLAIM_EVIDENCE_RULES.business_model.allowed as readonly string[];
   for (const id of v.unacknowledged_conflicts ?? []) {
     if (carriers.includes(String(id).split(":")[0])) reasons.push(`unacknowledged_conflict:${id}`);
   }
-  return { decision: reasons.length === 0 ? "accepted" : "review", reasons: [...new Set(reasons)] };
+  return {
+    decision: reasons.length === 0 ? "accepted" : "review", reasons: [...new Set(reasons)],
+    facets_stated: [...statedFacets(facetExcerpts)],
+  };
 }
 
 /**

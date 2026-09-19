@@ -304,3 +304,44 @@ export function bucketReasonFor(row: EvaluationRow & QualificationRecord): strin
   }
   return row.explanation || row.mission_reasoning || 'No reason was recorded.';
 }
+
+/**
+ * THE RESULT TABS, COUNTED ONCE.
+ *
+ * Qualified and In review had always been counted from LEAD ROWS, the rest from
+ * evaluation rows. On Lead V2 a pending company is not a lead row — it has no
+ * lead_candidate_id and nothing can act on it yet — so canary 9b1b70a2 showed
+ * "In review 0" for four companies the backend held as pending. Those rows now
+ * carry the backend's own bucket, and `in_review` counts them beside any lead
+ * in review, so the tabs sum to the canonical view.
+ *
+ * Legacy runs carry no canonical rows: `pendingEvidence` is empty and every
+ * count is exactly what it was.
+ */
+export interface ResultTabCounts {
+  qualified: number;
+  inReview: number;
+  rejected: number;
+  notReached: number;
+  /** Evaluation rows the backend holds as pending (or identity-unresolved). */
+  pendingEvidence: Array<EvaluationRow & QualificationRecord>;
+  /** True when the rows carry the backend's canonical decision (Lead V2). */
+  canonical: boolean;
+}
+
+export function resultTabCounts(i: {
+  qualifiedLeads: number;
+  inReviewLeads: number;
+  evaluationRows: ReadonlyArray<EvaluationRow & QualificationRecord>;
+}): ResultTabCounts {
+  const buckets = partitionAllRows(i.evaluationRows);
+  const pendingEvidence = buckets.in_review.filter((r) => !!r.canonical);
+  return {
+    qualified: i.qualifiedLeads,
+    inReview: i.inReviewLeads + pendingEvidence.length,
+    rejected: buckets.rejected.length,
+    notReached: notReachedCompanies(i.evaluationRows).length,
+    pendingEvidence,
+    canonical: i.evaluationRows.some((r) => !!r.canonical),
+  };
+}

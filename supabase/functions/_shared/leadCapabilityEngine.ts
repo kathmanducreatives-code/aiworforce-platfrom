@@ -7313,7 +7313,7 @@ export async function runCapabilityPlan(
       // provider for this mission, only for SHORTLISTED companies (enriched,
       // hiring verified or needing review), and only where the posting does not
       // already say so. Titles are read; no person is kept.
-      const teamChecks = { attempted: 0, checked: 0, supported: 0, contradicted: 0, from_posting: 0 };
+      const teamChecks = { attempted: 0, checked: 0, supported: 0, contradicted: 0, unverified: 0, from_posting: 0 };
       const teamStep = opts.plan.steps.find((st) => st.capability === cap);
       if (firstInFunctionRequested(opts.mission) &&
           teamStep?.providers.includes("apify_linkedin_company_employees")) {
@@ -7391,13 +7391,20 @@ export async function runCapabilityPlan(
           }
           teamChecks.checked++;
           const members = teamFunctionMembers(rows, url, qualificationCtx.role_vocabulary);
+          // ZERO RESULTS ARE NOT PROOF (the plan, §9.2). An employee search
+          // that finds nobody in the function says the ACTOR found nobody — its
+          // coverage of a company's staff is not established — not that the
+          // company has nobody. Only a posting's own "first / founding" words
+          // (job_posting) prove first-in-function; a verified existing member
+          // contradicts it; absence stays unverified.
           c.first_in_function = members.length === 0
-            ? { status: "supported", source: "team_composition", function_members: 0, function_titles: [],
-              reason: "no current employee holds a title in this function" }
+            ? { status: "unverified", source: "team_composition", function_members: 0, function_titles: [],
+              reason: "the team check found no one in this function — absence in a search is not proof of a first hire" }
             : { status: "contradicted", source: "team_composition", function_members: members.length,
               function_titles: members.slice(0, 5),
               reason: `${members.length} current employee(s) already hold the function` };
-          if (c.first_in_function.status === "supported") teamChecks.supported++; else teamChecks.contradicted++;
+          if (c.first_in_function.status === "contradicted") teamChecks.contradicted++;
+          else teamChecks.unverified++;
         }
         log("first_in_function_checked", teamChecks);
       }
@@ -10542,12 +10549,16 @@ export function groundedBusinessModelItem(
   const bmDecision = businessModelDecision(g);
   const accepted = bmDecision.decision === "accepted";
   const excerpt = claims.flatMap((x) => x.evidence_excerpts).map((x) => x.excerpt).find(Boolean) ?? null;
+  // The page the quote was read from, when the cited evidence has one — so a
+  // hard check can link to its source instead of saying "grounded evaluation".
+  const cited = new Set(claims.flatMap((x) => x.evidence_ids));
+  const url = (c.evidence_registry?.items ?? []).find((it) => cited.has(it.evidence_id) && !!it.source_url)?.source_url ?? null;
   return {
     evidence_id: `grd_${c.key}_business_model`, company_key: c.key, dimension: "business_model",
     value: bm.value.replace(/_/g, " "), status: accepted ? "proven" : "plausible",
     source: {
       provider: "engine", actor: "grounded_evidence_evaluation", provider_call_id: null,
-      url: null, excerpt: excerpt ? excerpt.slice(0, 280) : null,
+      url, excerpt: excerpt ? excerpt.slice(0, 280) : null,
     },
     method: "model_extraction", observed_at: at, valid_until: null,
     // NEVER `high`: a verified reading of a self-description is weaker than a
@@ -10558,6 +10569,7 @@ export function groundedBusinessModelItem(
     assessment: {
       decision, grounding_score: Number(g.grounding_score ?? 0), validated_claims: claims.length,
       business_model_decision: bmDecision.decision, business_model_reasons: bmDecision.reasons,
+      business_model_facets: bmDecision.facets_stated,
     },
   };
 }

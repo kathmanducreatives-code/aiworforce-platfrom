@@ -222,7 +222,7 @@ Deno.test("REVIEW-1: the business model's OWN decision proves; the whole-company
     enriched: null, identity: null, found_by: [],
     grounded: {
       version: "grounded-claims-v1", classifier_result: { business_model: { value: "b2b_saas", confidence: 0.9, claims: [], ...bm } },
-      validated_claims: [{ claim: "x", claim_type: "business_model", evidence_ids: [DESC], evidence_excerpts: [{ evidence_id: DESC, excerpt: "sells" }] }],
+      validated_claims: [{ claim: "x", claim_type: "business_model", evidence_ids: [DESC], evidence_excerpts: [{ evidence_id: DESC, excerpt: "a SaaS platform for finance teams" }] }],
       rejected_claims: [], grounding_score: 0.8, final_grounded_decision: "review", downgrade_reasons: [], unacknowledged_conflicts: [],
       ...over,
     },
@@ -234,7 +234,12 @@ Deno.test("REVIEW-1: the business model's OWN decision proves; the whole-company
   }
   assertEquals(item().assessment, {
     decision: "review", grounding_score: 0.8, validated_claims: 1, business_model_decision: "accepted", business_model_reasons: [],
+    business_model_facets: ["business_customer", "software_product", "saas_delivery"],
   });
+  // A quote that states none of it — the canary 9b1b70a2 shape — is not proof.
+  const silent = item({ validated_claims: [{ claim: "x", claim_type: "business_model", evidence_ids: [DESC], evidence_excerpts: [{ evidence_id: DESC, excerpt: "sells" }] }] });
+  assertEquals(silent.status, "plausible");
+  assertEquals(silent.assessment?.business_model_reasons, ["quote_does_not_state_business_customer", "quote_does_not_state_saas_delivery"]);
   // What DOES keep it under review — each a fact about the business-model claim itself.
   const reviewed = (over: Record<string, unknown>, bm: Record<string, unknown> = {}) => {
     const i = item(over, bm);
@@ -288,6 +293,17 @@ Deno.test("MATCH-1: controlled vocabulary, whole words, no substrings", () => {
 
 const PROBE = JSON.parse(Deno.readTextFileSync(new URL("../../fixtures/lead-v2/p3-job-discovery-probe.json", import.meta.url)));
 const ROWS = PROBE.probes["harvestapi~linkedin-job-search"].items as Array<Record<string, unknown>>;
+/**
+ * SYNTHETIC SELF-DESCRIPTIONS. The fixture's real descriptions do not state a
+ * business model (Audicus is a hearing-aid company; its real first words are
+ * "Audicus is a hearing hea…"), and a quote that states nothing can no longer
+ * prove anything (canary 9b1b70a2). Two companies are therefore given words
+ * that DO state every facet their code asserts, and the grounder quotes them.
+ */
+const SYNTHETIC_DESCRIPTION: Record<string, string> = {
+  "Audicus": "Audicus is a cloud-based SaaS platform for hearing clinics.",
+  "Bevi": "Bevi sells smart water coolers direct to consumers.",
+};
 /** What the grounded evaluator concludes per employer — one of each outcome. */
 const VERDICT: Record<string, { value: string; decision: "pass" | "review" | "fail"; confidence?: number }> = {
   "LinkedIn": { value: "b2b_saas", decision: "pass" },
@@ -315,7 +331,10 @@ Deno.test("E2E-1: grounded proof survives checkpoint → restore → Stage-2 reb
         if (!v || !desc) return { company_key: m.company_key, verification: null, failure: "malformed_result", detail: null };
         const claim = {
           claim: "the company's own description", claim_type: "business_model", evidence_ids: [String(desc.evidence_id)],
-          evidence_excerpts: [{ evidence_id: String(desc.evidence_id), excerpt: String(desc.source_text).slice(0, 24) }],
+          evidence_excerpts: [{
+            evidence_id: String(desc.evidence_id),
+            excerpt: SYNTHETIC_DESCRIPTION[String(m.company_name)] ?? String(desc.source_text).slice(0, 24),
+          }],
         };
         return {
           company_key: m.company_key, failure: null, detail: null, verification: {
@@ -343,7 +362,7 @@ Deno.test("E2E-1: grounded proof survives checkpoint → restore → Stage-2 reb
       if (call.actorKey === "apify_linkedin_company_details") {
         return Promise.resolve(((call.input.companies as string[]) ?? []).map((u) => {
           const c = byUrl.get(u)!;
-          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, description: c.description, industries: c.industries, locations: c.locations };
+          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, description: SYNTHETIC_DESCRIPTION[String(c.name)] ?? c.description, industries: c.industries, locations: c.locations };
         }));
       }
       return Promise.resolve([]);
@@ -475,7 +494,7 @@ Deno.test("VOCAB-1: free-text answers through the REAL batch verifier reach elig
       if (!says || !desc?.source_text) return [];
       const claim = {
         claim: "the company describes itself", claim_type: "business_model", evidence_ids: [desc.evidence_id],
-        evidence_excerpts: [{ evidence_id: desc.evidence_id, excerpt: desc.source_text.slice(0, 24) }],
+        evidence_excerpts: [{ evidence_id: desc.evidence_id, excerpt: SYNTHETIC_DESCRIPTION[String(m.company_name)] ?? desc.source_text.slice(0, 24) }],
       };
       // A hiring mission's PASS must also ground the current signal (the
       // verifier downgrades a pass without one), so cite the posting verbatim.
@@ -508,7 +527,7 @@ Deno.test("VOCAB-1: free-text answers through the REAL batch verifier reach elig
       if (call.actorKey === "apify_linkedin_company_details") {
         return Promise.resolve(((call.input.companies as string[]) ?? []).map((u) => {
           const c = byUrl.get(u)!;
-          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, description: c.description, industries: c.industries, locations: c.locations };
+          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, description: SYNTHETIC_DESCRIPTION[String(c.name)] ?? c.description, industries: c.industries, locations: c.locations };
         }));
       }
       return Promise.resolve([]);
@@ -609,8 +628,14 @@ Deno.test("EXCERPT-1: an accepted business model must not be argued against by i
       evidence_excerpts: [{ evidence_id: "company_description:linkedin:d1", excerpt }] }],
     rejected_claims: [], grounding_score: 0.6667, final_grounded_decision: "review", downgrade_reasons: [], unacknowledged_conflicts: [],
   }) as never;
-  assertEquals(businessModelDecision(verification("b2b_saas", DOT)), { decision: "review", reasons: ["self_description_mixed_audience"] });
-  assertEquals(businessModelDecision(verification("b2b_saas", "Eventeny’s real-time collaborative platform empowers organizers")).decision, "accepted");
+  const dot = businessModelDecision(verification("b2b_saas", DOT));
+  assertEquals([dot.decision, dot.reasons], ["review", ["self_description_mixed_audience"]]);
+  // No contradiction is not support (canary 9b1b70a2): this quote states
+  // neither business customers nor SaaS delivery, so it proves neither.
+  const eventeny = businessModelDecision(verification("b2b_saas", "Eventeny’s real-time collaborative platform empowers organizers"));
+  assertEquals([eventeny.decision, eventeny.reasons],
+    ["review", ["quote_does_not_state_business_customer", "quote_does_not_state_saas_delivery"]]);
+  assertEquals(businessModelDecision(verification("b2b_saas", "a SaaS platform for event marketing teams")).decision, "accepted");
 
   const company = (value: string, excerpt: string) => ({
     key: "c1", company: { company_name: "x", linkedin_company_url: null, canonical_domain: null, website: null, geography: null, external_source_id: "x" },
@@ -621,5 +646,7 @@ Deno.test("EXCERPT-1: an accepted business model must not be argued against by i
   const industry = (value: string, excerpt: string) =>
     evaluateEligibility(cs, graphOf([US(), ...companyEvidenceItems(company(value, excerpt))])).hard_checks.industry;
   assertEquals(industry("b2b_saas", DOT), "unknown", "dot.cards: a mixed self-description is not proof — pending");
-  assertEquals(industry("b2b_saas", "Eventeny’s real-time collaborative platform empowers organizers"), "pass");
+  assertEquals(industry("b2b_saas", "Eventeny’s real-time collaborative platform empowers organizers"), "unknown",
+    "a quote that states no facet is pending, never proof");
+  assertEquals(industry("b2b_saas", "a SaaS platform for event marketing teams"), "pass");
 });

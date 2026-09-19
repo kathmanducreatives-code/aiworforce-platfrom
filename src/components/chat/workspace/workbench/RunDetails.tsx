@@ -35,6 +35,7 @@ const SOURCE_LABEL: Record<string, string> = {
   portfolio: 'ranked portfolio',
   progress: 'stage progress',
   rows: 'result rows',
+  canonical: 'canonical decision',
   none: 'not recorded',
 };
 

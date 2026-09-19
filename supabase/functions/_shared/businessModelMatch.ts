@@ -249,3 +249,93 @@ export function excerptInconsistency(
   }
   return null;
 }
+
+// ── THE QUOTES MUST STATE WHAT THE CODE ASSERTS (P5 evidence-first) ─────────
+//
+// Canary 9b1b70a2. Feathery was accepted as `b2b_saas` on "an agentic data
+// intake platform for financial firms" — a quote that shows business customers
+// and a platform, and says nothing about SaaS delivery. Outsmart was accepted as
+// `consumer` — a verified FAIL — on "Rebuilding higher education for the AI
+// era", which names no audience at all. `excerptInconsistency` let both stand,
+// by design: it only rejects a quote that ARGUES AGAINST the code. Silence was
+// read as consent, and a model's inference became a hard PASS or FAIL.
+//
+// B2B SaaS is not one fact. It is four, each of which the company's own words
+// must state (the plan, §10):
+//
+//   business_customer   who buys it: businesses, not consumers
+//   software_product    what it is: software
+//   saas_delivery       how it is delivered: hosted / subscription / cloud
+//   service_primary     whether people-delivered services are the business
+//
+// A code asserts the facets below; every one must be STATED by the claim's
+// quotes, read deterministically, or the business model is `review` and the
+// hard rule stays PENDING. Nothing here guesses: "platform" alone is not
+// software, software is not SaaS, "AI" is not an audience, and a quote with a
+// negation is not read for facets at all. The direction of every error is
+// pending, never a false proof.
+
+export type BusinessModelFacet =
+  | "business_customer" | "consumer_customer" | "software_product" | "saas_delivery" | "service_primary" | "ai";
+
+export const FACETS_ASSERTED: Readonly<Record<BusinessModelCode, readonly BusinessModelFacet[]>> = {
+  b2b_saas: ["business_customer", "saas_delivery"],
+  ai_saas: ["ai", "saas_delivery"],
+  b2b_software: ["business_customer", "software_product"],
+  b2b_service: ["business_customer", "service_primary"],
+  consumer: ["consumer_customer"],
+  unknown: [],
+};
+
+/** A plural buyer noun: who a business product is sold to. */
+const BUSINESS_BUYER =
+  "(?:businesses|companies|firms|enterprises|organi[sz]ations|teams|institutions|banks|lenders|insurers|carriers|" +
+  "retailers|merchants|brands|agencies|hospitals|clinics|providers|practices|schools|universities|governments|" +
+  "manufacturers|distributors|operators|employers|recruiters|marketers|sales\\s+teams|finance\\s+teams)";
+const BUYER_VERB = "(?:for|serving|serves|serve|helps?|help|used\\s+by|trusted\\s+by|built\\s+for|designed\\s+for|sells?\\s+to|sold\\s+to)";
+const BUSINESS_CUSTOMER_RE = new RegExp(`\\b${BUYER_VERB}\\b(?:\\s+[\\w&',-]+){0,6}?\\s+${BUSINESS_BUYER}\\b`);
+const CONSUMER_CUSTOMER_RE =
+  /\b(?:for|serving|serves|helps?|used\s+by|built\s+for|designed\s+for)\b(?:\s+[\w&',-]+){0,4}?\s+(?:individuals|families|parents|shoppers|consumers|everyday\s+people|households)\b/;
+const SOFTWARE_WORDS = new Set([
+  "software", "saas", "app", "apps", "application", "applications", "api", "apis", "sdk", "sdks",
+  "erp", "crm", "ehr", "emr", "plugin", "plugins", "dashboard", "dashboards",
+]);
+const SAAS_PHRASE_RE =
+  /\bcloud[\s-]?(?:based|native|hosted)?\s+(?:platform|software|app|application|solution)s?\b|\bhosted\s+(?:platform|software|solution)\b|\bweb[\s-]?based\s+(?:platform|software|app|application)\b/;
+/** Seat-based pricing is software licensed as a service: SaaS on its own. */
+const SEAT_PRICING_RE = /\bper\s+(?:seat|user)\b|\/\s?(?:user|seat)\b/;
+/** Subscription language proves SaaS only beside software — a subscription box is not SaaS. */
+const SUBSCRIPTION_RE =
+  /\bsubscriptions?\b|\bper\s+month\b|\/\s?(?:mo|month)\b|\bfree\s+trial\b|\bself[\s-]?serve\b|\bsign\s+up\b/;
+const SERVICE_WORDS = new Set([
+  "service", "services", "agency", "agencies", "consulting", "consultancy", "staffing", "outsourcing", "outsourced",
+]);
+const AI_WORDS = new Set(["ai", "agentic", "llm", "llms", "genai"]);
+
+/** Which facets the quotes STATE. A negated quote states nothing. */
+export function statedFacets(excerpts: readonly string[]): Set<BusinessModelFacet> {
+  const out = new Set<BusinessModelFacet>();
+  let subscription = false;
+  for (const e of excerpts) {
+    const text = normalise(e);
+    const words = tokens(text);
+    if (words.length === 0 || words.some((w) => NEGATION.has(w))) continue;
+    const plain = ` ${text.replace(/\s+/g, " ")} `;
+    if (words.some((w) => AUDIENCE[w] === "b2b") || BUSINESS_CUSTOMER_RE.test(plain)) out.add("business_customer");
+    if (words.some((w) => AUDIENCE[w] === "consumer") || CONSUMER_CUSTOMER_RE.test(plain)) out.add("consumer_customer");
+    if (words.some((w) => SOFTWARE_WORDS.has(w))) out.add("software_product");
+    if (words.includes("saas") || SAAS_PHRASE_RE.test(plain) || SEAT_PRICING_RE.test(plain)) out.add("saas_delivery");
+    if (SUBSCRIPTION_RE.test(plain)) subscription = true;
+    if (words.some((w) => SERVICE_WORDS.has(w))) out.add("service_primary");
+    if (words.some((w) => AI_WORDS.has(w))) out.add("ai");
+  }
+  if (out.has("saas_delivery")) out.add("software_product");
+  if (subscription && out.has("software_product")) out.add("saas_delivery");
+  return out;
+}
+
+/** The facets a code asserts that the quotes do not state. Empty ⇒ the quotes carry the code. */
+export function unstatedFacets(code: BusinessModelCode, excerpts: readonly string[]): BusinessModelFacet[] {
+  const stated = statedFacets(excerpts);
+  return FACETS_ASSERTED[code].filter((f) => !stated.has(f));
+}

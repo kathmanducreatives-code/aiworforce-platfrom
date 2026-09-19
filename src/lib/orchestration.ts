@@ -3,6 +3,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { projectTaskListRow, TASK_LIST_COLUMNS } from './taskListProjection';
 
 export type AgentDept = 'talent' | 'growth' | 'intelligence' | 'content' | 'operations';
 export type AgentStatus = 'idle' | 'running' | 'awaiting_approval' | 'error';
@@ -260,68 +261,14 @@ export async function fetchPlan(planId: string): Promise<DBPlan | null> {
  * `hasStoredCompanyRun`) and `company_first_state.candidate_diagnostics`. The
  * checkpoint is never sent, because nothing in the browser resumes a run.
  */
-const TASK_LIST_COLUMNS = [
-  'id', 'plan_id', 'agent_id', 'agent_slug', 'workspace_id', 'user_id',
-  'step_index', 'description', 'status', 'input', 'output', 'payload',
-  'error_message', 'started_at', 'finished_at', 'completed_at', 'created_at',
-  'checkpoint_version',
-  // `result`, minus the engine's resume state. Each is read by a named module.
-  'r_task_status:result->task_status',
-  'r_terminal_status:result->terminal_status',
-  'r_quota:result->quota',
-  'r_company_first:result->company_first',
-  'r_workbench_progress:result->workbench_progress',
-  'r_workbench_evaluation_rows:result->workbench_evaluation_rows',
-  'r_workbench_portfolio:result->workbench_portfolio',
-  'r_candidate_diagnostics:result->company_first_state->candidate_diagnostics',
-  'r_provider_attempts:result->capability_execution_state->provider_attempts',
-].join(',');
+// The column list and the rebuild are one table: see `taskListProjection.ts`.
 
 export async function fetchTasksForPlan(planId: string): Promise<DBTask[]> {
   const { data, error } = await supabase
     .from('tasks' as any).select(TASK_LIST_COLUMNS).eq('plan_id', planId)
     .order('step_index', { ascending: true });
   if (error) { console.error('fetchTasksForPlan', error); return []; }
-  return ((data ?? []) as any[]).map((row) => {
-    const {
-      r_task_status, r_terminal_status, r_quota, r_company_first,
-      r_workbench_progress, r_workbench_evaluation_rows, r_workbench_portfolio,
-      r_candidate_diagnostics, r_provider_attempts, ...rest
-    } = row;
-
-    // ABSENT, NOT EMPTY. A task with no result at all must stay `null` —
-    // `taskResultIsPartial` and `taskQuotaUnmet` both return false for a
-    // non-object, and handing them a `{}` full of undefined would make a task
-    // that never ran indistinguishable from one that ran and reported nothing.
-    const present = [
-      r_task_status, r_terminal_status, r_quota, r_company_first,
-      r_workbench_progress, r_workbench_evaluation_rows, r_workbench_portfolio,
-      r_candidate_diagnostics, r_provider_attempts,
-    ].some((v) => v !== null && v !== undefined);
-
-    return {
-      ...rest,
-      result: present
-        ? {
-          task_status: r_task_status ?? undefined,
-          terminal_status: r_terminal_status ?? undefined,
-          quota: r_quota ?? undefined,
-          company_first: r_company_first ?? undefined,
-          workbench_progress: r_workbench_progress ?? undefined,
-          workbench_evaluation_rows: r_workbench_evaluation_rows ?? undefined,
-          workbench_portfolio: r_workbench_portfolio ?? undefined,
-          // Rebuilt at the path its reader expects, carrying only that field.
-          company_first_state: r_candidate_diagnostics
-            ? { candidate_diagnostics: r_candidate_diagnostics }
-            : undefined,
-          capability_execution_state: r_provider_attempts
-            ? { provider_attempts: r_provider_attempts }
-            : undefined,
-          result_truncated: true,
-        }
-        : null,
-    };
-  }) as unknown as DBTask[];
+  return ((data ?? []) as any[]).map(projectTaskListRow) as unknown as DBTask[];
 }
 
 /** The complete stored result for ONE task, fetched only when something needs it. */

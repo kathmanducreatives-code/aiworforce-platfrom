@@ -54,6 +54,8 @@ export type CountSource =
   | 'portfolio'
   | 'progress'
   | 'rows'
+  /** Lead V2: the backend's canonical decision (`workbench_mission_view`). */
+  | 'canonical'
   | 'none';
 
 export interface SummaryNumber {
@@ -143,6 +145,16 @@ export interface RunSummaryInput {
   progress: WorkbenchProgress | null;
   /** Row-level fallback for legacy runs the projections do not cover. */
   rows: { total: number; qualified: number; pending: number };
+  /**
+   * LEAD V2: THE CANONICAL DECISION, when the run wrote one.
+   *
+   * Then it is the only answer. The legacy portfolio and the lead-row total are
+   * other projections of an older decision — reconciling against them reported
+   * "counts disagree" on canary 9b1b70a2 for a run whose canonical numbers were
+   * consistent (portfolio: 0 qualified; canonical: 1). Absent on legacy runs,
+   * which reconcile exactly as before.
+   */
+  canonical?: { qualifiedCompanies: number; reviewed: number; pending: number } | null;
 }
 
 export function buildRunSummary(i: RunSummaryInput): RunSummary {
@@ -184,6 +196,24 @@ export function buildRunSummary(i: RunSummaryInput): RunSummary {
     { source: 'portfolio', value: num(portfolio?.counts.delivered) },
     { source: 'rows', value: fromRows(rows.total) },
   ]);
+
+  if (i.canonical) {
+    const one = (value: number): SummaryNumber =>
+      ({ value: Math.max(0, Math.trunc(value)), source: 'canonical', disagreements: [] });
+    const qc = one(i.canonical.qualifiedCompanies);
+    const rv = one(i.canonical.reviewed);
+    const pd = one(i.canonical.pending);
+    const req = num(quota?.requested);
+    return {
+      version: RUN_SUMMARY_VERSION,
+      qualified, qualifiedCompanies: qc, reviewed: rv, pending: pd,
+      notAFit: one(rv.value - qc.value - pd.value),
+      requested: req,
+      shortfall: req != null ? Math.max(0, req - qualified.value) : 0,
+      inProgress: progress?.in_progress === true,
+      hasDisagreement: false,
+    };
+  }
 
   // PENDING: judged, not yet qualifiable. The portfolio's `review` bucket is the
   // same idea by another name.

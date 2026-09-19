@@ -1,7 +1,7 @@
 import {
   readMissionView, LABEL_BUCKETS, describeHardCheck,
-  type CanonicalBucket, type CanonicalHardCheck, type CanonicalMissionView,
-} from './missionView';
+  type CanonicalBucket, type CanonicalEvidenceGap, type CanonicalHardCheck, type CanonicalMissionView,
+} from './missionView.ts';
 
 // EVALUATED COMPANIES — visible, explained, and never actionable.
 //
@@ -79,6 +79,8 @@ export interface EvaluationRow {
     bucket: CanonicalBucket;
     hard_check_details: CanonicalHardCheck[];
     missing_evidence: string[];
+    /** What could close each unknown hard check, or why nothing can yet. */
+    evidence_gaps?: CanonicalEvidenceGap[];
     caveats: string[];
   };
 }
@@ -166,7 +168,7 @@ export function canonicalEvaluationRows(view: CanonicalMissionView): EvaluationR
         mission_failed_requirements: failing.map((h) => h.reason),
         canonical: {
           bucket: l.bucket, hard_check_details: l.hard_check_details,
-          missing_evidence: l.missing_evidence, caveats: l.caveats,
+          missing_evidence: l.missing_evidence, caveats: l.caveats, evidence_gaps: l.evidence_gaps,
         },
       };
     });
@@ -342,6 +344,21 @@ export function workbenchFunnelCounts(
   qualified: number,
 ): WorkbenchFunnelCounts {
   const q = Math.max(0, Math.trunc(qualified));
+  // LEAD V2: the backend's buckets, never re-derived from lifecycle statuses.
+  // A canonical `pending` row is `held_for_evidence`, which the legacy reading
+  // counted as "investigating" — the caption said "4 investigating" for four
+  // companies the run had finished checking.
+  if (rows.some((r) => r.canonical)) {
+    const n = (b: string) => rows.filter((r) => r.canonical?.bucket === b).length;
+    return {
+      discovered: rows.length + q,
+      triaged_out: n('screened_out'),
+      investigating: n('investigating'),
+      identity_unresolved: n('identity_unresolved'),
+      verified: n('pending') + n('ineligible') + q,
+      qualified: q,
+    };
+  }
   const triagedOut = (r: EvaluationRow) =>
     r.shortlist_exclusion === 'triage_irrelevant' ||
     (r.status === 'not_investigated' && r.triage_relevance === 'irrelevant');

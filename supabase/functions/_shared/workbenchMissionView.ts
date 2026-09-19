@@ -23,6 +23,7 @@
 //
 // Pure.
 
+import { evidenceGapsFor, summarizeGaps, type EvidenceGap, type GapSummary } from "./evidenceGapRouter.ts";
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import type { MissionCriterion } from "./missionCriteria.ts";
 import type { ResearchWaveSummary } from "./researchFeedback.ts";
@@ -78,6 +79,11 @@ export interface WorkbenchLead {
   evidence_coverage: number;
   signal_strength: number;
   next_action: string | null;
+  /**
+   * PENDING leads only: each unknown hard check, and the route that could close
+   * it — or why nothing can (`evidenceGapRouter`). Empty for every other bucket.
+   */
+  evidence_gaps: EvidenceGap[];
 }
 
 export interface WorkbenchCounts {
@@ -104,6 +110,8 @@ export interface WorkbenchMissionView {
   stage: MissionStage;
   counts: WorkbenchCounts;
   leads: WorkbenchLead[];
+  /** The canonical evidence gaps across pending leads — what continuation reads. */
+  evidence_gaps: GapSummary;
   routes: Array<{
     route_id: string; anchor: string; spend_usd: number; raw: number; unique: number;
     duplicates: number; hard_eligible: number; useful: number; stop_reason: string | null;
@@ -253,6 +261,7 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
       : deterministicReasons(ceiling, c.graph);
     const bucket = bucketOf(c, eligibility, reasoned.label);
     counts[bucket] += 1;
+    const hardChecks = eligibility.checks.filter((x) => x.kind === "hard");
 
     leads.push({
       company: { key: c.company_key, name: c.name, domain: c.domain, linkedin_url: c.linkedin_url },
@@ -263,7 +272,7 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
       bucket,
       found_by: c.found_by,
       hard_checks: eligibility.hard_checks,
-      hard_check_details: eligibility.checks.filter((x) => x.kind === "hard").map((x) => ({
+      hard_check_details: hardChecks.map((x) => ({
         criterion_id: x.criterion_id, dimension: x.dimension, result: x.result, reason: x.reason,
         provenance: x.provenance,
       })),
@@ -274,6 +283,7 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
       evidence_coverage: ceiling.evidence_coverage,
       signal_strength: ceiling.signal_strength,
       next_action: c.next_action ?? null,
+      evidence_gaps: bucket === "pending" ? evidenceGapsFor(hardChecks, c.graph) : [],
     });
   }
 
@@ -315,6 +325,7 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
     stage: i.stage,
     counts,
     leads,
+    evidence_gaps: summarizeGaps(leads.filter((l) => l.bucket === "pending").map((l) => ({ gaps: l.evidence_gaps }))),
     routes,
     cost: {
       provider_settled_usd: i.cost?.provider_settled_usd ?? lastWave?.cost.settled_usd ?? 0,

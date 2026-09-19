@@ -167,8 +167,13 @@ const VIEW = await Deno.readTextFile(new URL(
 Deno.test("11. the Workbench computes the full partition, not just two buckets", () => {
   assert(VIEW.includes("partitionAllRows(evaluationRows"),
     "the view must partition every reviewed company");
-  assert(VIEW.includes("rejected: ruledOut.length"),
+  // The tab counts come from `resultTabCounts`, which partitions every row the
+  // same way (canary 9b1b70a2 added pending evidence to In review there).
+  assert(VIEW.includes("resultTabCounts({") && VIEW.includes("rejected: tabCounts.rejected"),
     "and hand the ruled-out count to the tab row");
+  const LIB = Deno.readTextFileSync(new URL("../../src/lib/workbench/leadTabs.ts", import.meta.url));
+  const fn = LIB.slice(LIB.indexOf("export function resultTabCounts"));
+  assert(fn.includes("partitionAllRows(i.evaluationRows)"), "the tab counts are the full partition");
 });
 
 Deno.test("12. the ruled-out tab renders a reason per company", () => {

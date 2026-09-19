@@ -109,7 +109,9 @@ Deno.test("INV a quote that argues against the label sends the business model to
   } as never);
   assertEquals(v("b2b_saas", "consumer software, B2B SaaS, and hardware").decision, "review");
   assertEquals(v("b2b_service", "Our software and forward-deployed creative teams").decision, "review");
-  assertEquals(v("b2b_saas", "a collaborative platform for event organizers").decision, "accepted");
+  // Silence is not support: a quote must STATE every facet its code asserts.
+  assertEquals(v("b2b_saas", "a collaborative platform for event organizers").decision, "review");
+  assertEquals(v("b2b_saas", "a SaaS platform for event marketing teams").decision, "accepted");
 });
 
 // ══════════════════════════════════════════ ONE CANONICAL DECISION SOURCE ══
@@ -144,7 +146,11 @@ Deno.test("INV the canonical Workbench count controls continuation — no stale 
   // …and the stop is not re-opened by a legacy `continuation_required`.
   assertEquals(settleV2Terminal(met.reason, "continuation_required"), "completed");
   assertEquals(settleV2Terminal("frontier_exhausted", "continuation_required"), "search_exhausted");
-  assertEquals(settleV2Terminal("quota_met", "round_limit_reached"), "round_limit_reached", "a real terminal status is kept");
+  // The legacy controller's ROUND COUNT is not a terminal the mission reached
+  // (canary 9b1b70a2: 1 of 1 delivered, `round_limit_reached`, plan partial).
+  assertEquals(settleV2Terminal("quota_met", "round_limit_reached"), "completed", "the canonical stop decides");
+  assertEquals(settleV2Terminal("quota_met", "invalid_request"), "invalid_request", "a refused request is kept");
+  assertEquals(settleV2Terminal("frontier_exhausted", "source_transition_failed"), "source_transition_failed");
   // All decided, no legitimate route ⇒ terminate.
   const done = decideAutoContinuation({ ...base, qualified: 0, frontierRemaining: 0, discoveryRoutesRemain: false });
   assertEquals([done.continue, done.reason], [false, "frontier_exhausted"]);
@@ -159,7 +165,11 @@ Deno.test("INV run-agent: the view is built once, on V2 only, BEFORE the decisio
   assert(built > 0 && decided > built, "the projection exists before the continuation decision");
   assert(src.includes("qualified: p5Decision ? p5Decision.qualified : progress.qualified_high_water"));
   assert(src.includes("qualifiedInPool: p5Decision ? p5Decision.qualified : sliceQualified"));
-  assert(src.includes(": p5Decision ? settleV2Terminal(autoDecision.reason, cf.status)"));
+  assert(src.includes("const v2Outcome = p5Decision\n          ? settleV2Outcome({"), "V2 settles one outcome");
+  assert(src.includes("verificationRoutesRemain: p5View?.evidence_gaps.with_executable_route ?? 0"),
+    "continuation reads the canonical evidence-gap router");
+  assert(src.includes("effectiveTerminal, cf.writeBoundary.invariantViolation, v2Outcome ? v2Outcome.quota : {"),
+    "the task status reads the V2 quota");
   assert(/workbench_mission_view: p5View\s*\n\s*\? \{ \.\.\.p5View,/.test(src), "the SAME object is written");
   assertEquals(src.match(/buildWorkbenchMissionView\(/g)?.length, 1, "exactly one construction site");
   assertEquals(src.match(/reasonForCandidates\(/g)?.length, 1, "the reasoner runs only inside the V2 view");
@@ -203,6 +213,17 @@ Deno.test("INV an unavailable provider stays unavailable until readiness or an o
 
 const PROBE = JSON.parse(Deno.readTextFileSync(new URL("../../fixtures/lead-v2/p3-job-discovery-probe.json", import.meta.url)));
 const ROWS = PROBE.probes["harvestapi~linkedin-job-search"].items as Array<Record<string, unknown>>;
+/**
+ * SYNTHETIC SELF-DESCRIPTIONS. The fixture's real descriptions do not state a
+ * business model (Audicus is a hearing-aid company; its real first words are
+ * "Audicus is a hearing hea…"), and a quote that states nothing can no longer
+ * prove anything (canary 9b1b70a2). Two companies are therefore given words
+ * that DO state every facet their code asserts, and the grounder quotes them.
+ */
+const SYNTHETIC_DESCRIPTION: Record<string, string> = {
+  "Audicus": "Audicus is a cloud-based SaaS platform for hearing clinics.",
+  "Bevi": "Bevi sells smart water coolers direct to consumers.",
+};
 const VERDICT: Record<string, { value: string; decision: "pass" | "review" | "fail"; confidence?: number }> = {
   "LinkedIn": { value: "b2b_saas", decision: "review" },
   "Audicus": { value: "b2b_saas", decision: "review" },
@@ -210,7 +231,7 @@ const VERDICT: Record<string, { value: string; decision: "pass" | "review" | "fa
   "Bobyard": { value: "b2b_saas", decision: "review", confidence: 0.4 },
 };
 
-function harness(specMode: "enforce" | "off") {
+function harness(specMode: "enforce" | "off", employees: "disabled" | "empty" = "disabled") {
   const byUrl = new Map(ROWS.map((r) => [(r.company as { linkedinUrl: string }).linkedinUrl, r.company as Record<string, unknown>]));
   const calls: Array<{ actor: string; input: string; ok: boolean }> = [];
   const evaluateBatch = (members: Array<{ company_key: string; company_name: string | null; registry: { items: Array<Record<string, unknown>> } }>) =>
@@ -221,7 +242,7 @@ function harness(specMode: "enforce" | "off") {
         const desc = m.registry.items.find((x) => x.evidence_type === "company_description");
         if (!v || !desc) return { company_key: m.company_key, verification: null, failure: "malformed_result", detail: null };
         const claim = { claim: "own words", claim_type: "business_model", evidence_ids: [String(desc.evidence_id)],
-          evidence_excerpts: [{ evidence_id: String(desc.evidence_id), excerpt: String(desc.source_text).slice(0, 24) }] };
+          evidence_excerpts: [{ evidence_id: String(desc.evidence_id), excerpt: SYNTHETIC_DESCRIPTION[String(m.company_name)] ?? String(desc.source_text).slice(0, 24) }] };
         return { company_key: m.company_key, failure: null, detail: null, verification: {
           version: "grounded-claims-v1", classifier_result: { business_model: { value: v.value, confidence: v.confidence ?? 0.9, claims: [claim] } },
           validated_claims: [claim], rejected_claims: [], grounding_score: 1, final_grounded_decision: v.decision,
@@ -239,6 +260,11 @@ function harness(specMode: "enforce" | "off") {
     invoke: (call: { actorKey: string; input: Record<string, unknown>; onProviderRun?: (r: { run_id: string; dataset_id: null }) => void }) => {
       const input = JSON.stringify(call.input);
       if (call.actorKey === "apify_linkedin_company_employees") {
+        if (employees === "empty") {
+          calls.push({ actor: call.actorKey, input, ok: true });
+          call.onProviderRun?.({ run_id: `run-${calls.length}`, dataset_id: null });
+          return Promise.resolve([]);
+        }
         calls.push({ actor: call.actorKey, input, ok: false });
         return Promise.reject(new Error("apify_actor_disabled_by_default"));
       }
@@ -254,7 +280,7 @@ function harness(specMode: "enforce" | "off") {
       if (call.actorKey === "apify_linkedin_company_details") {
         return Promise.resolve(((call.input.companies as string[]) ?? []).map((u) => {
           const c = byUrl.get(u)!;
-          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, description: c.description, industries: c.industries, locations: c.locations };
+          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, description: SYNTHETIC_DESCRIPTION[String(c.name)] ?? c.description, industries: c.industries, locations: c.locations };
         }));
       }
       return Promise.resolve([]);
@@ -360,6 +386,18 @@ Deno.test("INV the in-slice yield gate stops on the canonical count, not the Bra
   assertEquals(gates.length, 1);
   assertEquals([gates[0].qualified, gates[0].reason, gates[0].take_another_slice], [1, "quota_met", false],
     "the Workbench says the goal is met, so the engine buys nothing more");
+});
+
+Deno.test("INV an employee search that finds nobody is not proof of a first hire", async () => {
+  const h = harness("enforce", "empty");
+  const run = await runCapabilityPlan(h.deps() as never, h.opts() as never) as unknown as Run;
+  assert(h.calls.some((c) => c.actor === "apify_linkedin_company_employees" && c.ok), "the team check ran");
+  const checked = run.companies.map((c) => c.first_in_function as { status: string; source: string } | null)
+    .filter((f) => f?.source === "team_composition");
+  assert(checked.length > 0, "at least one company went through the team check");
+  for (const f of checked) {
+    assertEquals(f!.status, "unverified", "zero results mean the actor found nobody, not that there is nobody");
+  }
 });
 
 // ═══════════════════════════════════════════════════════ ISOLATION ══
