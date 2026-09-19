@@ -100,6 +100,17 @@ export interface PendingDecisionMaker {
   brainGate?: G;
   /** Vertical/company-type qualification outcome carried from stage 3. */
   verticalOutcome?: string | null;
+  /**
+   * Lead V2 (P5): the canonical eligibility decision. When present it — not the
+   * Brain gate — decides whether the row is a qualified deliverable. Absent on
+   * every V1 / legacy path, whose rows are unchanged.
+   */
+  canonicalDecision?: {
+    qualified: boolean;
+    bucket: string;
+    label: string | null;
+    hard_checks: Record<string, string>;
+  } | null;
 }
 
 

@@ -241,8 +241,10 @@ import {
 import {
   summarizeResearchWave, validateRouteControl, type ResearchWaveSummary, type RouteCallStat,
 } from "./researchFeedback.ts";
-import { ACTOR_READINESS, routeActorReady } from "./actorIntelligence.ts";
-import type { MissionCandidate } from "./workbenchMissionView.ts";
+import { ACTOR_READINESS, readinessOf, routeActorReady } from "./actorIntelligence.ts";
+import { markProviderUnavailable, unavailableProvider, type UnavailableProvider } from "./providerAvailability.ts";
+import { candidateDecision, decisionCounts, decisionSummary, type CandidateDecision, type MissionCandidate } from "./workbenchMissionView.ts";
+import { deriveMissionCriteria } from "./missionCriteria.ts";
 import {
   amendRetrievalPlan, anchorForCapability, buildRetrievalPlan, planEntryForCall, purposeForCapability, continuationAmendmentRefusal,
   type AmendmentTrigger, type RetrievalPlan,
@@ -585,6 +587,12 @@ export interface CapabilityExecutionState {
   // ── P4: THE RESEARCH FABRIC'S FEEDBACK, CARRIED WITH THE STATE ──
   /** One summary per discovery wave, oldest first (researchFeedback). */
   research_waves?: ResearchWaveSummary[];
+  /**
+   * P5 — providers the tool layer deterministically refused for THIS mission
+   * (opt-in actor not enabled, not configured). Carried with the state so a
+   * continuation does not ask again. See providerAvailability.ts.
+   */
+  unavailable_providers?: UnavailableProvider[];
   /** Every route-control proposal and what code decided about it. */
   route_controls?: RouteControlRecord[];
   /** Binds this state to the mission it was produced for. */
@@ -3788,6 +3796,13 @@ export async function runCapabilityPlan(
           // Refused before the network — or by the tool layer before any run
           // existed (P3 canary 03f4c9c6: an opt-in-only actor) — nothing was bought.
           release(state.spend_ledger!, callSpec.idempotency_key);
+          if (refusedBeforeAnyRun(e)) {
+            state.unavailable_providers = markProviderUnavailable(state.unavailable_providers, {
+              provider, capability, reason: String((e as Error)?.message ?? e).slice(0, 160),
+              refused_at: new Date().toISOString(),
+              readiness_at_refusal: readinessOf(provider, capability).readiness,
+            });
+          }
           appendTrace(state.mission_trace!, "call_released", { actor: provider, error: String(e).slice(0, 200) }, refs);
         } else {
           // The run may have started: the start fee is the floor until a receipt settles it.
@@ -3911,7 +3926,9 @@ export async function runCapabilityPlan(
       companies_enriched: companies.filter((c) => c.enriched !== null).length,
       hiring_verified: companies.filter((c) => c.hiring_jobs.length > 0).length,
       // THE ONLY SOURCE OF A QUALIFIED COUNT IS THE BRAIN'S VERDICT.
-      qualified_companies: companies.filter((c) => c.verdict === "pass").length,
+      qualified_companies: specOn
+        ? canonicalDecisionSummary(companies, opts).qualified
+        : companies.filter((c) => c.verdict === "pass").length,
       decision_makers_verified: companies.reduce((n, c) => n + c.verified_founders.length, 0),
       open_jobs_evaluated: state.prequalification?.open_jobs_evaluated ?? 0,
       shortlisted: companies.filter((c) => c.shortlisted).length,
@@ -7308,11 +7325,26 @@ export async function runCapabilityPlan(
         const shortlisted = companies.filter((c) => c.enriched && c.hiring_assessment &&
           (c.hiring_assessment.verdict === "hiring_verified" || c.hiring_assessment.verdict === "hiring_verification_needed"))
           .sort((a, b) => (headcount(a) ?? Number.MAX_SAFE_INTEGER) - (headcount(b) ?? Number.MAX_SAFE_INTEGER));
-        let teamLookupUnavailable: string | null = null;
+        // REFUSED ONCE PER MISSION. A refusal recorded by an earlier slice
+        // stands until the provider's readiness changes or an operator asks
+        // for a retry — asking again learns nothing (canaries c584fd77,
+        // d7012ba5, c0aa06be refused once per slice).
+        const knownUnavailable = unavailableProvider(
+          state.unavailable_providers, "apify_linkedin_company_employees",
+          readinessOf("apify_linkedin_company_employees", cap).readiness, opts.readEnv);
+        let teamLookupUnavailable: string | null = knownUnavailable
+          ? `the team lookup provider is unavailable for this mission (${knownUnavailable.reason})`
+          : null;
+        if (knownUnavailable) {
+          log("provider_unavailable_not_retried", {
+            provider: knownUnavailable.provider, capability: cap, refused_at: knownUnavailable.refused_at,
+          });
+        }
         for (const c of shortlisted) {
           if (teamLookupUnavailable) {
+            // THE GAP STAYS A GAP: first-hire proof is unavailable, never assumed.
             c.first_in_function ??= { status: "unverified", source: "none",
-              reason: `team check not run: ${teamLookupUnavailable}` };
+              reason: `first-hire proof unavailable — team check not run: ${teamLookupUnavailable}` };
             continue;
           }
           if (c.first_in_function?.status === "supported" && c.first_in_function.source === "job_posting") {
@@ -7347,7 +7379,14 @@ export async function runCapabilityPlan(
             const why = String(last?.reason ?? c.stage_block.reason).slice(0, 160);
             c.stage_block = priorBlock;
             c.first_in_function = { status: "unverified", source: "none", reason: `team check failed: ${why}` };
-            if (refusedBeforeAnyRun(why)) teamLookupUnavailable = `the team lookup provider is unavailable (${why})`;
+            if (refusedBeforeAnyRun(why)) {
+              teamLookupUnavailable = `the team lookup provider is unavailable (${why})`;
+              state.unavailable_providers = markProviderUnavailable(state.unavailable_providers, {
+                provider: "apify_linkedin_company_employees", capability: cap, reason: why,
+                refused_at: new Date().toISOString(),
+                readiness_at_refusal: readinessOf("apify_linkedin_company_employees", cap).readiness,
+              });
+            }
             continue;
           }
           teamChecks.checked++;
@@ -8085,7 +8124,8 @@ export async function runCapabilityPlan(
         // the only thing that can prove its business model. Recorded as an
         // observation, which the snapshot does carry, keyed on the same
         // evidence id so the graph never counts it twice.
-        {
+        // LEAD V2 ONLY: a V1 / legacy mission's checkpoint gains no P5 evidence.
+        if (specOn) {
           const bmItem = groundedBusinessModelItem(c, opts.identity?.task_id ?? null, new Date().toISOString());
           if (bmItem) {
             recordObservation(c, {
@@ -8559,7 +8599,13 @@ export async function runCapabilityPlan(
         c.signal_assessments = signals;
       }
 
-      state.qualified_company_keys = companies.filter((c) => c.verdict === "pass").map((c) => c.key);
+      // ONE DECISION TRUTH. On Lead V2 the qualified set IS the canonical P5
+      // eligibility (a surfaced label) — what persistence writes as leads, what
+      // the progress counters, the Signals feed and the continuation read. The
+      // Brain verdict stays recorded on each company; it no longer decides.
+      state.qualified_company_keys = specOn
+        ? canonicalQualifiedKeys(companies, opts)
+        : companies.filter((c) => c.verdict === "pass").map((c) => c.key);
       state.unknown_company_keys = companies.filter((c) => c.verdict === "unknown").map((c) => c.key);
 
       // ── WHAT THIS RUN ACTUALLY RETURNS ───────────────────────────────────
@@ -8626,7 +8672,13 @@ export async function runCapabilityPlan(
       // slice is taken from the frontier, and the paid stages are re-opened for
       // it. The four guards live in `shouldTakeAnotherSlice`; the binding one is
       // the clock, which is measured fresh here rather than assumed.
-      const qualifiedSoFar = companies.filter((c) => c.verdict === "pass").length;
+      // ONE DECISION TRUTH. On Lead V2 "qualified" is the canonical P5 count —
+      // the same projection the Workbench and the continuation decision read —
+      // never the legacy Brain verdict, which disagreed with it (canary
+      // d7012ba5: verdicts 0, Workbench 2) and kept authorising paid passes.
+      const qualifiedSoFar = specOn
+        ? canonicalDecisionSummary(companies, opts).qualified
+        : companies.filter((c) => c.verdict === "pass").length;
       const frontierLeft = companies.filter(
         (c) => isFrontier(c.investigation_state)).length;
       const sliceCapacity = deps.deadline
@@ -9542,6 +9594,11 @@ export interface BrainJudgementInputs {
 export function reapplyMissionEvaluation(
   run: { companies: EngineCompany[]; state: CapabilityExecutionState },
   updates: ReadonlyArray<{ company_key: string; evaluation: MissionEvaluation }>,
+  /**
+   * Lead V2: re-derive the qualified set from the canonical P5 decision, as the
+   * engine did — never overwrite it with the legacy verdict set.
+   */
+  canonical?: Parameters<typeof canonicalDecisions>[1],
 ): { reapplied: number; qualified_added: string[] } {
   const before = new Set(run.state.qualified_company_keys);
   let reapplied = 0;
@@ -9619,8 +9676,9 @@ export function reapplyMissionEvaluation(
   // Identical to the qualification loop's own line. Rebuilt wholesale rather
   // than appended to, so re-applying the same verdict cannot count a company
   // twice.
-  run.state.qualified_company_keys = run.companies
-    .filter((c) => c.verdict === "pass").map((c) => c.key);
+  run.state.qualified_company_keys = canonical
+    ? canonicalQualifiedKeys(run.companies, canonical)
+    : run.companies.filter((c) => c.verdict === "pass").map((c) => c.key);
   run.state.unknown_company_keys = run.companies
     .filter((c) => c.verdict === "unknown").map((c) => c.key);
 
@@ -10593,6 +10651,47 @@ export function missionCandidatesFrom(
       next_action: null,
     };
   });
+}
+
+/**
+ * Every company's canonical P5 decision, keyed by company key. The qualified
+ * set on Lead V2 is exactly the keys whose decision carries a label.
+ */
+export function canonicalDecisions(
+  companies: readonly EngineCompany[],
+  opts: { mission: LeadMissionV1; plan: { entry_capability: string | null | undefined }; identity?: { task_id?: string | null } | null },
+): Map<string, CandidateDecision> {
+  const criteria = deriveMissionCriteria(opts.mission);
+  const anchor = anchorForCapability(String(opts.plan.entry_capability ?? "")) ?? null;
+  const out = new Map<string, CandidateDecision>();
+  for (const candidate of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
+    out.set(candidate.company_key, candidateDecision({ criteria, candidate, anchor }));
+  }
+  return out;
+}
+
+/** The canonical qualified set, in working-set order. */
+export function canonicalQualifiedKeys(
+  companies: readonly EngineCompany[], opts: Parameters<typeof canonicalDecisions>[1],
+): string[] {
+  const d = canonicalDecisions(companies, opts);
+  return companies.filter((c) => d.get(c.key)?.label).map((c) => c.key);
+}
+
+/**
+ * The canonical P5 decision counts for a working set — the SAME projection
+ * `buildWorkbenchMissionView` renders, derived fresh from the mission (never a
+ * stored criteria array). Used by the in-slice yield gate on Lead V2.
+ */
+export function canonicalDecisionSummary(
+  companies: readonly EngineCompany[],
+  opts: { mission: LeadMissionV1; plan: { entry_capability: string | null | undefined }; identity?: { task_id?: string | null } | null },
+) {
+  const criteria = deriveMissionCriteria(opts.mission);
+  const candidates = missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null });
+  return decisionSummary(decisionCounts({
+    criteria, candidates, anchor: anchorForCapability(String(opts.plan.entry_capability ?? "")) ?? null,
+  }));
 }
 
 export function projectResearchFabric(

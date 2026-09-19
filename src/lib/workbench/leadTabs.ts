@@ -232,7 +232,17 @@ const STILL_BEING_WORKED: ReadonlySet<string> = new Set([
  * rejection outranks "we never got to it", and only a row that reached no
  * modelled state at all falls through to `unclassified`.
  */
+/** The canonical Lead V2 bucket, as a tab. The UI renders it; it never re-decides it. */
+const CANONICAL_TAB: Readonly<Record<string, LeadBucket>> = {
+  exact_match: 'qualified', strong_opportunity: 'qualified', worth_considering: 'qualified', low_priority: 'qualified',
+  pending: 'in_review', identity_unresolved: 'in_review',
+  ineligible: 'rejected', screened_out: 'rejected',
+  investigating: 'not_reached',
+};
+
 export function bucketFor(row: EvaluationRow & QualificationRecord): LeadBucket {
+  // LEAD V2: the backend already decided. No client-side re-qualification.
+  if (row.canonical) return CANONICAL_TAB[row.canonical.bucket] ?? 'unclassified';
   if (resolveQualification(row).qualified) return 'qualified';
   // A STATED REJECTION IS A DECISION, wherever it was recorded. Eighteen
   // companies were ruled out on headcount before anyone looked further; that is

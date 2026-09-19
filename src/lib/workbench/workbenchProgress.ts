@@ -1,3 +1,4 @@
+import { canonicalSummary, readMissionView } from './missionView';
 // THE RUN, WHILE IT IS STILL RUNNING.
 //
 // The Workbench used to be binary: empty until the run finished, then fully
@@ -53,7 +54,32 @@ const EXCLUSION_LABEL: Record<string, string> = {
 };
 
 /** Read a persisted `tasks.result` and return the snapshot, if any. */
+/**
+ * LEAD V2: the counts the canonical view owns replace the legacy counters —
+ * one number per question, from the backend's one projection. Execution state
+ * (stage, in-progress, stage-by-stage counters) still comes from progress.
+ */
 export function readWorkbenchProgress(result: unknown): WorkbenchProgress | null {
+  const legacy = readLegacyWorkbenchProgress(result);
+  const view = readMissionView(result);
+  if (!view) return legacy;
+  const c = canonicalSummary(view.counts);
+  const base: WorkbenchProgress = legacy ?? {
+    stage: 'accounts_found', accounts_found: 0, evaluated: 0, eligible_opportunities: 0,
+    exclusion_reasons: {}, identity_resolved: 0, identity_unresolved: 0, companies_enriched: 0,
+    hiring_verified: 0, qualified_companies: 0, decision_makers_verified: 0, open_jobs_evaluated: 0,
+    shortlisted: 0, in_progress: view.stage === 'retrieving', awaiting_external_run: false,
+  };
+  return {
+    ...base,
+    accounts_found: c.discovered,
+    evaluated: c.qualified + c.pending + c.ineligible,
+    qualified_companies: c.qualified,
+    identity_unresolved: view.counts.identity_unresolved,
+  };
+}
+
+function readLegacyWorkbenchProgress(result: unknown): WorkbenchProgress | null {
   if (!result || typeof result !== 'object') return null;
   const p = (result as { workbench_progress?: unknown }).workbench_progress;
   if (!p || typeof p !== 'object') return null;

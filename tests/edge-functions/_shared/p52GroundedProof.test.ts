@@ -207,6 +207,7 @@ Deno.test("REVIEW-1: the business model's OWN decision proves; the whole-company
     evidence_id: "grd_c1_business_model", dimension: "business_model", status: "proven",
     method: "model_extraction", confidence: "medium", actor: "grounded_evidence_evaluation",
     grounding_decision: "review", business_model_decision: "accepted",
+    url: null, excerpt: "We sell…", // the quote the claim rests on travels with the check
   });
   const review = industryCheck(grounded("b2b saas", "review", "pass"));
   assertEquals(review.result, "unknown", "a business model under review is never proof, whatever the company verdict");

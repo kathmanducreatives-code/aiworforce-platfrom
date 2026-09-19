@@ -84,6 +84,10 @@ export interface CheckProvenance {
   grounding_decision: "pass" | "review" | "fail" | null;
   /** The business-model claim's own decision — what actually made it proof or not. */
   business_model_decision: "accepted" | "review" | null;
+  /** Where the evidence was read, when the source had an address. */
+  url: string | null;
+  /** The source's own words behind the value, when kept (a grounded quote). */
+  excerpt: string | null;
 }
 
 export interface CriterionCheck {
@@ -131,6 +135,8 @@ function provenanceOf(item: EvidenceItem): CheckProvenance {
     method: item.method, confidence: item.confidence, actor: item.source.actor,
     grounding_decision: item.assessment?.decision ?? null,
     business_model_decision: item.assessment?.business_model_decision ?? null,
+    url: item.source.url ?? null,
+    excerpt: item.source.excerpt ?? null,
   };
 }
 

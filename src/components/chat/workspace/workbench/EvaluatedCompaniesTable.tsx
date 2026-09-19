@@ -96,13 +96,62 @@ export default function EvaluatedCompaniesTable({ rows }: { rows: EvaluationRow[
               ? r.enrichment_explanation
               : r.explanation)}
         </div>
-        {r.mission_failed_requirements.length > 0 && (
-          <div className="text-[11px] text-[#7D8590] mt-0.5">
-            {r.mission_failed_requirements.slice(0, 2).map((f) => (
-              <div key={f}>· {f}</div>
-            ))}
-          </div>
-        )}
+        {r.canonical
+          ? (
+            // LEAD V2: THE BACKEND'S HARD CHECKS, each with the evidence it
+            // rests on — status, method, confidence, source, and the
+            // business-model decision where one applied. Rendered, never
+            // re-derived.
+            <div className="mt-1 space-y-0.5">
+              {r.canonical.hard_check_details.map((h) => (
+                <div key={h.criterion_id} className="text-[11px] leading-snug">
+                  <span className={
+                    h.result === 'pass' ? 'text-emerald-300/90'
+                    : h.result === 'fail' ? 'text-rose-300/90'
+                    : 'text-amber-300/90'
+                  }>
+                    {h.result === 'pass' ? 'PASS' : h.result === 'fail' ? 'FAIL' : 'PENDING'}
+                  </span>
+                  <span className="text-[#7D8590]"> · {h.reason}</span>
+                  {h.provenance && (
+                    <span className="text-[#6e7681]">
+                      {' '}({[h.provenance.status, h.provenance.method.replace(/_/g, ' '),
+                        h.provenance.confidence && `${h.provenance.confidence} confidence`,
+                        h.provenance.actor.replace(/_/g, ' '),
+                        h.provenance.grounding_decision && `grounding ${h.provenance.grounding_decision}`,
+                        h.provenance.business_model_decision && `business model ${h.provenance.business_model_decision}`]
+                        .filter(Boolean).join(' · ')})
+                    </span>
+                  )}
+                  {h.provenance?.excerpt && (
+                    <div className="text-[#6e7681] italic truncate" title={h.provenance.excerpt}>
+                      &ldquo;{h.provenance.excerpt}&rdquo;
+                    </div>
+                  )}
+                  {h.provenance?.url && /^https?:\/\//i.test(h.provenance.url) && (
+                    <a
+                      href={h.provenance.url} target="_blank" rel="noopener noreferrer"
+                      className="text-[#58a6ff] hover:underline truncate block"
+                    >
+                      {h.provenance.url.replace(/^https?:\/\//i, '')}
+                    </a>
+                  )}
+                </div>
+              ))}
+              {r.canonical.missing_evidence.length > 0 && (
+                <div className="text-[11px] text-[#6e7681]">
+                  Missing: {r.canonical.missing_evidence.slice(0, 3).join('; ')}
+                </div>
+              )}
+            </div>
+          )
+          : r.mission_failed_requirements.length > 0 && (
+            <div className="text-[11px] text-[#7D8590] mt-0.5">
+              {r.mission_failed_requirements.slice(0, 2).map((f) => (
+                <div key={f}>· {f}</div>
+              ))}
+            </div>
+          )}
       </td>
     </tr>
   );

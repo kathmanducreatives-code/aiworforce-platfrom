@@ -628,3 +628,28 @@ export function readLineageProgress(raw: unknown): LineageProgress {
     stopped_detail: typeof o.stopped_detail === "string" ? o.stopped_detail : null,
   };
 }
+
+/**
+ * LEAD V2: A STOP IS A STOP.
+ *
+ * When the canonical decision above says the mission is over, the legacy
+ * quota controller's own status may still read `continuation_required` — its
+ * counter never saw the Workbench's answer. Persisting that would mark the task
+ * resumable and the V2 queue would claim it again: the "Workbench says done,
+ * worker keeps buying" failure. On V2 the stop reason decides the terminal
+ * status; any other legacy status is kept as it was.
+ */
+export function settleV2Terminal<T extends string>(
+  stopReason: string, legacyStatus: T,
+): T | "completed" | "search_exhausted" | "budget_exhausted" | "provider_failure" {
+  if (legacyStatus !== "continuation_required") return legacyStatus;
+  switch (stopReason) {
+    case "quota_met": return "completed";
+    case "frontier_exhausted":
+    case "no_progress": return "search_exhausted";
+    case "continuation_ceiling":
+    case "cost_ceiling": return "budget_exhausted";
+    case "provider_failure": return "provider_failure";
+    default: return legacyStatus;
+  }
+}

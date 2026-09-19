@@ -1,3 +1,8 @@
+import {
+  readMissionView, LABEL_BUCKETS, describeHardCheck,
+  type CanonicalBucket, type CanonicalHardCheck, type CanonicalMissionView,
+} from './missionView';
+
 // EVALUATED COMPANIES — visible, explained, and never actionable.
 //
 // TEST task 42e39fb1 shortlisted six companies with real commercial hiring
@@ -65,6 +70,17 @@ export interface EvaluationRow {
   mission_match_score: number | null;
   mission_reasoning: string | null;
   mission_failed_requirements: string[];
+  /**
+   * Lead V2: the backend's canonical decision for this company. When present
+   * it — not anything the UI derives — decides the tab, and its hard checks are
+   * what the row shows. Absent on legacy runs.
+   */
+  canonical?: {
+    bucket: CanonicalBucket;
+    hard_check_details: CanonicalHardCheck[];
+    missing_evidence: string[];
+    caveats: string[];
+  };
 }
 
 /** Statuses that mean a company genuinely progressed, for ordering/filtering. */
@@ -90,8 +106,77 @@ const ENRICHMENT_STATES: ReadonlySet<string> = new Set<string>([
 const strArr = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 
+/** How each canonical bucket reads as a lifecycle row. Surfaced leads are lead rows, never evaluation rows. */
+const CANONICAL_STATUS: Readonly<Record<Exclude<CanonicalBucket, 'exact_match' | 'strong_opportunity' | 'worth_considering' | 'low_priority'>, WorkbenchLifecycle>> = {
+  ineligible: 'not_qualified',
+  pending: 'held_for_evidence',
+  screened_out: 'not_investigated',
+  investigating: 'deferred',
+  identity_unresolved: 'identity_unresolved',
+};
+
+/**
+ * The canonical decision as evaluation rows: every company the run did NOT
+ * surface, each with the backend's own bucket and hard checks. Only
+ * `ineligible` is a decision against a company — a hard criterion verified
+ * false; `pending` is a question, never a rejection.
+ */
+export function canonicalEvaluationRows(view: CanonicalMissionView): EvaluationRow[] {
+  return view.leads
+    .filter((l) => !LABEL_BUCKETS.has(l.bucket))
+    .map((l) => {
+      const bucket = l.bucket as keyof typeof CANONICAL_STATUS;
+      const failing = l.hard_check_details.filter((h) => h.result === 'fail');
+      const explanation = bucket === 'ineligible'
+        ? `Ruled out: ${failing.map((h) => h.reason).join('; ') || 'a hard requirement is verified false'}`
+        : bucket === 'pending'
+        ? `Needs verification: ${l.missing_evidence.slice(0, 2).join('; ') || 'a hard requirement is not yet established'}`
+        : bucket === 'screened_out'
+        ? 'Screened out by the free first pass, before any paid research.'
+        : bucket === 'investigating'
+        ? 'Not reached yet — a continuation would investigate it.'
+        : 'Identity not resolved — which company this is could not be established.';
+      return {
+        company_key: l.company.key,
+        company_name: l.company.name ?? l.company.key,
+        domain: l.company.domain,
+        employee_count: null,
+        strongest_signal: null,
+        signal_tier: null,
+        supporting_job_title: null,
+        supporting_job_url: null,
+        prequalification_score: 0,
+        status: CANONICAL_STATUS[bucket],
+        explanation,
+        reasons: l.hard_check_details.map(describeHardCheck),
+        exclusion: null,
+        decided: bucket === 'ineligible',
+        decision_source: 'p5_canonical_eligibility',
+        resumable: bucket === 'investigating',
+        triage_relevance: null,
+        triage_signal_strength: null,
+        triage_reasons: [],
+        shortlist_exclusion: null,
+        shortlist_exclusion_explanation: null,
+        enrichment_state: 'not_attempted',
+        enrichment_explanation: '',
+        mission_decision: l.bucket,
+        mission_match_score: null,
+        mission_reasoning: explanation,
+        mission_failed_requirements: failing.map((h) => h.reason),
+        canonical: {
+          bucket: l.bucket, hard_check_details: l.hard_check_details,
+          missing_evidence: l.missing_evidence, caveats: l.caveats,
+        },
+      };
+    });
+}
+
 export function readEvaluationRows(result: unknown): EvaluationRow[] {
   if (!result || typeof result !== 'object') return [];
+  // LEAD V2: THE BACKEND'S CANONICAL DECISION, when the run wrote one.
+  const view = readMissionView(result);
+  if (view) return canonicalEvaluationRows(view);
   const raw = (result as { workbench_evaluation_rows?: unknown }).workbench_evaluation_rows;
   if (!Array.isArray(raw)) return [];
   return raw

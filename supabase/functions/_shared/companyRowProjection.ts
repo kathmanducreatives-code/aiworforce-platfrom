@@ -96,7 +96,10 @@ export function buildCompanyRowPersistencePlan(
   // Brain pass on a contact mission is still pending a person; an unknown or
   // failed gate on a company mission is still unqualified. Neither becomes
   // quota-eligible here.
-  const isDeliverable = deliverable === "company" && pending.brainGate === "pass";
+  // Lead V2: the canonical P5 decision decides; everywhere else, the Brain gate.
+  const canonical = pending.canonicalDecision ?? null;
+  const isDeliverable = deliverable === "company" &&
+    (canonical ? canonical.qualified : pending.brainGate === "pass");
 
   // The stage follows: a company that IS the deliverable and cleared the Brain
   // is qualified, not "waiting for a decision-maker search" that the mission
@@ -161,7 +164,12 @@ export function buildCompanyRowPersistencePlan(
         quota_eligible: isDeliverable,
         // WHY it is quota-eligible, recorded rather than inferable. A row that
         // claims quota credit must be able to say what earned it.
-        qualification_basis: isDeliverable ? "company_brain_pass" : null,
+        qualification_basis: isDeliverable
+          ? (canonical ? "p5_canonical_eligibility" : "company_brain_pass")
+          : null,
+        // THE BACKEND'S DECISION, carried so the UI renders it rather than
+        // re-deriving one. Present only on Lead V2 rows.
+        ...(canonical ? { canonical_decision: canonical } : {}),
         quota_basis: isDeliverable ? "qualified_companies_mission" : null,
       },
     },

@@ -48,6 +48,7 @@ import {
 } from "./companyRowProjection.ts";
 import { resolveCompanyIdentity, type CompanyIdentity } from "./companyIdentity.ts";
 import { identityIsActionable } from "./companyIdentityResolution.ts";
+import type { CandidateDecision } from "./workbenchMissionView.ts";
 
 export const MISSION_PERSISTENCE_PROJECTION_VERSION =
   "lead-mission-persistence-projection-v1" as const;
@@ -165,13 +166,20 @@ export function projectMissionCompanyRows(
    * `buildCompanyRowPersistencePlan`.
    */
   deliverable: CompanyRowDeliverable = "contact",
+  /**
+   * Lead V2 (P5): the canonical decision per company. When given, a company is
+   * a lead exactly when its canonical decision carries a label — the same set
+   * the engine counts and the Workbench shows. Absent on V1.
+   */
+  canonical?: ReadonlyMap<string, CandidateDecision>,
 ): MissionPersistenceProjection {
   const rows: MissionCompanyRow[] = [];
   const skipped: MissionPersistenceProjection["skipped"] = [];
   const seen = new Set<string>();
 
   for (const c of companies) {
-    if (c.verdict !== "pass") continue;
+    const decision = canonical?.get(c.key) ?? null;
+    if (canonical ? !decision?.label : c.verdict !== "pass") continue;
 
     const pending: PendingDecisionMaker = {
       company: identityFor(c),
@@ -179,6 +187,12 @@ export function projectMissionCompanyRows(
       jobEvidence: jobEvidenceFor(c),
       brainGate: brainGateFor(c),
       verticalOutcome: c.fit?.stage ?? null,
+      ...(decision ? {
+        canonicalDecision: {
+          qualified: !!decision.label, bucket: decision.bucket, label: decision.label,
+          hard_checks: { ...decision.hard_checks },
+        },
+      } : {}),
     };
 
     const key = companyRowKey(pending);

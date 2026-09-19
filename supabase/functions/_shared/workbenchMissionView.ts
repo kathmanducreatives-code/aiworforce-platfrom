@@ -160,6 +160,82 @@ function caveatsFor(graph: CompanyEvidenceGraph, r: ReasonedLabel, e: Eligibilit
   return [...new Set(out)].slice(0, 6);
 }
 
+// ── ONE DECISION TRUTH (P5 hardening) ───────────────────────────────────────
+//
+// Canaries d7012ba5 and c0aa06be kept buying discovery pages after this view
+// already held the answer: continuation read the legacy Brain-verdict counter
+// (0 of 1), the view said 2 strong opportunities. Every consumer of "how many
+// are qualified / pending / ineligible" — the engine's in-slice yield gate,
+// run-agent's continuation / replenishment / completion decision, the UI —
+// reads THIS count, derived from canonical company state.
+//
+// Deterministic and reasoner-free: the reasoner may lower a label but never
+// moves a candidate between qualified, pending and ineligible, so the counts
+// the decision needs do not wait on a model.
+
+/** One candidate's canonical decision: its bucket, its hard checks, and the label ceiling. */
+export interface CandidateDecision {
+  company_key: string;
+  bucket: Bucket;
+  /** Set only for surfaced leads (a label bucket). */
+  label: Label | null;
+  hard_checks: Record<string, CheckResult>;
+}
+
+export const LABEL_BUCKETS: ReadonlySet<Bucket> = new Set<Bucket>([
+  "exact_match", "strong_opportunity", "worth_considering", "low_priority",
+]);
+
+export function candidateDecision(i: {
+  criteria: readonly MissionCriterion[]; candidate: MissionCandidate; anchor: string | null;
+}): CandidateDecision {
+  const eligibility = evaluateEligibility(i.criteria, i.candidate.graph);
+  const ceiling = computeCeiling({ criteria: i.criteria, graph: i.candidate.graph, eligibility, anchor: i.anchor });
+  const bucket = bucketOf(i.candidate, eligibility, ceiling.ceiling);
+  return {
+    company_key: i.candidate.company_key, bucket,
+    label: LABEL_BUCKETS.has(bucket) ? bucket as Label : null,
+    hard_checks: eligibility.hard_checks,
+  };
+}
+
+/** Bucket counts over canonical candidates. `buildWorkbenchMissionView` produces the same numbers. */
+export function decisionCounts(i: {
+  criteria: readonly MissionCriterion[]; candidates: readonly MissionCandidate[]; anchor: string | null;
+}): WorkbenchCounts {
+  const counts: WorkbenchCounts = {
+    discovered: i.candidates.length, screened_out: 0, investigating: 0, identity_unresolved: 0,
+    pending: 0, exact_match: 0, strong_opportunity: 0, worth_considering: 0, low_priority: 0, ineligible: 0,
+  };
+  for (const candidate of i.candidates) {
+    counts[candidateDecision({ criteria: i.criteria, candidate, anchor: i.anchor }).bucket] += 1;
+  }
+  return counts;
+}
+
+/** The numbers a completion / continuation decision reads. */
+export interface DecisionSummary {
+  discovered: number;
+  /** Surfaced leads: every eligible candidate, whatever its label. */
+  qualified: number;
+  pending: number;
+  ineligible: number;
+  screened_out: number;
+  /** Still owed investigation or identity — work, not a decision. */
+  undecided: number;
+}
+
+export function decisionSummary(c: WorkbenchCounts): DecisionSummary {
+  return {
+    discovered: c.discovered,
+    qualified: c.exact_match + c.strong_opportunity + c.worth_considering + c.low_priority,
+    pending: c.pending,
+    ineligible: c.ineligible,
+    screened_out: c.screened_out,
+    undecided: c.investigating + c.identity_unresolved,
+  };
+}
+
 export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
   const counts: WorkbenchCounts = {
     discovered: i.candidates.length, screened_out: 0, investigating: 0, identity_unresolved: 0,

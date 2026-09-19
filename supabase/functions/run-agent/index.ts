@@ -98,11 +98,11 @@ import { makeGptDiscoveryPlanner } from "../_shared/gptDiscoveryPlanner.ts";
 import { DiscoveryStrategyBlockedError } from "../_shared/leadDiscoveryStrategy.ts";
 import { makeGptExecutionPlanner } from "../_shared/gptExecutionPlanner.ts";
 import { makeGptRouteController } from "../_shared/gptRouteController.ts";
-import { projectResearchFabric } from "../_shared/leadCapabilityEngine.ts";
+import { canonicalDecisions, projectResearchFabric } from "../_shared/leadCapabilityEngine.ts";
 import { requiredEvidenceDimensions } from "../_shared/evidenceGraph.ts";
 import { criteriaSections, deriveMissionCriteria } from "../_shared/missionCriteria.ts";
 import { effectiveRequestedCount as p5RequestedCount } from "../_shared/leadMission.ts";
-import { buildWorkbenchMissionView } from "../_shared/workbenchMissionView.ts";
+import { buildWorkbenchMissionView, decisionSummary } from "../_shared/workbenchMissionView.ts";
 import { makeGptOpportunityReasoner, reasonForCandidates } from "../_shared/opportunityReasoningRun.ts";
 import { missionCandidatesFrom } from "../_shared/leadCapabilityEngine.ts";
 import { anchorForCapability } from "../_shared/retrievalPlan.ts";
@@ -403,7 +403,7 @@ import {
   releaseLineageLease, type RpcDb as LeaseRpcDb,
 } from "../_shared/lineageLease.ts";
 import {
-  decideAutoContinuation, foldSlice, readLineageProgress, lineageIsFinished,
+  decideAutoContinuation, settleV2Terminal, foldSlice, readLineageProgress, lineageIsFinished,
   resolveMaxContinuations, resolveMaxLineageCostUnits,
   AUTO_CONTINUATION_VERSION, LINEAGE_PROGRESS_KEY, type LineageProgress,
 } from "../_shared/leadAutoContinuation.ts";
@@ -4652,6 +4652,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     reevalReport.outcomes.flatMap((o) =>
                       o.merged ? [{ company_key: o.company_key, evaluation: o.merged }] : []
                     ),
+                    // Lead V2: the qualified set stays the canonical P5 decision.
+                    (p2Specs && persistedMission && missionPlan)
+                      ? { mission: persistedMission, plan: missionPlan, identity: { task_id: String(task.id) } }
+                      : undefined,
                   );
                   const reappliedCount = reapply.reapplied;
                   // ── RECORD WHAT WAS ASKED, BEFORE THE RESUME RECORDS ARE
@@ -4772,6 +4776,12 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // company row was a step toward a person, and stamped
                 // `NEEDS_REVIEW` on rows this run had already counted as met.
                 companyIsTheDeliverable(persistedMission) ? "company" : "contact",
+                // Lead V2: leads are exactly the canonical P5 qualified set.
+                (p2Specs && missionPlan)
+                  ? canonicalDecisions(capabilityRun.companies, {
+                    mission: persistedMission, plan: missionPlan, identity: { task_id: String(task.id) },
+                  })
+                  : undefined,
               )
               : { version: MISSION_PERSISTENCE_PROJECTION_VERSION, rows: [], skipped: [] };
             const missionPersistPlan = createPersistPlan({
@@ -5759,6 +5769,70 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               ),
             )).length
           : 0;
+        // ══ P5: ONE CANONICAL DECISION PROJECTION ════════════════════════════
+        //
+        // Built BEFORE the continuation decision, because that decision reads
+        // it. Canaries d7012ba5 and c0aa06be bought more discovery pages while
+        // this view already held the answer: the continuation read the legacy
+        // Brain-verdict counter (0 of 1) and the view said 2 strong
+        // opportunities. On Lead V2 the qualified count the decision, the
+        // lineage progress and the Workbench all read is THIS view's
+        // (`decisionSummary`), derived from canonical company state.
+        //
+        // LEAD V2 ONLY (`p2Specs`, the engine's own V2 marker). A V1 / legacy
+        // lead mission or a Signals scan never builds it, never calls the
+        // opportunity reasoner and never writes it.
+        const p5View = (p2Specs && capabilityRun && persistedMission) ? await (async () => {
+              try {
+                // DERIVED, NEVER READ BACK. `criteria` is a projection of the
+                // mission, not part of its hash — and a mission approved before
+                // a semantics change carries the OLD projection. Canary
+                // 62c8b188 still enforced "Company kind: startup" as provable
+                // from a card compiled before P5.2 said it was not.
+                const criteria = deriveMissionCriteria(persistedMission);
+                const anchor = anchorForCapability(String(missionPlan?.entry_capability ?? "")) ?? null;
+                const candidates = missionCandidatesFrom(capabilityRun, {
+                  missionId: String(task.id),
+                  required: requiredEvidenceDimensions(
+                    criteriaExecutionPolicy(persistedMission),
+                    (persistedMission.required_signals ?? []).map((sig) => String(sig.type))),
+                });
+                return buildWorkbenchMissionView({
+                  mission: {
+                    requested_count: p5RequestedCount(persistedMission),
+                    execution_limit: quota.requestedLeadCount ?? null,
+                    anchor,
+                  },
+                  criteria,
+                  unsupported: criteriaSections(persistedMission).unsupported,
+                  candidates,
+                  // Settled after the continuation decision; see the result write.
+                  stage: "reasoning",
+                  waves: capabilityRun.state.research_waves ?? [],
+                  // `check()` is the ledger's own priced total — never a second sum.
+                  cost: { model_usd: modelCalls.check().priced_usd ?? 0 },
+                  // ── THE REASONER, BOUNDED BY THE CEILING ──────────────────
+                  //
+                  // One batched call over the candidates code already found
+                  // eligible, capped at ten. Every part of what it returns is
+                  // validated by `applyReasoning`; with no key, the flag off or
+                  // a failed call the map is empty and the ceiling stands.
+                  reasoning: await reasonForCandidates({
+                    request: persistedMission.original_user_query ?? routeUserRequest,
+                    criteria, anchor, candidates,
+                    enabled: String(readEnvSafe("LEAD_V2_REASONER") ?? "").trim().toLowerCase() !== "off",
+                    reason: makeGptOpportunityReasoner({
+                      readEnv: readEnvSafe, onModelCall: modelCalls.sink,
+                      log: (m, meta) => console.log(`[gpt-opportunity-reasoner] ${m}`, meta ?? ""),
+                    }, { onRoute: (r) => modelRouting.record(r) }),
+                  }),
+                });
+              } catch (e) {
+                console.error("[run-agent][workbench_mission_view][failed]", String(e));
+                return null;
+              }
+            })() : null;
+        const p5Decision = p5View ? decisionSummary(p5View.counts) : null;
         const priorTaskRow = await supabase
           .from("tasks").select("result").eq("id", task.id).maybeSingle();
         const priorProgress = readLineageProgress(
@@ -5780,7 +5854,8 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             (c) => wasInvestigated(c.investigation_state)).length
           : 0;
         const progress = foldSlice(priorProgress, {
-          qualifiedInPool: sliceQualified,
+          // Lead V2: the canonical count. V1: the legacy Brain verdict.
+          qualifiedInPool: p5Decision ? p5Decision.qualified : sliceQualified,
           uniqueCompaniesInvestigatedInPool: uniqueInvestigated,
           authorisationsInPool: capabilityRun?.state.investigation_selected ?? 0,
           costUnitsInLineage: capabilityRun?.state.accumulated_cost_units ?? 0,
@@ -5802,7 +5877,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           // THE HIGH-WATER MARK, not this slice's count. A slice that evaluated
           // nobody reports zero, and reading that as the total is how a barren
           // round erases a productive one.
-          qualified: progress.qualified_high_water,
+          //
+          // LEAD V2: THE CANONICAL COUNT, NOT A HIGH-WATER MARK OF THE LEGACY
+          // ONE. The view is recomputed over the whole restored pool every
+          // slice, so it is already cumulative.
+          qualified: p5Decision ? p5Decision.qualified : progress.qualified_high_water,
           requestedCount: quota.requestedLeadCount,
           frontierRemaining: sliceFrontier,
           continuationsUsed: progress.continuations_used,
@@ -5844,6 +5923,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // The status the REST of this branch persists and projects from.
         const effectiveTerminal = autoDecision.continue
           ? "continuation_required"
+          // Lead V2: the canonical stop decides; a legacy
+          // `continuation_required` must not re-open a finished mission.
+          : p5Decision ? settleV2Terminal(autoDecision.reason, cf.status)
           : cf.status;
         if (effectiveTerminal !== cf.status) {
           console.log("[run-agent][auto-continuation] terminal_status_overridden", {
@@ -6121,55 +6203,12 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             // from the same evidence graphs as `research_fabric`. Deterministic:
             // with no reasoner the ceiling itself is the label, explained from
             // the evidence that set it.
-            workbench_mission_view: capabilityRun && persistedMission ? await (async () => {
-              try {
-                // DERIVED, NEVER READ BACK. `criteria` is a projection of the
-                // mission, not part of its hash — and a mission approved before
-                // a semantics change carries the OLD projection. Canary
-                // 62c8b188 still enforced "Company kind: startup" as provable
-                // from a card compiled before P5.2 said it was not.
-                const criteria = deriveMissionCriteria(persistedMission);
-                const anchor = anchorForCapability(String(missionPlan?.entry_capability ?? "")) ?? null;
-                const candidates = missionCandidatesFrom(capabilityRun, {
-                  missionId: String(task.id),
-                  required: requiredEvidenceDimensions(
-                    criteriaExecutionPolicy(persistedMission),
-                    (persistedMission.required_signals ?? []).map((sig) => String(sig.type))),
-                });
-                return buildWorkbenchMissionView({
-                  mission: {
-                    requested_count: p5RequestedCount(persistedMission),
-                    execution_limit: quota.requestedLeadCount ?? null,
-                    anchor,
-                  },
-                  criteria,
-                  unsupported: criteriaSections(persistedMission).unsupported,
-                  candidates,
-                  stage: capabilityRun.state.qualified_company_keys?.length ? "complete" : "reasoning",
-                  waves: capabilityRun.state.research_waves ?? [],
-                  // `check()` is the ledger's own priced total — never a second sum.
-                  cost: { model_usd: modelCalls.check().priced_usd ?? 0 },
-                  // ── THE REASONER, BOUNDED BY THE CEILING ──────────────────
-                  //
-                  // One batched call over the candidates code already found
-                  // eligible, capped at ten. Every part of what it returns is
-                  // validated by `applyReasoning`; with no key, the flag off or
-                  // a failed call the map is empty and the ceiling stands.
-                  reasoning: await reasonForCandidates({
-                    request: persistedMission.original_user_query ?? routeUserRequest,
-                    criteria, anchor, candidates,
-                    enabled: String(readEnvSafe("LEAD_V2_REASONER") ?? "").trim().toLowerCase() !== "off",
-                    reason: makeGptOpportunityReasoner({
-                      readEnv: readEnvSafe, onModelCall: modelCalls.sink,
-                      log: (m, meta) => console.log(`[gpt-opportunity-reasoner] ${m}`, meta ?? ""),
-                    }, { onRoute: (r) => modelRouting.record(r) }),
-                  }),
-                });
-              } catch (e) {
-                console.error("[run-agent][workbench_mission_view][failed]", String(e));
-                return null;
-              }
-            })() : null,
+            // ONE PROJECTION, BUILT ONCE (before the continuation decision,
+            // which read its counts) and written here unchanged but for the
+            // stage the decision settled. Lead V2 only — V1 never gets P5.
+            workbench_mission_view: p5View
+              ? { ...p5View, stage: autoDecision.continue ? "retrieving" : "complete" }
+              : null,
             // Companies the Brain could not decide on. Held for evidence
             // resolution, explicitly NOT counted as rejections.
             unknown_companies_pending_evidence:
