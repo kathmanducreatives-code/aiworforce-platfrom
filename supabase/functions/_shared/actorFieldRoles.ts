@@ -65,8 +65,11 @@ export const FIELD_ROLES: Readonly<Record<string, Readonly<Record<string, FieldR
   },
   apify_funding_rounds_datahyena: {
     since: "query", round: "company_stage", verticals: "industry", countries: "geography",
-    country: "geography", industryGroup: "industry", industryGroups: "industry", naicsCode: "industry",
+    industryGroups: "industry", naicsCode: "industry",
     employeeBuckets: "company_size", minAmountUsd: "query", maxAmountUsd: "query", maxItems: "count",
+    // Narrows to rounds whose company the provider resolved. It changes the
+    // provider's own completeness bar, not what the mission asked for.
+    enrichedOnly: "operational",
     cursor: "page",
   },
   apify_google_news: {

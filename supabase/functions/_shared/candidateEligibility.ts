@@ -47,6 +47,8 @@ import type { EvidenceDimension, EvidenceItem } from "./candidateObservation.ts"
 import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts";
 import { geographyContradicts } from "./leadEligiblePool.ts";
 import { matchBusinessModel } from "./businessModelMatch.ts";
+import { normalizeRoundType } from "./fundingStageClaim.ts";
+import type { FundingStageVerdict } from "./fundingStageClaim.ts";
 import { usableHeadcount } from "./headcountValue.ts";
 
 export const ELIGIBILITY_VERSION = "candidate-eligibility-v1" as const;
@@ -166,6 +168,27 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
   }
   const ids = [item.evidence_id];
   const provenance = provenanceOf(item);
+  // P6 — A DECIDED FUNDING-STAGE CLAIM ANSWERS THE STAGE CRITERION DIRECTLY.
+  // `fundingStageClaim.ts` already ordered the verified rounds; re-reading its
+  // verdict as a string would only reintroduce the substring test it replaces.
+  if (c.dimension === "company_stage") {
+    const fs = fundingStageClaimValue(item, c.value);
+    if (fs) {
+      // A DECIDED CLAIM IS NEVER RE-READ AS TEXT. Falling through to the label
+      // path would let the explanation's own words ("later than seed") match a
+      // seed criterion by substring — the exact false positive §31 mutates for.
+      if (fs.answers === false) {
+        return {
+          ...base, result: "unknown", evidence_ids: ids, provenance,
+          reason: `the funding-stage claim decided "${fs.required_stage}", not ${String(c.value)}`,
+        };
+      }
+      return {
+        ...base, result: fs.verdict === "pass" ? "pass" : "fail",
+        reason: fs.explanation, evidence_ids: ids, provenance,
+      };
+    }
+  }
   // A disproven claim fails whatever the value was.
   if (item.status === "disproven") {
     return { ...base, result: "fail", reason: `${dim} is disproven by ${item.source.actor}`, evidence_ids: ids, provenance };
@@ -222,6 +245,36 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
       return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}`, evidence_ids: ids, provenance };
     }
   }
+}
+
+/**
+ * A `company_stage` item written by the funding-stage claim, and whether it
+ * answers the stage THIS criterion asked for.
+ *
+ * A verdict decided for "seed" says nothing about a criterion asking for
+ * "series-a", so a mismatch is reported as `answers: false` and leaves the
+ * criterion unknown — it is NOT handed to the label path, whose substring test
+ * would match the claim's own explanation text. A
+ * PENDING funding claim never reaches here: `fundingStageEvidenceItem` writes
+ * no item for one.
+ */
+type FundingStageClaimRead =
+  | { answers: false; required_stage: string }
+  | { answers: true; verdict: FundingStageVerdict; explanation: string };
+
+function fundingStageClaimValue(item: EvidenceItem, wanted: unknown): FundingStageClaimRead | null {
+  const v = item.value as
+    | { claim?: string; verdict?: string; required_stage?: string | null; explanation?: string }
+    | null
+    | undefined;
+  if (!v || typeof v !== "object" || v.claim !== "funding_stage") return null;
+  if (v.verdict !== "pass" && v.verdict !== "fail") return null;
+  const decided = normalizeRoundType(v.required_stage ?? null);
+  const want = normalizeRoundType(typeof wanted === "string" ? wanted : null);
+  if (!decided || !want || decided !== want) {
+    return { answers: false, required_stage: decided ?? String(v.required_stage ?? "") };
+  }
+  return { answers: true, verdict: v.verdict, explanation: String(v.explanation ?? `funding stage ${v.verdict}`) };
 }
 
 /**

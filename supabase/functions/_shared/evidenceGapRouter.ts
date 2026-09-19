@@ -101,7 +101,18 @@ export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
     routes: [{
       actor: "apify_funding_rounds_datahyena", capability: "funding_signal_discovery",
       purpose: "structured funding rounds", evidence_actors: ["apify_funding_rounds_datahyena"],
-      canonical_executor: false, executor_note: "P6: funding-stage verification route",
+      // NO PROVEN VERIFIER YET, so this route stays non-executable and the
+      // claim stays PENDING rather than being decided by a provider that
+      // cannot answer it. `fundingStageClaim.ts` holds the decision the moment
+      // one does. Verified 2026-09-19:
+      //   * datahyena takes no company input at all — absence of a row for a
+      //     company we already hold proves nothing about that company;
+      //   * memo23/crunchbase-scraper returns a round's TYPE anonymously but
+      //     no announced date, no amount and a truncated history (10 of
+      //     Stripe's 25 rounds), which is exactly the completeness PASS needs;
+      //   * enrich-crm is out of vendor credit.
+      canonical_executor: false,
+      executor_note: "P6: no verifier proven — datahyena cannot take a company, memo23 cannot date a round",
     }],
   },
   {

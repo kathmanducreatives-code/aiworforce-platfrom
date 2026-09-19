@@ -562,21 +562,27 @@ export const HIRING_ACTOR_CATALOG: Readonly<Record<string, HiringActorCard>> = O
     actor_key: "apify_funding_rounds_datahyena",
     actor_id: "datahyena/company-funding-rounds",
     purposes: ["funding_discovery"],
+    // RE-READ LIVE 2026-09-19 against build 0.1.45. The singular `country` and
+    // `industryGroup` this card used to list are NOT in the Actor's schema —
+    // only the plural array forms are. `enrichedOnly` is new in this build.
     supported_filters: [
-      "since", "round", "verticals", "industryGroup", "industryGroups",
-      "naicsCode", "minAmountUsd", "maxAmountUsd", "country", "countries",
-      "employeeBuckets", "maxItems", "cursor",
+      "since", "round", "verticals", "industryGroups",
+      "naicsCode", "minAmountUsd", "maxAmountUsd", "countries",
+      "employeeBuckets", "enrichedOnly", "maxItems", "cursor",
     ],
     verified_enums: {
       round: FUNDING_ROUND_STAGES,
       countries: FUNDING_COUNTRIES,
-      country: FUNDING_COUNTRIES,
       verticals: FUNDING_VERTICALS,
       employeeBuckets: FUNDING_EMPLOYEE_BUCKETS,
     },
     input_limits: {
       maxItems: "billed PER RECORD RETURNED — the single cost multiplier here",
       since: "YYYY-MM-DD or ISO-8601; the recency filter, and the only one",
+      enrichedOnly:
+        "boolean, default false. Narrows to rounds whose company the provider " +
+        "resolved. It raises the fill rate of `company.*`; it does NOT make the " +
+        "resolution correct — see `datahyena_company_identity_collision`.",
     },
     // From the vendor's own field list. NOT yet observed on a live run — see
     // `confidence` and the first known defect.
@@ -608,18 +614,25 @@ export const HIRING_ACTOR_CATALOG: Readonly<Record<string, HiringActorCard>> = O
       "private or unannounced rounds",
       "proving a company's CURRENT stage — a round is an event, not a status",
     ],
+    // PRICE ROSE 56% ON 2026-09-12: $0.045 → $0.07 per result at our BRONZE
+    // tier (SILVER 0.065, GOLD and above 0.06). Read live from the Store API on
+    // 2026-09-19. This is by far the most expensive row in the catalog — one
+    // 50-record run now costs $3.50.
     cost_model: {
       tier: "BRONZE",
       start_usd: 0.00005,
-      per_result_usd: 0.045,
-      events_usd: { "actor-start": 0.00005, result: 0.045 },
+      per_result_usd: 0.07,
+      events_usd: { "actor-start": 0.00005, result: 0.07 },
       cost_multiplier_fields: ["maxItems (one charge per record returned)"],
     },
     normalizer_key: "datahyena_funding_round",
     // The Store publishes no build version for this Actor; `modifiedAt` is the
-    // only version fact it exposes, so that is what the card records.
-    schema_build: "store-modified-2026-08-20",
-    last_verified_at: "2026-08-22",
+    // only version fact it exposes, so that is what the card records. Build
+    // 0.1.45, modified 2026-09-18 — a NEWER build than the one whose output was
+    // observed on run 0XchPqe0cJpx0Yc2T, so the fill rates below are from the
+    // previous build and the new `enrichedOnly` path is unobserved.
+    schema_build: "store-modified-2026-09-18",
+    last_verified_at: "2026-09-19",
     // RAISED FROM `low` AFTER RUN 0XchPqe0cJpx0Yc2T. The output was observed on
     // 18 real rows and the core evidence fields are fully populated: announced
     // date, company name, investors and source articles were present on 18 of

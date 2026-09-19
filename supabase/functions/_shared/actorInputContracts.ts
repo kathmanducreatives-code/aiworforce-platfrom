@@ -201,7 +201,7 @@ export const ACTOR_INPUT_CONTRACTS: Readonly<Record<string, ActorInputContract>>
         note: "Heavily used (1,381,328 runs, 707 monthly users). Mature and predictable; its edges are well explored." },
     },
     apify_funding_rounds_datahyena: {
-      verified_at: "2026-08-22",
+      verified_at: "2026-09-19",
       fields: [
         { name: "since", type: "string" },
         { name: "round", type: "array", enum: [
@@ -215,8 +215,6 @@ export const ACTOR_INPUT_CONTRACTS: Readonly<Record<string, ActorInputContract>>
           "crypto", "media", "education", "marketing", "telecom", "realestate",
           "hardware", "gaming", "space", "unknown"] },
         { name: "countries", type: "array" },
-        { name: "country", type: "string" },
-        { name: "industryGroup", type: "string" },
         { name: "industryGroups", type: "array" },
         { name: "naicsCode", type: "string" },
         { name: "employeeBuckets", type: "array", enum: [
@@ -224,6 +222,7 @@ export const ACTOR_INPUT_CONTRACTS: Readonly<Record<string, ActorInputContract>>
           "5001-10000", "10001+"] },
         { name: "minAmountUsd", type: "integer" },
         { name: "maxAmountUsd", type: "integer" },
+        { name: "enrichedOnly", type: "boolean", default: false },
         { name: "maxItems", type: "integer", default: 100 },
         { name: "cursor", type: "string" },
       ],
@@ -239,8 +238,12 @@ export const ACTOR_INPUT_CONTRACTS: Readonly<Record<string, ActorInputContract>>
           "Small but retained user base (48 total, 36 monthly, 4 ratings at 4.78). " +
           "Input schema read live from the Store API on 2026-08-22; OUTPUT HAS " +
           "NOT BEEN OBSERVED. Treat field names and fill rates as unconfirmed " +
-          "until a live verification run is done. Billed per record at $0.045 — " +
-          "the most expensive row in this catalog, so bound maxItems tightly.",
+          "until a live verification run is done. Input schema RE-READ LIVE on " +
+          "2026-09-19 against build 0.1.45: the singular `country` and " +
+          "`industryGroup` fields this contract used to claim do not exist, and " +
+          "`enrichedOnly` is new. Billed per record at $0.07 since 2026-09-12 " +
+          "(was $0.045) — the most expensive row in this catalog, so bound " +
+          "maxItems tightly.",
       },
     },
     apify_linkedin_company_posts: {
