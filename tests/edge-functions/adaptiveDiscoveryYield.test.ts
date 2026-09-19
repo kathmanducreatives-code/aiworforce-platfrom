@@ -287,3 +287,22 @@ Deno.test("merge across pages dedupes rather than double-counting", () => {
   assertEquals(merged.eligible_companies, 23,
     "20 in-range from page 1 plus 3 fresh, with the overlap counted once");
 });
+
+Deno.test("replenishment that widens nothing stops: barren slices end it (canary f9b5ad8e)", () => {
+  const base = {
+    qualified: 0, requestedCount: 1, frontierRemaining: 0,
+    continuationsUsed: 3, maxContinuations: 10, costUnitsUsed: 8, maxCostUnits: 120,
+    providerFailed: false, discoveryRoutesRemain: true,
+  };
+  // One barren slice is ordinary: the pool is widened once more.
+  assertEquals(decideAutoContinuation({ ...base, barrenSlices: 1 }).reason, "replenishment_required");
+  // Two in a row: the "open" route widened nothing — stop, and say so.
+  const d = decideAutoContinuation({ ...base, barrenSlices: 2 });
+  assert(!d.continue, d.detail);
+  assertEquals(d.reason, "no_progress");
+  assert(/widened nothing/.test(d.detail), d.detail);
+  // Verifying before discovering still outranks it: a pending candidate with a
+  // ready route is closer to a lead than any page the route might add.
+  assertEquals(decideAutoContinuation({ ...base, barrenSlices: 2, verificationRoutesRemain: 1 }).reason,
+    "verification_required");
+});

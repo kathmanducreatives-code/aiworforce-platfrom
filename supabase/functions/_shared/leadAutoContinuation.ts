@@ -300,6 +300,18 @@ export function decideAutoContinuation(
         user_message: `Still working — checking the missing facts on ${verifiable} promising ${verifiable === 1 ? "company" : "companies"} before searching for more.`,
       };
     }
+    // A ROUTE THAT STAYS "OPEN" BUT WIDENS NOTHING IS NOT A ROUTE. Canary
+    // f9b5ad8e: the funding feed had no further page to buy, its source state
+    // still read "not exhausted", and every replenishment slice ended barren —
+    // qualifying and investigating nobody — while this branch, ordered before
+    // the barren check below, kept answering "widen the pool" until the
+    // continuation ceiling. Consecutive barren slices end replenishment here
+    // exactly as they end any other run.
+    if (i.discoveryRoutesRemain && i.barrenSlices >= MAX_BARREN_SLICES) {
+      return stop("no_progress",
+        `${i.barrenSlices} consecutive slices qualified and investigated nobody; the discovery ` +
+        `routes still read as open but widened nothing — ${i.qualified} of ${i.requestedCount} qualified`);
+    }
     if (!i.discoveryRoutesRemain) {
       return stop("frontier_exhausted",
         `every discovered candidate has been investigated; ` +
