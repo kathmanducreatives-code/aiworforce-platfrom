@@ -14,6 +14,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { enrichFounderFromLinkedIn } from "../_shared/companyBrainResearch/founderLinkedIn.ts";
 import { enrichCompanyFromWebsite, MAX_PAGES } from "../_shared/companyBrainResearch/companyWebsite.ts";
+import {
+  resolveLocalProviderMode, mockResearchDeps, LOCAL_PROVIDER_MODE_ENV,
+  type LocalProviderMode,
+} from "../_shared/companyBrainResearch/localProviderMode.ts";
 import { enrichCompanyFromLinkedIn } from "../_shared/companyBrainResearch/companyLinkedIn.ts";
 import { generateBrainDraft, type DraftInput } from "../_shared/companyBrainResearch/generateBrainDraft.ts";
 import type { FirecrawlPage, ResearchDeps, ResearchSourceType, ResearchProvider } from "../_shared/companyBrainResearch/types.ts";
@@ -52,12 +56,34 @@ function actorId(envName: string, fallback: string): string {
 
 const FIRECRAWL_V2 = "https://api.firecrawl.dev/v2";
 
-function buildDeps(): { deps: ResearchDeps; apifyReady: boolean; firecrawlReady: boolean; llmReady: boolean } {
+function buildDeps(): {
+  deps: ResearchDeps; apifyReady: boolean; firecrawlReady: boolean; llmReady: boolean;
+  providerMode: LocalProviderMode;
+} {
   const apifyToken = Deno.env.get("APIFY_API_TOKEN");
   const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
   const llmReady = !!Deno.env.get("ANTHROPIC_API_KEY") || !!Deno.env.get("LOVABLE_API_KEY");
 
   const deps: ResearchDeps = { actorId };
+
+  // ── LOCAL FIXTURES, WHEN AND ONLY WHEN THIS IS A LOCAL STACK ──────────────
+  // `mock` fills the same three provider functions from fixtures, so every
+  // normalizer and every write below this line runs exactly as it does live.
+  // `live` changes nothing here: it means "use the real keys", and if they are
+  // absent the actions refuse as they always did — a silent downgrade to
+  // fixtures would put invented facts in somebody's Company Brain.
+  const { mode: providerMode, ignored_reason } = resolveLocalProviderMode((k) => Deno.env.get(k));
+  if (ignored_reason) console.warn(`[company-brain] ${ignored_reason}`);
+  if (providerMode === "mock") {
+    console.log(`[company-brain] ${LOCAL_PROVIDER_MODE_ENV}=mock — fixtures, no provider call, $0`);
+    // `llmReady: true` as well — the draft is the step that turns research into
+    // a Brain, and a local flow that stops one step short of the write proves
+    // nothing about the write.
+    return {
+      deps: mockResearchDeps(deps), apifyReady: true, firecrawlReady: true,
+      llmReady: true, providerMode,
+    };
+  }
 
   if (apifyToken) {
     deps.runApifyActor = async (actor, input) => {
@@ -105,7 +131,7 @@ function buildDeps(): { deps: ResearchDeps; apifyReady: boolean; firecrawlReady:
     };
   }
 
-  return { deps, apifyReady: !!apifyToken, firecrawlReady: !!firecrawlKey, llmReady };
+  return { deps, apifyReady: !!apifyToken, firecrawlReady: !!firecrawlKey, llmReady, providerMode };
 }
 
 Deno.serve(async (req) => {
@@ -140,7 +166,7 @@ Deno.serve(async (req) => {
     .eq("workspace_id", workspace_id).eq("user_id", userId).maybeSingle();
   if (!member) return json({ error: "forbidden" }, 403);
 
-  const { deps, apifyReady, firecrawlReady, llmReady } = buildDeps();
+  const { deps, apifyReady, firecrawlReady, llmReady, providerMode } = buildDeps();
 
   async function loadProfile(): Promise<AnyObj> {
     const { data } = await admin.from("company_brain").select("profile").eq("workspace_id", workspace_id).maybeSingle();
@@ -157,7 +183,11 @@ Deno.serve(async (req) => {
         workspace_id, user_id: userId,
         source_type: run.source_type, provider: run.provider,
         source_url: run.source_url ?? null, status: run.status,
-        input: run.input ?? {}, output: run.output ?? {}, evidence: run.evidence ?? {},
+        // PROVENANCE SURVIVES THE WRITE. `provider` is a fixed enum the schema
+        // constrains, so the mode rides in `input` — where a later reader can
+        // still tell a fixture-built Brain from a provider-built one.
+        input: { ...(run.input as AnyObj ?? {}), provider_mode: providerMode },
+        output: run.output ?? {}, evidence: run.evidence ?? {},
         error_message: run.error_message ?? null,
       });
     } catch (e) {
@@ -181,7 +211,10 @@ Deno.serve(async (req) => {
         output: r.research ?? {}, evidence: { source_url: profileUrl },
         error_message: r.ok ? undefined : (r.error ?? r.reason),
       });
-      return json({ ok: r.ok, research: r.research, skipped: r.skipped, reason: r.reason, error: r.error });
+      return json({
+        ok: r.ok, research: r.research, skipped: r.skipped, reason: r.reason, error: r.error,
+        provider_mode: providerMode,
+      });
     }
 
     // ---------------- Step 2: company (website required, LinkedIn optional) --
@@ -223,6 +256,7 @@ Deno.serve(async (req) => {
         company_linkedin: li?.research ?? null,
         pages_fetched: web.pages_fetched,
         error: web.error, skipped: web.skipped, reason: web.reason,
+        provider_mode: providerMode,
       });
     }
 
@@ -277,7 +311,11 @@ Deno.serve(async (req) => {
         }, 429);
       }
 
-      deps.generateJson = async ({ system, user }) => {
+      // IN MOCK MODE THE FIXTURE DRAFTER STAYS. Overwriting it here is what
+      // made `AGENTORY_LOCAL_PROVIDER_MODE=mock` still answer
+      // "No AI provider configured" — the mock was installed in `buildDeps`
+      // and then replaced, unconditionally, by the live one.
+      if (providerMode !== "mock") deps.generateJson = async ({ system, user }) => {
         const ai = await generateJson({
           taskType: "helper",
           systemPrompt: system,
@@ -453,6 +491,7 @@ Deno.serve(async (req) => {
         ok: true,
         completeness: computeCompanyBrainCompleteness(normalized),
         capabilities: { apify: apifyReady, firecrawl: firecrawlReady, llm: llmReady },
+        provider_mode: providerMode,
       });
     }
 

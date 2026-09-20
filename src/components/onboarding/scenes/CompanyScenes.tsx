@@ -51,8 +51,10 @@ export function CompanyDescriptionScene({ value, onChange, onContinue, onBack }:
 
 // -------------------------------------------------------- Scene 6: website ---
 
-export function CompanyWebsiteScene({ value, onChange, onAnalyze, onBack }: {
+export function CompanyWebsiteScene({ value, onChange, onAnalyze, onBack, busy }: {
   value: CompanyForm; onChange: (c: CompanyForm) => void; onAnalyze: () => void; onBack: () => void;
+  /** True while a run is in flight — the button must not start a second one. */
+  busy?: boolean;
 }) {
   const [showLinkedIn, setShowLinkedIn] = useState(!!value.linkedin_url);
   return (
@@ -60,7 +62,7 @@ export function CompanyWebsiteScene({ value, onChange, onAnalyze, onBack }: {
       eyebrow="Step 2 of 5 · Company"
       title="Where should Agentory read your company?"
       helper="We’ll read key product pages, separate examples from facts, and draft your ICP."
-      footer={<SceneFooter onBack={onBack} primaryLabel="Analyze company" onPrimary={onAnalyze} primaryDisabled={!canAnalyzeCompany(value)} />}
+      footer={<SceneFooter onBack={onBack} primaryLabel={busy ? 'Reading the site…' : 'Analyze company'} onPrimary={onAnalyze} primaryDisabled={!canAnalyzeCompany(value)} primaryBusy={busy} />}
     >
       <div className="space-y-4">
         <SceneInput label="Website URL" value={value.website_url} onChange={(v) => onChange({ ...value, website_url: v })} placeholder="https://agentory.space" autoFocus />

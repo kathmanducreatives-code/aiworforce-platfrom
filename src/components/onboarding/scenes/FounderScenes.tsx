@@ -41,9 +41,11 @@ export function FounderNameScene({ value, onChange, onContinue }: {
 
 // -------------------------------------------------------- Scene 2: linkedin --
 
-export function FounderLinkedInScene({ value, onChange, onAnalyze, onSkip, onBack }: {
+export function FounderLinkedInScene({ value, onChange, onAnalyze, onSkip, onBack, busy }: {
   value: FounderForm; onChange: (f: FounderForm) => void;
   onAnalyze: () => void; onSkip: () => void; onBack: () => void;
+  /** True while a run is in flight — the button must not start a second one. */
+  busy?: boolean;
 }) {
   return (
     <SceneFrame
@@ -53,9 +55,10 @@ export function FounderLinkedInScene({ value, onChange, onAnalyze, onSkip, onBac
       footer={
         <SceneFooter
           onBack={onBack}
-          primaryLabel="Analyze LinkedIn profile"
+          primaryLabel={busy ? 'Analyzing profile…' : 'Analyze LinkedIn profile'}
           onPrimary={onAnalyze}
           primaryDisabled={!canEnrichFounder(value)}
+          primaryBusy={busy}
           secondary={
             <Button variant="ghost" size="sm" onClick={onSkip} className="text-muted-foreground">
               Skip and continue manually

@@ -162,17 +162,47 @@ export function deriveGtmRelevance(r: { headline: string; summary: string; skill
 /** Normalize one Apify LinkedIn-profile row → FounderResearch. Pure.
  * Handles the output shapes of the common profile actors (parseforge,
  * automation-lab, atomus, …) via alias lookup + container unwrapping. */
+/**
+ * WHERE THE FOUNDER IS — FROM A STRING OR FROM AN OBJECT.
+ *
+ * `apimaestro/linkedin-profile-detail` returns
+ *
+ *     location: { country, city, full, postal_code, country_code }
+ *
+ * and the previous `asString(row.location ?? …)` turned that object into "",
+ * so every profile from this actor lost its location silently. No fixture
+ * caught it, because the fixture was written in the shape the code expected —
+ * only a live run could show the shape the provider actually sends.
+ *
+ * The string forms other actors use are still read, in the same order.
+ */
+export function locationOf(row: Record<string, unknown>): string {
+  const direct = asString(row.location ?? row.locationName ?? row.geoLocationName ?? row.city ?? row.geo_location);
+  if (direct) return direct;
+  const loc = row.location;
+  if (!loc || typeof loc !== "object" || Array.isArray(loc)) return "";
+  const o = loc as Record<string, unknown>;
+  const full = asString(o.full ?? o.name ?? o.display ?? o.text);
+  if (full) return full;
+  // Assemble from parts, in the order a person writes them.
+  return [asString(o.city), asString(o.region ?? o.state), asString(o.country)]
+    .filter(Boolean).join(", ");
+}
+
 export function normalizeFounderProfile(raw: unknown, sourceUrl: string): FounderResearch {
   const row = stripContactFields(unwrapActorRow(raw));
 
   const name = asString(
-    row.fullName ?? row.full_name ?? row.name
+    // `fullname` all-lowercase is what apimaestro/linkedin-profile-detail sends.
+    // Without it that actor's rows fall through to first/last name assembly,
+    // which works until a provider sends only the full name.
+    row.fullName ?? row.full_name ?? row.fullname ?? row.name
     ?? [asString(row.firstName ?? row.first_name), asString(row.lastName ?? row.last_name)].filter(Boolean).join(" "),
   );
   const headline = asString(row.headline ?? row.occupation ?? row.subTitle ?? row.sub_title ?? row.title);
-  const location = asString(row.location ?? row.locationName ?? row.geoLocationName ?? row.city ?? row.geo_location);
+  const location = locationOf(row);
   const summary = asString(row.summary ?? row.about ?? row.bio ?? row.description);
-  const skills = uniq(asStringArray(row.skills ?? row.topSkills ?? row.skill_list));
+  const skills = uniq(asStringArray(row.skills ?? row.topSkills ?? row.top_skills ?? row.skill_list));
   const experience = experiences(
     row.experience ?? row.experiences ?? row.positions ?? row.position_history ?? row.positionHistory ?? row.work_experience,
   );

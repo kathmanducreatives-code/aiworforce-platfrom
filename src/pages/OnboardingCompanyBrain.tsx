@@ -122,6 +122,10 @@ export default function OnboardingCompanyBrain() {
   // ----------------------------------------------------- backend handlers ---
 
   async function analyzeFounder() {
+    // ONE RUN AT A TIME. The button is disabled while busy, but a double click
+    // in the same tick beats the re-render — and each extra run is a provider
+    // call somebody pays for.
+    if (busy) return;
     setBusy('founder'); setError(null);
     goto('founder_research');
     try {
@@ -131,7 +135,11 @@ export default function OnboardingCompanyBrain() {
       });
       if (r?.ok && r.research) {
         setFounderResearch(r.research);
-        toast.success('Founder profile analyzed', { description: `Confidence: ${r.research.confidence}` });
+        toast.success('Founder profile analyzed', {
+          description: r.provider_mode === 'mock'
+            ? `Local fixture — no provider was called. Confidence: ${r.research.confidence}`
+            : `Confidence: ${r.research.confidence}`,
+        });
       } else {
         if (r?.research) setFounderResearch(r.research); // sparse: keep for honesty
         setError({ title: 'Founder analysis unavailable', body: explain(r?.reason ?? r?.error, 'founder') });
@@ -142,6 +150,7 @@ export default function OnboardingCompanyBrain() {
   }
 
   async function analyzeCompany() {
+    if (busy) return;
     setBusy('company'); setError(null);
     goto('company_research');
     try {
@@ -154,7 +163,11 @@ export default function OnboardingCompanyBrain() {
       if (r?.ok && r.company_research) {
         setCompanyResearch(r.company_research);
         setCompanyLinkedIn(r.company_linkedin ?? null);
-        toast.success('Company analyzed', { description: `${r.pages_fetched} page(s) read` });
+        toast.success('Company analyzed', {
+          description: r.provider_mode === 'mock'
+            ? `Local fixture — no provider was called. ${r.pages_fetched} page(s) read`
+            : `${r.pages_fetched} page(s) read`,
+        });
       } else {
         if (r?.company_research) setCompanyResearch(r.company_research);
         setError({ title: 'Company analysis unavailable', body: explain(r?.reason ?? r?.error, 'company') });
@@ -352,7 +365,7 @@ function SceneRouter(props: {
     case 'founder_name':
       return <FounderNameScene value={founder} onChange={setFounder} onContinue={next} />;
     case 'founder_linkedin':
-      return <FounderLinkedInScene value={founder} onChange={setFounder} onAnalyze={analyzeFounder} onSkip={() => goto('founder_verify')} onBack={back} />;
+      return <FounderLinkedInScene value={founder} onChange={setFounder} onAnalyze={analyzeFounder} onSkip={() => goto('founder_verify')} onBack={back} busy={busy === 'founder'} />;
     case 'founder_research':
       return <FounderResearchScene busy={busy === 'founder'} research={founderResearch} onContinue={next} onBack={() => goto('founder_linkedin')} />;
     case 'founder_verify':
@@ -361,7 +374,7 @@ function SceneRouter(props: {
     case 'company_description':
       return <CompanyDescriptionScene value={company} onChange={setCompany} onContinue={next} onBack={back} />;
     case 'company_website':
-      return <CompanyWebsiteScene value={company} onChange={setCompany} onAnalyze={analyzeCompany} onBack={back} />;
+      return <CompanyWebsiteScene value={company} onChange={setCompany} onAnalyze={analyzeCompany} onBack={back} busy={busy === 'company'} />;
     case 'company_research':
       return <CompanyResearchScene busy={busy === 'company'} research={companyResearch} onContinue={next} onBack={() => goto('company_website')} />;
     case 'company_verify':
@@ -422,8 +435,13 @@ function explain(reason: string | undefined, ctx: 'founder' | 'company' | 'draft
     case 'consent_not_given': return 'Turn on the consent toggle to enrich from LinkedIn.';
     case 'invalid_linkedin_profile_url': return 'That does not look like a linkedin.com/in/… profile URL.';
     case 'invalid_linkedin_company_url': return 'That does not look like a linkedin.com/company/… URL.';
-    case 'apify_not_configured': return 'LinkedIn enrichment is not configured yet. Continue and fill this in by hand.';
-    case 'firecrawl_not_configured': return 'Website research is not configured yet. Continue and fill this in by hand.';
+    case 'apify_not_configured':
+      return 'The LinkedIn research provider is not configured. For local development set ' +
+        'AGENTORY_LOCAL_PROVIDER_MODE=mock to use fixtures, or continue and fill this in by hand.';
+    case 'firecrawl_not_configured':
+      return 'The website research provider is not configured. For local development set ' +
+        'AGENTORY_LOCAL_PROVIDER_MODE=mock to use fixtures, or continue and fill this in by hand.';
+    case 'no_pages_fetched': return 'That website could not be reached, so nothing was read from it.';
     case 'llm_not_configured': return 'AI drafting is not configured yet. You can still fill the Brain in by hand.';
     case 'invalid_website_url': return 'Enter a full website URL starting with https://';
     case 'sparse_profile_data': return 'Limited public LinkedIn data found. You can continue and fill this in by hand.';

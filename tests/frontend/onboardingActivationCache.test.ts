@@ -39,8 +39,13 @@ Deno.test("1. activation invalidates the cached brain before navigating", () => 
   // ORDER MATTERS. Invalidating after `navigate` races the gate: the query
   // refetches while the gate is already deciding, so the bounce still happens —
   // just intermittently, which is worse than reliably.
+  //
+  // The destination is matched as `navigate(<anything>)`, not as the literal
+  // `navigate('/dashboard')` this once hard-coded: activation now returns the
+  // user to `returnPath`, and pinning the destination made this test fail for a
+  // change that never touched the ordering it exists to protect.
   const inval = ONBOARDING.indexOf("invalidateQueries");
-  const nav = ONBOARDING.indexOf("navigate('/dashboard')");
+  const nav = ONBOARDING.search(/navigate\([^)]*\)/);
   assert(inval > -1 && nav > -1);
   assert(inval < nav, "the cache must be invalidated BEFORE navigating, not after");
   assert(
