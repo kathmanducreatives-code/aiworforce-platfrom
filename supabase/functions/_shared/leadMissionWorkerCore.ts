@@ -68,6 +68,11 @@ export interface WorkerConfig {
   heartbeatIntervalMs: number;
   missionCeilingMs: number;
   idlePollMs: number;
+  /**
+   * How often the cancelled-mission sweep may run. It used to run on EVERY
+   * idle tick (5s, ~17k scans a day) over rows it had already settled.
+   */
+  cancelSweepIntervalMs: number;
 }
 
 export const DEFAULT_WORKER_CONFIG: WorkerConfig = {
@@ -78,6 +83,7 @@ export const DEFAULT_WORKER_CONFIG: WorkerConfig = {
   // See LEAD_WORKER_DEFAULT_RUNTIME_MS / _MAX_RUNTIME_CAP_MS in leadExecutionEngine.ts.
   missionCeilingMs: 300_000,
   idlePollMs: 5_000,
+  cancelSweepIntervalMs: 60_000,
 };
 
 export interface WorkerDeps {
@@ -98,6 +104,8 @@ export interface WorkerDeps {
    * already agrees. Optional: a deps without it behaves exactly as before.
    */
   sweepCancelled?: () => Promise<{ scanned: number; reconciled: number }>;
+  /** Clock for the sweep cadence. Injected so a test drives it without waiting. */
+  now?: () => number;
   sleep: (ms: number) => Promise<void>;
   log?: (msg: string, meta?: unknown) => void;
 }
@@ -193,12 +201,21 @@ export async function runWorkerLoop(
   deps: WorkerDeps,
   shouldStop: () => boolean,
 ): Promise<void> {
+  const now = deps.now ?? (() => Date.now());
+  // The first idle tick sweeps: a worker that has just started has not.
+  let lastSweptAt = -Infinity;
   while (!shouldStop()) {
     const tick = await workerTick(deps);
     if (!tick.claimed && !shouldStop()) {
       // IDLE IS WHEN IT IS FREE. Never between claim and run, so a sweep can
       // not delay a mission, and never while one is executing.
-      if (deps.sweepCancelled) {
+      // ONCE A MINUTE, NOT EVERY TICK. The sweep is a safety net for a cancel
+      // no release follows; at 5s it re-scanned settled rows ~17,000 times a
+      // day. The window it scans (24h) is unchanged, so nothing it used to
+      // reconcile is missed — it is reconciled within a minute instead.
+      const sweepEvery = deps.config.cancelSweepIntervalMs ?? DEFAULT_WORKER_CONFIG.cancelSweepIntervalMs;
+      if (deps.sweepCancelled && now() - lastSweptAt >= sweepEvery) {
+        lastSweptAt = now();
         try {
           const swept = await deps.sweepCancelled();
           if (swept.reconciled > 0) deps.log?.("[worker] cancelled missions reconciled", swept);

@@ -53,6 +53,23 @@ export interface TerminalIds {
  */
 export interface TerminalRowsDb {
   readTask: (taskId: string) => Promise<{ status: string | null; result: Record<string, unknown> | null } | null>;
+  /**
+   * THE CHECK WITHOUT THE PAYLOAD (egress).
+   *
+   * `tasks.result` carries the engine's resume state — 150-500 kB a row — and
+   * the reconciliation reads three short strings from it. The sweep ran every
+   * 5s against rows it had already settled, so those kilobytes were the
+   * project's largest single egress source (~5.5 GB/day).
+   *
+   * This returns the SAME shape with only the keys the decision reads
+   * (`terminal_status`, `task_status`), projected server-side. When it finds
+   * nothing to fix, nothing else is read. When it does, `readTask` supplies the
+   * whole result and the patch is computed from THAT — so what is written is
+   * byte-for-byte what the full-read path wrote.
+   *
+   * Optional: a db without it keeps the original single-read behaviour.
+   */
+  readTaskTerminalFields?: (taskId: string) => Promise<{ status: string | null; result: Record<string, unknown> | null } | null>;
   readLineage: (lineageId: string) => Promise<{ status: string | null } | null>;
   readPlan: (planId: string) => Promise<{ status: string | null } | null>;
   writeTask: (taskId: string, patch: { status: string; result: Record<string, unknown> }) => Promise<void>;
@@ -86,14 +103,28 @@ export async function reconcileTerminalRows(
   nowIso: string,
 ): Promise<ReconcileResult> {
   const rows: TerminalRows = { task: null, lineage: null, plan: null };
-  if (ids.taskId) rows.task = await db.readTask(ids.taskId);
+  // THE CHEAP READ FIRST. `readTaskTerminalFields` returns the same task shape
+  // with only the keys `terminalViolations` reads; a settled row is answered
+  // from it and the 150-500 kB result is never sent.
+  const projected = ids.taskId && db.readTaskTerminalFields
+    ? await db.readTaskTerminalFields(ids.taskId)
+    : null;
+  if (ids.taskId) rows.task = projected ?? (db.readTaskTerminalFields ? null : await db.readTask(ids.taskId));
   if (ids.lineageId) rows.lineage = await db.readLineage(ids.lineageId);
   if (ids.planId) rows.plan = await db.readPlan(ids.planId);
 
-  const patch = planTerminalReconciliation(queueStatus, reason, rows, nowIso);
+  let patch = planTerminalReconciliation(queueStatus, reason, rows, nowIso);
   const written: ReconcileResult["written"] = [];
   if (patch.violations.length === 0) {
     return { violations: [], written, remaining: [] };
+  }
+  // A WRITE IS REQUIRED, SO THE WHOLE RESULT IS REQUIRED: the task patch merges
+  // into it (`{ ...result, terminal_status, task_status, auto_continuation }`).
+  // Re-decided on the full row so the projection can never change an outcome.
+  if (projected && ids.taskId) {
+    rows.task = await db.readTask(ids.taskId);
+    patch = planTerminalReconciliation(queueStatus, reason, rows, nowIso);
+    if (patch.violations.length === 0) return { violations: [], written, remaining: [] };
   }
   if (patch.task && ids.taskId) {
     await db.writeTask(ids.taskId, patch.task);
@@ -123,7 +154,9 @@ export interface CancelledQueueRow {
   id: string;
   task_id: string | null;
   lineage_id: string | null;
-  request: Record<string, unknown> | null;
+  /** The plan the queue row names. Projected (`request->>plan_id`) or read from `request`. */
+  plan_id?: string | null;
+  request?: Record<string, unknown> | null;
 }
 
 export interface CancelSweepDb extends TerminalRowsDb {
@@ -159,7 +192,9 @@ export async function sweepCancelledMissions(
   const rows = await db.listCancelled(limit);
   const out: CancelSweepResult = { scanned: rows.length, reconciled: 0, details: [] };
   for (const row of rows) {
-    const planId = typeof row.request?.plan_id === "string" ? row.request.plan_id : null;
+    const planId = typeof row.plan_id === "string" && row.plan_id
+      ? row.plan_id
+      : (typeof row.request?.plan_id === "string" ? row.request.plan_id : null);
     const r = await reconcileTerminalRows(db, "cancelled", CANCELLED_REASON, {
       taskId: row.task_id,
       // The lineage defaults to the task, exactly as the worker's release does.

@@ -46,10 +46,44 @@ function config(): WorkerConfig {
     heartbeatIntervalMs: num("LEAD_WORKER_HEARTBEAT_MS", DEFAULT_WORKER_CONFIG.heartbeatIntervalMs),
     missionCeilingMs: clampWorkerCeilingMs(env(LEAD_WORKER_MAX_RUNTIME_ENV)),
     idlePollMs: num("LEAD_WORKER_IDLE_POLL_MS", DEFAULT_WORKER_CONFIG.idlePollMs),
+    cancelSweepIntervalMs: num("LEAD_WORKER_CANCEL_SWEEP_MS", DEFAULT_WORKER_CONFIG.cancelSweepIntervalMs),
   };
 }
 
 function sleep(ms: number) { return new Promise<void>((r) => setTimeout(r, ms)); }
+
+/**
+ * THE TASK COLUMNS A TERMINAL DECISION READS — and not `result` itself.
+ *
+ * `terminalStatusOf` reads `terminal_status`, then `company_first_state
+ * .terminal_status`, then `company_first.status`; `terminalViolations` reads
+ * `terminal_status` and `task_status`. Projected server-side, that is a few
+ * hundred bytes instead of the engine's whole resume state.
+ */
+const TASK_TERMINAL_COLUMNS =
+  "status," +
+  "r_terminal_status:result->terminal_status," +
+  "r_task_status:result->task_status," +
+  "r_cf_status:result->company_first->status," +
+  "r_cfs_terminal:result->company_first_state->terminal_status";
+
+interface TaskTerminalRow {
+  status?: string | null;
+  r_terminal_status?: unknown;
+  r_task_status?: unknown;
+  r_cf_status?: unknown;
+  r_cfs_terminal?: unknown;
+}
+
+/** The projected keys back into the `result` shape the pure deciders read. */
+export function terminalResultOf(row: TaskTerminalRow): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (row.r_terminal_status != null) out.terminal_status = row.r_terminal_status;
+  if (row.r_task_status != null) out.task_status = row.r_task_status;
+  if (row.r_cf_status != null) out.company_first = { status: row.r_cf_status };
+  if (row.r_cfs_terminal != null) out.company_first_state = { terminal_status: row.r_cfs_terminal };
+  return out;
+}
 const firstRow = (data: unknown) => (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
 
 async function main() {
@@ -80,10 +114,10 @@ async function main() {
       return firstRow(data)?.bound === true;
     },
     readTaskOutcome: async (taskId) => {
-      const { data } = await db.from("tasks").select("status, result").eq("id", taskId).maybeSingle();
+      const { data } = await db.from("tasks").select(TASK_TERMINAL_COLUMNS).eq("id", taskId).maybeSingle();
       if (!data) return null;
-      const row = data as { status?: string | null; result?: unknown };
-      return { status: row.status ?? null, terminal_status: terminalStatusOf(row.result) };
+      const row = data as TaskTerminalRow;
+      return { status: row.status ?? null, terminal_status: terminalStatusOf(terminalResultOf(row)) };
     },
     log,
   });
@@ -152,6 +186,17 @@ async function main() {
   // leadMissionTerminal.ts and the row I/O in leadMissionCancellation.ts, which
   // a test can drive without a database — this file cannot be imported.
   const rowsDb: CancelSweepDb = {
+    // THE CHECK: three short strings, projected server-side. This is what the
+    // sweep reads on every pass; the 150-500 kB result below is read only when
+    // a write is actually required.
+    readTaskTerminalFields: async (taskId) => {
+      const { data } = await db.from("tasks").select(TASK_TERMINAL_COLUMNS).eq("id", taskId).maybeSingle();
+      if (!data) return null;
+      const row = data as TaskTerminalRow;
+      return { status: row.status ?? null, result: terminalResultOf(row) };
+    },
+    // THE MERGE: the patch writes `{ ...result, … }`, so the write path — and
+    // only the write path — needs the whole column.
     readTask: async (taskId) => {
       const { data } = await db.from("tasks").select("status, result").eq("id", taskId).maybeSingle();
       return (data ?? null) as { status: string | null; result: Record<string, unknown> | null } | null;
@@ -182,12 +227,13 @@ async function main() {
     // rewritten by a sweep.
     listCancelled: async (limit) => {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      // `request` is a whole mission; the sweep reads ONE field of it.
       const { data, error } = await db.from("lead_mission_queue")
-        .select("id, task_id, lineage_id, request")
+        .select("id, task_id, lineage_id, plan_id:request->>plan_id")
         .eq("status", "cancelled").gte("updated_at", since)
         .order("updated_at", { ascending: false }).limit(limit);
       if (error) { log("[worker] cancel sweep read failed", error.message); return []; }
-      return (data ?? []) as Array<{ id: string; task_id: string | null; lineage_id: string | null; request: Record<string, unknown> | null }>;
+      return (data ?? []) as Array<{ id: string; task_id: string | null; lineage_id: string | null; plan_id: string | null }>;
     },
   };
 

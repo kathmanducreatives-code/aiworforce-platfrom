@@ -152,7 +152,7 @@ Deno.test("the worker sweeps only when idle, and a sweep failure never stops the
   const stopAfter = (n: number) => () => calls.filter((c) => c === "claim").length >= n;
   const base = (over: Partial<WorkerDeps>): WorkerDeps => ({
     workerId: "w1",
-    config: { leaseSeconds: 180, heartbeatIntervalMs: 1000, missionCeilingMs: 1000, idlePollMs: 0 },
+    config: { leaseSeconds: 180, heartbeatIntervalMs: 1000, missionCeilingMs: 1000, idlePollMs: 0, cancelSweepIntervalMs: 60_000 },
     claim: () => { calls.push("claim"); return Promise.resolve({ claimed: false, reason: "no_work" }); },
     heartbeatFor: () => ({ start: () => {}, stop: () => {} }),
     runMission: () => Promise.resolve({ status: "ok", terminal: true }),
@@ -203,4 +203,29 @@ Deno.test("the worker's sweep query asks only for cancelled missions, recently u
   assert(!/"failed"|"complete"/.test(sweep), "a successful or failed mission is never visited by the sweep");
   assert(/\.gte\("updated_at", since\)/.test(sweep) && /24 \* 60 \* 60 \* 1000/.test(sweep), "bounded to the last day");
   assert(/\.limit\(limit\)/.test(sweep), "bounded in count");
+});
+
+// ── EGRESS: THE SWEEP IS A SAFETY NET, NOT A POLL ─────────────────────────
+
+Deno.test("the sweep runs about once a minute, not on every idle tick", async () => {
+  const calls: string[] = [];
+  let clock = 0;
+  const deps = {
+    workerId: "w1",
+    config: { leaseSeconds: 180, heartbeatIntervalMs: 1000, missionCeilingMs: 1000, idlePollMs: 0, cancelSweepIntervalMs: 60_000 },
+    claim: () => { calls.push("claim"); clock += 5_000; return Promise.resolve({ claimed: false, reason: "no_work" }); },
+    heartbeatFor: () => ({ start: () => {}, stop: () => {} }),
+    runMission: () => Promise.resolve({ status: "ok", terminal: true }),
+    release: () => Promise.resolve(),
+    sleep: () => Promise.resolve(),
+    log: () => {},
+    now: () => clock,
+    sweepCancelled: () => { calls.push("sweep"); return Promise.resolve({ scanned: 0, reconciled: 0 }); },
+  } as unknown as WorkerDeps;
+  // 24 idle ticks at 5s each = two minutes of worker time.
+  await runWorkerLoop(deps, () => calls.filter((c) => c === "claim").length >= 24);
+  const sweeps = calls.filter((c) => c === "sweep").length;
+  // One on the first tick (a fresh worker has never swept), then one a minute.
+  assert(sweeps >= 2 && sweeps <= 3, `two minutes of idling must sweep 2-3 times, not 24 (got ${sweeps})`);
+  assertEquals(calls.filter((c) => c === "claim").length, 24, "every tick still claims");
 });

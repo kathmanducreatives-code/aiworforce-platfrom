@@ -239,6 +239,51 @@ export function readAutoResumeSuppression(
   };
 }
 
+/**
+ * THE SCAN'S COLUMNS — the row, and the three result keys a SKIP can be decided
+ * from. Never `result` itself: the sweeper reads 50 rows every three minutes,
+ * and a stalled Lead V2 row carries 150-500 kB of engine resume state.
+ * `resumeScanSkip` decides the two pure skips from these; every other row has
+ * its full result fetched and is judged by `eligibleForAutoResume` unchanged.
+ */
+export const STALLED_SCAN_COLUMNS: string =
+  "id, workspace_id, user_id, plan_id, agent_slug, step_index, status, " +
+  "updated_at, created_at, continuation_claim_expires_at, " +
+  "r_terminal_status:result->terminal_status," +
+  "r_task_status:result->task_status," +
+  `r_suppressed:result->${AUTO_RESUME_SUPPRESSED_KEY}`;
+
+/** A scanned row before its result is fetched. */
+export interface StalledScanRow {
+  id: string;
+  status: string | null;
+  r_terminal_status?: unknown;
+  r_task_status?: unknown;
+  r_suppressed?: unknown;
+}
+
+/**
+ * Can this row be SKIPPED without reading its result?
+ *
+ * Only the checks that (a) are pure skips — no write, no dispatch — and (b)
+ * read nothing but the projected keys, in the ORDER `eligibleForAutoResume`
+ * applies them, so the reason recorded is the one it would have recorded.
+ * Anything else returns null and the row is judged on its full result.
+ */
+export function resumeScanSkip(row: StalledScanRow): IneligibleReason | null {
+  if (row.status !== RESUMABLE_ROW_STATUS &&
+      !RECOVERABLE_STAMPED_ROW_STATUSES.includes(String(row.status ?? ""))) {
+    return "not_ready";
+  }
+  if (readAutoResumeSuppression({ [AUTO_RESUME_SUPPRESSED_KEY]: row.r_suppressed })) {
+    return "auto_resume_suppressed";
+  }
+  const terminal = typeof row.r_terminal_status === "string" ? row.r_terminal_status : null;
+  if (terminal !== null && terminal !== CLAIMABLE_TERMINAL_STATUS) return "already_terminal";
+  return null;
+}
+
+
 export function eligibleForAutoResume(
   row: StalledTaskRow,
   now: number,

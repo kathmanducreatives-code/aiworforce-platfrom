@@ -1,150 +1,98 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import {
   fetchPlan, fetchTasksForPlan, fetchActivityForPlan, fetchApprovalsForPlan, fetchToolCallsForPlan,
   subscribePlan, type DBPlan, type DBTask, type DBActivity, type DBApproval, type DBToolCall,
 } from '@/lib/orchestration';
 import { deriveWorkflowUiState, type WorkflowRunUiState } from '@/lib/chat/state';
-import { decidePlanRefetch } from '@/lib/chat/planRefetch';
-import { coalesceLoads } from '@/lib/chat/coalescedLoad';
+import {
+  createPlanStoreRegistry, type PlanSnapshot, type PlanStore, type PlanStoreRegistry,
+} from '@/lib/chat/planStore';
 
-function latestActivityTs(plan: DBPlan | null, tasks: DBTask[], activity: DBActivity[], toolCalls: DBToolCall[]): string | null {
-  const candidates: (string | null)[] = [
-    plan?.completed_at ?? null,
-    plan?.created_at ?? null,
-    ...tasks.map((t) => t.finished_at ?? t.started_at ?? t.created_at ?? null),
-    ...activity.map((a) => a.created_at ?? null),
-    ...toolCalls.map((c) => c.completed_at ?? c.started_at ?? c.created_at ?? null),
-  ];
-  let best: number = -Infinity;
-  let bestStr: string | null = null;
-  for (const c of candidates) {
-    if (!c) continue;
-    const t = Date.parse(c);
-    if (Number.isFinite(t) && t > best) { best = t; bestStr = c; }
-  }
-  return bestStr;
-}
+/**
+ * THE BROWSER'S SIDE OF THE PLAN STORE.
+ *
+ * The reads, the realtime subscription and the heartbeat live in
+ * `planStore.ts`, one per plan id however many components ask for it: four do
+ * (ConversationView, ExecutionPlanCard, PlanDetailView, the Workbench), and
+ * before this each ran its own loop against the same rows. The heartbeat is
+ * also quiet while the tab is hidden — see the module header for what that
+ * cost.
+ */
+export const planStores: PlanStoreRegistry = createPlanStoreRegistry({
+  read: async (planId) => {
+    const [plan, tasks, activity, approvals, toolCalls] = await Promise.all([
+      fetchPlan(planId),
+      fetchTasksForPlan(planId),
+      fetchActivityForPlan(planId),
+      fetchApprovalsForPlan(planId),
+      fetchToolCallsForPlan(planId),
+    ]);
+    return { plan, tasks, activity, approvals, toolCalls };
+  },
+  subscribe: (planId, onChange) => subscribePlan(planId, onChange),
+  isHidden: () => typeof document !== 'undefined' && document.hidden,
+  onFocus: (handler) => {
+    if (typeof window === 'undefined') return () => {};
+    window.addEventListener('focus', handler);
+    document.addEventListener('visibilitychange', handler);
+    return () => {
+      window.removeEventListener('focus', handler);
+      document.removeEventListener('visibilitychange', handler);
+    };
+  },
+  setInterval: (fn, ms) => window.setInterval(fn, ms),
+  clearInterval: (id) => window.clearInterval(id),
+  now: () => Date.now(),
+});
+
+const IDLE: PlanSnapshot = {
+  plan: null, tasks: [], activity: [], approvals: [], toolCalls: [],
+  loading: false, lastActivityAt: null, lastChangeAt: 0,
+};
 
 export function usePlanDetail(planId: string | null) {
-  const [plan, setPlan] = useState<DBPlan | null>(null);
-  const [tasks, setTasks] = useState<DBTask[]>([]);
-  const [activity, setActivity] = useState<DBActivity[]>([]);
-  const [approvals, setApprovals] = useState<DBApproval[]>([]);
-  const [toolCalls, setToolCalls] = useState<DBToolCall[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshTick, setRefreshTick] = useState(0);
-  const lastActivityRef = useRef<string | null>(null);
-  const lastChangeAtRef = useRef<number>(Date.now());
-  const [, forceTick] = useState(0);
+  const storeRef = useRef<PlanStore | null>(null);
+  // Acquired in a ref during render and released on unmount, so the store
+  // exists before the first `getSnapshot` and is shared by every consumer of
+  // this plan id.
+  const held = useRef<string | null>(null);
+  if (planId !== held.current) {
+    if (held.current) planStores.release(held.current);
+    held.current = planId;
+    storeRef.current = planId ? planStores.acquire(planId) : null;
+  }
+  useEffect(() => () => {
+    if (held.current) planStores.release(held.current);
+    held.current = null;
+    storeRef.current = null;
+  }, []);
 
-  // CURRENT STATE, READABLE FROM A LONG-LIVED CALLBACK.
-  //
-  // The heartbeat and the focus handler are created once per `planId` and must
-  // judge whether to re-read using what we hold NOW. Reading the state variables
-  // directly captures them at effect-creation time — `plan: null`, `tasks: []` —
-  // which is precisely the bug that made the old heartbeat inert for the whole
-  // life of the component. Refs are the state; the setters below keep them so.
-  const planRef = useRef<DBPlan | null>(null);
-  const tasksRef = useRef<DBTask[]>([]);
-  const approvalsRef = useRef<DBApproval[]>([]);
+  const subscribe = useCallback(
+    (listener: () => void) => storeRef.current?.subscribe(listener) ?? (() => {}),
+    [planId],
+  );
+  const getSnapshot = useCallback(
+    () => storeRef.current?.snapshot() ?? IDLE,
+    [planId],
+  );
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, () => IDLE);
+  const refresh = useCallback(() => { storeRef.current?.refresh(); }, [planId]);
 
-  const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
-
-  useEffect(() => {
-    if (!planId) {
-      planRef.current = null; tasksRef.current = []; approvalsRef.current = [];
-      setPlan(null); setTasks([]); setActivity([]); setApprovals([]); setToolCalls([]); setLoading(false);
-      return;
-    }
-    let cancelled = false;
-
-    const read = async () => {
-      setLoading(true);
-      const [p, t, a, ap, tc] = await Promise.all([
-        fetchPlan(planId),
-        fetchTasksForPlan(planId),
-        fetchActivityForPlan(planId),
-        fetchApprovalsForPlan(planId),
-        fetchToolCallsForPlan(planId),
-      ]);
-      if (cancelled) return;
-      const newLatest = latestActivityTs(p, t, a, tc);
-      if (newLatest !== lastActivityRef.current) {
-        lastActivityRef.current = newLatest;
-        lastChangeAtRef.current = Date.now();
-      }
-      planRef.current = p; tasksRef.current = t; approvalsRef.current = ap;
-      setPlan(p); setTasks(t); setActivity(a); setApprovals(ap); setToolCalls(tc); setLoading(false);
-    };
-
-    // ONE OUTSTANDING READ, HOWEVER MANY THINGS ASK FOR ONE.
-    //
-    // `read` fans out to five queries and is triggered from four places: the
-    // heartbeat below, every realtime event, refocus, and `refresh`. Before
-    // this, none of them waited for the previous read — so once the backend
-    // answered slower than the heartbeat, reads accumulated without bound and
-    // one open tab could exhaust PostgREST's pool, timing out every other
-    // request in the app. See `coalesceLoads` for the full account.
-    const load = coalesceLoads(read, {
-      isCancelled: () => cancelled,
-      onError: () => { if (!cancelled) setLoading(false); },
-    });
-    load();
-
-    // PRIMARY PATH. Realtime pushes plan, task, activity, approval and tool-call
-    // changes; the migration in this PR is what makes those events reach us.
-    const unsub = subscribePlan(planId, load);
-
-    // Heartbeat: a safety net for a dropped socket, a missed event, or the ~2s
-    // race where the plan exists and run-agent has not inserted its task yet.
-    // It reads the REFS, so it sees what we hold now rather than what we held at
-    // mount — the distinction that made the previous heartbeat never fire.
-    const interval = window.setInterval(() => {
-      const decision = decidePlanRefetch({
-        plan: planRef.current, tasks: tasksRef.current, approvals: approvalsRef.current,
-        lastActivityAt: lastActivityRef.current,
-      });
-      if (decision.should) load();
-      // Force a re-render so consumers can re-evaluate "still working" labels.
-      forceTick((x) => x + 1);
-    }, 4000);
-
-    // Realtime does not replay what was missed while the tab was hidden, and a
-    // socket dropped in the background reconnects with a gap. One read on
-    // refocus closes it. Not polling: it fires on a user action, never on a timer.
-    const onFocus = () => {
-      // `visibilitychange` also fires on HIDE. Reading then is pointless work
-      // against a tab nobody is looking at.
-      if (typeof document !== 'undefined' && document.hidden) return;
-      const decision = decidePlanRefetch({
-        plan: planRef.current, tasks: tasksRef.current, approvals: approvalsRef.current,
-        lastActivityAt: lastActivityRef.current, regainedFocus: true,
-      });
-      if (decision.should) load();
-    };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
-
-    return () => {
-      cancelled = true;
-      unsub();
-      window.clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
-    };
-  }, [planId, refreshTick]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const uiState: WorkflowRunUiState = deriveWorkflowUiState({
-    plan, tasks, approvals,
-    lastActivityAt: lastActivityRef.current,
-  });
-  const secondsSinceChange = Math.floor((Date.now() - lastChangeAtRef.current) / 1000);
+  const uiState: WorkflowRunUiState = useMemo(() => deriveWorkflowUiState({
+    plan: snapshot.plan, tasks: snapshot.tasks, approvals: snapshot.approvals,
+    lastActivityAt: snapshot.lastActivityAt,
+  }), [snapshot]);
 
   return {
-    plan, tasks, activity, approvals, toolCalls,
-    loading, refresh,
+    plan: snapshot.plan as DBPlan | null,
+    tasks: snapshot.tasks as DBTask[],
+    activity: snapshot.activity as DBActivity[],
+    approvals: snapshot.approvals as DBApproval[],
+    toolCalls: snapshot.toolCalls as DBToolCall[],
+    loading: snapshot.loading,
+    refresh,
     uiState,
-    lastActivityAt: lastActivityRef.current,
-    secondsSinceChange,
+    lastActivityAt: snapshot.lastActivityAt,
+    secondsSinceChange: Math.floor((Date.now() - snapshot.lastChangeAt) / 1000),
   };
 }

@@ -31,6 +31,7 @@ import { excludeV2OwnedTasks, loadV2OwnedTaskIds } from "../_shared/leadMissionV
 import {
   eligibleForAutoResume, resumeRequestFor, STALE_AFTER_MS, MAX_RESUMABLE_AGE_MS,
   type StalledTaskRow,
+  resumeScanSkip, STALLED_SCAN_COLUMNS, type StalledScanRow,
 } from "../_shared/stalledLeadResume.ts";
 import { dispatchContinuation } from "../_shared/leadContinuationDispatch.ts";
 import {
@@ -228,9 +229,16 @@ Deno.serve(async (req) => {
   // than by falling silent; the bound here exists only to keep the query
   // sensible and is deliberately far wider than any decision horizon.
   const SCAN_HORIZON_MS = 30 * 24 * 60 * 60_000;
+  // ── THE SCAN DOES NOT CARRY THE RESULT (egress) ─────────────────────────
+  //
+  // This ran every three minutes over up to 50 rows and pulled `tasks.result`
+  // with each one — 150-500 kB of engine resume state per row, for a decision
+  // that starts with three short strings. `STALLED_SCAN_COLUMNS` projects those
+  // three; the full result is fetched below, per row, only for rows that are
+  // still candidates — so `eligibleForAutoResume` still sees exactly what it
+  // saw before, and V2-owned rows (excluded moments later) are never fetched.
   let q = admin.from("tasks")
-    .select("id, workspace_id, user_id, plan_id, agent_slug, step_index, status, " +
-      "updated_at, created_at, continuation_claim_expires_at, result")
+    .select(STALLED_SCAN_COLUMNS)
     // ── THE ROW STATES A STALLED CONTINUATION MAY BE FOUND IN ──────────────
     //
     // `ready` is the healthy checkpoint state and still the normal case. The
@@ -295,7 +303,23 @@ Deno.serve(async (req) => {
   const considered: Array<Record<string, unknown>> = [];
   let dispatched = 0;
 
-  for (const row of sweepable) {
+  for (const scanned of sweepable) {
+    // THE SKIPS THAT NEED NO RESULT: not ready, suppressed, already terminal —
+    // the same three checks, in the same order, that `eligibleForAutoResume`
+    // applies first, decided from the projected keys.
+    const cheap = resumeScanSkip(scanned as unknown as StalledScanRow);
+    if (cheap) {
+      considered.push({ task_id: scanned.id, eligible: false, reason: cheap, result_read: false });
+      continue;
+    }
+    // A CANDIDATE: now the whole result, for this row alone, so every decision
+    // below — ceilings, checkpoint, mission, dispatch — reads what it always did.
+    const { data: full } = await admin.from("tasks")
+      .select("result").eq("id", scanned.id).maybeSingle();
+    const row: StalledTaskRow = {
+      ...(scanned as unknown as StalledTaskRow),
+      result: ((full as { result?: Record<string, unknown> | null } | null)?.result) ?? null,
+    };
     // PAID WORK WAITING TO BE ADOPTED — the strongest reason to come back, and
     // the one `recoverPendingRuns` will turn into a `GET` rather than a second
     // POST once the slice runs.
