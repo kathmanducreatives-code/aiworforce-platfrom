@@ -2,10 +2,11 @@ import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import NotificationCenter from "./shared/NotificationCenter";
+import { LogOut, Menu, X, Command } from "lucide-react";
 import {
-  LayoutDashboard, Radar, Inbox, Users, Eye, BookOpen, Sparkles, Brain,
-  Mail, Plug, LogOut, Menu, X, Command,
-} from "lucide-react";
+  IconDashboard, IconSignals, IconAwaiting, IconLeads, IconContent,
+  IconAgents, IconCompanyBrain, IconIntegrations, IconSequences,
+} from "./nav/NavIcons";
 import { cn } from "@/lib/utils";
 
 interface MobileHeaderProps {
@@ -13,25 +14,23 @@ interface MobileHeaderProps {
 }
 
 const quickTabs = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Home" },
-  { to: "/signals", icon: Radar, label: "Signals" },
-  { to: "/leads", icon: Users, label: "Leads" },
-  { to: "/competitors", icon: Eye, label: "Competitors" },
-  { to: "/content", icon: BookOpen, label: "Content" },
-  { to: "/agents", icon: Sparkles, label: "Agents" },
+  { to: "/dashboard", icon: IconDashboard, label: "Home" },
+  { to: "/signals", icon: IconSignals, label: "Signals" },
+  { to: "/leads", icon: IconLeads, label: "Leads" },
+  { to: "/content", icon: IconContent, label: "Content" },
+  { to: "/agents", icon: IconAgents, label: "Agents" },
 ];
 
 const drawerItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/signals", icon: Radar, label: "Signals" },
-  { to: "/awaiting-you", icon: Inbox, label: "Awaiting You" },
-  { to: "/leads", icon: Users, label: "Leads" },
-  { to: "/competitors", icon: Eye, label: "Competitors" },
-  { to: "/content", icon: BookOpen, label: "Content" },
-  { to: "/agents", icon: Sparkles, label: "Agents" },
-  { to: "/company-brain", icon: Brain, label: "Company Brain" },
-  { to: "/settings/integrations", icon: Plug, label: "Integrations" },
-  { to: "/email-sequences", icon: Mail, label: "Email Sequences" },
+  { to: "/dashboard", icon: IconDashboard, label: "Dashboard" },
+  { to: "/signals", icon: IconSignals, label: "Signals" },
+  { to: "/awaiting-you", icon: IconAwaiting, label: "Awaiting You" },
+  { to: "/leads", icon: IconLeads, label: "Leads" },
+  { to: "/content", icon: IconContent, label: "Content" },
+  { to: "/agents", icon: IconAgents, label: "Agents" },
+  { to: "/company-brain", icon: IconCompanyBrain, label: "Company Brain" },
+  { to: "/settings/integrations", icon: IconIntegrations, label: "Integrations" },
+  { to: "/email-sequences", icon: IconSequences, label: "Email Sequences" },
 ];
 
 const MobileHeader = ({ onOpenCommandPalette }: MobileHeaderProps) => {
@@ -72,7 +71,7 @@ const MobileHeader = ({ onOpenCommandPalette }: MobileHeaderProps) => {
                   )
                 }
               >
-                <item.icon className="h-3.5 w-3.5" />
+                <item.icon size={14} />
                 {item.label}
               </NavLink>
             ))}
@@ -111,7 +110,7 @@ const MobileHeader = ({ onOpenCommandPalette }: MobileHeaderProps) => {
                   )
                 }
               >
-                <item.icon className="h-4 w-4 shrink-0 text-neutral-400" />
+                <item.icon size={16} className="shrink-0 text-neutral-400" />
                 {item.label}
               </NavLink>
             ))}

@@ -305,13 +305,56 @@ export function mockDraftFromEvidence(user: string): AnyRec {
 }
 
 /**
+ * A LinkedIn COMPANY row, in the shape the configured company actors send —
+ * `locations[{ headquarter, parsed.text }]`, `industries[{ name }]`,
+ * `foundedOn{ year }` — as documented in `hiringActorCatalog`. Modelled on the
+ * provider, not on the parser: reading this payload with `asStringArray` is
+ * exactly the bug that lost every company's offices.
+ */
+export function mockLinkedInCompanyRow(companyUrl: string): Record<string, unknown> {
+  const slug = profileSlug(companyUrl);
+  const name = slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") || "Sample Company";
+  return {
+    name,
+    universalName: slug,
+    linkedinUrl: companyUrl,
+    website: `https://${slug}.example`,
+    description: `${name} is a B2B SaaS company. ${FIXTURE_NOTE}`,
+    employeeCount: 18,
+    employeeCountRange: "11-50",
+    industries: [{ name: "Software Development" }, { name: "Technology, Information and Internet" }],
+    foundedOn: { year: 2023, month: 6, day: 1 },
+    specialties: ["Go-to-market", "AI agents"],
+    followerCount: 1240,
+    locations: [
+      { country: "NP", city: "Kathmandu", headquarter: true,
+        parsed: { text: "Kathmandu, Nepal", countryFull: "Nepal" } },
+      { country: "GB", city: "London", headquarter: false,
+        parsed: { text: "London, United Kingdom", countryFull: "United Kingdom" } },
+    ],
+  };
+}
+
+/**
  * The fixture-backed `ResearchDeps`. Same four functions the live adapter
  * builds in `generate-company-brain-draft`, same signatures, no network.
  */
 export function mockResearchDeps(base: ResearchDeps = {}): ResearchDeps {
   return {
     ...base,
-    runApifyActor: (_actor: string, input: unknown) => {
+    runApifyActor: (actor: string, input: unknown) => {
+      // The founder step and the company step call DIFFERENT actors through
+      // the same dep. Returning a profile row for a company lookup would let
+      // the company normalizer be "tested" against a shape it never sees.
+      if (/company/i.test(actor)) {
+        const i = (input ?? {}) as Record<string, unknown>;
+        const url = String(
+          (Array.isArray(i.companyUrls) ? i.companyUrls[0] : null) ??
+          (Array.isArray(i.companies) ? i.companies[0] : null) ??
+          i.companyUrl ?? i.url ?? "",
+        );
+        return Promise.resolve([mockLinkedInCompanyRow(url)]);
+      }
       // `buildProfileActorInput` sends the same URL under several keys, because
       // different actors name it differently. Any of them will do here.
       const i = (input ?? {}) as Record<string, unknown>;

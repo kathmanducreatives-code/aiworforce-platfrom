@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
 
-const LABELS = ['Identity', 'Department', 'Role', 'Model', 'Capabilities', 'Tools', 'Skills'];
+const LABELS = ['Identity', 'Department', 'Role', 'Model', 'Capabilities', 'Tools'];
 
 interface Props {
   current: number;          // 1..7

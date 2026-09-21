@@ -297,7 +297,11 @@ Deno.test("3.B credential presence is the only thing read, and it fails closed",
   assertFalse(modelGatewayAvailable(offEnv));
   assertFalse(modelGatewayAvailable((k) => (k === "ANTHROPIC_API_KEY" ? "   " : undefined)));
   assert(modelGatewayAvailable((k) => (k === "ANTHROPIC_API_KEY" ? "x" : undefined)));
-  assert(modelGatewayAvailable((k) => (k === "LOVABLE_API_KEY" ? "x" : undefined)));
+  // OPENAI, not LOVABLE: the Lovable gateway is retired, so its key no longer
+  // means a model can be reached — and reporting availability for a provider
+  // that cannot answer is how a refusal turns into a surprise.
+  assert(modelGatewayAvailable((k) => (k === "OPENAI_API_KEY" ? "x" : undefined)));
+  assertFalse(modelGatewayAvailable((k) => (k === "LOVABLE_API_KEY" ? "x" : undefined)));
   assertFalse(modelGatewayAvailable(() => { throw new Error("denied"); }));
 });
 

@@ -19,6 +19,7 @@ import {
   type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
 import type { FallbackReason, HiringRoute } from "./hiringRouteContract.ts";
+import { routeActorReady, type ReadinessPolicy } from "./routeReadiness.ts";
 import {
   REFERENT_BINDING_VERSION, type ResolvedReferentBinding,
 } from "./referentBinding.ts";
@@ -155,7 +156,16 @@ export function legacyLoopReachable(
 }
 
 /**
- * Wrap a provider invoker so an out-of-graph Actor cannot run.
+ * Wrap a provider invoker so an out-of-graph or not-executable Actor cannot run.
+ *
+ * TWO QUESTIONS, ONE CHOKEPOINT — every provider call in the engine passes
+ * through here:
+ *
+ *   containment  is this provider in THIS STEP's declared providers?
+ *   readiness    does the canonical readiness authority say it may run?
+ *
+ * The policy is optional, so the legacy V1 sourcing path — which has no mission
+ * readiness policy — keeps its existing behaviour exactly.
  *
  * The guard THROWS. A logged warning is what the previous design had, and it was
  * present and correct on the run that still spent money on the wrong Actors.
@@ -164,17 +174,48 @@ export function guardedInvoker<T extends { actorKey?: string; selected_actor_key
   plan: CapabilityPlan | null,
   invoke: (call: T) => Promise<Record<string, unknown>[]>,
   onBlocked?: (actorKey: string, error: CapabilityContainmentError) => void,
+  readiness?: ReadinessPolicy | null,
 ): (call: T) => Promise<Record<string, unknown>[]> {
-  if (!plan) return invoke;
+  if (!plan && !readiness) return invoke;
   return async (call: T) => {
     const actorKey = String(call.actorKey ?? call.selected_actor_key ?? "");
     if (actorKey) {
+      const capability = (call as { capabilityId?: string }).capabilityId;
       try {
         // THE CAPABILITY TRAVELS WITH THE CALL, so containment can ask the
         // question that matters: not "may this mission use this Actor at all?"
         // but "may THIS STEP use it?".
-        const capability = (call as { capabilityId?: string }).capabilityId;
-        assertProviderAllowed(plan, actorKey, capability ? { capability } : {});
+        if (plan) assertProviderAllowed(plan, actorKey, capability ? { capability } : {});
+
+        // AND THEN THE SAME AUTHORITY EVERY PLANNING LAYER ASKED. Plan
+        // containment only knows whether an actor is in the graph; it cannot
+        // tell a live route from a carded one, a disabled actor, or one whose
+        // credential is missing. Without this, an actor that reached the plan
+        // by any means — a plan frozen before readiness threading, a checkpoint
+        // restored from an older build, a caller that skipped the planner —
+        // executed at runtime while every planning layer above called it
+        // blocked. "Not executable" now means the same thing at the moment of
+        // spending as it does at the moment of planning.
+        // ONLY FOR A PLAN THAT CLAIMS TO BE READINESS-FILTERED. A plan built
+        // under the V2 enforcement gate has already had unready providers
+        // removed from every step, so this check should never fire for a
+        // legitimately planned call — it exists to catch the calls that did
+        // NOT come through that planning (a stale frozen plan, a restored
+        // checkpoint, a caller that skipped the planner).
+        //
+        // A plan built in `legacy` mode was deliberately NOT filtered, and the
+        // V1/Signals paths depend on that. Applying production strictness to
+        // those calls would migrate legacy behaviour by accident.
+        const enforced = plan?.executability?.mode === "enforce";
+        if (enforced && readiness && capability) {
+          const r = routeActorReady(actorKey, capability, readiness);
+          if (!r.ready) {
+            throw new CapabilityContainmentError(
+              `provider "${actorKey}" may not run for capability "${capability}": ${r.reason}`,
+              { provider: actorKey, capability, kind: "readiness" },
+            );
+          }
+        }
       } catch (e) {
         if (e instanceof CapabilityContainmentError) {
           onBlocked?.(actorKey, e);

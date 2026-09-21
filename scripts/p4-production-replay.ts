@@ -163,5 +163,11 @@ const merged = mergeReevaluation(
 console.log("\n── AFTER ───────────────────────────────────────────────");
 console.log("  decision   :", merged.decision, "| fit:", merged.mission_fit);
 console.log("  dropped    :", parsed.raw_shape.dropped_citations);
+console.log("  repaired   :", parsed.raw_shape.repaired_fields.filter((f) => f.startsWith("citation:")));
+for (const m of merged.matched_requirements) {
+  if (!m.evidence_id.startsWith("web_page")) continue;
+  console.log("  RECEIPT    :", m.evidence_id, "| page:", pageIntentFor(m.evidence_id),
+    "|", JSON.stringify(m.excerpt.slice(0, 90)));
+}
 console.log("  still open :", merged.unknown_fields);
 console.log("  reasoning  :", (merged.reasoning ?? "").slice(0, 350));

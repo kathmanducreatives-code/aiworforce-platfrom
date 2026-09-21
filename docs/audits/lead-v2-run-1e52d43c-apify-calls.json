@@ -1,0 +1,1762 @@
+{
+ "run": {
+  "queue_id": "1e52d43c-7351-4777-ab93-20c80e32ff26",
+  "task_id": "d9c2974f-bb12-4f29-8821-235d743ed7b8",
+  "plan_id": "8fbc66e8-17b7-4651-8690-44b9ceb56f7a",
+  "workspace_id": "e8af257d-4c42-4fc2-9d62-037cdfac27c4"
+ },
+ "totals": {
+  "apify_runs": 33,
+  "apify_billed_usd": 0.5902,
+  "ledger_recorded_usd": 0.2463
+ },
+ "calls": [
+  {
+   "call": 1,
+   "started_at": "2026-09-14T07:15:11.095Z",
+   "finished_at": "2026-09-14T07:15:16.051Z",
+   "actor": "memo23/y-combinator-scraper",
+   "actor_id": "SrIfcdrKs6VJr7M8W",
+   "run_id": "g3wIijOAbYpEEwI97",
+   "dataset_id": "3kEPT4mtnhQPinDCb",
+   "status": "SUCCEEDED",
+   "duration_s": 4.8,
+   "capability": "apify_yc_companies_memo23",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_yc_companies_memo23:v2:039fefff2045caef03e18dab",
+   "agentory_sent_input": {
+    "mode": "companies",
+    "role": "marketing",
+    "queries": [
+     "B2B SaaS",
+     "SaaS"
+    ],
+    "regions": [
+     "United States of America"
+    ],
+    "isHiring": true,
+    "maxItems": 10,
+    "industries": [
+     "B2B"
+    ],
+    "enrichEmails": false,
+    "scrapeOpenJobs": true,
+    "maxEmployeeSize": "250",
+    "minEmployeeSize": "5+",
+    "scrapeFounderDetails": false
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "maxItems": 10,
+    "mode": "companies",
+    "regions": [
+     "United States of America"
+    ],
+    "industries": [
+     "B2B"
+    ],
+    "isHiring": true,
+    "role": "marketing",
+    "scrapeOpenJobs": true,
+    "minEmployeeSize": "5+",
+    "queries": [
+     "B2B SaaS",
+     "SaaS"
+    ],
+    "maxEmployeeSize": "250",
+    "scrapeFounderDetails": false,
+    "enrichEmails": false,
+    "startUrls": [],
+    "location": "",
+    "topCompany": false,
+    "nonprofit": false,
+    "batch": [
+     "All Batches"
+    ],
+    "monitoringMode": false,
+    "maxConcurrency": 10,
+    "minConcurrency": 1,
+    "maxRequestRetries": 3,
+    "proxy": {
+     "useApifyProxy": true
+    }
+   },
+   "rows_returned": 10,
+   "apify_usage_total_usd": 0.018000000000000002,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "apify-default-dataset-item": 10,
+    "additional-data": 0
+   },
+   "agentory_ledger_actual_usd": 0.018,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "PropelAuth",
+    "Lab0",
+    "SafetyKit",
+    "Gojiberry AI",
+    "Fuse AI",
+    "Every",
+    "Nango",
+    "FurtherAI",
+    "Streak",
+    "Zentail"
+   ]
+  },
+  {
+   "call": 2,
+   "started_at": "2026-09-14T07:15:55.555Z",
+   "finished_at": "2026-09-14T07:16:07.941Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "H71EoIbUDYRi47f7q",
+   "dataset_id": "m9iZ2MBduHeXtpMRt",
+   "status": "SUCCEEDED",
+   "duration_s": 12.3,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:76a28db41f1266d8b03f9ba5",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "SafetyKit"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "SafetyKit",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.005,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 1
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "SafetyKit"
+   ]
+  },
+  {
+   "call": 3,
+   "started_at": "2026-09-14T07:15:55.604Z",
+   "finished_at": "2026-09-14T07:16:00.489Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "gG1Yt5mKQJTbjIBDD",
+   "dataset_id": "FDH0VY63nByioXokL",
+   "status": "SUCCEEDED",
+   "duration_s": 4.7,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:403daaa729a984b037b3aac8",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Gojiberry AI"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Gojiberry AI",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 0,
+   "apify_usage_total_usd": 0.001,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 0
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": []
+  },
+  {
+   "call": 4,
+   "started_at": "2026-09-14T07:15:55.605Z",
+   "finished_at": "2026-09-14T07:15:59.858Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "qVLqrcbOdZYclFpYa",
+   "dataset_id": "qk02YWPTucxPzeTFz",
+   "status": "SUCCEEDED",
+   "duration_s": 4.1,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:34cdf877b66c78369adf435e",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "PropelAuth"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "PropelAuth",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.005,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 1
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "PropelAuth"
+   ]
+  },
+  {
+   "call": 5,
+   "started_at": "2026-09-14T07:15:55.622Z",
+   "finished_at": "2026-09-14T07:16:00.746Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "Jqm0FIlTKVeEbvaFg",
+   "dataset_id": "iMiY9YMOgTXXYn0GR",
+   "status": "SUCCEEDED",
+   "duration_s": 5.0,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:b312aa848b4a5d584a473d47",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Lab0"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Lab0",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.005,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 1
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Lab0"
+   ]
+  },
+  {
+   "call": 6,
+   "started_at": "2026-09-14T07:16:04.753Z",
+   "finished_at": "2026-09-14T07:16:10.541Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "lZsPL9SSSIE0B485e",
+   "dataset_id": "Ic5HAi4fiHilV3twE",
+   "status": "SUCCEEDED",
+   "duration_s": 5.6,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:299a1fb9b33c47406cd2286c",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Fuse AI"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Fuse AI",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 4,
+   "apify_usage_total_usd": 0.017,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 4
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Fuse AI Workforce",
+    "Color Fuse AI",
+    "Fuse Ai",
+    "Fuse AI"
+   ]
+  },
+  {
+   "call": 7,
+   "started_at": "2026-09-14T07:16:04.943Z",
+   "finished_at": "2026-09-14T07:16:09.613Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "qBUV7vXsJ1QUG7u5H",
+   "dataset_id": "g5Rvucmi7Lhnokci2",
+   "status": "SUCCEEDED",
+   "duration_s": 4.5,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:0ed81c2a3cf377a7a9f33455",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Every"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Every",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 15,
+   "apify_usage_total_usd": 0.061,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 15
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Every Special Child",
+    "Every Woman",
+    "Every",
+    "Every Body Eat\u00ae",
+    "Every Meal",
+    "Every.org",
+    "Every",
+    "Every Pregnancy",
+    "Every Texan",
+    "AI Every Time",
+    "The EVERY Company",
+    "Every Health Group",
+    "Every Brand Apparel, Inc.",
+    "Every Page Counts",
+    "Every Shelter"
+   ]
+  },
+  {
+   "call": 8,
+   "started_at": "2026-09-14T07:16:05.169Z",
+   "finished_at": "2026-09-14T07:16:08.316Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "HcSwE2i3UyWBXOBm1",
+   "dataset_id": "rCsdEl8YEGaeosXaP",
+   "status": "SUCCEEDED",
+   "duration_s": 3.0,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:e3f51edf07d0123adddecaef",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Nango"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Nango",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 0,
+   "apify_usage_total_usd": 0.001,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 0
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": []
+  },
+  {
+   "call": 9,
+   "started_at": "2026-09-14T07:16:11.001Z",
+   "finished_at": "2026-09-14T07:16:17.664Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "2CokWpVpjOtygHItD",
+   "dataset_id": "LJAVPacnX0crDtEcJ",
+   "status": "SUCCEEDED",
+   "duration_s": 6.5,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:cc79beacbc9aac1363eaf4a1",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "FurtherAI"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "FurtherAI",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.005,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 1
+   },
+   "agentory_ledger_actual_usd": 0.005,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "FurtherAI"
+   ]
+  },
+  {
+   "call": 10,
+   "started_at": "2026-09-14T07:16:11.150Z",
+   "finished_at": "2026-09-14T07:16:18.374Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "b6HlRFINbbGAdfYtG",
+   "dataset_id": "2Aq9vd4LIrLfyGfJZ",
+   "status": "SUCCEEDED",
+   "duration_s": 7.1,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:0348c57c067d9db74d17266c",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Streak"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Streak",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 15,
+   "apify_usage_total_usd": 0.061,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 15
+   },
+   "agentory_ledger_actual_usd": 0.049,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Clean Streak Ventures",
+    "Winning Streak Inc.",
+    "Clean Streak Facility Services",
+    "Blue Streak Technologies",
+    "Winning Streak Ventures",
+    "Blue Streak Electronics Inc.",
+    "Red Streak LLC",
+    "Winning Streak Windows",
+    "Blue Streak Lighting & Electric",
+    "Silver Streak Media",
+    "Streak Spray",
+    "Clean Streak Inc.",
+    "Greek Streak",
+    "Blue Streak Telecommunications",
+    "Blue Streak Couriers"
+   ]
+  },
+  {
+   "call": 11,
+   "started_at": "2026-09-14T07:16:14.884Z",
+   "finished_at": "2026-09-14T07:16:18.897Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "BZc9embexL0LMwrCp",
+   "dataset_id": "UWvnqi6JZSwGP1nNQ",
+   "status": "SUCCEEDED",
+   "duration_s": 3.9,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:1cdcbbfcd719b7c01491dd4d",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Zentail"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Zentail",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.005,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 1
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Zentail"
+   ]
+  },
+  {
+   "call": 12,
+   "started_at": "2026-09-14T07:16:29.549Z",
+   "finished_at": "2026-09-14T07:16:37.938Z",
+   "actor": "harvestapi/linkedin-company",
+   "actor_id": "UwSdACBp7ymaGUJjS",
+   "run_id": "z6rRZhStbiRn7yOpg",
+   "dataset_id": "L2B6KUYZZOx3HKttT",
+   "status": "SUCCEEDED",
+   "duration_s": 8.3,
+   "capability": "apify_linkedin_company_details",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_details:v2:b338cfd71ba9d6b1538fd05d",
+   "agentory_sent_input": {
+    "companies": [
+     "https://www.linkedin.com/company/propelauth",
+     "https://www.linkedin.com/company/safetykit",
+     "https://www.linkedin.com/company/fuseaicom",
+     "https://www.linkedin.com/company/everybanking",
+     "https://www.linkedin.com/company/furtherai",
+     "https://www.linkedin.com/company/zentail"
+    ]
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "companies": [
+     "https://www.linkedin.com/company/propelauth",
+     "https://www.linkedin.com/company/safetykit",
+     "https://www.linkedin.com/company/fuseaicom",
+     "https://www.linkedin.com/company/everybanking",
+     "https://www.linkedin.com/company/furtherai",
+     "https://www.linkedin.com/company/zentail"
+    ]
+   },
+   "rows_returned": 6,
+   "apify_usage_total_usd": 0.024050000000000002,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "apify-default-dataset-item": 6
+   },
+   "agentory_ledger_actual_usd": 0.0241,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "FurtherAI",
+    "PropelAuth",
+    "Zentail",
+    "Fuse AI",
+    "Every",
+    "SafetyKit"
+   ]
+  },
+  {
+   "call": 13,
+   "started_at": "2026-09-14T07:21:48.523Z",
+   "finished_at": "2026-09-14T07:21:57.643Z",
+   "actor": "memo23/y-combinator-scraper",
+   "actor_id": "SrIfcdrKs6VJr7M8W",
+   "run_id": "biOMPehAiDAbEx2Ci",
+   "dataset_id": "aEA2hmqgACNUlbxsT",
+   "status": "SUCCEEDED",
+   "duration_s": 9.0,
+   "capability": "apify_yc_companies_memo23",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_yc_companies_memo23:v2:095286b4635941ba989bcba3",
+   "agentory_sent_input": {
+    "mode": "companies",
+    "role": "marketing",
+    "batch": [
+     "All Batches"
+    ],
+    "queries": [
+     "B2B SaaS",
+     "B2B software as a service",
+     "business software SaaS"
+    ],
+    "regions": [
+     "United States of America"
+    ],
+    "isHiring": true,
+    "maxItems": 10,
+    "nonprofit": false,
+    "topCompany": false,
+    "enrichEmails": false,
+    "scrapeOpenJobs": true,
+    "maxEmployeeSize": "250",
+    "minEmployeeSize": "1+",
+    "scrapeFounderDetails": false
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "maxItems": 10,
+    "mode": "companies",
+    "role": "marketing",
+    "batch": [
+     "All Batches"
+    ],
+    "queries": [
+     "B2B SaaS",
+     "B2B software as a service",
+     "business software SaaS"
+    ],
+    "regions": [
+     "United States of America"
+    ],
+    "isHiring": true,
+    "nonprofit": false,
+    "topCompany": false,
+    "scrapeOpenJobs": true,
+    "maxEmployeeSize": "250",
+    "minEmployeeSize": "1+",
+    "scrapeFounderDetails": false,
+    "enrichEmails": false,
+    "startUrls": [],
+    "location": "",
+    "industries": [
+     "All industries"
+    ],
+    "monitoringMode": false,
+    "maxConcurrency": 10,
+    "minConcurrency": 1,
+    "maxRequestRetries": 3,
+    "proxy": {
+     "useApifyProxy": true
+    }
+   },
+   "rows_returned": 10,
+   "apify_usage_total_usd": 0.018000000000000002,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "apify-default-dataset-item": 10,
+    "additional-data": 0
+   },
+   "agentory_ledger_actual_usd": 0.018,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "PropelAuth",
+    "Lab0",
+    "SafetyKit",
+    "Gojiberry AI",
+    "Fuse AI",
+    "Every",
+    "Nango",
+    "Pasito",
+    "Poly",
+    "FurtherAI"
+   ]
+  },
+  {
+   "call": 14,
+   "started_at": "2026-09-14T07:22:10.171Z",
+   "finished_at": "2026-09-14T07:22:14.881Z",
+   "actor": "memo23/y-combinator-scraper",
+   "actor_id": "SrIfcdrKs6VJr7M8W",
+   "run_id": "mT7T2ewScfEI2Wxdi",
+   "dataset_id": "GQnrsJXKQYFM5z8qv",
+   "status": "SUCCEEDED",
+   "duration_s": 4.5,
+   "capability": "apify_yc_companies_memo23",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_yc_companies_memo23:v2:7521bbd2bb72580fc9bcc76c",
+   "agentory_sent_input": {
+    "mode": "companies",
+    "role": "marketing",
+    "queries": [
+     "B2B SaaS",
+     "SaaS startup"
+    ],
+    "regions": [
+     "United States of America"
+    ],
+    "isHiring": true,
+    "maxItems": 10,
+    "enrichEmails": false,
+    "scrapeOpenJobs": true,
+    "maxEmployeeSize": "250",
+    "minEmployeeSize": "5+",
+    "scrapeFounderDetails": false
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "maxItems": 10,
+    "mode": "companies",
+    "queries": [
+     "B2B SaaS",
+     "SaaS startup"
+    ],
+    "regions": [
+     "United States of America"
+    ],
+    "isHiring": true,
+    "role": "marketing",
+    "scrapeOpenJobs": true,
+    "minEmployeeSize": "5+",
+    "maxEmployeeSize": "250",
+    "scrapeFounderDetails": false,
+    "enrichEmails": false,
+    "startUrls": [],
+    "location": "",
+    "topCompany": false,
+    "nonprofit": false,
+    "batch": [
+     "All Batches"
+    ],
+    "industries": [
+     "All industries"
+    ],
+    "monitoringMode": false,
+    "maxConcurrency": 10,
+    "minConcurrency": 1,
+    "maxRequestRetries": 3,
+    "proxy": {
+     "useApifyProxy": true
+    }
+   },
+   "rows_returned": 10,
+   "apify_usage_total_usd": 0.018000000000000002,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "apify-default-dataset-item": 10,
+    "additional-data": 0
+   },
+   "agentory_ledger_actual_usd": 0.018,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "PropelAuth",
+    "Lab0",
+    "SafetyKit",
+    "Gojiberry AI",
+    "Fuse AI",
+    "Every",
+    "Nango",
+    "Pasito",
+    "FurtherAI",
+    "Quartzy"
+   ]
+  },
+  {
+   "call": 15,
+   "started_at": "2026-09-14T07:22:43.435Z",
+   "finished_at": "2026-09-14T07:22:51.582Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "MFA7h04MHkEgn01cX",
+   "dataset_id": "fSrSHuTMggtsknsQy",
+   "status": "SUCCEEDED",
+   "duration_s": 8.0,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:7197da89743584d2648f7bfa",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Pasito"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Pasito",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 3,
+   "apify_usage_total_usd": 0.013000000000000001,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 3
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "PASITO A PASITO APPLIED BEHAVIOR ANALYSIS LLC",
+    "Pasito",
+    "PASITO INDUSTRIES PVT LTD"
+   ]
+  },
+  {
+   "call": 16,
+   "started_at": "2026-09-14T07:23:01.419Z",
+   "finished_at": "2026-09-14T07:23:19.810Z",
+   "actor": "harvestapi/linkedin-company",
+   "actor_id": "UwSdACBp7ymaGUJjS",
+   "run_id": "paRmY6609UebBnLtV",
+   "dataset_id": "ezNZ0wNStfZ9lt6hE",
+   "status": "SUCCEEDED",
+   "duration_s": 18.2,
+   "capability": "apify_linkedin_company_details",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_details:v2:a756912d423e4c91a66776d4",
+   "agentory_sent_input": {
+    "companies": [
+     "https://www.linkedin.com/company/pasito-ai"
+    ]
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "companies": [
+     "https://www.linkedin.com/company/pasito-ai"
+    ]
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.00405,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "apify-default-dataset-item": 1
+   },
+   "agentory_ledger_actual_usd": 0.004,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Pasito"
+   ]
+  },
+  {
+   "call": 17,
+   "started_at": "2026-09-14T07:26:53.188Z",
+   "finished_at": "2026-09-14T07:26:56.925Z",
+   "actor": "memo23/y-combinator-scraper",
+   "actor_id": "SrIfcdrKs6VJr7M8W",
+   "run_id": "Jg1SocG73w5Mtze99",
+   "dataset_id": "eMeNJTXm9vu9yh2Ji",
+   "status": "SUCCEEDED",
+   "duration_s": 3.6,
+   "capability": "apify_yc_companies_memo23",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_yc_companies_memo23:v2:5bbdba949f506ba747d815fa",
+   "agentory_sent_input": {
+    "mode": "companies",
+    "role": "marketing",
+    "batch": [
+     "Winter 2026",
+     "Spring 2026",
+     "Fall 2025",
+     "Summer 2025"
+    ],
+    "queries": [
+     "B2B SaaS",
+     "business software SaaS",
+     "software for businesses"
+    ],
+    "regions": [
+     "United States of America"
+    ],
+    "isHiring": true,
+    "maxItems": 10,
+    "enrichEmails": false,
+    "scrapeOpenJobs": true,
+    "maxEmployeeSize": "250",
+    "minEmployeeSize": "5+",
+    "scrapeFounderDetails": false
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "maxItems": 10,
+    "mode": "companies",
+    "queries": [
+     "B2B SaaS",
+     "business software SaaS",
+     "software for businesses"
+    ],
+    "regions": [
+     "United States of America"
+    ],
+    "batch": [
+     "Winter 2026",
+     "Spring 2026",
+     "Fall 2025",
+     "Summer 2025"
+    ],
+    "isHiring": true,
+    "role": "marketing",
+    "scrapeOpenJobs": true,
+    "minEmployeeSize": "5+",
+    "maxEmployeeSize": "250",
+    "scrapeFounderDetails": false,
+    "enrichEmails": false,
+    "startUrls": [],
+    "location": "",
+    "topCompany": false,
+    "nonprofit": false,
+    "industries": [
+     "All industries"
+    ],
+    "monitoringMode": false,
+    "maxConcurrency": 10,
+    "minConcurrency": 1,
+    "maxRequestRetries": 3,
+    "proxy": {
+     "useApifyProxy": true
+    }
+   },
+   "rows_returned": 10,
+   "apify_usage_total_usd": 0.018000000000000002,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "apify-default-dataset-item": 10,
+    "additional-data": 0
+   },
+   "agentory_ledger_actual_usd": 0.018,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Lab0",
+    "Gojiberry AI",
+    "10x Science",
+    "Semble",
+    "Uplane",
+    "Moss",
+    "Hyperspell",
+    "Manicule",
+    "Tasklet",
+    "Nixo"
+   ]
+  },
+  {
+   "call": 18,
+   "started_at": "2026-09-14T07:27:34.222Z",
+   "finished_at": "2026-09-14T07:27:40.032Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "edDicoXd6ltPejHDV",
+   "dataset_id": "0yhPgkPVN4Fqu7pMB",
+   "status": "SUCCEEDED",
+   "duration_s": 5.7,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:b07ef4059ddb97575fa17533",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Semble"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Semble",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 4,
+   "apify_usage_total_usd": 0.017,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 4
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Semble",
+    "Semble",
+    "Semble AI",
+    "Semble"
+   ]
+  },
+  {
+   "call": 19,
+   "started_at": "2026-09-14T07:27:34.271Z",
+   "finished_at": "2026-09-14T07:27:42.846Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "WxHPLqxN3UgobVd1r",
+   "dataset_id": "p2dqCTfRC23passEc",
+   "status": "SUCCEEDED",
+   "duration_s": 8.5,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:2b5522bd5ca04aeac9fae7d3",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "10x Science"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "10x Science",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 15,
+   "apify_usage_total_usd": 0.061,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 15
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Science Bounty Inc.",
+    "10X Engineered Materials",
+    "Natel Energy",
+    "10x Science (YC W26)",
+    "10x Management",
+    "Syfter",
+    "BioChain Institute, Inc., a CellBio Scientific Company",
+    "New Culture",
+    "Dataquest.io",
+    "Foresite Capital",
+    "Quantum Talent",
+    "Kestra",
+    "Indus Insights",
+    "10x Growth Alliance (Sahay Alliance)",
+    "Purebred Marketing"
+   ]
+  },
+  {
+   "call": 20,
+   "started_at": "2026-09-14T07:27:34.363Z",
+   "finished_at": "2026-09-14T07:27:41.038Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "wY7rr27oPWMYk0vLJ",
+   "dataset_id": "UPie5Kx7eaYxpIi7U",
+   "status": "SUCCEEDED",
+   "duration_s": 6.4,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:99584247beb3b10ca3002164",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Moss"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Moss",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 15,
+   "apify_usage_total_usd": 0.061,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 15
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Moss Consulting HR Services",
+    "360 Cloud Solutions (combined with Moss Adams in 2025)",
+    "True Sea Moss",
+    "moss",
+    "Moss",
+    "ella moss",
+    "Moss",
+    "Moss Bros Auto Group",
+    "Moss Adams",
+    "Moss School of Construction",
+    "MOSS Building & Design",
+    "moss",
+    "Moss, Luse & Womble",
+    "Moss Home Solutions",
+    "Moss Inc."
+   ]
+  },
+  {
+   "call": 21,
+   "started_at": "2026-09-14T07:27:34.394Z",
+   "finished_at": "2026-09-14T07:27:40.242Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "89ddIOHX6jU8H5PVc",
+   "dataset_id": "657iqDyUeHnXfbemT",
+   "status": "SUCCEEDED",
+   "duration_s": 5.7,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:deece791aa5cd975a262d448",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Uplane"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Uplane",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 2,
+   "apify_usage_total_usd": 0.009000000000000001,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 2
+   },
+   "agentory_ledger_actual_usd": 0.005,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "UpLane",
+    "Uplane"
+   ]
+  },
+  {
+   "call": 22,
+   "started_at": "2026-09-14T07:27:44.537Z",
+   "finished_at": "2026-09-14T07:27:51.414Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "gQGESe0ibetD4APqw",
+   "dataset_id": "gTpKZUfNtoffKPtfI",
+   "status": "SUCCEEDED",
+   "duration_s": 6.8,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:ad25be34f5a45c22db554c7f",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Hyperspell"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Hyperspell",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.005,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 1
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Hyperspell"
+   ]
+  },
+  {
+   "call": 23,
+   "started_at": "2026-09-14T07:27:44.603Z",
+   "finished_at": "2026-09-14T07:27:52.600Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "Mag7x0uoD0MknhD17",
+   "dataset_id": "ljWm3buAsEAtvemfM",
+   "status": "SUCCEEDED",
+   "duration_s": 7.9,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:ac676e166078b260876a9bb9",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Manicule"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Manicule",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.005,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 1
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Manicule (YC P26)"
+   ]
+  },
+  {
+   "call": 24,
+   "started_at": "2026-09-14T07:27:45.040Z",
+   "finished_at": "2026-09-14T07:27:49.886Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "AfKYJEMDMGfM9NdVw",
+   "dataset_id": "Y7bQpdMgupxxigOli",
+   "status": "SUCCEEDED",
+   "duration_s": 4.7,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:43e9a0574b49064de008df7a",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Tasklet"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Tasklet",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 2,
+   "apify_usage_total_usd": 0.009000000000000001,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 2
+   },
+   "agentory_ledger_actual_usd": 0.005,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Tasklet Factory",
+    "TaskLet"
+   ]
+  },
+  {
+   "call": 25,
+   "started_at": "2026-09-14T07:27:48.236Z",
+   "finished_at": "2026-09-14T07:27:56.111Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "BAyaMHVOjmDBkPRn4",
+   "dataset_id": "VJkff7C4BkFdKFzfd",
+   "status": "SUCCEEDED",
+   "duration_s": 7.7,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:d76a5a9cbdcf76ff1a45a9cf",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Nixo"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Nixo",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 2,
+   "apify_usage_total_usd": 0.009000000000000001,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 2
+   },
+   "agentory_ledger_actual_usd": 0.005,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "NIXO Solutions LLC",
+    "NIXO"
+   ]
+  },
+  {
+   "call": 26,
+   "started_at": "2026-09-14T07:28:06.552Z",
+   "finished_at": "2026-09-14T07:28:14.781Z",
+   "actor": "harvestapi/linkedin-company",
+   "actor_id": "UwSdACBp7ymaGUJjS",
+   "run_id": "qFHlWi91GKXlYkgqr",
+   "dataset_id": "9mmgpyGPc3dJ6Sq1t",
+   "status": "SUCCEEDED",
+   "duration_s": 8.1,
+   "capability": "apify_linkedin_company_details",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_details:v2:28b34f1965913c0707dc6e52",
+   "agentory_sent_input": {
+    "companies": [
+     "https://www.linkedin.com/company/10xscience",
+     "https://www.linkedin.com/company/sembleai",
+     "https://www.linkedin.com/company/uplane-com",
+     "https://www.linkedin.com/company/hyperspell"
+    ]
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "companies": [
+     "https://www.linkedin.com/company/10xscience",
+     "https://www.linkedin.com/company/sembleai",
+     "https://www.linkedin.com/company/uplane-com",
+     "https://www.linkedin.com/company/hyperspell"
+    ]
+   },
+   "rows_returned": 4,
+   "apify_usage_total_usd": 0.016050000000000002,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "apify-default-dataset-item": 4
+   },
+   "agentory_ledger_actual_usd": 0.0161,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Uplane",
+    "Hyperspell",
+    "10x Science (YC W26)",
+    "Semble"
+   ]
+  },
+  {
+   "call": 27,
+   "started_at": "2026-09-14T07:32:06.878Z",
+   "finished_at": "2026-09-14T07:32:12.699Z",
+   "actor": "memo23/y-combinator-scraper",
+   "actor_id": "SrIfcdrKs6VJr7M8W",
+   "run_id": "4havAcZYghTdDA0DJ",
+   "dataset_id": "SpRNOb6JBdAFrOebZ",
+   "status": "SUCCEEDED",
+   "duration_s": 5.7,
+   "capability": "apify_yc_companies_memo23",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_yc_companies_memo23:v2:6eec708757a1cd07909f053b",
+   "agentory_sent_input": {
+    "mode": "companies",
+    "role": "marketing",
+    "batch": [
+     "All Batches"
+    ],
+    "queries": [],
+    "regions": [
+     "United States of America"
+    ],
+    "isHiring": true,
+    "maxItems": 10,
+    "industries": [
+     "B2B"
+    ],
+    "topCompany": false,
+    "enrichEmails": false,
+    "scrapeOpenJobs": true,
+    "maxEmployeeSize": "250",
+    "minEmployeeSize": "1+",
+    "scrapeFounderDetails": false
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "maxItems": 10,
+    "mode": "companies",
+    "role": "marketing",
+    "batch": [
+     "All Batches"
+    ],
+    "queries": [],
+    "regions": [
+     "United States of America"
+    ],
+    "isHiring": true,
+    "industries": [
+     "B2B"
+    ],
+    "topCompany": false,
+    "scrapeOpenJobs": true,
+    "maxEmployeeSize": "250",
+    "minEmployeeSize": "1+",
+    "scrapeFounderDetails": false,
+    "enrichEmails": false,
+    "startUrls": [],
+    "location": "",
+    "nonprofit": false,
+    "monitoringMode": false,
+    "maxConcurrency": 10,
+    "minConcurrency": 1,
+    "maxRequestRetries": 3,
+    "proxy": {
+     "useApifyProxy": true
+    }
+   },
+   "rows_returned": 10,
+   "apify_usage_total_usd": 0.018000000000000002,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "apify-default-dataset-item": 10,
+    "additional-data": 0
+   },
+   "agentory_ledger_actual_usd": 0.018,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "ShipBob",
+    "Mason",
+    "Deepgram",
+    "Mux",
+    "Bitmovin",
+    "SnapMagic",
+    "Gemnote",
+    "Mashgin",
+    "Tara AI",
+    "Streak"
+   ]
+  },
+  {
+   "call": 28,
+   "started_at": "2026-09-14T07:32:50.067Z",
+   "finished_at": "2026-09-14T07:32:55.224Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "D0Vwys0SqzIW4WVf8",
+   "dataset_id": "QRhnYF5hZVLnCHzEa",
+   "status": "SUCCEEDED",
+   "duration_s": 5.0,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:034f391c1bed2a0ec97c5118",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Gemnote"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Gemnote",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.005,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 1
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Gemnote"
+   ]
+  },
+  {
+   "call": 29,
+   "started_at": "2026-09-14T07:32:50.126Z",
+   "finished_at": "2026-09-14T07:32:54.395Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "f1jD96qxQPCeNUfdl",
+   "dataset_id": "rEnSUbWhhqXxCNSen",
+   "status": "SUCCEEDED",
+   "duration_s": 4.1,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:057db80bb26e9a46cf1d5dbb",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "SnapMagic"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "SnapMagic",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.005,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 1
+   },
+   "agentory_ledger_actual_usd": 0.005,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "SnapMagic"
+   ]
+  },
+  {
+   "call": 30,
+   "started_at": "2026-09-14T07:32:50.212Z",
+   "finished_at": "2026-09-14T07:32:56.457Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "ppgJyaKoleTa8zueq",
+   "dataset_id": "OhBIAipHl3phU7cU9",
+   "status": "SUCCEEDED",
+   "duration_s": 6.1,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:efdb32e73f72eb3d544c32b5",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "ShipBob"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "ShipBob",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.005,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 1
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "ShipBob"
+   ]
+  },
+  {
+   "call": 31,
+   "started_at": "2026-09-14T07:32:50.274Z",
+   "finished_at": "2026-09-14T07:32:56.264Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "XVTjIYlu2cPQff3bG",
+   "dataset_id": "LBVWGbe1dLxnv5Ckc",
+   "status": "SUCCEEDED",
+   "duration_s": 5.9,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:e4a22a0bc6671cf80718fc4f",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Mason"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Mason",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 15,
+   "apify_usage_total_usd": 0.061,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 15
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Mason Frank International",
+    "Legg Mason (Acquired by Franklin Templeton)",
+    "Mason Construction, LLC",
+    "Mason",
+    "Mason Contractors Association of America (MCAA)",
+    "Mason Alexander",
+    "Murdoch Mason Executive Search Group",
+    "Virginia Mason Franciscan Health",
+    "Mercatus Center at George Mason University",
+    "Mason",
+    "Mason Technologies Inc.",
+    "Mason & Hanger",
+    "Mason, Bruce & Girard, Inc. (MB&G)",
+    "Mason",
+    "George Mason University - Antonin Scalia Law School"
+   ]
+  },
+  {
+   "call": 32,
+   "started_at": "2026-09-14T07:32:59.498Z",
+   "finished_at": "2026-09-14T07:33:12.556Z",
+   "actor": "harvestapi/linkedin-company-search",
+   "actor_id": "taHaRcqil3scbchuI",
+   "run_id": "7WtGtHGvQp373cfYn",
+   "dataset_id": "O6rOds7uvQsX1ykgZ",
+   "status": "SUCCEEDED",
+   "duration_s": 12.9,
+   "capability": "apify_linkedin_company_search",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_search:v2:ee20015267b53b3a6830afde",
+   "agentory_sent_input": {
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "scraperMode": "full",
+    "searchQuery": "Tara AI"
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "searchQuery": "Tara AI",
+    "scraperMode": "full",
+    "maxItems": 15,
+    "locations": [
+     "United States"
+    ],
+    "startPage": 1
+   },
+   "rows_returned": 1,
+   "apify_usage_total_usd": 0.005,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "short-company": 0,
+    "full-company": 1
+   },
+   "agentory_ledger_actual_usd": 0.001,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "Tara AI"
+   ]
+  },
+  {
+   "call": 33,
+   "started_at": "2026-09-14T07:33:24.610Z",
+   "finished_at": "2026-09-14T07:33:34.626Z",
+   "actor": "harvestapi/linkedin-company",
+   "actor_id": "UwSdACBp7ymaGUJjS",
+   "run_id": "L5QHuk9MTVSggq3Cy",
+   "dataset_id": "316BWg6ULcC1LNold",
+   "status": "SUCCEEDED",
+   "duration_s": 9.9,
+   "capability": "apify_linkedin_company_details",
+   "ledger_attempt_number": 1,
+   "ledger_logical_call_key": "d9c2974f-bb12-4f29-8821-235d743ed7b8:apify_linkedin_company_details:v2:61142cda61d69484cd0e3d71",
+   "agentory_sent_input": {
+    "companies": [
+     "https://www.linkedin.com/company/shipbob",
+     "https://www.linkedin.com/company/mason-america",
+     "https://www.linkedin.com/company/snapmagic",
+     "https://www.linkedin.com/company/gemnote",
+     "https://www.linkedin.com/company/tara-ai"
+    ]
+   },
+   "apify_effective_input_after_actor_defaults": {
+    "companies": [
+     "https://www.linkedin.com/company/shipbob",
+     "https://www.linkedin.com/company/mason-america",
+     "https://www.linkedin.com/company/snapmagic",
+     "https://www.linkedin.com/company/gemnote",
+     "https://www.linkedin.com/company/tara-ai"
+    ]
+   },
+   "rows_returned": 5,
+   "apify_usage_total_usd": 0.020050000000000002,
+   "apify_charged_events": {
+    "apify-actor-start": 1,
+    "apify-default-dataset-item": 5
+   },
+   "agentory_ledger_actual_usd": 0.0201,
+   "agentory_ledger_cost_source": "provider_reported",
+   "dataset_company_names": [
+    "SnapMagic",
+    "ShipBob",
+    "Tara AI",
+    "Gemnote",
+    "Mason"
+   ]
+  }
+ ]
+}

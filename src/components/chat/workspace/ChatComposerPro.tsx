@@ -1,3 +1,4 @@
+import { subscribeChatDraft } from '@/lib/chatDraft';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ArrowUp, Hash, Loader2, Slash, X, AtSign } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -142,6 +143,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
         metadata: detail.metadata,
       });
     };
+    const unsubscribeDraft = subscribeChatDraft((text) => onPrefill(new CustomEvent('chat:prefill', { detail: text })));
     window.addEventListener('chat:prefill', onPrefill);
     window.addEventListener('chat:send', onSend);
     // Buffered command bus (Signals/Content card actions). Delivery is deferred
@@ -158,6 +160,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
       });
     });
     return () => {
+      unsubscribeDraft();
       window.removeEventListener('chat:prefill', onPrefill);
       window.removeEventListener('chat:send', onSend);
       unsubscribe();

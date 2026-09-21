@@ -262,10 +262,11 @@ export function createStrategistGenerateJson(opts: StrategistGenerateOpts = {}):
         ok: true,
         content: result.content,
         json: result.json,
-        // The canonical result carries its own adapter id; the legacy provider
-        // union only knows two names, so the transport is reported honestly and
-        // the strategist id travels in `model`.
-        provider: "lovable-ai",
+        // The canonical result carries its own adapter id; the transport union
+        // names only the vendors `aiProvider` can reach, so the real strategist
+        // id travels in `model` while `provider` stays a member of that union.
+        // (It said "lovable-ai" until that gateway was retired.)
+        provider: "openai",
         model: `${result.provider ?? providerId}:${result.model}`,
         usage: result.usage,
         latencyMs: result.latencyMs,
@@ -288,7 +289,7 @@ export function createStrategistGenerateJson(opts: StrategistGenerateOpts = {}):
         ok: escalation.ok,
         content: escalation.content,
         json: escalation.json,
-        provider: escalation.ok ? "lovable-ai" : "none",
+        provider: escalation.ok ? "openai" : "none",
         model: `${escalation.provider ?? providerId}:${escalation.model}`,
         usage: escalation.usage,
         error: escalation.error,

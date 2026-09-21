@@ -43,7 +43,13 @@ interface ScreeningJob {
   title: string;
 }
 
-const hasApiKey = !!import.meta.env.VITE_FIRECRAWL_API_KEY;
+// FIRECRAWL RUNS SERVER SIDE. This page used to read a VITE_-prefixed Firecrawl
+// key to decide whether live scraping was possible, which is exactly what put
+// that key in the browser bundle. The credential now lives in the
+// `firecrawl-scrape` Edge Function, so the browser cannot know — and does not
+// need to know — whether it is configured: a scrape that is not configured
+// fails with `firecrawl_not_configured` and is reported when it happens.
+const hasApiKey = true;
 
 const TalentIntelligence = () => {
   const { user } = useAuth();
@@ -202,7 +208,7 @@ const TalentIntelligence = () => {
         <div className="mb-6 flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
           <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
           <p className="text-sm text-destructive">
-            Firecrawl API key not configured. Add <code className="font-mono bg-destructive/10 px-1 rounded">VITE_FIRECRAWL_API_KEY</code> to your environment to enable live scraping.
+            Live scraping is unavailable. Firecrawl runs server side; check that the firecrawl-scrape function has its credential configured.
           </p>
         </div>
       )}

@@ -1,3 +1,4 @@
+import SharedAgentPortrait from '@/components/agents/AgentPortrait';
 /**
  * AGENT DESIGN SYSTEM — the shared visual language for the AI workforce
  * sequence.
@@ -82,36 +83,7 @@ export const AgentPortrait = memo(function AgentPortrait({
   active?: boolean;
   className?: string;
 }) {
-  return (
-    <div
-      className={cn('agent-portrait relative shrink-0', className)}
-      style={{ width: size, height: size, ['--a' as string]: employee.accent }}
-      data-active={active ? 'true' : 'false'}
-    >
-      <span className="agent-portrait__bloom" aria-hidden="true" />
-      <span className="agent-portrait__disc">
-        {employee.portrait ? (
-          <img
-            src={employee.portrait}
-            alt={`${employee.name} — ${employee.function}`}
-            width={size * 2}
-            height={size * 2}
-            loading="lazy"
-            decoding="async"
-            className="agent-portrait__img"
-          />
-        ) : (
-          <span
-            className="w-full h-full flex items-center justify-center font-display font-black"
-            style={{ color: employee.accent, fontSize: size * 0.4 }}
-          >
-            {employee.initial}
-          </span>
-        )}
-        <span className="agent-portrait__rim" aria-hidden="true" />
-      </span>
-    </div>
-  );
+  return <SharedAgentPortrait agentId={employee.id} name={employee.name} size={size} active={active} className={className} />;
 });
 
 /* ────────────────────────────────────────────────────────── AGENT IDENTITY ── */

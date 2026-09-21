@@ -6,7 +6,7 @@ import { GLASS_CARD } from "@/components/layout/workspaceStyles";
 const CLASS_STYLE: Record<string, string> = {
   direct: "border-rose-500/30 text-rose-300",
   adjacent: "border-amber-500/30 text-amber-300",
-  replacement: "border-sky-500/30 text-sky-300",
+  replacement: "border-emerald-500/30 text-emerald-300",
 };
 
 export default function CompetitorSignalCard({ signal }: { signal: RawSignal }) {

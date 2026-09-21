@@ -70,7 +70,7 @@ export default function ApprovalCard({ approval, agentId }: Props) {
               onClick={() => decide('approve')}
               disabled={!!resolving}
               className={cn(
-                'flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium transition-all disabled:opacity-50',
+                'ag-btn ag-btn-primary flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-lg text-sm font-medium disabled:opacity-50',
               )}
             >
               <Check className="h-4 w-4" /> Approve

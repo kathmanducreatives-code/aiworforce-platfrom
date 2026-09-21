@@ -265,7 +265,38 @@ import {
   buildChatCompletionsBody, type ReasoningEffort,
 } from "./modelRequestBody.ts";
 
-const ENDPOINT = "https://api.openai.com/v1/chat/completions";
+const DEFAULT_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+
+/**
+ * THE ENDPOINT, WHICH IS OPENAI UNLESS A LOOPBACK STUB SAYS OTHERWISE.
+ *
+ * Local development has no OpenAI key on purpose (see
+ * `supabase/functions/.env.local`), and the execution planner is a model call,
+ * so the whole lead pipeline stops at `no_api_key` and nothing downstream of
+ * planning can be exercised at all. A stub on localhost answers it for free.
+ *
+ * THE OVERRIDE IS LOOPBACK-ONLY, and that is the entire security argument: an
+ * env var that could point this function at an arbitrary host would be a way to
+ * exfiltrate every prompt — including workspace data — to somebody else's
+ * server, and a deployed function has no business talking to 127.0.0.1. So a
+ * non-loopback value is IGNORED, loudly, rather than honoured.
+ */
+function resolveEndpoint(readEnv: (k: string) => string | undefined): string {
+  const raw = readEnv("OPENAI_BASE_URL");
+  if (!raw) return DEFAULT_ENDPOINT;
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    console.warn("[gpt] OPENAI_BASE_URL is not a URL — using api.openai.com");
+    return DEFAULT_ENDPOINT;
+  }
+  if (u.hostname !== "127.0.0.1" && u.hostname !== "localhost" && u.hostname !== "[::1]") {
+    console.warn("[gpt] OPENAI_BASE_URL is not loopback — ignored, using api.openai.com");
+    return DEFAULT_ENDPOINT;
+  }
+  return `${raw.replace(/\/+$/, "")}/chat/completions`;
+}
 
 // ── THE TRANSIENT-FAILURE POLICY ───────────────────────────────────────────
 //
@@ -450,7 +481,7 @@ export async function gptStructured<T>(
     attempts = attempt + 1;
     let transientWaitMs: number | null = null;
     try {
-      const res = await doFetch(ENDPOINT, requestInit);
+      const res = await doFetch(resolveEndpoint(readEnv), requestInit);
 
       if (!res.ok) {
         const body = await res.text().catch(() => "");

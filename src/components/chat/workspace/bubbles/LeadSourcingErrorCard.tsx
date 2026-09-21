@@ -56,9 +56,7 @@ export default function LeadSourcingErrorCard({ payload, conversationId }: { pay
                       send('Show the search details for that last search.', conversationId);
                     }
                   }}
-                  className={primary
-                    ? 'h-7 gap-1.5 bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold text-[12px]'
-                    : 'h-7 gap-1.5 text-[12px]'}
+                  className="h-7 gap-1.5 text-[12px]"
                 >
                   {a === 'broaden_search' && <RotateCw className="h-3 w-3" />}
                   {(a === 'edit_criteria' || a === 'change_source') && <ListFilter className="h-3 w-3" />}
@@ -76,7 +74,7 @@ export default function LeadSourcingErrorCard({ payload, conversationId }: { pay
         ) : (
           <>
             {payload.retry_command && (
-              <Button size="sm" onClick={() => send(payload.retry_command!, conversationId)} className="h-7 gap-1.5 bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold text-[12px]">
+              <Button size="sm" onClick={() => send(payload.retry_command!, conversationId)} className="h-7 gap-1.5 text-[12px]">
                 <RotateCw className="h-3 w-3" /> Retry
               </Button>
             )}

@@ -29,7 +29,7 @@ export interface AgentModelManifest {
    */
   rig: { head: string; neck?: string; eyeLeft?: string; eyeRight?: string; chest?: string };
   /** Morph targets (ARKit-52 naming) for procedural blinks. Optional. */
-  expressions?: { blinkLeft?: string; blinkRight?: string };
+  expressions?: { blinkLeft?: string; blinkRight?: string; smileLeft?: string; smileRight?: string };
   /**
    * Clip name per continuous state. A missing state falls back to `idle`
    * (or procedural breathing) — never to another state's clip, so a model
@@ -51,6 +51,8 @@ export interface Agent3DEntry {
 
 /** Per-model ceiling — compressed geometry and KTX2 textures fit well under it. */
 export const MODEL_BUDGET_BYTES = 5 * 1024 * 1024;
+/** Reserved for the authored Lyra asset. Do not register it until its rig is inspected. */
+export const LYRA_MODEL_URL = '/agents/lyra/lyra.glb';
 /** Restraint, encoded: the head never turns further than this toward the cursor. */
 export const GAZE_LIMITS = Object.freeze({ maxYawDeg: 12, maxPitchDeg: 8 });
 

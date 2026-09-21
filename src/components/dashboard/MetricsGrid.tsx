@@ -103,7 +103,7 @@ export default function MetricsGrid({ m }: { m: DashboardMetrics }) {
           value={m.competitorSignals}
           sub={`${m.competitorSignals} new this week`}
           icon={<Eye className="h-3.5 w-3.5 text-blue-400" />}
-          to="/competitors"
+          to="/signals"
         />
         <Card
           label="Content drafts"

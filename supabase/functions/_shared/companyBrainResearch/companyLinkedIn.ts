@@ -12,6 +12,7 @@ import {
   asString, asStringArray, uniq, confidenceFrom, isHttpUrl,
 } from "./types.ts";
 import { stripContactFields, unwrapActorRow } from "./founderLinkedIn.ts";
+import { linkedInLocationEntries } from "../hiringActorNormalizers.ts";
 
 export const COMPANY_ACTOR_ENV = "APIFY_ACTOR_LINKEDIN_COMPANY_SCRAPER";
 // Default points at a company scraper from a vendor that exists in the current
@@ -59,6 +60,33 @@ function employeeCount(v: unknown): string {
   return n.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * A place written as an object — `{ city, country }`, `{ parsed: { text } }`,
+ * `{ full }` — rendered as the line a person would write.
+ */
+export function placeText(v: unknown): string {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return "";
+  const o = v as Record<string, unknown>;
+  const parsed = o.parsed as Record<string, unknown> | undefined;
+  const direct = asString(parsed?.text ?? o.full ?? o.text ?? o.name ?? o.linkedinText);
+  if (direct) return direct;
+  return [asString(o.city), asString(o.region ?? o.state), asString(o.countryFull ?? o.country)]
+    .filter(Boolean).join(", ");
+}
+
+/** `[{ name }]` → `["name"]`; plain strings pass through. */
+export function namedList(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  for (const x of v) {
+    const t = typeof x === "string"
+      ? asString(x)
+      : (x && typeof x === "object" ? asString((x as Record<string, unknown>).name ?? (x as Record<string, unknown>).title) : "");
+    if (t && !out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
 /** Normalize one Apify LinkedIn-company row → CompanyLinkedInResearch. Pure.
  * Handles the output shapes of the common company actors (automation-lab,
  * curious_coder, apimaestro, …) via alias lookup + container unwrapping. */
@@ -66,7 +94,10 @@ export function normalizeCompanyLinkedIn(raw: unknown, sourceUrl: string): Compa
   const row = stripContactFields(unwrapActorRow(raw));
 
   const company_name = asString(row.companyName ?? row.company_name ?? row.name ?? row.title);
-  const industry = asString(row.industry ?? row.industryName ?? row.industries ?? row.industry_name);
+  // `industries` is `[{ name }]` on the enriched actors; a bare `asString` of
+  // that array is "".
+  const industry = asString(row.industry ?? row.industryName ?? row.industry_name) ||
+    namedList(row.industries).join(", ");
   const company_description = asString(row.description ?? row.about ?? row.companyDescription ?? row.tagline ?? row.overview);
   const website = asString(row.website ?? row.websiteUrl ?? row.companyWebsite ?? row.website_url);
   const specialties = uniq(asStringArray(row.specialties ?? row.specialities ?? row.specialities_list));
@@ -75,12 +106,41 @@ export function normalizeCompanyLinkedIn(raw: unknown, sourceUrl: string): Compa
     row.employeeCount ?? row.employeesCount ?? row.employee_count ?? row.employees ?? row.staffCount ?? row.staff_count,
   );
   const company_size = employeeCount(row.companySize ?? row.company_size ?? row.employeeRange ?? row.size);
-  const headquarters = asString(row.headquarters ?? row.headquarter ?? row.hq ?? row.head_office);
-  const founded = asString(row.founded ?? row.foundedYear ?? row.founded_year ?? row.foundedOn);
+  // ── LOCATIONS ARE OBJECTS, NOT STRINGS ───────────────────────────────────
+  //
+  // The catalog documents what these actors send:
+  //
+  //   locations[{ headquarter, parsed.text, city, country }]
+  //
+  // and this used to read it with `asStringArray(row.locations)`, which yields
+  // NOTHING for an array of objects. Every company researched through
+  // onboarding therefore lost its offices and its headquarters silently, while
+  // the call reported success — the same class of bug as the founder profile's
+  // object-shaped `location`. The lead pipeline already parsed this correctly;
+  // `linkedInLocationEntries` is that implementation, shared rather than
+  // rewritten.
+  const entries = linkedInLocationEntries(row.locations, { acceptStrings: true });
 
+  // The provider's own `headquarter: true` flag decides which office is the
+  // headquarters — never position in the array, and never "the first one".
+  const flaggedHq = entries.find((e) => e.is_headquarters)?.text ?? "";
+  const headquarters = flaggedHq ||
+    asString(row.headquarters ?? row.headquarter ?? row.hq ?? row.head_office ?? row.headquartersLocation) ||
+    placeText(row.headquarters ?? row.headquarter ?? row.hq ?? row.headquartersLocation);
+
+  // `foundedOn` is an object on the enriched actors ({ year, month, day }).
+  const founded = asString(row.founded ?? row.foundedYear ?? row.founded_year) ||
+    asString((row.foundedOn as Record<string, unknown> | undefined)?.year) ||
+    asString(row.foundedOn);
+
+  // NOTE the absence of `asStringArray(row.locations)`. It used to be the whole
+  // implementation, and it stringifies anything: `locations: 42` became the
+  // office "42", and `[null, 3, true]` became "3". `linkedInLocationEntries`
+  // already reads the legitimate string form, so the loose fallback only ever
+  // manufactured places that no provider reported.
   const locations = uniq([
-    ...asStringArray(row.locations),
-    asString(row.location),
+    ...entries.map((e) => e.text),
+    asString(row.location) || placeText(row.location),
     headquarters,
   ].filter(Boolean));
 

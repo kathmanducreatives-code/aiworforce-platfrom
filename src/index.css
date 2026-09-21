@@ -2383,71 +2383,146 @@ section[id] {
     background: linear-gradient(90deg, transparent, rgb(var(--ag-emerald) / 0.45), transparent);
   }
 
-  /* ── Buttons ──────────────────────────────────────────────────────────── */
+  /* ── Buttons: dark glass with light passing through ───────────────────────
+     Every button is a pane of dark glass. Layers, top to bottom:
+       a soft sheen on the upper half (glossy)  → over a flat, blurred body (matte)
+       an emerald tint that enters from the top edge (primary only)
+       a hairline edge and a 1px highlight on the lip
+     The green is light in the glass, never a paint fill. Hover brightens the
+     light a little; press settles the pane. Contrast: primary text ~13:1,
+     secondary ~12:1 on the composited surface. */
   .ag-btn {
-    transition: background-color 150ms ease, box-shadow 220ms ease, color 150ms ease, transform 100ms ease, filter 150ms ease;
+    position: relative;
+    isolation: isolate;
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    backdrop-filter: blur(14px) saturate(150%);
+    transition: background-color 180ms ease, background-image 180ms ease, box-shadow 220ms ease,
+      color 160ms ease, translate 120ms ease, filter 160ms ease;
   }
   .ag-btn:active:not(:disabled) {
-    transform: translateY(0.5px);
+    translate: 0 0.5px;
   }
-  /* Primary: deep emerald, lit from above, a restrained glow. Tactile, not neon. */
+  /* Keyboard focus and disabled live on the class, so a hand-built glass button
+     behaves exactly like <Button>. */
+  .ag-btn:focus-visible {
+    outline: 2px solid rgb(52 211 153 / 0.6);
+    outline-offset: 2px;
+  }
+  .ag-btn:disabled,
+  .ag-btn[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* Primary: emerald-tinted glass. Mostly glass; the tint is what says "primary". */
   .ag-btn-primary {
-    color: #fff;
-    background-color: rgb(var(--ag-emerald-ink));
-    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0) 58%);
-    text-shadow: 0 1px 0 rgb(0 0 0 / 0.18);
+    --ag-btn-tint: 0.26;
+    --ag-btn-edge: 0.34;
+    --ag-btn-glow: 0.38;
+    color: rgb(220 252 235);
+    background-color: rgb(9 20 16 / 0.62);
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.085) 0%, rgb(255 255 255 / 0.025) 48%, rgb(255 255 255 / 0) 52%),
+      radial-gradient(130% 150% at 50% -10%, rgb(52 211 153 / var(--ag-btn-tint)), rgb(16 185 129 / calc(var(--ag-btn-tint) * 0.45)) 60%, rgb(16 185 129 / calc(var(--ag-btn-tint) * 0.3)));
     box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.22),
-      inset 0 0 0 1px rgb(255 255 255 / 0.05),
-      0 0 0 1px rgb(4 100 70 / 0.9),
-      0 1px 2px rgb(0 0 0 / 0.4),
-      0 6px 20px -8px rgb(var(--ag-emerald) / 0.55);
+      inset 0 1px 0 rgb(209 250 229 / 0.16),
+      inset 0 0 0 1px rgb(52 211 153 / var(--ag-btn-edge)),
+      inset 0 -8px 16px -12px rgb(0 0 0 / 0.5),
+      inset 0 0 14px rgb(16 185 129 / 0.08),
+      0 1px 2px rgb(0 0 0 / 0.45),
+      0 8px 22px -12px rgb(16 185 129 / var(--ag-btn-glow));
   }
   .ag-btn-primary:hover:not(:disabled) {
-    background-color: rgb(11 142 99);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.26),
-      inset 0 0 0 1px rgb(255 255 255 / 0.07),
-      0 0 0 1px rgb(4 110 77 / 0.95),
-      0 1px 2px rgb(0 0 0 / 0.4),
-      0 10px 30px -8px rgb(var(--ag-emerald) / 0.7);
+    --ag-btn-tint: 0.34;
+    --ag-btn-edge: 0.46;
+    --ag-btn-glow: 0.55;
+    color: rgb(240 253 244);
   }
   .ag-btn-primary:active:not(:disabled) {
-    background-color: rgb(9 122 85);
-    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.25), 0 0 0 1px rgb(4 100 70 / 0.95), 0 4px 14px -8px rgb(var(--ag-emerald) / 0.5);
+    --ag-btn-tint: 0.28;
+    --ag-btn-glow: 0.24;
+    box-shadow:
+      inset 0 1px 3px rgb(0 0 0 / 0.35),
+      inset 0 0 0 1px rgb(52 211 153 / 0.36),
+      0 1px 1px rgb(0 0 0 / 0.4),
+      0 4px 12px -10px rgb(16 185 129 / 0.3);
   }
-  /* Secondary: quiet glass. A fill and a hairline, neutral text. */
+
+  /* Secondary: neutral dark glass, a faint edge, a minimal lift on hover. */
   .ag-btn-secondary {
-    color: rgb(var(--ag-text) / 0.9);
-    background-color: var(--ag-fill);
-    box-shadow: inset 0 1px 0 var(--ag-sheen), inset 0 0 0 1px var(--ag-line-strong);
+    color: rgb(var(--ag-text) / 0.88);
+    background-color: rgb(255 255 255 / 0.03);
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.05) 0%, rgb(255 255 255 / 0.012) 50%, rgb(255 255 255 / 0) 52%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.07),
+      inset 0 0 0 1px rgb(255 255 255 / 0.085),
+      0 1px 2px rgb(0 0 0 / 0.35);
   }
   .ag-btn-secondary:hover:not(:disabled) {
     color: rgb(var(--ag-text));
-    background-color: var(--ag-fill-hover);
-    box-shadow: inset 0 1px 0 var(--ag-sheen), inset 0 0 0 1px rgb(255 255 255 / 0.16);
+    background-color: rgb(255 255 255 / 0.055);
+    translate: 0 -0.5px;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.09),
+      inset 0 0 0 1px rgb(200 245 225 / 0.15),
+      0 1px 2px rgb(0 0 0 / 0.35),
+      0 8px 18px -12px rgb(0 0 0 / 0.8);
   }
-  [data-theme="light"] .ag-btn-secondary:hover:not(:disabled) {
-    box-shadow: inset 0 1px 0 var(--ag-sheen), inset 0 0 0 1px rgb(15 23 20 / 0.2);
+  .ag-btn-secondary:active:not(:disabled) {
+    translate: 0 0.5px;
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.3), inset 0 0 0 1px rgb(255 255 255 / 0.1);
   }
+
+  /* Ghost: text until hovered; then a breath of glass. */
   .ag-btn-ghost {
     color: rgb(var(--ag-text-muted));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
   .ag-btn-ghost:hover:not(:disabled) {
     color: rgb(var(--ag-text));
-    background-color: var(--ag-fill-hover);
+    background-color: rgb(255 255 255 / 0.05);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.05);
   }
+
+  /* Destructive: the same glass, with red light instead of emerald. */
   .ag-btn-destructive {
-    color: rgb(254 202 202);
-    background-color: rgb(239 68 68 / 0.12);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), inset 0 0 0 1px rgb(239 68 68 / 0.3);
+    color: rgb(254 205 205);
+    background-color: rgb(24 10 10 / 0.6);
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.06) 0%, rgb(255 255 255 / 0.015) 48%, rgb(255 255 255 / 0) 52%),
+      radial-gradient(130% 150% at 50% -10%, rgb(248 113 113 / 0.16), rgb(239 68 68 / 0.07) 60%);
+    box-shadow:
+      inset 0 1px 0 rgb(254 226 226 / 0.1),
+      inset 0 0 0 1px rgb(248 113 113 / 0.28),
+      0 1px 2px rgb(0 0 0 / 0.45);
   }
   .ag-btn-destructive:hover:not(:disabled) {
     color: rgb(254 226 226);
-    background-color: rgb(239 68 68 / 0.18);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), inset 0 0 0 1px rgb(239 68 68 / 0.45), 0 8px 24px -12px rgb(239 68 68 / 0.45);
+    box-shadow:
+      inset 0 1px 0 rgb(254 226 226 / 0.12),
+      inset 0 0 0 1px rgb(248 113 113 / 0.42),
+      0 1px 2px rgb(0 0 0 / 0.45),
+      0 8px 22px -12px rgb(239 68 68 / 0.4);
   }
-  [data-theme="light"] .ag-btn-destructive { color: rgb(185 28 28); }
+
+  /* Light theme: the same panes, lit by a bright room. */
+  [data-theme="light"] .ag-btn-primary {
+    color: rgb(4 96 68);
+    background-color: rgb(255 255 255 / 0.7);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(5 150 105 / 0.35), 0 1px 2px rgb(15 23 20 / 0.08), 0 6px 16px -10px rgb(5 150 105 / 0.35);
+  }
+  [data-theme="light"] .ag-btn-primary:hover:not(:disabled) { color: rgb(4 78 56); }
+  [data-theme="light"] .ag-btn-secondary {
+    background-color: rgb(255 255 255 / 0.6);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(15 23 20 / 0.12), 0 1px 2px rgb(15 23 20 / 0.06);
+  }
+  [data-theme="light"] .ag-btn-secondary:hover:not(:disabled) {
+    background-color: rgb(255 255 255 / 0.85);
+    box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgb(15 23 20 / 0.18), 0 6px 14px -10px rgb(15 23 20 / 0.25);
+  }
+  [data-theme="light"] .ag-btn-ghost:hover:not(:disabled) { background-color: rgb(15 23 20 / 0.05); box-shadow: none; }
+  [data-theme="light"] .ag-btn-destructive { color: rgb(185 28 28); background-color: rgb(255 255 255 / 0.7); }
   [data-theme="light"] .ag-btn-destructive:hover:not(:disabled) { color: rgb(153 27 27); }
 
   /* ── Fields: inputs, selects and textareas sit IN the surface ─────────── */

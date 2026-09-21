@@ -176,13 +176,40 @@ async function execScrapeUrl(input: unknown): Promise<ToolResult> {
     return { ok: false, unavailable: true, error: "FIRECRAWL_API_KEY not configured" };
   }
 
-  const i = (input ?? {}) as { url?: string; extraction_goal?: string; max_pages?: number };
+  const i = (input ?? {}) as { url?: string; extraction_goal?: string; max_pages?: number; mode?: string };
   const url = (i.url ?? "").toString().trim();
   const extraction_goal = (i.extraction_goal ?? "").toString();
   const max_pages = Math.min(5, Math.max(1, Number(i.max_pages) || 1));
 
   if (!url) return { ok: false, error: "missing 'url'" };
   if (!isValidHttpUrl(url)) return { ok: false, error: "invalid_url" };
+
+  // ── MAP: WHICH PAGES DOES THIS SITE ACTUALLY HAVE? ────────────────────────
+  //
+  // Firecrawl `/map` lists a site's URLs without fetching their content, so one
+  // cheap call replaces a handful of guessed paths. The claim verifier asks for
+  // this before it buys anything; without it, live run 3bc526e2 spent 7 of its
+  // 12 page purchases on 404s and left one company with no evidence at all.
+  //
+  // It travels through `scrape_url` deliberately: the credit reservation, the
+  // ledger row, the idempotency key and the readiness checks are all keyed to
+  // this tool, and a second paid tool would need every one of them rebuilt.
+  if ((i.mode ?? "").toString().toLowerCase() === "map") {
+    const limit = Math.min(500, Math.max(1, Number(i.max_pages) || 120));
+    try {
+      const r = await firecrawlFetch(FIRECRAWL_API_KEY, "/map", { url, limit });
+      if (!r.ok) return { ok: false, error: `firecrawl_map_${r.status}` };
+      const body = (r.data ?? {}) as Record<string, unknown>;
+      const raw = (Array.isArray(body.links) ? body.links : Array.isArray(body.data) ? body.data : []) as unknown[];
+      const links = raw
+        .map((x) => typeof x === "string" ? x : String((x as Record<string, unknown>)?.url ?? ""))
+        .filter((u) => !!u && isValidHttpUrl(u))
+        .slice(0, limit);
+      return { ok: true, data: { mode: "map", url, links, count: links.length } };
+    } catch (e) {
+      return { ok: false, error: `firecrawl_map_failed: ${String(e).slice(0, 120)}` };
+    }
+  }
 
   // Single-page scrape
   if (max_pages === 1) {

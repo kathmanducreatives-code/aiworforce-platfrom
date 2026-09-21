@@ -9,9 +9,9 @@
 // enrichment also requires consent, nothing sends automatically, and no Scout
 // Radar scan is triggered.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { GuidedSetup } from '@/components/onboarding/GuidedSetup';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -19,33 +19,12 @@ import { companyBrainKey } from '@/hooks/useCompanyBrain';
 import { safeReturnPath } from '@/lib/routeGuard';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
-import { Cpu, Loader2 } from 'lucide-react';
-
-import { ProgressiveBackground } from '@/components/onboarding/ProgressiveBackground';
-import { FloatingBrainCard } from '@/components/onboarding/FloatingBrainCard';
-import { StepProgress } from '@/components/onboarding/StepProgress';
-import { ErrorState } from '@/components/onboarding/ErrorState';
 import {
-  FounderNameScene, FounderLinkedInScene, FounderResearchScene, FounderVerifyScene,
-} from '@/components/onboarding/scenes/FounderScenes';
-import {
-  CompanyDescriptionScene, CompanyWebsiteScene, CompanyResearchScene, CompanyVerifyScene,
-} from '@/components/onboarding/scenes/CompanyScenes';
-import { DraftBrainScene, DraftSummaryScene } from '@/components/onboarding/scenes/ResearchScenes';
-import { DecisionReviewScene } from '@/components/onboarding/scenes/DecisionReviewScene';
-import { ActivateScene } from '@/components/onboarding/scenes/ActivateScene';
-
-import {
-  STEPS,
   emptyCompanyForm, emptyFounderForm, type CompanyForm, type FounderForm,
   isLinkedInCompanyUrl, buildDraftInput, buildSavePatch, previewBrain,
 } from '@/lib/onboardingV3';
-import {
-  SCENES, type SceneId, sceneIndex, sceneAt, phaseIndexOf, brainStateFor,
-  firstSceneOfPhase, REVIEW_SCENES, reviewSceneForMissingStep,
-} from '@/lib/onboardingScenes';
 import type { CompanyBrainV2 } from '@/lib/normalizeCompanyBrain';
+import { preserveSetupEdits } from '@/lib/guidedSetup';
 
 const FN = 'generate-company-brain-draft';
 
@@ -58,7 +37,6 @@ export default function OnboardingCompanyBrain() {
   // instead of always landing on /dashboard once onboarding is done.
   const returnPath = safeReturnPath(searchParams.get('next')) ?? '/dashboard';
 
-  const [scene, setScene] = useState<SceneId>('founder_name');
 
   const [founder, setFounder] = useState<FounderForm>(emptyFounderForm());
   const [company, setCompany] = useState<CompanyForm>(emptyCompanyForm());
@@ -67,12 +45,49 @@ export default function OnboardingCompanyBrain() {
   const [companyResearch, setCompanyResearch] = useState<any>(null);
   const [companyLinkedIn, setCompanyLinkedIn] = useState<any>(null);
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
-  const [suggestedFixes, setSuggestedFixes] = useState<Record<string, unknown> | null>(null);
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<{ title: string; body: string } | null>(null);
   const [edited, setEdited] = useState<CompanyBrainV2 | null>(null);
   const [activated, setActivated] = useState(false);
+  const [setupStep, setSetupStep] = useState(0);
+  const [savedSnapshot, setSavedSnapshot] = useState('');
+  const [restoredWorkspace, setRestoredWorkspace] = useState<string | null>(null);
+  const [sessionSaved, setSessionSaved] = useState(false);
+  const snapshot = JSON.stringify({ founder, company, draft, edited, founderResearch, companyResearch, companyLinkedIn, setupStep });
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    try {
+      const raw = sessionStorage.getItem(`agentory:guided-setup:${workspaceId}`);
+      if (raw) {
+        const value = JSON.parse(raw);
+        if (value.version === 1 && value.founder && value.company) {
+          setFounder({ ...emptyFounderForm(), ...value.founder });
+          setCompany({ ...emptyCompanyForm(), ...value.company });
+          setDraft(value.draft ?? null); setEdited(value.edited ?? null);
+          setFounderResearch(value.founderResearch ?? null);
+          setCompanyResearch(value.companyResearch ?? null);
+          setCompanyLinkedIn(value.companyLinkedIn ?? null);
+          setSetupStep(Math.max(0, Math.min(5, Number(value.setupStep) || 0)));
+        }
+      }
+    } catch { /* Storage can be unavailable; the in-memory setup still works. */ }
+    setRestoredWorkspace(workspaceId);
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || restoredWorkspace !== workspaceId) return;
+    setSessionSaved(false);
+    const timer = window.setTimeout(() => {
+      try {
+        if (activated) sessionStorage.removeItem(`agentory:guided-setup:${workspaceId}`);
+        else sessionStorage.setItem(`agentory:guided-setup:${workspaceId}`, JSON.stringify({ version: 1, ...JSON.parse(snapshot) }));
+        setSessionSaved(true);
+      } catch { setSessionSaved(false); }
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [snapshot, workspaceId, restoredWorkspace, activated]);
 
   // Same live-preview merge as before: draft + user edits + typed values.
   // Preserves suggested_fixes / claims / signal_preferences etc. by keeping the
@@ -109,15 +124,7 @@ export default function OnboardingCompanyBrain() {
 
   // ----------------------------------------------------------- navigation ---
 
-  const idx = sceneIndex(scene);
-  const goto = (s: SceneId) => { setError(null); setScene(s); };
-  const next = () => goto(sceneAt(Math.min(SCENES.length - 1, idx + 1)).id);
-  const back = () => goto(sceneAt(Math.max(0, idx - 1)).id);
 
-  const phaseIndex = phaseIndexOf(scene);
-  const brainState = brainStateFor(scene, { activated });
-  const orbSize = scene === 'activate_ready' ? 168
-    : (brainState.mode === 'thinking' ? 148 : 92);
 
   // ----------------------------------------------------- backend handlers ---
 
@@ -127,7 +134,6 @@ export default function OnboardingCompanyBrain() {
     // call somebody pays for.
     if (busy) return;
     setBusy('founder'); setError(null);
-    goto('founder_research');
     try {
       const r = await call('research_founder', {
         linkedin_url: founder.linkedin_url,
@@ -152,7 +158,6 @@ export default function OnboardingCompanyBrain() {
   async function analyzeCompany() {
     if (busy) return;
     setBusy('company'); setError(null);
-    goto('company_research');
     try {
       const r = await call('research_company', {
         website_url: company.website_url,
@@ -178,28 +183,33 @@ export default function OnboardingCompanyBrain() {
   }
 
   async function draftBrain() {
+    if (busy) return false;
     setBusy('draft'); setError(null);
     try {
       const r = await call('draft', buildDraftInput({
         founder, company, founderResearch, companyResearch, companyLinkedIn,
       }));
       if (r?.ok && r.draft) {
+        if (edited) setEdited(preserveSetupEdits(previewBrain(draft).brain, edited, previewBrain(r.draft).brain));
         setDraft(r.draft);
-        setEdited(null);
-        goto('draft_summary');
-        toast.success('Draft Company Brain ready', { description: 'Review one decision group at a time.' });
+        // Preserve user-confirmed context when regenerating an AI draft.
+        toast.success('Draft Company Brain ready', { description: 'Review the suggested audience and signals.' });
+        return true;
       } else {
         setError({ title: 'Could not draft the Brain', body: explain(r?.reason ?? r?.error, 'draft') });
       }
     } catch {
       setError({ title: 'Draft failed', body: 'You can still fill the Brain in by hand.' });
     } finally { setBusy(null); }
+    return false;
   }
 
   async function persist(activate: boolean) {
+    if (busy) return;
     setBusy(activate ? 'activate' : 'save'); setError(null);
     try {
       const patch = buildSavePatch({ founder, company, brain });
+      patch.founder = { ...(patch.founder as object), first_help_goal: founder.first_help_goal };
       // These are the user's own typed/confirmed company values — an explicit
       // seller confirmation, the one non-manual origin allowed to write seller
       // identity. Without this the save boundary treats it as an automated
@@ -210,14 +220,14 @@ export default function OnboardingCompanyBrain() {
       });
       if (activate && !r?.activated) {
         // Blocked: keep the additive suggested_fixes so the user can accept them.
-        setSuggestedFixes(r?.suggested_fixes ?? null);
         setError({
           title: "A few decisions left",
           body: (r?.blocked_reasons ?? []).join('; ') || 'Confirm the highlighted decisions. Your draft is saved.',
         });
         return;
       }
-      if (activate) { setActivated(true); }
+      if (!activate && r?.ok === false) throw new Error('Draft save rejected');
+      setSavedSnapshot(snapshot);
       toast.success(activate ? 'Company Brain activated' : 'Draft saved', {
         description: activate
           ? 'Leads, Signal Radar, Content, Agents and Outreach now use it.'
@@ -241,7 +251,7 @@ export default function OnboardingCompanyBrain() {
         // `await` before navigating: refetching after the route change would
         // race the gate and reintroduce the same bounce, just less often.
         await queryClient.invalidateQueries({ queryKey: companyBrainKey(workspaceId) });
-        setTimeout(() => navigate(returnPath), 900);
+        setActivated(true);
       }
     } catch {
       setError({ title: 'Save failed', body: 'Nothing was lost — try again.' });
@@ -250,173 +260,19 @@ export default function OnboardingCompanyBrain() {
 
   // --------------------------------------------------------------- render ---
 
-  return (
-    <div className="relative flex min-h-screen flex-col overflow-x-clip text-foreground">
-      <ProgressiveBackground />
-
-      {/* Top bar */}
-      <header className="z-20 shrink-0">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3.5 sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/40 bg-primary/10 text-primary shadow-[0_0_16px_hsl(var(--primary)/0.25)]">
-              <Cpu className="h-4 w-4" />
-            </div>
-            <p className="text-xs font-semibold tracking-tight">
-              Agentory <span className="mx-1 text-muted-foreground/50">·</span>
-              <span className="text-muted-foreground/90">Company Brain</span>
-            </p>
-          </div>
-          <Button
-            size="sm" variant="ghost"
-            onClick={() => persist(false)}
-            disabled={!!busy || !workspaceId}
-            className="h-8 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {busy === 'save' && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            Save draft
-          </Button>
-        </div>
-      </header>
-
-      {/* 5-phase progress — compact, it guides without dominating */}
-      <div className="mx-auto w-full max-w-lg shrink-0 px-4 pt-1.5 sm:px-6">
-        <StepProgress index={phaseIndex} steps={STEPS} />
-      </div>
-
-      {/* Scene stage — orb and card composed as one hero object */}
-      <main className="flex flex-1 flex-col items-center justify-start gap-4 px-4 py-6 sm:py-8">
-        {/* The draft_brain (busy) and draft_summary scenes own their own orb +
-            workforce animation, so the shell orb is hidden there to avoid
-            duplication. */}
-        {!(scene === 'draft_brain' && busy === 'draft') && scene !== 'draft_summary' && (
-          <FloatingBrainCard
-            label={brainState.label}
-            mode={brainState.mode}
-            size={orbSize}
-          />
-        )}
-
-        <div className="w-full">
-          {error && (
-            <div className="mx-auto mb-4 w-full max-w-[760px]">
-              <ErrorState
-                title={error.title}
-                body={error.body}
-                onRetry={
-                  scene === 'founder_research' ? analyzeFounder :
-                  scene === 'company_research' ? analyzeCompany :
-                  scene === 'draft_brain' ? draftBrain :
-                  undefined
-                }
-                onContinue={
-                  scene === 'founder_research' || scene === 'company_research'
-                    ? () => { setError(null); next(); }
-                    : undefined
-                }
-              />
-            </div>
-          )}
-
-          <AnimatePresence mode="wait" initial={false}>
-            <SceneRouter
-              key={scene}
-              scene={scene}
-              founder={founder} setFounder={setFounder}
-              company={company} setCompany={setCompany}
-              founderResearch={founderResearch}
-              companyResearch={companyResearch}
-              brain={brain} completeness={completeness}
-              busy={busy}
-              onEditBrain={setEdited}
-              analyzeFounder={analyzeFounder}
-              analyzeCompany={analyzeCompany}
-              draftBrain={draftBrain}
-              persist={persist}
-              goto={goto} next={next} back={back}
-            />
-          </AnimatePresence>
-        </div>
-      </main>
-    </div>
-  );
+  return <GuidedSetup
+    step={setupStep} onStep={step => { setError(null); setSetupStep(step); window.scrollTo({ top: 0, behavior: 'instant' }); }}
+    founder={founder} onFounder={setFounder} company={company} onCompany={setCompany}
+    brain={brain} onBrain={setEdited} completeness={completeness}
+    busy={busy} error={error} activated={activated} hasDraft={!!draft}
+    saved={activated ? 'Company Brain saved' : busy === 'save' ? 'Saving draft…' : savedSnapshot === snapshot ? 'Draft saved' : sessionSaved ? 'Saved in this tab' : 'Unsaved changes'}
+    companyResearched={!!companyResearch} founderResearched={!!founderResearch}
+    onResearchCompany={analyzeCompany} onResearchFounder={analyzeFounder} onDraft={draftBrain}
+    onSave={() => persist(false)} onActivate={() => persist(true)}
+    onDestination={path => navigate(safeReturnPath(path) ?? returnPath)}
+  />;
 }
 
-// ---------------------------------------------------------------- router ----
-
-function SceneRouter(props: {
-  scene: SceneId;
-  founder: FounderForm; setFounder: (f: FounderForm) => void;
-  company: CompanyForm; setCompany: (c: CompanyForm) => void;
-  founderResearch: any; companyResearch: any;
-  brain: CompanyBrainV2; completeness: ReturnType<typeof previewBrain>['completeness'];
-  busy: string | null;
-  onEditBrain: (b: CompanyBrainV2) => void;
-  analyzeFounder: () => void; analyzeCompany: () => void; draftBrain: () => void;
-  persist: (activate: boolean) => void;
-  goto: (s: SceneId) => void; next: () => void; back: () => void;
-}) {
-  const {
-    scene, founder, setFounder, company, setCompany, founderResearch, companyResearch,
-    brain, completeness, busy, onEditBrain, analyzeFounder, analyzeCompany, draftBrain,
-    persist, goto, next, back,
-  } = props;
-
-  switch (scene) {
-    case 'founder_name':
-      return <FounderNameScene value={founder} onChange={setFounder} onContinue={next} />;
-    case 'founder_linkedin':
-      return <FounderLinkedInScene value={founder} onChange={setFounder} onAnalyze={analyzeFounder} onSkip={() => goto('founder_verify')} onBack={back} busy={busy === 'founder'} />;
-    case 'founder_research':
-      return <FounderResearchScene busy={busy === 'founder'} research={founderResearch} onContinue={next} onBack={() => goto('founder_linkedin')} />;
-    case 'founder_verify':
-      return <FounderVerifyScene value={founder} research={founderResearch} onChange={setFounder} onConfirm={next} onBack={back} />;
-
-    case 'company_description':
-      return <CompanyDescriptionScene value={company} onChange={setCompany} onContinue={next} onBack={back} />;
-    case 'company_website':
-      return <CompanyWebsiteScene value={company} onChange={setCompany} onAnalyze={analyzeCompany} onBack={back} busy={busy === 'company'} />;
-    case 'company_research':
-      return <CompanyResearchScene busy={busy === 'company'} research={companyResearch} onContinue={next} onBack={() => goto('company_website')} />;
-    case 'company_verify':
-      return <CompanyVerifyScene value={company} research={companyResearch} onChange={setCompany} onConfirm={next} onBack={back} />;
-
-    case 'draft_brain':
-      return <DraftBrainScene busy={busy === 'draft'} onDraft={draftBrain} onBack={back} />;
-    case 'draft_summary':
-      return <DraftSummaryScene brain={brain} onReview={() => goto('review_targeting')} onBack={() => goto('draft_brain')} />;
-
-    case 'review_targeting':
-    case 'review_buyers':
-    case 'review_signals':
-    case 'review_safety':
-    case 'review_messaging': {
-      const isLast = scene === REVIEW_SCENES[REVIEW_SCENES.length - 1];
-      return (
-        <DecisionReviewScene
-          scene={scene}
-          brain={brain}
-          confidence={completeness.confidence}
-          onEditBrain={onEditBrain}
-          onContinue={() => (isLast ? goto('activate_ready') : next())}
-          onBack={back}
-          isLast={isLast}
-        />
-      );
-    }
-
-    case 'activate_ready':
-      return (
-        <ActivateScene
-          completeness={completeness}
-          busy={busy === 'activate' ? 'activate' : busy === 'save' ? 'save' : null}
-          onActivate={() => persist(true)}
-          onSaveDraft={() => persist(false)}
-          onGoToMissing={(step) => goto(reviewSceneForMissingStep(step))}
-          onBack={() => goto('review_messaging')}
-        />
-      );
-  }
-}
 
 /** Project a normalized Brain back onto a raw profile patch for previewing. */
 function toRaw(b: CompanyBrainV2): Record<string, unknown> {
@@ -436,11 +292,9 @@ function explain(reason: string | undefined, ctx: 'founder' | 'company' | 'draft
     case 'invalid_linkedin_profile_url': return 'That does not look like a linkedin.com/in/… profile URL.';
     case 'invalid_linkedin_company_url': return 'That does not look like a linkedin.com/company/… URL.';
     case 'apify_not_configured':
-      return 'The LinkedIn research provider is not configured. For local development set ' +
-        'AGENTORY_LOCAL_PROVIDER_MODE=mock to use fixtures, or continue and fill this in by hand.';
+      return 'LinkedIn research is unavailable in this workspace. Continue with your own details or try again later.';
     case 'firecrawl_not_configured':
-      return 'The website research provider is not configured. For local development set ' +
-        'AGENTORY_LOCAL_PROVIDER_MODE=mock to use fixtures, or continue and fill this in by hand.';
+      return 'Website research is unavailable in this workspace. Continue with your own details or try again later.';
     case 'no_pages_fetched': return 'That website could not be reached, so nothing was read from it.';
     case 'llm_not_configured': return 'AI drafting is not configured yet. You can still fill the Brain in by hand.';
     case 'invalid_website_url': return 'Enter a full website URL starting with https://';

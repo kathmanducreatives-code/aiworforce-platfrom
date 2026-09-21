@@ -26,6 +26,19 @@ const MANIFEST: AgentModelManifest = {
   framing: { target: [0, 1.5, 0], distance: 1, fovDeg: 28 },
 };
 
+Deno.test('optional success smile settles and does not repeat for the same event', () => {
+  let smile = 0;
+  const { rig } = recorder();
+  rig.setSmile = (amount) => { smile = amount; };
+  const animator = createAgentAnimator({ manifest: MANIFEST, rig, random: () => 0.5 });
+  const input: AnimatorInput = { state: IDLE_VISUAL, pointer: null, gesture: { kind: 'completed', nonce: 1 } };
+  let peak = 0;
+  for (let i = 0; i < 60; i++) { animator.update(16, input); peak = Math.max(peak, smile); }
+  assert(peak > 0 && peak <= 0.18);
+  assertEquals(smile, 0);
+  for (let i = 0; i < 60; i++) { animator.update(16, input); assertEquals(smile, 0); }
+});
+
 function recorder() {
   const log = {
     base: [] as [string | null, number][], gestures: [] as string[],

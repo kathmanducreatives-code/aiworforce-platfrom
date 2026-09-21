@@ -7,7 +7,7 @@ import { DECISION_LABEL, type CanonicalDecision } from "@/lib/radarCardPresenter
 
 const DECISION_STYLE: Record<string, string> = {
   contact: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-  watch: "border-sky-500/30 bg-sky-500/10 text-sky-300",
+  watch: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   needs_review: "border-amber-500/30 bg-amber-500/10 text-amber-300",
   skip: "border-white/10 bg-white/[0.03] text-neutral-400",
 };

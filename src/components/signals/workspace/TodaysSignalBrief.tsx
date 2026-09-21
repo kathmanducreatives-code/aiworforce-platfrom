@@ -16,7 +16,7 @@ export default function TodaysSignalBrief({ brief, scanning, onRunScan, onReview
   return (
     <section
       aria-label="Today's signal brief"
-      className="mb-5 overflow-hidden rounded-xl border bg-gradient-to-br from-white/[0.03] to-transparent p-4 backdrop-blur-md"
+      className="mb-5 overflow-hidden rounded-xl border bg-card/30 p-4"
       style={{ borderColor: `${accentHex}26` }}
     >
       <header className="mb-2 flex items-center justify-between">
@@ -34,7 +34,7 @@ export default function TodaysSignalBrief({ brief, scanning, onRunScan, onReview
           <div className="min-w-0">
             <h3 className="text-[16px] font-semibold text-foreground">No verified signals yet</h3>
             <p className="mt-1 max-w-[64ch] text-[13.5px] text-muted-foreground/85">
-              Scout has not confirmed new signals for your ICP. Run a radar scan or ask Scout what to monitor.
+              Lyra has not confirmed new signals for your ICP. Run a radar scan or ask Lyra what to monitor.
             </p>
             {brief.missingSources.length > 0 && (
               <p className="mt-2 text-[12px] text-amber-300/80">
@@ -66,7 +66,7 @@ export default function TodaysSignalBrief({ brief, scanning, onRunScan, onReview
               </p>
             )}
             <p className="mt-1 text-[12.5px] text-muted-foreground/60">
-              {brief.usefulCount} verified · Scout is monitoring your radar.
+              {brief.usefulCount} verified · Lyra is monitoring your radar.
             </p>
           </div>
           <button

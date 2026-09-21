@@ -8,9 +8,10 @@ import PilotBriefing from '@/components/workforce/PilotBriefing';
 import AgentProfileDrawer from '@/components/workforce/AgentProfileDrawer';
 import AgentPortrait from '@/components/agents/AgentPortrait';
 import WorkforceAgentCard from '@/components/dashboard/WorkforceAgentCard';
+import WorkforceGreeting from '@/components/dashboard/WorkforceGreeting';
 import { useAgentVisualStates } from '@/hooks/useAgentVisualStates';
 import { visualAgentKey } from '@/lib/agent3d/visualState';
-import InlineCommandBar from '@/components/workforce/InlineCommandBar';
+import LiveIntelligenceBar from '@/components/dashboard/LiveIntelligenceBar';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { prepareChatDraft } from '@/lib/chatDraft';
 import { lookupPublicAgent } from '@/config/agentRegistry';
@@ -25,7 +26,7 @@ import type { AgentId } from '@/components/workforce/agents';
 
 const Dashboard = () => {
   const { workspaceId } = useWorkspace();
-  const { agents, timeline, totals, brainComplete, loading } = useWorkforceState(workspaceId);
+  const { agents, timeline, totals, brainComplete, loading, signalFeed } = useWorkforceState(workspaceId);
   // Live execution truth for the agents' visuals — separate from the count-based copy above.
   const { states: visualStates } = useAgentVisualStates(workspaceId);
   const [selectedId, setSelectedId] = useState<AgentId>('pilot');
@@ -49,8 +50,7 @@ const Dashboard = () => {
     <div className="workforce-home min-h-screen bg-transparent">
       <div className="mx-auto w-full max-w-[1500px] px-5 lg:px-8 pt-5 pb-16">
         <header className="team-header">
-          <div><span className="team-eyebrow">Agentory · Your AI workforce</span><h1>A small team. A bigger edge.</h1><p>Give your team a goal. Make your next move count.</p></div>
-          <button className="team-pilot" onClick={() => talk()}><AgentPortrait agentId="pilot" size={32} decorative /><span>Plan with Pilot</span><ArrowUpRight size={14} /></button>
+          <WorkforceGreeting />
         </header>
         {showFirstRun && (
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4">
@@ -83,7 +83,7 @@ const Dashboard = () => {
           <section className="team-gallery" aria-label="Your AI workforce">
             {(['scout', 'aria', 'penn', 'scribe'] as AgentId[]).map(id => <WorkforceAgentCard key={id} agent={agents[id]} visual={visualStates[visualAgentKey(id)!]} loading={loading} onProfile={() => { setSelectedId(id); setProfileId(id); }} onChat={() => talk(id)} onAction={() => { const action = agents[id].nextAction; if (action.route) navigate(action.route); else talk(id); }} />)}
           </section>
-          <InlineCommandBar />
+          <LiveIntelligenceBar workspaceId={workspaceId} feed={signalFeed} />
           <div className="team-lower">
             <section className="team-panel" aria-label="Recent activity">
               <div className="team-panel-header"><h2>Recent activity</h2><button onClick={() => navigate('/workflows')}>Workflows <ArrowUpRight size={12} className="inline" /></button></div>

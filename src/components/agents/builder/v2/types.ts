@@ -23,4 +23,4 @@ export interface BuilderForm {
   skillConfig: SkillConfig;
 }
 
-export const TOTAL_STEPS = 7;
+export const TOTAL_STEPS = 6;

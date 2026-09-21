@@ -1424,11 +1424,31 @@ export function buildCapabilityGraph(
 export class CapabilityContainmentError extends Error {
   readonly capability: string | null;
   readonly provider: string | null;
-  constructor(message: string, opts: { capability?: string; provider?: string } = {}) {
+  /**
+   * WHY the call was refused.
+   *
+   * `containment` — the provider is outside this mission's graph, or belongs to
+   * a different capability inside it.
+   * `readiness`   — the provider IS in the graph, but the canonical readiness
+   * authority says this route may not run (carded-but-not-live, disabled,
+   * missing credentials, policy-refused).
+   *
+   * Both are refusals, and both must be caught by the same handlers — a
+   * readiness refusal that escaped as a new error type would end a mission with
+   * `failed:unhandled_exception`, which is exactly how canary 849d6782 died.
+   * The kind exists so the refusal can be REPORTED accurately, not so it can be
+   * handled differently.
+   */
+  readonly kind: "containment" | "readiness";
+  constructor(
+    message: string,
+    opts: { capability?: string; provider?: string; kind?: "containment" | "readiness" } = {},
+  ) {
     super(message);
     this.name = "CapabilityContainmentError";
     this.capability = opts.capability ?? null;
     this.provider = opts.provider ?? null;
+    this.kind = opts.kind ?? "containment";
   }
 }
 

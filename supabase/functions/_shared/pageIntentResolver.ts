@@ -17,14 +17,20 @@
 // requirement to an intent, and only this table turns an intent into a URL.
 
 import { PAGE_INTENTS, type PageIntent } from "./evidenceRequest.ts";
+import { isExcludedPath } from "./companyBrainResearch/companyWebsite.ts";
 
 /**
  * Conventional paths per intent, most likely first.
  *
- * Ordered by how often the page actually lives there. A 404 is an ANSWER —
- * "this company has no pricing page" is evidence in itself — so a miss is
- * never retried against the whole list; only the first candidate path is
- * fetched at P2, and `/map`-based recovery is a later phase.
+ * Ordered by how often the page actually lives there.
+ *
+ * THESE ARE NOW A FALLBACK, NOT THE PLAN. The comment here used to say a miss
+ * is never retried and "`/map`-based recovery is a later phase" — that phase is
+ * `resolvePagesFromMap` below, and it is why guessing is no longer the first
+ * move. Live run 3bc526e2 bought twelve pages from this table and seven were
+ * 404s; one company (Studycast) got no usable page at all, so its business
+ * model could never be settled. A 404 is an answer about a PAGE, but it is not
+ * an answer about the CLAIM, and paying for it teaches nothing.
  */
 export const PAGE_INTENT_PATHS: Readonly<Record<PageIntent, readonly string[]>> =
   Object.freeze({
@@ -170,6 +176,64 @@ export interface ResolvedPage {
  * share a path (`customers` and `case_studies` both offer `/case-studies`) do
  * not buy the same page twice.
  */
+/**
+ * Match intents to URLs the site ACTUALLY exposes.
+ *
+ * `mapped` is the output of Firecrawl `/map` for this domain. Selection reuses
+ * the Company Brain's proven rules rather than inventing a second web-discovery
+ * mechanism: same-site only, `isExcludedPath` drops auth/app/legal surfaces,
+ * and the intent's own conventional paths become MATCHERS against the real
+ * URLs instead of fabricated ones.
+ *
+ * Returns at most `maxPages`, ordered by the caller's intent priority. An empty
+ * or malformed map yields an empty list — the caller then leaves the claim
+ * PENDING, which is the honest answer. It never falls back to guessing.
+ */
+export function resolvePagesFromMap(
+  domain: string,
+  intents: readonly PageIntent[],
+  mapped: readonly string[],
+  maxPages: number,
+): ResolvedPage[] {
+  const host = registrableDomain(domain);
+  if (!host || !Array.isArray(mapped) || mapped.length === 0 || maxPages <= 0) return [];
+
+  // Same site, http(s), and never a surface that cannot describe the company.
+  const onSite = mapped
+    .filter((u): u is string => typeof u === "string" && isHttpUrl(u))
+    .filter((u) => sameSite(host, u))
+    .filter((u) => !isExcludedPath(u));
+  if (onSite.length === 0) return [];
+
+  const pathOf = (u: string): string => {
+    try { return new URL(u).pathname.replace(/\/+$/, "") || "/"; } catch { return "/"; }
+  };
+  const out: ResolvedPage[] = [];
+  const seen = new Set<string>();
+  const take = (intent: PageIntent, url: string) => {
+    if (out.length >= maxPages || seen.has(url)) return;
+    seen.add(url);
+    out.push({ intent, url });
+  };
+
+  for (const intent of intents) {
+    if (out.length >= maxPages) break;
+    if (intent === "homepage") {
+      // The homepage is whichever mapped URL is the bare root.
+      const root = onSite.find((u) => pathOf(u) === "/") ?? `https://${host}/`;
+      take(intent, root);
+      continue;
+    }
+    const paths = PAGE_INTENT_PATHS[intent] ?? [];
+    // Conventional paths as MATCHERS, most-likely first; then a looser
+    // contains-match so `/platform/overview` still serves the product intent.
+    let hit = onSite.find((u) => paths.some((pth) => pathOf(u) === pth));
+    if (!hit) hit = onSite.find((u) => paths.some((pth) => pth !== "/" && pathOf(u).startsWith(pth)));
+    if (hit) take(intent, hit);
+  }
+  return out;
+}
+
 export function resolvePages(
   domain: string,
   intents: readonly PageIntent[],

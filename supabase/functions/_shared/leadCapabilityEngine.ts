@@ -2616,17 +2616,24 @@ export async function runCapabilityPlan(
   } | null = null;
   const maxCandidates = opts.maxCandidates ?? 50;
 
-  // THE GUARDED BOUNDARY. Every provider call in this file goes through it.
-  const invoke = guardedInvoker(opts.plan, deps.invoke, (actorKey) => {
-    log("capability_containment_violation", { actorKey });
-  });
+  // THE GUARDED BOUNDARY. Every provider call in this file goes through it, and
+  // it asks BOTH canonical questions: is this provider in this step's graph,
+  // and does the readiness authority say the route may run. The policy is the
+  // same object every planning layer used, so a route cannot be blocked at
+  // plan time and executable at call time.
+  const guardPolicy: ReadinessPolicy = opts.readiness ?? PRODUCTION_READINESS;
+  const invoke = guardedInvoker(opts.plan, deps.invoke, (actorKey, error) => {
+    log("capability_containment_violation", {
+      actorKey, kind: error.kind, capability: error.capability, reason: error.message.slice(0, 200),
+    });
+  }, guardPolicy);
 
   // ── WHAT A PREVIOUS INVOCATION ALREADY PAID FOR ────────────────────────────
   const resumeScope = opts.resume ?? null;
 
   // ── P2: THE EXECUTION SPINE ─────────────────────────────────────────────────
   const specOn = opts.specMode === "enforce";
-  const routePolicy: ReadinessPolicy = opts.readiness ?? PRODUCTION_READINESS;
+  const routePolicy: ReadinessPolicy = guardPolicy;
   /** The funding rung the mission asks for, when it asks for one — what a discovered round is judged against. */
   const requiredRoundStage: string | null = (() => {
     const c = deriveMissionCriteria(opts.mission).find((x) => x.dimension === "company_stage" &&

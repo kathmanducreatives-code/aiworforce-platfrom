@@ -13,13 +13,9 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import AgentAvatar from '@/components/chat/workspace/agents/AgentAvatar';
 
-const PLACEHOLDERS = [
-  'Ask your workforce anything...',
-  '@Scout find backend engineers in Berlin',
-  'Summarize this week\u2019s pipeline',
-  'What changed across competitors today?',
-  '@Penn draft outreach for today\u2019s leads',
-];
+// One fixed prompt. The dashboard already has one rotating line (the greeting)
+// and a rotating Live Intelligence bar; a third moving text is noise.
+const PLACEHOLDER = 'Ask your workforce anything...';
 
 const CHIPS = [
   'Brief me on today',
@@ -50,24 +46,10 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
   const [value, setValue] = useState('');
   const [focused, setFocused] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [phIdx, setPhIdx] = useState(0);
-  const [rotating, setRotating] = useState(true);
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const blurResumeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Hide when ChatWorkspace drawer/fullscreen is open — that surface owns input.
   const hidden = mode !== 'closed';
-
-  // Rotating placeholder
-  useEffect(() => {
-    if (!rotating) return;
-    const t = setInterval(() => setPhIdx((i) => (i + 1) % PLACEHOLDERS.length), 4000);
-    return () => clearInterval(t);
-  }, [rotating]);
-
-  useEffect(() => {
-    if (value.length > 0 || focused) setRotating(false);
-  }, [value, focused]);
 
   // Auto-resize textarea — max 4 lines
   useEffect(() => {
@@ -150,17 +132,8 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
     });
   };
 
-  const handleFocus = () => {
-    if (blurResumeRef.current) clearTimeout(blurResumeRef.current);
-    setFocused(true);
-  };
-  const handleBlur = () => {
-    setFocused(false);
-    if (blurResumeRef.current) clearTimeout(blurResumeRef.current);
-    blurResumeRef.current = setTimeout(() => {
-      if (!value) setRotating(true);
-    }, 2000);
-  };
+  const handleFocus = () => setFocused(true);
+  const handleBlur = () => setFocused(false);
 
   const hasText = value.trim().length > 0;
 
@@ -171,7 +144,7 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
     return (
       <div
         className={cn(
-          'fixed z-40 pointer-events-none',
+          'fixed z-40 pointer-events-none transition-[left] [transition-duration:240ms] [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]',
           isMobile ? 'left-0 right-0 flex justify-center' : sidebarCollapsed ? 'left-[68px] right-4 flex justify-end' : 'left-[260px] right-4 flex justify-end',
         )}
         style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}
@@ -207,7 +180,7 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
       <div
         data-tour="command-dock"
         className={cn(
-          "fixed z-40 flex justify-center px-4 pointer-events-none",
+          "fixed z-40 flex justify-center px-4 pointer-events-none transition-[left] [transition-duration:240ms] [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]",
           isMobile ? "left-0 right-0" : sidebarCollapsed ? "left-[68px] right-0" : "left-[260px] right-0"
         )}
         style={{
@@ -279,17 +252,7 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
                     'pointer-events-none absolute inset-0 py-1 text-neutral-500 font-sans',
                     isMobile ? 'text-[14px] leading-[20px]' : 'text-[14px] leading-[22px]',
                   )}>
-                    <AnimatePresence mode="wait">
-                      <motion.span
-                        key={phIdx}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.3, ease: 'easeOut' }}
-                      >
-                        {PLACEHOLDERS[phIdx]}
-                      </motion.span>
-                    </AnimatePresence>
+                    {PLACEHOLDER}
                   </div>
                 )}
               </div>

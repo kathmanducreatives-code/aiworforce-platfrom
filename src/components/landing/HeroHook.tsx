@@ -10,13 +10,13 @@
  * ghost words holding the corners, and a scroll exit that compresses into the
  * next section instead of cutting.
  *
- * PERFORMANCE. Transform and opacity only. Two rAF-throttled listeners
+ * PERFORMANCE. GSAP entrance and a CSS text highlight. Two rAF-throttled listeners
  * (pointer, scroll) write CSS variables; everything else is CSS. No canvas, no
  * particles, no WebGL. Cursor-driven effects are desktop-only and every
  * animation stops under prefers-reduced-motion.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { ArrowRight } from 'lucide-react';
@@ -51,6 +51,7 @@ const HeroHook = () => {
       gsap.timeline({ defaults: { ease: 'expo.out' } })
         .to('.hero-eyebrow', { opacity: 1, y: 0, duration: 0.7 }, 0)
         .to('.hero-reveal', { y: '0%', opacity: 1, duration: 1.05, stagger: 0.1 }, 0.16)
+        .fromTo('.hero-letter', { yPercent: 110, rotateX: -65, opacity: 0 }, { yPercent: 0, rotateX: 0, opacity: 1, duration: 0.95, stagger: 0.045 }, 0.48)
         .to('.hero-copy', { opacity: 1, y: 0, duration: 0.9 }, 0.66)
         .to('.hero-cta', { opacity: 1, y: 0, duration: 0.8 }, 0.82)
         .to('.hero-cue', { opacity: 1, duration: 0.9 }, 1.0);
@@ -127,20 +128,20 @@ const HeroHook = () => {
           </span>
         </p>
 
-        <h1 className="hero-h1 font-display font-black text-white mx-auto mb-11">
+        <h1 className="hero-h1 font-display font-black text-white mx-auto mb-7">
           <span className="hero-line">
             <span className="hero-reveal hero-line--intro">
-              Agentory <span className="hero-serif">is where you</span>
+              Built for <span className="hero-serif">your next chapter.</span>
             </span>
           </span>
           <span className="hero-line">
-            <span className="hero-reveal">build, assign, and manage</span>
+            <span className="hero-reveal">Big ambitions. Meet your</span>
           </span>
           <span className="hero-line">
             <span className="hero-reveal hero-accent">
               <span aria-hidden="true">
                 {'AI employees.'.split('').map((ch, i) => (
-                  <span key={i} className="hero-wave" style={{ animationDelay: `${(i * 0.05).toFixed(2)}s` }}>
+                  <span key={i} className="hero-letter" style={{ '--letter': i } as CSSProperties}>
                     {ch === ' ' ? '\u00A0' : ch}
                   </span>
                 ))}
@@ -150,9 +151,9 @@ const HeroHook = () => {
           </span>
         </h1>
 
-        <p className="hero-copy opacity-0 translate-y-4 text-white/68 leading-[1.55] max-w-[760px] mx-auto hero-copy--size">
-          Create specialized AI employees, give them responsibilities, and run their work across
-          your business — all from one place.
+        <p className="hero-copy opacity-0 translate-y-4 text-white/68 leading-[1.55] max-w-[640px] mx-auto hero-copy--size">
+          A team that researches, finds leads, and creates content — with your company context built in.
+          You set the direction. They get to work.
         </p>
 
         <div className="hero-cta opacity-0 translate-y-3 mt-10">
@@ -194,8 +195,7 @@ const HeroHook = () => {
         /* Same 5.5s clock as the wave, a beat behind, so the light reads as a
            response to the type rather than as its own loop. */
         @keyframes heroBreathe { 0%, 26%, 100% { opacity: 0.7; } 11% { opacity: 1; } }
-        /* One light crossing a grid line. The only moving decoration. */
- }
+        
         .hero-vignette {
           position: absolute; inset: 0; z-index: 2; pointer-events: none;
           background:
@@ -228,36 +228,36 @@ const HeroHook = () => {
 
         /* ── Headline ──────────────────────────────────────────────────── */
         .hero-h1 {
-          font-size: clamp(2.55rem, 6.2vw, 7rem);
-          line-height: 0.97; letter-spacing: -0.048em; max-width: 1180px;
+          font-size: clamp(2.8rem, 6.1vw, 6rem);
+          line-height: 1.06; letter-spacing: -0.055em; max-width: 1180px;
         }
-        .hero-line { display: block; overflow: hidden; padding-bottom: 0.1em; }
-        .hero-copy--size { font-size: clamp(18px, 1.5vw, 23px); }
+        .hero-line { display: block; overflow: hidden; padding: 0.08em 0.06em 0.16em; }
+        .hero-copy--size { font-size: clamp(17px, 1.4vw, 20px); text-wrap: pretty; }
         .hero-reveal { display: block; transform: translateY(105%); opacity: 0; will-change: transform; }
-        /* Line one stays fully readable — it is the sentence's subject. */
         .hero-serif {
           font-family: 'Instrument Serif', Georgia, serif;
           font-style: italic; font-weight: 400; letter-spacing: -0.01em;
           color: rgba(255,255,255,0.8);
         }
-        .hero-line--intro { font-size: 0.6em; font-weight: 800; letter-spacing: -0.035em; color: rgba(255,255,255,0.92); }
+        .hero-line--intro { font-size: 0.38em; font-weight: 500; letter-spacing: -0.025em; color: rgba(255,255,255,0.65); padding-bottom: 0.65em; }
         .hero-accent {
-          position: relative; display: inline-block;
-          transition: letter-spacing 420ms cubic-bezier(0.22,1,0.36,1), filter 420ms ease;
-          filter: drop-shadow(0 0 26px rgba(16,185,129,calc(0.3 - var(--s) * 0.3)));
+          position: relative; display: inline-block; white-space: nowrap;
+          font-size: 1.3em; perspective: 800px;
+          filter: drop-shadow(0 8px 28px rgba(16,185,129,0.2));
         }
-        .hero-wave {
-          display: inline-block; will-change: transform;
-          background: linear-gradient(178deg, #6ee7b7 4%, #34d399 52%, #10b981 100%);
-          -webkit-background-clip: text; background-clip: text; color: transparent;
-          animation: heroWave 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        .hero-letter {
+          display: inline-block; transform-origin: 50% 85%;
+          color: #34d399;
+          background: linear-gradient(115deg, #10b981 0%, #6ee7b7 35%, #d1fae5 48%, #6ee7b7 58%, #10b981 80%);
+          background-size: 300% 100%;
+          -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+          animation: heroLight 7s ease-in-out infinite;
+          animation-delay: calc(1.6s + var(--letter) * 0.065s);
         }
-        @keyframes heroWave {
-          0%, 20%, 100% { transform: translateY(0); }
-          7%  { transform: translateY(-5px); }
-          14% { transform: translateY(1px); }
+        @keyframes heroLight {
+          0%, 65%, 100% { background-position: 100% 50%; }
+          28% { background-position: 0% 50%; }
         }
-        .hero-h1:hover .hero-accent { letter-spacing: -0.058em; }
         /* ── Buttons ───────────────────────────────────────────────────── */
         /* Built as control surfaces rather than pills: an outer shell, an
            inset face, and edge highlights doing the work instead of a drop
@@ -325,17 +325,16 @@ const HeroHook = () => {
         @media (max-width: 1023px) {
           /* Ghost words become clutter before they become atmosphere. */
           .hero-ghost { display: none; }
-          .hero-h1 { font-size: clamp(2.1rem, 8.4vw, 3.2rem); }
-          /* Per-letter motion gets messy at small sizes; the phrase keeps a
-             single soft highlight instead. */
-          .hero-wave { animation: none; }
-          .hero-accent { animation: heroAccentGlow 5.5s ease-in-out infinite; }
-          @keyframes heroAccentGlow { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.14); } }
+          .hero-h1 { font-size: clamp(2.05rem, 6.5vw, 4.2rem); }
+          .hero-accent { font-size: 1.28em; }
+          .hero-line--intro { font-size: 0.52em; }
           .hero-secondary { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .hero-bloom, .hero-ghost, .hero-wave, .hero-cue__line { animation: none; }
+          .hero-bloom, .hero-ghost, .hero-letter, .hero-cue__line { animation: none; }
+          .hero-reveal, .hero-letter { transform: none !important; opacity: 1 !important; }
+          .hero-btn, .hero-btn::before { transition: none; transform: none; }
                     .hero-inner, .hero-eyebrow, .hero-cue { transform: none; opacity: 1; }
           .hero-primary { transition: box-shadow 260ms ease; }
         }

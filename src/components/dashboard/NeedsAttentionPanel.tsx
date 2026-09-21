@@ -57,7 +57,7 @@ export default function NeedsAttentionPanel({
       m.competitorSignals > 0
         ? `${m.competitorSignals} competitor signal${m.competitorSignals === 1 ? "" : "s"} to review`
         : "0 high-priority competitor signals",
-    to: "/competitors",
+    to: "/signals",
     tone: "blue",
   });
 

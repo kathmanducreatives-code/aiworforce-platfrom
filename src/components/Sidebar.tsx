@@ -1,27 +1,25 @@
+import type { ComponentType } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard, Radar, MessageSquare, Inbox,
-  Users, Eye, BookOpen, Sparkles, Brain,
-  Mail, Plug, HelpCircle, PanelLeftClose, PanelLeft, Workflow,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { motion, useReducedMotion, type Transition } from 'framer-motion';
 import CreditPill from './credits/CreditPill';
 import ProfileMenu from './account/ProfileMenu';
 import { TOUR_TAG_BY_NAV_KEY } from './tour/tourSteps';
-
-type Accent = 'emerald' | 'teal' | 'amber' | 'violet' | 'blue' | 'neutral';
+import {
+  IconDashboard, IconAwaiting, IconWorkflows,
+  IconSignals, IconLeads, IconContent, IconSequences,
+  IconAgents, IconCompanyBrain, IconIntegrations,
+  IconHelp, IconCollapse, IconExpand, type NavIconProps,
+} from './nav/NavIcons';
+import './nav/sidebar.css';
 
 interface NavItem {
   key: string;
   path: string;
-  icon: any;
+  icon: ComponentType<NavIconProps>;
   label: string;
-  accent: Accent;
   badge?: string;
   badgeColor?: 'amber' | 'emerald';
   matchExact?: boolean;
-  /** Excluded from auto-active matching (e.g. Pilot shares /dashboard with Dashboard) */
-  neverActive?: boolean;
 }
 
 interface NavGroup {
@@ -29,37 +27,38 @@ interface NavGroup {
   items: NavItem[];
 }
 
+// THE canonical navigation. productTourGuide.test.ts parses these literals
+// (`{ key, path, …, label }`) straight from this file, so keep each item on
+// that shape and keep the icon an identifier, never an inline component.
 const navGroups: NavGroup[] = [
   {
     label: 'Command',
     items: [
-      { key: 'dashboard', path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', accent: 'emerald', matchExact: true },
-      { key: 'pilot', path: '/dashboard', icon: MessageSquare, label: 'Pilot', accent: 'emerald', neverActive: true },
-      { key: 'awaiting', path: '/awaiting-you', icon: Inbox, label: 'Awaiting You', accent: 'emerald', badge: '4', badgeColor: 'amber' },
-      { key: 'workflows', path: '/workflows', icon: Workflow, label: 'Workflows', accent: 'emerald' },
+      { key: 'dashboard', path: '/dashboard', icon: IconDashboard, label: 'Dashboard', matchExact: true },
+      { key: 'awaiting', path: '/awaiting-you', icon: IconAwaiting, label: 'Awaiting You', badge: '4', badgeColor: 'amber' },
+      { key: 'workflows', path: '/workflows', icon: IconWorkflows, label: 'Workflows' },
     ],
   },
   {
     label: 'Growth',
     items: [
-      { key: 'signals', path: '/signals', icon: Radar, label: 'Signals', accent: 'teal' },
-      { key: 'leads', path: '/leads', icon: Users, label: 'Leads', accent: 'amber' },
-      { key: 'content', path: '/content', icon: BookOpen, label: 'Content', accent: 'violet' },
-      { key: 'competitors', path: '/competitors', icon: Eye, label: 'Competitors', accent: 'blue' },
-      { key: 'email-sequences', path: '/email-sequences', icon: Mail, label: 'Email Sequences', accent: 'emerald' },
+      { key: 'signals', path: '/signals', icon: IconSignals, label: 'Signals' },
+      { key: 'leads', path: '/leads', icon: IconLeads, label: 'Leads' },
+      { key: 'content', path: '/content', icon: IconContent, label: 'Content' },
+      { key: 'email-sequences', path: '/email-sequences', icon: IconSequences, label: 'Email Sequences' },
     ],
   },
   {
     label: 'AI Workforce',
     items: [
-      { key: 'agents', path: '/agents', icon: Sparkles, label: 'Agents', accent: 'emerald' },
-      { key: 'company-brain', path: '/company-brain', icon: Brain, label: 'Company Brain', accent: 'emerald' },
+      { key: 'agents', path: '/agents', icon: IconAgents, label: 'Agents' },
+      { key: 'company-brain', path: '/company-brain', icon: IconCompanyBrain, label: 'Company Brain' },
     ],
   },
   {
     label: 'System',
     items: [
-      { key: 'integrations', path: '/settings/integrations', icon: Plug, label: 'Integrations', accent: 'neutral' },
+      { key: 'integrations', path: '/settings/integrations', icon: IconIntegrations, label: 'Integrations' },
     ],
   },
 ];
@@ -69,19 +68,13 @@ const navGroups: NavGroup[] = [
 // second hand-maintained map that could silently drift.
 const TOUR_TAG_BY_KEY: Record<string, string | undefined> = TOUR_TAG_BY_NAV_KEY;
 
-const ACCENT: Record<Accent, {
-  bar: string;
-  bg: string;
-  icon: string;
-  border: string;
-}> = {
-  emerald: { bar: 'bg-emerald-400', bg: 'bg-emerald-500/[0.08]', icon: 'text-emerald-300', border: 'border-emerald-400/40' },
-  teal:    { bar: 'bg-teal-400',    bg: 'bg-teal-500/[0.08]',    icon: 'text-teal-300',    border: 'border-teal-400/40' },
-  amber:   { bar: 'bg-amber-400',   bg: 'bg-amber-500/[0.08]',   icon: 'text-amber-300',   border: 'border-amber-400/40' },
-  violet:  { bar: 'bg-violet-400',  bg: 'bg-violet-500/[0.08]',  icon: 'text-violet-300',  border: 'border-violet-400/40' },
-  blue:    { bar: 'bg-blue-400',    bg: 'bg-blue-500/[0.08]',    icon: 'text-blue-300',    border: 'border-blue-400/40' },
-  neutral: { bar: 'bg-neutral-300', bg: 'bg-white/[0.05]',       icon: 'text-neutral-200', border: 'border-white/20' },
-};
+/**
+ * How the shared active indicator travels between rows: a flat tween, never a
+ * spring, so it cannot overshoot. The row's icon colour (CSS, 120ms) resolves
+ * just ahead of the surface arriving under it.
+ */
+const INDICATOR_TRAVEL: Transition = { type: 'tween', duration: 0.26, ease: [0.32, 0.72, 0, 1] };
+const INDICATOR_INSTANT: Transition = { duration: 0 };
 
 interface SidebarProps {
   collapsed: boolean;
@@ -92,7 +85,6 @@ interface SidebarProps {
 function resolveActiveKey(pathname: string): string | null {
   for (const group of navGroups) {
     for (const item of group.items) {
-      if (item.neverActive) continue;
       const match = item.matchExact ? pathname === item.path : pathname === item.path || pathname.startsWith(item.path + '/');
       if (match) return item.key;
     }
@@ -103,149 +95,117 @@ function resolveActiveKey(pathname: string): string | null {
 const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
   const { pathname } = useLocation();
   const activeKey = resolveActiveKey(pathname);
+  const travel = useReducedMotion() ? INDICATOR_INSTANT : INDICATOR_TRAVEL;
 
   return (
-    <aside
-      className={cn(
-        'fixed left-0 top-0 h-screen z-40 flex flex-col bg-[#050505]/60 backdrop-blur-xl border-r border-white/[0.04] transition-[width] duration-200',
-        collapsed ? 'w-[68px]' : 'w-[256px]'
-      )}
-    >
-      {/* Workspace header */}
-      <div className={cn('px-2 py-2 border-b border-white/[0.03]', collapsed && 'px-1')}>
+    <aside className="sb" data-collapsed={collapsed ? 'true' : 'false'}>
+      <div className="sb__account">
         <ProfileMenu collapsed={collapsed} />
       </div>
 
-      {/* Navigation */}
-      <nav
-        aria-label="Primary"
-        className="flex-1 overflow-y-auto px-2 py-3 space-y-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-      >
+      {/* layoutScroll: the indicator measures correctly even if the nav scrolls. */}
+      <motion.nav aria-label="Primary" className="sb__nav" layoutScroll>
         {navGroups.map((group) => (
-          <div
-            key={group.label}
-            role="group"
-            aria-label={group.label}
-            className="space-y-0.5"
-          >
-            {!collapsed && (
-              <p className="px-3.5 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
-                {group.label}
-              </p>
-            )}
-            {group.items.map((item) => {
-              const isActive = item.key === activeKey;
-              const accent = ACCENT[item.accent];
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.key}
-                  to={item.path}
-                  aria-current={isActive ? 'page' : undefined}
-                  aria-label={collapsed ? item.label : undefined}
-                  title={collapsed ? item.label : undefined}
-                  data-tour={TOUR_TAG_BY_KEY[item.key]}
-                  className={cn(
-                    'group relative flex items-center h-11 rounded-md transition-colors duration-150 outline-none',
-                    'focus-visible:ring-1 focus-visible:ring-emerald-400/50',
-                    collapsed ? 'justify-center px-0' : 'gap-3 px-3.5',
-                    isActive
-                      ? cn(accent.bg, 'text-white')
-                      : 'text-neutral-300 hover:bg-white/[0.035] hover:text-white',
-                  )}
-                >
-                  {isActive && (
-                    <span
-                      aria-hidden
-                      className={cn(
-                        'absolute left-0 top-1/2 -translate-y-1/2 w-[2.5px] h-5 rounded-r',
-                        accent.bar,
-                      )}
-                    />
-                  )}
-                  <span className="relative flex items-center justify-center">
-                    <Icon
-                      className={cn(
-                        'h-[19px] w-[19px] shrink-0 transition-colors',
-                        isActive ? accent.icon : 'text-neutral-500 group-hover:text-neutral-200',
-                      )}
-                    />
-                    {collapsed && item.badge && (
-                      <span
-                        aria-hidden
-                        className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] px-1 rounded-full bg-amber-500/90 text-[9px] font-semibold text-black flex items-center justify-center leading-none"
-                      >
-                        {item.badge}
-                      </span>
-                    )}
-                  </span>
-                  {!collapsed && (
-                    <span
-                      className={cn(
-                        'flex-1 truncate text-[15px]',
-                        isActive ? 'font-semibold' : 'font-medium',
-                      )}
-                    >
-                      {item.label}
-                    </span>
-                  )}
-                  {!collapsed && item.badge && (
-                    <span
-                      className={cn(
-                        'ml-auto inline-flex items-center h-[18px] px-1.5 rounded text-[11px] font-mono tabular-nums border',
-                        item.badgeColor === 'amber'
-                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/25'
-                          : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25',
-                      )}
-                    >
-                      {item.badge}
-                      <span className="sr-only"> pending</span>
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+          <div key={group.label} role="group" aria-label={group.label} className="sb__group">
+            <p className="sb__section" aria-hidden="true">{group.label}</p>
+            {group.items.map((item) => (
+              <SidebarNavItem
+                key={item.key}
+                item={item}
+                active={item.key === activeKey}
+                collapsed={collapsed}
+                travel={travel}
+              />
+            ))}
           </div>
         ))}
-      </nav>
+      </motion.nav>
 
-      {/* Bottom utility */}
-      <div className="border-t border-white/[0.04] px-2 py-2 space-y-1">
-        <div className={cn('px-1', collapsed && 'px-0')}>
-          <CreditPill collapsed={collapsed} />
-        </div>
+      <div className="sb__footer">
+        <CreditPill collapsed={collapsed} />
         <button
           type="button"
+          className="sb__row sb__button"
           aria-label="Help and support"
           title={collapsed ? 'Help & Support' : undefined}
-          className={cn(
-            'flex items-center h-9 rounded-md text-[13.5px] text-neutral-300 hover:text-white hover:bg-white/[0.035] transition-colors w-full',
-            collapsed ? 'justify-center px-0' : 'gap-3 px-3'
-          )}
         >
-          <HelpCircle className="h-4 w-4 text-neutral-400 shrink-0" />
-          {!collapsed && <span>Help & Support</span>}
+          <IconHelp className="sb__icon" size={18} />
+          <span className="sb__label">Help &amp; Support</span>
         </button>
         <button
           type="button"
+          className="sb__row sb__button"
           onClick={onToggle}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
           title={collapsed ? 'Expand' : 'Collapse'}
-          className={cn(
-            'flex items-center h-9 rounded-md text-[13.5px] text-neutral-300 hover:text-white hover:bg-white/[0.035] transition-colors w-full',
-            collapsed ? 'justify-center px-0' : 'gap-3 px-3'
-          )}
         >
-          {collapsed ? (
-            <PanelLeft className="h-4 w-4 text-neutral-400 shrink-0" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4 text-neutral-400 shrink-0" />
-          )}
-          {!collapsed && <span>Collapse</span>}
+          {collapsed
+            ? <IconExpand className="sb__icon" size={18} />
+            : <IconCollapse className="sb__icon" size={18} />}
+          <span className="sb__label">Collapse</span>
         </button>
       </div>
     </aside>
   );
 };
+
+function SidebarNavItem({ item, active, collapsed, travel }: {
+  item: NavItem;
+  active: boolean;
+  collapsed: boolean;
+  travel: Transition;
+}) {
+  const Icon = item.icon;
+  // Collapsed, the visible label is gone, so the accessible name carries it —
+  // and the pending count, which is otherwise only a dot.
+  const collapsedName = item.badge ? `${item.label}, ${item.badge} pending` : item.label;
+
+  return (
+    <Link
+      to={item.path}
+      className="sb__row"
+      data-active={active ? 'true' : undefined}
+      aria-current={active ? 'page' : undefined}
+      aria-label={collapsed ? collapsedName : undefined}
+      title={collapsed ? item.label : undefined}
+      data-tour={TOUR_TAG_BY_KEY[item.key]}
+    >
+      {/* ONE indicator for the whole rail: the same layoutId mounts under
+          whichever row is active, so framer-motion carries it there. */}
+      {active && (
+        <>
+          <motion.span
+            layoutId="sidebar-active-surface"
+            className="sb__surface"
+            style={{ borderRadius: 9 }}
+            transition={travel}
+            aria-hidden
+          />
+          <motion.span
+            layoutId="sidebar-active-rail"
+            className="sb__rail"
+            transition={travel}
+            aria-hidden
+          />
+        </>
+      )}
+      <Icon className="sb__icon" size={20} />
+      <span className="sb__label">{item.label}</span>
+      {item.badge && (
+        <>
+          <span
+            className={item.badgeColor === 'emerald' ? 'sb__badge sb__badge--emerald' : 'sb__badge'}
+            aria-hidden={collapsed || undefined}
+          >
+            {item.badge}
+            <span className="sr-only"> pending</span>
+          </span>
+          <span className="sb__dot" aria-hidden />
+        </>
+      )}
+    </Link>
+  );
+}
 
 export default Sidebar;

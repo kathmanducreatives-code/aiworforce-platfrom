@@ -452,12 +452,8 @@ const ICPResultsPage = () => {
                                             <button
                                                 key={tier}
                                                 onClick={() => setTierFilter(tier)}
-                                                className={cn(
-                                                    "px-3 py-1.5 rounded text-xs font-medium transition-colors border",
-                                                    tierFilter === tier
-                                                        ? "bg-primary text-primary-foreground border-primary"
-                                                        : "bg-background text-muted-foreground border-border/40 hover:border-border"
-                                                )}
+                                                aria-pressed={tierFilter === tier}
+                                                className="ag-chip px-3 py-1.5 rounded-md text-xs font-medium"
                                             >
                                                 {tier === 'all' ? 'All' : `Tier ${tier}`}
                                             </button>
@@ -533,7 +529,7 @@ const ICPResultsPage = () => {
                                             </Button>
                                             <Button
                                                 onClick={() => setShowFindEmailsDropdown(!showFindEmailsDropdown)}
-                                                className="h-9 px-2 rounded-l-none border-l border-primary-foreground/20 bg-primary text-primary-foreground hover:bg-primary/90"
+                                                className="h-9 px-2 rounded-l-none border-l border-white/10"
                                             >
                                                 <ChevronDown className="w-4 h-4" />
                                             </Button>
@@ -658,7 +654,7 @@ const ICPResultsPage = () => {
                                             </Button>
                                             <Button
                                                 onClick={() => setShowFindEmailsDropdown(!showFindEmailsDropdown)}
-                                                className="h-9 px-2 rounded-l-none border-l border-primary-foreground/20 bg-primary text-primary-foreground hover:bg-primary/90"
+                                                className="h-9 px-2 rounded-l-none border-l border-white/10"
                                             >
                                                 <ChevronDown className="w-4 h-4" />
                                             </Button>

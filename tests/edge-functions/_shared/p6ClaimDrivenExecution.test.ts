@@ -454,8 +454,18 @@ Deno.test("LEGACY PURCHASER GONE (2): legacy Brain says debt + canonical claim a
 
 Deno.test("LEGACY PURCHASER GONE (source): under Lead V2 the evidence-debt route never runs; the phase is the only buyer", () => {
   const src = Deno.readTextFileSync(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
-  assert(src.includes('if ((evidenceMode === "plan_only" || evidenceMode === "execute") && !p2Specs) {'),
+  // The exclusion used to read `&& !p2Specs`, which tied it to the spec spine:
+  // with `LEAD_V2_SPECS=off` a Lead V2 mission fell back to the legacy owner.
+  // It now asks the property that actually matters.
+  assert(src.includes("const legacyEvidenceDebtAllowed = !isLeadV2Mission;"),
+    "the legacy debt route must be excluded for Lead V2 by mission mode, not by the spec flag");
+  assert(src.includes('const isLeadV2Mission = intelligence.mode === "new_architecture" && !!capabilityRun;'),
+    "and Lead V2 must be identified by the mission mode the rest of the run keys off");
+  assert(src.includes('if ((evidenceMode === "plan_only" || evidenceMode === "execute") && legacyEvidenceDebtAllowed) {'),
     "the legacy debt/collection/re-evaluation block is V1-only");
+  // And the canonical verifier no longer asks the V1 flag for permission.
+  assert(src.includes("if (!webVerificationEnabled) return {};"),
+    "canonical claim verification must own its own spend switch");
   const phase = src.indexOf("const phase = await runClaimVerificationPhase({");
   const debt = src.indexOf("computeEvidenceDebts(debtCandidates");
   assert(phase > 0 && debt > 0);

@@ -130,7 +130,7 @@ export const ICPLeadCard = ({ lead, onClick }: ICPLeadCardProps) => {
                     <Button
                         size="sm"
                         variant="secondary"
-                        className="bg-primary text-primary-foreground hover:bg-primary/90 h-7 text-xs font-semibold shadow-[var(--shadow-glow)]"
+                        className="h-7 text-xs"
                     >
                         <Eye className="w-3 h-3 mr-1.5" />
                         View Evidence

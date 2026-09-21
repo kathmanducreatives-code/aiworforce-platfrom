@@ -1,0 +1,396 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIVE INTELLIGENCE — a slab of dark liquid glass.
+
+   THE MATERIAL, WITHOUT backdrop-filter. The dashboard behind this bar is a
+   near-uniform dark gradient, so a blur would change nothing you can see while
+   being recomputed on every scroll frame. The glass is built from light instead:
+     1. body    — translucent green-black, darker toward the base
+     2. edge    — a hairline that is bright at the top and cools to emerald
+     3. depth   — emerald light pooled under the surface, a thin inner rim
+     4. sheen   — a specular highlight that follows the pointer
+     5. lens    — a faint diagonal refraction that drifts against the pointer
+
+   MOTION. Rotation: 6–8px of travel and a fade. Arrival: a ring of light leaves
+   the LIVE dot and crosses the glass (~1.2s), a refraction band sweeps with it,
+   and the new signal settles in behind the wavefront. The ring animates a
+   registered radius (one gradient repaint over a 100px-tall slab); everything
+   else is transform/opacity. Nothing loops.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@property --li-r { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@property --li-a { syntax: '<number>'; inherits: false; initial-value: 0; }
+
+.li {
+  --li-x: 30%;
+  --li-shift: 0px;
+  --li-ease: cubic-bezier(0.22, 0.8, 0.3, 1);
+  --li-ink: #f2f6f4;
+  --li-muted: #8a9691;
+  --li-label: #7f9a8e;
+  --li-accent: #34d399;
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 22px;
+  min-height: 96px;
+  padding: 16px 20px 18px;
+  border-radius: 16px;
+  color: var(--li-ink);
+  background: linear-gradient(180deg, rgba(24, 35, 30, 0.66) 0%, rgba(11, 18, 15, 0.76) 55%, rgba(8, 13, 11, 0.84) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 22px 44px -32px rgba(0, 0, 0, 0.95);
+}
+
+/* 2 · the edge: bright where light hits the top, cooling to emerald below. */
+.li::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.045) 42%, rgba(110, 231, 183, 0.11));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* 3 · depth: light pooled under the glass, and a thin inner rim near the top. */
+.li::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 150% at 50% 140%, rgba(52, 211, 153, 0.085), transparent 70%),
+    linear-gradient(90deg, transparent 6%, rgba(255, 255, 255, 0.055) 50%, transparent 94%) 0 1px / 100% 1px no-repeat;
+}
+
+/* 4 · specular sheen, following the pointer. */
+.li__sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background: radial-gradient(34% 170% at var(--li-x) -35%, rgba(214, 255, 236, 0.08), transparent 70%);
+  transition: opacity 0.5s var(--li-ease);
+}
+
+/* 5 · the lens: a faint refraction that drifts a few pixels against the pointer. */
+.li__lens {
+  position: absolute;
+  inset: 0 -24px;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(102deg, transparent 32%, rgba(255, 255, 255, 0.022) 44%, rgba(160, 255, 215, 0.018) 50%, transparent 62%);
+  transform: translate3d(var(--li-shift), 0, 0);
+  transition: transform 0.9s var(--li-ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .li:hover .li__sheen { opacity: 1; }
+}
+.li[data-arriving] .li__sheen { opacity: 1; }
+
+/* ── left: the status ───────────────────────────────────────────────────── */
+
+.li__meta {
+  position: relative;
+  z-index: 1;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 20px;
+  border-right: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.li__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--li-label);
+  white-space: nowrap;
+}
+
+.li__dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--li-accent);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.12);
+  transition: box-shadow 0.45s var(--li-ease);
+}
+.li[data-arriving] .li__dot { box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.2), 0 0 14px rgba(52, 211, 153, 0.6); }
+.li[data-state='error'] .li__dot { background: #8a8f8c; box-shadow: none; }
+
+.li__type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 560;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #d4e2db;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.li__new {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 99px;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  color: #8ff0c9;
+  background: rgba(52, 211, 153, 0.14);
+}
+
+/* ── centre: the signal ─────────────────────────────────────────────────── */
+
+.li__body { position: relative; z-index: 1; min-width: 0; }
+.li__slide { min-width: 0; }
+
+.li__headline {
+  margin: 0;
+  overflow: hidden;
+  font-size: 15.5px;
+  font-weight: 520;
+  letter-spacing: -0.012em;
+  line-height: 1.3;
+  color: var(--li-ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.li__context {
+  margin: 5px 0 0;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--li-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.li__more { color: #7fcfae; }
+
+.li__inline-meta { display: none; }
+
+.li__skeleton { display: grid; gap: 9px; }
+.li__skeleton span { display: block; height: 12px; width: 58%; border-radius: 6px; background: rgba(255, 255, 255, 0.05); }
+.li__skeleton span + span { height: 9px; width: 34%; background: rgba(255, 255, 255, 0.035); }
+
+/* ── right: position and action ─────────────────────────────────────────── */
+
+.li__side {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 9px;
+}
+
+.li__side-top { display: flex; align-items: center; gap: 12px; }
+
+.li__flag {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #b89e70;
+  white-space: nowrap;
+}
+
+.li__count {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: 500 10.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.06em;
+  color: #6f7a75;
+  cursor: pointer;
+  transition: color 0.15s ease-out;
+}
+.li__count:hover { color: #c9d6cf; }
+
+.li__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #d9e7e0;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease-out, background-color 0.15s ease-out, border-color 0.15s ease-out;
+}
+.li__cta span { display: inline-block; transition: transform 0.18s var(--li-ease); }
+@media (hover: hover) and (pointer: fine) {
+  .li__cta:hover { color: #eafff5; background: rgba(52, 211, 153, 0.09); border-color: rgba(52, 211, 153, 0.28); }
+  .li__cta:hover span { transform: translateX(2px); }
+}
+
+.li__cta:focus-visible,
+.li__count:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.55), 0 0 0 4px rgba(52, 211, 153, 0.12);
+}
+.li__count:focus-visible { border-radius: 4px; }
+
+/* ── progress: one hairline, paused in place while the person is here ───── */
+
+.li__progress {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 8px;
+  z-index: 1;
+  height: 1px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+}
+.li__progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0.12), rgba(110, 231, 183, 0.5));
+  animation: li-progress var(--li-dwell, 8000ms) linear forwards;
+}
+.li[data-paused] .li__progress::after { animation-play-state: paused; }
+@keyframes li-progress { to { transform: scaleX(1); } }
+
+/* ── arrival: a ring of light through the glass ─────────────────────────── */
+
+.li__ripple {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.li__ring {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at var(--ox) var(--oy),
+      transparent calc(var(--li-r) - 38px),
+      rgba(52, 211, 153, calc(0.09 * var(--li-a))) calc(var(--li-r) - 16px),
+      rgba(176, 255, 222, calc(0.36 * var(--li-a))) calc(var(--li-r) - 2px),
+      rgba(52, 211, 153, calc(0.13 * var(--li-a))) calc(var(--li-r) + 7px),
+      transparent calc(var(--li-r) + 24px)),
+    radial-gradient(circle at var(--ox) var(--oy),
+      rgba(52, 211, 153, calc(0.06 * var(--li-a))) 0,
+      transparent var(--li-r));
+  animation: li-ring 1150ms cubic-bezier(0.25, 0.6, 0.3, 1) 60ms both;
+}
+@keyframes li-ring {
+  0%   { --li-r: 0px; --li-a: 0; }
+  12%  { --li-a: 1; }
+  68%  { --li-a: 0.7; }
+  100% { --li-r: var(--li-rmax, 1200px); --li-a: 0; }
+}
+
+.li__spark {
+  position: absolute;
+  left: var(--ox);
+  top: var(--oy);
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(214, 255, 236, 0.95), rgba(52, 211, 153, 0.45) 45%, transparent 70%);
+  opacity: 0;
+  animation: li-spark 460ms var(--li-ease) both;
+}
+@keyframes li-spark {
+  0%   { opacity: 0; transform: scale(0.3); }
+  30%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+
+.li__band {
+  position: absolute;
+  top: -30%;
+  bottom: -30%;
+  left: 0;
+  width: 22%;
+  background: linear-gradient(90deg, transparent, rgba(196, 255, 228, 0.1) 50%, transparent);
+  opacity: 0;
+  animation: li-band 1000ms cubic-bezier(0.3, 0.5, 0.3, 1) 170ms both;
+}
+@keyframes li-band {
+  0%   { opacity: 0; transform: translate3d(-110%, 0, 0) skewX(-14deg); }
+  20%  { opacity: 1; }
+  80%  { opacity: 0.8; }
+  100% { opacity: 0; transform: translate3d(480%, 0, 0) skewX(-14deg); }
+}
+
+/* ── narrow screens: status above, action beside, signal below ─────────── */
+
+@media (max-width: 760px) {
+  .li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'meta side' 'body body';
+    row-gap: 10px;
+    padding: 14px 16px 16px;
+  }
+  .li__meta { grid-area: meta; flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; padding-right: 0; border-right: 0; }
+  .li__side { grid-area: side; flex-direction: row; align-items: center; }
+  .li__body { grid-area: body; }
+  .li__cta { height: 28px; padding: 0 10px; }
+  /* One row can hold the live label, the position and the action — nothing more. */
+  .li__type, .li__side-top .li__flag { display: none; }
+  .li__inline-meta {
+    display: block;
+    margin: 0 0 5px;
+    font-size: 10px;
+    font-weight: 560;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #c9d8d1;
+  }
+  .li__headline { font-size: 14.5px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+}
+
+/* ── reduced motion: nothing travels ────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .li__ripple { display: none; }
+  .li__lens, .li__sheen, .li__dot, .li__cta span { transition: none; }
+  .li__lens { transform: none; }
+  .li__progress::after { animation: none; transform: scaleX(0); }
+}

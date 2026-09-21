@@ -1,0 +1,48 @@
+# LOCAL-ONLY PROJECT DIRECTORY — the stack, without the repo's migrations.
+#
+# `supabase start` applies `supabase/migrations/` automatically, and those are
+# INCREMENTAL: on an empty database they fail (they alter tables the held
+# baseline creates), which aborts the whole start. This directory has no
+# migrations, so the containers come up empty and
+# `scripts/local-supabase/rebuild-local-db.sh` builds the schema the way
+# supabase/migrations-held/README.md prescribes: baseline, then every migration
+# in timestamp order.
+#
+# The project_id MATCHES the repo's, so the containers carry the same names and
+# `supabase functions serve` / `supabase status` run from the repo root against
+# this same stack. Nothing here points at the hosted project.
+project_id = "ohsdatpvfdjdemstoiuj"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:8082"
+additional_redirect_urls = ["http://127.0.0.1:8082", "http://localhost:8082"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+# Local development: no mail server round-trip for a dev login.
+enable_confirmations = false
+
+[realtime]
+enabled = true
+
+[storage]
+enabled = true

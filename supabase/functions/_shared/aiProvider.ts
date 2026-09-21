@@ -4,7 +4,7 @@
 //
 // Used by: pilot-chat, orchestrate, run-agent.
 
-export type ProviderName = "lovable-ai" | "anthropic";
+export type ProviderName = "anthropic" | "openai";
 export type TaskType =
   | "pilot_chat"
   | "orchestration_plan"
@@ -82,9 +82,13 @@ export interface GenerateResult {
   error?: string;
   errorCode?: string;
   latencyMs: number;
+  /** True when the task ran on its declared fallback rather than its own model. */
+  degraded?: boolean;
+  /** The model the task intended, whatever actually ran. */
+  intendedModel?: string;
 }
 
-const LOVABLE_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 import {
   readModelUsage, buildModelTelemetry, type ModelCallTelemetry,
 } from "./modelCostModel.ts";
@@ -94,19 +98,77 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 // `Record<TaskType, string>` on purpose: a new task type cannot be added
 // without choosing a model for it, which is what would have caught the two
 // below before they reached production.
-const DEFAULT_MODELS: Record<TaskType, string> = {
-  pilot_chat: "google/gemini-3-flash-preview",
-  orchestration_plan: "google/gemini-3-flash-preview",
-  agent_execution: "google/gemini-3-flash-preview",
-  tool_input_planning: "google/gemini-3-flash-preview",
-  // Both are substantive generation over a company's own material, so they get
-  // the same model as the other real tasks rather than the helper tier.
-  company_brain_analyze: "google/gemini-3-flash-preview",
-  company_brain_followups: "google/gemini-3-flash-preview",
-  helper: "google/gemini-2.5-flash-lite",
+// ── ONE DELIBERATE MODEL PER TASK, AND NO SILENT DEMOTION ───────────────────
+//
+// This map used to point every task at `google/gemini-3-flash-preview` through
+// the Lovable gateway, with `helper` on a cheaper Gemini. That gateway needs
+// `LOVABLE_API_KEY`, which is not set in the environment Agentory actually runs
+// in — so every attempt in the chain was skipped and all seven tasks fell
+// through to one hardcoded Anthropic helper model. Pilot chat, orchestration,
+// agent execution, tool-input planning and both Company Brain tasks were
+// running on a helper-grade model, silently, because of a missing credential.
+// Nothing reported it: `ok: true` came back and the model name was in a log
+// nobody reads.
+//
+// So the Gemini routing is gone rather than revived. Agentory holds its own
+// OpenAI and Anthropic credentials and its lead pipeline already routes OpenAI
+// directly (`gptModelRouter`); a third-party reseller gateway in front of the
+// same two vendors is a dependency without a job.
+//
+// Each task now names the model it INTENDS, and `fallback` says what may
+// happen when that model cannot run. `none` means the call fails loudly.
+export type ModelVendor = "anthropic" | "openai";
+
+export interface TaskModelPolicy {
+  /** The model this task is meant to run on. */
+  model: string;
+  vendor: ModelVendor;
+  /**
+   * What may substitute when `vendor`'s credential is absent or the call fails.
+   * `null` = nothing may: the task fails with `no_provider_for_task` rather
+   * than quietly running somewhere else.
+   */
+  fallback: { model: string; vendor: ModelVendor } | null;
+  /** Why this tier — read by a human deciding whether to change it. */
+  rationale: string;
+}
+
+const HAIKU = "claude-haiku-4-5-20251001";
+
+export const TASK_MODELS: Record<TaskType, TaskModelPolicy> = {
+  pilot_chat: {
+    model: HAIKU, vendor: "anthropic", fallback: null,
+    rationale: "user-facing conversation; a substitute would change the product's voice mid-session",
+  },
+  orchestration_plan: {
+    model: HAIKU, vendor: "anthropic", fallback: null,
+    rationale: "decides what work runs; a demoted planner spends money on a worse plan",
+  },
+  agent_execution: {
+    model: HAIKU, vendor: "anthropic", fallback: null,
+    rationale: "produces the work the user reads",
+  },
+  tool_input_planning: {
+    model: HAIKU, vendor: "anthropic",
+    fallback: { model: "gpt-4.1-mini", vendor: "openai" },
+    rationale: "structured actor input; a second vendor is acceptable because the output is validated against the actor contract",
+  },
+  company_brain_analyze: {
+    model: HAIKU, vendor: "anthropic", fallback: null,
+    rationale: "writes the Brain every later decision reads",
+  },
+  company_brain_followups: {
+    model: HAIKU, vendor: "anthropic", fallback: null,
+    rationale: "same source of truth as the analyze pass",
+  },
+  helper: {
+    model: HAIKU, vendor: "anthropic",
+    fallback: { model: "gpt-4.1-mini", vendor: "openai" },
+    rationale: "short mechanical completions; either vendor is fine",
+  },
 };
 
-const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
+const ANTHROPIC_MODEL = HAIKU;
 
 // ----- JSON extraction (tolerant of fences / preamble / truncation) -----
 
@@ -141,7 +203,11 @@ export function extractJson(raw: string): unknown {
 
 // ----- Provider callers -----
 
-async function callLovable(
+/**
+ * OpenAI's chat-completions API. This function used to point at the Lovable
+ * gateway, which speaks the same shape; the gateway is gone, the shape stayed.
+ */
+async function callOpenAICompat(
   model: string,
   opts: GenerateOpts,
   apiKey: string,
@@ -153,7 +219,7 @@ async function callLovable(
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 30_000);
   try {
-    const res = await fetch(LOVABLE_GATEWAY_URL, {
+    const res = await fetch(OPENAI_CHAT_URL, {
       method: "POST",
       signal: ctrl.signal,
       headers: {
@@ -171,17 +237,17 @@ async function callLovable(
     clearTimeout(timer);
     const text = await res.text();
     if (!res.ok) {
-      let code = `lovable_${res.status}`;
+      let code = `openai_${res.status}`;
       if (res.status === 429) code = "rate_limited";
       else if (res.status === 402) code = "credits_exhausted";
-      return { ok: false, content: "", error: `Lovable ${res.status}: ${text.slice(0, 300)}`, errorCode: code };
+      return { ok: false, content: "", error: `OpenAI ${res.status}: ${text.slice(0, 300)}`, errorCode: code };
     }
     const data = JSON.parse(text);
     const content: string = data?.choices?.[0]?.message?.content ?? "";
     return { ok: true, content, usage: data?.usage };
   } catch (e) {
     clearTimeout(timer);
-    return { ok: false, content: "", error: `lovable fetch failed: ${String(e)}`, errorCode: "network_error" };
+    return { ok: false, content: "", error: `openai fetch failed: ${String(e)}`, errorCode: "network_error" };
   }
 }
 
@@ -225,53 +291,71 @@ async function callAnthropic(
 
 // ----- Public API -----
 
+/**
+ * The attempt chain for one task: its intended model, then its declared
+ * fallback, and nothing else.
+ *
+ * Exported so the policy can be asserted without a network: given a set of
+ * credentials, exactly which models may this task reach, in what order?
+ */
+export function plannedAttempts(
+  taskType: TaskType, hasKey: (v: ModelVendor) => boolean,
+): Array<{ vendor: ModelVendor; model: string; intended: boolean }> {
+  const policy = TASK_MODELS[taskType];
+  const out: Array<{ vendor: ModelVendor; model: string; intended: boolean }> = [];
+  if (hasKey(policy.vendor)) out.push({ vendor: policy.vendor, model: policy.model, intended: true });
+  if (policy.fallback && hasKey(policy.fallback.vendor)) {
+    out.push({ ...policy.fallback, intended: false });
+  }
+  return out;
+}
+
 export async function generateText(opts: GenerateOpts): Promise<GenerateResult> {
-  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-  const defaultModel = DEFAULT_MODELS[opts.taskType];
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+  const hasKey = (v: ModelVendor) => (v === "anthropic" ? !!anthropicKey : !!openaiKey);
+  const policy = TASK_MODELS[opts.taskType];
   const started = Date.now();
 
-  type Attempt = { provider: ProviderName; model: string; run: () => Promise<Awaited<ReturnType<typeof callLovable>>> };
-  const attempts: Attempt[] = [];
-
-  const wantsAnthropicFirst = opts.preferredProvider === "anthropic" && !!anthropicKey;
-
-  if (wantsAnthropicFirst) {
-    attempts.push({ provider: "anthropic", model: ANTHROPIC_MODEL, run: () => callAnthropic(opts, anthropicKey!) });
-  }
-  if (lovableKey) {
-    attempts.push({ provider: "lovable-ai", model: defaultModel, run: () => callLovable(defaultModel, opts, lovableKey) });
-    // alt model fallback (different family)
-    const alt = "openai/gpt-5-mini";
-    if (alt !== defaultModel) {
-      attempts.push({ provider: "lovable-ai", model: alt, run: () => callLovable(alt, opts, lovableKey) });
-    }
-  }
-  if (anthropicKey && !wantsAnthropicFirst) {
-    attempts.push({ provider: "anthropic", model: ANTHROPIC_MODEL, run: () => callAnthropic(opts, anthropicKey) });
-  }
+  type Attempt = {
+    provider: ProviderName; model: string; intended: boolean;
+    run: () => Promise<Awaited<ReturnType<typeof callAnthropic>>>;
+  };
+  const attempts: Attempt[] = plannedAttempts(opts.taskType, hasKey).map((a) =>
+    a.vendor === "anthropic"
+      ? { provider: "anthropic" as ProviderName, model: a.model, intended: a.intended,
+          run: () => callAnthropic(opts, anthropicKey!) }
+      : { provider: "openai" as ProviderName, model: a.model, intended: a.intended,
+          run: () => callOpenAICompat(a.model, opts, openaiKey!) }
+  );
 
   if (attempts.length === 0) {
+    // NO SILENT DEMOTION. The task named a model; its vendor has no credential
+    // and its policy allows no substitute, so the call fails and says which
+    // credential to set. Running the task somewhere else would be the bug this
+    // whole policy exists to remove.
+    const needed = policy.vendor === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+    console.error("[ai-provider] no provider for task", {
+      task: opts.taskType, intended_model: policy.model, needed_env: needed,
+      fallback_allowed: !!policy.fallback,
+    });
     return {
       ok: false,
       content: "",
       provider: "none",
-      model: "",
-      error: "No AI provider configured (need LOVABLE_API_KEY or ANTHROPIC_API_KEY).",
-      errorCode: "no_provider",
+      model: policy.model,
+      error: `No provider for task "${opts.taskType}" (intended ${policy.model}; set ${needed}).`,
+      errorCode: "no_provider_for_task",
       latencyMs: Date.now() - started,
     };
   }
 
   let lastErr = "no attempts";
   let lastCode = "unknown";
-  let skipLovable = false;
+  /** A vendor that answered 402/429 is not asked again in this call. */
+  const exhausted = new Set<ProviderName>();
   for (const att of attempts) {
-    // Lovable out of credits (402) / rate-limited: skip remaining Lovable
-    // attempts but STILL fall through to Anthropic (the documented fallback)
-    // instead of failing the whole call. Fixes the case where TEST Lovable is
-    // 402 yet ANTHROPIC_API_KEY is configured.
-    if (skipLovable && att.provider === "lovable-ai") continue;
+    if (exhausted.has(att.provider)) continue;
 
     // ── THE BUDGET IS CHECKED HERE, INSIDE THE LOOP ──────────────────────
     //
@@ -314,9 +398,21 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
         }),
         true,
       );
+      // A FALLBACK THAT NOBODY NOTICES IS THE ORIGINAL BUG. When the task did
+      // not get the model it named, say so in the result AND in the log — the
+      // caller can surface it, and an operator can see it without reading
+      // model names out of a successful trace.
+      if (!att.intended) {
+        console.warn("[ai-provider] task ran on its FALLBACK model", {
+          task: opts.taskType, intended: policy.model, actual: att.model,
+          provider: att.provider, fn: opts.functionName,
+        });
+      }
       return {
         ok: true, content: r.content, provider: att.provider, model: att.model,
         usage: r.usage, latencyMs,
+        degraded: !att.intended,
+        intendedModel: policy.model,
       };
     }
     // A FAILED ATTEMPT IS STILL A CALL. It may have been billed, and during an
@@ -340,7 +436,7 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
     });
     // On credits/rate errors, don't waste more Lovable calls — but let the loop
     // continue to any configured Anthropic fallback attempt.
-    if (lastCode === "credits_exhausted" || lastCode === "rate_limited") skipLovable = true;
+    if (lastCode === "credits_exhausted" || lastCode === "rate_limited") exhausted.add(att.provider);
   }
 
   return {

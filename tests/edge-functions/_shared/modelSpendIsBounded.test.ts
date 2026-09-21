@@ -284,8 +284,7 @@ Deno.test("pilot-chat checks the ceiling before it can spend", async () => {
 // ══════════ capture: the meter needs something to sum ═════════════════════
 
 import {
-  generateText, type GenerateOpts,
-} from "../../../supabase/functions/_shared/aiProvider.ts";
+  generateText, type GenerateOpts, TASK_MODELS } from "../../../supabase/functions/_shared/aiProvider.ts";
 import type { ModelCallTelemetry } from "../../../supabase/functions/_shared/modelCostModel.ts";
 
 /** Stub the network and the env; nothing here reaches a provider. */
@@ -299,17 +298,21 @@ function withStubbedProvider(
     Promise.resolve(handler(String(
       typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
     )))) as typeof fetch;
+  // `pilot_chat` intends Anthropic, and allows no fallback — so Anthropic is
+  // the credential a stubbed pilot-chat call needs. (This used to stub
+  // LOVABLE_API_KEY, back when every task was routed through that gateway.)
   Deno.env.get = ((k: string) =>
-    k === "LOVABLE_API_KEY" ? "test-key" : undefined) as typeof Deno.env.get;
+    k === "ANTHROPIC_API_KEY" ? "test-key" : undefined) as typeof Deno.env.get;
   return run().finally(() => {
     globalThis.fetch = realFetch;
     Deno.env.get = realGet;
   });
 }
 
+/** Anthropic's messages shape — `content[].text`, not `choices[].message`. */
 const okBody = (usage: unknown) =>
   new Response(JSON.stringify({
-    choices: [{ message: { content: "hello" } }], usage,
+    content: [{ type: "text", text: "hello" }], usage,
   }), { status: 200, headers: { "content-type": "application/json" } });
 
 Deno.test("CAPTURE: a successful chat call reaches the sink with its tokens", async () => {
@@ -356,13 +359,18 @@ Deno.test("CAPTURE: a FAILED attempt is still recorded", async () => {
   );
 });
 
-Deno.test("CAPTURE: chat's real model is unpriced, and that is visible not silent", async () => {
-  // `DEFAULT_MODELS.pilot_chat` is `google/gemini-3-flash-preview`, which
-  // `MODEL_PRICES` does not know. The row is still written — volume is
-  // recoverable even when money is not — and `cost_source` says so.
+Deno.test("CAPTURE: chat's model is PRICED now, and an unknown one is still marked", async () => {
+  // This test used to assert the opposite, and was right to: `pilot_chat` ran
+  // `google/gemini-3-flash-preview` through the Lovable gateway, which
+  // `MODEL_PRICES` does not know, so every chat call landed in the ledger with
+  // `cost_source: "unknown"` — volume recoverable, money not.
+  //
+  // Chat now runs the model its task policy names, which IS priced. The
+  // unpriced path still has to work, because a model can always be added
+  // before its price is, so both halves are asserted here.
   const seen: ModelCallTelemetry[] = [];
   await withStubbedProvider(
-    () => okBody({ prompt_tokens: 10, completion_tokens: 5 }),
+    () => okBody({ input_tokens: 10, output_tokens: 5 }),
     async () => {
       await generateText({
         taskType: "pilot_chat", messages: [{ role: "user", content: "hi" }],
@@ -372,9 +380,10 @@ Deno.test("CAPTURE: chat's real model is unpriced, and that is visible not silen
   );
   assertEquals(seen.length, 1);
   assertEquals(seen[0].input_tokens, 10, "tokens are captured regardless of price");
-  assertEquals(
-    seen[0].cost_source, "unknown",
-    "an unpriced model must be marked unknown so `unpriced_calls` can count it",
+  assertEquals(seen[0].model, TASK_MODELS.pilot_chat.model, "chat ran the model its policy names");
+  assert(
+    seen[0].cost_source !== "unknown",
+    "the task's own model must be priced — an unpriced default is how chat spend went uncounted",
   );
 });
 
@@ -536,7 +545,7 @@ Deno.test("L2: the fallback chain cannot bypass an exhausted budget", async () =
   const realGet = Deno.env.get;
   globalThis.fetch = (() => { fetches++; return Promise.resolve(new Response("{}", { status: 200 })); }) as typeof fetch;
   Deno.env.get = ((k: string) =>
-    k === "LOVABLE_API_KEY" || k === "ANTHROPIC_API_KEY" ? "test-key" : undefined) as typeof Deno.env.get;
+    k === "OPENAI_API_KEY" || k === "ANTHROPIC_API_KEY" ? "test-key" : undefined) as typeof Deno.env.get;
   try {
     const exhausted = new ModelCallCollector(BUDGET);
     for (let i = 0; i < 3; i++) exhausted.sink(unpricedCall(10, 10), true);

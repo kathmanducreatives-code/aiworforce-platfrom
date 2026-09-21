@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, CreditCard, History, Settings as SettingsIcon, LogOut, TrendingUp } from 'lucide-react';
+import { CreditCard, History, Settings as SettingsIcon, LogOut, TrendingUp } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -13,7 +13,7 @@ import { useCreditBalance } from '@/hooks/useCreditBalance';
 import { getPlan } from '@/lib/pricing/plans';
 import { formatCredits } from '@/lib/credits/ledger';
 import CreditDrawer from '@/components/credits/CreditDrawer';
-import { cn } from '@/lib/utils';
+import { IconChevronDown } from '@/components/nav/NavIcons';
 
 interface Props {
   collapsed?: boolean;
@@ -41,33 +41,20 @@ export default function ProfileMenu({ collapsed }: Props) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
+          {/* Styled by the sidebar's system (nav/sidebar.css). Name and plan stay
+              mounted when collapsed — they fade, and still name the button. */}
           <button
             type="button"
             data-tour="profile-menu"
-            className={cn(
-              'flex items-center gap-3 w-full rounded-md border border-transparent hover:border-white/[0.05] hover:bg-white/[0.03] transition-all',
-              collapsed ? 'justify-center p-1.5' : 'px-2 py-1.5',
-            )}
+            className="sb__account-trigger"
+            title={collapsed ? (profile?.full_name || 'Account') : undefined}
           >
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold text-white shrink-0 shadow-inner"
-              style={{ background: 'linear-gradient(135deg, hsl(var(--primary-dark)) 0%, hsl(var(--primary)) 100%)' }}
-            >
-              {initial}
-            </div>
-            {!collapsed && (
-              <>
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="text-[14px] font-medium text-foreground truncate leading-tight">
-                    {profile?.full_name || 'Agentory'}
-                  </p>
-                  <p className="text-[11px] text-neutral-500 truncate font-mono">
-                    {plan.name}
-                  </p>
-                </div>
-                <ChevronDown className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
-              </>
-            )}
+            <span className="sb__avatar" aria-hidden>{initial}</span>
+            <span className="sb__account-meta">
+              <span className="sb__account-name">{profile?.full_name || 'Agentory'}</span>
+              <span className="sb__account-plan">{plan.name}</span>
+            </span>
+            <IconChevronDown className="sb__account-chevron" size={14} />
           </button>
         </DropdownMenuTrigger>
 

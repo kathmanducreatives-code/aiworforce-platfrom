@@ -1,3 +1,4 @@
+import AgentPortrait from '@/components/agents/AgentPortrait';
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useEffect, useState } from 'react';
@@ -49,7 +50,7 @@ export default function AgentHoverCard({
             'w-12 h-12 rounded-full ring-2 overflow-hidden shrink-0 bg-card',
             dept.ring,
           )}>
-            <img src={agent.image} alt={agent.name} className="w-full h-full object-cover" />
+            <AgentPortrait agentId={agent.id} name={agent.name} src={agent.image} ring={false} />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground leading-tight">{agent.name}</p>
@@ -90,7 +91,7 @@ export default function AgentHoverCard({
           </button>
           <button
             onClick={onSendCommand}
-            className="text-xs font-semibold py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
+            className="ag-btn ag-btn-primary rounded-lg font-medium text-xs py-2"
           >
             Send command
           </button>

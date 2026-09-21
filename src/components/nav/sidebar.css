@@ -1,0 +1,411 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE AGENTORY SIDEBAR — one quiet architectural rail.
+
+   Design rules encoded here, so no row can drift from them:
+
+   1. ONE ACCENT. Emerald marks the active row and nothing else. Per-item
+      colours (teal/amber/violet) are what made the old rail read as a
+      template; they are gone.
+   2. THE ICON NEVER MOVES. Expanded and collapsed both place the glyph's box
+      at exactly x=24: 10px of rail padding + 14px of row padding. Collapsing
+      therefore clips the label away from a stationary icon instead of sliding
+      the whole row, which is what makes the motion feel built rather than
+      animated.
+   3. NOTHING IS ALWAYS ON. No glow, no gradient, no border per row. The active
+      surface is 6% emerald; hover is 3.5% white. Both are nearly subliminal
+      and that is the point.
+   4. MOTION IS SHORT AND FLAT. 120–160ms for colour, ~240ms for structure,
+      ease-out, no bounce, no scale, no loop.
+
+   The single moving active indicator itself is framer-motion (`layoutId`) in
+   Sidebar.tsx — CSS cannot animate an element between two DOM parents.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sb {
+  /* geometry — these two are mirrored by MainLayout's margin and CommandDock's
+     offset, so they are the sidebar's public contract. */
+  --sb-w: 260px;
+  --sb-w-collapsed: 68px;
+  --sb-pad-x: 10px;
+  --sb-row-pad-x: 14px;
+  --sb-row-h: 40px;
+  --sb-radius: 9px;
+
+  /* surface */
+  --sb-bg: #050506;
+  --sb-edge: rgba(255, 255, 255, 0.045);
+  --sb-divider: rgba(255, 255, 255, 0.032);
+
+  /* ink — inactive icons sit a step below inactive text, per the spec */
+  --sb-text: #8e9491;
+  --sb-text-hover: #dfe5e2;
+  --sb-text-active: #f3f6f4;
+  --sb-icon: #6d7671;
+  --sb-icon-hover: #c3cbc7;
+
+  /* accent */
+  --sb-accent: #34d399;
+  --sb-surface-active: rgba(52, 211, 153, 0.06);
+  --sb-surface-hover: rgba(255, 255, 255, 0.035);
+
+  /* motion */
+  --sb-t-color: 140ms;
+  --sb-t-struct: 240ms;
+  --sb-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: var(--sb-w);
+  height: 100vh;
+  background: var(--sb-bg);
+  border-right: 1px solid var(--sb-edge);
+  overflow: hidden;
+  transition: width var(--sb-t-struct) var(--sb-ease);
+}
+
+.sb[data-collapsed='true'] {
+  width: var(--sb-w-collapsed);
+}
+
+/* ── account header ──────────────────────────────────────────────────────── */
+
+.sb__account {
+  padding: 10px var(--sb-pad-x) 6px;
+}
+
+/* The avatar's centre lands on x=34 in both widths (10 + 9 + 15), the same
+   axis every nav glyph sits on — so the whole rail shares one vertical line. */
+.sb__account-trigger {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 46px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--sb-radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+  transition: background-color var(--sb-t-color) ease-out;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sb__account-trigger:hover { background: rgba(255, 255, 255, 0.03); }
+  .sb__account-trigger:hover .sb__account-chevron { color: #9aa29e; }
+}
+.sb__account-trigger[data-state='open'] { background: rgba(255, 255, 255, 0.035); }
+.sb__account-trigger:focus-visible {
+  box-shadow:
+    0 0 0 1px rgba(52, 211, 153, 0.55),
+    0 0 0 4px rgba(52, 211, 153, 0.12);
+}
+
+.sb__avatar {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #103326;
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, 0.16);
+  color: #bdeed6;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sb__account-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 10px;
+  line-height: 1.2;
+  transition: opacity 150ms ease-out 80ms;
+}
+.sb__account-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  color: #eef3f0;
+}
+.sb__account-plan {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: #646c68;
+}
+.sb__account-chevron {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  color: #565e5a;
+  transition: color var(--sb-t-color) ease-out, opacity 150ms ease-out 80ms;
+}
+.sb[data-collapsed='true'] .sb__account-meta,
+.sb[data-collapsed='true'] .sb__account-chevron {
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+}
+
+/* ── nav ─────────────────────────────────────────────────────────────────── */
+
+.sb__nav {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px var(--sb-pad-x) 10px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sb__nav::-webkit-scrollbar { display: none; }
+
+.sb__group + .sb__group { margin-top: 14px; }
+
+/* Section labels: present, quiet, never competing with a row. They collapse
+   their own height so the groups close up cleanly in the narrow rail. */
+.sb__section {
+  height: 22px;
+  margin: 0;
+  padding: 0 var(--sb-row-pad-x);
+  display: flex;
+  align-items: center;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5c6360;
+  white-space: nowrap;
+  overflow: hidden;
+  transition:
+    opacity 110ms ease-out,
+    height var(--sb-t-struct) var(--sb-ease),
+    margin var(--sb-t-struct) var(--sb-ease);
+}
+.sb[data-collapsed='true'] .sb__section {
+  height: 8px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── a nav row ───────────────────────────────────────────────────────────── */
+
+.sb__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--sb-row-h);
+  padding: 0 var(--sb-row-pad-x);
+  border-radius: var(--sb-radius);
+  color: var(--sb-text);
+  text-decoration: none;
+  white-space: nowrap;
+  outline: none;
+  transition: color var(--sb-t-color) ease-out;
+}
+.sb__row + .sb__row { margin-top: 2px; }
+
+/* Hover is a real element, not a background, so it never fights the shared
+   active surface underneath it during the indicator's travel. */
+.sb__row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--sb-surface-hover);
+  opacity: 0;
+  transition: opacity var(--sb-t-color) ease-out;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sb__row:hover::before { opacity: 1; }
+  .sb__row:hover { color: var(--sb-text-hover); }
+  .sb__row:hover .sb__icon { color: var(--sb-icon-hover); transform: translateX(1px); }
+}
+.sb__row[data-active='true']::before { opacity: 0; }
+
+.sb__row:focus-visible {
+  box-shadow:
+    0 0 0 1px rgba(52, 211, 153, 0.55),
+    0 0 0 4px rgba(52, 211, 153, 0.12);
+}
+
+/* The one always-on emerald: the active row's icon. */
+.sb__row[data-active='true'] { color: var(--sb-text-active); }
+.sb__row[data-active='true'] .sb__icon { color: var(--sb-accent); }
+
+.sb__icon {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  display: block;
+  color: var(--sb-icon);
+  /* Colour resolves faster than the indicator travels, so the destination
+     lights up just ahead of the surface arriving under it. */
+  transition:
+    color 120ms ease-out,
+    transform var(--sb-t-color) var(--sb-ease);
+}
+
+.sb__label {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 11px;
+  font-size: 13.5px;
+  font-weight: 450;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Expanding: the label waits for the rail to have width before it appears. */
+  transition: opacity 150ms ease-out 80ms;
+}
+.sb__row[data-active='true'] .sb__label { font-weight: 530; }
+/* Collapsing: it leaves immediately, before the width animation catches it. */
+.sb[data-collapsed='true'] .sb__label {
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+}
+
+/* ── badges ──────────────────────────────────────────────────────────────── */
+
+.sb__badge {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  margin-left: 8px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  background: rgba(217, 168, 90, 0.13);
+  color: #e6bd7d;
+  transition: opacity 150ms ease-out 80ms;
+}
+.sb__badge--emerald {
+  background: rgba(52, 211, 153, 0.12);
+  color: #6ee7b7;
+}
+.sb[data-collapsed='true'] .sb__badge {
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+}
+
+/* Collapsed, the count survives as a dot on the glyph — the claim stays
+   visible without a number that cannot fit. */
+.sb__dot {
+  position: absolute;
+  top: 6px;
+  right: 11px;
+  z-index: 2;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d9a85a;
+  opacity: 0;
+  transition: opacity 120ms ease-out 120ms;
+}
+.sb[data-collapsed='true'] .sb__dot { opacity: 1; }
+
+/* ── the shared active indicator ─────────────────────────────────────────── */
+
+.sb__surface {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: var(--sb-radius);
+  background: var(--sb-surface-active);
+}
+
+/* Aligned to the row, not the section: 20px of rail against a 40px row. */
+.sb__rail {
+  position: absolute;
+  left: calc(var(--sb-pad-x) * -1);
+  top: 10px;
+  z-index: 1;
+  width: 2px;
+  height: 20px;
+  border-radius: 0 2px 2px 0;
+  background: var(--sb-accent);
+}
+
+/* ── footer ──────────────────────────────────────────────────────────────── */
+
+.sb__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px var(--sb-pad-x) 10px;
+  border-top: 1px solid var(--sb-divider);
+}
+
+/* 18px utility glyphs with 15px of padding: still centred on x=34. */
+.sb__footer .sb__row { height: 34px; padding: 0 15px; margin-top: 0; }
+
+.sb__button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sb__footer .sb__label { font-size: 12.5px; }
+
+/* Credits read as account status, not as a call to action: no border, no glow,
+   just a quieter row that happens to be emerald-inked. */
+.sb__credits {
+  width: 100%;
+  color: #8fbfa8;
+}
+.sb__credits .sb__icon { color: #4f9c7a; }
+@media (hover: hover) and (pointer: fine) {
+  .sb__credits:hover { color: #b9e2cd; }
+  .sb__credits:hover .sb__icon { color: var(--sb-accent); }
+}
+.sb__credits--low { color: #d7b47f; }
+.sb__credits--low .sb__icon { color: #b98c46; }
+.sb__credits-value { font-variant-numeric: tabular-nums; }
+.sb__credits-tag {
+  position: relative;
+  z-index: 1;
+  margin-left: 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5f6a65;
+  transition: opacity 150ms ease-out 80ms;
+}
+.sb[data-collapsed='true'] .sb__credits-tag { opacity: 0; transition: opacity 90ms ease-out; }
+
+/* ── reduced motion ──────────────────────────────────────────────────────── */
+/* Everything still works; nothing travels. Opacity is kept but made instant so
+   collapsing does not flash a half-faded label. */
+
+@media (prefers-reduced-motion: reduce) {
+  .sb,
+  .sb *,
+  .sb *::before {
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    animation-duration: 1ms !important;
+  }
+  .sb__row:hover .sb__icon { transform: none; }
+}

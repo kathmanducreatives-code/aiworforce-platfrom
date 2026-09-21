@@ -164,7 +164,7 @@ export default function ConversationView({ planId }: { planId: string }) {
         <motion.button
           initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
           onClick={jumpBottom}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-medium shadow-lg"
+          className="ag-btn ag-btn-secondary absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full text-xs font-medium"
         >
           {unread} new message{unread > 1 ? 's' : ''} ↓
         </motion.button>

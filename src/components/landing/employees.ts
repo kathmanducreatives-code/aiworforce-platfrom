@@ -17,28 +17,19 @@
  * Strategist`), and the whole product surface — dock, chat, workbench — renders
  * that name. Marketing now calls the signals employee **Lisa**. To avoid
  * touching product identity, `id` stays `mira` (which is what keeps the
- * registry linkage and the portrait glob working) while `name` is the public
+ * registry linkage and shared portraits working) while `name` is the public
  * one. If the product adopts Lisa too, rename in `@/config/agentRegistry` and
  * delete the `name` override here.
  *
- * PORTRAITS resolve through `import.meta.glob` keyed on `id`, so the files on
- * disk keep their existing names.
+ * PORTRAITS resolve through the canonical registry keyed on `id`, sharing
+ * the same optimized assets as the product.
  */
 
 import { PUBLIC_AGENTS, type PublicAgentId } from '@/config/agentRegistry';
 import pilotPortrait from '@/assets/agents/pilot.webp';
 
-const portraitFiles = import.meta.glob('../../assets/agents/public/*.webp', {
-  eager: true,
-  query: '?url',
-  import: 'default',
-}) as Record<string, string>;
-
-function portraitFor(id: string): string | null {
-  const hit = Object.entries(portraitFiles).find(([path]) =>
-    path.toLowerCase().endsWith(`/${id}.webp`),
-  );
-  return hit ? hit[1] : null;
+function portraitFor(id: PublicAgentId): string | null {
+  return PUBLIC_AGENTS[id]?.avatar ?? null;
 }
 
 export type EmployeeId = Extract<PublicAgentId, 'lyra' | 'atlas' | 'mira' | 'orion' | 'pilot'>;

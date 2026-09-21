@@ -14,7 +14,7 @@ export default function WorkforceActivityPanel({ m }: { m: DashboardMetrics }) {
   const rows: Row[] = [
     { name: "Scout",  activity: m.signalsFound      ? `Found ${m.signalsFound} signals`                : "Waiting for first workflow.", to: "/signals" },
     { name: "Aria",   activity: m.savedActioned     ? `Ranked ${m.savedActioned} opportunities`        : "Waiting for first workflow.", to: "/signals" },
-    { name: "Hawk",   activity: m.competitorSignals ? `Tracked ${m.competitorSignals} competitor signals` : "Waiting for first workflow.", to: "/competitors" },
+    { name: "Hawk",   activity: m.competitorSignals ? `Tracked ${m.competitorSignals} competitor signals` : "Waiting for first workflow.", to: "/signals" },
     { name: "Penn",   activity: m.outreachDrafts    ? `Prepared ${m.outreachDrafts} outreach drafts`   : "Waiting for first workflow.", to: "/content" },
     { name: "Scribe", activity: m.contentDrafts     ? `Saved ${m.contentDrafts} content drafts`        : "Waiting for first workflow.", to: "/content" },
     { name: "Pilot",  activity: "Coordinating your workflows", to: "/agents" },

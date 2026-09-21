@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import ChatComposerPro from './workspace/ChatComposerPro';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
@@ -9,7 +10,8 @@ import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
  */
 export default function GlobalChatBar() {
   const { mode } = useChatWorkspace();
-  if (mode !== 'closed') return null;
+  const { pathname } = useLocation();
+  if (mode !== 'closed' || pathname === '/dashboard') return null;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-20 pointer-events-none">

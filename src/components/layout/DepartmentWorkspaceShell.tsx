@@ -1,3 +1,4 @@
+import AgentPortrait from '@/components/agents/AgentPortrait';
 // DepartmentWorkspaceShell — reusable two-pane layout for department pages.
 //
 // Left ~70%: eyebrow, title, description, metric strip, tabs, filters, body.
@@ -10,8 +11,8 @@ import { type ReactNode, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { METRIC_LABEL, METRIC_STRIP, METRIC_VALUE, PRIMARY_ACTION, SECONDARY_ACTION } from '@/components/layout/workspaceStyles';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { MessageSquare } from 'lucide-react';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { MessageSquare, X } from 'lucide-react';
 
 export interface DeptAgent {
   name: string;
@@ -57,6 +58,7 @@ interface Props<T extends string = string> {
   children: ReactNode;
   rail: ReactNode;
   mobileRailLabel?: string;
+  collapsibleRail?: boolean;
 }
 
 export default function DepartmentWorkspaceShell<T extends string = string>({
@@ -74,9 +76,10 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
   children,
   rail,
   mobileRailLabel = 'Open agent',
+  collapsibleRail = false,
 }: Props<T>) {
-  const [imgFailed, setImgFailed] = useState(false);
   const [mobileRailOpen, setMobileRailOpen] = useState(false);
+  const [railOpen, setRailOpen] = useState(true);
   const accent = agent.accentHex;
 
   return (
@@ -86,7 +89,7 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
         <div className="mx-auto w-full max-w-[1080px] px-6 py-6 pb-32 lg:px-8 lg:py-8">
           {/* Compact header */}
           <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-[280px]">
               <p
                 className="text-[10.5px] font-semibold uppercase tracking-[0.22em]"
                 style={{ color: `${accent}99` }}
@@ -107,26 +110,7 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
                 className="flex items-center gap-2.5 rounded-xl border bg-[rgba(12,16,15,0.6)] px-2.5 py-1.5 shadow-[0_20px_60px_-30px_rgba(0,0,0,0.9)] backdrop-blur-xl"
                 style={{ borderColor: `${accent}26` }}
               >
-                <div
-                  className="overflow-hidden rounded-full border"
-                  style={{ borderColor: `${accent}40`, boxShadow: `0 0 10px -3px ${accent}40` }}
-                >
-                  {imgFailed ? (
-                    <div
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-foreground"
-                      style={{ background: `${accent}22`, color: accent }}
-                    >
-                      {agent.fallbackInitial ?? agent.name[0]}
-                    </div>
-                  ) : (
-                    <img
-                      src={agent.avatar}
-                      alt={agent.name}
-                      onError={() => setImgFailed(true)}
-                      className="h-7 w-7 rounded-full object-cover"
-                    />
-                  )}
-                </div>
+                <AgentPortrait name={agent.name} src={agent.avatar} size={28} />
                 <div className="leading-tight">
                   <p className="text-[12.5px] font-semibold text-foreground">{agent.name}</p>
                   <p className="text-[11px] text-muted-foreground/75">
@@ -148,6 +132,17 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
                 </div>
               </div>
 
+              {collapsibleRail && (
+                <button
+                  onClick={() => setRailOpen(open => !open)}
+                  aria-expanded={railOpen}
+                  aria-controls="department-agent-chat"
+                  className="hidden lg:inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-muted-foreground hover:bg-white/[0.04] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  {railOpen ? 'Close' : 'Open'} {agent.name} chat
+                </button>
+              )}
               {(primaryAction || secondaryAction) && (
                 <div className="flex items-center gap-2">
                   {secondaryAction && (
@@ -253,8 +248,17 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
       </div>
 
       {/* Right rail — sticky desktop */}
-      <aside className="sticky top-0 hidden h-screen w-[360px] shrink-0 border-l border-white/[0.05] bg-[#050505]/60 backdrop-blur-xl lg:block xl:w-[380px]">
-        {rail}
+      <aside
+        id="department-agent-chat"
+        aria-label={`${agent.name} chat`}
+        className={cn("sticky top-0 hidden h-screen w-[360px] shrink-0 border-l border-white/[0.06] bg-[#050505]/80", (!collapsibleRail || railOpen) && "lg:flex lg:flex-col", "xl:w-[380px]", collapsibleRail && "h-[calc(100dvh-52px)]")}
+      >
+        {collapsibleRail && <div className="flex justify-end border-b border-white/[0.05] px-4 py-2">
+          <button onClick={() => setRailOpen(false)} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-white/[0.04] hover:text-foreground" aria-label={`Close ${agent.name} chat`}>
+            <X className="h-3.5 w-3.5" />Close chat
+          </button>
+        </div>}
+        <div className="min-h-0 flex-1">{rail}</div>
       </aside>
 
       {/* Mobile / tablet drawer */}
@@ -271,10 +275,12 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
               }}
             >
               <MessageSquare className="h-4 w-4" />
-              {agent.name}
+              {collapsibleRail ? `Open ${agent.name} chat` : agent.name}
             </button>
           </SheetTrigger>
           <SheetContent side="right" className="w-full max-w-[380px] border-l-white/10 bg-[#050505]/95 p-0 backdrop-blur-2xl sm:max-w-[400px]">
+            <SheetTitle className="sr-only">{agent.name} chat</SheetTitle>
+            <SheetDescription className="sr-only">Ask {agent.name} about this workspace. Close with the close button or Escape.</SheetDescription>
             {rail}
           </SheetContent>
         </Sheet>

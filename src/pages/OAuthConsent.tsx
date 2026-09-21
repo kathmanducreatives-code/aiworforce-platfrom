@@ -130,7 +130,7 @@ export default function OAuthConsent() {
             <button
               disabled={busy}
               onClick={() => decide(true)}
-              className="flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+              className="ag-btn ag-btn-primary rounded-lg font-medium flex-1 px-4 py-2.5 text-sm disabled:opacity-50"
             >
               Approve
             </button>

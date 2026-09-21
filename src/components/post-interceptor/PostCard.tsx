@@ -66,10 +66,8 @@ const PostCard = ({ post, onIntercept, isIntercepting }: PostCardProps) => {
                     onClick={() => onIntercept(post)}
                     disabled={isIntercepting}
                     className={cn(
-                        'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
-                        isIntercepting
-                            ? 'bg-primary/20 text-primary/60 cursor-not-allowed'
-                            : 'bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-[0_0_12px_-2px_hsl(var(--primary)/0.5)] active:scale-95'
+                        'ag-btn ag-btn-primary flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium',
+                        isIntercepting && 'cursor-not-allowed opacity-50'
                     )}
                 >
                     <Crosshair className="h-3.5 w-3.5" />

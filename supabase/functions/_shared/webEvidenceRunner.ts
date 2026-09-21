@@ -33,7 +33,10 @@ import {
   buildExtractionInput,
   parseExtractionStrict,
 } from "./webEvidenceExtraction.ts";
-import { looksLikeMissingPage, resolvePages, sameSite } from "./pageIntentResolver.ts";
+import {
+  looksLikeMissingPage, resolvePages, resolvePagesFromMap, sameSite,
+  type ResolvedPage,
+} from "./pageIntentResolver.ts";
 import { toStoredRows, writeWebEvidence } from "./webEvidenceStore.ts";
 
 export interface EvidenceRunBudget extends PlannerBudget {
@@ -90,6 +93,15 @@ export interface EvidenceRunnerDeps {
    */
   extract?: ((payload: Record<string, unknown>) => Promise<unknown>) | null;
   fetchPage: PageFetcher;
+  /**
+   * Firecrawl `/map` for one domain: the URLs the site ACTUALLY exposes.
+   *
+   * Optional, and its absence preserves the old behaviour exactly — V1 callers
+   * that do not pass it keep resolving intents against conventional paths. When
+   * it IS passed, the conventional paths become matchers against real URLs and
+   * nothing is fabricated.
+   */
+  mapSite?: ((i: { domain: string; company_key: string }) => Promise<string[]>) | null;
   /** Optional. Omitted, every page is bought — the pre-fix behaviour. */
   readCache?: CacheReader | null;
   db?: SupabaseClient | null;
@@ -244,9 +256,40 @@ export async function runEvidenceCollection(i: {
       budget.max_pages,
       budget.max_pages_total - pagesSpent,
     );
-    const targets = resolvePages(req.domain, req.page_intents, allowance);
+    // ── DISCOVER, THEN SELECT — NEVER GUESS ──────────────────────────────
+    //
+    // Live run 3bc526e2 bought 12 pages from the conventional-path table and 7
+    // were 404s; Studycast got no usable page at all, so its business model
+    // could never be settled. One `/map` per domain replaces up to three
+    // fabricated URLs with the ones the site really serves.
+    //
+    // A map that fails, returns nothing, or yields nothing useful leaves
+    // `targets` empty and the company is reported `no_pages_planned` — the
+    // claim stays PENDING. That is the honest answer, and it is NOT a FAIL.
+    let targets: ResolvedPage[] = [];
+    let mappedCount = 0;
+    if (i.deps.mapSite) {
+      const mapped = await i.deps.mapSite({ domain: req.domain, company_key: req.company_key })
+        .catch(() => [] as string[]);
+      mappedCount = Array.isArray(mapped) ? mapped.length : 0;
+      targets = resolvePagesFromMap(req.domain, req.page_intents, mapped ?? [], allowance);
+      log("map", {
+        company: debt.company_name, domain: req.domain,
+        mapped: mappedCount, selected: targets.map((t) => t.url),
+      });
+    } else {
+      // V1 / Company Brain callers: unchanged.
+      targets = resolvePages(req.domain, req.page_intents, allowance);
+    }
     if (targets.length === 0) {
-      outcome.outcome = "no_pages_planned";
+      // The existing vocabulary already distinguishes these: a map that
+      // returned nothing means the site did not answer; a map that returned
+      // URLs none of which serve the intents means nothing useful is there.
+      outcome.outcome = !i.deps.mapSite
+        ? "no_pages_planned"
+        : mappedCount === 0
+        ? "site_unavailable"
+        : "no_useful_pages";
       report.companies.push(outcome);
       continue;
     }

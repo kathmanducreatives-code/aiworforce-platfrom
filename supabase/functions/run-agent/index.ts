@@ -4425,11 +4425,40 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                       return ({ url, request_id }: { url: string; request_id: string; company_key: string }) =>
                         fetchOne({ url, request_id });
             };
+/** A map is one call; the list it returns is bounded before anything is selected. */
+            const MAP_MAX_URLS = 120;
             const evidenceMode = Deno.env.get("EVIDENCE_ENRICHMENT") ?? "off";
-            // V1 ONLY. Under Lead V2 the legacy Brain's evidence debt may not
-            // decide which companies get paid pages: the business-model claim
-            // verifier below buys them, for exactly the canonical gaps.
-            if ((evidenceMode === "plan_only" || evidenceMode === "execute") && !p2Specs) {
+            /**
+             * May the canonical claim verifier buy first-party pages?
+             *
+             * Its own switch, defaulting to the legacy one so this change moves
+             * no environment. `on`/`execute` enable it; `off` disables it.
+             */
+            const webVerificationEnabled = (() => {
+              const own = String(Deno.env.get("LEAD_V2_WEB_VERIFICATION") ?? "").trim().toLowerCase();
+              if (own === "on" || own === "execute" || own === "true") return true;
+              if (own === "off" || own === "false") return false;
+              return evidenceMode === "execute";
+            })();
+            // ── WHO MAY DECIDE TO BUY A PAGE ──────────────────────────────
+            //
+            // V1 ONLY, and now unconditionally so. The legacy Brain's
+            // evidence-debt mechanism selects companies by its own rules —
+            // which requirement looks unmet to the old mission evaluation —
+            // and that is a second, parallel decision-maker for the same money.
+            // Under Lead V2 the canonical path owns it: an unresolved claim
+            // becomes a gap, the gap router chooses the route, and the claim
+            // verifier buys exactly those pages.
+            //
+            // The exclusion used to read `&& !p2Specs`, which tied it to the
+            // spec spine: with `LEAD_V2_SPECS=off` a Lead V2 mission fell back
+            // to the legacy owner. `isLeadV2Mission` is the property that
+            // actually matters, so it is what the exclusion asks.
+            // `new_architecture` IS the Lead V2 mission: the mode the contract
+            // guard, the spec spine and the claim verifiers all key off.
+            const isLeadV2Mission = intelligence.mode === "new_architecture" && !!capabilityRun;
+            const legacyEvidenceDebtAllowed = !isLeadV2Mission;
+            if ((evidenceMode === "plan_only" || evidenceMode === "execute") && legacyEvidenceDebtAllowed) {
               try {
                 const debtCandidates = capabilityRun.companies.map((c) => ({
                   key: c.key,
@@ -4897,8 +4926,21 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   leadReadiness.decide(actorKey, "funding_verification").readiness, readEnvSafe) !== null;
                 const businessModel = businessModelVerifier({
                   collect: async (targets, intents, maxPages) => {
-                    // Web spend is still switched by EVIDENCE_ENRICHMENT.
-                    if (evidenceMode !== "execute") return {};
+                    // ── THE CANONICAL PATH OWNS ITS OWN SWITCH ─────────────
+                    //
+                    // `targets` are companies whose canonical business-model
+                    // claim is unresolved — chosen by the gap router, not by
+                    // the legacy evidence-debt rules. Their page spend used to
+                    // be switched by `EVIDENCE_ENRICHMENT`, which is the V1
+                    // Brain's flag: the old mechanism still decided whether the
+                    // new one was allowed to run, so turning V1 enrichment off
+                    // silently disabled canonical claim verification too.
+                    //
+                    // `LEAD_V2_WEB_VERIFICATION` is this path's own switch. It
+                    // DEFAULTS to the legacy flag's value so no environment
+                    // changes behaviour by being upgraded; set it explicitly to
+                    // decouple the two.
+                    if (!webVerificationEnabled) return {};
                     const debts = claimPageDebts(targets);
                     const run = await runEvidenceCollection({
                       workspace_id, debts, budget: claimPageBudget(debts.length, intents, maxPages),
@@ -4913,6 +4955,37 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                           }]));
                         },
                         fetchPage: webEvidencePageFetcher(),
+                        // ── DISCOVER THE SITE BEFORE BUYING ANY PAGE ──────
+                        //
+                        // One `/map` per domain, through the SAME paid tool
+                        // path as a scrape, so it is budgeted, metered,
+                        // idempotent and ledger-visible like everything else.
+                        // Canonical verification only: the V1 collector above
+                        // passes no mapper and keeps guessing exactly as before.
+                        mapSite: async ({ domain }: { domain: string }) => {
+                          const r = await runTool("scrape_url", {
+                            url: `https://${domain}`,
+                            mode: "map",
+                            max_pages: MAP_MAX_URLS,
+                            capability_key: "web_evidence_verification",
+                            audit_stage: "company_enrichment",
+                            audit_reason: "discover_pages_for_claim",
+                            actor_id: "firecrawl_map",
+                            ...auditOwnership(),
+                          }, baseCtx);
+                          const d = (r.data ?? {}) as Record<string, unknown>;
+                          const raw = Array.isArray(d.links)
+                            ? d.links
+                            : Array.isArray(d.urls)
+                            ? d.urls
+                            : Array.isArray(d.pages)
+                            ? d.pages
+                            : [];
+                          return raw
+                            .map((x) => typeof x === "string" ? x : String((x as Record<string, unknown>)?.url ?? ""))
+                            .filter(Boolean)
+                            .slice(0, MAP_MAX_URLS);
+                        },
                         log: (event, meta) => verifierLog(`pages:${event}`, meta),
                       },
                     });

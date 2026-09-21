@@ -1,3 +1,4 @@
+import AgentPortrait from '@/components/agents/AgentPortrait';
 // ScoutCopilot — persistent right-rail assistant for the Signals workspace.
 // Mirrors MiraCopilot's structure: agent header, rotating insight, mode chips,
 // prompt suggestions, and a bottom Ask input. Dispatches via sendAgentCommand
@@ -79,7 +80,6 @@ export default function ScoutCopilot({
   onEditRadar,
 }: ScoutCopilotProps) {
   const [mode, setMode] = useState<Mode>('brief');
-  const [imgFailed, setImgFailed] = useState(false);
   const [value, setValue] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const insight = useMemo(() => INSIGHTS[Math.floor(Math.random() * INSIGHTS.length)], []);
@@ -112,29 +112,10 @@ export default function ScoutCopilot({
       {/* Header */}
       <div
         className="border-b border-white/[0.05] px-4 py-4"
-        style={{ background: `linear-gradient(180deg, ${accentHex}14 0%, transparent 100%)` }}
+        style={{ background: `${accentHex}05` }}
       >
         <div className="flex items-center gap-3">
-          <div
-            className="overflow-hidden rounded-full border"
-            style={{ borderColor: `${accentHex}55`, boxShadow: `0 0 16px -3px ${accentHex}55` }}
-          >
-            {imgFailed ? (
-              <div
-                className="flex h-11 w-11 items-center justify-center rounded-full text-[15px] font-semibold"
-                style={{ background: `${accentHex}22`, color: accentHex }}
-              >
-                {agentName[0]}
-              </div>
-            ) : (
-              <img
-                src={agentAvatar}
-                alt={agentName}
-                onError={() => setImgFailed(true)}
-                className="h-11 w-11 rounded-full object-cover"
-              />
-            )}
-          </div>
+          <AgentPortrait name={agentName} src={agentAvatar} size={44} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h2 className="text-[15px] font-semibold text-foreground">{agentName}</h2>
@@ -247,7 +228,7 @@ export default function ScoutCopilot({
             }}
             placeholder={`Ask ${agentName} about market signals…`}
             rows={1}
-            className="flex-1 resize-none bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+            className="min-w-0 flex-1 resize-none bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
           />
           <button
             onClick={() => void dispatch(value)}

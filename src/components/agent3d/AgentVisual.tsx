@@ -54,6 +54,7 @@ const AgentVisual = forwardRef<AgentVisualHandle, AgentVisualProps>(function Age
   const eligible = !!manifest && !!loader && validateManifest(manifest).length === 0;
   const decision = useRenderDecision(surface, eligible);
   const [failed, setFailed] = useState(false);
+  const [modelReady, setModelReady] = useState(false);
   const [gesture, setGesture] = useState<GestureRequest | null>(null);
   const showModel = decision.tier === 'model' && !failed;
 
@@ -63,14 +64,14 @@ const AgentVisual = forwardRef<AgentVisualHandle, AgentVisualProps>(function Age
 
   const event = state?.event;
   useEffect(() => {
-    if (!showModel || !event || acknowledgedEvents.has(event.key)) return;
+    if (!showModel || !modelReady || !event || acknowledgedEvents.has(event.key)) return;
     acknowledgedEvents.add(event.key);
     setGesture((g) => ({ kind: event.kind === 'completed' ? 'completed' : 'stopped', nonce: (g?.nonce ?? 0) + 1 }));
-  }, [showModel, event]);
+  }, [showModel, modelReady, event]);
 
   const poster = fallback ?? <AgentPortrait agentId={agentId} decorative />;
   if (!showModel || !manifest || !loader) return <>{poster}</>;
-  return <ModelStage className={className} poster={poster} loader={loader} rendererProps={{ manifest, state: state ?? IDLE_VISUAL, gesture, trackRef }} onFailure={() => setFailed(true)} />;
+  return <ModelStage className={className} poster={poster} loader={loader} rendererProps={{ manifest, state: state ?? IDLE_VISUAL, gesture, trackRef }} onReady={() => setModelReady(true)} onFailure={() => setFailed(true)} />;
 });
 
 export default AgentVisual;
@@ -97,12 +98,13 @@ function useRenderDecision(surface: VisualSurface, eligible: boolean): RenderDec
 
 type Loader = NonNullable<(typeof RENDERER_LOADERS)[keyof typeof RENDERER_LOADERS]>;
 
-function ModelStage({ className, poster, loader, rendererProps, onFailure }: {
+function ModelStage({ className, poster, loader, rendererProps, onFailure, onReady }: {
   className?: string;
   poster: ReactNode;
   loader: Loader;
   rendererProps: Omit<AgentRendererProps, 'active' | 'onReady' | 'onFailure' | 'onDegrade'>;
   onFailure: () => void;
+  onReady: () => void;
 }) {
   const stage = useRef<HTMLDivElement>(null);
   const Renderer = useMemo(() => lazy(loader), [loader]);
@@ -113,7 +115,7 @@ function ModelStage({ className, poster, loader, rendererProps, onFailure }: {
   useEffect(() => {
     const el = stage.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), { rootMargin: '120px' });
+    const io = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting));
     io.observe(el);
     const onVis = () => setVisible(document.visibilityState === 'visible');
     document.addEventListener('visibilitychange', onVis);
@@ -128,7 +130,7 @@ function ModelStage({ className, poster, loader, rendererProps, onFailure }: {
     <div aria-hidden style={{ position: 'absolute', inset: 0, opacity: ready ? 0 : 1, transition: 'opacity .6s ease' }}>{poster}</div>
     {seen && <RendererBoundary onError={onFailure}>
       <Suspense fallback={null}>
-        <Renderer {...rendererProps} active={inView && visible} onReady={() => setReady(true)} onFailure={onFailure} onDegrade={() => { markDegraded(); onFailure(); }} />
+        <Renderer {...rendererProps} active={inView && visible} onReady={() => { setReady(true); onReady(); }} onFailure={onFailure} onDegrade={() => { markDegraded(); onFailure(); }} />
       </Suspense>
     </RendererBoundary>}
   </div>;

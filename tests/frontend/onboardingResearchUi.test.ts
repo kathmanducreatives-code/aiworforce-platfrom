@@ -16,6 +16,7 @@ const PAGE = await read("src/pages/OnboardingCompanyBrain.tsx");
 const FOUNDER = await read("src/components/onboarding/scenes/FounderScenes.tsx");
 const COMPANY = await read("src/components/onboarding/scenes/CompanyScenes.tsx");
 const KIT = await read("src/components/onboarding/scenes/sceneKit.tsx");
+const GUIDED = await read("src/components/onboarding/GuidedSetup.tsx");
 
 Deno.test("a second Analyze click cannot start a second run", () => {
   // Two defences, because either alone has a hole: the button is disabled while
@@ -27,8 +28,8 @@ Deno.test("a second Analyze click cannot start a second run", () => {
     assert(guard > -1, `${fn} must refuse re-entry while a run is in flight`);
     assert(guard < start, `${fn} must check busy BEFORE claiming it`);
   }
-  assert(/busy=\{busy === 'founder'\}/.test(PAGE), "the founder scene must know it is busy");
-  assert(/busy=\{busy === 'company'\}/.test(PAGE), "the company scene must know it is busy");
+  assert(/busy=\{busy\}/.test(PAGE), "the guided setup must know it is busy");
+  assert(/fieldset disabled=\{!!busy\}/.test(GUIDED), "fields and navigation are locked during research");
   assert(/primaryBusy=\{busy\}/.test(FOUNDER), "the founder button must disable itself");
   assert(/primaryBusy=\{busy\}/.test(COMPANY), "the company button must disable itself");
   assert(/disabled=\{primaryDisabled \|\| primaryBusy\}/.test(KIT), "busy must actually disable the button");
@@ -49,20 +50,18 @@ Deno.test("a failure says what failed, and never 'Something went wrong'", () => 
   ]) {
     assert(PAGE.includes(`case '${reason}'`), `no message for ${reason}`);
   }
-  // The not-configured messages name the local remedy rather than shrugging.
-  assert(PAGE.includes("AGENTORY_LOCAL_PROVIDER_MODE=mock"),
-    "a local developer must be told how to run this without a provider");
+  assert(PAGE.includes("Continue with your own details"), "unavailable research must explain the manual fallback");
 });
 
 Deno.test("skip and continue manually survives", () => {
   assert(FOUNDER.includes("Skip and continue manually"));
-  assert(/onSkip=\{\(\) => goto\('founder_verify'\)\}/.test(PAGE),
-    "skipping must still advance the wizard, not dead-end it");
+  assert(GUIDED.includes('You can continue manually at any time.'));
+  assert(GUIDED.includes('onPrimary={step === 5 ? p.onActivate : next}'));
 });
 
 Deno.test("a successful analysis advances the wizard and keeps a sparse result", () => {
   const founder = PAGE.slice(PAGE.indexOf("async function analyzeFounder("), PAGE.indexOf("async function analyzeCompany("));
-  assert(founder.includes("goto('founder_research')"), "the click moves to the research scene");
+  assert(GUIDED.includes("Reading profile…"), "research has a visible busy state");
   assert(founder.includes("setFounderResearch(r.research)"), "a good result is kept");
   assert(/if \(r\?\.research\) setFounderResearch\(r\.research\)/.test(founder),
     "a sparse result is kept too — the user can still see what was found");

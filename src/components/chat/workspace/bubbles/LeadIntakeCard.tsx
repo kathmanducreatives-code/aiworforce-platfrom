@@ -169,7 +169,6 @@ export default function LeadIntakeCard({ payload, conversationId }: { payload: L
           size="sm"
           disabled={modeMissing}
           onClick={() => submit(false)}
-          className="bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold"
         >
           Find leads
         </Button>

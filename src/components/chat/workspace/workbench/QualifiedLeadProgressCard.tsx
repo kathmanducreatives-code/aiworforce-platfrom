@@ -121,10 +121,8 @@ export default function QualifiedLeadProgressCard({ response, candidates = [], t
             size="sm"
             onClick={handleContinue}
             disabled={running}
-            className={`h-8 px-3.5 rounded-lg font-bold text-[12.5px] ${
-              running
-                ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-white/[0.04]'
-                : 'bg-emerald-500 hover:bg-emerald-400 text-black'
+            className={`ag-btn ag-btn-primary h-8 px-3.5 rounded-lg font-medium text-[12.5px] ${
+              running ? 'cursor-not-allowed opacity-45' : ''
             }`}
           >
             {running

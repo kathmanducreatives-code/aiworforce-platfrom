@@ -68,21 +68,19 @@ const STEP_SPECS: StepSpec[] = [
     placement: 'right',
   },
   {
-    // The sidebar item is labelled "Pilot"; the guide used to call this step
-    // "Conversations", which matched no visible UI and no route. The id stays
+    // Pilot is reached through the persistent command dock. The stable id stays
     // `conversations` because persisted tour progress keys off it.
     id: 'conversations',
-    navKey: 'pilot',
+    navKey: null,
     featureName: 'Pilot',
     title: 'Pilot',
     body: 'Your flexible command center. Ask Pilot anything, or mention an agent directly.',
-    where: 'Left sidebar → Pilot, or the command dock at the bottom.',
+    where: 'Command dock at the bottom.',
     useItFor: 'Asking Pilot for custom work or giving direct tasks to Scout, Aria, Hawk, Penn, and Scribe.',
     tryFirst: 'Ask “What should I do next?”',
     ctaLabel: 'Open Pilot',
     ctaRoute: '/dashboard',
-    anchorTag: 'sidebar-conversations',
-    fallbackSelector: '[data-tour="command-dock"]',
+    anchorTag: 'command-dock',
     placement: 'right',
   },
   {

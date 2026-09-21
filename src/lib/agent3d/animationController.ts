@@ -27,6 +27,8 @@ export interface RigAdapter {
   setChest(pitchDeg: number): void;
   /** 0 = open, 1 = closed. */
   setBlink(amount: number): void;
+  /** Optional authored smile morphs; never required to convey completion. */
+  setSmile?(amount: number): void;
 }
 
 export interface AnimatorInput {
@@ -147,6 +149,7 @@ export function createAgentAnimator({ manifest, rig, random = Math.random }: {
       const { head, eyes } = splitGaze(gaze);
       rig.setHead({ yawDeg: head.yawDeg, pitchDeg: head.pitchDeg + nodCurve(t - nodAt, nodDepth) });
       rig.setEyes(eyes);
+      rig.setSmile?.(nodDepth ? Math.max(0, -nodCurve(t - nodAt, 0.18)) : 0);
 
       // Phase accumulates, so a state change alters the pace without a jump.
       breathPhase = (breathPhase + (2 * Math.PI * dt) / posture.breathPeriodMs) % (2 * Math.PI);

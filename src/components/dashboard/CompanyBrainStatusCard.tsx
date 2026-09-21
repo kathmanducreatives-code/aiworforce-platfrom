@@ -76,7 +76,7 @@ export default function CompanyBrainStatusCard() {
           <div className="flex flex-col sm:flex-row gap-2 shrink-0">
             <button
               onClick={open}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+              className="ag-btn ag-btn-primary rounded-lg font-medium inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm"
             >
               Continue setup <ArrowRight className="h-4 w-4" />
             </button>
@@ -122,7 +122,7 @@ export default function CompanyBrainStatusCard() {
         <div className="flex flex-col sm:flex-row gap-2 shrink-0">
           <button
             onClick={open}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+            className="ag-btn ag-btn-primary rounded-lg font-medium inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm"
           >
             <Pencil className="h-3.5 w-3.5" /> Edit Company Brain
           </button>

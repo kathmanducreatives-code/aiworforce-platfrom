@@ -73,7 +73,7 @@ export default function Signals() {
   // Canonical Signal Scout identity (legacy 'scout' → public Lyra profile).
   const scout = resolveAgent('scout');
   const theme = getDeptTheme('growth');
-  const accent = scout.accentHex ?? theme.hex;
+  const accent = theme.hex;
 
   // Metrics
   const metrics = useMemo(() => {
@@ -131,7 +131,7 @@ export default function Signals() {
     try {
       const res = await runRadarScan({ mode: 'default' });
       if (res?.inserted !== undefined) {
-        toast.success(`Scout added ${res.inserted} new ${res.inserted === 1 ? 'signal' : 'signals'}`);
+        toast.success(`Lyra added ${res.inserted} new ${res.inserted === 1 ? 'signal' : 'signals'}`);
       } else {
         toast.success('Radar scan complete');
       }
@@ -146,7 +146,7 @@ export default function Signals() {
       <DepartmentWorkspaceShell
         eyebrow="Growth · Signals"
         title="Company Brain Radar"
-        description="Verified market signals from your ICP — hiring, funding, competitor moves and buying-window activity, monitored by Scout."
+        description="Verified market signals from your ICP — hiring, funding, competitor moves and buying-window activity, monitored by Lyra."
         agent={{
           name: scout.name,
           role: scout.role,
@@ -193,6 +193,7 @@ export default function Signals() {
             onEditRadar={() => setEditRadarOpen(true)}
           />
         }
+        collapsibleRail
         mobileRailLabel={`Open ${scout.name}`}
       >
         {tab === 'today' && (

@@ -7,6 +7,7 @@ import { createFrameBudget } from '@/lib/agent3d/capability';
 import { GAZE_REST, pointerToGaze, type GazeAngles } from '@/lib/agent3d/gaze';
 import { gazeLimitsFor, type AgentModelManifest } from '@/lib/agent3d/registry';
 import type { AgentRendererProps } from './rendererContract';
+import { loadModelBytes } from '@/lib/agent3d/loadModel';
 
 /**
  * THE glTF RENDERER — the only module that imports three.js.
@@ -94,6 +95,10 @@ function createStage(el: HTMLElement, manifest: AgentModelManifest, latest: Muta
   let tick: ((now: number) => void) | null = null;
   let detach = () => {};
   let mixer: THREE.AnimationMixer | null = null;
+  const request = new AbortController();
+  let bytes = 0;
+  let loadMs = 0;
+  let samples = 0, sampleTime = 0, renderCost = 0;
 
   const begin = () => { if (wanted && tick && !raf && !disposed) raf = requestAnimationFrame(tick); };
   const halt = () => { cancelAnimationFrame(raf); raf = 0; };
@@ -105,8 +110,18 @@ function createStage(el: HTMLElement, manifest: AgentModelManifest, latest: Muta
     start() { wanted = true; begin(); },
     stop() { wanted = false; halt(); },
     async load() {
+      const started = performance.now();
+      const timeout = window.setTimeout(() => request.abort(), 15_000);
       const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-      const gltf = await loader.loadAsync(manifest.url);
+      const buffer = await loadModelBytes(manifest.url, request.signal).finally(() => clearTimeout(timeout));
+      bytes = buffer.byteLength;
+      // Require an embedded GLB: no unbudgeted remote textures or buffers.
+      const view = new DataView(buffer);
+      const jsonLength = view.getUint32(12, true);
+      const json = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 20, jsonLength)));
+      if ([...(json.images ?? []), ...(json.buffers ?? [])].some((item: { uri?: string }) => item.uri && !item.uri.startsWith('data:'))) throw new Error('GLB must embed its textures and buffers');
+      const gltf = await loader.parseAsync(buffer, '');
+      loadMs = performance.now() - started;
       if (disposed) { disposeTree(gltf.scene); return; }
       const model = gltf.scene;
       scene.add(model);
@@ -125,7 +140,8 @@ function createStage(el: HTMLElement, manifest: AgentModelManifest, latest: Muta
       const onLeave = () => { pointer = null; };
       track?.addEventListener('pointermove', onMove);
       track?.addEventListener('pointerleave', onLeave);
-      detach = () => { track?.removeEventListener('pointermove', onMove); track?.removeEventListener('pointerleave', onLeave); };
+      track?.addEventListener('pointercancel', onLeave);
+      detach = () => { track?.removeEventListener('pointermove', onMove); track?.removeEventListener('pointerleave', onLeave); track?.removeEventListener('pointercancel', onLeave); };
 
       let lastFrame = 0, lastRender = 0, ready = false;
       tick = (now) => {
@@ -139,17 +155,28 @@ function createStage(el: HTMLElement, manifest: AgentModelManifest, latest: Muta
         const dt = lastRender ? now - lastRender : 16;
         lastRender = now;
         const p = latest.current;
+        const renderStart = performance.now();
         rig.reset();
         mixer!.update(dt / 1000);
         animator.update(dt, { state: p.state, pointer, gesture: p.gesture });
         rig.apply();
         renderer.render(scene, camera);
+        renderCost += performance.now() - renderStart;
+        samples++;
+        sampleTime += Math.min(dt, 100);
+        if (samples === 120) {
+          // Local diagnostics only: no network telemetry, no React updates per frame.
+          const detail = { url: manifest.url, bytes, loadMs: Math.round(loadMs), fps: Math.round(samples * 1000 / sampleTime), cpuSubmitMs: +(renderCost / samples).toFixed(2), drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, gpuMs: null };
+          window.dispatchEvent(new CustomEvent('agent3d:performance', { detail }));
+          if (import.meta.env.DEV) console.info('[agent3d:performance]', detail);
+        }
         if (!ready) { ready = true; p.onReady(); }
       };
       begin();
     },
     dispose() {
       disposed = true;
+      request.abort();
       wanted = false;
       halt();
       detach();
@@ -198,6 +225,7 @@ function createRig(model: THREE.Object3D, clips: THREE.AnimationClip[], mixer: T
   const rest = new Map([chest, neck, head, ...eyes].filter((b): b is THREE.Object3D => !!b).map((b) => [b, b.quaternion.clone()]));
 
   const blinkTargets: { influences: number[]; index: number }[] = [];
+  const smileTargets: { influences: number[]; index: number }[] = [];
   const blinkNames = [manifest.expressions?.blinkLeft, manifest.expressions?.blinkRight].filter((n): n is string => !!n);
   model.traverse((o) => {
     const mesh = o as THREE.Mesh;
@@ -205,6 +233,11 @@ function createRig(model: THREE.Object3D, clips: THREE.AnimationClip[], mixer: T
     for (const name of blinkNames) {
       const index = mesh.morphTargetDictionary[name];
       if (index !== undefined) blinkTargets.push({ influences: mesh.morphTargetInfluences, index });
+    }
+    for (const name of [manifest.expressions?.smileLeft, manifest.expressions?.smileRight]) {
+      if (!name) continue;
+      const index = mesh.morphTargetDictionary[name];
+      if (index !== undefined) smileTargets.push({ influences: mesh.morphTargetInfluences, index });
     }
   });
 
@@ -215,6 +248,7 @@ function createRig(model: THREE.Object3D, clips: THREE.AnimationClip[], mixer: T
   let base: THREE.AnimationAction | null = null;
   let gesture: { action: THREE.AnimationAction; returnAt: number; fade: number } | null = null;
   let head$: GazeAngles = GAZE_REST, eyes$: GazeAngles = GAZE_REST, chest$ = 0, blink$ = 0;
+  let smile$ = 0;
 
   return {
     playBase(name, fade) {
@@ -239,6 +273,7 @@ function createRig(model: THREE.Object3D, clips: THREE.AnimationClip[], mixer: T
     setEyes(o) { eyes$ = o; },
     setChest(p) { chest$ = p; },
     setBlink(a) { blink$ = a; },
+    setSmile(a) { smile$ = a; },
     reset() {
       for (const [bone, q] of rest) bone.quaternion.copy(q);
       // Hand back to the base clip just before the gesture ends, so it never snaps.
@@ -256,6 +291,7 @@ function createRig(model: THREE.Object3D, clips: THREE.AnimationClip[], mixer: T
       turnInModelSpace(head, model, head$.yawDeg * (1 - neckShare), head$.pitchDeg * (1 - neckShare));
       for (const eye of eyes) turnInModelSpace(eye, model, eyes$.yawDeg, eyes$.pitchDeg);
       for (const t of blinkTargets) t.influences[t.index] = blink$;
+      for (const t of smileTargets) t.influences[t.index] = smile$;
     },
   };
 }

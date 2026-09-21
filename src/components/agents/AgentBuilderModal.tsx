@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -22,7 +23,6 @@ import Step3Role from './builder/v2/Step3Role';
 import Step4Model from './builder/v2/Step4Model';
 import Step5Capabilities from './builder/v2/Step5Capabilities';
 import Step6Tools from './builder/v2/Step6Tools';
-import Step7Skills from './builder/v2/Step7Skills';
 import DeployScreen from './builder/v2/DeployScreen';
 import { DEPARTMENTS } from './builder/v2/constants';
 import { TOTAL_STEPS, type BuilderForm } from './builder/v2/types';
@@ -46,6 +46,7 @@ export default function AgentBuilderModal() {
   const { open, prefill, closeBuilder } = useAgentBuilder();
   const { workspaceId } = useWorkspace();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [phase, setPhase] = useState<Phase>('building');
   const [step, setStep] = useState(1);
@@ -139,7 +140,7 @@ export default function AgentBuilderModal() {
     setPhase('deploying');
     try {
       const validCaps = form.capabilities.filter((c) => c.capability.trim() && c.input_type.trim() && c.output_type.trim());
-      // NOTE: Skills, skill config and tool URL are kept in local UI state only — backend does not yet persist them.
+      // Only supported, persisted fields are offered in the builder.
       await createAgent({
         workspaceId,
         name: form.name.trim(),
@@ -150,6 +151,7 @@ export default function AgentBuilderModal() {
         tools: form.tools,
         capabilities: validCaps,
       });
+      await queryClient.invalidateQueries({ queryKey: ['agent-roster', workspaceId] });
       // Brief delay for the deploy animation
       await new Promise((r) => setTimeout(r, 900));
       setPhase('success');
@@ -211,7 +213,7 @@ export default function AgentBuilderModal() {
             <SuccessView
               name={form.name}
               department={form.department}
-              onGoToRoom={() => { closeBuilder(); navigate(`/department/${form.department}`); }}
+              onGoToRoom={() => { closeBuilder(); navigate('/agents'); }}
               onBuildAnother={() => {
                 setPhase('building');
                 setStep(1);
@@ -305,19 +307,7 @@ export default function AgentBuilderModal() {
                               onSkip={next}
                             />
                           )}
-                          {step === 7 && (
-                            <Step7Skills
-                              equipped={form.skills}
-                              config={form.skillConfig}
-                              onToggle={(k) => setForm((f) => ({
-                                ...f,
-                                skills: f.skills.includes(k) ? f.skills.filter((x) => x !== k) : [...f.skills, k],
-                              }))}
-                              onConfigChange={(skill, patch) => setForm((f) => ({
-                                ...f, skillConfig: { ...f.skillConfig, [skill]: { ...(f.skillConfig[skill] ?? {}), ...patch } },
-                              }))}
-                            />
-                          )}
+
                         </motion.div>
                       </AnimatePresence>
                     </div>
@@ -329,7 +319,7 @@ export default function AgentBuilderModal() {
                       <span className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">
                         Step {step} of {TOTAL_STEPS}
                       </span>
-                      <Button onClick={next} className="bg-emerald-500 hover:bg-emerald-400 text-background font-bold">
+                      <Button onClick={next}>
                         {step < TOTAL_STEPS ? <>Next <ChevronRight className="w-4 h-4 ml-1" /></> : <>Review <Sparkles className="w-4 h-4 ml-1.5" /></>}
                       </Button>
                     </div>
@@ -398,8 +388,8 @@ function SuccessView({ name, department, colorKey, onGoToRoom, onBuildAnother }:
         </p>
       )}
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-        <Button onClick={onGoToRoom} className="bg-emerald-500 hover:bg-emerald-400 text-background font-bold">
-          Go to {dept?.label ?? 'Department'} room
+        <Button onClick={onGoToRoom}>
+          View your team
         </Button>
         <Button variant="outline" onClick={onBuildAnother}>Build another agent</Button>
       </div>

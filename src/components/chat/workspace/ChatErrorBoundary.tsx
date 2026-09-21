@@ -42,7 +42,7 @@ export default class ChatErrorBoundary extends Component<Props, State> {
             </button>
             <button
               onClick={this.reset}
-              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+              className="ag-btn ag-btn-primary rounded-lg font-medium inline-flex items-center gap-1.5 text-xs px-3 py-1.5"
             >
               <RefreshCw className="h-3 w-3" /> Retry
             </button>

@@ -1,5 +1,4 @@
 import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
 import { Key, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TOOLS } from './constants';
@@ -12,7 +11,7 @@ interface Props {
   onSkip: () => void;
 }
 
-export default function Step6Tools({ selected, toolConfig, onChange, onConfigChange, onSkip }: Props) {
+export default function Step6Tools({ selected, onChange, onSkip }: Props) {
   const toggle = (k: string) => {
     onChange(selected.includes(k) ? selected.filter((x) => x !== k) : [...selected, k]);
   };
@@ -23,11 +22,11 @@ export default function Step6Tools({ selected, toolConfig, onChange, onConfigCha
         <h2 className="text-3xl md:text-4xl font-display font-black text-foreground tracking-tight mb-2">
           What tools can this agent use?
         </h2>
-        <p className="text-sm text-muted-foreground">Tools let the agent take actions in the real world.</p>
+        <p className="text-sm text-muted-foreground">Choose tools for this agent. Connections are managed in Settings. Custom webhooks and skill configuration are not available yet.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {TOOLS.map((t) => {
+        {TOOLS.filter(t => !t.hasUrl).map((t) => {
           const on = selected.includes(t.key);
           return (
             <div
@@ -53,16 +52,7 @@ export default function Step6Tools({ selected, toolConfig, onChange, onConfigCha
                       <Key className="w-3 h-3" /> Requires API key <ExternalLink className="w-2.5 h-2.5" />
                     </button>
                   )}
-                  {on && t.hasUrl && (
-                    <div className="mt-3">
-                      <Input
-                        value={(toolConfig[t.key]?.url as string) ?? ''}
-                        onChange={(e) => onConfigChange(t.key, { url: e.target.value })}
-                        placeholder="https://hooks.example.com/..."
-                        className="h-8 text-xs bg-background/60"
-                      />
-                    </div>
-                  )}
+
                 </div>
               </div>
             </div>

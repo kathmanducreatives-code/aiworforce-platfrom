@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import AgentPortrait from './AgentPortrait';
 import { cn } from '@/lib/utils';
-import { AgentProfile, deptRing, deptDot, AGENT_BY_ID, AGENT_BY_NAME } from '@/data/agentProfiles';
+import { AgentProfile, deptDot, AGENT_BY_ID, AGENT_BY_NAME } from '@/data/agentProfiles';
 
 type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -33,41 +33,19 @@ export default function AgentAvatar({
     (agentId ? AGENT_BY_ID[agentId] : undefined) ??
     (agentName ? AGENT_BY_NAME[agentName.toLowerCase()] : undefined);
 
-  const [failed, setFailed] = useState(false);
   const s = sizeMap[size];
-  const ringClass = resolved ? deptRing[resolved.department] : 'ring-border/60';
   const dotClass = resolved ? deptDot[resolved.department] : 'bg-muted';
-  const initial = (resolved?.name ?? agentName ?? '?')[0]?.toUpperCase() ?? '?';
 
   return (
     <div className={cn('relative shrink-0', s.box, className)}>
-      <div
-        className={cn(
-          'w-full h-full rounded-full overflow-hidden bg-gradient-to-br from-foreground/10 to-foreground/5 flex items-center justify-center',
-          ring && 'ring-2 ring-offset-0',
-          ring && ringClass,
-        )}
-      >
-        {resolved && resolved.image && !failed ? (
-          <img
-            src={resolved.image}
-            alt={resolved.name}
-            loading="lazy"
-            onError={() => setFailed(true)}
-            className="w-full h-full object-cover"
-          />
-
-        ) : (
-          <span className={cn('font-bold text-foreground/80', s.text)}>{initial}</span>
-        )}
-      </div>
+      <AgentPortrait agentId={resolved?.id ?? agentId} name={resolved?.name ?? agentName} src={resolved?.image} ring={ring} />
 
       {showStatus && (
         <span
           className={cn(
             'absolute bottom-0 right-0 rounded-full border-2 border-card',
             s.dot,
-            status === 'active' ? `${dotClass} animate-pulse` : 'bg-muted',
+            status === 'active' ? `${dotClass}` : 'bg-muted',
           )}
         />
       )}

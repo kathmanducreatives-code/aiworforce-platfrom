@@ -23,14 +23,13 @@ export default function PlatformCard({ posting, originalJob, onSynced }: { posti
     const handleSync = async () => {
         setSyncing(true);
         try {
-            const response = await (firecrawl as any).scrapeUrl(posting.platform_url, {
-                formats: ['extract'],
-                extract: {
-                    prompt: "Is this job still active? Extract: current job title, description, salary if visible, applicant count if visible, whether the posting appears expired or removed"
-                }
+            // Through the Edge Function, which holds the credential. The v1
+            // The v1 extract format became v2's json format; the proxy
+            // returns it as both `json` and `extract` so this read is unchanged.
+            const response = await firecrawl.scrapeUrl(posting.platform_url, {
+                prompt: "Is this job still active? Extract: current job title, description, salary if visible, applicant count if visible, whether the posting appears expired or removed"
             });
-            const data = response?.data || response;
-            const extract = data?.extract;
+            const extract = response?.data?.extract as Record<string, any> | null;
 
             if (!extract) throw new Error("Could not extract data from the URL");
 

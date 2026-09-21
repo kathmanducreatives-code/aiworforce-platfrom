@@ -2,7 +2,7 @@
 // Emits string[]. Enter/comma commits. Backspace on empty removes last.
 // Premium look: rounded, hover states, smart empty affordance.
 
-import { useState, type KeyboardEvent } from 'react';
+import { useId, useState, type KeyboardEvent } from 'react';
 import { X, Plus } from 'lucide-react';
 
 interface Props {
@@ -15,6 +15,7 @@ interface Props {
 }
 
 export function ChipInput({ label, values, onChange, placeholder = 'Type and press Enter', emptyHelper }: Props) {
+  const inputId = useId();
   const [draft, setDraft] = useState('');
   const [focused, setFocused] = useState(false);
 
@@ -37,7 +38,7 @@ export function ChipInput({ label, values, onChange, placeholder = 'Type and pre
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between">
-        <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+        <label htmlFor={inputId} className="text-xs font-medium text-foreground/80">{label}</label>
         {values.length > 0 && (
           <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60">{values.length}</span>
         )}
@@ -48,7 +49,7 @@ export function ChipInput({ label, values, onChange, placeholder = 'Type and pre
           'flex flex-wrap items-center gap-1.5 rounded-xl border bg-background/40 p-2 transition-all',
           focused
             ? 'border-primary/50 shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]'
-            : 'border-border/50 hover:border-border',
+            : 'border-foreground/15 hover:border-primary/25',
         ].join(' ')}
       >
         {values.map((v) => (
@@ -68,17 +69,8 @@ export function ChipInput({ label, values, onChange, placeholder = 'Type and pre
           </span>
         ))}
 
-        {isEmpty && emptyHelper ? (
-          <button
-            type="button"
-            onClick={() => setFocused(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-dashed border-border/50 bg-transparent px-2 py-1 text-[11px] text-muted-foreground/80 transition-colors hover:border-primary/40 hover:text-primary"
-          >
-            <Plus className="h-3 w-3" />
-            {emptyHelper}
-          </button>
-        ) : (
           <input
+            id={inputId}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKey}
@@ -87,7 +79,6 @@ export function ChipInput({ label, values, onChange, placeholder = 'Type and pre
             placeholder={values.length === 0 ? placeholder : ''}
             className="min-w-[9rem] flex-1 border-0 bg-transparent px-1.5 py-0.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
           />
-        )}
 
         {draft && (
           <button
@@ -100,6 +91,7 @@ export function ChipInput({ label, values, onChange, placeholder = 'Type and pre
           </button>
         )}
       </div>
+      {isEmpty && emptyHelper && <p className="mt-1.5 text-[11px] text-muted-foreground">{emptyHelper}</p>}
     </div>
   );
 }

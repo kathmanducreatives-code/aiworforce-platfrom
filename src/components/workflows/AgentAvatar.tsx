@@ -1,3 +1,4 @@
+import AgentPortrait from '@/components/agents/AgentPortrait';
 import { AGENT_BY_ID, type AgentProfile } from '@/data/agentProfiles';
 import { cn } from '@/lib/utils';
 
@@ -22,9 +23,7 @@ export default function AgentAvatar({ agentId, size = 24, ring = false, classNam
       )}
       style={s}
     >
-      {agent.image
-        ? <img src={agent.image} alt={agent.name} className="w-full h-full object-cover" />
-        : <span className="text-[10px] font-medium text-neutral-300">{agent.name[0]}</span>}
+      <AgentPortrait agentId={agentId} size={size} ring={ring} />
     </span>
   );
 }

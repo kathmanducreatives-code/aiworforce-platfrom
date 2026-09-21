@@ -202,11 +202,69 @@ export function capabilityRunnable(
  * May a route controller ADD a route through this actor? The policy's decision,
  * plus a card: an uncarded actor has no bounded, priced input to compile.
  */
+/**
+ * WHAT KIND OF PROVIDER IS THIS, AND WHAT DOES IT OWE US?
+ *
+ * Readiness used to require a hiring ACTOR CARD from every provider, which is
+ * an Apify-shaped contract: actor id, supported filters, verified enums, cost
+ * per result. Firecrawl has none of those and never will — it is a direct HTTP
+ * API, not a marketplace actor — so `routeActorReady("firecrawl", …)` answered
+ * "no actor card" for a provider the readiness table declares READY and which
+ * runs in production every day.
+ *
+ * That contradiction was survivable only because the claim verifiers never
+ * asked, which is exactly the second hidden executability system this module
+ * exists to abolish. So the authority now models the provider CLASS, and each
+ * class declares its own contract:
+ *
+ *   apify_actor     must have an actor card (filters, enums, cost, defects)
+ *   api_provider    a direct API we call ourselves; the adapter IS the contract
+ *   model_provider  an LLM route, priced and bounded by the model ledger
+ *
+ * Adding a class is additive. Adding a provider without one is not possible:
+ * `providerClassOf` returns null and the route is refused, so a new provider
+ * cannot reach production by being forgotten.
+ */
+export type ProviderClass = "apify_actor" | "api_provider" | "model_provider";
+
+/**
+ * Providers that are NOT Apify actors, with the class that describes them.
+ *
+ * Deliberately explicit rather than inferred: "has no actor card" must never
+ * again silently mean "not ready", and it must never silently mean "ready"
+ * either.
+ */
+export const NON_ACTOR_PROVIDERS: Readonly<Record<string, ProviderClass>> = Object.freeze({
+  firecrawl: "api_provider",
+  firecrawl_scrape: "api_provider",
+  firecrawl_map: "api_provider",
+  company_website: "api_provider",
+  // Engine-internal producers: evidence the engine derives rather than buys.
+  engine: "api_provider",
+  grounded_evidence_evaluation: "model_provider",
+  funding_corroboration: "api_provider",
+});
+
+/** The class of a provider, or null when nothing declares it. */
+export function providerClassOf(actor: string): ProviderClass | null {
+  if (hiringActorCard(actor)) return "apify_actor";
+  return NON_ACTOR_PROVIDERS[actor] ?? null;
+}
+
 export function routeActorReady(
   actor: string, capability: string, policy: ReadinessPolicy = PRODUCTION_READINESS,
 ): { ready: true } | { ready: false; reason: string } {
   const d = policy.decide(actor, capability);
   if (!d.executable) return { ready: false, reason: d.reason };
-  if (!hiringActorCard(actor)) return { ready: false, reason: `${actor} has no actor card` };
+  // THE CONTRACT ITS CLASS OWES. An Apify actor owes a card; a direct API owes
+  // a declaration. A provider that owes neither is one nobody has described,
+  // and an undescribed provider may not spend.
+  const cls = providerClassOf(actor);
+  if (!cls) {
+    return {
+      ready: false,
+      reason: `${actor} has no provider class: add an actor card (Apify) or a NON_ACTOR_PROVIDERS entry`,
+    };
+  }
   return { ready: true };
 }

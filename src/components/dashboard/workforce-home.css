@@ -1,25 +1,26 @@
 /* THE WORKFORCE HOME — a single-screen command center.
  *
- * Hierarchy: greeting → the four agents → one goal input → activity, review
- * queue and Pilot's briefing side by side. The fixed workforce composer owns the
- * bottom of the viewport (~110px), so the page is sized to put the agents and
- * the goal input above it, with the lower row starting in view.
+ * Hierarchy: a one-line greeting → the four agents → one goal input → activity,
+ * review queue and Pilot's briefing side by side. The greeting is deliberately
+ * small: the agents are the page, so the height a headline used to take is
+ * given to them.
  *
- * Card height follows the viewport: clamp(280px, 100vh − 590px, 380px) — about
- * 310px on a 900px-tall laptop screen, the full 380px on a 1080p display — so
- * the agents stay the visual focus without pushing everything else below the
- * fold. */
+ * Card height follows the viewport: clamp(340px, 100vh − 490px, 500px) — 340px
+ * on an ~830px-tall laptop, ~410px at 900px, the full 500px on a 1080p display.
+ * The lower row starts below the agents and may begin under the fold on short
+ * screens; the agents come first. */
 
 .workforce-home { --team-ink: #eef4f1; color: var(--team-ink); position: relative; isolation: isolate; }
 .workforce-home::before { content: ''; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 48% 8%, #28634b24, transparent 50%); }
 
 /* ── greeting ─────────────────────────────────────────────────────────── */
-.team-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 16px; }
+.team-header { display: flex; justify-content: space-between; align-items: center; gap: 24px; min-height: 42px; margin-bottom: 14px; }
+/* One quiet line: the phrase recedes, the name is the only bright word. */
+.team-greeting { margin: 0; font-size: clamp(19px, 1.65vw, 24px); font-weight: 450; letter-spacing: -.028em; line-height: 1.2; color: #8f9e97; }
+.team-greeting__phrase { display: inline-block; animation: team-greeting-in .55s cubic-bezier(.22,.8,.3,1) both; }
+.team-greeting__name { color: #f3f7f5; font-weight: 560; }
+@keyframes team-greeting-in { from { opacity: 0; transform: translateY(4px); filter: blur(2px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
 .team-eyebrow { color: #88b5a1; font-size: 10px; letter-spacing: .19em; text-transform: uppercase; font-weight: 600; }
-.team-header h1 { font-size: clamp(24px, 2.3vw, 34px); letter-spacing: -.04em; line-height: 1.1; font-weight: 550; margin: 6px 0 4px; }
-.team-header p { color: #9aa9a2; font-size: 13px; }
-.team-pilot { display: flex; align-items: center; gap: 10px; border: 1px solid #c7edda1c; border-radius: 50px; background: #c1edd008; padding: 6px 14px 6px 6px; font-size: 12px; white-space: nowrap; transition: background .2s, border-color .2s; }
-.team-pilot:hover { background: #c1edd013; border-color: #c7edda33; }
 
 /* ── the agents ───────────────────────────────────────────────────────── */
 .team-gallery { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; margin-bottom: 14px; }
@@ -27,7 +28,7 @@
   position: relative; min-width: 0; perspective: 1100px;
   --team-rx: 0deg; --team-ry: 0deg; --team-x: 50%; --team-y: 40%; --team-px: 0px; --team-py: 0px;
   --team-lift: 0px; --team-scale: 1;
-  --team-card-h: clamp(280px, calc(100vh - 590px), 380px);
+  --team-card-h: clamp(340px, calc(100vh - 490px), 500px);
 }
 .team-agent__surface {
   position: relative; height: var(--team-card-h); overflow: hidden;
@@ -133,4 +134,5 @@
 @media (prefers-reduced-motion:reduce) {
   .team-agent__surface, .team-agent__portrait { transform: none; transition: none; }
   .team-agent__reflection, .team-agent__reveal { transition: none; }
+  .team-greeting__phrase { animation: none; }
 }

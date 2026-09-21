@@ -184,10 +184,10 @@ export default function ChatComposer({
           onClick={submit}
           disabled={!value.trim() || submitting || disabled}
           className={cn(
-            'h-9 w-9 shrink-0 rounded-xl flex items-center justify-center transition-all',
+            'ag-btn h-9 w-9 shrink-0 rounded-lg flex items-center justify-center',
             value.trim() && !submitting && !disabled
-              ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20'
-              : 'bg-muted text-muted-foreground/50 cursor-not-allowed',
+              ? 'ag-btn-primary'
+              : 'ag-btn-secondary text-muted-foreground/50 cursor-not-allowed',
           )}
           aria-label="Send"
         >

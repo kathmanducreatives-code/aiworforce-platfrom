@@ -124,7 +124,7 @@ export default function PlanDetailView({ planId, compact }: Props) {
             {a.description && <p className="text-sm text-muted-foreground mt-1">{a.description}</p>}
           </div>
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => handleDecide(a.id, 'approve')} className="bg-primary hover:bg-primary/90">
+            <Button size="sm" onClick={() => handleDecide(a.id, 'approve')}>
               <Check className="h-4 w-4 mr-1.5" /> Approve
             </Button>
             <Button size="sm" variant="outline" onClick={() => handleDecide(a.id, 'reject')}>

@@ -10,10 +10,12 @@ for (
     SUPABASE_ANON_KEY: "anon-key",
     SUPABASE_SERVICE_ROLE_KEY: "service-key",
     OPENAI_API_KEY: "test-key",
-    // The surfaces route through the Lovable gateway; without a key
-    // `generateText` refuses before it reaches the network and every
-    // conversational answer degrades to CONVERSE_UNAVAILABLE.
-    LOVABLE_API_KEY: "test-gateway-key",
+    // The conversational surfaces intend Anthropic (`TASK_MODELS.pilot_chat`),
+    // and that task allows no fallback — so without this key `generateText`
+    // refuses before the network and every answer degrades to
+    // CONVERSE_UNAVAILABLE. Which is the point: a missing credential is now a
+    // loud refusal rather than a quiet demotion to another model.
+    ANTHROPIC_API_KEY: "test-anthropic-key",
   })
 ) Deno.env.set(k, v);
 

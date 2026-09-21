@@ -69,15 +69,18 @@ Deno.test("the rule lives ONCE, in the shared layout — no page carries collaps
   const layout = code(await read("src/components/MainLayout.tsx"));
   assert(layout.includes("collapsedFor(location.pathname, readPrefs(sessionStore))"), "seeded and re-derived from the route");
   assert(layout.includes("onToggle={toggleSidebar}") && layout.includes("withToggle(location.pathname"), "manual toggle recorded");
-  assert(/transition-\[margin\] duration-200/.test(layout), "a quiet ~200ms transition, no layout jump");
+  // The content margin eases in step with the sidebar's own width (nav/sidebar.css).
+  const ms = layout.match(/transition-\[margin\] \[transition-duration:(\d+)ms\]/);
+  assert(ms && Number(ms[1]) >= 180 && Number(ms[1]) <= 280, "a quiet ~200–260ms transition, no layout jump");
   assert(layout.includes("{isMobile && (") && layout.includes("<MobileHeader"), "mobile keeps its own drawer header");
   for (const page of ["src/pages/Content.tsx", "src/pages/Signals.tsx", "src/pages/Leads.tsx"]) {
     let s = "";
     try { s = code(await read(page)); } catch { continue; }
     assert(!/setIsSidebarCollapsed|sidebarPolicy|collapsedFor/.test(s), `${page} must not own sidebar state`);
   }
-  const sidebar = await read("src/components/Sidebar.tsx");
-  const m = sidebar.match(/collapsed \? 'w-\[(\d+)px\]'/);
+  // The rail's widths are the sidebar design system's contract, declared once in its CSS.
+  const sidebar = await read("src/components/nav/sidebar.css");
+  const m = sidebar.match(/--sb-w-collapsed:\s*(\d+)px/);
   assert(m && Number(m[1]) >= 60 && Number(m[1]) <= 72, "collapsed width within 60–72px");
 });
 

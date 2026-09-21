@@ -21,7 +21,7 @@ import {
 import type { ContentItem, ContentItemVersion } from "@/lib/content/contentItems";
 import type { StudioAsset } from "@/components/content/ContentStudioEditor";
 import { SCRIBE_ACTIONS, versionLabel } from "@/lib/content/contentStudioModel";
-import scribeImg from "@/assets/agents/scribe.webp";
+import AgentPortrait from "@/components/agents/AgentPortrait";
 import { ACCENT, FIELD, ROW_IDLE, ROW_SELECTED } from "@/components/content/studioStyles";
 
 type Tab = "scribe" | "history";
@@ -80,7 +80,7 @@ export default function ScribePanel({
     <aside className="flex h-full w-[320px] shrink-0 flex-col border-l border-white/[0.06] bg-[rgba(8,11,10,0.62)] backdrop-blur-2xl" aria-label="Scribe panel">
       {/* identity + tabs */}
       <div className="flex items-center gap-3 px-4 pb-3 pt-4">
-        <img src={scribeImg} alt="" className="h-8 w-8 rounded-full border border-emerald-500/25 object-cover" />
+        <AgentPortrait agentId="scribe" size={32} decorative />
         <div className="min-w-0 flex-1 leading-tight">
           <p className="text-[13.5px] font-semibold text-foreground">Scribe</p>
           <p className="text-[11.5px] text-muted-foreground/65">Content Strategist</p>

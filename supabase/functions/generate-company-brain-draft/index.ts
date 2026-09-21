@@ -62,7 +62,10 @@ function buildDeps(): {
 } {
   const apifyToken = Deno.env.get("APIFY_API_TOKEN");
   const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
-  const llmReady = !!Deno.env.get("ANTHROPIC_API_KEY") || !!Deno.env.get("LOVABLE_API_KEY");
+  // The vendors `aiProvider` can actually reach. `LOVABLE_API_KEY` used to
+  // count here; the gateway is retired, so counting it would report the draft
+  // as available and then refuse with `no_provider_for_task`.
+  const llmReady = !!Deno.env.get("ANTHROPIC_API_KEY") || !!Deno.env.get("OPENAI_API_KEY");
 
   const deps: ResearchDeps = { actorId };
 

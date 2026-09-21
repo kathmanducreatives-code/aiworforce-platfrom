@@ -507,10 +507,8 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
           size="sm"
           onClick={handleStart}
           disabled={blocked || routingMismatch}
-          className={`font-bold flex items-center gap-1.5 h-8 px-3.5 rounded-lg transition-colors ${
-            blocked
-              ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-white/[0.04]'
-              : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_16px_rgba(16,185,129,0.18)]'
+          className={`ag-btn ag-btn-primary font-medium flex items-center gap-1.5 h-8 px-3.5 rounded-lg ${
+            blocked ? 'cursor-not-allowed opacity-45' : ''
           }`}
         >
           <Play className="h-3.5 w-3.5" /> Start Workflow

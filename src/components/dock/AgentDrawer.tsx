@@ -1,3 +1,4 @@
+import AgentPortrait from '@/components/agents/AgentPortrait';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { DockAgent, deptColor } from '@/data/dockAgents';
 import { cn } from '@/lib/utils';
@@ -30,7 +31,7 @@ export default function AgentDrawer({ agent, open, onOpenChange, onSendCommand }
               'w-14 h-14 rounded-full ring-2 overflow-hidden shrink-0 bg-card',
               dept.ring,
             )}>
-              <img src={agent.image} alt={agent.name} className="w-full h-full object-cover" />
+              <AgentPortrait agentId={agent.id} name={agent.name} src={agent.image} ring={false} />
             </div>
             <div className="flex-1 min-w-0 text-left">
               <SheetTitle className="text-foreground text-base font-semibold">{agent.name}</SheetTitle>
@@ -100,7 +101,7 @@ export default function AgentDrawer({ agent, open, onOpenChange, onSendCommand }
             </button>
             <button
               onClick={() => onSendCommand(agent)}
-              className="flex items-center justify-center gap-1.5 text-xs font-semibold py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
+              className="ag-btn ag-btn-primary rounded-lg font-medium flex items-center justify-center gap-1.5 text-xs py-2.5"
             >
               <Send className="h-3 w-3" />
               Send command

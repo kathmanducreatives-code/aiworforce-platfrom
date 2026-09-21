@@ -126,7 +126,7 @@ export const DEPT_CONFIG: Record<AgentId, DeptConfig> = {
     ringHex: '#60a5fa',
     glowRgba: 'rgba(96,165,250,0.35)',
     iconKey: 'eye',
-    route: '/competitors',
+    route: '/signals',
     badge: (t) => t.competitorSignals || null,
     stats: (t) => [
       { label: 'Competitor notes', value: t.competitorSignals },
@@ -135,8 +135,8 @@ export const DEPT_CONFIG: Record<AgentId, DeptConfig> = {
       { label: 'Monitoring', value: 'Live', tone: 'good' },
     ],
     actions: () => [
-      { label: 'Open Competitor Feed', route: '/competitors', primary: true },
-      { label: 'View Research', route: '/competitor-intelligence' },
+      { label: 'Open Signal Feed', route: '/signals', primary: true },
+      { label: 'View Research', route: '/leads/research' },
     ],
   },
   scribe: {

@@ -35,7 +35,7 @@ import {
   type VerifierDeps, type VerifierFinding,
 } from "./claimVerifier.ts";
 import { CLAIM_REGISTRY, type ClaimDefinition } from "./evidenceGapRouter.ts";
-import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
+import { PRODUCTION_READINESS, type ReadinessPolicy, routeActorReady } from "./routeReadiness.ts";
 import { relevantVerifierActors, type ClaimPlan } from "./claimPlan.ts";
 
 export const CLAIM_VERIFICATION_PHASE_VERSION = "claim-verification-phase-v1" as const;
@@ -118,7 +118,17 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
     const deps: VerifierDeps = {
       ...i.deps,
       // THE ONE READINESS AUTHORITY, for this verifier's capability.
-      ready: (actor) => !!route && policy.decide(actor, route.capability).executable && !(i.unavailable?.(actor) ?? false),
+      // THE SAME QUESTION EVERY OTHER LAYER ASKS. This used to call
+      // `policy.decide` directly, which skips the provider-class contract that
+      // `routeActorReady` enforces — a weaker question than the graph, the
+      // router, the planner and the runtime all ask. It was weaker because the
+      // authority could not model a non-Apify provider: Firecrawl has no actor
+      // card, so the strict check refused a provider that is declared READY and
+      // runs every day. `providerClassOf` models it now, so the exemption is
+      // gone and the verifier asks what everyone else asks.
+      ready: (actor) =>
+        !!route && routeActorReady(actor, route.capability, policy).ready &&
+        !(i.unavailable?.(actor) ?? false),
     };
     const result = await verifier.verify(targets, deps, { mission_id: i.mission_id, pending: mine });
     let recorded = 0;

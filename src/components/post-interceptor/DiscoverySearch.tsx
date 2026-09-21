@@ -102,7 +102,7 @@ const DiscoverySearch = ({ onIntercept, onSearch }: DiscoverySearchProps) => {
                     <button
                         type="submit"
                         disabled={loading || !keywords.trim()}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 hover:shadow-[0_0_16px_-2px_hsl(var(--primary)/0.5)] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                        className="ag-btn ag-btn-primary rounded-lg font-medium flex items-center gap-2 px-5 py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
                         <Zap className="h-4 w-4" />
                         {loading ? 'Searching...' : 'Find Viral Posts'}

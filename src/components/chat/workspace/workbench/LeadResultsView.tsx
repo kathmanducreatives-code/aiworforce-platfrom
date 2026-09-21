@@ -868,12 +868,12 @@ function ActionButton({ label, busyLabel, onClick, disabled, busy, primary, titl
       onClick={onClick}
       title={title}
       disabled={off}
-      className={`h-9 px-3.5 rounded-lg text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors ${
+      className={`ag-btn h-9 px-3.5 rounded-lg text-[13px] font-medium inline-flex items-center gap-1.5 ${
         off
-          ? 'border border-white/[0.07] bg-white/[0.02] text-[#6e7681] cursor-not-allowed'
+          ? 'ag-btn-secondary text-[#6e7681] opacity-60 cursor-not-allowed'
           : primary
-          ? 'bg-emerald-500 hover:bg-emerald-400 text-black'
-          : 'border border-white/[0.1] hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06] text-[#C9D1D9]'
+          ? 'ag-btn-primary'
+          : 'ag-btn-secondary'
       }`}
     >
       {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

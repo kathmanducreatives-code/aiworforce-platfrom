@@ -203,10 +203,10 @@ function NextStepCard({ workbenchRows, conversationId }: { workbenchRows?: any[]
         <button
           onClick={handleClick}
           disabled={!step.enabled}
-          className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12.5px] font-bold transition-colors ${
+          className={`ag-btn shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12.5px] font-medium ${
             step.enabled
-              ? 'bg-emerald-500 text-black hover:bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
-              : 'bg-neutral-800 text-neutral-500 border border-white/[0.04] cursor-not-allowed'
+              ? 'ag-btn-primary'
+              : 'ag-btn-secondary opacity-45 cursor-not-allowed'
           }`}
         >
           <ArrowRight className="h-3.5 w-3.5" />

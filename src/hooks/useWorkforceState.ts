@@ -31,7 +31,9 @@ export interface DecisionItem {
 }
 
 export function useWorkforceState(workspaceId: string | null) {
-  const { signals, drafts, savedOutputs, loading } = useSignalFeed(workspaceId);
+  // The ONE signal read on the dashboard. The Live Intelligence bar consumes it
+  // through `signalFeed` below rather than calling the hook a second time.
+  const { signals, clusters, relevance, coverage, error: signalError, refresh: refreshSignals, drafts, savedOutputs, loading } = useSignalFeed(workspaceId);
   const { approvals } = useApprovals(workspaceId);
   const { data: brain } = useCompanyBrain();
 
@@ -164,6 +166,7 @@ export function useWorkforceState(workspaceId: string | null) {
       timeline,
       decisions,
       totals: { signals: signals.length, outreachDrafts, contentDrafts, approvals: approvalsCount, hotSignals, competitorSignals },
+      signalFeed: { signals, clusters, relevance, coverage, loading, error: signalError, refresh: refreshSignals },
     };
-  }, [signals, drafts, savedOutputs, approvals, brain, loading]);
+  }, [signals, clusters, relevance, coverage, signalError, refreshSignals, drafts, savedOutputs, approvals, brain, loading]);
 }

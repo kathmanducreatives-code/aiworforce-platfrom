@@ -8,6 +8,7 @@ import CommandDock from "./dock/CommandDock";
 import ChatWorkspace from "./chat/workspace/ChatWorkspace";
 import AgentBuilderModal from "./agents/AgentBuilderModal";
 import RouteErrorBoundary from "./RouteErrorBoundary";
+import PageTransition from "./layout/PageTransition";
 import { AmbientBackdrop } from "./layout/AmbientBackdrop";
 import WorkspaceGate from "./WorkspaceGate";
 import OnboardingGate from "./OnboardingGate";
@@ -72,25 +73,27 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         )}
 
         <main
-          className={`min-h-screen overflow-auto transition-[margin] duration-200 ease-out relative z-10 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
+          className={`min-h-screen overflow-auto transition-[margin] [transition-duration:240ms] [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] relative z-10 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
             isMobile ? 'ml-0 pt-[72px]' : isSidebarCollapsed ? 'ml-[68px]' : 'ml-[260px]'
           }`}
         >
           {/* Top Command Bar */}
-          {!isMobile && (
+          {!isMobile && location.pathname !== '/dashboard' && (
             <div className="sticky top-0 z-30 backdrop-blur-md bg-[#030303]/40 border-b border-white/[0.03] px-6 py-2.5 flex items-center justify-end">
               <CommandBar onOpen={() => setCommandOpen(true)} />
             </div>
           )}
 
           <div className={isMobile ? 'px-4 py-6 pb-32' : 'pb-32'}>
-            <RouteErrorBoundary>
-              <WorkspaceGate>
-                <OnboardingGate>
-                  {children}
-                </OnboardingGate>
-              </WorkspaceGate>
-            </RouteErrorBoundary>
+            <PageTransition routeKey={location.pathname}>
+              <RouteErrorBoundary>
+                <WorkspaceGate>
+                  <OnboardingGate>
+                    {children}
+                  </OnboardingGate>
+                </WorkspaceGate>
+              </RouteErrorBoundary>
+            </PageTransition>
           </div>
         </main>
 

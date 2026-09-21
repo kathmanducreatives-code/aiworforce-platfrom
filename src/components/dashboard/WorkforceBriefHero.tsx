@@ -3,6 +3,7 @@ import { Inbox, Radar, Workflow, Moon, Sun } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
 import NotificationCenter from "@/components/shared/NotificationCenter";
+import { greetingFor } from "@/lib/greeting";
 
 interface Props {
   signals: number;
@@ -10,12 +11,7 @@ interface Props {
   approvals: number;
 }
 
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
+const greeting = () => greetingFor(new Date());
 
 function sendChat(text: string) {
   window.dispatchEvent(new CustomEvent("chat:send", { detail: { text } }));
@@ -66,7 +62,7 @@ export default function WorkforceBriefHero({ signals, drafts, approvals }: Props
       <div className="mt-6 flex flex-wrap gap-2">
         <button
           onClick={() => navigate("/awaiting-you")}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+          className="ag-btn ag-btn-primary rounded-lg font-medium inline-flex items-center gap-2 px-4 py-2.5 text-sm"
         >
           <Inbox className="h-4 w-4" />
           Review approvals

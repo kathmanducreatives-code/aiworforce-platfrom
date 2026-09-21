@@ -178,10 +178,10 @@ const LeadRow = ({ lead, onMarkSent }: LeadRowProps) => {
                         onClick={handleCopy}
                         disabled={!note}
                         className={cn(
-                            'flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all flex-1 lg:flex-none',
+                            'ag-btn flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium flex-1 lg:flex-none',
                             copied
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : 'bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-[0_0_12px_-2px_hsl(var(--primary)/0.4)] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed'
+                                ? 'ag-btn-secondary text-emerald-300'
+                                : 'ag-btn-primary disabled:opacity-40 disabled:cursor-not-allowed'
                         )}
                     >
                         {copied ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}

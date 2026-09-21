@@ -150,7 +150,11 @@ export function installFakeNetwork(opts: {
         || href.includes("ai.gateway.lovable.dev") || href.includes("api.anthropic.com")) {
       const payload = JSON.parse(String(rawBody ?? "{}"));
       const msgs = (payload.messages ?? []) as Array<{ role: string; content: string }>;
-      const system = msgs.find((m) => m.role === "system")?.content ?? "";
+      // Anthropic carries the system prompt in a top-level `system` field;
+      // OpenAI carries it as a `role: "system"` message. Reading only the
+      // latter made every Anthropic call look like it had no system prompt.
+      const system = (typeof payload.system === "string" ? payload.system : "")
+        || (msgs.find((m) => m.role === "system")?.content ?? "");
       const user = msgs.filter((m) => m.role === "user").map((m) => m.content).join("\n");
       const reply = opts.modelReplies.find((r) => r.when(user, system));
       if (!reply) {
@@ -160,6 +164,19 @@ export function installFakeNetwork(opts: {
       state.modelCalls.push({ system, user, reply: reply.content });
       const content = typeof reply.content === "string"
         ? reply.content : JSON.stringify(reply.content);
+      // EACH VENDOR'S OWN SHAPE. This used to answer every host with OpenAI's
+      // `choices[].message.content`, which was fine while the chat surfaces ran
+      // through an OpenAI-compatible gateway. They call Anthropic directly now,
+      // and Anthropic answers `content[].text` — a double that returns the
+      // wrong shape makes a working call look like an empty reply.
+      if (href.includes("api.anthropic.com")) {
+        return ok({
+          content: [{ type: "text", text: content }],
+          stop_reason: "end_turn",
+          usage: { input_tokens: 1, output_tokens: 1 },
+          model: payload.model ?? "test",
+        });
+      }
       return ok({
         choices: [{ message: { content }, finish_reason: "stop" }],
         usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },

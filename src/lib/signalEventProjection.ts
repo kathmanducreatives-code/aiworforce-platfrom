@@ -98,7 +98,11 @@ export function normalizeSignalEventRow(row: RawSignalEventRow): FeedSignal {
       origin: row.origin ?? null,
       subject_type: row.subject_type ?? null,
       subject_key: row.subject_key ?? null,
+      // When the event HAPPENED, beside its basis. Freshness ranking must use
+      // this, never `created_at` (which is when Agentory looked).
+      occurred_at: row.occurred_at ?? null,
       occurred_at_basis: row.occurred_at_basis ?? null,
+      confidence: row.confidence ?? null,
       verification_status: row.verification_status ?? null,
     },
   };

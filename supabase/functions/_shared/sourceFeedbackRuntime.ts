@@ -20,7 +20,7 @@
 //
 // AUTHORITIES REUSED, never duplicated:
 //   model gateway            aiProvider.ts, via intelligence/plannerWrapper.ts
-//   secret resolution        aiProvider.ts (ANTHROPIC_API_KEY / LOVABLE_API_KEY)
+//   secret resolution        aiProvider.ts (ANTHROPIC_API_KEY / OPENAI_API_KEY)
 //   prompt safety            intelligence/promptAssembly.ts (policy, fences, neutralize)
 //   deterministic decision   hiringSourcePlan.ts (decideNextAction)
 //   action union             hiringSourcePlan.ts (ApprovedSourceNextAction)
@@ -105,7 +105,7 @@ export function modelGatewayAvailable(read?: EnvReader): boolean {
   try {
     const get: EnvReader = read ?? ((k) => Deno.env.get(k));
     return Boolean(String(get("ANTHROPIC_API_KEY") ?? "").trim())
-      || Boolean(String(get("LOVABLE_API_KEY") ?? "").trim());
+      || Boolean(String(get("OPENAI_API_KEY") ?? "").trim());
   } catch {
     return false;
   }

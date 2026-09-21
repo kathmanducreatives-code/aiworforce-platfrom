@@ -379,18 +379,58 @@ export function normalizeLinkedInCompanyCandidate(
  * fallback for a row that failed to parse. Order is the provider's, and
  * duplicates are dropped so a company with three London entries reads once.
  */
-export function enrichedGeography(raw: unknown): string | null {
-  if (!Array.isArray(raw)) return null;
+/** One office, as the provider describes it. */
+export interface LinkedInLocationEntry {
+  /** "London, United Kingdom" — the provider's rendering, or city+country. */
+  text: string;
+  /** The provider's own `headquarter` flag. Never inferred from position. */
+  is_headquarters: boolean;
+}
+
+/**
+ * Read `locations[]` into plain text, entry by entry.
+ *
+ * Extracted so there is ONE implementation of this shape. The Company Brain's
+ * company enrichment used to parse the same payload with
+ * `asStringArray(row.locations)`, which yields nothing at all for an array of
+ * objects — so every company researched through onboarding lost its offices and
+ * its headquarters silently, while the call reported success.
+ *
+ * String entries are OPT-IN. `enrichedGeography` has always treated a bare
+ * string inside `locations[]` as malformed (a pinned test: `[null, 3, "x"]` is
+ * null, not "x"), and that judgement is not this refactor's to change. The
+ * Company Brain path opts in, because the company actors it calls do sometimes
+ * send plain strings there.
+ */
+export function linkedInLocationEntries(
+  raw: unknown, opts: { acceptStrings?: boolean } = {},
+): LinkedInLocationEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: LinkedInLocationEntry[] = [];
   const seen = new Set<string>();
-  for (const entry of raw as Record<string, unknown>[]) {
-    if (!entry || typeof entry !== "object") continue;
-    const parsed = entry.parsed as Record<string, unknown> | undefined;
-    const text = s(parsed?.text) ??
-      [s(entry.city), s(parsed?.countryFull) ?? s(entry.country)]
-        .filter(Boolean).join(", ");
-    if (text) seen.add(text);
+  for (const entry of raw as unknown[]) {
+    let text: string | null = null;
+    let hq = false;
+    if (typeof entry === "string") {
+      if (!opts.acceptStrings) continue;
+      text = s(entry);
+    } else if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+      const e = entry as Record<string, unknown>;
+      const parsed = e.parsed as Record<string, unknown> | undefined;
+      text = s(parsed?.text) ??
+        ([s(e.city), s(parsed?.countryFull) ?? s(e.country)].filter(Boolean).join(", ") || null);
+      hq = e.headquarter === true || e.isHeadquarter === true || e.is_headquarters === true;
+    }
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push({ text, is_headquarters: hq });
   }
-  return seen.size > 0 ? [...seen].join("; ") : null;
+  return out;
+}
+
+export function enrichedGeography(raw: unknown): string | null {
+  const entries = linkedInLocationEntries(raw);
+  return entries.length > 0 ? entries.map((e) => e.text).join("; ") : null;
 }
 
 export function normalizeLinkedInCompanyEnriched(
