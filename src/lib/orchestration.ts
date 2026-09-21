@@ -2,6 +2,7 @@
 // task plans, activity feed, approvals). All queries are workspace-scoped.
 
 import { supabase } from '@/integrations/supabase/client';
+import { invokeFunction } from '@/lib/agentoryApi';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { projectTaskListRow, TASK_LIST_COLUMNS } from './taskListProjection';
 
@@ -393,12 +394,10 @@ export async function submitInstruction(
   userInstruction: string,
   opts?: { agentSlug?: string },
 ): Promise<SubmitResult> {
-  const { data, error } = await supabase.functions.invoke('orchestrate', {
-    body: {
-      workspace_id: workspaceId,
-      user_instruction: userInstruction,
-      ...(opts?.agentSlug ? { target_agent_slug: opts.agentSlug } : {}),
-    },
+  const { data, error } = await invokeFunction('orchestrate', {
+    workspace_id: workspaceId,
+    user_instruction: userInstruction,
+    ...(opts?.agentSlug ? { target_agent_slug: opts.agentSlug } : {}),
   });
   if (error) throw error;
   return data as SubmitResult;
@@ -413,7 +412,7 @@ export async function decideApproval(approvalId: string, action: 'approve' | 're
 }
 
 export async function pingOrchestrate() {
-  const { data, error } = await supabase.functions.invoke('orchestrate', { body: { ping: true } });
+  const { data, error } = await invokeFunction('orchestrate', { ping: true });
   if (error) throw error;
   return data as { ok: boolean };
 }

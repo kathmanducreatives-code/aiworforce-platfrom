@@ -15,4 +15,16 @@ VITE_SUPABASE_URL=$url
 VITE_SUPABASE_PUBLISHABLE_KEY=$key
 VITE_SUPABASE_ANON_KEY=$key
 VITE_SUPABASE_PROJECT_ID=local
+
+# ── THE RAILWAY API, LOCALLY ────────────────────────────────────────────────
+#
+# Which functions the browser sends to the local API instead of the local edge
+# runtime. Empty (or absent) means all of them go to Supabase, which is what a
+# production build does today. Start the API with:
+#
+#   bash scripts/local-supabase/start-local-api.sh
+#
+# Narrow it to try one route at a time, e.g. VITE_AGENTORY_API_FUNCTIONS=pilot-chat
+VITE_AGENTORY_API_URL=${AGENTORY_API_URL:-http://127.0.0.1:8795}
+VITE_AGENTORY_API_FUNCTIONS=${AGENTORY_API_FUNCTIONS:-*}
 ENV

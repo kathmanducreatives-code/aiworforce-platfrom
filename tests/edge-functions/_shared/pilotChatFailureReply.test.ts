@@ -30,10 +30,18 @@ const PILOT = await Deno.readTextFile(
   new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url),
 );
 
-/** The `Deno.serve(...)` call and everything inside it. */
+/**
+  * The wrapper around `handlePilotChat` — the try/catch and the ledger drain.
+  *
+  * This used to read from `Deno.serve(`, because the wrapper WAS the serve
+  * callback. It is now `servePilotChat`, an exported function that `Deno.serve`
+  * calls and that the Railway API mounts, so that both front doors fail and
+  * bill identically. What is pinned below is unchanged: whatever serves
+  * pilot-chat, the catch must be around it.
+  */
 function serveBlock(): string {
-  const i = PILOT.lastIndexOf("Deno.serve(");
-  assert(i !== -1, "pilot-chat must still serve");
+  const i = PILOT.indexOf("export async function servePilotChat");
+  assert(i !== -1, "pilot-chat must still have a wrapper around the handler");
   return PILOT.slice(i);
 }
 
@@ -45,7 +53,7 @@ function serveBlock(): string {
  */
 function userFacingText(): string {
   const start = PILOT.indexOf("function failureMessageFor");
-  const body = PILOT.slice(start, PILOT.indexOf("\nDeno.serve(", start));
+  const body = PILOT.slice(start, PILOT.indexOf("\nexport async function servePilotChat", start));
   return (body.match(/"[^"]{20,}"/g) ?? []).join(" ");
 }
 

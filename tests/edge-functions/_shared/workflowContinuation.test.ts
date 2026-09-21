@@ -380,5 +380,9 @@ Deno.test("16. nothing here can start an Actor", async () => {
     new URL("../../../supabase/functions/continue-workflow/index.ts", import.meta.url));
   assertFalse(fn.includes("api.apify.com"), "this function never talks to Apify directly");
   assertEquals((fn.match(/await fetch\(/g) ?? []).length, 1, "exactly one outbound call: run-agent");
-  assert(fn.includes("/functions/v1/run-agent"));
+  // The destination is resolved rather than hard-coded, so run-agent can move
+  // to the Railway API without this function being edited. It is still
+  // run-agent, and still the only thing this function calls.
+  assert(fn.includes('functionUrl("run-agent"'),
+    "the one outbound call must resolve run-agent, and nothing else");
 });

@@ -38,6 +38,7 @@ import {
 import {
   getLeadIntelligenceCapabilities,
 } from "../_shared/leadIntelligencePolicy.ts";
+import { functionUrl } from "../_shared/functionEndpoints.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -576,7 +577,7 @@ function stripFences(s: string): string {
 
 // ---------- Main handler ----------
 
-Deno.serve(async (req) => {
+async function handleOrchestrate(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
@@ -1716,9 +1717,9 @@ Return ONLY valid JSON, no prose, no markdown:
     }
 
     invokeInBackground({
-      url: v2Route
-        ? `${SUPABASE_URL}/functions/v1/enqueue-lead-mission`
-        : `${SUPABASE_URL}/functions/v1/run-agent`,
+      // WHERE, asked rather than assumed — see functionEndpoints.ts. Each
+      // destination moves to the Railway API independently of the other.
+      url: functionUrl(v2Route ? "enqueue-lead-mission" : "run-agent", (k) => Deno.env.get(k)),
       token: SUPABASE_SERVICE_ROLE_KEY,
       log: (m, meta) => console.error("[orchestrate][kickoff]", m, meta),
       // enqueue takes the kickoff under `request`; run-agent takes it directly.
@@ -1764,4 +1765,15 @@ Return ONLY valid JSON, no prose, no markdown:
     console.error("[orchestrate] unexpected:", err);
     return json({ error: "internal_error", details: String(err) }, 500);
   }
-});
+}
+
+export { handleOrchestrate };
+
+// ── THE SERVER STARTS UNLESS AN IN-PROCESS CALLER IS IMPORTING THIS MODULE ──
+//
+// The same guard, for the same reason, as run-agent and pilot-chat: the Railway
+// API imports this handler and mounts it on a route, and a second `Deno.serve`
+// in that process would fight the API's own listener for the port. An explicit
+// opt-out that the edge deployment never sets cannot fail the way
+// `import.meta.main` can if the runtime ever loads this file as a dependency.
+if (!Deno.env.get("ORCHESTRATE_IMPORT_ONLY")) Deno.serve((req) => handleOrchestrate(req));

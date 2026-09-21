@@ -24,6 +24,7 @@ import {
   type SelectDb,
 } from "../_shared/lineageLease.ts";
 import { loadV2OwnedTaskIds } from "../_shared/leadMissionV2Request.ts";
+import { functionUrl } from "../_shared/functionEndpoints.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -289,7 +290,7 @@ Deno.serve(async (req) => {
   let invokeStatus = 0;
   let invokeBody: unknown = null;
   try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
+    const res = await fetch(functionUrl("run-agent", (k) => Deno.env.get(k)), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

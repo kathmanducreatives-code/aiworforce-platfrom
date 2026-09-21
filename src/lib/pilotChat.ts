@@ -7,7 +7,7 @@
 // realtime subscription in useChatConversation just like any other turn,
 // so callers usually only need result.conversation_id.
 
-import { supabase } from '@/integrations/supabase/client';
+import { invokeFunction } from '@/lib/agentoryApi';
 
 export interface PilotChatInput {
   message: string;
@@ -57,7 +57,7 @@ export type PilotChatResult =
     };
 
 export async function pilotChat(input: PilotChatInput): Promise<PilotChatResult> {
-  const { data, error } = await supabase.functions.invoke('pilot-chat', { body: input });
+  const { data, error } = await invokeFunction('pilot-chat', input);
   if (error) {
     const context = typeof error.context === 'object' && error.context !== null ? error.context as { json?: () => Promise<unknown>; text?: () => Promise<string> } : null;
     try {

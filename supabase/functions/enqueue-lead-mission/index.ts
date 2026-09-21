@@ -25,7 +25,7 @@ const cors = {
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-Deno.serve(async (req) => {
+async function handleEnqueueLeadMission(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
@@ -66,4 +66,11 @@ Deno.serve(async (req) => {
     engine: "v2_worker",
     requested_lead_count: forced.requested_lead_count,
   }, 201);
-});
+}
+
+export { handleEnqueueLeadMission };
+
+// Same guard as orchestrate, run-agent and pilot-chat — see run-agent/index.ts.
+if (!Deno.env.get("ENQUEUE_LEAD_MISSION_IMPORT_ONLY")) {
+  Deno.serve((req) => handleEnqueueLeadMission(req));
+}

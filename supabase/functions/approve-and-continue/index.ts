@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { functionUrl } from "../_shared/functionEndpoints.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -82,7 +83,7 @@ Deno.serve(async (req) => {
     // If approved — fire next step if one exists
     const nextStep = approval.payload?.next_step;
     if (nextStep) {
-      await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/run-agent`, {
+      await fetch(functionUrl("run-agent", (k) => Deno.env.get(k)), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

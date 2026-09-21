@@ -442,6 +442,7 @@ import { shouldSkipBroadResearch } from "../_shared/broadResearchPolicy.ts";
 import type { CompanyEnrichmentObservability } from "../_shared/companyEnrichmentObservability.ts";
 import { emptySignalEnrichmentObservability, type SignalEnrichmentObservability } from "../_shared/signalEnrichmentObservability.ts";
 import type { TimingAssessment } from "../_shared/timingAssessment.ts";
+import { functionUrl, functionsBaseUrl } from "../_shared/functionEndpoints.ts";
 
 
 /**
@@ -6972,9 +6973,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             continuationIndex: progress.continuations_used,
           }, {
             fetch: (url, init) => fetch(url, init),
-            functionsBaseUrl: Deno.env.get("SUPABASE_URL")
-              ? `${Deno.env.get("SUPABASE_URL")}/functions/v1`
-              : null,
+            functionsBaseUrl: functionsBaseUrl((k) => Deno.env.get(k)),
+            // The resolved destination wins when run-agent has moved to the
+            // Railway API, where it is `/api/run-agent`, not `<base>/run-agent`.
+            runAgentUrl: functionUrl("run-agent", (k) => Deno.env.get(k)),
             serviceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? null,
             log: (m, meta) => console.log("[run-agent][auto-continuation]", m, meta),
           });
@@ -8052,7 +8054,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     // leaving the plan parked one step further along with a completed step 0
     // and nothing driving step 1. Identical symptom, later checkpoint.
     invokeInBackground({
-      url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/run-agent`,
+      url: functionUrl("run-agent", (k) => Deno.env.get(k)),
       token: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       log: (m, meta) => console.error("[run-agent][chain]", m, meta),
       body: {

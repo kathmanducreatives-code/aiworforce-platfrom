@@ -139,7 +139,7 @@ Deno.test("6. an unread request fails honestly instead of delegating", () => {
 });
 
 Deno.test("7. the catch preserves the category on the row", () => {
-  const serve = SRC.slice(SRC.indexOf("Deno.serve("));
+  const serve = SRC.slice(SRC.indexOf("export async function servePilotChat"));
   assert(serve.includes("failureMetadata(e"),
     "the reason is in scope at the catch and must reach the database");
 });

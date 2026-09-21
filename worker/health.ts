@@ -132,13 +132,26 @@ export function startHealthServer(
   port: number,
   view: () => HealthView,
   log: (msg: string, meta?: unknown) => void,
+  /**
+   * The Railway API, when this process also serves one.
+   *
+   * ONE LISTENER, because the platform gives one port. The API answers first
+   * and returns null for anything that is not `/api/…`, leaving the health
+   * paths below exactly as they were. A process with no API passes nothing
+   * here and behaves identically to before.
+   */
+  api?: (req: Request) => Promise<Response | null>,
 ): { close: () => Promise<void> } {
   const server = Deno.serve({
     port,
     hostname: "0.0.0.0",
     onListen: ({ hostname, port }) => log("[worker] health listening", { hostname, port }),
-  }, (req) => {
+  }, async (req) => {
     const path = new URL(req.url).pathname;
+    if (api) {
+      const served = await api(req);
+      if (served) return served;
+    }
     if (path !== "/" && path !== "/health" && path !== "/healthz") {
       return new Response("not found", { status: 404 });
     }

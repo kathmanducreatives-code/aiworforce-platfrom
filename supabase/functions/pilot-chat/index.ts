@@ -133,6 +133,7 @@ import {
 } from "../_shared/executionLedger.ts";
 import { getLeadIntelligenceCapabilities } from "../_shared/leadIntelligencePolicy.ts";
 import { compileFirstProviderCall } from "../_shared/leadCapabilityEngine.ts";
+import { functionUrl } from "../_shared/functionEndpoints.ts";
 import {
   buildPaidExecutionPreflight, preflightDryRun,
 } from "../_shared/leadPaidExecutionPreflight.ts";
@@ -1170,7 +1171,9 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
     }
   }
 
-  const orchResponse = await fetch(`${a.SUPABASE_URL}/functions/v1/orchestrate`, {
+  // orchestrate may be served by Supabase or by the Railway API; the caller
+  // does not need to know which. See functionEndpoints.ts.
+  const orchResponse = await fetch(functionUrl("orchestrate", (k) => Deno.env.get(k)), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -4269,7 +4272,18 @@ export { handlePilotChat };
 // if the edge runtime ever loaded this file as a dependency rather than an
 // entry point, pilot-chat would silently serve nothing. An explicit opt-out
 // variable that production never sets cannot fail that way.
-if (!Deno.env.get("PILOT_CHAT_IMPORT_ONLY")) Deno.serve(async (req) => {
+/**
+ * THE WHOLE REQUEST, INCLUDING HOW IT FAILS.
+ *
+ * `handlePilotChat` answers the request; everything below — the unhandled-error
+ * path that writes the failure into the conversation, and the `finally` that
+ * drains model spend to the ledger on every exit — is the rest of the contract.
+ * The Railway API mounts THIS, not the inner handler, so a request served from
+ * Railway fails, reports and bills exactly the way the edge one does. Extracted
+ * rather than copied into the router: two copies of this would drift, and the
+ * half that drifted would be the half nobody reads until an outage.
+ */
+export async function servePilotChat(req: Request): Promise<Response> {
   const fail: FailureContext = {};
   try {
     return await handlePilotChat(req, fail);
@@ -4360,4 +4374,6 @@ if (!Deno.env.get("PILOT_CHAT_IMPORT_ONLY")) Deno.serve(async (req) => {
       );
     }
   }
-});
+}
+
+if (!Deno.env.get("PILOT_CHAT_IMPORT_ONLY")) Deno.serve((req) => servePilotChat(req));

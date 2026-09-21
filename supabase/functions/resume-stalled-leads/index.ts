@@ -38,6 +38,7 @@ import {
   lineageLeaseEnforced, lineageRootOf, readLineageLease, type SelectDb,
 } from "../_shared/lineageLease.ts";
 import { LEAD_EXECUTION_CALLS_TABLE } from "../_shared/executionLedger.ts";
+import { functionUrl } from "../_shared/functionEndpoints.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -409,6 +410,8 @@ Deno.serve(async (req) => {
     const outcome = await dispatchContinuation(request, {
       fetch: (url, init) => fetch(url, init),
       functionsBaseUrl: `${SUPABASE_URL.replace(/\/+$/, "")}/functions/v1`,
+      // The resume path dispatches to run-agent, which may have moved.
+      runAgentUrl: functionUrl("run-agent", (k) => Deno.env.get(k)),
       serviceRoleKey: SERVICE_KEY,
       log: (m, meta) => console.log(`[resume-stalled-leads] ${m}`, meta ?? ""),
     });

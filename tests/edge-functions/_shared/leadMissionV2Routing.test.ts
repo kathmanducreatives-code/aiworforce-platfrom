@@ -36,10 +36,14 @@ Deno.test("BOTH gates are required, joined by AND", () => {
 });
 
 Deno.test("V1 IS THE DEFAULT — the fallback is run-agent, unchanged", () => {
+  // The two destinations are now RESOLVED rather than written out, so either
+  // can move to the Railway API without editing this branch (see
+  // functionEndpoints.ts). What must not change is which function each branch
+  // selects: the V2 verdict picks the queue, and everything else picks
+  // run-agent exactly as before.
   assert(
-    /url: v2Route\s*\n?\s*\?\s*`\$\{SUPABASE_URL\}\/functions\/v1\/enqueue-lead-mission`\s*\n?\s*:\s*`\$\{SUPABASE_URL\}\/functions\/v1\/run-agent`/
-      .test(SRC),
-    "the false branch must still be run-agent",
+    /url: functionUrl\(v2Route \? "enqueue-lead-mission" : "run-agent", /.test(SRC),
+    "the true branch must be the queue and the false branch must still be run-agent",
   );
   // Only the destination differs. If the bodies diverged, the worker would no
   // longer be replaying what the edge path would have sent.

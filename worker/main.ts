@@ -35,10 +35,34 @@ import {
 } from "../supabase/functions/_shared/leadMissionCancellation.ts";
 import { createLeadMissionRunner } from "./leadMissionRunner.ts";
 import { newStatus, healthView, startHealthServer } from "./health.ts";
+import { mountApi } from "./api/server.ts";
+import { sealFunctionListeners } from "./api/routes.ts";
 
 const env = (k: string) => Deno.env.get(k);
 const num = (k: string, d: number) => { const v = Number(env(k)); return Number.isFinite(v) && v > 0 ? v : d; };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * WHAT THIS PROCESS IS FOR.
+ *
+ *   worker  claim missions from the queue (the default, and what every existing
+ *           deployment does today — a container that sets nothing is unchanged
+ *           by the API's existence)
+ *   api     serve the HTTP routes and claim nothing
+ *   both    one container doing both
+ *
+ * `both` is the recommended shape while the API is small: the two roles share a
+ * container, a deploy and one set of secrets, and the work they do is almost
+ * entirely waiting on somebody else's network. Splitting them later is this
+ * variable and a second Railway service — not a code change — which is the
+ * reason the choice is a variable at all.
+ */
+export type WorkerRole = "worker" | "api" | "both";
+
+export function resolveRole(read: (k: string) => string | undefined): WorkerRole {
+  const raw = (read("AGENTORY_ROLE") ?? "").trim().toLowerCase();
+  return raw === "api" || raw === "both" || raw === "worker" ? raw : "worker";
+}
 
 function config(): WorkerConfig {
   return {
@@ -91,8 +115,10 @@ async function main() {
   const key = env("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) { console.error("[worker] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY required"); Deno.exit(1); }
 
-  // BEFORE the import: run-agent must not start an HTTP server in this process.
-  Deno.env.set("RUN_AGENT_IMPORT_ONLY", "1");
+  // BEFORE the import: no function module may start an HTTP server in this
+  // process. The worker only needs run-agent sealed; the API may import three
+  // more, so all four flags are set here, once, before anything is loaded.
+  sealFunctionListeners();
   const { handleRunAgent } = await import("../supabase/functions/run-agent/index.ts");
 
   const db = createClient(url, key, { auth: { persistSession: false } });
@@ -122,8 +148,10 @@ async function main() {
     log,
   });
 
-  // The gate. No DB claim unless V2 is enabled for at least one workspace.
-  const gated = v2Enabled(env) && runner.ready;
+  const role = resolveRole(env);
+  // The gate. No DB claim unless V2 is enabled for at least one workspace — and
+  // an api-only process claims nothing whatever the allowlist says.
+  const gated = role !== "api" && v2Enabled(env) && runner.ready;
 
   // OBSERVABILITY ONLY. Counters are recorded around the existing claim; the
   // claim itself, and every queue semantic, is untouched.
@@ -311,9 +339,24 @@ async function main() {
     } catch { /* unsupported platform */ }
   }
 
+  // ── THE HTTP SURFACE, WHEN THIS PROCESS HAS ONE ──────────────────────────
+  //
+  // Mounted BEFORE the listener opens, so a route that fails to import takes
+  // the process down at start-up rather than 500-ing the first real request.
+  // A `worker` role mounts nothing and the listener is the health endpoint it
+  // always was.
+  const api = role === "worker" ? null : await mountApi(env, log);
+  if (api) log("[worker] api role active", { role, routes: api.routes });
+
   // PORT is the platform's contract. Absent locally ⇒ no socket, no extra
   // permission, behaviour identical to before.
   const port = Number(env("PORT"));
+  if (api && !(Number.isFinite(port) && port > 0)) {
+    // An API with no port answers nothing, which is a misconfiguration worth
+    // failing loudly rather than idling through.
+    console.error("[worker] AGENTORY_ROLE requests the API but PORT is unset");
+    Deno.exit(1);
+  }
   const health = Number.isFinite(port) && port > 0
     ? startHealthServer(port, () => healthView({
       status, workerId, gated, idlePollMs: cfg.idlePollMs, working,
@@ -323,13 +366,22 @@ async function main() {
         mission_ceiling_ms: cfg.missionCeilingMs,
         idle_poll_ms: cfg.idlePollMs,
       },
-    }), log)
+    }), log, api?.handle)
     : null;
 
-  log("[worker] starting", { workerId, gated, config: cfg });
-  if (!gated) log("[worker] V2 disabled (no allowlisted workspace) — idling, will not claim any mission");
+  log("[worker] starting", { workerId, role, gated, config: cfg });
+  if (!gated && role !== "api") {
+    log("[worker] V2 disabled (no allowlisted workspace) — idling, will not claim any mission");
+  }
   try {
-    await runWorkerLoop(deps, () => stop);
+    if (role === "api") {
+      // SERVE ONLY. No claim loop at all — not a gated one — so an api process
+      // cannot take a mission even if the allowlist is later widened.
+      log("[worker] api-only: not claiming missions");
+      while (!stop) await sleep(cfg.idlePollMs);
+    } else {
+      await runWorkerLoop(deps, () => stop);
+    }
   } finally {
     await health?.close();
     log("[worker] stopped", { polls: status.polls, claims: status.claims });

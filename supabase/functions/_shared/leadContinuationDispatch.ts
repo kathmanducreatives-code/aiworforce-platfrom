@@ -179,6 +179,17 @@ export interface DispatchDeps {
   /** Injected wait, so a test never actually sleeps. */
   wait?: (ms: number) => Promise<void>;
   functionsBaseUrl: string | null;
+  /**
+   * run-agent's absolute URL, when the caller has already resolved it.
+   *
+   * `functionsBaseUrl` assumes run-agent is reachable as `<base>/run-agent`,
+   * which is true of Supabase's function gateway and of nothing else. Once
+   * run-agent is served by the Railway API it lives at `<base>/api/run-agent`,
+   * so the caller resolves the whole URL through `functionEndpoints.ts` and
+   * passes it here. Takes precedence when set; absent, the base is used exactly
+   * as before, so every existing caller is unchanged.
+   */
+  runAgentUrl?: string | null;
   serviceRoleKey: string | null;
   log?: (msg: string, meta?: unknown) => void;
 }
@@ -218,11 +229,17 @@ export async function dispatchContinuation(
   req: DispatchRequest, deps: DispatchDeps,
 ): Promise<DispatchOutcome> {
   const log = deps.log ?? (() => {});
-  if (!deps.functionsBaseUrl || !deps.serviceRoleKey) {
+  const resolvedUrl = deps.runAgentUrl
+    ? deps.runAgentUrl
+    : deps.functionsBaseUrl
+    ? `${deps.functionsBaseUrl.replace(/\/+$/, "")}/run-agent`
+    : null;
+  if (!resolvedUrl || !deps.serviceRoleKey) {
     // FAIL VISIBLY, NOT SILENTLY. Without credentials the chain cannot continue,
     // and a run that silently stops after one slice is the bug this replaces.
     log("continuation_dispatch_not_configured", {
-      has_base_url: !!deps.functionsBaseUrl, has_key: !!deps.serviceRoleKey,
+      has_base_url: !!deps.functionsBaseUrl, has_url: !!deps.runAgentUrl,
+      has_key: !!deps.serviceRoleKey,
     });
     return {
       dispatched: false, reason: "not_configured",
@@ -230,7 +247,7 @@ export async function dispatchContinuation(
     };
   }
 
-  const url = `${deps.functionsBaseUrl.replace(/\/+$/, "")}/run-agent`;
+  const url = resolvedUrl;
   try {
     const res = await raceHandoff(deps, deps.fetch(url, {
       method: "POST",
