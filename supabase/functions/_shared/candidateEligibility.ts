@@ -47,8 +47,9 @@ import type { EvidenceDimension, EvidenceItem } from "./candidateObservation.ts"
 import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts";
 import { geographyContradicts } from "./leadEligiblePool.ts";
 import { matchBusinessModel } from "./businessModelMatch.ts";
-import { normalizeRoundType } from "./fundingStageClaim.ts";
+import { decideRecentlyFunded, normalizeRoundType } from "./fundingStageClaim.ts";
 import type { FundingStageVerdict } from "./fundingStageClaim.ts";
+import { fundingRecordsInGraph } from "./fundingCorroboration.ts";
 import { usableHeadcount } from "./headcountValue.ts";
 
 export const ELIGIBILITY_VERSION = "candidate-eligibility-v1" as const;
@@ -237,6 +238,29 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
       return proven
         ? { ...base, result: "pass", reason: `stage "${item.value}" matches ${want}`, evidence_ids: ids, provenance }
         : { ...base, result: "unknown", reason: `stage "${item.value}" is reported, not proven`, evidence_ids: ids, provenance };
+    }
+    case "funding": {
+      // ── "RECENTLY FUNDED" IS A DATE, NOT A PRESENCE ────────────────────
+      //
+      // The mission's own window decides it, against the dated rounds the
+      // company already carries (funding discovery's records, the pair's
+      // corroborated record). Nothing is bought here: a company we hold no
+      // rounds for stays PENDING and reaches the verifier through its gap.
+      //
+      // Without a window the old presence rule stands, so a bare "funded"
+      // criterion behaves exactly as it did.
+      const window = c.time_window?.days ?? null;
+      const records = window ? fundingRecordsInGraph(graph) : [];
+      if (window && records.length > 0) {
+        const d = decideRecentlyFunded({ window_days: window, records, now: new Date() });
+        if (d.verdict !== "pending") {
+          return { ...base, result: d.verdict === "pass" ? "pass" : "fail", reason: d.explanation, evidence_ids: ids, provenance };
+        }
+        return { ...base, result: "unknown", reason: d.explanation, evidence_ids: ids, provenance };
+      }
+      if (!proven) return { ...base, result: "unknown", reason: `${dim} is reported, not proven`, evidence_ids: ids, provenance };
+      if (item.value === false) return { ...base, result: "fail", reason: `${dim} is false`, evidence_ids: ids, provenance };
+      return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}`, evidence_ids: ids, provenance };
     }
     default: {
       // Signal dimensions: presence of a fresh, proven item satisfies them.

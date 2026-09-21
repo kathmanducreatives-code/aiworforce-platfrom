@@ -61,14 +61,38 @@ export const ACTOR_READINESS: readonly ActorReadinessRecord[] = Object.freeze([
     reason: "carded (low confidence); never run live in V2", live_evidence: null, gated_by: "mission names the YC cohort" },
   { actor: "apify_funding_rounds_datahyena", capability: "funding_signal_discovery", readiness: "CARDED_BUT_NOT_LIVE",
     reason: "carded and executable; not run under the V2 spec spine ($0.045/record); hybrid is P6", live_evidence: null },
-  // P6 known-company funding verification. Both actors were probed live on
-  // 2026-09-19 OUTSIDE this pipeline (Wordware PASS, Stripe/Cal.com FAIL,
-  // Dioptra/37signals no rounds); neither has run through the V2 spec spine,
-  // so the route stays blocked until a canary proves the pair end to end.
-  { actor: "apify_funding_atomus", capability: "funding_verification", readiness: "CARDED_BUT_NOT_LIVE",
-    reason: "atomus/linkedin-company-scraper: round types, dates and a TRUE round count; probed live, not yet run in V2", live_evidence: null },
-  { actor: "apify_funding_pvalyou", capability: "funding_verification", readiness: "CARDED_BUT_NOT_LIVE",
-    reason: "pvalyou/company-record: per-round source URLs, incomplete history, slow cold reads; probed live, not yet run in V2", live_evidence: null },
+  // ── THE FUNDING PAIR ──────────────────────────────────────────────────────
+  //
+  // EXPERIMENTAL, together. The live pair probe of 2026-09-21 (Wordware,
+  // preserved under `docs/audits/live-validation-2026-09-21/`) proved the
+  // PROVIDER CONTRACT end to end: atomus returned 3 dated rounds with
+  // `num_funding_rounds: 3` and no citation; pvalyou returned the same Seed
+  // round with 4 cited announcements and no trustworthy count; merged on the
+  // same rung inside the date window they produce one complete, cited record,
+  // and `decideCorroboratedFundingStage` answers seed PASS / pre-seed FAIL.
+  // Alone, each answers PENDING — atomus `required_stage_uncorroborated`,
+  // pvalyou `history_incomplete`.
+  //
+  // What that probe did NOT do is run the route through this pipeline: the
+  // same day's mission (task 3bc526e2, local stack) recorded the funding
+  // verifier as `irrelevant`, because the mission carried no hard funding
+  // claim, so no ProviderCallSpec, ledger row or gap-routed target exists for
+  // it yet. READY means live-proven THROUGH the spine; this is not that, and
+  // calling it READY would make the table lie.
+  //
+  // EXPERIMENTAL is exactly the state it is in: proven on live data, runnable
+  // only where someone says so (`LEAD_V2_ALLOW_EXPERIMENTAL_ROUTES` or a
+  // provider probe), still refused for an ordinary production mission. The
+  // canary that runs a hard funding claim through the spine is what earns
+  // READY — for the PAIR, never for one of them.
+  { actor: "apify_funding_atomus", capability: "funding_verification", readiness: "EXPERIMENTAL",
+    reason: "atomus/linkedin-company-scraper: dated rounds and a TRUE round count (completeness), no citations — half the pair",
+    live_evidence: "live pair probe 2026-09-21 (Wordware): 3/3 rounds, num_funding_rounds 3",
+    gated_by: "the funding pair: a PASS needs pvalyou's or discovery's citation, so atomus alone can only answer PENDING" },
+  { actor: "apify_funding_pvalyou", capability: "funding_verification", readiness: "EXPERIMENTAL",
+    reason: "pvalyou/company-record: per-round source URLs (provenance), a round count that is only what it holds, slow cold reads — half the pair",
+    live_evidence: "live pair probe 2026-09-21 (Wordware): Seed 2024-11-21 with 4 cited announcements",
+    gated_by: "the funding pair: without atomus's completeness pvalyou alone can only answer PENDING" },
   { actor: "apify_linkedin_company_employees", capability: "hiring_verification", readiness: "NEEDS_PROVIDER_WORK",
     reason: "opt-in only at the tool layer (apify_actor_disabled_by_default); first-hire team check refused live", live_evidence: null },
   { actor: "apify_people_search", capability: "founder_discovery", readiness: "NEEDS_PROVIDER_WORK",

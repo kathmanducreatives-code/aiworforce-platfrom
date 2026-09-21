@@ -352,3 +352,110 @@ export function fundingStageEvidenceItem(i: {
     origin: "lead_mission",
   };
 }
+
+// ── "RECENTLY FUNDED" — DECIDED FROM ROUNDS WE ALREADY HOLD ─────────────────
+//
+// A funding SIGNAL criterion ("recently raised", "funded in the last 6 months")
+// used to pass on the mere PRESENCE of a funding item, whatever its date. So a
+// company whose only round was announced in 2019 satisfied "recently funded",
+// and the mission's own time window — which the card prints — decided nothing.
+//
+// This reads the dated rounds the mission ALREADY has (funding discovery's
+// FundingRecordFacts, the corroborated record the pair writes) and answers the
+// window. It buys nothing: the verifier route exists for companies we hold no
+// rounds for at all, and is never taken for one we do.
+//
+// The asymmetry of `decideFundingStage` is kept, for the same reason:
+//
+//   a verified round inside the window                      → PASS
+//   no round inside it, and the history is COMPLETE         → FAIL
+//   no round inside it, and the history may be partial      → PENDING
+//   no rounds, undated rounds, or no record at all          → PENDING
+//
+// Absence is never disproof: "we have not seen a recent round" and "there has
+// not been one" are different claims, and only a complete history closes the
+// gap between them.
+
+export type RecentFundingReason =
+  | "no_funding_record"
+  | "no_dated_rounds"
+  | "round_inside_window"
+  | "no_round_inside_window"
+  | "history_incomplete"
+  | "no_window_requested";
+
+export interface RecentFundingDecision {
+  version: typeof FUNDING_STAGE_CLAIM_VERSION;
+  verdict: FundingStageVerdict;
+  /** The window asked for, in days. */
+  window_days: number | null;
+  /** The most recent dated round seen, whatever the verdict. */
+  latest_announced_date: string | null;
+  reasons: RecentFundingReason[];
+  explanation: string;
+  carrier_rounds: FundingRoundFact[];
+}
+
+/** Is this record's round list complete, by the provider's own count? */
+function historyIsComplete(r: FundingRecordFact): boolean {
+  if (r.history_complete === true) return true;
+  return typeof r.reported_round_count === "number" && r.reported_round_count <= r.rounds.length;
+}
+
+export function decideRecentlyFunded(i: {
+  window_days: number | null;
+  /** Every funding record the company already carries. Nothing is bought here. */
+  records: readonly FundingRecordFact[];
+  now: Date | string;
+}): RecentFundingDecision {
+  const base: RecentFundingDecision = {
+    version: FUNDING_STAGE_CLAIM_VERSION, verdict: "pending", window_days: i.window_days,
+    latest_announced_date: null, reasons: [], explanation: "", carrier_rounds: [],
+  };
+  const now = typeof i.now === "string" ? Date.parse(i.now) : i.now.getTime();
+  if (!i.window_days || i.window_days <= 0) {
+    return { ...base, reasons: ["no_window_requested"], explanation: "no recency window was asked for" };
+  }
+  const records = i.records.filter((r) => (r.rounds?.length ?? 0) > 0);
+  if (records.length === 0) {
+    return { ...base, reasons: ["no_funding_record"], explanation: "no funding record was retrieved" };
+  }
+  const cutoff = now - i.window_days * 86_400_000;
+  const dated = records.flatMap((r) => r.rounds.map((round) => ({ round, at: Date.parse(round.announced_date ?? "") })))
+    .filter((x) => Number.isFinite(x.at));
+  if (dated.length === 0) {
+    return { ...base, reasons: ["no_dated_rounds"],
+      explanation: "funding is reported, but no round carries an announced date" };
+  }
+  const latest = dated.reduce((a, b) => (b.at > a.at ? b : a));
+  base.latest_announced_date = latest.round.announced_date;
+
+  // PASS: a round we can VERIFY (a provider field with a citation or a date),
+  // announced inside the window.
+  const inside = dated.filter((x) => x.at >= cutoff && isVerifiedRound(x.round));
+  if (inside.length > 0) {
+    const days = Math.round((now - latest.at) / 86_400_000);
+    return {
+      ...base, verdict: "pass", reasons: ["round_inside_window"],
+      carrier_rounds: inside.map((x) => x.round),
+      explanation: `a verified ${normalizeRoundType(inside[0].round.round_type) ?? "funding"} round was announced ` +
+        `${days} day(s) ago, inside the ${i.window_days}-day window`,
+    };
+  }
+
+  // FAIL needs the whole record: "nothing recent" is a claim about rounds we
+  // have not seen unless the provider says there are none.
+  if (records.some(historyIsComplete)) {
+    const days = Math.round((now - latest.at) / 86_400_000);
+    return {
+      ...base, verdict: "fail", reasons: ["no_round_inside_window"], carrier_rounds: [latest.round],
+      explanation: `the most recent round in a complete history was announced ${days} day(s) ago, ` +
+        `outside the ${i.window_days}-day window`,
+    };
+  }
+  return {
+    ...base, reasons: ["history_incomplete"], carrier_rounds: [latest.round],
+    explanation: `the rounds we hold are all older than the ${i.window_days}-day window, ` +
+      `but no provider states this is the full history`,
+  };
+}

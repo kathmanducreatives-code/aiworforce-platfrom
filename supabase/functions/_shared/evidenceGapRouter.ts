@@ -96,6 +96,41 @@ const FIRST_PARTY_PAGES: ClaimRoute = {
 };
 const freshness = (d: EvidenceDimension): number | null => EVIDENCE_VALIDITY_DAYS[d] ?? null;
 
+/**
+ * THE FUNDING PAIR — ONE ROUTE, TWO PROVIDERS, NEITHER SUFFICIENT ALONE.
+ *
+ * Live pair probe, 2026-09-21 (Wordware, preserved in
+ * `docs/audits/live-validation-2026-09-21/`):
+ *
+ *   atomus   3 dated rounds and `num_funding_rounds: 3` — COMPLETENESS, and
+ *            not one source URL
+ *   pvalyou  the same Seed round with 4 cited announcements — PROVENANCE, and
+ *            a round count that is only what it holds
+ *
+ *   atomus alone  → PENDING (`required_stage_uncorroborated`)
+ *   pvalyou alone → PENDING (`history_incomplete`)
+ *   the pair      → PASS (complete history, latest verified round is Seed, cited)
+ *
+ * So the route names atomus and carries pvalyou beside it: the verifier calls
+ * atomus first and buys pvalyou only when atomus cannot settle the claim alone
+ * (`fundingStageVerifier`). Readiness decides whether it may run at all, which
+ * is why promoting ONE of the two can never make this route answer — the
+ * decision requires a citation, and only pvalyou or a discovered round has one.
+ *
+ * It answers two claims: the STAGE ("is it still Seed?") and RECENCY ("has it
+ * raised lately?"), for a company we hold no rounds for. One we already have
+ * rounds for is decided from those rounds and bought again for neither.
+ */
+const FUNDING_PAIR_ROUTE: ClaimRoute = {
+  actor: "apify_funding_atomus", capability: "funding_verification",
+  purpose: "the company's funding rounds, corroborated by cited announcements",
+  evidence_actors: ["apify_funding_atomus", "apify_funding_pvalyou", "funding_corroboration"],
+  canonical_executor: true,
+  executor_note: "atomus completeness + pvalyou citations decide the funding claims (fundingStageVerifier)",
+  // atomus always; pvalyou only when atomus cannot settle it alone.
+  cost_hint_usd: 0.0235,
+};
+
 export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
   {
     claim: "business_model", criterion_dimensions: ["industry", "business_model"],
@@ -107,21 +142,7 @@ export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
   {
     claim: "funding_stage", criterion_dimensions: ["company_stage"], evidence: ["funding", "company_stage"],
     freshness_days: freshness("funding"),
-    routes: [{
-      // P6: KNOWN-COMPANY FUNDING VERIFICATION. atomus (LinkedIn identity,
-      // true round count) settles a later round alone; for Seed/unclear it is
-      // corroborated by pvalyou's per-round citations (`fundingCorroboration`).
-      // The executor exists (`fundingStageVerifier`); READINESS in Actor
-      // Intelligence decides whether the route is taken, so it stays blocked
-      // until the pair is proven live through this pipeline.
-      actor: "apify_funding_atomus", capability: "funding_verification",
-      purpose: "the company's funding rounds, corroborated by cited announcements",
-      evidence_actors: ["apify_funding_atomus", "apify_funding_pvalyou", "funding_corroboration"],
-      canonical_executor: true,
-      executor_note: "atomus completeness + pvalyou citations decide the funding stage (fundingStageVerifier)",
-      // atomus always; pvalyou only when atomus cannot settle it alone.
-      cost_hint_usd: 0.0235,
-    }],
+    routes: [FUNDING_PAIR_ROUTE],
   },
   {
     claim: "open_role", criterion_dimensions: ["hiring"], evidence: ["hiring", "job"], freshness_days: freshness("hiring"),
@@ -142,7 +163,14 @@ export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
       cost_hint_usd: 0.05,
     }],
   },
-  { claim: "recently_funded", criterion_dimensions: ["funding"], evidence: ["funding"], freshness_days: freshness("funding"), routes: [], deferred_to: "P6" },
+  {
+    // DECIDED FROM ROUNDS WE ALREADY HOLD (`decideRecentlyFunded`), and routed
+    // only for a company we hold none for: the same pair that answers the
+    // stage answers "is there a recent round at all". A company whose rounds
+    // discovery already bought is never bought again.
+    claim: "recently_funded", criterion_dimensions: ["funding"], evidence: ["funding"],
+    freshness_days: freshness("funding"), routes: [FUNDING_PAIR_ROUTE],
+  },
   { claim: "product_launch", criterion_dimensions: ["product_launch"], evidence: ["product_launch"], freshness_days: freshness("product_launch"), routes: [], deferred_to: "P7" },
   { claim: "geographic_expansion", criterion_dimensions: ["expansion"], evidence: ["expansion"], freshness_days: freshness("expansion"), routes: [], deferred_to: "P7" },
   { claim: "social_activity", criterion_dimensions: ["social_activity"], evidence: [], freshness_days: null, routes: [], deferred_to: "P7" },

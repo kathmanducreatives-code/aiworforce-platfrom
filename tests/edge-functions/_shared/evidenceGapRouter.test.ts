@@ -94,8 +94,10 @@ Deno.test("business model: once the pages are in the registry, the route is trie
 Deno.test("funding stage: the P6 executor exists but is not READY — a capability gap, never guessed", () => {
   const [g] = evidenceGapsFor([unknown("company_stage")], LANCEDB);
   assertEquals([g.claim, g.next], ["funding_stage", "blocked"]);
-  assertEquals([g.considered[0].actor, g.considered[0].readiness], ["apify_funding_atomus", "CARDED_BUT_NOT_LIVE"]);
-  assert(g.considered[0].why.includes("CARDED_BUT_NOT_LIVE"), g.considered[0].why);
+  // EXPERIMENTAL since the 2026-09-21 live pair probe: proven on live data,
+  // still refused for an ordinary mission until it runs through this pipeline.
+  assertEquals([g.considered[0].actor, g.considered[0].readiness], ["apify_funding_atomus", "EXPERIMENTAL"]);
+  assert(g.considered[0].why.includes("EXPERIMENTAL"), g.considered[0].why);
   const s = summarizeGaps([{ gaps: [g] }]);
   assertEquals([s.pending, s.with_executable_route, s.blocked], [1, 0, 1]);
 });
@@ -165,5 +167,5 @@ Deno.test("PHASE C: the business model is the one canonical claim a production r
   assertEquals([...new Set(verifiable.map((g) => g.claim))], ["business_model"]);
   assertEquals([...new Set(verifiable.map((g) => g.route?.actor))], ["firecrawl"]);
   assert(s.capability_gaps.some((c) => c.claim === "funding_stage" &&
-    c.routes.some((r) => r.actor === "apify_funding_atomus" && r.why.includes("CARDED_BUT_NOT_LIVE"))));
+    c.routes.some((r) => r.actor === "apify_funding_atomus" && r.why.includes("EXPERIMENTAL"))));
 });

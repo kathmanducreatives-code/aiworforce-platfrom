@@ -10,10 +10,17 @@ import {
   createPlanStoreRegistry, PLAN_HEARTBEAT_MS, type PlanRead, type PlanStoreIo,
 } from "../../src/lib/chat/planStore.ts";
 
-/** A plan that is still moving, so `decidePlanRefetch` wants to read. */
+/**
+ * A plan that is still moving, so `decidePlanRefetch` wants to read.
+ *
+ * RELATIVE timestamps: `deriveWorkflowUiState` reads how long ago the last
+ * activity was, so a fixture pinned to a date goes stale the day after it is
+ * written and the heartbeat correctly stops wanting it.
+ */
+const justNow = () => new Date(Date.now() - 5_000).toISOString();
 const ACTIVE: PlanRead = {
-  plan: { id: "p1", status: "executing", created_at: "2026-09-20T10:00:00.000Z" } as never,
-  tasks: [{ id: "t1", status: "running", created_at: "2026-09-20T10:00:00.000Z" } as never],
+  plan: { id: "p1", status: "executing", created_at: justNow() } as never,
+  tasks: [{ id: "t1", status: "running", created_at: justNow() } as never],
   activity: [], approvals: [], toolCalls: [],
 };
 
@@ -108,8 +115,8 @@ Deno.test("a second plan gets its own store; releasing one does not stop the oth
 
 Deno.test("a settled plan does not read on the heartbeat, visible or not", async () => {
   const done: PlanRead = {
-    plan: { id: "p1", status: "complete", created_at: "2026-09-20T10:00:00.000Z", completed_at: "2026-09-20T10:05:00.000Z" } as never,
-    tasks: [{ id: "t1", status: "complete", created_at: "2026-09-20T10:00:00.000Z", finished_at: "2026-09-20T10:05:00.000Z" } as never],
+    plan: { id: "p1", status: "complete", created_at: justNow(), completed_at: justNow() } as never,
+    tasks: [{ id: "t1", status: "complete", created_at: justNow(), finished_at: justNow() } as never],
     activity: [], approvals: [], toolCalls: [],
   };
   const h = harness({ read: () => Promise.resolve(done) });

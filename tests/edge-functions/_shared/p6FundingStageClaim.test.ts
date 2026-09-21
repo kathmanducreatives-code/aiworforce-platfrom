@@ -11,7 +11,7 @@
 //
 // PURE — no provider, no network, no clock.
 
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   decideFundingStage, fundingStageEvidenceItem, isVerifiedRound, normalizeRoundType,
   stageRank, type FundingRecordFact, type FundingRoundFact,
@@ -19,6 +19,7 @@ import {
 import { checkCriterion } from "../../../supabase/functions/_shared/candidateEligibility.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
 import { CLAIM_REGISTRY } from "../../../supabase/functions/_shared/evidenceGapRouter.ts";
+import { PRODUCTION_READINESS } from "../../../supabase/functions/_shared/routeReadiness.ts";
 import { readinessOf } from "../../../supabase/functions/_shared/actorIntelligence.ts";
 import { HIRING_ACTOR_CATALOG } from "../../../supabase/functions/_shared/hiringActorCatalog.ts";
 import { ACTOR_INPUT_CONTRACTS } from "../../../supabase/functions/_shared/actorInputContracts.ts";
@@ -261,11 +262,16 @@ Deno.test("a missing funding claim leaves the criterion unknown — absence is n
 Deno.test("no funding route may execute until a verifier is proven LIVE — readiness, not the executor, is the gate", () => {
   // P6 built the executor (`fundingStageVerifier`), so the route now carries
   // `canonical_executor: true`. What keeps it closed is Actor Intelligence:
-  // the pair was probed outside this pipeline, never through it.
+  // the 2026-09-21 probe proved the PAIR on live data but ran outside this
+  // pipeline, so both are EXPERIMENTAL — runnable only where someone says so,
+  // never in an ordinary production mission.
   const claim = CLAIM_REGISTRY.find((c) => c.claim === "funding_stage")!;
   assertEquals(claim.routes.map((r) => [r.actor, r.canonical_executor]), [["apify_funding_atomus", true]]);
-  assertEquals(readinessOf("apify_funding_atomus", "funding_verification").readiness, "CARDED_BUT_NOT_LIVE");
-  assertEquals(readinessOf("apify_funding_pvalyou", "funding_verification").readiness, "CARDED_BUT_NOT_LIVE");
+  assertEquals(readinessOf("apify_funding_atomus", "funding_verification").readiness, "EXPERIMENTAL");
+  assertEquals(readinessOf("apify_funding_pvalyou", "funding_verification").readiness, "EXPERIMENTAL");
+  assertFalse(PRODUCTION_READINESS.decide("apify_funding_atomus", "funding_verification").executable,
+    "EXPERIMENTAL is not a licence to run");
+  assertFalse(PRODUCTION_READINESS.decide("apify_funding_pvalyou", "funding_verification").executable);
 });
 
 Deno.test("the datahyena card carries the price and schema the Store actually publishes", () => {
