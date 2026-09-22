@@ -640,3 +640,65 @@ Deno.test("25. a state for a DIFFERENT mission is never reused", async () => {
   const second = await runCounting({ state: foreign });
   assertEquals(second.planned, 1);
 });
+
+// ═══ 12. A BLOCKED PLAN SAYS WHAT IT REFUSED ═══════════════════════════════
+//
+// `no_valid_step` used to be the bare sentence "no proposed step survived
+// validation". Two different failures wore it — the planner proposing NOTHING,
+// and the planner proposing steps that were each dropped for a reason already
+// sitting in `violations` — and the sentence distinguished neither. A live
+// funding canary (2026-09-21) died on it, and answering "did the model even
+// try?" cost a second paid planning round.
+//
+// These cases pin the two messages apart, and pin that the reasons travel WITH
+// the block rather than beside it.
+
+const noValidStep = (v: { violations: { code: string; message: string }[] }) =>
+  v.violations.find((x) => x.code === "no_valid_step")!;
+
+Deno.test("12a. AN EMPTY PROPOSAL says so, and names what was authorised", () => {
+  const m = mission();
+  const v = validateExecutionPlan([], m, graphFor(m));
+  assertEquals(v.source, "blocked");
+  const nvs = noValidStep(v);
+  assert(/proposed no steps at all/.test(nvs.message), nvs.message);
+  // THE DIAGNOSTIC FACT: an empty plan against a non-empty authorisation means
+  // the model judged every authorised actor unfit — a mission problem, not a
+  // planner bug. It is only visible if the authorisation is in the message.
+  for (const cap of graphFor(m).steps.map((s) => s.capability)) {
+    assert(nvs.message.includes(cap), `authorised capability ${cap} must be named: ${nvs.message}`);
+  }
+});
+
+Deno.test("12b. STEPS DROPPED: each is named, with the reasons that killed them", () => {
+  const m = mission();
+  // Both steps are refused: a capability outside the graph, and a real
+  // capability served by an actor that cannot serve it.
+  const v = validateExecutionPlan([
+    step("contact_enrichment", ENRICH, "not authorised by this mission"),
+    step("company_enrichment", "apify_not_a_real_actor", "unknown actor"),
+  ], m, graphFor(m));
+  assertEquals(v.source, "blocked");
+  const nvs = noValidStep(v);
+  assert(/all 2 proposed step\(s\) were dropped/.test(nvs.message), nvs.message);
+  // WHAT was tried…
+  assert(nvs.message.includes("contact_enrichment|apify_linkedin_company_details"), nvs.message);
+  assert(nvs.message.includes("company_enrichment|apify_not_a_real_actor"), nvs.message);
+  // …and WHY. The per-step codes are carried into the block itself.
+  assert(/reasons: /.test(nvs.message), nvs.message);
+  const otherCodes = v.violations.filter((x) => x.code !== "no_valid_step").map((x) => x.code);
+  assert(otherCodes.length > 0, "the per-step violations must still be present individually");
+  for (const c of otherCodes) {
+    assert(nvs.message.includes(c), `reason ${c} must travel with the block: ${nvs.message}`);
+  }
+});
+
+Deno.test("12c. the two failures never read the same", () => {
+  const m = mission();
+  const empty = noValidStep(validateExecutionPlan([], m, graphFor(m))).message;
+  const dropped = noValidStep(validateExecutionPlan(
+    [step("contact_enrichment", ENRICH, "not authorised")], m, graphFor(m),
+  )).message;
+  assert(empty !== dropped, "an empty proposal and a rejected proposal must be distinguishable");
+  assertFalse(/proposed no steps at all/.test(dropped), dropped);
+});

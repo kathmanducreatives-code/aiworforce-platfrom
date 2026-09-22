@@ -31,7 +31,7 @@ import {
   type VerifierDeps, type VerifierFinding,
 } from "./claimVerifier.ts";
 import {
-  ATOMUS_FUNDING_ACTOR_KEY, atomusSettles, decideCorroboratedFundingStage, fundingRecordsInGraph,
+  ATOMUS_FUNDING_ACTOR_KEY, atomusSettles, decideCorroboratedFundingStage, fundingRecordEvidenceItem, fundingRecordsInGraph,
   normalizeAtomusFunding, normalizePvalyouFunding, PVALYOU_FUNDING_ACTOR_KEY,
 } from "./fundingCorroboration.ts";
 import { fundingStageEvidenceItem, type FundingRecordFact, type FundingStageDecision } from "./fundingStageClaim.ts";
@@ -67,6 +67,13 @@ function finding(t: VerificationTarget, decision: FundingStageDecision, record: 
     : null;
   return {
     company_key: t.company_key, item, answered: true,
+    // THE DATED ROUNDS, as the same `funding` record discovery writes, so the
+    // time-window claim reads what the pair already bought.
+    ...(record ? {
+      supporting: [fundingRecordEvidenceItem({
+        company_key: t.company_key, record, mission_id: i.mission_id, observed_at: i.at,
+      })],
+    } : {}),
     detail: {
       stage: i.stage, verdict: decision.verdict, reasons: decision.reasons, explanation: decision.explanation,
       ...(i.conflicts?.length ? { conflicts: i.conflicts } : {}),

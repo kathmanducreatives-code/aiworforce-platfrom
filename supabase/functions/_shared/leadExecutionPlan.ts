@@ -51,6 +51,8 @@ import {
   conceptTermsOf, type StrategyViolation,
 } from "./leadDiscoveryStrategy.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
+import { verifiedAfterEligibility as claimsVerifiedAfter } from "./claimPlan.ts";
+import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 
 export const EXECUTION_PLAN_VERSION = "lead-execution-plan-v1" as const;
 
@@ -139,6 +141,13 @@ export interface ExecutionPlanOptions {
    * layer exists to prevent.
    */
   brain?: DiscoveryPolicySize | null;
+  /**
+   * The run's readiness policy — the SAME one the claim-verification phase
+   * will use. It decides which hard claims the planner is told are verified
+   * after eligibility (`verified_after_eligibility`). Absent, production
+   * readiness applies, which is exactly the behaviour before this existed.
+   */
+  readiness?: ReadinessPolicy;
 }
 
 /**
@@ -410,9 +419,43 @@ export function validateExecutionPlan(
   }
 
   if (final.length === 0) {
+    // ── A REFUSAL THAT SAYS WHAT IT REFUSED ────────────────────────────────
+    //
+    // This used to be the bare sentence "no proposed step survived validation",
+    // and that sentence is why a blocked run could not be diagnosed without
+    // re-running it under new instrumentation. Two different failures wore it:
+    // the planner proposing NOTHING (it could see no usable actor at all), and
+    // the planner proposing steps that were each dropped for a stated reason
+    // which was already in `violations` and never surfaced together with the
+    // block. A reader could not tell which, so the first question — "did the
+    // model try?" — cost a whole paid planning round to answer.
+    //
+    // Both are now answered in the message itself.
+    const proposedSteps = proposed as readonly unknown[];
+    const attempted = proposedSteps.map((raw) => {
+      const p = asRecord(raw);
+      const cap = p ? String(p.capability ?? "?") : "?";
+      const actor = p && typeof p.actor_key === "string" && p.actor_key ? p.actor_key : "-";
+      return `${cap}|${actor}`;
+    });
+    const reasons = [...violations.reduce((m, v) => {
+      m.set(v.code, (m.get(v.code) ?? 0) + 1);
+      return m;
+    }, new Map<string, number>())].map(([code, n]) => (n > 1 ? `${code} ×${n}` : code));
+
     violations.push({
       code: "no_valid_step",
-      message: "no proposed step survived validation",
+      message: proposedSteps.length === 0
+        // THE MODEL PROPOSED NOTHING. The useful fact is what it was allowed to
+        // propose, because an empty plan against a non-empty authorisation means
+        // the model judged every authorised actor unfit for this mission.
+        ? `the planner proposed no steps at all; this mission authorises ` +
+          `${[...authorised].join(", ") || "(nothing)"}`
+        // STEPS WERE PROPOSED AND EVERY ONE WAS DROPPED. Name them and the
+        // reasons, so the fix is visible without re-running the planner.
+        : `all ${proposedSteps.length} proposed step(s) were dropped ` +
+          `[${attempted.join(", ")}]; reasons: ${reasons.join(", ") || "(none recorded)"}; ` +
+          `this mission authorises ${[...authorised].join(", ") || "(nothing)"}`,
       severity: "block",
     });
     return { ...base, steps: [], source: "blocked", violations };
@@ -427,6 +470,18 @@ export function validateExecutionPlan(
 }
 
 /**
+ * What the planner is told a LATER phase verifies — see `claimPlan.ts`, the
+ * one owner of this answer. The payload omits `evidence`: the planner needs to
+ * know a fact is owned, not how it is written.
+ */
+export function verifiedAfterEligibility(
+  mission: LeadMissionV1, graph: CapabilityPlan, readiness: ReadinessPolicy,
+): Array<{ claim: string; criterion_id: string; value: unknown; verified_by: string[] }> {
+  return claimsVerifiedAfter(mission, graph.entry_capability ?? null, readiness)
+    .map(({ claim, criterion_id, value, verified_by }) => ({ claim, criterion_id, value, verified_by }));
+}
+
+/**
  * What the planner is shown.
  *
  * The mission, the capabilities it authorised WITH the Actors each may reach,
@@ -438,7 +493,23 @@ export function buildExecutionPlannerPayload(
   mission: LeadMissionV1, graph: CapabilityPlan, opts: ExecutionPlanOptions = {},
 ): Record<string, unknown> {
   const p = mission.company_profile;
+  const verifiedAfter = verifiedAfterEligibility(mission, graph, opts.readiness ?? PRODUCTION_READINESS);
   return {
+    ...(verifiedAfter.length ? {
+      // ── FACTS THIS PLAN DOES NOT HAVE TO ESTABLISH ────────────────────────
+      //
+      // The planner is told to list what a request must KNOW and to return an
+      // empty plan when no authorised capability establishes it. A hard claim
+      // answered by the claim-verification phase — funding, business model —
+      // has no capability in this graph BY DESIGN: that phase runs after
+      // eligibility, per company, and is the single authority for buying
+      // verification. So a known-company mission requiring a funding round was
+      // refused by a planner doing exactly what it was told, because nobody
+      // told it that fact had an owner. Listed here from the SAME claim plan
+      // and readiness policy the phase itself uses; a claim no executable
+      // verifier answers is NOT listed, so it is still refused as before.
+      verified_after_eligibility: verifiedAfter,
+    } : {}),
     task: "plan_the_whole_job",
     request: {
       original_user_query: mission.original_user_query,

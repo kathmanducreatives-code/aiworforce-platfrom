@@ -33,6 +33,7 @@ import { applyVerifierFinding, missionCandidatesFrom } from "../../../supabase/f
 import { checkCriterion } from "../../../supabase/functions/_shared/candidateEligibility.ts";
 import { fundingVerifierReady } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import type { MissionCriterion } from "../../../supabase/functions/_shared/missionCriteria.ts";
+import { readinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
 
 globalThis.fetch = () => { throw new Error("P6 verifier tests must not reach the network"); };
 
@@ -292,8 +293,16 @@ Deno.test("targets are ONLY pending companies whose hard gap routes to this veri
     cand("d", { hard_checks: [{ criterion_id: "geography:us", dimension: "geography", result: "unknown", reason: "?" }] }),
   ], () => "seed", READY);
   assertEquals(picked.map((t) => [t.company_key, t.criterion.value]), [["a", "seed"]]);
-  // And with the production registry the route is not READY, so nobody is a target.
-  assertEquals(verificationTargets({ route_actor: "apify_funding_atomus", max_targets: 6 }, [cand("a")], () => "seed"), []);
+  // With the production registry the pair is READY (since 2026-09-22), so the
+  // pending company is a target; with the pair not ready, nobody is.
+  assertEquals(verificationTargets({ route_actor: "apify_funding_atomus", max_targets: 6 }, [cand("a")], () => "seed")
+    .map((t) => t.company_key), ["a"]);
+  const notReady = readinessPolicy({ overrides: {
+    "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
+    "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
+  } });
+  assertEquals(verificationTargets({ route_actor: "apify_funding_atomus", max_targets: 6 }, [cand("a")], () => "seed",
+    undefined, notReady), []);
 });
 
 Deno.test("a verifier's answer survives into the next slice: evidence recorded, route marked, router blocked", () => {
@@ -328,8 +337,15 @@ Deno.test("a verifier's answer survives into the next slice: evidence recorded, 
   assertEquals([gaps[0].next, gaps[0].considered[0].tried], ["blocked", true], "an answered route is not taken again");
 });
 
-Deno.test("a round stage stays unprovable until the funding verifier is READY", async () => {
-  assertFalse(fundingVerifierReady());
+Deno.test("a round stage is unprovable until the funding verifier is READY — and provable once it is", async () => {
+  // The pair became READY on 2026-09-22; a not-ready pair is the fixture for the
+  // "until" half, production is the "once it is" half.
+  const notReady = readinessPolicy({ overrides: {
+    "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
+    "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
+  } });
+  assertFalse(fundingVerifierReady(notReady));
+  assert(fundingVerifierReady(), "production: the corroborating pair may run");
   const { compileLeadMission } = await import("../../../supabase/functions/_shared/leadMissionCompiler.ts");
   const { deriveMissionCriteria } = await import("../../../supabase/functions/_shared/missionCriteria.ts");
   const mission = compileLeadMission({
@@ -344,8 +360,10 @@ Deno.test("a round stage stays unprovable until the funding verifier is READY", 
       evaluation_instructions: "", founder_unlock_recommended: false, confidence: 0.85, unknowns: [],
     } as never,
   }).final_mission;
-  const seed = deriveMissionCriteria(mission).find((c) => c.dimension === "company_stage" && c.value === "seed")!;
-  assertEquals(seed.status, "unprovable_today", "no route can answer it yet, and the card must say so");
+  const pending = deriveMissionCriteria(mission, notReady).find((c) => c.dimension === "company_stage" && c.value === "seed")!;
+  assertEquals(pending.status, "unprovable_today", "no route can answer it, and the card must say so");
+  const now = deriveMissionCriteria(mission).find((c) => c.dimension === "company_stage" && c.value === "seed")!;
+  assertEquals(now.status, "ok", "the pair can answer it, so it is not disclosed as unprovable");
 });
 
 Deno.test("run-agent runs the verifiers on canonical gaps, before the view, bound to the ledger, with a kill switch", () => {

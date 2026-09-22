@@ -329,11 +329,14 @@ Deno.test("the preview states the same size filter execution will send", () => {
   const ENGINE = Deno.readTextFileSync(
     new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
   );
-  assertEquals(
-    ENGINE.includes("buildExecutionPlannerPayload(opts.mission, opts.plan)," +
-      " { brain: opts.brain })") ||
-      ENGINE.includes("buildExecutionPlannerPayload(opts.mission, opts.plan, { brain: opts.brain })"),
-    true,
-    "the planner payload must carry the policy too",
-  );
+  // Every site that builds the planner payload must pass the Brain's size
+  // policy. Matched on the call and the `brain:` option rather than the exact
+  // object literal, because the options now also carry the run's readiness
+  // policy (so the planner knows which hard claims are verified after
+  // eligibility) — the property pinned here is the brain, and only the brain.
+  const sites = ENGINE.match(/buildExecutionPlannerPayload\(opts\.mission, opts\.plan,\s*\{[^}]*\}\)/g) ?? [];
+  assert(sites.length >= 1, "the engine builds the planner payload");
+  for (const site of sites) {
+    assert(site.includes("brain: opts.brain"), `the planner payload must carry the policy too: ${site}`);
+  }
 });

@@ -27,6 +27,7 @@ import {
   companyEvidenceItems, missionCandidatesFrom, runCapabilityPlan,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import { readinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
 import { jobEmployerToCompany, normalizeLinkedInJob } from "../../../supabase/functions/_shared/hiringActorNormalizers.ts";
 import {
   parseReasonerResult, reasonerPayload,
@@ -51,19 +52,32 @@ const proposal = {
   preferred_source_strategy: [], evaluation_instructions: "", founder_unlock_recommended: false, confidence: 0.85, unknowns: [],
 };
 const MISSION = compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission;
+/**
+ * THIS FILE TESTS LABEL CEILINGS, on a mission where the seed rung is a
+ * disclosed-unprovable preference. That was production until 2026-09-22, when
+ * the corroborating funding pair became READY and made the rung a usable
+ * target (see "the seed rung is a usable target in production" below). The
+ * fixtures are derived under the pre-promotion pair, NAMED, so the ceilings are
+ * still measured against the mission they were written for.
+ */
+const PAIR_NOT_READY = readinessPolicy({ overrides: {
+  "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
+  "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
+} });
 // Hard: industry b2b saas + saas, geography United States, company_stage startup.
 // Target: hiring (the anchor). "seed" compiles `unprovable_today` and is skipped.
-const CRITERIA = deriveMissionCriteria(MISSION);
+const CRITERIA = deriveMissionCriteria(MISSION, PAIR_NOT_READY);
 
 /** The same mission with the Brain's size PREFERENCE — a second, non-signal target. */
 const CRITERIA_PREF = deriveMissionCriteria(
-  compileLeadMission({ originalUserQuery: CANONICAL, proposal, companyBrain: { employee_min: 1, employee_max: 150 } }).final_mission);
+  compileLeadMission({ originalUserQuery: CANONICAL, proposal, companyBrain: { employee_min: 1, employee_max: 150 } }).final_mission,
+  PAIR_NOT_READY);
 
 /** "…bonus if they recently raised" — a second observable signal beside the anchor. */
 const CRITERIA_BONUS = deriveMissionCriteria(compileLeadMission({
   originalUserQuery: "Find 1 B2B SaaS startup in the US hiring its first growth marketer; bonus if they recently raised.",
   proposal: { ...proposal, adjacent_signals: ["recently raised"], preferred_signals: ["hiring growth marketer", "recently raised"] },
-}).final_mission);
+}).final_mission, PAIR_NOT_READY);
 
 let seq = 0;
 function ev(dimension: EvidenceDimension, value: unknown, over: Partial<EvidenceItem> = {}): EvidenceItem {
@@ -85,6 +99,16 @@ const hardProven = () => [
   ev("geography", "San Francisco, CA, United States"),
   ev("industry", "b2b saas"),
 ];
+
+Deno.test("the seed rung is a usable target in production now the funding pair is READY", () => {
+  // The production counterpart of the fixture above: the same mission, default
+  // policy. The rung is a PREFERENCE here ("seed-stage", no "only"/"must"), so
+  // it ranks and can never reject — but it is no longer skipped.
+  const seed = deriveMissionCriteria(MISSION).find((c) => c.dimension === "company_stage" && c.value === "seed")!;
+  assertEquals([seed.kind, seed.status], ["target", "ok"]);
+  const skipped = CRITERIA.find((c) => c.dimension === "company_stage" && c.value === "seed")!;
+  assertEquals(skipped.status, "unprovable_today", "…and the fixture is the not-ready pair, by name");
+});
 
 // ── SEM-1 ───────────────────────────────────────────────────────────────────
 

@@ -1,0 +1,34 @@
+.agent-depth-card {
+  --depth-rx: 0deg; --depth-ry: 0deg; --depth-px: 0px; --depth-py: 0px;
+  --depth-mx: 50%; --depth-my: 40%; --depth-lift: 0px; --depth-scale: 1;
+  position: relative; isolation: isolate;
+  transform: perspective(1100px) translateY(var(--depth-lift)) rotateX(var(--depth-rx)) rotateY(var(--depth-ry)) scale(var(--depth-scale));
+  transition: transform 350ms cubic-bezier(.2,.7,.3,1), border-color 150ms ease;
+}
+.agent-depth-card > :not(.agent-depth-light) { position: relative; z-index: 1; }
+.agent-depth-light { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; background: radial-gradient(circle at var(--depth-mx) var(--depth-my), color-mix(in srgb, var(--depth-accent) 12%, transparent), transparent 40%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--depth-accent) 22%, transparent); transition: opacity 350ms ease; }
+.agent-card-portrait { position: relative; display: inline-flex; flex-shrink: 0; width: 56px; height: 56px; isolation: isolate; }
+.agent-card-portrait__frame { position: relative; width: 100%; height: 100%; border-radius: 22%; overflow: hidden; background: #0c1512; box-shadow: inset 0 0 0 1px #ffffff18, 0 0 0 1px #75bc9c36; }
+.agent-card-portrait__image { width: 100%; height: 100%; object-fit: cover; object-position: center 38%; filter: drop-shadow(0 5px 8px #0004); transform: translate(var(--depth-px), var(--depth-py)) scale(1); transition: transform 350ms cubic-bezier(.2,.7,.3,1); }
+.agent-work-effect { position: absolute; width: 42px; height: 70px; left: -16px; top: -7px; color: var(--depth-accent); opacity: 0; transform: translateY(4px); pointer-events: none; transition: opacity 350ms ease, transform 400ms ease; }
+.agent-depth-card:focus-within .agent-depth-light { opacity: .65; }
+.agent-depth-card:focus-within .agent-work-effect { opacity: .45; transform: none; }
+@media (hover: hover) and (pointer: fine) {
+  .agent-depth-card:hover .agent-depth-light { opacity: 1; transition-duration: 150ms; }
+  .agent-depth-card[data-depth-active] { --depth-lift: -3px; --depth-scale: 1.005; }
+  .agent-depth-card[data-depth-active] .agent-card-portrait__image { transform: translate(var(--depth-px), var(--depth-py)) scale(1.02); }
+  .agent-depth-card[data-depth-active] .agent-work-effect { opacity: .6; transform: none; transition-delay: 150ms; }
+  .agent-depth-card[data-depth-active] .work-fragment { animation: agent-work-assemble 600ms both 150ms; }
+  .agent-depth-card[data-depth-active] .work-fragment--later { animation-delay: 250ms; }
+  .agent-depth-card[data-depth-active] .work-trace { stroke-dasharray: 160; animation: agent-work-trace 700ms both 150ms; }
+  .agent-depth-card[data-depth-active] .work-pulse { transform-box: fill-box; transform-origin: center; animation: agent-work-pulse 3s ease-out infinite 700ms; }
+}
+@keyframes agent-work-assemble { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes agent-work-trace { from { stroke-dashoffset: 160; opacity: 0; } to { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes agent-work-pulse { 0%, 100% { opacity: .15; transform: scale(1); } 45% { opacity: .65; transform: scale(1.25); } }
+@media (prefers-reduced-motion: reduce) {
+  .agent-depth-card, .agent-card-portrait__image { transform: none !important; }
+  .agent-depth-card { transition: border-color 150ms ease; }
+  .agent-work-effect, .agent-work-effect * { animation: none !important; transform: none !important; transition: opacity 150ms ease !important; }
+  .agent-depth-card:hover .agent-work-effect { opacity: .35; }
+}

@@ -77,27 +77,33 @@ Deno.test("LIVE: the same evidence answers the other rungs honestly", () => {
 
 // ── THE PROMOTION THE PROBE EARNED, AND THE ONE IT DID NOT ──────────────────
 
-Deno.test("READINESS: the pair is EXPERIMENTAL together, with the probe named", () => {
+Deno.test("READINESS: the pair is READY together — earned THROUGH the spine, not by the probe", () => {
   const a = readinessOf("apify_funding_atomus", "funding_verification");
   const p = readinessOf("apify_funding_pvalyou", "funding_verification");
-  assertEquals([a.readiness, p.readiness], ["EXPERIMENTAL", "EXPERIMENTAL"],
+  assertEquals([a.readiness, p.readiness], ["READY", "READY"],
     "promoted as a pair — never one without the other");
   for (const r of [a, p]) {
-    assert(r.live_evidence?.includes("2026-09-21"), `${r.actor}: the probe that proved it is named`);
+    // The 2026-09-21 probe (this file's evidence) earned EXPERIMENTAL; READY
+    // came from the 2026-09-22 known-company mission that routed a HARD
+    // funding claim to the pair through the spine (task 3f082b22).
+    assert(r.live_evidence?.includes("3f082b22"), `${r.actor}: the spine canary is named`);
     assert(r.gated_by?.includes("pair"), `${r.actor}: the record says it cannot answer alone`);
   }
-  // READY means live-proven THROUGH the spine. The 2026-09-21 mission recorded
-  // this verifier as `irrelevant`, so neither has earned it.
-  assertFalse([a.readiness, p.readiness].includes("READY"),
-    "READY waits for a mission that routes a hard funding claim to this pair");
 });
 
-Deno.test("READINESS: EXPERIMENTAL runs nowhere by default, and only where it is named", () => {
+Deno.test("READINESS: READY runs by default now, and ONE half still never settles the claim", () => {
+  // Production executes both halves. That the pair is the unit is enforced by
+  // the DECISION below (and in the next test), not by withholding readiness.
   for (const pair of [ATOMUS_PAIR, PVALYOU_PAIR]) {
     const [actor, capability] = pair.split("|");
-    assertFalse(PRODUCTION_READINESS.decide(actor, capability).executable,
-      `${actor} must not run in an ordinary production mission`);
-    const allowed = readinessPolicy({ allow_experimental: [ATOMUS_PAIR, PVALYOU_PAIR] });
+    assert(PRODUCTION_READINESS.decide(actor, capability).executable, `${actor} runs in production`);
+    // A not-ready fixture is still refused, and an explicit allow still opens it.
+    const notReady = readinessPolicy({ overrides: { [ATOMUS_PAIR]: "EXPERIMENTAL", [PVALYOU_PAIR]: "EXPERIMENTAL" } });
+    assertFalse(notReady.decide(actor, capability).executable);
+    const allowed = readinessPolicy({
+      overrides: { [ATOMUS_PAIR]: "EXPERIMENTAL", [PVALYOU_PAIR]: "EXPERIMENTAL" },
+      allow_experimental: [ATOMUS_PAIR, PVALYOU_PAIR],
+    });
     assertEquals(allowed.decide(actor, capability).via, "experimental_allowed");
   }
 });

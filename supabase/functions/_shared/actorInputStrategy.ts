@@ -1,3 +1,4 @@
+import { perResultPriceUsd } from "./hiringActorCatalog.ts";
 // HOW TO AIM AN ACTOR, NOT MERELY WHAT IT ACCEPTS.
 //
 // ── WHY A SCHEMA IS NOT ENOUGH ──────────────────────────────────────────────
@@ -164,7 +165,7 @@ export const ACTOR_INPUT_STRATEGIES:
         effect: "changes_population",
       },
       maxItems: {
-        means: "Maximum records returned. Billed PER RECORD at $0.045.",
+        means: `Maximum records returned. Billed PER RECORD at $${perResultPriceUsd("apify_funding_rounds_datahyena") ?? "?"}.`,
         use_when:
           "Always — it is the entire cost model, and the most expensive per-row " +
           "actor in the catalog.",
@@ -199,7 +200,7 @@ export const ACTOR_INPUT_STRATEGIES:
       "A mission window in days becomes `since` = today minus that many days, " +
       "ISO date. There is no other recency control, and `announcedAt` must still " +
       "be re-checked per row because the filter bounds the query, not the answer.",
-    expensive_inputs: ["maxItems (per-record billing at $0.045 — the highest in the catalog)"],
+    expensive_inputs: [`maxItems (per-record billing at $${perResultPriceUsd("apify_funding_rounds_datahyena") ?? "?"} — the highest in the catalog)`],
     noisy_patterns: [
       "OBSERVED on run 0XchPqe0cJpx0Yc2T: the provider resolved an Australian " +
       "fintech round onto a Montreal performing-arts ensemble's domain. Company " +

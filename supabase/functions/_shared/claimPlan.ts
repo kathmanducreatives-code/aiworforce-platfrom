@@ -17,7 +17,8 @@
 //
 // Pure.
 
-import type { MissionCriterion } from "./missionCriteria.ts";
+import { deriveMissionCriteria, type MissionCriterion } from "./missionCriteria.ts";
+import type { LeadMissionV1 } from "./leadMission.ts";
 import { CLAIM_REGISTRY, claimFor, type ClaimDefinition } from "./evidenceGapRouter.ts";
 import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 
@@ -104,4 +105,46 @@ export function buildClaimPlan(
 /** Route actors that answer at least one HARD claim of this plan — the only verifiers worth running. */
 export function relevantVerifierActors(plan: ClaimPlan): Set<string> {
   return new Set(plan.hard.flatMap((h) => h.routes.map((r) => r.actor)));
+}
+
+export interface VerifiedAfterEligibility {
+  claim: string;
+  criterion_id: string;
+  value: unknown;
+  /** The verification CAPABILITY — never an actor a planner could propose. */
+  verified_by: string[];
+  /** Evidence dimensions the verification writes (from the claim registry). */
+  evidence: string[];
+}
+
+/**
+ * Hard claims the claim-verification phase will establish for this mission.
+ *
+ * THE ONE ANSWER to "is this fact owned by a later phase?", asked by every gate
+ * that used to assume only a graph capability can establish anything: the
+ * execution planner (which returned an empty plan) and request feasibility
+ * (which refused the run as `request_not_feasible`). Both were right given what
+ * they could see — the claim-verification phase runs after eligibility and has
+ * no step in the graph by design — and both refused a known-company funding
+ * mission for that reason alone.
+ *
+ * Built by `buildClaimPlan`, the function the phase itself runs, under the
+ * run's own readiness policy: a claim no EXECUTABLE verifier answers is not
+ * returned, so production behaviour — where the funding pair may not run — is
+ * exactly what it was.
+ */
+export function verifiedAfterEligibility(
+  mission: LeadMissionV1, entry: string | null, readiness: ReadinessPolicy = PRODUCTION_READINESS,
+  registry: readonly ClaimDefinition[] = CLAIM_REGISTRY,
+): VerifiedAfterEligibility[] {
+  const plan = buildClaimPlan(deriveMissionCriteria(mission, readiness), entry, readiness, registry);
+  return plan.hard
+    .filter((h) => h.status === "verifiable" && h.claim)
+    .map((h) => ({
+      claim: h.claim!,
+      criterion_id: h.criterion_id,
+      value: h.value,
+      verified_by: [...new Set(h.routes.map((r) => r.capability))],
+      evidence: [...(registry.find((d) => d.claim === h.claim)?.evidence ?? [])],
+    }));
 }

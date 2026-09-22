@@ -200,7 +200,7 @@ import {
   type CompanyResumeRecord,
 } from "../_shared/leadResumeState.ts";
 import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
-import { missionHash, companyIsTheDeliverable } from "../_shared/leadMission.ts";
+import { missionHash, companyIsTheDeliverable, isLeadMissionV1 } from "../_shared/leadMission.ts";
 import {
   selectResearchPlaybooks, playbookSelectionSummary,
 } from "../_shared/leadResearchPlaybooks.ts";
@@ -443,6 +443,7 @@ import type { CompanyEnrichmentObservability } from "../_shared/companyEnrichmen
 import { emptySignalEnrichmentObservability, type SignalEnrichmentObservability } from "../_shared/signalEnrichmentObservability.ts";
 import type { TimingAssessment } from "../_shared/timingAssessment.ts";
 import { functionUrl, functionsBaseUrl } from "../_shared/functionEndpoints.ts";
+import { candidatePool, parseRunBudget } from "../_shared/runBudget.ts";
 
 
 /**
@@ -958,6 +959,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
   const needs_approval: boolean = body.needs_approval === true;
   const tool_input_body: any = body.tool_input ?? null;
   const execution_mode_body: string | undefined = body.execution_mode;
+  // THE RUN'S OWN BUDGET — tighten-only (see runBudget.ts). Not `budget`, which
+  // stays ignored as a client-controlled field: nothing here can RAISE spend.
+  const runBudget = parseRunBudget(body.run_budget);
   // WHICH RUN TO CONTINUE — an ID, never the findings themselves. The records
   // are loaded from the database below, after the workspace is verified.
   const leadResumeParentTaskId: string | null =
@@ -1611,9 +1615,20 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     };
 
     // 1) Firecrawl scrape — if instruction/input contains URLs.
+    //
+    // NOT FOR A MISSION-AUTHORITATIVE RUN. This pre-scrape predates Lead V2 and
+    // runs before the capability engine with no spend-ledger reservation and no
+    // execution owner. On a Lead V2 mission a URL in the request is an IDENTITY
+    // (`known_companies`), and web evidence is bought only by the claim-
+    // verification phase, under its budget. A known-company funding canary
+    // (2026-09-22) sent the user's LinkedIn page here with the whole request as
+    // the extraction goal; it failed only because the key was refused.
+    const missionOwnsEvidence = isLeadMissionV1(tool_input_body?.lead_mission);
     const urlRe = /https?:\/\/[^\s)\]"'<>]+/g;
     const haystack = `${instruction ?? ""}\n${input ?? ""}`;
-    const urls = Array.from(new Set((haystack.match(urlRe) ?? []).map((u) => u.replace(/[.,;:]+$/, "")))).slice(0, 3);
+    const urls = missionOwnsEvidence
+      ? []
+      : Array.from(new Set((haystack.match(urlRe) ?? []).map((u) => u.replace(/[.,;:]+$/, "")))).slice(0, 3);
 
     if (urls.length > 0) {
       const blocks: string[] = [];
@@ -2472,7 +2487,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             requestedCount: quota.requestedLeadCount,
             // The discovery ceiling, not MAX_SAFE_INTEGER: the pool bound is
             // meaningful and passing infinity made `pool_bound` unreachable.
-            poolSize: Math.max(10, quota.requestedLeadCount * 10),
+            poolSize: candidatePool(quota.requestedLeadCount, runBudget),
           }).budget,
         });
         console.log("[run-agent][mission-evaluation][binding]", {
@@ -2499,7 +2514,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         const triageBinding = buildMissionTriageBinding({
           workspaceId: workspace_id,
           onModelCall: modelCalls.sink,
-          poolSize: Math.max(10, quota.requestedLeadCount * 10),
+          poolSize: candidatePool(quota.requestedLeadCount, runBudget),
           // THE ROUTER'S SIGNAL. Triage is the same work at any quota; what the
           // quota changes is whether a misordering costs a position or a lead.
           requestedCount: quota.requestedLeadCount,
@@ -2611,7 +2626,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // it.
         const firstCall = missionPlan
           ? compileFirstProviderCall(missionPlan, {
-            maxCandidates: Math.max(10, quota.requestedLeadCount * 10),
+            maxCandidates: candidatePool(quota.requestedLeadCount, runBudget),
           })
           : { provider: null, compiled: null };
         const paidPreflight = buildPaidExecutionPreflight({
@@ -3953,7 +3968,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               // THE RAW-ROW ALLOWANCE, unchanged. The ADMITTED target is a
               // separate, smaller number the engine derives from what is still
               // owed — see `ADMITTED_PER_OWED_LEAD`.
-              maxCandidates: Math.max(10, quota.requestedLeadCount * 10),
+              // Ten raw rows per lead (at least ten) unless the run's budget
+              // lowers it — see `candidatePool`, the one owner of this number.
+              maxCandidates: candidatePool(quota.requestedLeadCount, runBudget),
+              runBudget,
               remainingLeads: quota.requestedLeadCount,
               discoveryReplenishment,
             });
@@ -5145,6 +5163,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 (p2Specs && missionPlan)
                   ? canonicalDecisions(capabilityRun.companies, {
                     mission: persistedMission, plan: missionPlan, identity: { task_id: String(task.id) },
+                    readiness: leadReadiness,
                   })
                   : undefined,
               )
@@ -5526,7 +5545,14 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           } catch (e) {
             // A containment violation is a BUG, not a provider failure, and it
             // must not silently degrade into the legacy path.
-            console.log("[run-agent][capability-engine][error]", String(e));
+            //
+            // THE STACK, NOT JUST THE MESSAGE. `String(e)` reduces a TypeError
+            // to one line with no file and no frame, which is the difference
+            // between "fix it" and "reproduce it first": a live funding canary
+            // crashed here with `Cannot read properties of undefined (reading
+            // 'replace')` and the log said nothing about where.
+            console.log("[run-agent][capability-engine][error]",
+              e instanceof Error ? (e.stack ?? `${e.name}: ${e.message}`) : String(e));
             throw e;
           }
         }

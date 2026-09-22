@@ -144,6 +144,10 @@ RULES, in order of importance:
    and why.
 7. A capability whose runs_an_actor is false takes actor_key: null. It is a
    stage of the run, not a purchase.
+8. Facts listed under verified_after_eligibility are established per company
+   by a verification phase that runs AFTER qualification. You do not plan them
+   and cannot: do not propose a step for them, and do not treat them as facts
+   this request is missing. Plan everything else the request needs.
 
 If the authorised capabilities and their actors cannot establish what this
 request needs, return an empty steps list and say what is missing. That is a

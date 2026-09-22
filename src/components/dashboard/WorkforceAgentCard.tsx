@@ -1,9 +1,9 @@
-import { useEffect, useRef, type PointerEvent } from 'react';
 import { ArrowUpRight, MessageCircle } from 'lucide-react';
 import { lookupPublicAgent } from '@/config/agentRegistry';
 import { AGENTS } from '@/components/workforce/agents';
 import type { AgentState } from '@/hooks/useWorkforceState';
-import AgentVisual, { type AgentVisualHandle } from '@/components/agent3d/AgentVisual';
+import { AgentDepthCard } from '@/components/agents/AgentDepthCard';
+import { AgentCardPortrait } from '@/components/agents/AgentCardPortrait';
 import type { AgentVisualState } from '@/lib/agent3d/visualState';
 
 interface Props {
@@ -20,38 +20,6 @@ interface Props {
 export default function WorkforceAgentCard({ agent, visual, loading, onProfile, onChat, onAction }: Props) {
   const meta = AGENTS[agent.id];
   const profile = lookupPublicAgent(agent.id);
-  const host = useRef<HTMLElement>(null);
-  const face = useRef<AgentVisualHandle>(null);
-  // A click is acknowledged by the agent (a nod, once models exist), then acted on.
-  const acknowledged = (act: () => void) => () => { face.current?.acknowledge(); act(); };
-  const frame = useRef<number>();
-  const bounds = useRef<DOMRect>();
-  useEffect(() => () => cancelAnimationFrame(frame.current ?? 0), []);
-  function reset() {
-    cancelAnimationFrame(frame.current ?? 0);
-    bounds.current = undefined;
-    ['--team-rx', '--team-ry', '--team-x', '--team-y', '--team-px', '--team-py'].forEach(key => host.current?.style.removeProperty(key));
-  }
-  function move(event: PointerEvent<HTMLElement>) {
-    if (event.pointerType !== 'mouse' || !matchMedia('(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)').matches) return;
-    const el = host.current;
-    if (!el) return;
-    const box = bounds.current ?? (bounds.current = el.getBoundingClientRect());
-    const x = Math.max(-1, Math.min(1, (event.clientX - box.left) / box.width * 2 - 1));
-    const y = Math.max(-1, Math.min(1, (event.clientY - box.top) / box.height * 2 - 1));
-    cancelAnimationFrame(frame.current ?? 0);
-    frame.current = requestAnimationFrame(() => {
-      // Restrained depth: ≤3° of tilt, light that follows the pointer, and the
-      // portrait drifting a few pixels against it (parallax), all released on
-      // leave so the CSS transition eases the card back to rest.
-      el.style.setProperty('--team-rx', `${-y * 3}deg`);
-      el.style.setProperty('--team-ry', `${x * 3}deg`);
-      el.style.setProperty('--team-x', `${50 + x * 40}%`);
-      el.style.setProperty('--team-y', `${50 + y * 40}%`);
-      el.style.setProperty('--team-px', `${-x * 6}px`);
-      el.style.setProperty('--team-py', `${-y * 4}px`);
-    });
-  }
   // The dot and the announced status are claims about right now, so they rest on
   // the same live truth as the visual (useAgentVisualStates) — never on the
   // count-based `agent.status`, which calls an agent busy because it has outputs.
@@ -62,21 +30,20 @@ export default function WorkforceAgentCard({ agent, visual, loading, onProfile, 
   // two actions are revealed on hover or keyboard focus; the profile (top right)
   // stays available on touch. Status is still announced to screen readers, and
   // a small dot marks an agent that needs you — nothing else is always on.
-  return <article ref={host} className="team-agent" data-visual-state={visual?.base ?? 'idle'} onPointerMove={move} onPointerLeave={reset} onPointerCancel={reset} aria-label={`${meta.name} — ${meta.role}`}>
+  return <AgentDepthCard className="team-agent team-agent--depth" accent={profile?.accentHex ?? '#10B981'} label={`${meta.name} — ${meta.role}`}>
     <div className="team-agent__surface">
-      <AgentVisual ref={face} agentId={agent.id} state={visual} surface="home" trackRef={host}
-        fallback={<img className="team-agent__portrait" src={profile?.avatar} alt="" decoding="async" draggable={false} />} />
+      <AgentCardPortrait stage id={profile?.id ?? agent.id} name={meta.name} role={meta.role} src={profile?.avatar} />
       <div className="team-agent__shade" />
       <div className="team-agent__reflection" />
-      <button className="team-agent__profile" onClick={acknowledged(onProfile)} aria-label={`View ${meta.name}'s profile`}><ArrowUpRight size={16} /></button>
+      <button className="team-agent__profile" onClick={onProfile} aria-label={`View ${meta.name}'s profile`}><ArrowUpRight size={16} /></button>
       <div className="team-agent__body">
         <h2>{meta.name}{attention && <span className="team-agent__attention" title={status} aria-hidden />}</h2>
         <span className="sr-only">{status}</span>
         <div className="team-agent__reveal">
           <span className="team-agent__specialty">{meta.role.replace('AI ', '')}</span>
-          <div className="team-agent__actions"><button onClick={acknowledged(onAction)} title={agent.nextAction.label}><span className="team-agent__action-label">{agent.nextAction.label}</span><ArrowUpRight size={14} className="shrink-0" /></button><button onClick={acknowledged(onChat)} aria-label={`Chat with ${meta.name}`}><MessageCircle size={16} /></button></div>
+          <div className="team-agent__actions"><button onClick={onAction} title={agent.nextAction.label}><span className="team-agent__action-label">{agent.nextAction.label}</span><ArrowUpRight size={14} className="shrink-0" /></button><button onClick={onChat} aria-label={`Chat with ${meta.name}`}><MessageCircle size={16} /></button></div>
         </div>
       </div>
     </div>
-  </article>;
+  </AgentDepthCard>;
 }

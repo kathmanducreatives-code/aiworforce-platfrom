@@ -1530,3 +1530,19 @@ export function actorsRequiringEnrichment(): string[] {
     .filter((c) => c.requires_enrichment_before_qualification)
     .map((c) => c.actor_key);
 }
+
+/**
+ * An actor's price per result, from its card — THE ONE SOURCE for any message
+ * that quotes a price.
+ *
+ * Validation text used to carry its own literal ("billed per record at
+ * $0.045"), which went stale the day the Store repriced datahyena to $0.07
+ * (2026-09-12) while the card was updated: the refusal quoted a price 36% too
+ * low, and so did every total it multiplied out. A message that reads the card
+ * cannot disagree with the estimate the spend ledger enforces.
+ */
+export function perResultPriceUsd(actorKey: string): number | null {
+  const card = (HIRING_ACTOR_CATALOG as Record<string, { cost_model?: { per_result_usd?: number | null } }>)[actorKey];
+  const v = card?.cost_model?.per_result_usd;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}

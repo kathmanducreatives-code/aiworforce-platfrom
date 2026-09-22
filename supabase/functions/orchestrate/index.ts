@@ -39,6 +39,7 @@ import {
   getLeadIntelligenceCapabilities,
 } from "../_shared/leadIntelligencePolicy.ts";
 import { functionUrl } from "../_shared/functionEndpoints.ts";
+import { parseRunBudget } from "../_shared/runBudget.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -1671,6 +1672,12 @@ Return ONLY valid JSON, no prose, no markdown:
         tool_input: (firstStep as Step & { metadata?: { tool_input?: unknown } }).metadata?.tool_input ?? tool_input ?? null,
         execution_mode: qualifiedLead ? "company_first" : executionMode,
         lead_routing: leadRouting,
+        // THE RUN'S OWN BUDGET, carried to whichever executor takes the step —
+        // the edge function or, through the queue, the worker. Re-validated by
+        // run-agent; tighten-only either way (runBudget.ts).
+        ...(parseRunBudget((body as Record<string, unknown>).run_budget)
+          ? { run_budget: parseRunBudget((body as Record<string, unknown>).run_budget) }
+          : {}),
         // QUALIFIED-LEAD ROUTE. run-agent's company-first branch needs (a) an
         // unpinned actor so it compiles the entity intent itself, and (b) the
         // FINAL-LEAD quota. Without these the request silently degrades to the

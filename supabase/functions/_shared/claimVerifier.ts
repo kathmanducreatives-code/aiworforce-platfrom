@@ -101,6 +101,17 @@ export interface VerifierFinding {
   company_key: string;
   /** The canonical item to record; null when the claim stays PENDING. */
   item: EvidenceItem | null;
+  /**
+   * Evidence the answer RESTS ON, recorded beside the verdict.
+   *
+   * The funding verifier's verdict is a `company_stage` item; the dated rounds
+   * it read are a `funding` record. Recording only the verdict left those dates
+   * out of the graph, so `recently_funded` — which is answered from funding
+   * records — had nothing to read after the pair had already bought them.
+   * Funding discovery has always recorded both; this makes the verifier do the
+   * same.
+   */
+  supporting?: EvidenceItem[];
   /** True once the route has ANSWERED for this company, whatever the verdict. */
   answered: boolean;
   detail: Record<string, unknown>;

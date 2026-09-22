@@ -268,6 +268,7 @@ import { appendTrace, newMissionTrace, type MissionTrace } from "./missionTrace.
 import { ACTOR_INPUT_CONTRACTS as P2_ACTOR_CONTRACTS } from "./actorInputContracts.ts";
 import { hashInput as p2HashInput } from "./hiringActorInputs.ts";
 import { toRepoKey } from "./actorIdentity.ts";
+import { tightenCeilings, type RunBudget } from "./runBudget.ts";
 
 /**
  * The PAID stages a new investigation slice must re-run.
@@ -2122,6 +2123,12 @@ export interface CapabilityEngineOpts {
   specScope?: { workspace_id: string; lineage_id: string };
   ceilings?: Partial<Ceilings>;
   canary?: boolean;
+  /**
+   * The run's own budget (`runBudget.ts`). TIGHTEN-ONLY: it lowers the provider
+   * ceilings the spend ledger enforces before every paid call, and can never
+   * raise one. Absent for an ordinary mission.
+   */
+  runBudget?: RunBudget | null;
   /** Resume state. Ignored unless its mission_hash matches. */
   state?: CapabilityExecutionState | null;
   brain?: {
@@ -2636,7 +2643,7 @@ export async function runCapabilityPlan(
   const routePolicy: ReadinessPolicy = guardPolicy;
   /** The funding rung the mission asks for, when it asks for one — what a discovered round is judged against. */
   const requiredRoundStage: string | null = (() => {
-    const c = deriveMissionCriteria(opts.mission).find((x) => x.dimension === "company_stage" &&
+    const c = deriveMissionCriteria(opts.mission, guardPolicy).find((x) => x.dimension === "company_stage" &&
       typeof x.value === "string" && stageRank(normalizeRoundType(x.value)) !== null);
     return c ? String(c.value) : null;
   })();
@@ -2651,7 +2658,8 @@ export async function runCapabilityPlan(
   /** A slice resumed onto an existing plan version (a worker continuation). */
   const resumedOntoPlan = specOn && (state.retrieval_plans?.length ?? 0) > 0;
   if (specOn) {
-    state.spend_ledger ??= newSpendLedger(resolveCeilings(opts.ceilings ?? null, opts.canary === true));
+    state.spend_ledger ??= newSpendLedger(
+      tightenCeilings(resolveCeilings(opts.ceilings ?? null, opts.canary === true), opts.runBudget ?? null));
     state.mission_trace ??= newMissionTrace();
     state.provider_call_specs ??= [];
     state.retrieval_plans ??= [];
@@ -4119,7 +4127,7 @@ export async function runCapabilityPlan(
   let executionPlan: ExecutionPlan | null = null;
   if (deps.planExecution) {
     try {
-      const payload = buildExecutionPlannerPayload(opts.mission, opts.plan, { brain: opts.brain });
+      const payload = buildExecutionPlannerPayload(opts.mission, opts.plan, { brain: opts.brain, readiness: guardPolicy });
       const hash = await missionHash(opts.mission);
       const stepsOf = (proposed: unknown) =>
         Array.isArray(proposed)
@@ -4178,7 +4186,13 @@ export async function runCapabilityPlan(
         executionPlan = first;
       } else {
         const blocking = first.violations.filter((v) => v.severity === "block");
-        log("execution_plan_repair_attempt", { violations: blocking.map((v) => v.code) });
+        // THE MESSAGE, NOT ONLY THE CODE. `no_valid_step` on its own says a
+        // plan was refused and nothing about why; the message now carries the
+        // proposed steps and the reasons each was dropped, and a log that
+        // prints only codes throws that away again.
+        log("execution_plan_repair_attempt", {
+          violations: blocking.map((v) => ({ code: v.code, actor_key: v.actor_key, message: v.message })),
+        });
         const repaired = validateExecutionPlan(
           stepsOf(await deps.planExecution({
             payload, mission_hash: hash,
@@ -4203,8 +4217,13 @@ export async function runCapabilityPlan(
           state.terminal_reason = "execution_plan_blocked";
           state.fallback_reason = repaired.violations[0]?.code ?? "execution_plan_blocked";
           log("execution_plan_blocked", {
-            first: blocking.map((v) => v.code),
-            second: repaired.violations.filter((v) => v.severity === "block").map((v) => v.code),
+            first: blocking.map((v) => ({ code: v.code, actor_key: v.actor_key, message: v.message })),
+            second: repaired.violations.filter((v) => v.severity === "block")
+              .map((v) => ({ code: v.code, actor_key: v.actor_key, message: v.message })),
+            // What the planner was ALLOWED to use. An empty plan against a
+            // non-empty authorisation is the model judging every actor unfit,
+            // which is a mission problem, not a planner problem.
+            authorised_capabilities: opts.plan.steps.map((st) => st.capability),
           });
           throw new ExecutionPlanBlockedError(repaired.violations);
         }
@@ -5440,9 +5459,9 @@ export async function runCapabilityPlan(
             // round travels with it as the funding evidence.
             //
             // EVERY SEARCH TERM COMES FROM THE STRATEGY. `maxItems` is the only
-            // pre-set, and only because it is a COST ceiling — at $0.045 per
-            // record this Actor is five times the price of any other row here,
-            // so the ceiling is clamped harder than elsewhere.
+            // pre-set, and only because it is a COST ceiling — this Actor bills
+            // per record at the highest price in the catalog (see its card), so
+            // the ceiling is clamped harder than elsewhere.
             const compiled = compileDatahyenaFundingInput({
               maxItems: Math.min(maxCandidates, 200),
               ...sel.input,
@@ -5999,7 +6018,7 @@ export async function runCapabilityPlan(
           const amended = validateExecutionPlan(
             ((p: unknown) => Array.isArray(p) ? p : (p as { steps?: unknown } | null)?.steps)(
               await deps.planExecution({
-                payload: buildExecutionPlannerPayload(opts.mission, opts.plan, { brain: opts.brain }),
+                payload: buildExecutionPlannerPayload(opts.mission, opts.plan, { brain: opts.brain, readiness: guardPolicy }),
                 mission_hash: await missionHash(opts.mission),
                 results: summary,
               })),
@@ -10658,6 +10677,34 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
   // disagrees. A `review` grounding is plausible only (see the builder).
   const groundedItem = groundedBusinessModelItem(c, missionId, at);
   if (groundedItem) items.push(groundedItem);
+  // ── A RESOLVED IDENTITY IS EVIDENCE ────────────────────────────────────
+  //
+  // Identity reached the graph only through a provider OBSERVATION, so a
+  // company resolved by the identity stage — a supplied LinkedIn page is a
+  // `verified_match` with no lookup at all — had no identity item whenever its
+  // enrichment row came back empty. `known_companies`, which is answered from
+  // identity, then stayed `unknown` forever and the company sat in `pending`
+  // with every claim it needed already proven (canary 9dd9c230: funding_stage
+  // PASS, known_companies unknown). Only added when no observation spoke for
+  // identity, so a provider's own identity row always takes precedence.
+  if (c.identity && identityIsActionable(c.identity) && !items.some((e) => e.dimension === "identity")) {
+    items.push({
+      evidence_id: `idr_${c.key}`, company_key: c.key, dimension: "identity",
+      value: {
+        linkedin_company_url: c.identity.linkedin_company_url,
+        domain: c.company.canonical_domain ?? null,
+        name: c.enriched?.company_name ?? c.company.company_name ?? null,
+      },
+      status: "proven",
+      source: {
+        provider: "engine", actor: "identity_resolution", provider_call_id: null,
+        url: c.identity.linkedin_company_url, excerpt: (c.identity.evidence ?? []).join("; ") || null,
+      },
+      method: "deterministic_derivation", observed_at: at, valid_until: null, confidence: "high",
+      derived_from: [c.identity.linkedin_company_url].filter((u): u is string => !!u),
+      mission_id: missionId, origin: "lead_mission",
+    });
+  }
   if (c.hiring_assessment?.verdict === "hiring_verified") {
     derived("hiring", true, "proven", c.hiring_jobs.map((j) => j.job_url ?? "").filter(Boolean).slice(0, 5), "high");
   }
@@ -10716,9 +10763,15 @@ export function missionCandidatesFrom(
  */
 export function canonicalDecisions(
   companies: readonly EngineCompany[],
-  opts: { mission: LeadMissionV1; plan: { entry_capability: string | null | undefined }; identity?: { task_id?: string | null } | null },
+  opts: {
+    mission: LeadMissionV1;
+    plan: { entry_capability: string | null | undefined };
+    identity?: { task_id?: string | null } | null;
+    /** The run's policy, so eligibility reads the same criteria the card showed. */
+    readiness?: ReadinessPolicy;
+  },
 ): Map<string, CandidateDecision> {
-  const criteria = deriveMissionCriteria(opts.mission);
+  const criteria = deriveMissionCriteria(opts.mission, opts.readiness ?? PRODUCTION_READINESS);
   const anchor = anchorForCapability(String(opts.plan.entry_capability ?? "")) ?? null;
   const out = new Map<string, CandidateDecision>();
   for (const candidate of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
@@ -10742,9 +10795,14 @@ export function canonicalQualifiedKeys(
  */
 export function canonicalDecisionSummary(
   companies: readonly EngineCompany[],
-  opts: { mission: LeadMissionV1; plan: { entry_capability: string | null | undefined }; identity?: { task_id?: string | null } | null },
+  opts: {
+    mission: LeadMissionV1;
+    plan: { entry_capability: string | null | undefined };
+    identity?: { task_id?: string | null } | null;
+    readiness?: ReadinessPolicy;
+  },
 ) {
-  const criteria = deriveMissionCriteria(opts.mission);
+  const criteria = deriveMissionCriteria(opts.mission, opts.readiness ?? PRODUCTION_READINESS);
   const candidates = missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null });
   return decisionSummary(decisionCounts({
     criteria, candidates, anchor: anchorForCapability(String(opts.plan.entry_capability ?? "")) ?? null,
@@ -10846,7 +10904,7 @@ export function applyVerifierFinding(
       provider_call_id: f.item.source.provider_call_id, source_record_id: null, source_url: f.item.source.url,
       observed_at: f.item.observed_at,
       entity_hint: entityHintFromCompany(c.company),
-      evidence: [f.item],
+      evidence: [f.item, ...(f.supporting ?? [])],
     });
     recorded = true;
   }

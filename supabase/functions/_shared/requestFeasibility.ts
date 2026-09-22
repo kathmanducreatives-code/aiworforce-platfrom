@@ -58,6 +58,7 @@ import {
   type ExecutabilityGateMode, type ExecutabilityState,
 } from "./capabilityExecutability.ts";
 import { capabilityRunnable, PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
+import { verifiedAfterEligibility, type VerifiedAfterEligibility } from "./claimPlan.ts";
 
 export const FEASIBILITY_VERSION = "request-feasibility-v1" as const;
 
@@ -337,6 +338,10 @@ export function assessRequestFeasibility(
     };
   };
 
+  let verifiedAfterCache: VerifiedAfterEligibility[] | null = null;
+  const verifiedAfter = (): VerifiedAfterEligibility[] =>
+    verifiedAfterCache ??= verifiedAfterEligibility(mission, plan.entry_capability ?? null, policy);
+
   // ── grade every stated signal requirement ────────────────────────────────
   for (const sig of mission.required_signals ?? []) {
     const event = String(sig.event ?? sig.type ?? "").trim();
@@ -346,6 +351,25 @@ export function assessRequestFeasibility(
     const detail = { event, subject, mission_cohort: cohort };
 
     const by = provingSteps.find((s) => stepProves(s, event, subject, cohort));
+    // ── ESTABLISHED AFTER ELIGIBILITY ──────────────────────────────────────
+    //
+    // No graph step proves a company's funding for a known-company mission,
+    // because the funding pair runs in the claim-verification phase, not as a
+    // capability. This check refused that mission as `request_not_feasible`
+    // before the planner was even asked. A company-subject signal whose
+    // evidence a verifiable hard claim writes IS established — by the same
+    // claim plan, under the same readiness policy, that the phase runs.
+    const verifier = !by && subject === "company"
+      ? verifiedAfter().find((v) => v.evidence.includes(event))
+      : undefined;
+    if (verifier) {
+      report.requirements.push({
+        requirement: phrase, status: "satisfied", by_capability: verifier.verified_by[0] ?? "claim_verification",
+        message: `Established after eligibility by ${verifier.verified_by.join(", ")} (${verifier.claim}).`,
+        detail: { ...detail, established_after_eligibility: true, claim: verifier.claim },
+      });
+      continue;
+    }
     if (enforce) {
       const graded = gradeExecutability(event, subject, phrase, detail, by ?? null);
       if (graded) {

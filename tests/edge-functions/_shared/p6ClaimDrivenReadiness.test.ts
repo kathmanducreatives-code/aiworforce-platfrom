@@ -38,7 +38,9 @@ Deno.test("PRODUCTION: READY runs; carded, experimental and needs-work do not", 
 Deno.test("PROVIDER PROBE: only the named carded routes open, and only in probe mode", () => {
   const probe = readinessPolicy({ mode: "provider_probe", probe_routes: [DATAHYENA] });
   assertEquals(probe.decide("apify_funding_rounds_datahyena", "funding_signal_discovery").via, "provider_probe");
-  assertFalse(probe.decide("apify_funding_atomus", "funding_verification").executable, "not named: still shut");
+  // A carded route the probe does not NAME stays shut. (The funding pair used
+  // to be the example here; it has been READY since 2026-09-22.)
+  assertFalse(probe.decide("apify_linkedin_company_search", "general_company_discovery").executable, "not named: still shut");
   assertFalse(probe.decide("apify_linkedin_company_employees", "hiring_verification").executable,
     "a probe opens carded routes, never NEEDS_PROVIDER_WORK");
   // The same list in production mode opens nothing.
@@ -80,17 +82,34 @@ Deno.test("readinessPolicyFor: production unless the workspace is a NAMED probe 
 
 const EMPTY = buildCompanyEvidenceGraph("acme", [], { now: new Date("2026-09-19T12:00:00Z") });
 const unknownStage = { criterion_id: "company_stage:seed", dimension: "company_stage", result: "unknown", reason: "stage unknown" };
-const ATOMUS_PROBE = readinessPolicy({ mode: "provider_probe", probe_routes: ["apify_funding_atomus|funding_verification"] });
+/**
+ * THE FUNDING PAIR AS THESE MECHANICS WERE WRITTEN AGAINST: carded, not ready.
+ *
+ * Every test below uses the funding route as its example of a route production
+ * refuses and a named probe opens. Since 2026-09-22 the pair is READY in
+ * production (it ran through the spine, task 3f082b22), so production no longer
+ * supplies that example. The mechanics — gap router, verifier selection, claim
+ * plan and phase all reading ONE decision — are unchanged, and are exercised
+ * against the pair in the state they were written for, named here.
+ */
+const PAIR_CARDED = {
+  "apify_funding_atomus|funding_verification": "CARDED_BUT_NOT_LIVE",
+  "apify_funding_pvalyou|funding_verification": "CARDED_BUT_NOT_LIVE",
+} as const;
+const PRE_PROMOTION = readinessPolicy({ overrides: PAIR_CARDED });
+const ATOMUS_PROBE = readinessPolicy({
+  mode: "provider_probe", probe_routes: ["apify_funding_atomus|funding_verification"], overrides: PAIR_CARDED,
+});
 
 Deno.test("GAP ROUTER and VERIFIER SELECTION read the policy: the funding route is blocked in production, open in its probe", () => {
-  const [prod] = evidenceGapsFor([unknownStage], EMPTY);
+  const [prod] = evidenceGapsFor([unknownStage], EMPTY, undefined, undefined, PRE_PROMOTION);
   assertEquals(prod.next, "blocked");
   const [probe] = evidenceGapsFor([unknownStage], EMPTY, undefined, undefined, ATOMUS_PROBE);
   assertEquals([probe.next, probe.route?.actor], ["verify", "apify_funding_atomus"]);
   const verifier = { route_actor: "apify_funding_atomus", max_targets: 6 };
   const cand = [{ company_key: "acme", name: "Acme", domain: "acme.io", linkedin_url: null, graph: EMPTY,
     eligibility: "pending" as const, hard_checks: [{ ...unknownStage, value: "seed" }], attempted_routes: [] }];
-  assertEquals(verificationTargets(verifier, cand, () => "seed").length, 0);
+  assertEquals(verificationTargets(verifier, cand, () => "seed", undefined, PRE_PROMOTION).length, 0);
   assertEquals(verificationTargets(verifier, cand, () => "seed", undefined, ATOMUS_PROBE).length, 1);
 });
 
@@ -112,8 +131,8 @@ Deno.test("RETRIEVAL PLAN validation reads the policy: a route through a carded 
 Deno.test("CLAIM PLAN: hard claims carry their READY routes cheapest first; targets buy nothing; no fixed pipeline", () => {
   const combined = parseLeadMissionDeterministic(
     "Find 1 B2B SaaS fintech company that must be seed-stage, recently raised Seed and is hiring growth marketers.");
-  const criteria = deriveMissionCriteria(combined);
-  const prod = buildClaimPlan(criteria, "funding_signal_discovery");
+  const criteria = deriveMissionCriteria(combined, PRE_PROMOTION);
+  const prod = buildClaimPlan(criteria, "funding_signal_discovery", PRE_PROMOTION);
   const bm = prod.hard.find((h) => h.claim === "business_model")!;
   assertEquals(bm.routes.map((r) => r.actor), ["apify_linkedin_company_details", "firecrawl"]);
   const stage = prod.hard.find((h) => h.claim === "funding_stage")!;
@@ -181,8 +200,8 @@ Deno.test("PHASE: a verifier answering no HARD claim of the plan is not run", as
 
 Deno.test("PHASE: readiness and per-mission refusals decide `ready` for each verifier's own capability", async () => {
   const log: string[] = [];
-  await runClaimVerificationPhase(phaseBase(log, { readiness: PRODUCTION_READINESS, unavailable: (a: string) => a === "firecrawl" }) as never);
-  // Production: the funding route is not executable, so it has no targets at all;
+  await runClaimVerificationPhase(phaseBase(log, { readiness: PRE_PROMOTION, unavailable: (a: string) => a === "firecrawl" }) as never);
+  // A not-ready funding route is not executable, so it has no targets at all;
   // firecrawl is READY but refused this mission, so its verifier is told so.
   assertEquals(log, ["pages:a,b,c:not_ready"]);
 });

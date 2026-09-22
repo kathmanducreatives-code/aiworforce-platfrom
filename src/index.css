@@ -80,6 +80,7 @@ html, body {
 /* === Premium card surface (v4 polish) === */
 /* The app's card: the design system's glass (see AGENTORY DESIGN SYSTEM). */
 .card-premium {
+  background-image: var(--ag-material-reflection);
   background-color: var(--ag-surface, rgba(12,16,15,0.58));
   border: 1px solid var(--ag-line, rgba(255,255,255,0.065));
   border-radius: var(--radius-card);
@@ -111,6 +112,7 @@ html, body {
 /* These three now draw from the design system's surfaces (ag-glass / ag-raised /
    ag-float) so every generation of glass in the app is the same material. */
 .glass-quiet {
+  background-image: var(--ag-material-reflection);
   background-color: var(--ag-surface, rgba(12,16,15,0.58));
   backdrop-filter: blur(20px) saturate(140%);
   -webkit-backdrop-filter: blur(20px) saturate(140%);
@@ -118,6 +120,7 @@ html, body {
 }
 
 .glass-surface {
+  background-image: var(--ag-material-reflection-float);
   background-color: var(--ag-surface-raised, rgba(15,19,18,0.8));
   backdrop-filter: blur(24px) saturate(150%);
   -webkit-backdrop-filter: blur(24px) saturate(150%);
@@ -126,6 +129,7 @@ html, body {
 }
 
 .glass-loud {
+  background-image: var(--ag-material-reflection-float);
   background-color: var(--ag-surface-float, rgba(11,14,13,0.9));
   backdrop-filter: blur(32px) saturate(160%);
   -webkit-backdrop-filter: blur(32px) saturate(160%);
@@ -2303,6 +2307,9 @@ section[id] {
   --ag-line: rgb(255 255 255 / 0.065);       /* hairline */
   --ag-line-strong: rgb(255 255 255 / 0.11);
   --ag-sheen: rgb(255 255 255 / 0.045);      /* inner top highlight */
+  /* A still reflection, not an animated effect. Keep the ink surface dark. */
+  --ag-material-reflection: radial-gradient(ellipse at 4% 0%, rgb(221 247 235 / 0.045), transparent 58%), linear-gradient(160deg, rgb(255 255 255 / 0.018), transparent 42%);
+  --ag-material-reflection-float: radial-gradient(ellipse at 6% 0%, rgb(221 247 235 / 0.065), transparent 62%), linear-gradient(155deg, rgb(255 255 255 / 0.025), transparent 45%);
   --ag-fill: rgb(255 255 255 / 0.035);       /* quiet control fill */
   --ag-fill-hover: rgb(255 255 255 / 0.065);
   --ag-fill-active: rgb(255 255 255 / 0.085);
@@ -2322,6 +2329,8 @@ section[id] {
   --ag-line: rgb(15 23 20 / 0.08);
   --ag-line-strong: rgb(15 23 20 / 0.14);
   --ag-sheen: rgb(255 255 255 / 0.9);
+  --ag-material-reflection: linear-gradient(155deg, rgb(255 255 255 / 0.32), transparent 55%);
+  --ag-material-reflection-float: linear-gradient(155deg, rgb(255 255 255 / 0.45), transparent 60%);
   --ag-fill: rgb(15 23 20 / 0.035);
   --ag-fill-hover: rgb(15 23 20 / 0.06);
   --ag-fill-active: rgb(15 23 20 / 0.08);
@@ -2336,6 +2345,7 @@ section[id] {
   /* ── Surfaces ─────────────────────────────────────────────────────────── */
   .ag-glass {
     background-color: var(--ag-surface);
+    background-image: var(--ag-material-reflection);
     border: 1px solid var(--ag-line);
     box-shadow: inset 0 1px 0 var(--ag-sheen), var(--ag-shadow);
     -webkit-backdrop-filter: blur(20px) saturate(140%);
@@ -2343,6 +2353,7 @@ section[id] {
   }
   .ag-raised {
     background-color: var(--ag-surface-raised);
+    background-image: var(--ag-material-reflection);
     border: 1px solid var(--ag-line);
     box-shadow: inset 0 1px 0 var(--ag-sheen), 0 1px 1px rgb(0 0 0 / 0.3), 0 24px 60px -30px rgb(0 0 0 / 0.95);
     -webkit-backdrop-filter: blur(24px) saturate(150%);
@@ -2350,6 +2361,7 @@ section[id] {
   }
   .ag-float {
     background-color: var(--ag-surface-float);
+    background-image: var(--ag-material-reflection-float);
     border: 1px solid var(--ag-line-strong);
     box-shadow: inset 0 1px 0 var(--ag-sheen), var(--ag-shadow-float);
     -webkit-backdrop-filter: blur(28px) saturate(160%);

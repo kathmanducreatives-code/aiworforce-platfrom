@@ -676,8 +676,11 @@ export const APIFY_INTELLIGENCE: Readonly<Record<string, ActorIntelligenceRecord
       input_limits: { maxItems: 500 },
       output_fields: [],
       cost: {
-        model: "PAY_PER_EVENT", start_usd: 0.00005, per_result_usd: 0.045,
-        notes: "The most expensive per-row Actor registered. 100 rows is $4.50.",
+        // Store repriced $0.045 → $0.07 on 2026-09-12 (hiringActorCatalog). This
+        // registry cannot import the catalog (the catalog imports it), so the
+        // two are held equal by `providerPricingSource.test.ts`, not by hope.
+        model: "PAY_PER_EVENT", start_usd: 0.00005, per_result_usd: 0.07,
+        notes: "The most expensive per-row Actor registered.",
       },
       adoption: { total_users: 48, monthly_users: 36, rating: 4.78, rating_count: 4 },
       // Nothing to fall back to: it is the only registered source that returns a

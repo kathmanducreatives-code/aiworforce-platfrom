@@ -291,9 +291,30 @@ function normKey(k: string): string {
  * an explicit compilation failure — not a second, regex-derived reading of the
  * user's sentence. Migration-era only; see leadMissionCompilerBinding.ts.
  */
-export function scanProposalForViolations(raw: unknown): ProposalViolation[] {
+export function scanProposalForViolations(
+  raw: unknown,
+  /**
+   * The user's own message. Used for ONE exception and nothing else: a LinkedIn
+   * company URL in `known_companies` that the user wrote themselves.
+   *
+   * The scanner exists so a MODEL cannot name a scrape target the user never
+   * gave. A user who pastes their company's LinkedIn page is the opposite case,
+   * and refusing it left no way at all to carry a known company's verified
+   * identity into a mission: a name alone is (rightly) not an identity, and a
+   * LinkedIn search for "wordware" returned wordware-inc, wordware-pty-ltd and
+   * saunabywordware — three other companies — so the resolver correctly refused
+   * to guess. The URL is admitted only when it appears VERBATIM in this text,
+   * so the model still cannot introduce a target of its own.
+   */
+  userText: string = "",
+): ProposalViolation[] {
   const found: ProposalViolation[] = [];
   const seen = new Set<unknown>();
+  const said = userText.toLowerCase();
+  const userSuppliedLinkedIn = (path: string, s: string): boolean =>
+    /^known_companies\[\d+\]$/.test(path) &&
+    /^https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/company\/[^\s/?#]+\/?$/i.test(s) &&
+    said.includes(s.toLowerCase().replace(/\/+$/, ""));
 
   const walk = (node: unknown, path: string, depth: number): void => {
     if (depth > 12 || found.length > 40) return;
@@ -303,7 +324,7 @@ export function scanProposalForViolations(raw: unknown): ProposalViolation[] {
         found.push({ path, kind: "actor_reference", detail: s });
       } else if (VENDOR_WORDS.test(s)) {
         found.push({ path, kind: "vendor_name", detail: s.slice(0, 80) });
-      } else if (ANY_URL.test(s)) {
+      } else if (ANY_URL.test(s) && !userSuppliedLinkedIn(path, s)) {
         found.push({ path, kind: "url", detail: s.slice(0, 80) });
       }
       return;
@@ -360,7 +381,7 @@ export const MISSION_COMPILER_SYSTEM_PROMPT = [
   "do not translate them into a category. Set 'no_broadening_requested' true when the",
   "request says exactly, strictly, only, or do not broaden. Set 'geography_is_hard'",
   "true only when the user themselves named the place. List every company the request",
-  "names in 'known_companies', by name or domain, exactly as written; leave it empty",
+  "names in 'known_companies', by name, domain, or a LinkedIn company URL the request itself contains, exactly as written; leave it empty",
   "when the request names none. Put actions the request forbids — sending outreach,",
   "inventing contacts — in 'prohibitions'. Say what the user asked to RECEIVE in",
   "'output_intent'. Set 'requested_opportunity_count' to null when the request names no",
@@ -544,8 +565,8 @@ export interface ParsedProposal {
  * malformed field is a model being imprecise, whereas a forbidden field is a
  * model reaching for authority it does not have.
  */
-export function parseMissionProposal(raw: unknown): ParsedProposal {
-  const violations = scanProposalForViolations(raw);
+export function parseMissionProposal(raw: unknown, userText = ""): ParsedProposal {
+  const violations = scanProposalForViolations(raw, userText);
   if (violations.length > 0) return { proposal: null, violations, repairs: [] };
 
   const c = raw as Record<string, unknown>;
@@ -855,7 +876,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   if (i.proposal === undefined || i.proposal === null) {
     throw new MissionCompilationBlockedError(query, ["no_model_proposal"]);
   } else {
-    parsed = parseMissionProposal(i.proposal);
+    parsed = parseMissionProposal(i.proposal, query);
     if (!parsed.proposal) {
       // UNSAFE OR UNREADABLE, and therefore not a mission. The violations travel
       // with the refusal so the caller can say WHICH part was unusable.

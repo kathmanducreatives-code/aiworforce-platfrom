@@ -24,7 +24,7 @@ import {
   FUNDING_EMPLOYEE_BUCKETS, FUNDING_STAGES_WITHOUT_COVERAGE,
   POST_POSTED_LIMITS, COMMENT_POSTED_LIMITS, POST_SEARCH_SORT_BY,
   POST_PROFILE_SCRAPER_MODES, POST_CONTEXT_COUNTRIES, POST_CONTENT_TYPES,
-  NEWS_TIMEFRAMES, NEWS_TOPICS, NEWS_REGION_LANGUAGES,
+  NEWS_TIMEFRAMES, NEWS_TOPICS, NEWS_REGION_LANGUAGES, perResultPriceUsd
 } from "./hiringActorCatalog.ts";
 
 // ── CONTRACTS ────────────────────────────────────────────────────────────────
@@ -825,7 +825,7 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(?:[T ].*)?$/;
  * ── WHAT THIS REFUSES, AND WHY ──────────────────────────────────────────────
  *
  * `maxItems` is the whole cost model here: one charge per record returned, at
- * $0.045 — five times the per-row price of any other Actor in this catalog. An
+ * the highest per-row price of any Actor in this catalog (see its card). An
  * unbounded or accidentally large value is the most expensive mistake available
  * in the system, so it is required and capped rather than defaulted.
  *
@@ -852,9 +852,13 @@ export function compileDatahyenaFundingInput(
   if (!Number.isInteger(i.maxItems) || i.maxItems < 1) {
     e.push("maxItems must be a positive integer — this Actor bills per record");
   } else if (i.maxItems > 500) {
-    // A ceiling, not a preference. 500 records is already ~$22.50.
-    e.push(`maxItems ${i.maxItems} exceeds the 500-record ceiling for this Actor ` +
-      `(billed per record at $0.045; ${i.maxItems} rows would cost ~$${(i.maxItems * 0.045).toFixed(2)})`);
+    // A ceiling, not a preference. The price is READ FROM THE CARD, never
+    // written here: this message once quoted $0.045 after the Store had moved
+    // to $0.07, and a refusal that under-states the cost is worse than none.
+    const price = perResultPriceUsd(K);
+    e.push(`maxItems ${i.maxItems} exceeds the 500-record ceiling for this Actor` +
+      (price === null ? "" :
+        ` (billed per record at $${price}; ${i.maxItems} rows would cost ~$${(i.maxItems * price).toFixed(2)})`));
   }
   if (i.minAmountUsd !== undefined && i.maxAmountUsd !== undefined &&
       i.minAmountUsd > i.maxAmountUsd) {

@@ -60,7 +60,7 @@ export const ACTOR_READINESS: readonly ActorReadinessRecord[] = Object.freeze([
   { actor: "apify_yc_companies_solidcode", capability: "startup_company_discovery", readiness: "CARDED_BUT_NOT_LIVE",
     reason: "carded (low confidence); never run live in V2", live_evidence: null, gated_by: "mission names the YC cohort" },
   { actor: "apify_funding_rounds_datahyena", capability: "funding_signal_discovery", readiness: "CARDED_BUT_NOT_LIVE",
-    reason: "carded and executable; not run under the V2 spec spine ($0.045/record); hybrid is P6", live_evidence: null },
+    reason: "carded and executable; not run under the V2 spec spine (per-record billing, the highest in the catalog — see its card); hybrid is P6", live_evidence: null },
   // ── THE FUNDING PAIR ──────────────────────────────────────────────────────
   //
   // EXPERIMENTAL, together. The live pair probe of 2026-09-21 (Wordware,
@@ -80,19 +80,34 @@ export const ACTOR_READINESS: readonly ActorReadinessRecord[] = Object.freeze([
   // it yet. READY means live-proven THROUGH the spine; this is not that, and
   // calling it READY would make the table lie.
   //
-  // EXPERIMENTAL is exactly the state it is in: proven on live data, runnable
-  // only where someone says so (`LEAD_V2_ALLOW_EXPERIMENTAL_ROUTES` or a
-  // provider probe), still refused for an ordinary production mission. The
-  // canary that runs a hard funding claim through the spine is what earns
-  // READY — for the PAIR, never for one of them.
-  { actor: "apify_funding_atomus", capability: "funding_verification", readiness: "EXPERIMENTAL",
+  // ── READY, AS A PAIR: 2026-09-22, THROUGH THE SPINE ─────────────────────
+  //
+  // Known-company canary, task 3f082b22 (local stack, Pilot-compiled mission
+  // "Qualify https://www.linkedin.com/company/wordware. It must have raised
+  // Seed funding within the last 2 years."): a HARD company_stage:seed claim
+  // → claim plan `verifiable` → the funding verifier selected from the gap →
+  // atomus run jYxeaTmdOcUMqEDpH (3 dated rounds, reported_round_count 3) →
+  // pvalyou run 1PD7p3cn1lmi1AS54 (the Seed round, 4 cited announcements,
+  // basic tier) → corroborated record, 0 conflicts → funding_stage PASS
+  // (`required_stage_verified_and_latest`, cited) → recently_funded read from
+  // the same record (730d PASS, 180d FAIL — no repurchase) → eligible →
+  // Workbench `worth_considering`. No funding discovery, no datahyena call.
+  //
+  // THE READY UNIT IS THE ROUTE, NOT EITHER ACTOR. Both entries are READY
+  // because the route needs both to be allowed to run; neither can SETTLE the
+  // claim alone, and that is enforced by the decision, not by this table:
+  // atomus carries no citation, so it can never PASS; pvalyou's count is only
+  // what it holds, so it can never make a history complete or a FAIL. The live
+  // domain-only canary (task 65c5793d: no LinkedIn identity, so atomus could
+  // not run) proved exactly that — pvalyou alone settled PENDING.
+  { actor: "apify_funding_atomus", capability: "funding_verification", readiness: "READY",
     reason: "atomus/linkedin-company-scraper: dated rounds and a TRUE round count (completeness), no citations — half the pair",
-    live_evidence: "live pair probe 2026-09-21 (Wordware): 3/3 rounds, num_funding_rounds 3",
-    gated_by: "the funding pair: a PASS needs pvalyou's or discovery's citation, so atomus alone can only answer PENDING" },
-  { actor: "apify_funding_pvalyou", capability: "funding_verification", readiness: "EXPERIMENTAL",
+    live_evidence: "spine canary 2026-09-22 task 3f082b22 (Wordware): run jYxeaTmdOcUMqEDpH, 3/3 rounds, reported_round_count 3, merged with pvalyou → funding_stage PASS; first probe 2026-09-21",
+    gated_by: "READY only as the corroborating funding pair: a PASS needs pvalyou's or discovery's citation, so atomus alone can only answer PENDING" },
+  { actor: "apify_funding_pvalyou", capability: "funding_verification", readiness: "READY",
     reason: "pvalyou/company-record: per-round source URLs (provenance), a round count that is only what it holds, slow cold reads — half the pair",
-    live_evidence: "live pair probe 2026-09-21 (Wordware): Seed 2024-11-21 with 4 cited announcements",
-    gated_by: "the funding pair: without atomus's completeness pvalyou alone can only answer PENDING" },
+    live_evidence: "spine canary 2026-09-22 task 3f082b22 (Wordware): run 1PD7p3cn1lmi1AS54, Seed 2024-11-21 with 4 citations lent to atomus's round; alone (task 65c5793d) settled PENDING",
+    gated_by: "READY only as the corroborating funding pair: without atomus's completeness pvalyou alone can only answer PENDING" },
   { actor: "apify_linkedin_company_employees", capability: "hiring_verification", readiness: "NEEDS_PROVIDER_WORK",
     reason: "opt-in only at the tool layer (apify_actor_disabled_by_default); first-hire team check refused live", live_evidence: null },
   { actor: "apify_people_search", capability: "founder_discovery", readiness: "NEEDS_PROVIDER_WORK",

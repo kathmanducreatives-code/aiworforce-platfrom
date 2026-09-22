@@ -40,7 +40,7 @@
 //
 // Pure. No network, no model, no database. Not part of `missionHash`.
 
-import { PRODUCTION_READINESS } from "./routeReadiness.ts";
+import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import {
   canonicalSignalType, containsPhrase, isHiringSignal,
   type FieldProvenance, type LeadMissionV1, type MissionSignal,
@@ -184,6 +184,54 @@ export function readStageIntent(query: string): StageIntent | null {
       kind: elevatedBy && !hedged ? "hard" : "target",
       elevated_by: elevatedBy && !hedged ? elevatedBy : null,
       hedged,
+    };
+  }
+  return null;
+}
+
+/**
+ * THE ROUND THE USER REQUIRED — the case `readStageIntent` deliberately drops.
+ *
+ * `readStageIntent` skips a stage word sitting next to "raised"/"raising"/
+ * "closed"/"round", and it is right to: "seed-stage company" describes a kind
+ * of company, while "raised Seed funding" describes an EVENT, and the two are
+ * not the same claim. The event was then supposed to travel as the funding
+ * signal's `round_type` qualifier — and does not: the canonical signal reader
+ * never extracts it, and `PROJECTABLE_QUALIFIER_FIELDS` would drop it anyway.
+ * So "recently raised Seed funding" compiled with the rung missing entirely,
+ * the card said `unrepresented:qualifier:round_type`, and the only stage
+ * criteria left were the Company Brain's ICP rungs — which are preferences and
+ * can never reject anyone.
+ *
+ * Read here rather than repaired in the reader because the rung only means
+ * "required round" when the mission actually asks for funding; the caller
+ * checks that before using this.
+ *
+ * ALWAYS HARD. `readStageIntent` needs an elevation word ("only", "must")
+ * because a bare stage word is usually descriptive. A round the user says a
+ * company must have RAISED is not descriptive — it is the same kind of stated
+ * requirement as "US" or "B2B SaaS", both of which compile hard without
+ * elevation.
+ */
+export function readFundedStageIntent(query: string): StageIntent | null {
+  const text = String(query ?? "");
+  for (const [re, value] of STAGE_PATTERNS) {
+    const m = re.exec(text);
+    if (!m) continue;
+    const around = text.slice(Math.max(0, m.index - 24), m.index + m[0].length + 8).toLowerCase();
+    // The MIRROR of readStageIntent's guard: this reader wants exactly what
+    // that one refuses, so a rung is read by one of them and never by both.
+    if (!/\b(?:raised|raising|closed)\b|\bround\b/.test(around)) continue;
+    const v = value === "series_" ? `series_${m[1].toLowerCase()}` : value;
+    if (!ROUND_STAGES.has(v)) continue;
+    const clause = text.slice(Math.max(0, m.index - 60), Math.min(text.length, m.index + m[0].length + 60));
+    if (HEDGE_RE.test(clause)) return null;
+    return {
+      value: v,
+      phrase: text.slice(Math.max(0, m.index - 24), m.index + m[0].length).trim(),
+      kind: "hard",
+      elevated_by: null,
+      hedged: false,
     };
   }
   return null;
@@ -476,7 +524,27 @@ function signalDetail(k: CanonicalSignalKind, s: Partial<MissionSignal>, subkind
  * Callable on any mission: one compiled before P1 (no `mission_semantics`)
  * is read from its original query on the fly, so the card can show it too.
  */
-export function deriveMissionCriteria(mission: LeadMissionV1): MissionCriterion[] {
+export function deriveMissionCriteria(
+  mission: LeadMissionV1,
+  /**
+   * WHO MAY RUN, for THIS mission — not for production in general.
+   *
+   * A round-stage criterion is marked `unprovable_today` when no funding
+   * verifier may execute, and an unprovable criterion compiles as a preference
+   * rather than a requirement. That question was asked of `PRODUCTION_READINESS`
+   * directly, which no environment can influence, so a probe or
+   * experimental-allowed run — the only ways an EXPERIMENTAL route is ever
+   * meant to execute — still compiled funding as a target. Only HARD unknown
+   * claims become evidence gaps, so the verifier was never selected, the pair
+   * never ran through the spine, and it could never earn the READY that would
+   * have made this answer true: a closed loop with no environment variable that
+   * opens it.
+   *
+   * The DEFAULT is still `PRODUCTION_READINESS`, so every caller that does not
+   * pass a policy behaves exactly as before.
+   */
+  readiness: ReadinessPolicy = PRODUCTION_READINESS,
+): MissionCriterion[] {
   const query = String(mission.original_user_query ?? "");
   const q = query.toLowerCase();
   const inQuery = (v: unknown) => typeof v === "string" && v.trim().length > 1 && q.includes(v.toLowerCase());
@@ -488,7 +556,17 @@ export function deriveMissionCriteria(mission: LeadMissionV1): MissionCriterion[
       : readings.map((r) => r.kind));
   const hypotheses = sem?.hypotheses ?? lang?.hypotheses ?? [];
   const unmapped = sem?.unmapped_signal_language ?? lang?.unmapped ?? [];
-  const stageIntent = sem ? sem.stage : lang?.stage ?? null;
+  const statedStage = sem ? sem.stage : lang?.stage ?? null;
+  /**
+   * THE RUNG THIS MISSION IS JUDGED ON.
+   *
+   * A stage the sentence states outright, or — when the mission asks for
+   * funding — the round it says the company must have RAISED. The second is
+   * read only under a funding requirement, so a passing mention of a round in
+   * an unrelated sentence cannot become a hard filter.
+   */
+  const fundingRequested = (mission.required_signals ?? []).some((x) => kindOfSignal(x) === "funding");
+  const stageIntent = statedStage ?? (fundingRequested ? readFundedStageIntent(query) : null);
   const prov = mission.field_provenance ?? {};
   const cp = mission.company_profile ?? { business_models: [], verticals: [], stages: [], locations: [] };
   const conf = Number.isFinite(mission.confidence) ? mission.confidence : undefined;
@@ -586,6 +664,17 @@ export function deriveMissionCriteria(mission: LeadMissionV1): MissionCriterion[
   }
 
   for (const st of cp.stages ?? []) {
+    // ── FIRST-WINS IS WHY THE USER'S OWN RUNG KEPT LOSING ──────────────────
+    //
+    // `push` ignores a second criterion with the same `dimension:value`, and
+    // these Company Brain rungs are pushed BEFORE the stated one below. So a
+    // mission that asked for Seed and a Brain whose ICP also lists Seed
+    // produced the BRAIN's criterion — a `target`, which ranks and never
+    // rejects — and the user's hard requirement was discarded silently, along
+    // with the readiness-aware `unprovable_today` the stated rung computes.
+    // Skipping here lets the stated rung own the rung it names; every other
+    // Brain rung is pushed exactly as before.
+    if (stageIntent?.kind === "hard" && slug(stageIntent.value) === slug(st)) continue;
     const source = sourceFromProvenance(prov["company_profile.stages"], true);
     if (st === "startup") {
       // The noun ("startups") is the company kind; a stage word, when the
@@ -622,7 +711,7 @@ export function deriveMissionCriteria(mission: LeadMissionV1): MissionCriterion[
     // P6: a round stage is provable for a company ALREADY in the pool once a
     // known-company funding verifier is READY (Actor Intelligence) — not before,
     // so an unproven route can never make a criterion look answerable.
-    const unprovable = ROUND_STAGES.has(stageIntent.value) && !funded && !fundingVerifierReady();
+    const unprovable = ROUND_STAGES.has(stageIntent.value) && !funded && !fundingVerifierReady(readiness);
     push({
       kind: stageIntent.kind, dimension: "company_stage", value: stageIntent.value,
       label: `Stage: ${stageIntent.value.replace(/_/g, " ")}` +
@@ -858,6 +947,8 @@ export function criteriaSections(
  * so provability follows the production decision of the one readiness
  * authority — a provider probe never makes a criterion look answerable.
  */
-export function fundingVerifierReady(): boolean {
-  return PRODUCTION_READINESS.decide("apify_funding_atomus", "funding_verification").executable;
+export function fundingVerifierReady(
+  readiness: ReadinessPolicy = PRODUCTION_READINESS,
+): boolean {
+  return readiness.decide("apify_funding_atomus", "funding_verification").executable;
 }

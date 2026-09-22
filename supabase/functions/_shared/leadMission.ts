@@ -735,8 +735,19 @@ export function extractRequestedCount(query: string): number | null {
 
 /** Supplied domains — the signal that discovery must be SKIPPED. */
 export function extractKnownCompanies(query: string): string[] {
-  const domains = query.match(/\b[a-z0-9][a-z0-9-]*\.(?:com|io|ai|co|net|org|dev|security)\b/gi) ?? [];
-  return [...new Set(domains.map((d) => d.toLowerCase()))];
+  // A LINKEDIN COMPANY PAGE IS ONE IDENTIFIER, NOT A DOMAIN.
+  //
+  // The domain pattern below matched the HOST of a pasted company page, so
+  // "Qualify https://www.linkedin.com/company/wordware" produced
+  // `known_companies: ["linkedin.com"]` — LinkedIn itself — and because this
+  // deterministic reading outranks the model's `known_companies`, the user's
+  // correct identifier was replaced by it. Pages are taken whole first, and
+  // domains are read only from the text that remains.
+  const pages = [...query.matchAll(/https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/company\/[^\s/?#,)]+\/?/gi)]
+    .map((m) => m[0].replace(/[.,;:)]+$/, ""));
+  const rest = pages.reduce((q, page) => q.split(page).join(" "), query);
+  const domains = rest.match(/\b[a-z0-9][a-z0-9-]*\.(?:com|io|ai|co|net|org|dev|security)\b/gi) ?? [];
+  return [...new Set([...pages, ...domains.map((d) => d.toLowerCase())])];
 }
 
 export interface DeterministicParseOpts {

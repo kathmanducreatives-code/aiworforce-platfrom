@@ -417,7 +417,9 @@ function buildMissionForPrompt(
     brain_rejected_broadening: merged.rejected_broadening,
     // P1: re-derived AFTER this merge, so every Company Brain addition shows
     // with its provenance rather than as something the user said.
-    criteria: deriveMissionCriteria(merged.mission),
+    // THE SAME POLICY the capability graph above was built with, so the card,
+    // the graph and the criteria agree about what this run may execute.
+    criteria: deriveMissionCriteria(merged.mission, readiness),
     preflight_dry_run: preflightDryRun(preflight),
     // ── OBSERVABILITY ──────────────────────────────────────────────────────
     // Enough to answer "why did it choose YC for this query?" and "why did it

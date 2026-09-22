@@ -392,7 +392,7 @@ export const CAPABILITY_REGISTRY: Readonly<Record<CapabilityId, CapabilitySpec>>
     // funding for a company set already in hand; `funding_verification` is
     // deliberately absent from the graph rather than faked with this provider.
     providers: ["apify_funding_rounds_datahyena"],
-    // The most expensive row in the catalog at $0.045, so the forecast must not
+    // The most expensive row in the catalog (price on its card), so the forecast must not
     // treat it like a $0.001 job row.
     cost_units: 3,
     max_attempts: 2,

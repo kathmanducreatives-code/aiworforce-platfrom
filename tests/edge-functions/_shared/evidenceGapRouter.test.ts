@@ -22,6 +22,7 @@ import { decideAutoContinuation } from "../../../supabase/functions/_shared/lead
 import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 import { mergeCompanyBrainIntoMission } from "../../../supabase/functions/_shared/leadMission.ts";
 import { deriveMissionCriteria } from "../../../supabase/functions/_shared/missionCriteria.ts";
+import { readinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
 
 const NOW = new Date("2026-09-19T12:00:00.000Z");
 const item = (dimension: EvidenceItem["dimension"], value: unknown, actor: string): EvidenceItem => ({
@@ -91,15 +92,23 @@ Deno.test("business model: once the pages are in the registry, the route is trie
   assert(g.considered.find((r) => r.actor === "firecrawl")!.why.includes("already answered"));
 });
 
-Deno.test("funding stage: the P6 executor exists but is not READY — a capability gap, never guessed", () => {
+Deno.test("funding stage: the P6 executor is READY since it ran through the spine — the gap routes to the pair", () => {
+  // Promoted 2026-09-22 (known-company canary, task 3f082b22): a hard funding
+  // claim ran through gap → verifier → atomus + pvalyou → corroborated PASS.
   const [g] = evidenceGapsFor([unknown("company_stage")], LANCEDB);
-  assertEquals([g.claim, g.next], ["funding_stage", "blocked"]);
-  // EXPERIMENTAL since the 2026-09-21 live pair probe: proven on live data,
-  // still refused for an ordinary mission until it runs through this pipeline.
-  assertEquals([g.considered[0].actor, g.considered[0].readiness], ["apify_funding_atomus", "EXPERIMENTAL"]);
-  assert(g.considered[0].why.includes("EXPERIMENTAL"), g.considered[0].why);
+  assertEquals([g.claim, g.next], ["funding_stage", "verify"]);
+  assertEquals([g.considered[0].actor, g.considered[0].readiness], ["apify_funding_atomus", "READY"]);
   const s = summarizeGaps([{ gaps: [g] }]);
-  assertEquals([s.pending, s.with_executable_route, s.blocked], [1, 0, 1]);
+  assertEquals([s.pending, s.with_executable_route, s.blocked], [1, 1, 0]);
+
+  // …and a NOT-READY pair is still a capability gap, never guessed.
+  const notReady = readinessPolicy({ overrides: {
+    "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
+    "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
+  } });
+  const [b] = evidenceGapsFor([unknown("company_stage")], LANCEDB, undefined, undefined, notReady);
+  assertEquals([b.claim, b.next], ["funding_stage", "blocked"]);
+  assert(b.considered[0].why.includes("EXPERIMENTAL"), b.considered[0].why);
 });
 
 Deno.test("a route a claim verifier already answered is not taken again, even with no evidence item", () => {
@@ -155,17 +164,16 @@ Deno.test("an executor is not enough: a route whose actor is not READY in Actor 
   assertEquals([g.next, g.considered[0].readiness], ["blocked", "NOT_PRESENT"]);
 });
 
-Deno.test("PHASE C: the business model is the one canonical claim a production route can settle today", () => {
-  // Was 0 — the rule was dormant. Firecrawl is now a canonical executor, so a
-  // pending business model routes to verification; funding and first-in-function
-  // are still blocked (P6 / the opt-in actor), and say so.
+Deno.test("PHASE C: business model and the funding pair are the canonical claims a production route can settle today", () => {
+  // Firecrawl settles the business model; since 2026-09-22 the corroborating
+  // funding pair settles both funding claims (one route, two claims).
+  // First-in-function is still blocked on the opt-in actor, and says so.
   const every = CLAIM_REGISTRY.flatMap((c) => c.criterion_dimensions).map(unknown);
   const gaps = evidenceGapsFor(every, LANCEDB);
   const s = summarizeGaps([{ gaps }]);
   assertEquals(s.with_executable_route, 1);
   const verifiable = gaps.filter((g) => g.next === "verify");
-  assertEquals([...new Set(verifiable.map((g) => g.claim))], ["business_model"]);
-  assertEquals([...new Set(verifiable.map((g) => g.route?.actor))], ["firecrawl"]);
-  assert(s.capability_gaps.some((c) => c.claim === "funding_stage" &&
-    c.routes.some((r) => r.actor === "apify_funding_atomus" && r.why.includes("EXPERIMENTAL"))));
+  assertEquals([...new Set(verifiable.map((g) => g.claim))].sort(), ["business_model", "funding_stage", "recently_funded"]);
+  assertEquals([...new Set(verifiable.map((g) => g.route?.actor))].sort(), ["apify_funding_atomus", "firecrawl"]);
+  assert(!s.capability_gaps.some((c) => c.claim === "funding_stage"), "funding is no longer a capability gap");
 });

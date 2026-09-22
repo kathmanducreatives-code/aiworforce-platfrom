@@ -51,6 +51,7 @@ import { decideRecentlyFunded, normalizeRoundType } from "./fundingStageClaim.ts
 import type { FundingStageVerdict } from "./fundingStageClaim.ts";
 import { fundingRecordsInGraph } from "./fundingCorroboration.ts";
 import { usableHeadcount } from "./headcountValue.ts";
+import { normalizeSuppliedCompanies } from "./suppliedCompanyIdentity.ts";
 
 export const ELIGIBILITY_VERSION = "candidate-eligibility-v1" as const;
 
@@ -154,6 +155,19 @@ function currentItem(graph: CompanyEvidenceGraph, dim: EvidenceDimension): Evide
  */
 export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph): CriterionCheck {
   const base = { criterion_id: c.id, dimension: c.dimension, kind: c.kind };
+  // ── A SELECTION, CHECKED AGAINST WHO THE COMPANY TURNED OUT TO BE ────────
+  //
+  // "Companies you supplied" is compiled as a HARD criterion, and no evidence
+  // dimension answers it — so it fell through to the `!dim` branch below and
+  // came back `unknown` for every candidate, forever. One unknown hard check
+  // makes eligibility `pending`, so EVERY candidate of EVERY known-company
+  // mission was structurally unqualifiable: the funding pair could run, ground
+  // its claim, and the company still could never reach `eligible`.
+  //
+  // Answered from the candidate's resolved IDENTITY rather than passed blindly:
+  // a company that resolved to something the user did not supply fails, and
+  // one whose identity is not resolved yet stays unknown until it is.
+  if (c.dimension === "known_companies") return checkKnownCompanies(c, graph, base);
   const dim = CRITERION_EVIDENCE_DIMENSION[c.dimension];
   if (!dim) {
     return { ...base, result: "unknown", reason: `no evidence dimension answers ${c.dimension}`, evidence_ids: [], provenance: null };
@@ -368,6 +382,56 @@ function checkBusinessModel(
     ...base, result: "unknown", evidence_ids: [seen.item.evidence_id], provenance: provenanceOf(seen.item),
     reason: `${say(seen)} ${why} ${want}` + (unstated.length ? ` (the quote does not state ${unstated.join(" or ")})` : ""),
   };
+}
+
+/** Lower-case LinkedIn company slug, or null. */
+function linkedinSlug(u: unknown): string | null {
+  const m = /linkedin\.com\/company\/([^/?#\s]+)/i.exec(String(u ?? ""));
+  return m ? decodeURIComponent(m[1]).toLowerCase().replace(/\/+$/, "") : null;
+}
+const normDomain = (d: unknown) =>
+  String(d ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "") || null;
+const normName = (n: unknown) =>
+  String(n ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() || null;
+
+/**
+ * Is this candidate one of the companies the user supplied?
+ *
+ * A STRONG identifier (LinkedIn slug, domain) decides when both sides have
+ * one: a match passes and a disagreement fails. A name decides only to PASS —
+ * "Wordware" and a resolved "Wordware AI" are the same company far more often
+ * than not, so a name difference is `unknown`, never a rejection.
+ */
+function checkKnownCompanies(
+  c: MissionCriterion, graph: CompanyEvidenceGraph,
+  base: { criterion_id: string; dimension: CriterionDimension; kind: MissionCriterion["kind"] },
+): CriterionCheck {
+  const supplied = normalizeSuppliedCompanies(Array.isArray(c.value) ? c.value : []).companies.map((s) => s.company);
+  const claim = graph.claims.find((x) => x.dimension === "identity");
+  const item = claim?.current ?? null;
+  const id = (item?.value ?? null) as { linkedin_company_url?: unknown; domain?: unknown; name?: unknown } | null;
+  if (!item || !id) {
+    return { ...base, result: "unknown", reason: "the company's identity is not resolved yet", evidence_ids: [], provenance: null };
+  }
+  const ids = [item.evidence_id];
+  const cand = { slug: linkedinSlug(id.linkedin_company_url), domain: normDomain(id.domain), name: normName(id.name) };
+  let strongDisagreement = false;
+  for (const s of supplied) {
+    const sup = { slug: linkedinSlug(s.linkedin_company_url), domain: normDomain(s.canonical_domain), name: normName(s.company_name) };
+    if ((sup.slug && sup.slug === cand.slug) || (sup.domain && sup.domain === cand.domain)) {
+      return { ...base, result: "pass", reason: `one of the companies you supplied (${sup.slug ?? sup.domain})`,
+        evidence_ids: ids, provenance: provenanceOf(item) };
+    }
+    if (sup.name && cand.name && (cand.name === sup.name || cand.name.startsWith(`${sup.name} `))) {
+      return { ...base, result: "pass", reason: `one of the companies you supplied (${s.company_name})`,
+        evidence_ids: ids, provenance: provenanceOf(item) };
+    }
+    if ((sup.slug && cand.slug) || (sup.domain && cand.domain)) strongDisagreement = true;
+  }
+  return strongDisagreement
+    ? { ...base, result: "fail", reason: "resolved to a company you did not supply", evidence_ids: ids, provenance: provenanceOf(item) }
+    : { ...base, result: "unknown", reason: "the resolved identity neither matches nor rules out the companies you supplied",
+      evidence_ids: ids, provenance: provenanceOf(item) };
 }
 
 /**
