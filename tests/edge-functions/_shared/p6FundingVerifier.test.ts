@@ -12,7 +12,7 @@
 // 2026-09-19 (`tests/fixtures/lead-v2/p6-funding-probes.json`); the verifier and
 // the ledger with injected calls. No network.
 
-import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertFalse, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   atomusSettles, corroborateFunding, decideCorroboratedFundingStage,
   normalizeAtomusFunding, normalizePvalyouFunding,
@@ -22,10 +22,18 @@ import {
   atomusInput, FUNDING_STAGE_VERIFIER_KEY, fundingStageVerifier,
 } from "../../../supabase/functions/_shared/fundingStageVerifier.ts";
 import {
-  attemptedRoutes, ledgerBoundCall, verificationTargets, verifierIdempotencyKey, verifyOpKey,
+  attemptedRoutes, ledgerBoundCall, verificationTargets, verifyOpKey,
   type VerificationTarget, type VerifierCall, type VerifierCallOutcome, type VerifierDeps,
 } from "../../../supabase/functions/_shared/claimVerifier.ts";
-import { newSpendLedger, DEFAULT_CEILINGS } from "../../../supabase/functions/_shared/budgetPolicy.ts";
+import { newSpendLedger, DEFAULT_CEILINGS, estimateCallUsd } from "../../../supabase/functions/_shared/budgetPolicy.ts";
+import { tightenCeilings } from "../../../supabase/functions/_shared/runBudget.ts";
+import { verifierSpecCompiler } from "../../../supabase/functions/_shared/verifierCallSpec.ts";
+import { criteriaExecutionPolicy } from "../../../supabase/functions/_shared/criteriaExecutionPolicy.ts";
+import { guardedInvoker } from "../../../supabase/functions/_shared/leadMissionRuntime.ts";
+import { hiringActorCard } from "../../../supabase/functions/_shared/hiringActorCatalog.ts";
+import { parseLeadMissionDeterministic } from "../../../supabase/functions/_shared/leadMission.ts";
+import { specIdentityColumns } from "../../../supabase/functions/_shared/executionLedger.ts";
+import type { ProviderCallSpec } from "../../../supabase/functions/_shared/providerCallSpec.ts";
 import { CLAIM_REGISTRY, evidenceGapsFor, type ClaimDefinition } from "../../../supabase/functions/_shared/evidenceGapRouter.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
 import type { EvidenceItem } from "../../../supabase/functions/_shared/candidateObservation.ts";
@@ -33,7 +41,7 @@ import { applyVerifierFinding, missionCandidatesFrom } from "../../../supabase/f
 import { checkCriterion } from "../../../supabase/functions/_shared/candidateEligibility.ts";
 import { fundingVerifierReady } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import type { MissionCriterion } from "../../../supabase/functions/_shared/missionCriteria.ts";
-import { readinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
+import { PRODUCTION_READINESS, readinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
 
 globalThis.fetch = () => { throw new Error("P6 verifier tests must not reach the network"); };
 
@@ -221,21 +229,44 @@ Deno.test("atomus is sent the canonical LinkedIn URL (bare domains are not suppo
 
 // ═══════════════════════════════════════════════════ ledger-bound calls ══
 
-function ledgerHarness(invoke: (c: { resumeRunId?: string }) => Promise<Record<string, unknown>[]>) {
+/** The pair authorised, as a supervised canary would name it. */
+const PAIR_ALLOWED_POLICY = readinessPolicy({ allow_experimental: [
+  "apify_funding_atomus|funding_verification", "apify_funding_pvalyou|funding_verification",
+] });
+/**
+ * The pair as it was before the 2026-09-23 spine canary earned READY: what a
+ * mission sees whenever the table says the pair may not run. The gate these
+ * tests pin is readiness, whatever the table says today.
+ */
+const PAIR_NOT_READY = readinessPolicy({ overrides: {
+  "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
+  "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
+} });
+const FUNDING_POLICY = criteriaExecutionPolicy(parseLeadMissionDeterministic("Find seed-stage B2B SaaS companies"));
+
+type SentCall = { actorKey: string; capabilityId: string; input: Record<string, unknown>; providerCallSpec: ProviderCallSpec; resumeRunId?: string };
+function ledgerHarness(
+  invoke: (c: SentCall) => Promise<Record<string, unknown>[]>,
+  readiness = PAIR_ALLOWED_POLICY,
+) {
   const ledger = newSpendLedger(DEFAULT_CEILINGS);
   const refused: string[] = [];
-  let invoked = 0;
+  const sent: SentCall[] = [];
   const call = ledgerBoundCall({
-    ledger, scope: { workspace_id: "ws", lineage_id: "ln" },
-    estimate: (k, input) => 0.00005 + (input.companies as unknown[]).length * (k === "apify_funding_pvalyou" ? 0.02 : 0.0035),
-    actorIdFor: (k) => k === "apify_funding_atomus" ? "atomus/linkedin-company-scraper" : "pvalyou/company-record",
-    invoke: (c) => { invoked++; return invoke(c); },
+    ledger,
+    spec: verifierSpecCompiler({
+      scope: { workspace_id: "ws", lineage_id: "ln" }, mission_hash: "mh", policy: FUNDING_POLICY,
+      ceilings: () => ledger.ceilings, readiness,
+    }),
+    actorIdFor: (k) => hiringActorCard(k)?.actor_id ?? null,
+    invoke: guardedInvoker(null, (c: SentCall) => { sent.push(c); return invoke(c); }, undefined, readiness),
     hash: () => "h", onRefused: (k) => refused.push(k),
   });
-  return { ledger, call, refused, invoked: () => invoked };
+  return { ledger, call, refused, sent, invoked: () => sent.length };
 }
 const pvCall = (companies: string[], resume?: string): VerifierCall => ({
-  actor_key: "apify_funding_pvalyou", input: { tier: "basic", companies }, candidate_keys: companies, purpose: "funding_evidence",
+  actor_key: "apify_funding_pvalyou", capability: "funding_verification", input: { tier: "basic", companies },
+  candidate_keys: companies, purpose: "funding_evidence",
   ...(resume ? { resume_run_id: resume } : {}),
 });
 
@@ -246,8 +277,57 @@ Deno.test("an executed call is never bought twice; a running one is adopted by i
   assertEquals((await h.call(pvCall(["a.com"]))).status, "failed", "the same call, not adopted, is refused rather than re-bought");
   assertEquals((await h.call(pvCall(["a.com"], "r1"))).status, "ok");
   assertEquals(h.invoked(), 2);
-  const key = verifierIdempotencyKey({ workspace_id: "ws", lineage_id: "ln" }, "apify_funding_pvalyou", { tier: "basic", companies: ["a.com"] });
+  const key = h.sent[0].providerCallSpec.idempotency_key;
+  assertEquals(h.sent[1].providerCallSpec.idempotency_key, key, "the adopted call is the same purchase");
   assertEquals(h.ledger.reservations.filter((r) => r.idempotency_key === key).length, 1, "one reservation for the call");
+});
+
+Deno.test("SPINE: the spec is compiled, reserved under its own key, and travels in the envelope", async () => {
+  const h = ledgerHarness(() => Promise.resolve([{ ok: 1 }]));
+  const out = await h.call(pvCall(["wordware.ai"]));
+  assertEquals(out.status, "ok");
+  const [sent] = h.sent;
+  const spec = sent.providerCallSpec;
+  // What the ledger row reads (`specIdentityColumns`) is what the verifier was told.
+  assertEquals((out as { provider_call_id: string }).provider_call_id, spec.provider_call_id);
+  assertEquals(specIdentityColumns({ provider_call_spec: spec }).provider_call_id, spec.provider_call_id);
+  assertEquals([spec.capability, spec.purpose, spec.status], ["funding_verification", "funding_evidence", "intended"]);
+  assertEquals(sent.capabilityId, "funding_verification", "the guard is told the capability");
+  // Sent exactly what was compiled.
+  assertEquals(sent.input, spec.serialized_input);
+  // The estimate is the card's price × billable units, and it is what was reserved.
+  const card = hiringActorCard("apify_funding_pvalyou")!;
+  assertEquals(spec.cost.estimate_usd, estimateCallUsd("apify_funding_pvalyou", card.cost_model, { tier: "basic", companies: ["x"] }));
+  const r = h.ledger.reservations.find((x) => x.idempotency_key === spec.idempotency_key)!;
+  assertEquals([r.provider_call_id, r.estimate_usd, r.status], [spec.provider_call_id, spec.cost.estimate_usd, "executed"]);
+});
+
+Deno.test("SPINE: a pair the mission may not run is refused at the spec — no reservation, no network", async () => {
+  // A not-ready pair that nothing names.
+  const h = ledgerHarness(() => Promise.resolve([{ ok: 1 }]), PAIR_NOT_READY);
+  const r = await h.call(pvCall(["a.com"]));
+  assertEquals(r.status, "refused");
+  assert((r as { reason: string }).reason.startsWith("spec_refused_policy"), (r as { reason: string }).reason);
+  assertEquals(h.invoked(), 0);
+  assertEquals(h.ledger.reservations.length, 0);
+});
+
+Deno.test("SPINE: the guard refuses a plan-less verifier call its readiness does not allow", async () => {
+  let reached = 0;
+  const g = guardedInvoker(null, () => { reached++; return Promise.resolve([]); }, undefined, PAIR_NOT_READY);
+  await assertRejects(() => g({ actorKey: "apify_funding_atomus", capabilityId: "funding_verification" } as never));
+  assertEquals(reached, 0);
+  // …and a plan-less call that is not a claim verifier is exactly as before.
+  await g({ actorKey: "apify_funding_atomus", capabilityId: "something_else" } as never);
+  assertEquals(reached, 1);
+});
+
+Deno.test("SPINE: an actor with no card price is unaffordable, never free", () => {
+  const spec = verifierSpecCompiler({
+    scope: { workspace_id: "ws", lineage_id: "ln" }, mission_hash: "mh", policy: FUNDING_POLICY,
+    ceilings: () => DEFAULT_CEILINGS, readiness: readinessPolicy({ mode: "provider_probe", probe_routes: ["apify_unpriced|funding_verification"] }),
+  })({ actor_key: "apify_unpriced", capability: "funding_verification", input: { companies: ["a"] }, candidate_keys: ["a"], purpose: "funding_evidence" });
+  assertFalse(spec.status === "intended");
 });
 
 Deno.test("a deterministic refusal releases the reservation and is remembered for the mission", async () => {
@@ -257,12 +337,76 @@ Deno.test("a deterministic refusal releases the reservation and is remembered fo
   assertEquals(h.ledger.reservations.every((r) => r.status === "released"), true);
 });
 
-Deno.test("the ledger refuses a call over the funding-evidence ceiling before any network", async () => {
+Deno.test("a call over the funding-evidence ceiling is refused at the spec, before any reservation or network", async () => {
   const h = ledgerHarness(() => Promise.resolve([]));
   const r = await h.call(pvCall(["a.com", "b.com", "c.com"]));
   assertEquals(r.status, "refused");
-  assert((r as { reason: string }).reason.startsWith("budget_call"));
+  assert((r as { reason: string }).reason.startsWith("spec_refused_budget"), (r as { reason: string }).reason);
   assertEquals(h.invoked(), 0);
+  assertEquals(h.ledger.reservations.length, 0);
+});
+
+Deno.test("a run budget lowers the ceiling a verifier call is compiled against", async () => {
+  const ledger = newSpendLedger(tightenCeilings(DEFAULT_CEILINGS, { provider_usd: 0.01, max_candidates: null }));
+  const call = ledgerBoundCall({
+    ledger,
+    spec: verifierSpecCompiler({
+      scope: { workspace_id: "ws", lineage_id: "ln" }, mission_hash: "mh", policy: FUNDING_POLICY,
+      ceilings: () => ledger.ceilings, readiness: PAIR_ALLOWED_POLICY,
+    }),
+    actorIdFor: (k) => hiringActorCard(k)?.actor_id ?? null,
+    invoke: () => Promise.resolve([{ ok: 1 }]), hash: () => "h",
+  });
+  // One basic pvalyou read is priced above a $0.01 budget; atomus is not.
+  assertEquals((await call(pvCall(["a.com"]))).status, "refused");
+  assertEquals((await call({ actor_key: "apify_funding_atomus", capability: "funding_verification",
+    input: { companies: ["https://www.linkedin.com/company/a"] }, candidate_keys: ["a"], purpose: "funding_evidence" })).status, "ok");
+});
+
+Deno.test("TRACE: a verifier call leaves the same pre-execution trail as an engine call", async () => {
+  const run = async (invoke: () => Promise<Record<string, unknown>[]>, budget: number | null, readiness = PAIR_ALLOWED_POLICY) => {
+    const ledger = newSpendLedger(tightenCeilings(DEFAULT_CEILINGS, budget === null ? null : { provider_usd: budget, max_candidates: null }));
+    const events: { type: string; detail: Record<string, unknown>; refs: { provider_call_id: string | null; idempotency_key: string | null } }[] = [];
+    const call = ledgerBoundCall({
+      ledger,
+      spec: verifierSpecCompiler({
+        scope: { workspace_id: "ws", lineage_id: "ln" }, mission_hash: "mh", policy: FUNDING_POLICY,
+        ceilings: () => ledger.ceilings, readiness,
+      }),
+      actorIdFor: (k) => hiringActorCard(k)?.actor_id ?? null,
+      invoke, hash: () => "h",
+      trace: (type, detail, refs) => events.push({ type, detail, refs }),
+    });
+    const out = await call(pvCall(["a.com"]));
+    return { out, events, types: events.map((e) => e.type) };
+  };
+
+  // Executed: compiled → reserved at the estimate → executed, all under one call id.
+  const ok = await run(() => Promise.resolve([{ ok: 1 }]), null);
+  assertEquals(ok.types, ["spec_compiled", "call_reserved", "call_executed"]);
+  const pcid = (ok.out as { provider_call_id: string }).provider_call_id;
+  assert(pcid, "the call has an id");
+  for (const e of ok.events) {
+    assertEquals(e.refs.provider_call_id, pcid, `${e.type} names the call`);
+    assert(e.refs.idempotency_key, `${e.type} names the key`);
+    assertEquals(e.detail.actor, "apify_funding_pvalyou");
+  }
+  assertEquals(ok.events[1].detail.estimate_usd, ok.events[0].detail.estimate_usd, "reserved what was estimated");
+
+  // Over a run budget: compiled, then refused by the ledger — never executed.
+  const over = await run(() => Promise.resolve([{ ok: 1 }]), 0.01);
+  assertEquals(over.out.status, "refused");
+  assert(!over.types.includes("call_executed"));
+  assertEquals(over.types.at(-1), over.types.includes("spec_refused") ? "spec_refused" : "call_refused_budget");
+
+  // Not permitted by readiness: refused at the spec, nothing after it.
+  const gated = await run(() => Promise.resolve([{ ok: 1 }]), null, PAIR_NOT_READY);
+  assertEquals(gated.types, ["spec_refused"]);
+
+  // A provider failure after reservation releases or fails — it is never silent.
+  const failed = await run(() => Promise.reject(new Error("boom")), null);
+  assertEquals(failed.types.slice(0, 2), ["spec_compiled", "call_reserved"]);
+  assert(["call_failed", "call_released"].includes(failed.types[2]), failed.types.join(","));
 });
 
 // ═════════════════════════════════════ targets, marks and the router ══
@@ -293,16 +437,10 @@ Deno.test("targets are ONLY pending companies whose hard gap routes to this veri
     cand("d", { hard_checks: [{ criterion_id: "geography:us", dimension: "geography", result: "unknown", reason: "?" }] }),
   ], () => "seed", READY);
   assertEquals(picked.map((t) => [t.company_key, t.criterion.value]), [["a", "seed"]]);
-  // With the production registry the pair is READY (since 2026-09-22), so the
-  // pending company is a target; with the pair not ready, nobody is.
-  assertEquals(verificationTargets({ route_actor: "apify_funding_atomus", max_targets: 6 }, [cand("a")], () => "seed")
-    .map((t) => t.company_key), ["a"]);
-  const notReady = readinessPolicy({ overrides: {
-    "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
-    "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
-  } });
-  assertEquals(verificationTargets({ route_actor: "apify_funding_atomus", max_targets: 6 }, [cand("a")], () => "seed",
-    undefined, notReady), []);
+  // A not-ready pair makes nobody a target; the READY production pair does.
+  const pair = { route_actor: "apify_funding_atomus", max_targets: 6 };
+  assertEquals(verificationTargets(pair, [cand("a")], () => "seed", undefined, PAIR_NOT_READY), []);
+  assertEquals(verificationTargets(pair, [cand("a")], () => "seed").map((t) => t.company_key), ["a"]);
 });
 
 Deno.test("a verifier's answer survives into the next slice: evidence recorded, route marked, router blocked", () => {
@@ -337,15 +475,12 @@ Deno.test("a verifier's answer survives into the next slice: evidence recorded, 
   assertEquals([gaps[0].next, gaps[0].considered[0].tried], ["blocked", true], "an answered route is not taken again");
 });
 
-Deno.test("a round stage is unprovable until the funding verifier is READY — and provable once it is", async () => {
-  // The pair became READY on 2026-09-22; a not-ready pair is the fixture for the
-  // "until" half, production is the "once it is" half.
-  const notReady = readinessPolicy({ overrides: {
-    "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
-    "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
-  } });
-  assertFalse(fundingVerifierReady(notReady));
-  assert(fundingVerifierReady(), "production: the corroborating pair may run");
+Deno.test("a round stage is unprovable until the funding verifier may run — and provable once it may", async () => {
+  // A not-ready pair is the "until" half; the READY production pair — and a
+  // policy naming a not-ready one, a supervised canary — are "once it may".
+  assertFalse(fundingVerifierReady(PAIR_NOT_READY), "not ready: the pair may not run");
+  assert(fundingVerifierReady(), "production: the pair is READY");
+  assert(fundingVerifierReady(PAIR_ALLOWED_POLICY), "named: the corroborating pair may run");
   const { compileLeadMission } = await import("../../../supabase/functions/_shared/leadMissionCompiler.ts");
   const { deriveMissionCriteria } = await import("../../../supabase/functions/_shared/missionCriteria.ts");
   const mission = compileLeadMission({
@@ -360,9 +495,11 @@ Deno.test("a round stage is unprovable until the funding verifier is READY — a
       evaluation_instructions: "", founder_unlock_recommended: false, confidence: 0.85, unknowns: [],
     } as never,
   }).final_mission;
-  const pending = deriveMissionCriteria(mission, notReady).find((c) => c.dimension === "company_stage" && c.value === "seed")!;
+  const pending = deriveMissionCriteria(mission, PAIR_NOT_READY).find((c) => c.dimension === "company_stage" && c.value === "seed")!;
   assertEquals(pending.status, "unprovable_today", "no route can answer it, and the card must say so");
-  const now = deriveMissionCriteria(mission).find((c) => c.dimension === "company_stage" && c.value === "seed")!;
+  const prod = deriveMissionCriteria(mission).find((c) => c.dimension === "company_stage" && c.value === "seed")!;
+  assertEquals(prod.status, "ok", "production: the READY pair can answer it");
+  const now = deriveMissionCriteria(mission, PAIR_ALLOWED_POLICY).find((c) => c.dimension === "company_stage" && c.value === "seed")!;
   assertEquals(now.status, "ok", "the pair can answer it, so it is not disclosed as unprovable");
 });
 
@@ -377,6 +514,11 @@ Deno.test("run-agent runs the verifiers on canonical gaps, before the view, boun
     "verifiers: [fundingStageVerifier(), businessModel],",
     "readiness: leadReadiness,",
     "call: ledgerBoundCall({",
+    // The verifier path is the spine: spec, guard, readiness-aware criteria, settlement.
+    "spec: verifierSpecCompiler({",
+    "invoke: guardedInvoker(null, (call) => capabilityInvoke(call),",
+    "const vCriteria = deriveMissionCriteria(vMission, leadReadiness);",
+    `console.log("[run-agent][p2-spine][claim-verifier]"`,
     "return company ? applyVerifierFinding(company, f, verifier) : false;",
     "engineRun.resume_records = engineRun.companies.map(toResumeRecord)",
     "(capabilityRun?.state.verifier_pending_runs?.length ?? 0)",

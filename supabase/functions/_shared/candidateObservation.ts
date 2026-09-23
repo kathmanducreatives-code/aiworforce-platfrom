@@ -43,7 +43,14 @@ export interface EvidenceItem {
   source: {
     provider: string;
     actor: string;
+    /** The ONE paid call this item came from. Null when none — or when several did (see below). */
     provider_call_id: string | null;
+    /**
+     * Every paid call the item rests on, when that is more than the single call
+     * above can say — a verdict derived from two purchases names both. Absent on
+     * single-source items.
+     */
+    provider_call_ids?: string[];
     url: string | null;
     excerpt: string | null;
   };

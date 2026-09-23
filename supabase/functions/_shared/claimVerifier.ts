@@ -27,11 +27,12 @@
 import {
   attachProviderRun, markExecuted, release, reserve, type CallPurpose, type SpendLedger,
 } from "./budgetPolicy.ts";
-import { canonicalJson, sha256Hex } from "./providerInputFingerprint.ts";
+import type { ProviderCallSpec } from "./providerCallSpec.ts";
 import type { EvidenceItem } from "./candidateObservation.ts";
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import { evidenceGapsFor, type ClaimDefinition, CLAIM_REGISTRY } from "./evidenceGapRouter.ts";
 import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
+import type { TraceEventType } from "./missionTrace.ts";
 
 export const CLAIM_VERIFIER_VERSION = "claim-verifier-v1" as const;
 
@@ -61,6 +62,8 @@ export interface VerificationTarget {
 
 export interface VerifierCall {
   actor_key: string;
+  /** The claim-verifier capability this call serves (`CLAIM_VERIFIER_CAPABILITIES`). */
+  capability: string;
   input: Record<string, unknown>;
   candidate_keys: string[];
   purpose: CallPurpose;
@@ -188,42 +191,72 @@ export function batches<T>(xs: readonly T[], size: number): T[][] {
   return out;
 }
 
-// ── ONE PAID CALL, BOUND TO THE MISSION LEDGER ──────────────────────────────
+// ── ONE PAID CALL, THROUGH THE SPEC, THE GUARD AND THE LEDGER ───────────────
+//
+// A verifier's purchase is an ordinary provider call, and goes the way every
+// engine call goes:
+//
+//   compileProviderCallSpec   readiness, live contract, max billable units,
+//                             estimate against the call ceiling — refused here
+//                             is refused before any reservation or network
+//   reserve                   the spec's idempotency key and estimate, against
+//                             the call, candidate, route and mission ceilings
+//   guardedInvoker            readiness asked again at the moment of spending
+//   provider                  sent `serialized_input` and nothing else, with the
+//                             spec in the envelope, so the ledger row carries
+//                             its `provider_call_id` and a receipt settles it
+//
+// Before this the verifier path reserved under a key of its own and sent the
+// raw input unguarded: the spend was bounded, but the ledger row had no
+// provider_call_id, no estimate and no settlement (task 3f082b22).
 
 export interface LedgerCallDeps {
   ledger: SpendLedger;
-  scope: { workspace_id: string; lineage_id: string };
-  /** The card's price for this input. */
-  estimate(actorKey: string, input: Record<string, unknown>): number;
+  /** Compile the call. Pure; the spec decides readiness, units, estimate and ceiling. */
+  spec(c: VerifierCall): ProviderCallSpec;
   actorIdFor(actorKey: string): string | null;
-  /** The engine's invoker. Throws with `toolResult` on a failed or still-running run. */
+  /**
+   * The GUARDED invoker (`guardedInvoker`, no plan, the mission's readiness).
+   * Throws with `toolResult` on a failed or still-running run.
+   */
   invoke(call: {
-    actorKey: string; actorId: string; input: Record<string, unknown>; inputHash: string;
+    actorKey: string; actorId: string; capabilityId: string; input: Record<string, unknown>; inputHash: string;
+    providerCallSpec: ProviderCallSpec;
     resumeRunId?: string; onProviderRun?: (r: { run_id: string; dataset_id: string | null }) => void;
   }): Promise<Record<string, unknown>[]>;
   hash(input: Record<string, unknown>, actorKey: string): string;
   /** A deterministic refusal (opt-in gate, vendor credit, auth): refused ONCE per mission. */
   onRefused?(actorKey: string, reason: string): void;
+  /**
+   * The mission trace — the SAME one the engine's own calls and every
+   * settlement write to.
+   *
+   * The ordering below (spec before reservation, reservation before network)
+   * was always enforced here, and never RECORDED: a live canary (task
+   * c6d4b4fe) showed enrichment's full `spec_compiled → call_reserved →
+   * call_executed → call_settled` and, for the funding pair, `call_settled`
+   * alone. A spend that cannot be shown to have been checked before it
+   * happened is indistinguishable from one that was not. Same event names and
+   * detail shapes as the engine's, so one reader serves both.
+   */
+  trace?(type: TraceEventType, detail: Record<string, unknown>, refs: TraceRefs): void;
 }
+
+type TraceRefs = { plan_version: number | null; provider_call_id: string | null; idempotency_key: string | null };
 
 /** A refusal that no retry within this mission can change. */
 const REFUSAL_RE =
   /disabled_by_default|actor_not_configured|actor_missing|actor_key_unknown|not configured|unauthori[sz]ed|insufficient|credit|\b429\b|rate.?limit/i;
 
-export function verifierIdempotencyKey(
-  scope: { workspace_id: string; lineage_id: string }, actorKey: string, input: Record<string, unknown>,
-): string {
-  return sha256Hex(`${scope.workspace_id}:${scope.lineage_id}:verifier:${actorKey}:${canonicalJson(input)}`);
-}
-
 /**
  * The `call` a verifier is given. Every call:
  *
- *   - has ONE idempotency key per exact input, so a call already executed is
- *     never bought again — only a RUNNING one is adopted, by its run id;
- *   - reserves its estimate against the mission ledger (call, candidate, route
- *     and mission ceilings) BEFORE any network, and is refused when it would
- *     cross one;
+ *   - is compiled into a ProviderCallSpec first; a spec refused for readiness
+ *     or for its estimate never reserves and never reaches the network;
+ *   - has ONE idempotency key — the spec's — so a call already executed is
+ *     never bought again; only a RUNNING one is adopted, by its run id;
+ *   - reserves the spec's estimate against the mission ledger BEFORE any
+ *     network, and is refused when it would cross a ceiling;
  *   - settles the reservation to what actually happened: executed when a run
  *     started, released when nothing was bought.
  */
@@ -231,30 +264,54 @@ export function ledgerBoundCall(d: LedgerCallDeps): (c: VerifierCall) => Promise
   return async (c) => {
     const actorId = d.actorIdFor(c.actor_key);
     if (!actorId) return { status: "refused", reason: `${c.actor_key} has no actor card` };
-    const key = verifierIdempotencyKey(d.scope, c.actor_key, c.input);
-    const provider_call_id = `pc_${key.slice(0, 26)}`;
+    const spec = d.spec(c);
+    const refs: TraceRefs = {
+      plan_version: spec.plan_version ?? null, provider_call_id: spec.provider_call_id ?? null,
+      idempotency_key: spec.idempotency_key ?? null,
+    };
+    const trace = (type: TraceEventType, detail: Record<string, unknown>) =>
+      d.trace?.(type, { actor: c.actor_key, ...detail }, refs);
+    trace(spec.status === "intended" ? "spec_compiled" : "spec_refused", {
+      capability: spec.capability, purpose: spec.purpose, route_id: spec.route_id,
+      estimate_usd: spec.cost.estimate_usd, ceiling_usd: spec.cost.ceiling_usd, refusal: spec.refusal,
+    });
+    if (spec.status !== "intended") {
+      return { status: "refused", reason: `spec_${spec.status}: ${spec.refusal?.code ?? ""} ${spec.refusal?.detail ?? ""}`.trim() };
+    }
+    const key = spec.idempotency_key;
+    const provider_call_id = spec.provider_call_id;
+    const input = spec.serialized_input as Record<string, unknown>;
     const existing = d.ledger.reservations.find((r) => r.idempotency_key === key &&
       (r.status === "executed" || r.status === "settled" || r.status === "adopted"));
     if (existing && !c.resume_run_id) {
+      trace("call_idempotent_skip", { capability: spec.capability });
       return { status: "failed", reason: "already_executed: this exact call was bought earlier in the mission" };
     }
+    if (existing && c.resume_run_id) trace("call_adopted", { capability: spec.capability, run_id: c.resume_run_id });
     if (!existing) {
       const decision = reserve(d.ledger, {
-        idempotency_key: key, provider_call_id, purpose: c.purpose, route_id: null, route_anchor: "funding",
-        candidate_keys: c.candidate_keys, estimate_usd: d.estimate(c.actor_key, c.input),
+        idempotency_key: key, provider_call_id, purpose: spec.purpose, route_id: spec.route_id, route_anchor: "funding",
+        candidate_keys: spec.candidate_keys, estimate_usd: spec.cost.estimate_usd,
       });
       if (!decision.ok) {
+        trace("call_refused_budget", {
+          capability: spec.capability, ceiling: decision.ceiling, limit_usd: decision.limit_usd,
+          would_commit_usd: decision.would_commit_usd,
+        });
         return { status: "refused", reason: `budget_${decision.ceiling}: ${decision.would_commit_usd} > ${decision.limit_usd}` };
       }
+      trace("call_reserved", { estimate_usd: spec.cost.estimate_usd });
     }
-    const estimate = d.estimate(c.actor_key, c.input);
+    const estimate = spec.cost.estimate_usd;
     try {
       const rows = await d.invoke({
-        actorKey: c.actor_key, actorId, input: c.input, inputHash: d.hash(c.input, c.actor_key),
+        actorKey: c.actor_key, actorId, capabilityId: spec.capability, input,
+        inputHash: d.hash(input, c.actor_key), providerCallSpec: spec,
         ...(c.resume_run_id ? { resumeRunId: c.resume_run_id } : {}),
         onProviderRun: (r) => { attachProviderRun(d.ledger, key, r.run_id); },
       });
-      markExecuted(d.ledger, key, estimate);
+      if (!existing) markExecuted(d.ledger, key, estimate);
+      trace("call_executed", { rows: rows.length, provisional_usd: estimate });
       return { status: "ok", rows, provider_call_id };
     } catch (e) {
       const tr = ((e as { toolResult?: unknown }).toolResult ?? null) as
@@ -262,18 +319,27 @@ export function ledgerBoundCall(d: LedgerCallDeps): (c: VerifierCall) => Promise
       const runId = tr && typeof tr.run_id === "string" ? tr.run_id : null;
       const message = String((e as Error)?.message ?? e);
       if (runId && tr?.pending === true) {
-        markExecuted(d.ledger, key, estimate);
+        if (!existing) markExecuted(d.ledger, key, estimate);
         attachProviderRun(d.ledger, key, runId);
+        trace("call_executed", { rows: 0, provisional_usd: estimate, run_id: runId, pending: true });
         return { status: "running", run_id: runId, provider_call_id };
       }
+      // The guard refused before the network: readiness, at the moment of spending.
+      if (!runId && (e as { name?: string })?.name === "CapabilityContainmentError") {
+        if (!existing) release(d.ledger, key);
+        trace("call_released", { reason: "containment", detail: message.slice(0, 160) });
+        return { status: "refused", reason: message.slice(0, 160) };
+      }
       if (!runId && REFUSAL_RE.test(message)) {
-        release(d.ledger, key);
+        if (!existing) release(d.ledger, key);
+        trace("call_released", { reason: "provider_refused", detail: message.slice(0, 160) });
         d.onRefused?.(c.actor_key, message.slice(0, 160));
         return { status: "refused", reason: message.slice(0, 160) };
       }
       // A run that started is paid for, whatever it returned.
-      if (runId) markExecuted(d.ledger, key, estimate);
-      else release(d.ledger, key);
+      if (runId) { if (!existing) markExecuted(d.ledger, key, estimate); }
+      else if (!existing) release(d.ledger, key);
+      trace("call_failed", { run_id: runId, paid: !!runId, detail: message.slice(0, 160) });
       return { status: "failed", reason: message.slice(0, 160) };
     }
   };

@@ -10944,7 +10944,7 @@ export function recordDiscoveredFunding(
   const stage = decideFundingStage({ required_stage: requiredStage, record, pass_requires_source_url: true });
   const stageItem = fundingStageEvidenceItem({
     company_key: c.key, decision: stage, record, mission_id: ctx.mission_id,
-    provider_call_id: ctx.provider_call_id, observed_at: ctx.observed_at,
+    provider_call_id: ctx.provider_call_id, observed_at: ctx.observed_at, derived_from: [item.evidence_id],
   });
   // `answered: false` — discovery is not the verifier. A company it could not
   // settle still gets the verifier's completeness check.

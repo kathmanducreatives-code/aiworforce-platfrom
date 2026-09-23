@@ -80,7 +80,7 @@ export const ACTOR_READINESS: readonly ActorReadinessRecord[] = Object.freeze([
   // it yet. READY means live-proven THROUGH the spine; this is not that, and
   // calling it READY would make the table lie.
   //
-  // ── READY, AS A PAIR: 2026-09-22, THROUGH THE SPINE ─────────────────────
+  // ── 2026-09-22: THE DECISION IS PROVEN; THE PURCHASE PATH WAS NOT ─────
   //
   // Known-company canary, task 3f082b22 (local stack, Pilot-compiled mission
   // "Qualify https://www.linkedin.com/company/wordware. It must have raised
@@ -93,21 +93,50 @@ export const ACTOR_READINESS: readonly ActorReadinessRecord[] = Object.freeze([
   // the same record (730d PASS, 180d FAIL — no repurchase) → eligible →
   // Workbench `worth_considering`. No funding discovery, no datahyena call.
   //
-  // THE READY UNIT IS THE ROUTE, NOT EITHER ACTOR. Both entries are READY
-  // because the route needs both to be allowed to run; neither can SETTLE the
-  // claim alone, and that is enforced by the decision, not by this table:
-  // atomus carries no citation, so it can never PASS; pvalyou's count is only
-  // what it holds, so it can never make a history complete or a FAIL. The live
-  // domain-only canary (task 65c5793d: no LinkedIn identity, so atomus could
-  // not run) proved exactly that — pvalyou alone settled PENDING.
+  // It was briefly marked READY on that evidence, and that was premature. The
+  // two purchases did not go through the spine every other provider call
+  // does: no ProviderCallSpec was compiled, `guardedInvoker` was not on the
+  // path, and their `lead_execution_calls` rows carry no provider_call_id, no
+  // spec estimate and no settlement (the company-details call in the same run
+  // has all three). The verifier path now compiles, guards and settles like
+  // the engine (`verifierCallSpec.ts`, `ledgerBoundCall`); READY waits for a
+  // canary whose two ledger rows show exactly that.
+  //
+  // ── 2026-09-23: READY, TOGETHER, ON A CANARY THAT SHOWS THE WHOLE SPINE ─
+  //
+  // Final bounded canary, task de24f92c (local stack, same mission, run budget
+  // provider_usd 0.05 / max_candidates 1, no datahyena). For EACH half:
+  // ProviderCallSpec compiled against the $0.05 ceiling → readiness → USD
+  // preflight → guardedInvoker → provider_call_id → execution → estimate →
+  // receipt settlement, in the trace in that order (spec_compiled →
+  // call_reserved → call_executed → call_settled):
+  //
+  //   atomus   pc_63b19ebacfe08a580f927ad584  run xs9xxoJ9V4yjBztbG
+  //            estimate = actual = settled = $0.0036, stable, variance 0
+  //   pvalyou  pc_cb2607ae06ad8429f0823fdf05  run 9a9kcGDEgRTcmZTtQ
+  //            estimate = actual = settled = $0.0201, stable, variance 0
+  //
+  // and the canonical evidence names both, each for what it proved: the Seed
+  // event reported by atomus and CITED by pvalyou (blog.wordware.ai), the
+  // history's completeness (3 of 3 rounds) atomus's; funding_stage PASS cites
+  // both calls and derives from the funding record. recently_funded 730d PASS
+  // / 180d FAIL from the same record; eligible; Workbench worth_considering at
+  // $0.0278 provider (= the ledger's receipts) + $0.002656 model.
+  //
+  // THE UNIT IS THE ROUTE, NOT EITHER ACTOR, whatever the class: neither can
+  // SETTLE the claim alone, and that is enforced by the decision, not by this
+  // table. atomus carries no citation, so it can never PASS; pvalyou's count is
+  // only what it holds, so it can never make a history complete or a FAIL. The
+  // live domain-only canary (task 65c5793d: no LinkedIn identity, so atomus
+  // could not run) proved exactly that — pvalyou alone settled PENDING.
   { actor: "apify_funding_atomus", capability: "funding_verification", readiness: "READY",
     reason: "atomus/linkedin-company-scraper: dated rounds and a TRUE round count (completeness), no citations — half the pair",
-    live_evidence: "spine canary 2026-09-22 task 3f082b22 (Wordware): run jYxeaTmdOcUMqEDpH, 3/3 rounds, reported_round_count 3, merged with pvalyou → funding_stage PASS; first probe 2026-09-21",
-    gated_by: "READY only as the corroborating funding pair: a PASS needs pvalyou's or discovery's citation, so atomus alone can only answer PENDING" },
+    live_evidence: "final canary task de24f92c (2026-09-23, Wordware): pc_63b19ebacfe08a580f927ad584 run xs9xxoJ9V4yjBztbG, full spec spine, settled $0.0036 = estimate; completeness 3/3 cited in the Seed PASS",
+    gated_by: "the funding pair: a PASS needs pvalyou's or discovery's citation, so atomus alone can only answer PENDING (or a later-round FAIL)" },
   { actor: "apify_funding_pvalyou", capability: "funding_verification", readiness: "READY",
     reason: "pvalyou/company-record: per-round source URLs (provenance), a round count that is only what it holds, slow cold reads — half the pair",
-    live_evidence: "spine canary 2026-09-22 task 3f082b22 (Wordware): run 1PD7p3cn1lmi1AS54, Seed 2024-11-21 with 4 citations lent to atomus's round; alone (task 65c5793d) settled PENDING",
-    gated_by: "READY only as the corroborating funding pair: without atomus's completeness pvalyou alone can only answer PENDING" },
+    live_evidence: "final canary task de24f92c (2026-09-23, Wordware): pc_cb2607ae06ad8429f0823fdf05 run 9a9kcGDEgRTcmZTtQ, full spec spine, settled $0.0201 = estimate; the Seed event's citation in the PASS",
+    gated_by: "the funding pair: without atomus's completeness pvalyou alone can only answer PENDING" },
   { actor: "apify_linkedin_company_employees", capability: "hiring_verification", readiness: "NEEDS_PROVIDER_WORK",
     reason: "opt-in only at the tool layer (apify_actor_disabled_by_default); first-hire team check refused live", live_evidence: null },
   { actor: "apify_people_search", capability: "founder_discovery", readiness: "NEEDS_PROVIDER_WORK",

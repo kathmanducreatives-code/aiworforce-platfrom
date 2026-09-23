@@ -435,6 +435,51 @@ export function specIdentityColumns(requestInput: unknown): {
 }
 
 /**
+ * ── WHAT A PROVIDER CALL COST: THREE FIGURES, THREE MOMENTS ─────────────────
+ *
+ *   pre-spend estimate    `request_input.provider_call_spec.cost.estimate_usd`
+ *                         (and the spend-ledger reservation's `estimate_usd`).
+ *                         Compiled BEFORE the call; what the ceilings reserve.
+ *                         Not a column: `estimated_cost_usd` already means
+ *                         "a cost that is not provider-reported" (see below)
+ *                         and is not repurposed for it.
+ *   actual_cost_usd       the provider's charge AS KNOWN WHEN THE CALL
+ *                         RETURNED: the largest of the run's usage total, its
+ *                         charged events, and its published start + per-result
+ *                         price × billed rows (`priceProviderCall`). A FLOOR:
+ *                         Apify posts per-result charges after SUCCEEDED, so
+ *                         it can be lower than the bill. Never rewritten later.
+ *   settled_usd           the bill, from the run's receipt re-read until stable,
+ *   (settlement_source    after the run finished (`p2SpinePersistence`). Only
+ *    = provider_receipt)  `provider_receipt` is a receipt; `derived_floor` is
+ *                         the spend ledger's provisional figure written for a
+ *                         call no receipt could settle, and is NOT one.
+ *
+ * Reports read ONE of them: {@link canonicalProviderCostUsd}.
+ */
+export interface ProviderCostColumns {
+  actual_cost_usd?: number | string | null;
+  settled_usd?: number | string | null;
+  settlement_source?: string | null;
+}
+
+/**
+ * THE provider cost a report shows: the receipt-settled figure, else the
+ * provider-reported figure at completion, else null (not known — never zero).
+ */
+export function canonicalProviderCostUsd(row: ProviderCostColumns): number | null {
+  const n = (v: unknown) => {
+    const x = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
+    return Number.isFinite(x) ? x : null;
+  };
+  if (row.settlement_source === "provider_receipt") {
+    const settled = n(row.settled_usd);
+    if (settled !== null) return settled;
+  }
+  return n(row.actual_cost_usd);
+}
+
+/**
  * The finalization patch.
  *
  * COST SEMANTICS. `actual_cost_usd` is only ever written when the provider

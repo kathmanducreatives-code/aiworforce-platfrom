@@ -257,27 +257,26 @@ Deno.test("a missing funding claim leaves the criterion unknown — absence is n
   assertEquals(checkCriterion(criterion("seed"), empty).result, "unknown");
 });
 
-// ── The route is carded honestly and stays non-executable ────────────────────
+// ── The route is carded honestly, and READINESS — not the executor — opens it ──
 
-Deno.test("a funding route executes once a verifier is proven LIVE — readiness, not the executor, is the gate", () => {
+Deno.test("the funding route runs in production only because the pair was proven through the spine — readiness is the gate", () => {
   // P6 built the executor (`fundingStageVerifier`), so the route carries
-  // `canonical_executor: true`. Actor Intelligence is what opens it: the pair
-  // was EXPERIMENTAL after the 2026-09-21 probe (live data, outside this
-  // pipeline) and became READY after the 2026-09-22 known-company canary ran a
-  // HARD funding claim through the spine (task 3f082b22).
+  // `canonical_executor: true`. What opens it is Actor Intelligence: task
+  // de24f92c (2026-09-23) ran both halves through the spec spine, so the pair
+  // is READY — together.
   const claim = CLAIM_REGISTRY.find((c) => c.claim === "funding_stage")!;
   assertEquals(claim.routes.map((r) => [r.actor, r.canonical_executor]), [["apify_funding_atomus", true]]);
   assertEquals(readinessOf("apify_funding_atomus", "funding_verification").readiness, "READY");
   assertEquals(readinessOf("apify_funding_pvalyou", "funding_verification").readiness, "READY");
   assert(PRODUCTION_READINESS.decide("apify_funding_atomus", "funding_verification").executable);
   assert(PRODUCTION_READINESS.decide("apify_funding_pvalyou", "funding_verification").executable);
-  // The gate is still readiness: take it away and the route closes again.
+  // The gate still closes the moment the table says the pair is not ready.
   const notReady = readinessPolicy({ overrides: {
-    "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
-    "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
+    "apify_funding_atomus|funding_verification": "EXPERIMENTAL", "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
   } });
   assertFalse(notReady.decide("apify_funding_atomus", "funding_verification").executable,
     "EXPERIMENTAL is not a licence to run");
+  assertFalse(notReady.decide("apify_funding_pvalyou", "funding_verification").executable);
 });
 
 Deno.test("the datahyena card carries the price and schema the Store actually publishes", () => {
@@ -296,6 +295,8 @@ Deno.test("the datahyena card carries the price and schema the Store actually pu
   const names = contract.fields.map((f) => f.name);
   assert(names.includes("enrichedOnly"));
   for (const gone of ["country", "industryGroup"]) assertEquals(names.includes(gone), false, gone);
-  // The catalog price and the contract's stated price must not drift apart.
-  assert(contract.quality.note.includes("$0.07"));
+  // The contract names no price of its own: a second copy is how the two drifted
+  // apart. It points at the card, which is the one price source.
+  assertEquals(/\$\d/.test(contract.quality.note), false, contract.quality.note);
+  assert(contract.quality.note.includes("catalog card"));
 });

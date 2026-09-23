@@ -140,15 +140,14 @@ Deno.test("NO REPURCHASE: a company whose rounds we hold is answered, not routed
 
 Deno.test("ROUTED ONLY WHEN NOTHING IS KNOWN: the gap goes to the funding pair", () => {
   const empty = buildCompanyEvidenceGraph("acme", [], { now: NOW });
-  // A NOT-READY pair (its state before 2026-09-22) is refused…
+  // A not-ready pair: no ordinary mission may take it.
   const notReady = readinessPolicy({ overrides: {
-    "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
-    "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
+    "apify_funding_atomus|funding_verification": "EXPERIMENTAL", "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
   } });
   const [blocked] = evidenceGapsFor([unknownFunding], empty, undefined, undefined, notReady);
   assertEquals(blocked.claim, "recently_funded");
-  assertEquals(blocked.next, "blocked", "a not-ready pair: no ordinary mission may take it");
-  // …and production, where the pair is READY, routes the same gap to it.
+  assertEquals(blocked.next, "blocked", "EXPERIMENTAL: no ordinary mission may take it");
+  // READY since the 2026-09-23 spine canary: production routes it.
   const [prod] = evidenceGapsFor([unknownFunding], empty);
   assertEquals([prod.next, prod.route?.actor], ["verify", "apify_funding_atomus"]);
 

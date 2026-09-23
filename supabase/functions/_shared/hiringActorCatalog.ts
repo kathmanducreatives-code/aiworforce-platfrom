@@ -643,7 +643,9 @@ export const HIRING_ACTOR_CATALOG: Readonly<Record<string, HiringActorCard>> = O
     ],
     cost_model: {
       tier: "BRONZE", start_usd: 0.00005, per_result_usd: 0.02,
-      events_usd: { "actor-start": 0.00005, "basic-company-profile": 0.02, "full-company-profile": 0.1 },
+      // Event names exactly as the run's own `pricingInfo` publishes them (run
+      // 6u7BzSMsN27YrSeFH, 2026-09-23) — the names `resultEventName` reads.
+      events_usd: { "actor-start": 0.00005, company_basic: 0.02, company_full: 0.1 },
       cost_multiplier_fields: ["companies (one charge per company delivered)"],
     },
     normalizer_key: "pvalyou_funding",

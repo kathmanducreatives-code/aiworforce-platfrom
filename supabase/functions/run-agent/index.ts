@@ -103,7 +103,7 @@ import { canonicalDecisions, canonicalQualifiedKeys, projectResearchFabric } fro
 import { requiredEvidenceDimensions } from "../_shared/evidenceGraph.ts";
 import { criteriaSections, deriveMissionCriteria } from "../_shared/missionCriteria.ts";
 import { effectiveRequestedCount as p5RequestedCount } from "../_shared/leadMission.ts";
-import { buildWorkbenchMissionView, decisionSummary } from "../_shared/workbenchMissionView.ts";
+import { buildWorkbenchMissionView, decisionSummary, missionCostFromLedgers } from "../_shared/workbenchMissionView.ts";
 import { makeGptOpportunityReasoner, reasonForCandidates } from "../_shared/opportunityReasoningRun.ts";
 import { missionCandidatesFrom } from "../_shared/leadCapabilityEngine.ts";
 import { anchorForCapability } from "../_shared/retrievalPlan.ts";
@@ -117,7 +117,7 @@ const readEnvSafe = (key: string): string | undefined => {
   try { return Deno.env.get(key); } catch { return undefined; }
 };
 import {
-  legacyLoopReachable, missionRouteRequest, readPersistedLeadMission,
+  guardedInvoker, legacyLoopReachable, missionRouteRequest, readPersistedLeadMission,
   readPersistedBindings,
 } from "../_shared/leadMissionRuntime.ts";
 import {
@@ -165,6 +165,7 @@ import { emptyEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
 import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
 import { applyVerifierFinding } from "../_shared/leadCapabilityEngine.ts";
 import { ledgerBoundCall } from "../_shared/claimVerifier.ts";
+import { verifierSpecCompiler } from "../_shared/verifierCallSpec.ts";
 import { runClaimVerificationPhase } from "../_shared/claimVerificationPhase.ts";
 import { buildClaimPlan } from "../_shared/claimPlan.ts";
 import {
@@ -172,7 +173,6 @@ import {
 } from "../_shared/businessModelVerifier.ts";
 import { fundingStageVerifier } from "../_shared/fundingStageVerifier.ts";
 import { hiringActorCard } from "../_shared/hiringActorCatalog.ts";
-import { estimateCallUsd } from "../_shared/budgetPolicy.ts";
 import { hashInput as claimVerifierHashInput } from "../_shared/hiringActorInputs.ts";
 import { markProviderUnavailable, unavailableProvider } from "../_shared/providerAvailability.ts";
 import {
@@ -410,7 +410,7 @@ import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../
 import { buildQualifiedLeadRunContext } from "../_shared/qualifiedLeadRunContext.ts";
 import { decideClaimAttempt, claimContinuation, claimContinuationViaRpc, releaseContinuationViaRpc, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb, type RpcDb } from "../_shared/continuationClaim.ts";
 import {
-  buildRunOutcome, readFactsFromResult, readPersistedRunOutcome, readSpendFacts,
+  buildRunOutcome, readFactsFromResult, readModelSpendUsd, readPersistedRunOutcome, readSpendFacts,
   renderQualificationClause, RUN_OUTCOME_RESULT_KEY,
   renderSpendClause, type OutcomeDb, type SpendFacts,
 } from "../_shared/runOutcome.ts";
@@ -444,6 +444,7 @@ import { emptySignalEnrichmentObservability, type SignalEnrichmentObservability 
 import type { TimingAssessment } from "../_shared/timingAssessment.ts";
 import { functionUrl, functionsBaseUrl } from "../_shared/functionEndpoints.ts";
 import { candidatePool, parseRunBudget } from "../_shared/runBudget.ts";
+import { appendTrace } from "../_shared/missionTrace.ts";
 
 
 /**
@@ -4929,7 +4930,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 const engineRun = capabilityRun;
                 const vState = engineRun.state;
                 const vMission = persistedMission;
-                const vCriteria = deriveMissionCriteria(vMission);
+                // Under the mission's readiness, as at the compile site and in
+                // the engine: a round stage is hard exactly when a verifier this
+                // mission may run can prove it.
+                const vCriteria = deriveMissionCriteria(vMission, leadReadiness);
                 const vCandidates = () => missionCandidatesFrom(engineRun, { missionId: String(task.id) }).map((cand) => {
                   const e = evaluateEligibility(vCriteria, cand.graph);
                   return {
@@ -5082,16 +5086,37 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   unavailable,
                   pending: vState.verifier_pending_runs ?? [],
                   deps: {
+                    // THE SAME SPINE AS EVERY ENGINE CALL: a ProviderCallSpec
+                    // (readiness, contract, units, estimate vs ceiling), the
+                    // ledger reservation under the spec's key, `guardedInvoker`
+                    // at the moment of spending, and the spec in the envelope
+                    // so the ledger row carries `provider_call_id` and settles.
                     call: ledgerBoundCall({
                       ledger: vState.spend_ledger!,
-                      scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
-                      estimate: (actorKey, input) => {
-                        const card = hiringActorCard(actorKey);
-                        return card?.cost_model ? estimateCallUsd(actorKey, card.cost_model, input) : Number.POSITIVE_INFINITY;
-                      },
+                      spec: verifierSpecCompiler({
+                        scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
+                        mission_hash: await missionHash(vMission),
+                        policy: criteriaExecutionPolicy(vMission),
+                        ceilings: () => vState.spend_ledger!.ceilings,
+                        readiness: leadReadiness,
+                        plan: (() => {
+                          const rp = vState.retrieval_plans?.[vState.retrieval_plans.length - 1];
+                          return rp ? { plan_id: rp.plan_id, version: rp.version } : null;
+                        })(),
+                      }),
                       actorIdFor: (actorKey) => hiringActorCard(actorKey)?.actor_id ?? null,
-                      invoke: (call) => capabilityInvoke(call),
+                      invoke: guardedInvoker(null, (call) => capabilityInvoke(call), (actorKey, error) => {
+                        console.error("[run-agent][claim-verifier][guard_refused]", {
+                          task_id: task.id, actorKey, kind: error.kind, reason: error.message.slice(0, 200),
+                        });
+                      }, leadReadiness),
                       hash: (input, actorKey) => claimVerifierHashInput(input, actorKey),
+                      // THE SAME TRACE the engine's calls and every settlement
+                      // write to, so a verifier purchase reads spec → reserve →
+                      // execute → settle like any other.
+                      trace: (type, detail, refs) => {
+                        if (vState.mission_trace) appendTrace(vState.mission_trace, type, detail, refs);
+                      },
                       onRefused: (actorKey, reason) => {
                         vState.unavailable_providers = markProviderUnavailable(vState.unavailable_providers, {
                           provider: actorKey, capability: "funding_verification", reason,
@@ -5114,6 +5139,29 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   task_id: task.id, order: phase.order, ran: phase.ran, stopped: phase.stopped, irrelevant: phase.irrelevant,
                   pending_runs: phase.pending.length,
                 });
+                // ── SETTLE WHAT THE VERIFIERS BOUGHT ─────────────────────────
+                //
+                // The engine's settlement ran before this phase existed in the
+                // run, so a verifier reservation stayed provisional and its
+                // ledger row never got `settled_usd`. Settled from the same
+                // receipts, bounded by the same deadline; a no-op when the
+                // verifiers bought nothing.
+                if (vState.spend_ledger!.reservations.some((r) => r.status === "executed" && r.provider_run_id)) {
+                  const apifyToken = readEnvSafe("APIFY_API_TOKEN");
+                  const room = terminalGuard.deadline ? terminalGuard.deadline.remainingMs() : Infinity;
+                  const vFinal = await settleAndPersistP2Spine({
+                    state: vState as SpineState,
+                    receiptFor: apifyToken ? (runId) => fetchApifyRunReceipt(runId, apifyToken) : null,
+                    db: supabase as unknown as SpineDb,
+                    scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
+                    attempts: settlementAttempts(room, { waitMs: 15_000 }),
+                    waitMs: 15_000,
+                    minFinishedAgeMs: 60_000,
+                  });
+                  console.log("[run-agent][p2-spine][claim-verifier]", {
+                    task_id: task.id, settlement: vFinal.settlement, persisted: vFinal.persisted, error: vFinal.error ?? null,
+                  });
+                }
                 // The checkpoint is written from the resume records; rebuild them
                 // so the verification marks and evidence survive into the next slice.
                 if (phase.changed > 0) engineRun.resume_records = engineRun.companies.map(toResumeRecord);
@@ -6188,6 +6236,39 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     criteriaExecutionPolicy(persistedMission),
                     (persistedMission.required_signals ?? []).map((sig) => String(sig.type))),
                 });
+                // ── THE REASONER, BOUNDED BY THE CEILING ──────────────────
+                //
+                // One batched call over the candidates code already found
+                // eligible, capped at ten. Every part of what it returns is
+                // validated by `applyReasoning`; with no key, the flag off or
+                // a failed call the map is empty and the ceiling stands.
+                //
+                // Run BEFORE the cost is read, so the view's model figure
+                // includes the reasoner's own call.
+                const reasoning = await reasonForCandidates({
+                  request: persistedMission.original_user_query ?? routeUserRequest,
+                  criteria, anchor, candidates,
+                  enabled: String(readEnvSafe("LEAD_V2_REASONER") ?? "").trim().toLowerCase() !== "off",
+                  reason: makeGptOpportunityReasoner({
+                    readEnv: readEnvSafe, onModelCall: modelCalls.sink,
+                    log: (m, meta) => console.log(`[gpt-opportunity-reasoner] ${m}`, meta ?? ""),
+                  }, { onRoute: (r) => modelRouting.record(r) }),
+                });
+                // ── COST FROM THE CANONICAL LEDGERS ─────────────────────────
+                //
+                // Provider: the spend ledger, AFTER both settlement passes (the
+                // engine's and the claim verifiers'). Model: the model ledger for
+                // every task of this lineage (calls already drained to it) plus
+                // this collector's undrained calls — the same mission scope the
+                // spend ledger carries. `drain` empties the collector, so no
+                // call is counted in both.
+                const { data: costTaskRows } = await supabase.from("tasks")
+                  .select("id").eq("lineage_id", lineageRootId);
+                const costTaskIds = Array.isArray(costTaskRows) && costTaskRows.length > 0
+                  ? (costTaskRows as Array<{ id: string }>).map((r) => r.id) : [String(task.id)];
+                const drainedModel = await readModelSpendUsd(
+                  supabase as unknown as OutcomeDb, String(workspace_id ?? ""), costTaskIds);
+                const liveModel = modelCalls.check();
                 return buildWorkbenchMissionView({
                   mission: {
                     requested_count: p5RequestedCount(persistedMission),
@@ -6203,23 +6284,12 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   // the ones this run's readiness policy lets it take.
                   readiness: leadReadiness,
                   waves: capabilityRun.state.research_waves ?? [],
-                  // `check()` is the ledger's own priced total — never a second sum.
-                  cost: { model_usd: modelCalls.check().priced_usd ?? 0 },
-                  // ── THE REASONER, BOUNDED BY THE CEILING ──────────────────
-                  //
-                  // One batched call over the candidates code already found
-                  // eligible, capped at ten. Every part of what it returns is
-                  // validated by `applyReasoning`; with no key, the flag off or
-                  // a failed call the map is empty and the ceiling stands.
-                  reasoning: await reasonForCandidates({
-                    request: persistedMission.original_user_query ?? routeUserRequest,
-                    criteria, anchor, candidates,
-                    enabled: String(readEnvSafe("LEAD_V2_REASONER") ?? "").trim().toLowerCase() !== "off",
-                    reason: makeGptOpportunityReasoner({
-                      readEnv: readEnvSafe, onModelCall: modelCalls.sink,
-                      log: (m, meta) => console.log(`[gpt-opportunity-reasoner] ${m}`, meta ?? ""),
-                    }, { onRoute: (r) => modelRouting.record(r) }),
+                  cost: missionCostFromLedgers({
+                    spend_ledger: capabilityRun.state.spend_ledger,
+                    model_usd: drainedModel.usd + (liveModel.priced_usd ?? 0),
+                    model_unpriced_calls: drainedModel.unpriced_calls + liveModel.unpriced_calls,
                   }),
+                  reasoning,
                 });
               } catch (e) {
                 console.error("[run-agent][workbench_mission_view][failed]", String(e));

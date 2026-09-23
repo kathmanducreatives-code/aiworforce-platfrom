@@ -177,7 +177,7 @@ Deno.test('"likely to need a growth marketer soon" → hypothesis with proxies, 
 
 // ── stage: ONLY vs prefer ────────────────────────────────────────────────────
 
-Deno.test('"ONLY seed-stage" → seed hard, carried as a hard constraint, provable now the funding pair is READY', () => {
+Deno.test('"ONLY seed-stage" → seed hard, carried as a hard constraint, provable by the READY funding pair', () => {
   const r = compile("Find ONLY seed-stage B2B SaaS startups in the US hiring their first growth marketer.", {
     company_types: ["B2B SaaS"], geographies: ["United States"], preferred_signals: ["hiring growth marketer"],
   });
@@ -186,13 +186,12 @@ Deno.test('"ONLY seed-stage" → seed hard, carried as a hard constraint, provab
   const seed = (m.criteria ?? []).find((c) => c.dimension === "company_stage" && c.value === "seed")!;
   assertEquals(seed.kind, "hard");
   assertEquals(seed.elevated_by, "only");
-  // Was `unprovable_today` while no funding verifier could run. The
-  // corroborating pair has been READY since 2026-09-22, so a round stage is
-  // establishable per company — and is therefore NOT disclosed as unsupported.
+  // Was `unprovable_today` while the funding pair was EXPERIMENTAL; since the
+  // 2026-09-23 spine canary it is READY, so a round stage can be established.
   assertEquals(seed.status, "ok");
   const s = criteriaSections(m);
   assert(s.hard.some((l) => l.includes("seed")));
-  assert(!s.unsupported.some((l) => l.includes("seed")), "a provable rung is not listed as unsupported");
+  assert(!s.unsupported.some((l) => l.includes("seed")), "a provable stage is not disclosed as unsupported");
 });
 
 Deno.test('"prefer seed-stage" → seed target; a model-written hard stage is demoted and recorded', () => {

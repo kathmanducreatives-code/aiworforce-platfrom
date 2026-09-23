@@ -77,33 +77,32 @@ Deno.test("LIVE: the same evidence answers the other rungs honestly", () => {
 
 // ── THE PROMOTION THE PROBE EARNED, AND THE ONE IT DID NOT ──────────────────
 
-Deno.test("READINESS: the pair is READY together — earned THROUGH the spine, not by the probe", () => {
+Deno.test("READINESS: the pair is READY together, with the spine canary named", () => {
   const a = readinessOf("apify_funding_atomus", "funding_verification");
   const p = readinessOf("apify_funding_pvalyou", "funding_verification");
   assertEquals([a.readiness, p.readiness], ["READY", "READY"],
     "promoted as a pair — never one without the other");
   for (const r of [a, p]) {
-    // The 2026-09-21 probe (this file's evidence) earned EXPERIMENTAL; READY
-    // came from the 2026-09-22 known-company mission that routed a HARD
-    // funding claim to the pair through the spine (task 3f082b22).
-    assert(r.live_evidence?.includes("3f082b22"), `${r.actor}: the spine canary is named`);
+    // READY means live-proven THROUGH the spine: the 2026-09-23 canary, with
+    // this half's own provider call named.
+    assert(r.live_evidence?.includes("de24f92c") && r.live_evidence.includes("full spec spine"),
+      `${r.actor}: the spine canary that proved it is named`);
+    assert(/pc_[0-9a-f]{26}/.test(r.live_evidence ?? ""), `${r.actor}: its own provider call is named`);
     assert(r.gated_by?.includes("pair"), `${r.actor}: the record says it cannot answer alone`);
   }
 });
 
-Deno.test("READINESS: READY runs by default now, and ONE half still never settles the claim", () => {
-  // Production executes both halves. That the pair is the unit is enforced by
-  // the DECISION below (and in the next test), not by withholding readiness.
+Deno.test("READINESS: production runs the READY pair; an EXPERIMENTAL pair runs only where it is named", () => {
+  const notReady = readinessPolicy({ overrides: {
+    [ATOMUS_PAIR]: "EXPERIMENTAL", [PVALYOU_PAIR]: "EXPERIMENTAL",
+  } });
   for (const pair of [ATOMUS_PAIR, PVALYOU_PAIR]) {
     const [actor, capability] = pair.split("|");
-    assert(PRODUCTION_READINESS.decide(actor, capability).executable, `${actor} runs in production`);
-    // A not-ready fixture is still refused, and an explicit allow still opens it.
-    const notReady = readinessPolicy({ overrides: { [ATOMUS_PAIR]: "EXPERIMENTAL", [PVALYOU_PAIR]: "EXPERIMENTAL" } });
-    assertFalse(notReady.decide(actor, capability).executable);
-    const allowed = readinessPolicy({
-      overrides: { [ATOMUS_PAIR]: "EXPERIMENTAL", [PVALYOU_PAIR]: "EXPERIMENTAL" },
-      allow_experimental: [ATOMUS_PAIR, PVALYOU_PAIR],
-    });
+    assertEquals(PRODUCTION_READINESS.decide(actor, capability).via, "ready",
+      `${actor} runs in an ordinary production mission`);
+    assertFalse(notReady.decide(actor, capability).executable, `${actor}: EXPERIMENTAL is not a licence to run`);
+    const allowed = readinessPolicy({ overrides: { [ATOMUS_PAIR]: "EXPERIMENTAL", [PVALYOU_PAIR]: "EXPERIMENTAL" },
+      allow_experimental: [ATOMUS_PAIR, PVALYOU_PAIR] });
     assertEquals(allowed.decide(actor, capability).via, "experimental_allowed");
   }
 });

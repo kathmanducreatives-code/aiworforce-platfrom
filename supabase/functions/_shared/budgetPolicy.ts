@@ -316,6 +316,12 @@ export function perRowUsd(actorKey: string, model: CostModelLike, input: Record<
     if (/full/i.test(mode)) return ev["full-profile"] ?? base;
     return ev["short-profile"] ?? base;
   }
+  // The base price is the BASIC profile. A full read is billed as a different
+  // event at several times that, so pricing it as basic would under-state it.
+  if (actorKey === "apify_funding_pvalyou") {
+    return String(input.tier ?? "basic") === "full"
+      ? (ev["company_full"] ?? Number.POSITIVE_INFINITY) : (ev["company_basic"] ?? base);
+  }
   return base;
 }
 

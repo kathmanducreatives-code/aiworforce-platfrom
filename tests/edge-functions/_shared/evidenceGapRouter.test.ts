@@ -24,6 +24,12 @@ import { mergeCompanyBrainIntoMission } from "../../../supabase/functions/_share
 import { deriveMissionCriteria } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import { readinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
 
+/** The funding pair as it was before the 2026-09-23 spine canary earned READY. */
+const PAIR_NOT_READY = readinessPolicy({ overrides: {
+  "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
+  "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
+} });
+
 const NOW = new Date("2026-09-19T12:00:00.000Z");
 const item = (dimension: EvidenceItem["dimension"], value: unknown, actor: string): EvidenceItem => ({
   evidence_id: `${dimension}_${actor}`, company_key: "lancedb", dimension, value, status: "proven",
@@ -92,23 +98,23 @@ Deno.test("business model: once the pages are in the registry, the route is trie
   assert(g.considered.find((r) => r.actor === "firecrawl")!.why.includes("already answered"));
 });
 
-Deno.test("funding stage: the P6 executor is READY since it ran through the spine — the gap routes to the pair", () => {
-  // Promoted 2026-09-22 (known-company canary, task 3f082b22): a hard funding
-  // claim ran through gap → verifier → atomus + pvalyou → corroborated PASS.
+Deno.test("funding stage: the P6 executor is READY, so a pending round stage routes to the pair", () => {
+  // READY since the 2026-09-23 spine canary (task de24f92c): both halves ran
+  // through the spec spine, so an ordinary mission may take the route.
   const [g] = evidenceGapsFor([unknown("company_stage")], LANCEDB);
-  assertEquals([g.claim, g.next], ["funding_stage", "verify"]);
+  assertEquals([g.claim, g.next, g.route?.actor], ["funding_stage", "verify", "apify_funding_atomus"]);
   assertEquals([g.considered[0].actor, g.considered[0].readiness], ["apify_funding_atomus", "READY"]);
   const s = summarizeGaps([{ gaps: [g] }]);
   assertEquals([s.pending, s.with_executable_route, s.blocked], [1, 1, 0]);
+});
 
-  // …and a NOT-READY pair is still a capability gap, never guessed.
-  const notReady = readinessPolicy({ overrides: {
-    "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
-    "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
-  } });
-  const [b] = evidenceGapsFor([unknown("company_stage")], LANCEDB, undefined, undefined, notReady);
-  assertEquals([b.claim, b.next], ["funding_stage", "blocked"]);
-  assert(b.considered[0].why.includes("EXPERIMENTAL"), b.considered[0].why);
+Deno.test("funding stage: a pair that is NOT ready is a capability gap, never guessed", () => {
+  const [g] = evidenceGapsFor([unknown("company_stage")], LANCEDB, undefined, undefined, PAIR_NOT_READY);
+  assertEquals([g.claim, g.next], ["funding_stage", "blocked"]);
+  assertEquals([g.considered[0].actor, g.considered[0].readiness], ["apify_funding_atomus", "EXPERIMENTAL"]);
+  assert(g.considered[0].why.includes("EXPERIMENTAL"), g.considered[0].why);
+  const s = summarizeGaps([{ gaps: [g] }]);
+  assertEquals([s.pending, s.with_executable_route, s.blocked], [1, 0, 1]);
 });
 
 Deno.test("a route a claim verifier already answered is not taken again, even with no evidence item", () => {
@@ -164,16 +170,20 @@ Deno.test("an executor is not enough: a route whose actor is not READY in Actor 
   assertEquals([g.next, g.considered[0].readiness], ["blocked", "NOT_PRESENT"]);
 });
 
-Deno.test("PHASE C: business model and the funding pair are the canonical claims a production route can settle today", () => {
-  // Firecrawl settles the business model; since 2026-09-22 the corroborating
-  // funding pair settles both funding claims (one route, two claims).
-  // First-in-function is still blocked on the opt-in actor, and says so.
+Deno.test("PHASE C: business model and the funding claims are the canonical claims a production route can settle today", () => {
+  // Was 0 — the rule was dormant. Firecrawl is a canonical executor, so a
+  // pending business model routes to verification; since 2026-09-23 the READY
+  // funding pair settles both funding claims; first-in-function is still
+  // blocked (the opt-in actor), and says so.
   const every = CLAIM_REGISTRY.flatMap((c) => c.criterion_dimensions).map(unknown);
   const gaps = evidenceGapsFor(every, LANCEDB);
   const s = summarizeGaps([{ gaps }]);
-  assertEquals(s.with_executable_route, 1);
   const verifiable = gaps.filter((g) => g.next === "verify");
   assertEquals([...new Set(verifiable.map((g) => g.claim))].sort(), ["business_model", "funding_stage", "recently_funded"]);
   assertEquals([...new Set(verifiable.map((g) => g.route?.actor))].sort(), ["apify_funding_atomus", "firecrawl"]);
   assert(!s.capability_gaps.some((c) => c.claim === "funding_stage"), "funding is no longer a capability gap");
+  // With the pair held back, funding is a named capability gap again.
+  const held = summarizeGaps([{ gaps: evidenceGapsFor(every, LANCEDB, undefined, undefined, PAIR_NOT_READY) }]);
+  assert(held.capability_gaps.some((c) => c.claim === "funding_stage" &&
+    c.routes.some((r) => r.actor === "apify_funding_atomus" && r.why.includes("EXPERIMENTAL"))));
 });

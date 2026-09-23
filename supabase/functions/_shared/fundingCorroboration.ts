@@ -31,8 +31,9 @@
 // Pure. No provider, no clock beyond what the caller passes.
 
 import {
-  decideFundingStage, normalizeRoundType, stageRank,
-  type FundingRecordFact, type FundingRoundFact, type FundingStageDecision,
+  decideFundingStage, dedupeCallIds, dedupeProvenance, normalizeRoundType, recordCallIds, recordCompleteness,
+  roundProvenance, stageRank,
+  type FundingProvenanceRef, type FundingRecordFact, type FundingRoundFact, type FundingStageDecision,
 } from "./fundingStageClaim.ts";
 import type { EvidenceItem } from "./candidateObservation.ts";
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
@@ -132,6 +133,26 @@ export function normalizePvalyouFunding(row: Record<string, unknown>): ProviderF
   };
 }
 
+/**
+ * THE PURCHASE, WRITTEN ON WHAT IT BOUGHT.
+ *
+ * The normalizers read a row and know nothing of the call that returned it; the
+ * verifier does. Stamping puts the call on the record AND on every round (as
+ * `reported` or, for a round carrying this source's URLs, `cited`) and names the
+ * record's completeness source — so the provenance survives any later merge.
+ */
+export function stampFundingCall(record: FundingRecordFact, provider_call_id: string | null): FundingRecordFact {
+  const stamped: FundingRecordFact = { ...record, provider_call_id };
+  return {
+    ...stamped,
+    rounds: record.rounds.map((r) => ({
+      ...r, provenance: roundProvenance({ ...stamped, rounds: [] }, { ...r, provenance: undefined }),
+    })),
+    provider_call_ids: dedupeCallIds([provider_call_id]),
+    completeness: recordCompleteness({ ...stamped, completeness: undefined }),
+  };
+}
+
 // ─────────────────────────────────────────────────── funding discovery ──
 //
 // A funding-event feed (datahyena) returns ROUNDS: a company, a stage, a date,
@@ -201,12 +222,16 @@ export function fundingRecordEvidenceItem(i: {
     announced_date: r?.announced_date ?? null, amount_usd: r?.amount_usd ?? null, record: i.record,
   };
   const cited = (r?.source_urls.length ?? 0) > 0;
+  const ids = recordCallIds(i.record);
   return {
     evidence_id: `fdr_${i.company_key}_${i.record.actor}_${r?.announced_date ?? "undated"}_${value.round_type ?? "x"}`.slice(0, 64),
     company_key: i.company_key, dimension: "funding", value,
     status: r?.announced_date ? "proven" : "plausible",
     source: {
-      provider: i.record.provider, actor: i.record.actor, provider_call_id: i.record.provider_call_id ?? null,
+      provider: i.record.provider, actor: i.record.actor,
+      // A merged record has no ONE call; it names every call it was built from.
+      provider_call_id: ids.length === 1 ? ids[0] : null,
+      ...(ids.length > 0 ? { provider_call_ids: ids } : {}),
       url: i.record.source_url, excerpt: null,
     },
     method: "provider_field", observed_at: i.observed_at, valid_until: null,
@@ -280,27 +305,42 @@ export function corroborateFunding(i: {
   // Citing records alone: their rounds, and NO completeness — none of them can
   // say no later round exists. atomus alone cites nothing, so a PASS that must
   // cite cannot happen.
+  // Every call any input was built from — the merged record names them all.
+  const callIds = dedupeCallIds([...(i.atomus ? recordCallIds(i.atomus) : []), ...citing.flatMap(recordCallIds)]);
   if (!i.atomus) {
     return { ...base, sources, record: {
       ...citing[0], actor: citing.length > 1 ? FUNDING_CORROBORATION_ACTOR : citing[0].actor,
-      rounds: citing.flatMap((c) => c.rounds.map((r) => ({ ...r, source_urls: [...r.source_urls] }))),
+      rounds: citing.flatMap((c) => c.rounds.map((r) => ({
+        ...r, source_urls: [...r.source_urls], provenance: roundProvenance(c, r),
+      }))),
       reported_round_count: null, history_complete: null,
+      // Never forced onto one call: a single citing record keeps its own.
+      provider_call_id: citing.length === 1 ? citing[0].provider_call_id ?? null : null,
+      provider_call_ids: callIds,
+      completeness: null,
     } };
   }
   if (citing.length === 0) return { ...base, record: i.atomus, sources };
 
-  const rounds: FundingRoundFact[] = i.atomus.rounds.map((r) => ({ ...r, source_urls: [...r.source_urls] }));
+  type Round = FundingRoundFact & { source_urls: string[]; provenance: FundingProvenanceRef[] };
+  const atomus = i.atomus;
+  const rounds: Round[] = atomus.rounds.map((r) => ({
+    ...r, source_urls: [...r.source_urls], provenance: roundProvenance(atomus, r),
+  }));
   const conflicts: string[] = [];
   let corroborated = 0;
-  for (const p of citing.flatMap((c) => c.rounds)) {
+  for (const c of citing) for (const p of c.rounds) {
     const pType = normalizeRoundType(p.round_type);
     const pRank = stageRank(pType);
     if (pRank === null) continue; // accelerator, grant, debt, "Other": no rung to confirm or contradict
+    // What THIS source did for the round: cited it only if it supplied URLs.
+    const pSources = roundProvenance(c, p);
     const sameRung = rounds.find((a) => normalizeRoundType(a.round_type) === pType &&
       (days(a.announced_date, p.announced_date) ?? Infinity) <= ROUND_MATCH_WINDOW_DAYS);
     if (sameRung) {
       const before = sameRung.source_urls.length;
       sameRung.source_urls = [...new Set([...sameRung.source_urls, ...p.source_urls])];
+      sameRung.provenance = dedupeProvenance([...sameRung.provenance, ...pSources]);
       if (before === 0 && sameRung.source_urls.length > 0) corroborated++;
       continue;
     }
@@ -309,7 +349,7 @@ export function corroborateFunding(i: {
     conflicts.push(sameDate
       ? `rung_mismatch:${normalizeRoundType(sameDate.round_type)}_vs_${pType}@${p.announced_date ?? "undated"}`
       : `round_not_in_atomus:${pType}@${p.announced_date ?? "undated"}`);
-    rounds.push({ ...p, source_urls: [...p.source_urls] });
+    rounds.push({ ...p, source_urls: [...p.source_urls], provenance: pSources });
   }
   return {
     ...base,
@@ -319,10 +359,15 @@ export function corroborateFunding(i: {
     record: {
       provider: "apify", actor: FUNDING_CORROBORATION_ACTOR, rounds,
       // Completeness is atomus's TRUE count — withdrawn the moment the two disagree.
-      reported_round_count: conflicts.length === 0 ? i.atomus.reported_round_count : null,
+      reported_round_count: conflicts.length === 0 ? atomus.reported_round_count : null,
       history_complete: null,
-      observed_at: citing[0].observed_at ?? i.atomus.observed_at,
-      source_url: i.atomus.source_url,
+      observed_at: citing[0].observed_at ?? atomus.observed_at,
+      source_url: atomus.source_url,
+      // SEVERAL CALLS, SO NO ONE CALL. Each round names its own sources and the
+      // count names atomus's call; together they are every call it rests on.
+      provider_call_id: null,
+      provider_call_ids: callIds,
+      completeness: conflicts.length === 0 ? recordCompleteness(atomus) : null,
     },
   };
 }

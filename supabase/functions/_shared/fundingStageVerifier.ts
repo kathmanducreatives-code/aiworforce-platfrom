@@ -8,11 +8,11 @@
 //   0. what the mission already holds: funding discovery's rounds, read from
 //        the company's evidence graph (never re-bought). They cite, and they
 //        can contradict; they never prove completeness.
-//   1. atomus, one batch, by LinkedIn page                       ~$0.0035 each
+//   1. atomus, one batch, by LinkedIn page       (cheapest; price on its card)
 //        a verified later round (Series A+)  → FAIL, done
 //        complete history, latest = Seed, and a DISCOVERED round cites that
 //        same Seed round                     → PASS, no pvalyou purchase
-//   2. pvalyou, batches of 2, only for Seed / pre-seed / unclear    $0.02 each
+//   2. pvalyou, batches of 2, only for Seed / pre-seed / unclear  (price on its card)
 //        corroborated by `fundingCorroboration`, decided with
 //        `pass_requires_source_url`:
 //        complete history + cited decisive Seed round → PASS
@@ -32,14 +32,16 @@ import {
 } from "./claimVerifier.ts";
 import {
   ATOMUS_FUNDING_ACTOR_KEY, atomusSettles, decideCorroboratedFundingStage, fundingRecordEvidenceItem, fundingRecordsInGraph,
-  normalizeAtomusFunding, normalizePvalyouFunding, PVALYOU_FUNDING_ACTOR_KEY,
+  normalizeAtomusFunding, normalizePvalyouFunding, PVALYOU_FUNDING_ACTOR_KEY, stampFundingCall,
 } from "./fundingCorroboration.ts";
 import { fundingStageEvidenceItem, type FundingRecordFact, type FundingStageDecision } from "./fundingStageClaim.ts";
 
 export const FUNDING_STAGE_VERIFIER_KEY = "funding_stage_corroboration" as const;
+/** The claim-verifier capability both halves of the pair are carded under. */
+export const FUNDING_VERIFICATION_CAPABILITY = "funding_verification" as const;
 /** atomus is one call for all of them; bounded so per-candidate evidence spend stays small. */
 export const FUNDING_MAX_TARGETS = 6;
-/** Two pvalyou reads per call keeps each call under the $0.05 funding-evidence ceiling. */
+/** Two pvalyou reads per call keeps each call under the funding-evidence call ceiling (DEFAULT_CEILINGS). */
 export const PVALYOU_BATCH = 2;
 
 /** A LinkedIn company page as atomus accepts it: the canonical URL, or null. */
@@ -59,21 +61,22 @@ function slugOf(v: string | null): string | null {
 function finding(t: VerificationTarget, decision: FundingStageDecision, record: FundingRecordFact | null, i: {
   mission_id: string | null; provider_call_id: string | null; at: string; stage: string; conflicts?: string[];
 }): VerifierFinding {
+  // THE DATED ROUNDS, as the same `funding` record discovery writes, so the
+  // time-window claim reads what the pair already bought — and the record the
+  // verdict is DERIVED FROM, so the graph can say which evidence it rests on.
+  const supporting = record
+    ? fundingRecordEvidenceItem({ company_key: t.company_key, record, mission_id: i.mission_id, observed_at: i.at })
+    : null;
   const item = record
     ? fundingStageEvidenceItem({
       company_key: t.company_key, decision, record, mission_id: i.mission_id,
       provider_call_id: i.provider_call_id, observed_at: i.at,
+      derived_from: supporting ? [supporting.evidence_id] : [],
     })
     : null;
   return {
     company_key: t.company_key, item, answered: true,
-    // THE DATED ROUNDS, as the same `funding` record discovery writes, so the
-    // time-window claim reads what the pair already bought.
-    ...(record ? {
-      supporting: [fundingRecordEvidenceItem({
-        company_key: t.company_key, record, mission_id: i.mission_id, observed_at: i.at,
-      })],
-    } : {}),
+    ...(supporting ? { supporting: [supporting] } : {}),
     detail: {
       stage: i.stage, verdict: decision.verdict, reasons: decision.reasons, explanation: decision.explanation,
       ...(i.conflicts?.length ? { conflicts: i.conflicts } : {}),
@@ -113,9 +116,10 @@ export function fundingStageVerifier(): ClaimVerifier {
         for (const t of carry.targets) {
           const sent = carry.inputs[t.company_key];
           const pv = reads.find((r) => r.input === sent) ?? null;
+          const pvRecord = pv?.record ? stampFundingCall(pv.record, callId) : null;
           const atomus = carry.atomus[t.company_key] ?? null;
           const { decision, corroboration } = decideCorroboratedFundingStage({
-            required_stage: String(t.criterion.value ?? ""), atomus, pvalyou: pv?.record ?? null,
+            required_stage: String(t.criterion.value ?? ""), atomus, pvalyou: pvRecord,
             discovered: carry.discovered?.[t.company_key] ?? [],
           });
           findings.push(finding(t, decision, corroboration.record, {
@@ -130,7 +134,7 @@ export function fundingStageVerifier(): ClaimVerifier {
           tier: "basic", companies: carry.targets.map((t) => carry.inputs[t.company_key]),
         };
         const out = await deps.call({
-          actor_key: PVALYOU_FUNDING_ACTOR_KEY, input, purpose: "funding_evidence",
+          actor_key: PVALYOU_FUNDING_ACTOR_KEY, capability: FUNDING_VERIFICATION_CAPABILITY, input, purpose: "funding_evidence",
           candidate_keys: carry.targets.map((t) => t.company_key), resume_run_id: resume?.run_id ?? null,
         });
         if (out.status === "ok") return settleWithPvalyou(carry, out.rows, out.provider_call_id);
@@ -165,7 +169,7 @@ export function fundingStageVerifier(): ClaimVerifier {
       const withPage = byPage.filter((x) => x.page);
       if (withPage.length > 0 && deps.ready(ATOMUS_FUNDING_ACTOR_KEY)) {
         const out = await deps.call({
-          actor_key: ATOMUS_FUNDING_ACTOR_KEY, purpose: "funding_evidence",
+          actor_key: ATOMUS_FUNDING_ACTOR_KEY, capability: FUNDING_VERIFICATION_CAPABILITY, purpose: "funding_evidence",
           input: { companies: withPage.map((x) => x.page!) },
           candidate_keys: withPage.map((x) => x.t.company_key),
         });
@@ -175,7 +179,8 @@ export function fundingStageVerifier(): ClaimVerifier {
           for (const { t, page } of withPage) {
             const want = slugOf(page);
             const r = reads.find((x) => slugOf(x.input) === want || slugOf(x.linkedin_url) === want) ?? null;
-            atomusRecords[t.company_key] = r?.record ?? null;
+            // The call is written on the record, so it survives the merge.
+            atomusRecords[t.company_key] = r?.record ? stampFundingCall(r.record, atomusCallId) : null;
           }
         } else {
           deps.log("funding_verifier_atomus_unavailable", { status: out.status, reason: (out as { reason?: string }).reason });

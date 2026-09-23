@@ -107,13 +107,16 @@ Deno.test("1. A NOT-READY PAIR: the funding verifier is not executable and the s
     "with no verifier that may run, a round stage cannot be established");
 });
 
-Deno.test("1a. PRODUCTION, AFTER THE SPINE CANARY: the pair is executable and the stage is provable", () => {
-  // Promoted on live evidence (task 3f082b22). The DEFAULT policy is what an
-  // un-threaded caller gets, so it is what changed — and nothing else did.
-  assert(fundingVerifierReady(), "the default is production, and production now allows the pair");
+Deno.test("1a. PRODUCTION: the pair is READY, so the default policy proves a round stage", () => {
+  // Task 3f082b22 proved the DECISION outside the spec spine; task de24f92c
+  // (2026-09-23) proved it THROUGH the spine for both halves. Production now
+  // allows the pair with no override at all.
+  assert(fundingVerifierReady(), "the default is production, and production allows the pair");
   assert(PRODUCTION_READINESS.decide(ATOMUS, CAP).executable);
   assert(PRODUCTION_READINESS.decide(PVALYOU, CAP).executable);
-  assertEquals(stageCriterion(missionNeedingVerifier(), PRODUCTION_READINESS).status, "ok");
+  assertEquals(PRODUCTION_READINESS.decide(ATOMUS, CAP).via, "ready");
+  const c = stageCriterion(missionNeedingVerifier(), PRODUCTION_READINESS);
+  assertEquals([c.status, c.kind], ["ok", "hard"]);
 });
 
 Deno.test("1b. THE DEFAULT IS PRODUCTION — an un-threaded caller is unchanged", () => {
@@ -177,15 +180,16 @@ Deno.test("3. without the explicit override the pair still cannot execute", () =
   }
 });
 
-Deno.test("3b. PROMOTED AS A PAIR — both READY together, each named as half of it, the canary cited", async () => {
+Deno.test("3b. READY AS A PAIR — each named as half of it, with the spine canary that earned it", async () => {
   const { readinessOf } = await import("../../../supabase/functions/_shared/actorIntelligence.ts");
   const a = readinessOf(ATOMUS, CAP);
   const p = readinessOf(PVALYOU, CAP);
   assertEquals([a.readiness, p.readiness], ["READY", "READY"], "never one without the other");
   for (const r of [a, p]) {
-    assert(r.live_evidence?.includes("3f082b22"), `${r.actor}: the spine canary that earned it is named`);
-    assert(/READY only as the corroborating funding pair/.test(r.gated_by ?? ""),
-      `${r.actor}: the table says it cannot answer alone`);
+    assert(r.live_evidence?.includes("de24f92c") && r.live_evidence.includes("full spec spine"),
+      `${r.actor}: the canary that proved it through the spine is named`);
+    assert(/pc_[0-9a-f]{26}/.test(r.live_evidence ?? ""), `${r.actor}: its own provider call is named`);
+    assert(/the funding pair/.test(r.gated_by ?? ""), `${r.actor}: the table says it cannot answer alone`);
   }
 });
 

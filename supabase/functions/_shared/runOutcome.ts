@@ -34,6 +34,8 @@
 // Pure. The reader that gathers the facts lives beside it; this file decides
 // what may be said about them and nothing else.
 
+import { canonicalProviderCostUsd, type ProviderCostColumns } from "./executionLedger.ts";
+
 export const RUN_OUTCOME_VERSION = "run-outcome-v1" as const;
 
 /**
@@ -57,8 +59,14 @@ export interface SpendFacts {
   /** `record_kind = 'provider_call'` rows for this lineage. */
   provider_calls: number;
   /**
-   * Summed `actual_cost_usd`. Null when no row carries one — which is a
+   * Summed CANONICAL provider cost (`canonicalProviderCostUsd`): the receipt-
+   * settled bill where a receipt settled the call, else the provider-reported
+   * figure at completion. Null when no row carries either — which is a
    * different statement from zero and must render differently.
+   *
+   * It summed `actual_cost_usd` alone, which is the charge as known when the
+   * call returned and can be a fraction of the bill: canary abc316e8 reported
+   * $0.0242 for calls Apify billed $0.0278.
    */
   usd_reported: number | null;
   /** Calls still `started` or `timed_out`: bought, and not yet read. */
@@ -451,17 +459,16 @@ export async function readSpendFacts(
       db.from("credit_transactions").select("actual_credits, status, task_id")
         .eq("workspace_id", workspaceId).in("task_id", taskIds),
       db.from("lead_execution_calls")
-        .select("status, actual_cost_usd, record_kind, task_id")
+        .select("status, actual_cost_usd, settled_usd, settlement_source, record_kind, task_id")
         .eq("workspace_id", workspaceId).in("task_id", taskIds),
     ]);
     const creditRows = (Array.isArray(credits.data) ? credits.data : []) as
       Array<{ actual_credits?: unknown; status?: unknown }>;
     const callRows = (Array.isArray(calls.data) ? calls.data : []) as
-      Array<{ status?: unknown; actual_cost_usd?: unknown; record_kind?: unknown }>;
+      Array<{ status?: unknown; record_kind?: unknown } & ProviderCostColumns>;
 
     const provider = callRows.filter((r) => r.record_kind === "provider_call");
-    const priced = provider.filter((r) => r.actual_cost_usd !== null &&
-      r.actual_cost_usd !== undefined);
+    const priced = provider.map(canonicalProviderCostUsd).filter((c): c is number => c !== null);
     return {
       credits_charged: creditRows
         .filter((r) => r.status === "charged")
@@ -471,13 +478,44 @@ export async function readSpendFacts(
       // cost" and "this cost nothing" are different sentences.
       usd_reported: priced.length === 0
         ? null
-        : Math.round(priced.reduce((n, r) => n + num(r.actual_cost_usd), 0) * 10_000) / 10_000,
+        : Math.round(priced.reduce((n, c) => n + c, 0) * 10_000) / 10_000,
       unsettled_operations: provider.filter(
         (r) => r.status === "started" || r.status === "timed_out").length,
       reused_operations: provider.filter((r) => r.status === "reused").length,
     };
   } catch {
     return empty;
+  }
+}
+
+/**
+ * THE MODEL LEDGER'S TOTAL for these tasks: Σ (actual, else estimate) over
+ * `lead_model_calls` — the same per-row price the workspace spend ceiling sums
+ * (`modelSpendCeiling`). A row with neither, or `cost_source: "unknown"`, is
+ * counted as unpriced, never as free. `{ usd: 0, unpriced_calls: 0, ok: false }`
+ * when the read fails, so a caller can tell "nothing" from "could not read".
+ */
+export async function readModelSpendUsd(
+  db: OutcomeDb, workspaceId: string, taskIds: readonly string[],
+): Promise<{ usd: number; priced_calls: number; unpriced_calls: number; ok: boolean }> {
+  if (taskIds.length === 0) return { usd: 0, priced_calls: 0, unpriced_calls: 0, ok: true };
+  try {
+    const res = await db.from("lead_model_calls")
+      .select("estimated_cost_usd, actual_cost_usd, cost_source, task_id")
+      .eq("workspace_id", workspaceId).in("task_id", taskIds);
+    if (res.error) return { usd: 0, priced_calls: 0, unpriced_calls: 0, ok: false };
+    const rows = (Array.isArray(res.data) ? res.data : []) as Array<Record<string, unknown>>;
+    let usd = 0, priced = 0, unpriced = 0;
+    for (const r of rows) {
+      const actual = r.actual_cost_usd === null || r.actual_cost_usd === undefined ? null : num(r.actual_cost_usd);
+      const est = r.estimated_cost_usd === null || r.estimated_cost_usd === undefined ? null : num(r.estimated_cost_usd);
+      const cost = actual ?? est;
+      if (r.cost_source === "unknown" || cost === null) unpriced++;
+      else { priced++; usd += cost; }
+    }
+    return { usd: Math.round(usd * 1_000_000) / 1_000_000, priced_calls: priced, unpriced_calls: unpriced, ok: true };
+  } catch {
+    return { usd: 0, priced_calls: 0, unpriced_calls: 0, ok: false };
   }
 }
 

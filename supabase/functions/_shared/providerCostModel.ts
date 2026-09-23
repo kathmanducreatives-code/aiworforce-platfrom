@@ -81,8 +81,14 @@ function money(v: unknown): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-/** Round to the cent-fraction the ledger columns store. */
-const round4 = (n: number) => Number(n.toFixed(4));
+/**
+ * Round to the cent-fraction the ledger columns store — THE SAME WAY the spend
+ * ledger's settlement rounds (`budgetPolicy.round4`). This used `toFixed(4)`,
+ * which rounds a binary half down: the enrichment run Apify billed $0.00405 was
+ * recorded at completion as $0.0040 and settled as $0.0041, a variance that
+ * was nothing but two rounding rules (canary abc316e8).
+ */
+const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
 
 /**
  * Which per-event price applies to one RESULT from this actor.
@@ -112,8 +118,40 @@ export function resultEventName(
         return "full-profile-with-email";
       }
       return mode === "short" ? "short-profile" : mode === "full" ? "full-profile" : null;
+    // THE FUNDING PAIR. Named exactly as each run's `pricingInfo` publishes its
+    // per-result event (read from runs yXMNWcg0RHbhY4Fsh and 6u7BzSMsN27YrSeFH,
+    // 2026-09-23). Unnamed, the completion-time floor below had no per-result
+    // price for atomus and recorded its $0.00005 start fee as the whole charge:
+    // `actual_cost_usd: 0.0001` against a receipt of $0.00355.
+    case "apify_funding_atomus":
+      return "company-enriched";
+    case "apify_funding_pvalyou":
+      return String(input?.tier ?? "basic") === "full" ? "company_full" : "company_basic";
     default:
       return null;
+  }
+}
+
+/**
+ * How many of a run's rows the provider BILLS for.
+ *
+ * Every row is billed on most actors. Two charge only for a company they found,
+ * and return a free row for one they did not: atomus (`status: "success"` with a
+ * company) and pvalyou (a record, not `not_found`). Counting the free rows would
+ * price a miss as a hit. The tests are the ones the normalizers use to decide a
+ * row found anything (`normalizeAtomusFunding`, `normalizePvalyouFunding`).
+ */
+export function billableResultCount(actorKey: string, rows: readonly unknown[] | null | undefined): number | null {
+  if (!Array.isArray(rows)) return null;
+  const obj = (v: unknown): Record<string, unknown> =>
+    v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
+  switch (actorKey) {
+    case "apify_funding_atomus":
+      return rows.filter((r) => obj(r).status === "success" && Object.keys(obj(obj(r).company)).length > 0).length;
+    case "apify_funding_pvalyou":
+      return rows.filter((r) => obj(r).status !== "not_found" && Object.keys(obj(obj(r).record)).length > 0).length;
+    default:
+      return rows.length;
   }
 }
 

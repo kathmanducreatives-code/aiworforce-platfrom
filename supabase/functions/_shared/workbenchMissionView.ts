@@ -28,6 +28,7 @@ import { evidenceGapsFor, summarizeGaps, type EvidenceGap, type GapSummary } fro
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import type { MissionCriterion } from "./missionCriteria.ts";
 import type { ResearchWaveSummary } from "./researchFeedback.ts";
+import type { SpendLedger } from "./budgetPolicy.ts";
 import {
   evaluateEligibility, type CheckProvenance, type CheckResult, type EligibilityResult,
 } from "./candidateEligibility.ts";
@@ -122,6 +123,50 @@ export interface WorkbenchMissionView {
   cost: {
     provider_settled_usd: number; provider_pending_usd: number; model_usd: number;
     unknown_cost_calls: number; credits: number;
+    /** provider settled + provider pending + model. */
+    total_usd: number;
+  };
+}
+
+/**
+ * THE MISSION'S COST, READ FROM THE LEDGERS THAT RECORD IT.
+ *
+ * It was read from the last research wave's snapshot, taken at the END OF A
+ * WAVE — before any receipt had settled and before the claim verifiers ran, so
+ * canary abc316e8 showed `provider_settled_usd: 0` beside $0.0278 of settled
+ * calls. And the model figure was taken before the reasoner's own call.
+ *
+ *   provider settled   Σ `settled_usd` of reservations a RECEIPT settled
+ *   provider pending   Σ provisional (else estimate) of reservations bought and
+ *                      not yet settled — spent, bill not yet final
+ *   model              the model ledger's own total, passed in
+ *
+ * One reservation per idempotency key, so an adopted or idempotently skipped
+ * call is never counted twice; refused, released and adopted reservations
+ * committed nothing. Nothing is priced from the actor catalogue after the fact.
+ */
+export function missionCostFromLedgers(i: {
+  spend_ledger: SpendLedger | null | undefined;
+  model_usd: number;
+  model_unpriced_calls?: number;
+  credits?: number;
+}): WorkbenchMissionView["cost"] {
+  const rs = i.spend_ledger?.reservations ?? [];
+  const settled = round4(rs.filter((r) => r.status === "settled")
+    .reduce((n, r) => n + (r.settled_usd ?? 0), 0));
+  const pending = round4(rs.filter((r) => r.status === "reserved" || r.status === "executed")
+    .reduce((n, r) => n + (r.provisional_usd ?? r.estimate_usd ?? 0), 0));
+  // Model rows are priced to the millionth (token prices); rounding them to
+  // the provider ledger's 4 places would show a figure the model ledger does
+  // not hold.
+  const model = round6(i.model_usd);
+  return {
+    provider_settled_usd: settled,
+    provider_pending_usd: pending,
+    model_usd: model,
+    unknown_cost_calls: i.model_unpriced_calls ?? 0,
+    credits: i.credits ?? 0,
+    total_usd: round6(settled + pending + model),
   };
 }
 
@@ -334,14 +379,22 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
     leads,
     evidence_gaps: summarizeGaps(leads.filter((l) => l.bucket === "pending").map((l) => ({ gaps: l.evidence_gaps }))),
     routes,
-    cost: {
-      provider_settled_usd: i.cost?.provider_settled_usd ?? lastWave?.cost.settled_usd ?? 0,
-      provider_pending_usd: i.cost?.provider_pending_usd ??
-        round4(Math.max(0, (lastWave?.cost.committed_usd ?? 0) - (lastWave?.cost.settled_usd ?? 0))),
-      model_usd: i.cost?.model_usd ?? 0,
-      unknown_cost_calls: i.cost?.unknown_cost_calls ?? 0,
-      credits: i.cost?.credits ?? 0,
-    },
+    cost: (() => {
+      // A caller holding the ledgers passes `missionCostFromLedgers`; the wave
+      // snapshot is only the fallback for a caller that has none.
+      const settled = i.cost?.provider_settled_usd ?? lastWave?.cost.settled_usd ?? 0;
+      const pending = i.cost?.provider_pending_usd ??
+        round4(Math.max(0, (lastWave?.cost.committed_usd ?? 0) - (lastWave?.cost.settled_usd ?? 0)));
+      const model = i.cost?.model_usd ?? 0;
+      return {
+        provider_settled_usd: settled,
+        provider_pending_usd: pending,
+        model_usd: model,
+        unknown_cost_calls: i.cost?.unknown_cost_calls ?? 0,
+        credits: i.cost?.credits ?? 0,
+        total_usd: round6(settled + pending + model),
+      };
+    })(),
   };
 }
 
@@ -373,6 +426,10 @@ export function legacyCountsFrom(v: WorkbenchMissionView): {
     unknown_pending_evidence: c.pending,
     screened_out: c.screened_out,
   };
+}
+
+function round6(n: number): number {
+  return Math.round(n * 1_000_000) / 1_000_000;
 }
 
 function round4(n: number): number {

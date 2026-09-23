@@ -277,9 +277,9 @@ export const ACTOR_INPUT_CONTRACTS: Readonly<Record<string, ActorInputContract>>
           "until a live verification run is done. Input schema RE-READ LIVE on " +
           "2026-09-19 against build 0.1.45: the singular `country` and " +
           "`industryGroup` fields this contract used to claim do not exist, and " +
-          "`enrichedOnly` is new. Billed per record at $0.07 since 2026-09-12 " +
-          "(was $0.045) — the most expensive row in this catalog, so bound " +
-          "maxItems tightly.",
+          "`enrichedOnly` is new. Billed per record (repriced upward on " +
+          "2026-09-12; price on its catalog card) — the most expensive row in " +
+          "this catalog, so bound maxItems tightly.",
       },
     },
     apify_linkedin_company_posts: {

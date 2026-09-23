@@ -5,16 +5,18 @@
 // 1. A ONE-LEAD CANARY WAS PRICED LIKE A TEN-LEAD RUN. run-agent sized every
 //    discovery pool as `Math.max(10, requestedLeadCount * 10)`. That floor of
 //    ten is a healthy over-discovery margin for a real mission, and it is the
-//    WHOLE cost of a bounded probe: funding discovery bills $0.07 per record, so
-//    "find 1 lead" bought ten records — $0.70 — before any verification ran.
+//    WHOLE cost of a bounded probe: funding discovery bills per record at the
+//    highest row price in the catalog (see its card), so "find 1 lead" bought
+//    ten records before any verification ran.
 //
 // 2. THERE WAS NO WAY FOR A RUN TO SAY WHAT IT MAY SPEND. The spend ledger has
 //    always refused a call whose estimate would breach a ceiling, BEFORE the
-//    call (`budgetPolicy.reserve`). But the ceilings were the hard-coded
-//    defaults — $2.00 per mission, $0.90 for the funding route — so that $0.70
-//    call cleared every check. Provider credits count CALLS, not dollars, and
-//    model spend is capped separately; nothing held provider dollars to what
-//    the person running the mission actually approved.
+//    call (`budgetPolicy.reserve`). But the ceilings were always the defaults
+//    (`DEFAULT_CEILINGS`), whose mission and funding-route limits are sized for
+//    a real mission, so that ten-record call cleared every check. Provider
+//    credits count CALLS, not dollars, and model spend is capped separately;
+//    nothing held provider dollars to what the person running the mission
+//    actually approved.
 //
 // ── TIGHTEN-ONLY, BY CONSTRUCTION ──────────────────────────────────────────
 //
@@ -82,10 +84,10 @@ export function candidatePool(requestedLeadCount: number, b: RunBudget | null): 
  * The ceilings a run is held to: the base, lowered by the budget.
  *
  * The mission's provider ceiling becomes `min(base, provider_usd)`, and no
- * route or single call may exceed it either — a $0.10 run cannot hold a $0.90
- * funding route open. Model ceilings are untouched: model spend has its own
- * cap (`MODEL_SPEND_CEILING_USD`), and folding the two together would let one
- * starve the other.
+ * route or single call may exceed it either — a small run cannot hold the
+ * default funding route open. Model ceilings are untouched: model spend has its
+ * own cap (`MODEL_SPEND_CEILING_USD`), and folding the two together would let
+ * one starve the other.
  */
 export function tightenCeilings(base: Ceilings, b: RunBudget | null): Ceilings {
   if (!b || b.provider_usd === null) return base;

@@ -365,7 +365,7 @@ async function execScrapeUrl(input: unknown): Promise<ToolResult> {
 
 // ---------- Tool: source_with_apify (Apify) ----------
 
-import { apifyEventPrices,
+import { apifyEventPrices, billableResultCount,
   priceProviderCall, type ProviderRunUsage,
 } from "./providerCostModel.ts";
 import {
@@ -2096,7 +2096,8 @@ function outcomeFromToolResult(
       // converts it, so the fall-through is no longer the only answer.
       cost: firecrawlCost(d) ?? priceProviderCall({
         actorKey: String(d.selected_actor_key ?? d.actor_id ?? ""),
-        itemCount: items ? items.length : null,
+        // BILLED rows, not returned rows: a funding actor's "not found" row is free.
+        itemCount: billableResultCount(String(d.selected_actor_key ?? d.actor_id ?? ""), items),
         input: (input.compiled_actor_input ?? input) as Record<string, unknown>,
         run: (d.provider_usage ?? null) as ProviderRunUsage | null,
         started: !resumed,

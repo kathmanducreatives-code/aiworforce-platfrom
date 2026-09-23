@@ -27,7 +27,6 @@ import {
   companyEvidenceItems, missionCandidatesFrom, runCapabilityPlan,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
-import { readinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
 import { jobEmployerToCompany, normalizeLinkedInJob } from "../../../supabase/functions/_shared/hiringActorNormalizers.ts";
 import {
   parseReasonerResult, reasonerPayload,
@@ -52,32 +51,21 @@ const proposal = {
   preferred_source_strategy: [], evaluation_instructions: "", founder_unlock_recommended: false, confidence: 0.85, unknowns: [],
 };
 const MISSION = compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission;
-/**
- * THIS FILE TESTS LABEL CEILINGS, on a mission where the seed rung is a
- * disclosed-unprovable preference. That was production until 2026-09-22, when
- * the corroborating funding pair became READY and made the rung a usable
- * target (see "the seed rung is a usable target in production" below). The
- * fixtures are derived under the pre-promotion pair, NAMED, so the ceilings are
- * still measured against the mission they were written for.
- */
-const PAIR_NOT_READY = readinessPolicy({ overrides: {
-  "apify_funding_atomus|funding_verification": "EXPERIMENTAL",
-  "apify_funding_pvalyou|funding_verification": "EXPERIMENTAL",
-} });
 // Hard: industry b2b saas + saas, geography United States, company_stage startup.
-// Target: hiring (the anchor). "seed" compiles `unprovable_today` and is skipped.
-const CRITERIA = deriveMissionCriteria(MISSION, PAIR_NOT_READY);
+// Target: hiring (the anchor), and "seed" — provable since the funding pair
+// became READY (2026-09-23), so it is a target like any other: a candidate is
+// an Exact Match only once its stage is proven too (`seedProven`).
+const CRITERIA = deriveMissionCriteria(MISSION);
 
 /** The same mission with the Brain's size PREFERENCE — a second, non-signal target. */
 const CRITERIA_PREF = deriveMissionCriteria(
-  compileLeadMission({ originalUserQuery: CANONICAL, proposal, companyBrain: { employee_min: 1, employee_max: 150 } }).final_mission,
-  PAIR_NOT_READY);
+  compileLeadMission({ originalUserQuery: CANONICAL, proposal, companyBrain: { employee_min: 1, employee_max: 150 } }).final_mission);
 
 /** "…bonus if they recently raised" — a second observable signal beside the anchor. */
 const CRITERIA_BONUS = deriveMissionCriteria(compileLeadMission({
   originalUserQuery: "Find 1 B2B SaaS startup in the US hiring its first growth marketer; bonus if they recently raised.",
   proposal: { ...proposal, adjacent_signals: ["recently raised"], preferred_signals: ["hiring growth marketer", "recently raised"] },
-}).final_mission, PAIR_NOT_READY);
+}).final_mission);
 
 let seq = 0;
 function ev(dimension: EvidenceDimension, value: unknown, over: Partial<EvidenceItem> = {}): EvidenceItem {
@@ -88,6 +76,11 @@ function ev(dimension: EvidenceDimension, value: unknown, over: Partial<Evidence
     confidence: "high", derived_from: [], mission_id: "task-p5", origin: "lead_mission", ...over,
   };
 }
+/** The funding pair's verdict that the company is still at Seed, as the verifier writes it. */
+const seedProven = () => ev("company_stage", {
+  claim: "funding_stage", required_stage: "seed", verdict: "pass", latest_verified_stage: "seed",
+  reasons: ["required_stage_verified_and_latest"], explanation: "", rounds_cited: [],
+}, { method: "deterministic_derivation" });
 const graphOf = (items: EvidenceItem[], required: EvidenceDimension[] = []) =>
   buildCompanyEvidenceGraph("c1", items, { now: NOW, required });
 
@@ -99,16 +92,6 @@ const hardProven = () => [
   ev("geography", "San Francisco, CA, United States"),
   ev("industry", "b2b saas"),
 ];
-
-Deno.test("the seed rung is a usable target in production now the funding pair is READY", () => {
-  // The production counterpart of the fixture above: the same mission, default
-  // policy. The rung is a PREFERENCE here ("seed-stage", no "only"/"must"), so
-  // it ranks and can never reject — but it is no longer skipped.
-  const seed = deriveMissionCriteria(MISSION).find((c) => c.dimension === "company_stage" && c.value === "seed")!;
-  assertEquals([seed.kind, seed.status], ["target", "ok"]);
-  const skipped = CRITERIA.find((c) => c.dimension === "company_stage" && c.value === "seed")!;
-  assertEquals(skipped.status, "unprovable_today", "…and the fixture is the not-ready pair, by name");
-});
 
 // ── SEM-1 ───────────────────────────────────────────────────────────────────
 
@@ -235,11 +218,11 @@ Deno.test("the ceiling rises with the evidence, and pending or ineligible have n
     return computeCeiling({ criteria, graph: g, eligibility: evaluateEligibility(criteria, g), anchor: "hiring" });
   };
   // Anchor proven and every usable target proven (size within the band).
-  const exact = ceilingFor(CRITERIA_PREF, [...hardProven(), hiring, ev("headcount", 20)]);
+  const exact = ceilingFor(CRITERIA_PREF, [...hardProven(), hiring, ev("headcount", 20), seedProven()]);
   assertEquals(exact.ceiling, "exact_match", JSON.stringify(exact.targets_unproven));
 
   // Anchor proven, headcount unknown — one unproven target.
-  const strong = ceilingFor(CRITERIA_PREF, [...hardProven(), hiring]);
+  const strong = ceilingFor(CRITERIA_PREF, [...hardProven(), hiring, seedProven()]);
   assertEquals([strong.ceiling, strong.targets_unproven.length], ["strong_opportunity", 1]);
 
   // Eligible, no anchor and no other proven signal.
@@ -281,7 +264,7 @@ Deno.test("GPT may not promote past the ceiling, cite what does not exist, or hi
 
 Deno.test("a reasoner that declines to promote is honoured, and a missing reasoner still explains", () => {
   const hiring = ev("hiring", true);
-  const g = graphOf([...hardProven(), hiring, ev("headcount", 20)]);
+  const g = graphOf([...hardProven(), hiring, ev("headcount", 20), seedProven()]);
   const ceiling = computeCeiling({ criteria: CRITERIA_PREF, graph: g, eligibility: evaluateEligibility(CRITERIA_PREF, g), anchor: "hiring" });
   assertEquals(ceiling.ceiling, "exact_match");
   const modest = applyReasoning(ceiling, {

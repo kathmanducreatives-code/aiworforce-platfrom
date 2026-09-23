@@ -19,7 +19,7 @@ import {
   type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
 import type { FallbackReason, HiringRoute } from "./hiringRouteContract.ts";
-import { routeActorReady, type ReadinessPolicy } from "./routeReadiness.ts";
+import { CLAIM_VERIFIER_CAPABILITIES, routeActorReady, type ReadinessPolicy } from "./routeReadiness.ts";
 import {
   REFERENT_BINDING_VERSION, type ResolvedReferentBinding,
 } from "./referentBinding.ts";
@@ -206,7 +206,13 @@ export function guardedInvoker<T extends { actorKey?: string; selected_actor_key
         // A plan built in `legacy` mode was deliberately NOT filtered, and the
         // V1/Signals paths depend on that. Applying production strictness to
         // those calls would migrate legacy behaviour by accident.
-        const enforced = plan?.executability?.mode === "enforce";
+        //
+        // A CLAIM VERIFIER'S CALL IS ALWAYS CHECKED. Its capability is not a
+        // graph step, so it never reaches the plan and has no plan to claim it
+        // was filtered: it arrives with no plan and its readiness policy, and
+        // the readiness answer is the only gate between it and the provider.
+        const enforced = plan?.executability?.mode === "enforce" ||
+          (!plan && !!capability && CLAIM_VERIFIER_CAPABILITIES.has(capability));
         if (enforced && readiness && capability) {
           const r = routeActorReady(actorKey, capability, readiness);
           if (!r.ready) {

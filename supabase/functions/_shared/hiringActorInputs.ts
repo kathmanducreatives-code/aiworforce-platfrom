@@ -853,8 +853,8 @@ export function compileDatahyenaFundingInput(
     e.push("maxItems must be a positive integer — this Actor bills per record");
   } else if (i.maxItems > 500) {
     // A ceiling, not a preference. The price is READ FROM THE CARD, never
-    // written here: this message once quoted $0.045 after the Store had moved
-    // to $0.07, and a refusal that under-states the cost is worse than none.
+    // written here: this message once quoted the old price after the Store
+    // had repriced, and a refusal that under-states the cost is worse than none.
     const price = perResultPriceUsd(K);
     e.push(`maxItems ${i.maxItems} exceeds the 500-record ceiling for this Actor` +
       (price === null ? "" :

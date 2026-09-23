@@ -29,6 +29,8 @@
 //
 // PURE. No network, provider, model or database access.
 
+import { HIRING_ACTOR_CATALOG, perResultPriceUsd } from "./hiringActorCatalog.ts";
+
 /** What an Actor consumes. See the header — this is the discovery boundary. */
 export type ActorInputEntity = "query" | "domain" | "company_url" | "profile_url" | "company_name";
 
@@ -201,6 +203,22 @@ export const REJECTED_ACTORS: ReadonlyArray<{
       "repo's existing memo23 YC Actor remains the field-tested primary.",
   },
 ]);
+
+/**
+ * A registry cost taken from the Actor's catalog card — the canonical price.
+ *
+ * A card with no per-result price yields Infinity rather than a guess: an
+ * unpriced row must look unaffordable, never free.
+ */
+function cardCost(actorKey: string, notes: string): ActorCostModel {
+  const m = HIRING_ACTOR_CATALOG[actorKey]?.cost_model;
+  return {
+    model: "PAY_PER_EVENT",
+    start_usd: m?.start_usd ?? Number.POSITIVE_INFINITY,
+    per_result_usd: perResultPriceUsd(actorKey) ?? Number.POSITIVE_INFINITY,
+    notes,
+  };
+}
 
 /**
  * THE REGISTRY.
@@ -675,13 +693,10 @@ export const APIFY_INTELLIGENCE: Readonly<Record<string, ActorIntelligenceRecord
       },
       input_limits: { maxItems: 500 },
       output_fields: [],
-      cost: {
-        // Store repriced $0.045 → $0.07 on 2026-09-12 (hiringActorCatalog). This
-        // registry cannot import the catalog (the catalog imports it), so the
-        // two are held equal by `providerPricingSource.test.ts`, not by hope.
-        model: "PAY_PER_EVENT", start_usd: 0.00005, per_result_usd: 0.07,
-        notes: "The most expensive per-row Actor registered.",
-      },
+      // READ FROM THE CARD, never written here. This row once held its own
+      // literal and kept quoting the old price for a week after the Store
+      // repriced; the card (hiringActorCatalog) is the one price source.
+      cost: cardCost("apify_funding_rounds_datahyena", "The most expensive per-row Actor registered."),
       adoption: { total_users: 48, monthly_users: 36, rating: 4.78, rating_count: 4 },
       // Nothing to fall back to: it is the only registered source that returns a
       // funding amount without a session cookie.

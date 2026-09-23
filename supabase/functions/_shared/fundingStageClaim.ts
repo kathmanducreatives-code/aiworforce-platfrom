@@ -74,6 +74,46 @@ export interface FundingRoundFact {
   source_urls: readonly string[];
   /** `model_extraction` is corroboration only — it cannot decide this claim. */
   method: EvidenceMethod;
+  /**
+   * WHICH PAID CALLS STAND BEHIND THIS ROUND, AND WHAT EACH CONTRIBUTED.
+   *
+   * A merged round has more than one source, and they prove different things:
+   * the source that CITED it (its source URLs) proves the event happened; the
+   * source that only REPORTED it corroborates. Absent on a round that came
+   * straight from one record — `roundProvenance` then reads the record's own
+   * call. See `fundingCorroboration.corroborateFunding`.
+   */
+  provenance?: readonly FundingProvenanceRef[];
+}
+
+/** One source of one funding round. */
+export interface FundingProvenanceRef {
+  actor: string;
+  /** The paid call that returned it. Null only when no call is known (a fixture, a replay). */
+  provider_call_id: string | null;
+  /**
+   * `cited`: this source supplied the round's source URL(s) — it is the event's
+   * citation. `reported`: it listed the round without citing it. A source is
+   * never marked `cited` for a URL it did not supply.
+   */
+  role: "reported" | "cited";
+}
+
+/**
+ * WHO SAID THE HISTORY IS COMPLETE.
+ *
+ * "No later round" (a stage PASS) and "nothing recent" (a recency FAIL) are
+ * claims about rounds we have not seen; the only thing that licenses them is a
+ * provider's statement of how many rounds exist. This names that provider and
+ * the call it answered in, so a verdict that leans on completeness can cite it.
+ */
+export interface FundingCompletenessRef {
+  actor: string;
+  provider_call_id: string | null;
+  reported_round_count: number | null;
+  history_complete: boolean | null;
+  /** Does the count cover the rounds held? False is a PARTIAL history, stated. */
+  complete: boolean;
 }
 
 /** A company's funding record as one provider holds it. */
@@ -91,8 +131,20 @@ export interface FundingRecordFact {
   history_complete: boolean | null;
   observed_at: string | null;
   source_url: string | null;
-  /** The paid call that returned it, when one did — so a claim can cite the purchase. */
+  /**
+   * The ONE paid call that returned it, when exactly one did. A record merged
+   * from several calls leaves this null — it is never forced onto one of them —
+   * and names them all in `provider_call_ids`.
+   */
   provider_call_id?: string | null;
+  /** Every paid call this record was built from, deduplicated in contribution order. */
+  provider_call_ids?: readonly string[];
+  /**
+   * The source of the completeness count, when one exists. `undefined` on a
+   * record nobody stamped (derived from the record by `recordCompleteness`);
+   * `null` when completeness was WITHDRAWN (two sources disagreed).
+   */
+  completeness?: FundingCompletenessRef | null;
   /** Who the record is about, as the provider named them. Identity, not evidence. */
   company?: { name: string | null; domain: string | null; linkedin_url: string | null } | null;
 }
@@ -293,6 +345,131 @@ export function fundingStageStatus(v: FundingStageVerdict): EvidenceItem["status
   return v === "pass" ? "proven" : v === "fail" ? "disproven" : "unknown";
 }
 
+// ── PROVENANCE: WHICH PAID CALL PROVES WHAT ─────────────────────────────────
+//
+// A funding verdict can rest on two purchases that prove DIFFERENT things. The
+// corroborated Seed PASS is the canonical case:
+//
+//   the Seed EVENT        reported by atomus, CITED by pvalyou (source URL)
+//   the history's COMPLETENESS   atomus's true round count — "no later round"
+//
+// Merging the two records into one used to keep neither call id: the record
+// carried `provider_call_id: null` and the verdict named only the call that
+// happened to settle it. These helpers keep every source, keep event and
+// history provenance apart, and never attach a source to a citation it did not
+// supply.
+
+/** Distinct call ids, in first-seen order. Nulls dropped. Same input ⇒ same output. */
+export function dedupeCallIds(ids: Iterable<string | null | undefined>): string[] {
+  const out: string[] = [];
+  for (const id of ids) if (typeof id === "string" && id && !out.includes(id)) out.push(id);
+  return out;
+}
+
+/** Distinct provenance refs (actor, call, role), in first-seen order. */
+export function dedupeProvenance(refs: Iterable<FundingProvenanceRef>): FundingProvenanceRef[] {
+  const out: FundingProvenanceRef[] = [];
+  const seen = new Set<string>();
+  for (const r of refs) {
+    const k = `${r.actor}|${r.provider_call_id ?? ""}|${r.role}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ actor: r.actor, provider_call_id: r.provider_call_id ?? null, role: r.role });
+  }
+  return out;
+}
+
+/**
+ * Who stands behind this round. A round that carries its own provenance (a
+ * merged round) answers for itself; otherwise it is the record's own call, and
+ * it CITED the round only if the round carries a source URL from it.
+ */
+export function roundProvenance(record: FundingRecordFact, round: FundingRoundFact): FundingProvenanceRef[] {
+  if (round.provenance && round.provenance.length > 0) return dedupeProvenance(round.provenance);
+  return [{
+    actor: record.actor, provider_call_id: record.provider_call_id ?? null,
+    role: (round.source_urls?.length ?? 0) > 0 ? "cited" : "reported",
+  }];
+}
+
+/** Is this record's round list complete, by the provider's own count? */
+function historyIsComplete(r: FundingRecordFact): boolean {
+  if (r.history_complete === true) return true;
+  return typeof r.reported_round_count === "number" && r.reported_round_count <= r.rounds.length;
+}
+
+/**
+ * The source of this record's completeness count, or null when it states none.
+ * A record that was stamped answers for itself (null = withdrawn); an unstamped
+ * one is its own source when it states a count.
+ */
+export function recordCompleteness(r: FundingRecordFact): FundingCompletenessRef | null {
+  if (r.completeness !== undefined) return r.completeness;
+  if (r.history_complete !== true && typeof r.reported_round_count !== "number") return null;
+  return {
+    actor: r.actor, provider_call_id: r.provider_call_id ?? null,
+    reported_round_count: r.reported_round_count, history_complete: r.history_complete,
+    complete: historyIsComplete(r),
+  };
+}
+
+/** Every paid call a record was built from. */
+export function recordCallIds(r: FundingRecordFact): string[] {
+  return dedupeCallIds([
+    ...(r.provider_call_ids ?? []),
+    r.provider_call_id,
+    ...r.rounds.flatMap((round) => roundProvenance(r, round).map((p) => p.provider_call_id)),
+    recordCompleteness(r)?.provider_call_id,
+  ]);
+}
+
+/** What a funding verdict rests on, in the terms an audit asks. */
+export interface FundingDecisionProvenance {
+  /** The rounds the verdict rests on, each with who reported and who cited it. */
+  events: Array<{ round_type: string | null; announced_date: string | null; sources: FundingProvenanceRef[] }>;
+  /**
+   * The completeness the verdict RELIES ON — set only when it does (a stage
+   * PASS; a recency FAIL). Null for every other verdict, and always null on
+   * PENDING: a verdict that did not use completeness does not claim it.
+   */
+  history_completeness: FundingCompletenessRef | null;
+  /** Every paid call the verdict materially rests on: event sources, then completeness. */
+  provider_call_ids: string[];
+}
+
+/**
+ * Provenance for a decided verdict. `sources_of` resolves a carrier round's
+ * sources (by default from the one record the verdict read).
+ */
+export function fundingDecisionProvenance(i: {
+  verdict: FundingStageVerdict;
+  carrier_rounds: readonly FundingRoundFact[];
+  record: FundingRecordFact | null;
+  /** True when the verdict could not have been reached without a complete history. */
+  relies_on_completeness: boolean;
+  sources_of?: (round: FundingRoundFact) => FundingProvenanceRef[];
+  completeness?: FundingCompletenessRef | null;
+}): FundingDecisionProvenance {
+  const sourcesOf = i.sources_of ??
+    ((round: FundingRoundFact) => (i.record ? roundProvenance(i.record, round) : dedupeProvenance(round.provenance ?? [])));
+  const events = i.carrier_rounds.map((round) => ({
+    round_type: normalizeRoundType(round.round_type),
+    announced_date: round.announced_date,
+    sources: sourcesOf(round),
+  }));
+  const completeness = i.verdict !== "pending" && i.relies_on_completeness
+    ? (i.completeness !== undefined ? i.completeness : (i.record ? recordCompleteness(i.record) : null))
+    : null;
+  return {
+    events,
+    history_completeness: completeness,
+    provider_call_ids: dedupeCallIds([
+      ...events.flatMap((e) => e.sources.map((s) => s.provider_call_id)),
+      completeness?.provider_call_id,
+    ]),
+  };
+}
+
 /**
  * The canonical `company_stage` EvidenceItem for a decided funding-stage claim.
  *
@@ -309,13 +486,24 @@ export function fundingStageEvidenceItem(i: {
   decision: FundingStageDecision;
   record: FundingRecordFact;
   mission_id: string | null;
+  /** The call that settled the claim. Used only when the record names no call of its own. */
   provider_call_id: string | null;
   observed_at: string;
   valid_until?: string | null;
+  /** The evidence the verdict was derived from — the funding record item(s) it read. */
+  derived_from?: readonly string[];
 }): EvidenceItem | null {
   const d = i.decision;
   if (d.verdict === "pending") return null;
   const carrier = d.carrier_rounds[0] ?? null;
+  // Only a PASS needs the whole history ("no LATER round"); a FAIL rests on the
+  // later round alone.
+  const provenance = fundingDecisionProvenance({
+    verdict: d.verdict, carrier_rounds: d.carrier_rounds, record: i.record,
+    relies_on_completeness: d.verdict === "pass",
+  });
+  const ids = provenance.provider_call_ids.length > 0
+    ? provenance.provider_call_ids : dedupeCallIds([i.provider_call_id]);
   return {
     evidence_id: `fnd_${i.company_key}_funding_stage`.slice(0, 64),
     company_key: i.company_key,
@@ -333,12 +521,16 @@ export function fundingStageEvidenceItem(i: {
         amount_usd: r.amount_usd,
         source_url: r.source_urls[0] ?? null,
       })),
+      provenance,
     },
     status: fundingStageStatus(d.verdict),
     source: {
       provider: i.record.provider,
       actor: i.record.actor,
-      provider_call_id: i.provider_call_id,
+      // ONE call when one call proves it; null when several do — never forced
+      // onto one of them. `provider_call_ids` names them all.
+      provider_call_id: ids.length === 1 ? ids[0] : null,
+      provider_call_ids: ids,
       url: carrier?.source_urls[0] ?? i.record.source_url ?? null,
       excerpt: null,
     },
@@ -347,7 +539,7 @@ export function fundingStageEvidenceItem(i: {
     observed_at: i.observed_at,
     valid_until: i.valid_until ?? null,
     confidence: d.verdict === "pass" ? "high" : "medium",
-    derived_from: [],
+    derived_from: [...(i.derived_from ?? [])],
     mission_id: i.mission_id,
     origin: "lead_mission",
   };
@@ -394,12 +586,11 @@ export interface RecentFundingDecision {
   reasons: RecentFundingReason[];
   explanation: string;
   carrier_rounds: FundingRoundFact[];
-}
-
-/** Is this record's round list complete, by the provider's own count? */
-function historyIsComplete(r: FundingRecordFact): boolean {
-  if (r.history_complete === true) return true;
-  return typeof r.reported_round_count === "number" && r.reported_round_count <= r.rounds.length;
+  /**
+   * The paid calls behind the carrier rounds and, for a FAIL, the complete
+   * history that licenses "nothing recent". A PASS needs no completeness.
+   */
+  provenance: FundingDecisionProvenance;
 }
 
 export function decideRecentlyFunded(i: {
@@ -411,7 +602,20 @@ export function decideRecentlyFunded(i: {
   const base: RecentFundingDecision = {
     version: FUNDING_STAGE_CLAIM_VERSION, verdict: "pending", window_days: i.window_days,
     latest_announced_date: null, reasons: [], explanation: "", carrier_rounds: [],
+    provenance: { events: [], history_completeness: null, provider_call_ids: [] },
   };
+  // A carrier round's sources come from the record that held it.
+  const owner = new Map<FundingRoundFact, FundingRecordFact>();
+  for (const r of i.records) for (const round of r.rounds ?? []) if (!owner.has(round)) owner.set(round, r);
+  const sourcesOf = (round: FundingRoundFact) => {
+    const r = owner.get(round);
+    return r ? roundProvenance(r, round) : dedupeProvenance(round.provenance ?? []);
+  };
+  const prov = (verdict: FundingStageVerdict, carriers: FundingRoundFact[], completeFrom: FundingRecordFact | null) =>
+    fundingDecisionProvenance({
+      verdict, carrier_rounds: carriers, record: null, sources_of: sourcesOf,
+      relies_on_completeness: completeFrom !== null, completeness: completeFrom ? recordCompleteness(completeFrom) : null,
+    });
   const now = typeof i.now === "string" ? Date.parse(i.now) : i.now.getTime();
   if (!i.window_days || i.window_days <= 0) {
     return { ...base, reasons: ["no_window_requested"], explanation: "no recency window was asked for" };
@@ -438,6 +642,7 @@ export function decideRecentlyFunded(i: {
     return {
       ...base, verdict: "pass", reasons: ["round_inside_window"],
       carrier_rounds: inside.map((x) => x.round),
+      provenance: prov("pass", inside.map((x) => x.round), null),
       explanation: `a verified ${normalizeRoundType(inside[0].round.round_type) ?? "funding"} round was announced ` +
         `${days} day(s) ago, inside the ${i.window_days}-day window`,
     };
@@ -445,16 +650,19 @@ export function decideRecentlyFunded(i: {
 
   // FAIL needs the whole record: "nothing recent" is a claim about rounds we
   // have not seen unless the provider says there are none.
-  if (records.some(historyIsComplete)) {
+  const completeRecord = records.find(historyIsComplete) ?? null;
+  if (completeRecord) {
     const days = Math.round((now - latest.at) / 86_400_000);
     return {
       ...base, verdict: "fail", reasons: ["no_round_inside_window"], carrier_rounds: [latest.round],
+      provenance: prov("fail", [latest.round], completeRecord),
       explanation: `the most recent round in a complete history was announced ${days} day(s) ago, ` +
         `outside the ${i.window_days}-day window`,
     };
   }
   return {
     ...base, reasons: ["history_incomplete"], carrier_rounds: [latest.round],
+    provenance: prov("pending", [latest.round], null),
     explanation: `the rounds we hold are all older than the ${i.window_days}-day window, ` +
       `but no provider states this is the full history`,
   };

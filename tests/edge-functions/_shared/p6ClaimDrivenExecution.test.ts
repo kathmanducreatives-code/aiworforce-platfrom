@@ -34,7 +34,9 @@ import { fundingStageVerifier } from "../../../supabase/functions/_shared/fundin
 import { ledgerBoundCall, type PendingVerifierRun } from "../../../supabase/functions/_shared/claimVerifier.ts";
 import { fundingRecordsInGraph } from "../../../supabase/functions/_shared/fundingCorroboration.ts";
 import { hiringActorCard } from "../../../supabase/functions/_shared/hiringActorCatalog.ts";
-import { estimateCallUsd } from "../../../supabase/functions/_shared/budgetPolicy.ts";
+import { verifierSpecCompiler } from "../../../supabase/functions/_shared/verifierCallSpec.ts";
+import { criteriaExecutionPolicy } from "../../../supabase/functions/_shared/criteriaExecutionPolicy.ts";
+import { guardedInvoker } from "../../../supabase/functions/_shared/leadMissionRuntime.ts";
 import { hashInput } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 import type { EvidenceItem } from "../../../supabase/functions/_shared/candidateObservation.ts";
 import { computeEvidenceDebts } from "../../../supabase/functions/_shared/webEvidenceDebt.ts";
@@ -194,16 +196,16 @@ async function execute(o: {
     deps: {
       call: ledgerBoundCall({
         ledger: result.state.spend_ledger,
-        scope: { workspace_id: "ws-cd", lineage_id: "lineage-cd" },
-        estimate: (actor, input) => {
-          const card = hiringActorCard(actor);
-          return card?.cost_model ? estimateCallUsd(actor, card.cost_model, input) : Infinity;
-        },
+        // The production wiring: the spec compiler and the guarded invoker.
+        spec: verifierSpecCompiler({
+          scope: { workspace_id: "ws-cd", lineage_id: "lineage-cd" }, mission_hash: "mh-cd",
+          policy: criteriaExecutionPolicy(o.mission), ceilings: () => result.state.spend_ledger.ceilings, readiness,
+        }),
         actorIdFor: (actor) => hiringActorCard(actor)?.actor_id ?? null,
-        invoke: (call) => {
-          record(call.actorKey, "funding_verification", call.input);
+        invoke: guardedInvoker(null, (call) => {
+          record(call.actorKey, call.providerCallSpec.capability, call.input);
           return Promise.resolve(o.rows[call.actorKey]?.(call.input) ?? []);
-        },
+        }, undefined, readiness),
         hash: (input, actor) => hashInput(input, actor),
       }),
       now: () => "2026-09-19T12:00:00.000Z",
