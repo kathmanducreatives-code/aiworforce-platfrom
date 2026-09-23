@@ -806,14 +806,36 @@ export function deriveMissionCriteria(
       : def && k !== "technology" && (TEMPORAL_CUE_RE.test(query) || k === "hiring")
       ? { days: def.days, basis: def.basis, source: "system_default", rule: def.rule, enforced: false }
       : undefined;
+    // ── A STATED FUNDING WINDOW IS A REQUIREMENT, WHEN IT CAN BE PROVEN ────
+    //
+    // "…that has raised funding in the last 2 years" names a window the user
+    // chose, and the READY funding pair answers exactly that (`recently_funded`:
+    // a dated round inside the window, or a complete history with none). As a
+    // TARGET it ranked and never rejected — and the claim phase only verifies
+    // HARD gaps, so the pair was never asked and request feasibility refused
+    // the mission as unprovable (2026-09-23, local). The `must` elevation above
+    // could not rescue it: both parsers record the whole sentence as the
+    // signal's phrase, so there is nothing before it to read.
+    //
+    // Only a USER-stated window, and only while the pair may run: a default
+    // window stays a target, and an unready verifier cannot make a requirement
+    // look answerable. And only when the days carried ARE the days the user
+    // said: the deterministic parser labels "in the last 2 years" user-stated
+    // while carrying the 180-day default, and a hard requirement on the wrong
+    // window would reject a company the user asked for.
+    const fundingWindow = !elevated && k === "funding" && source === "user_explicit" &&
+      time_window?.source === "user_explicit" && time_window.days === explicitWindowDays(query) &&
+      fundingVerifierReady(readiness);
     push({
-      kind: elevated ? "hard" : "target",
+      kind: elevated || fundingWindow ? "hard" : "target",
       dimension: k, value: { event: eventOf(s), subject: s.subject ?? "company", qualifier: s.qualifier ?? {} },
       label: signalDetail(k, s, rec?.subkind ?? reading?.subkind),
       source, ...(time_window ? { time_window } : {}),
       ...(elevated ? { elevated_by: elevated[1].startsWith("must") ? "must" : elevated[1] as MissionCriterion["elevated_by"] } : {}),
       user_phrase: source === "user_explicit" ? phrase : "",
-      rationale: source === "user_explicit"
+      rationale: fundingWindow
+        ? "a funding window the request states, which the funding pair can verify"
+        : source === "user_explicit"
         ? "an observable signal the request asks for"
         : "added by the model's reading; the request's words do not state it",
     });

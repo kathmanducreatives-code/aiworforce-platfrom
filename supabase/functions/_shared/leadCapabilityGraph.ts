@@ -964,8 +964,20 @@ export function buildCapabilityGraph(
       applies: () => hasSignal(mission, "product_launch") && (mission.strategies ?? []).length === 0 &&
         usable("product_launch_discovery", "entry"),
       reason: () => "the mission requires a product-launch signal" },
+    // ── A BRAIN PREFERENCE RANKS; IT DOES NOT CHOOSE THE UNIVERSE ─────────
+    //
+    // When the request states no stage, `mergeCompanyBrainIntoMission` fills
+    // `company_profile.stages` from the workspace's ICP and marks the field
+    // `company_brain`. Those rungs compile as TARGETS — they rank, they never
+    // reject — and letting them pick the entry turned a preference into a hard
+    // choice of source: "Find 1 software development company in Germany with
+    // 51 to 200 employees" (2026-09-23, local) entered through the YC
+    // directory because this workspace's Brain lists seed and Series A. The
+    // user asked for a profile, not a startup cohort. Only a stage the user
+    // (or a workflow edit) stated may select startup-cohort discovery.
     { capability: "startup_company_discovery",
       applies: () => mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s)) &&
+        mission.field_provenance?.["company_profile.stages"] !== "company_brain" &&
         entryGate("startup_company_discovery"),
       reason: () => "the mission targets startups" },
     { capability: "general_company_discovery", applies: () => entryGate("general_company_discovery"),

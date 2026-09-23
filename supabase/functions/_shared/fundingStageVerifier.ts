@@ -34,7 +34,9 @@ import {
   ATOMUS_FUNDING_ACTOR_KEY, atomusSettles, decideCorroboratedFundingStage, fundingRecordEvidenceItem, fundingRecordsInGraph,
   normalizeAtomusFunding, normalizePvalyouFunding, PVALYOU_FUNDING_ACTOR_KEY, stampFundingCall,
 } from "./fundingCorroboration.ts";
-import { fundingStageEvidenceItem, type FundingRecordFact, type FundingStageDecision } from "./fundingStageClaim.ts";
+import {
+  fundingStageEvidenceItem, recordCompleteness, type FundingRecordFact, type FundingStageDecision,
+} from "./fundingStageClaim.ts";
 
 export const FUNDING_STAGE_VERIFIER_KEY = "funding_stage_corroboration" as const;
 /** The claim-verifier capability both halves of the pair are carded under. */
@@ -192,6 +194,30 @@ export function fundingStageVerifier(): ClaimVerifier {
       const discovered: Record<string, FundingRecordFact[]> = {};
       for (const t of fresh) {
         const atomus = atomusRecords[t.company_key] ?? null;
+        // ── A RECENCY GAP NEEDS THE DATED HISTORY, NOT A STAGE VERDICT ──────
+        //
+        // "Raised funding in the last N years" is `recently_funded`, decided by
+        // eligibility from a funding RECORD: a dated verified round inside the
+        // window passes, and a COMPLETE history with none fails. atomus holds
+        // both — dates and the true round count — so its record is the whole
+        // answer. Running the stage logic here read the signal object as a
+        // required stage ("[object Object]" is not a funding round) and bought
+        // pvalyou's citations (~$0.02 a company), which recency never uses.
+        // No atomus record (no LinkedIn page, not found, or refused) leaves the
+        // claim PENDING: absence is never disproof.
+        if (t.criterion.dimension === "funding") {
+          findings.push({
+            company_key: t.company_key, answered: true,
+            item: atomus
+              ? fundingRecordEvidenceItem({ company_key: t.company_key, record: atomus, mission_id: ctx.mission_id, observed_at: at })
+              : null,
+            detail: {
+              stage: "atomus_recency", claim: "recently_funded", provider_call_id: atomus ? atomusCallId : null,
+              rounds: atomus?.rounds.length ?? 0, history_complete: atomus ? recordCompleteness(atomus)?.complete === true : false,
+            },
+          });
+          continue;
+        }
         discovered[t.company_key] = discoveredOf(t);
         const failed = atomusSettles(String(t.criterion.value ?? ""), atomus);
         if (failed) {

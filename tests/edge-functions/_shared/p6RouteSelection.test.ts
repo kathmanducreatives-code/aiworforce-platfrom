@@ -12,7 +12,7 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
 import { readinessPolicy } from "../../../supabase/functions/_shared/routeReadiness.ts";
-import { parseLeadMissionDeterministic } from "../../../supabase/functions/_shared/leadMission.ts";
+import { mergeCompanyBrainIntoMission, parseLeadMissionDeterministic } from "../../../supabase/functions/_shared/leadMission.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
 import { CLAIM_REGISTRY, evidenceGapsFor } from "../../../supabase/functions/_shared/evidenceGapRouter.ts";
 
@@ -172,4 +172,27 @@ Deno.test("a READY actor gated off this mission does not make its entry runnable
   const startupRow = plan.entry_selection!.considered.find((c) => c.capability === "startup_company_discovery")!;
   assertFalse(startupRow.applies, "refused: its only READY actor is out of cohort");
   assertFalse(plan.allowed_providers.includes("apify_yc_companies_memo23"));
+});
+
+Deno.test("a Company Brain stage PREFERENCE does not choose startup-cohort discovery; a stated stage still does", () => {
+  // 2026-09-23 (local): "Find 1 software development company in Germany with
+  // 51 to 200 employees" entered through the YC directory because the
+  // workspace Brain lists seed and Series A. The Brain filled the empty stage
+  // field (provenance `company_brain`) — a ranking preference, not a request.
+  const base = parseLeadMissionDeterministic("Find 1 software development company in Germany with 51 to 200 employees.");
+  const brain = mergeCompanyBrainIntoMission(base, { stages: ["seed", "series_a"] } as never).mission;
+  assertEquals(brain.company_profile.stages, ["seed", "series_a"]);
+  assertEquals(brain.field_provenance?.["company_profile.stages"], "company_brain");
+  const viaBrain = buildCapabilityGraph(brain, PROBE);
+  assertEquals(viaBrain.entry_capability, "general_company_discovery", "a preference ranks; it does not pick the universe");
+  assertFalse(viaBrain.entry_selection!.considered.some((c) => c.capability === "startup_company_discovery" && c.applies));
+
+  // The same stage, stated by the user, still selects the startup cohort.
+  const stated = {
+    ...base, company_profile: { ...base.company_profile, stages: ["seed"] },
+    field_provenance: { ...base.field_provenance, "company_profile.stages": "explicit_user_request" as const },
+  };
+  assertEquals(buildCapabilityGraph(stated, PROBE).entry_capability, "startup_company_discovery");
+  assertEquals(buildCapabilityGraph(parseLeadMissionDeterministic("Find startups in Germany"), PROBE).entry_capability,
+    "startup_company_discovery");
 });
