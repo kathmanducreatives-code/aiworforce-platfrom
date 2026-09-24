@@ -37,7 +37,7 @@ import {
   buildQualificationContext, resolveEmployeeBounds,
 } from "../../../supabase/functions/_shared/missionQualificationContext.ts";
 import {
-  prequalifyNormalizedCompany,
+  admittedCandidateCount, prequalifyNormalizedCompany,
 } from "../../../supabase/functions/_shared/leadGenericPrequalification.ts";
 import { parseLeadMissionDeterministic } from "../../../supabase/functions/_shared/leadMission.ts";
 
@@ -128,20 +128,34 @@ const LIVE_POOL = [
   ["Blue Signal Search", 100, "51-200"],
 ] as const;
 
-Deno.test("the live pool: only the two genuinely in-range companies stay eligible", () => {
+Deno.test("the live pool: only the two genuinely in-range companies are admitted; the rest rank down, then enrichment decides", () => {
   const bounds = resolveEmployeeBounds(CTX, BRAIN_HARD);
   const verdicts = LIVE_POOL.map(([n, c, b]) => ({
     name: n,
     v: prequalifyNormalizedCompany(company(n, c, b), { min: bounds.min, max: bounds.max },
       { size_enforceable: bounds.enforceable }),
   }));
-  assertEquals(
-    verdicts.filter((x) => x.v.eligible).map((x) => x.name),
-    ["Hire Feed", "Blue Signal Search"],
-    "84 and 100 are inside 1-150; nothing else in that pool was",
-  );
-  for (const x of verdicts.filter((x) => !x.v.eligible)) {
-    assertEquals(x.v.exclusion, "employee_size", x.name);
+  // Every row carries its LinkedIn identity, so its REPORTED count is one
+  // company-record read from a proven one: out of range ranks down, and the
+  // Brain's hard rule rejects on the enriched count (canary 87ecf153).
+  assertEquals(verdicts.filter((x) => x.v.size_status === "in_range").map((x) => x.name),
+    ["Hire Feed", "Blue Signal Search"], "84 and 100 are inside 1-150; nothing else in that pool was");
+  const top = Math.min(...verdicts.filter((x) => x.v.size_status === "in_range").map((x) => x.v.score));
+  for (const x of verdicts.filter((x) => x.v.size_status !== "in_range")) {
+    assertEquals([x.v.exclusion, x.v.eligible], [null, true], x.name);
+    assert(x.v.score < top, `${x.name} ranks below every in-range company`);
+  }
+  // Discovery sizes its pool on the admitted count: still only the two.
+  assertEquals(admittedCandidateCount(LIVE_POOL.map(([n, c, b]) => company(n, c, b)),
+    { min: bounds.min, max: bounds.max }, { size_enforceable: bounds.enforceable }), 2);
+});
+
+Deno.test("…and WITHOUT a LinkedIn identity the Brain's hard rule still excludes, free", () => {
+  const bounds = resolveEmployeeBounds(CTX, BRAIN_HARD);
+  for (const [n, c, b] of LIVE_POOL.filter(([, c]) => c > 150)) {
+    const row = { ...(company(n, c, b) as Record<string, unknown>), linkedin_company_url: null } as never;
+    const v = prequalifyNormalizedCompany(row, { min: bounds.min, max: bounds.max }, { size_enforceable: bounds.enforceable });
+    assertEquals(v.exclusion, "employee_size", n);
   }
 });
 

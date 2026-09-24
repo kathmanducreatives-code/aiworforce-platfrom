@@ -226,3 +226,19 @@ export function statusForAuthority(a: EvidenceAuthority): EvidenceItem["status"]
 export function authorityRecord(d: AuthorityDecision): NonNullable<EvidenceItem["authority"]> {
   return { version: d.version, claim: d.claim, level: d.authority, rule: d.rule, reason: d.reason };
 }
+
+/**
+ * MAY A HEADCOUNT REJECT A CANDIDATE BEFORE ENRICHMENT?
+ *
+ * Only when its authority for company size is PROVEN. A discovery row's count
+ * (company search, a YC `teamSize`, a job's employer record) is PLAUSIBLE: it
+ * may rank a candidate down, never out, because enrichment — the company
+ * record read after identity resolution — settles the claim for a few tenths of
+ * a cent. Canary 87ecf153 pruned both candidates on search-row counts (86 and
+ * 2,135 for an 11–50 band) and the claim was never actually decided.
+ */
+export function mayRejectOnReportedSize(source: string, observed_at: string | null = new Date().toISOString()): AuthorityDecision {
+  return authorityForEvidence({
+    claim: "company_size", source, field: "employee_count", observed_at, quality: { exact: true },
+  });
+}

@@ -67,31 +67,37 @@ const MISSION_10_150 = { min: 10, max: 150 };
 
 // ═══════════════ 1. THE GATE THAT PAYS FOR ITSELF ══════════════════════════
 
-Deno.test("1. a TRUSTED EXACT headcount outside the mission range excludes, free", () => {
-  // This is the whole point. Before this pass existed, a 500-person company
-  // discovered by the LinkedIn search was carried through identity resolution
-  // and enrichment to reach a conclusion its discovery row already stated.
-  const big = normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 500 }));
-  const v = prequalifyNormalizedCompany(big, MISSION_10_150);
-
+Deno.test("1. an out-of-range headcount excludes for free ONLY where settling it would cost a paid identity search", () => {
+  // Before this pass existed, a 500-person company discovered by the LinkedIn
+  // search was carried through identity resolution and enrichment to reach a
+  // conclusion its discovery row already stated. That saving is kept where it
+  // is real: a row with no LinkedIn identity would need a paid name search
+  // (~$0.06) before the company record could settle the count.
+  const bigNoIdentity = normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 500, linkedinUrl: undefined }));
+  const v = prequalifyNormalizedCompany(bigNoIdentity, MISSION_10_150);
   assertEquals(v.size_status, "above_max");
   assertEquals(v.exclusion, "employee_size");
   assertFalse(v.eligible);
-  // The reason must say what was SAVED, not merely that a bound was crossed —
-  // a future reader deciding whether this pass earns its complexity needs it.
-  assert(v.reasons.some((r) => /before identity resolution and enrichment/.test(r)),
-    v.reasons.join(" | "));
+  // The reason must say what was SAVED, not merely that a bound was crossed.
+  assert(v.reasons.some((r) => /before identity resolution and enrichment/.test(r)), v.reasons.join(" | "));
+  const smallNoIdentity = normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 3, linkedinUrl: undefined }));
+  assertEquals(prequalifyNormalizedCompany(smallNoIdentity, MISSION_10_150).exclusion, "employee_size");
 
-  const small = normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 3 }));
-  assertEquals(prequalifyNormalizedCompany(small, MISSION_10_150).size_status, "below_min");
+  // A row that CARRIES its LinkedIn identity is one company-record read away
+  // from a PROVEN count, and its own count is only PLAUSIBLE (evidenceAuthority).
+  // Canary 87ecf153 pruned both candidates this way and never decided the claim.
+  const big = normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 500 }));
+  const ranked = prequalifyNormalizedCompany(big, MISSION_10_150);
+  assertEquals(ranked.size_status, "above_max");
+  assertEquals(ranked.exclusion, null);
+  assert(ranked.eligible, "ranked down, not out — enrichment decides");
+  assert(ranked.reasons.some((r) => /ranked down, not excluded/.test(r) && /enrichment's exact count decides/.test(r)),
+    ranked.reasons.join(" | "));
 
-  // …and an in-range company is kept and scored up.
-  const ok = prequalifyNormalizedCompany(
-    normalizeLinkedInCompanyCandidate(liRow()), MISSION_10_150);
-  assertEquals(ok.size_status, "in_range");
-  assertEquals(ok.exclusion, null);
-  assert(ok.eligible);
-  assert(ok.score > prequalifyNormalizedCompany(big, MISSION_10_150).score);
+  // …and an in-range company outranks it.
+  const ok = prequalifyNormalizedCompany(normalizeLinkedInCompanyCandidate(liRow()), MISSION_10_150);
+  assertEquals([ok.size_status, ok.exclusion, ok.eligible], ["in_range", null, true]);
+  assert(ok.score > ranked.score);
 });
 
 // ═══════════════ 2-5. THE WAYS IT MUST REFUSE TO EXCLUDE ═══════════════════
@@ -171,7 +177,8 @@ Deno.test("5. an ADVISORY range the MISSION never set may rank but not reject", 
   // from the workspace Brain rather than from the user's sentence. Seven
   // companies were excluded on Brain bounds on TEST run cf6cce3d, and the rule
   // that fixed it must hold on this side of the pass too.
-  const big = normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 500 }));
+  // No LinkedIn identity, so an enforced bound may exclude for free (test 1).
+  const big = normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 500, linkedinUrl: undefined }));
 
   const enforced = prequalifyNormalizedCompany(big, MISSION_10_150, {
     size_enforceable: true,
@@ -346,7 +353,7 @@ Deno.test("10. merging never claims role evidence the generic pass cannot have",
   // An out-of-range generic company shows up in the exclusion count, because
   // that number drives the funnel and must describe the whole pool.
   const big = prequalifyDiscoveredCompanies(
-    [normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 900 }))], MISSION_10_150);
+    [normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 900, linkedinUrl: undefined }))], MISSION_10_150);
   assertEquals(mergePrequalification(yc, big).employee_size_excluded,
     yc.employee_size_excluded + 1);
 });
@@ -358,7 +365,7 @@ Deno.test("11. an empty YC result is a valid base for a pure non-YC pool", () =>
   const empty = emptyPrequalificationResult();
   const generic = prequalifyDiscoveredCompanies([
     normalizeLinkedInCompanyCandidate(liRow()),
-    normalizeLinkedInCompanyCandidate(liRow({ id: "b", name: "Bigco", website: "https://bigco.com", employeeCount: 4000 })),
+    normalizeLinkedInCompanyCandidate(liRow({ id: "b", name: "Bigco", website: "https://bigco.com", employeeCount: 4000, linkedinUrl: undefined })),
   ], MISSION_10_150);
 
   const merged = mergePrequalification(empty, generic);

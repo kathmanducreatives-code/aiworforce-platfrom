@@ -719,7 +719,9 @@ export interface CapabilityExecutionState {
       | "schema_failure"
       | "run_pending"
       /** P2: a replan's amendment was refused (trigger, reserve or validation). */
-      | "amendment_refused";
+      | "amendment_refused"
+      /** `run_budget.max_candidates` is spent: nothing further may be bought, or planned. */
+      | "candidate_budget_spent";
   };
   /**
    * Stage removals the chain PROPOSED and containment refused.
@@ -2681,6 +2683,18 @@ export async function runCapabilityPlan(
       }, { plan_version: currentPlan()!.version });
     }
   }
+  /**
+   * THE MISSION'S CANDIDATE ALLOWANCE IS SPENT: no further discovery purchase
+   * can happen (`run_budget.max_candidates`, counted in `discovery_rows_bought`),
+   * so neither may a model call that exists only to plan one — a re-plan, a
+   * route-control proposal, a replenishment slice. Canary 87ecf153 spent
+   * $0.0019 of model on a second slice whose only discovery call was then
+   * refused.
+   */
+  const candidateBudgetSpent = (): boolean => {
+    const limit = opts.runBudget?.max_candidates ?? null;
+    return limit !== null && (state.discovery_rows_bought ?? 0) >= limit;
+  };
   /** Adaptive reserve left: the reserve minus spend by calls from amended versions. */
   const adaptiveReserveRemaining = (): number => {
     const l = state.spend_ledger;
@@ -4521,10 +4535,17 @@ export async function runCapabilityPlan(
     // for `frontierRemaining <= 0`, so a debt cannot exist while candidates
     // remain to investigate. It is not re-checked here on purpose — deciding
     // the same thing in two places is how the two come to disagree.
-    const replenishmentDebt =
+    const replenishmentWanted =
       opts.discoveryReplenishment?.reason === "replenishment_required" &&
       DISCOVERY_REPLENISHABLE.has(cap) &&
       state.completed_capabilities.includes(cap);
+    const replenishmentDebt = replenishmentWanted && !candidateBudgetSpent();
+    if (replenishmentWanted && !replenishmentDebt) {
+      log("discovery_not_reopened_candidate_budget_spent", {
+        capability: cap, limit: opts.runBudget?.max_candidates ?? null, bought: state.discovery_rows_bought ?? 0,
+        note: "no further discovery purchase is possible this mission, so no slice plans one",
+      });
+    }
     if (replenishmentDebt) {
       log("discovery_reopened_for_replenishment", {
         capability: cap,
@@ -5050,6 +5071,12 @@ export async function runCapabilityPlan(
           summary.admitted.available < summary.admitted.target;
         if (!deps.controlRoutes || !plan || !criteriaPolicy || !undecided || discoveryStoppedByControl ||
             routeControlCalls >= MAX_ROUTE_CONTROL_CALLS) return;
+        // Every route-control action but `stop` buys more discovery, and a stop
+        // saves nothing once the allowance is spent: no proposal can be acted on.
+        if (candidateBudgetSpent()) {
+          log("route_control_skipped_candidate_budget_spent", { wave: summary.wave });
+          return;
+        }
         routeControlCalls++;
         let proposal: unknown = null;
         try {
@@ -5670,6 +5697,10 @@ export async function runCapabilityPlan(
       // would re-ask for page two.
       for (const k of actorsRun) pagesTaken[k] = pagesTaken[k] ?? 1;
       for (let pass = 2; pass <= passLimit; pass++) {
+        if (candidateBudgetSpent()) {
+          discoveryStop = "candidate_budget_spent";
+          break;
+        }
         if (schemaFailure || runPending) {
           discoveryStop = schemaFailure ? "schema_failure" : "run_pending";
           break;
@@ -5831,6 +5862,11 @@ export async function runCapabilityPlan(
       // may legitimately ask for more.
       {
         const admittedAtStop = admittedNow();
+        // Whatever stopped the passes, a spent allowance is the binding fact:
+        // no later slice may buy, so none should be scheduled to plan.
+        if (candidateBudgetSpent() && discoveryStop !== "raw_row_ceiling" && discoveryStop !== "no_further_actor_proposed") {
+          discoveryStop = "candidate_budget_spent";
+        }
         state.discovery_source_state = {
           sources_attempted: [...actorsRun],
           pages_taken: { ...pagesTaken },
@@ -5842,7 +5878,7 @@ export async function runCapabilityPlan(
           raw_rows: companies.length,
           pool_target: admittedTarget,
           exhausted: discoveryStop === "no_further_actor_proposed" ||
-            discoveryStop === "raw_row_ceiling",
+            discoveryStop === "raw_row_ceiling" || discoveryStop === "candidate_budget_spent",
           stop_reason: discoveryStop,
         };
         log("discovery_source_state", state.discovery_source_state);

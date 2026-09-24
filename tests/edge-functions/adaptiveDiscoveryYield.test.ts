@@ -284,8 +284,12 @@ Deno.test("merge across pages dedupes rather than double-counting", () => {
     emptyPrequalificationResult(),
     prequalifyDiscoveredCompanies([...page1, ...page2], BOUNDS, ENFORCED),
   );
-  assertEquals(merged.eligible_companies, 23,
+  assertEquals(admittedCandidateCount([...page1, ...page2], BOUNDS, ENFORCED), 23,
     "20 in-range from page 1 plus 3 fresh, with the overlap counted once");
+  // The 5 reported out of range still carry their LinkedIn identity, so they
+  // are ranked down rather than excluded — investigable, never "admitted".
+  assertEquals(merged.eligible_companies, 28, "23 admitted + 5 ranked down, each counted once");
+  assertEquals(merged.unique_companies, 28);
 });
 
 Deno.test("replenishment that widens nothing stops: barren slices end it (canary f9b5ad8e)", () => {

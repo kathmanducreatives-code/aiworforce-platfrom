@@ -38,7 +38,13 @@
 //
 //   artifact       a directory or platform page is not a prospect. Y
 //                  Combinator's own page was once counted as a qualified lead.
-//   employee_size  a TRUSTED EXACT headcount outside a range the MISSION set.
+//   employee_size  an exact headcount outside a range the MISSION set, when
+//                  either it is PROVEN (`evidenceAuthority`) or settling it
+//                  would first need a paid identity search. A discovery row's
+//                  count is PLAUSIBLE: for a candidate that already carries its
+//                  LinkedIn identity — one cheap enrichment away from a proven
+//                  count — it ranks the company down and enrichment decides
+//                  (canary 87ecf153).
 //
 // Everything else — a description, an identity, a hiring flag, an industry
 // label — ranks. This is the three-valued discipline the ICP gate already
@@ -56,6 +62,7 @@
 //
 // PURE. No network, provider, model or database access.
 
+import { mayRejectOnReportedSize } from "./evidenceAuthority.ts";
 import type {
   NormalizedHiringCompany, FieldTrust,
 } from "./hiringActorNormalizers.ts";
@@ -177,10 +184,32 @@ export function prequalifyNormalizedCompany(
     : (size.max != null && exactCount > size.max) ? "above_max"
     : "in_range";
   const size_fit = size_status === "in_range";
+  // ── A REPORTED COUNT RANKS; ONLY A PROVEN ONE MAY REJECT ─────────────────
+  //
+  // The row's count is the SOURCE's statement. Whether it may reject before
+  // enrichment is the authority layer's decision, not this module's: a
+  // discovery row is PLAUSIBLE for company size, so an out-of-range figure
+  // ranks the company down and enrichment's proven count decides.
+  const sizeAuthority = exactCount === null ? null
+    : mayRejectOnReportedSize(company.raw_ref?.actor_key ?? company.source_provenance);
+  // CHEAP TO SETTLE: a candidate that already carries its LinkedIn identity is
+  // one company-record read (~$0.004) from a PROVEN count. One without it
+  // would first need a paid identity search (~$0.06), and there the free
+  // reported count may still exclude — the cost of settling it exceeds what
+  // the exclusion saves.
+  const enrichmentIsCheap = !!company.linkedin_company_url;
+  const sizeMayReject = sizeAuthority?.authority === "proven" || !enrichmentIsCheap;
+  const outOfRange = size_status === "above_max" || size_status === "below_min";
 
   if (size_fit) {
     score += 30;
     reasons.push(`exact headcount ${exactCount} is inside the target range`);
+  } else if (outOfRange && !sizeMayReject) {
+    score -= 25;
+    reasons.push(
+      `reported headcount ${exactCount} is ${size_status === "above_max" ? "above the maximum" : "below the minimum"} — ` +
+      `ranked down, not excluded: a reported figure is not proof (${sizeAuthority?.rule}), ` +
+      `the company already carries its LinkedIn identity, and enrichment's exact count decides`);
   } else if (size_status === "above_max") {
     reasons.push(
       `exact headcount ${exactCount} exceeds the maximum — excluded before ` +
@@ -280,12 +309,8 @@ export function prequalifyNormalizedCompany(
     // the absence of jobs, and reading its silence as "no commercial hiring"
     // would exclude every LinkedIn and funding row on the strength of a
     // question nobody asked the provider.
-    eligible: !(sizeEnforceable &&
-      (size_status === "above_max" || size_status === "below_min")),
-    exclusion: (sizeEnforceable &&
-      (size_status === "above_max" || size_status === "below_min"))
-      ? "employee_size"
-      : null,
+    eligible: !(sizeEnforceable && sizeMayReject && outOfRange),
+    exclusion: (sizeEnforceable && sizeMayReject && outOfRange) ? "employee_size" : null,
     reasons,
     linkedin_identity_status: "unresolved",
     identity_confidence,
@@ -456,5 +481,13 @@ export function admittedCandidateCount(
   size: GenericSizeBounds = {},
   policy: GenericPrequalificationPolicy = {},
 ): number {
-  return prequalifyDiscoveredCompanies(companies, size, policy).eligible_companies;
+  // A row whose REPORTED size is outside an enforced range is no longer
+  // excluded when enrichment can cheaply settle it (it is ranked down, and
+  // decided on the proven count). It still does not count toward "enough
+  // candidates": sizing discovery on rows we already expect to fail is how a
+  // pool of 12 usable companies and 38 far too large would read as full.
+  const enforce = policy.size_enforceable !== false;
+  return prequalifyDiscoveredCompanies(companies, size, policy).companies
+    .filter((c) => c.eligible && !(enforce && (c.size_status === "above_max" || c.size_status === "below_min")))
+    .length;
 }
