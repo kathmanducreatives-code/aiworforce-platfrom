@@ -729,11 +729,20 @@ export function deriveMissionCriteria(
   if (er && (er.min != null || er.max != null)) {
     const source = sourceFromProvenance(prov["company_profile.employee_range"],
       /\b\d{1,5}\s*(?:-|to|–)\s*\d{1,5}\b|\bemployees?\b/.test(q));
+    // AN EXACT STAFF COUNT IS NOT A BAND. It stays a live criterion (so a
+    // candidate is PENDING on it, never quietly eligible without it), and says
+    // plainly that nothing can settle it: a declared band is a range, and the
+    // LinkedIn member count is not staff (companySize.ts).
+    const exact = er.min != null && er.max != null && er.min === er.max;
     push({
       kind: source === "user_explicit" || source === "company_brain_policy" ? "hard" : "target", dimension: "company_size",
       value: { min: er.min ?? null, max: er.max ?? null },
-      label: `Company size: ${er.min ?? 0}–${er.max ?? "∞"} employees`, source, user_phrase: "",
-      rationale: source === "company_brain_policy"
+      label: exact ? `Company size: exactly ${er.min} employees`
+        : `Company size: ${er.min ?? 0}–${er.max ?? "∞"} employees`, source, user_phrase: "",
+      rationale: exact
+        ? "an exact staff count is not provable today: LinkedIn gives a declared size band and an associated-member " +
+          "count, and neither is a staff headcount — candidates stay pending on it"
+        : source === "company_brain_policy"
         ? "your Company Brain's size rule, enforced on every mission"
         : source === "company_brain_preference"
         ? "your Company Brain's size band; you did not state one" : "stated in the request",

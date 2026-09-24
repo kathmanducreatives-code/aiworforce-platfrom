@@ -77,7 +77,7 @@ export interface ClaimDefinition {
 
 const LINKEDIN_DETAILS: ClaimRoute = {
   actor: "apify_linkedin_company_details", capability: "company_enrichment",
-  purpose: "the company's LinkedIn page (HQ, headcount, description)",
+  purpose: "the company's LinkedIn record (locations, declared size band, description)",
   evidence_actors: ["linkedin", "apify_linkedin_company_details"],
   canonical_executor: true, executor_note: "in-slice enrichment of every investigated company",
   cost_hint_usd: 0.004,
@@ -138,7 +138,9 @@ export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
     routes: [LINKEDIN_DETAILS, FIRST_PARTY_PAGES],
   },
   { claim: "country", criterion_dimensions: ["geography"], evidence: ["geography"], freshness_days: null, routes: [LINKEDIN_DETAILS] },
-  { claim: "headcount", criterion_dimensions: ["company_size"], evidence: ["headcount"], freshness_days: freshness("headcount"), routes: [LINKEDIN_DETAILS] },
+  // "N–M employees" is the company's DECLARED size band (companySize.ts). The
+  // LinkedIn associated-member count answers no claim here.
+  { claim: "company_size", criterion_dimensions: ["company_size"], evidence: ["company_size_band"], freshness_days: freshness("company_size_band"), routes: [LINKEDIN_DETAILS] },
   {
     claim: "funding_stage", criterion_dimensions: ["company_stage"], evidence: ["funding", "company_stage"],
     freshness_days: freshness("funding"),
@@ -211,7 +213,7 @@ function judgeRoutes(
 ): GapRoute[] {
   if (!def) return [];
   // TRIED means the actor has already answered for this company on ANY
-  // dimension: LinkedIn details that returned a headcount but no HQ were
+  // dimension: LinkedIn details that returned a size band but no HQ were
   // bought, and asking again returns the same page.
   const answered = new Set(graph.claims.flatMap((c) => c.sources));
   return def.routes.map((r) => {

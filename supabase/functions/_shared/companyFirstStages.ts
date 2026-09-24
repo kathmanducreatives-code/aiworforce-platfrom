@@ -11,6 +11,7 @@
 //
 // Pure. No I/O.
 
+import { bandSatisfies, type CompanySizeBand } from "./companySize.ts";
 import {
   attributionOnlyStatus, extractAggregatorEvidence,
   type AggregatorEvidence, type AggregatorStatus,
@@ -108,9 +109,13 @@ export interface CompanyFitInput {
   company_name?: string | null;
   identity_status: "verified_match" | "ambiguous" | "mismatch" | "unresolved";
   enrichment_complete: boolean;
-  /** Enriched exact headcount. The ONLY value the size gate may read. */
-  employee_count: number | null;
-  /** Advisory only — present so a diagnostic can show it was ignored. */
+  /**
+   * The company's DECLARED size band (companySize.ts) — the ONLY value the size
+   * gate may read. The LinkedIn associated-member count is not staff and is not
+   * an input here.
+   */
+  company_size_band: CompanySizeBand | null;
+  /** A non-LinkedIn provider's size wording. Advisory — shown, never gated on. */
   employee_range_advisory: string | null;
   employee_min?: number | null;
   employee_max?: number | null;
@@ -149,8 +154,8 @@ export interface CompanyFitResult {
  *   * Missing evidence is PENDING, never a rejection. A company we failed to
  *     enrich is unknown, not unsuitable, and hard-rejecting it destroys a real
  *     lead permanently while looking like precision.
- *   * The size gate reads `employee_count` ONLY. `employee_range_advisory`
- *     contradicted it by up to 23x in the live benchmark.
+ *   * The size gate reads the DECLARED size band ONLY — never the LinkedIn
+ *     associated-member count, which counts members, not staff.
  */
 export function evaluateCompanyFit(i: CompanyFitInput): CompanyFitResult {
   const failed: string[] = [];
@@ -199,14 +204,20 @@ export function evaluateCompanyFit(i: CompanyFitInput): CompanyFitResult {
   }
   if (aggregatorFinding === "possible") missing.push("aggregator_evidence_inconclusive");
 
-  // SIZE — exact count only.
+  // SIZE — the declared band only. Wholly outside the range rejects; a
+  // partial overlap (or an exact staff count) is unsettled, never a reject.
   if (i.employee_min != null || i.employee_max != null) {
-    if (i.employee_count === null) {
-      missing.push("employee_count_unknown" +
-        (i.employee_range_advisory ? `:advisory_range_present_but_untrusted` : ""));
+    if (i.company_size_band === null) {
+      missing.push("company_size_band_unknown" +
+        (i.employee_range_advisory ? `:advisory_text_present_but_not_a_band` : ""));
     } else {
-      if (i.employee_min != null && i.employee_count < i.employee_min) failed.push("employee_count_below_min");
-      if (i.employee_max != null && i.employee_count > i.employee_max) failed.push("employee_count_above_max");
+      const v = bandSatisfies({ min: i.employee_min ?? null, max: i.employee_max ?? null }, i.company_size_band);
+      if (v.verdict === "fail") {
+        failed.push(i.employee_max != null && i.company_size_band.min > i.employee_max
+          ? "company_size_band_above_max" : "company_size_band_below_min");
+      } else if (v.verdict === "unknown") {
+        missing.push("company_size_band_unsettled");
+      }
     }
   }
 

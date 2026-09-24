@@ -30,7 +30,7 @@
 //             neither shows nor rules the requirement out
 //
 // A contradiction only fails a hard rule when the evidence behind it is
-// verified. A provider's reported location or headcount band that disagrees
+// verified. A provider's reported location or size band that disagrees
 // sends the candidate to `pending`, not out of the mission: an unverified
 // claim can no more reject a company than it can qualify one. Industry and
 // business model are compared through the controlled vocabulary in
@@ -50,7 +50,7 @@ import { matchBusinessModel } from "./businessModelMatch.ts";
 import { decideRecentlyFunded, normalizeRoundType } from "./fundingStageClaim.ts";
 import type { FundingStageVerdict } from "./fundingStageClaim.ts";
 import { fundingRecordsInGraph } from "./fundingCorroboration.ts";
-import { usableHeadcount } from "./headcountValue.ts";
+import { bandSatisfies, isSizeBand } from "./companySize.ts";
 import { normalizeSuppliedCompanies } from "./suppliedCompanyIdentity.ts";
 
 export const ELIGIBILITY_VERSION = "candidate-eligibility-v1" as const;
@@ -64,7 +64,8 @@ export const CRITERION_EVIDENCE_DIMENSION: Readonly<Partial<Record<CriterionDime
     geography: "geography",
     industry: "industry",
     business_model: "business_model",
-    company_size: "headcount",
+    // THE DECLARED BAND, never the LinkedIn member count (companySize.ts).
+    company_size: "company_size_band",
     company_stage: "company_stage",
     hiring: "hiring",
     funding: "funding",
@@ -120,18 +121,6 @@ export interface EligibilityResult {
 
 const text = (v: unknown): string => String(v ?? "").trim().toLowerCase();
 
-function headcountSatisfied(required: unknown, count: unknown): CheckResult {
-  // A zero or negative "count" is a missing number, never a contradiction.
-  const n = usableHeadcount(count);
-  if (n === null) return "unknown";
-  const r = required as { min?: number | null; max?: number | null } | number | null;
-  const min = typeof r === "object" && r ? r.min ?? null : null;
-  const max = typeof r === "object" && r ? r.max ?? null : null;
-  if (min == null && max == null) return "unknown";
-  if (min != null && n < min) return "fail";
-  if (max != null && n > max) return "fail";
-  return "pass";
-}
 
 function provenanceOf(item: EvidenceItem): CheckProvenance {
   return {
@@ -209,7 +198,7 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
     return { ...base, result: "fail", reason: `${dim} is disproven by ${item.source.actor}`, evidence_ids: ids, provenance };
   }
   // PLAUSIBLE IS NOT PROVEN — in either direction. A provider's reported
-  // location or headcount band ranks a candidate; it neither satisfies a hard
+  // location or size band ranks a candidate; it neither satisfies a hard
   // rule nor rules the candidate out.
   const proven = item.status === "proven";
 
@@ -227,16 +216,19 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
         : { ...base, result: "unknown", reason: `geography ${claimed} is reported, not proven`, evidence_ids: ids, provenance };
     }
     case "company_size": {
-      const r = headcountSatisfied(c.value, item.value);
-      if (r === "fail") {
-        return proven
-          ? { ...base, result: "fail", reason: `headcount ${item.value} is outside the required range`, evidence_ids: ids, provenance }
-          : { ...base, result: "unknown", reason: `headcount ${item.value} is reported outside the range, not verified`, evidence_ids: ids, provenance };
+      // A SIZE CRITERION IS ANSWERED BY THE DECLARED BAND. Band inside the
+      // requested range → pass; fully outside → fail; a partial overlap, or an
+      // exact staff count, cannot be settled by a band → unknown. The LinkedIn
+      // associated-member count is a different dimension and is never read.
+      if (!isSizeBand(item.value)) {
+        return { ...base, result: "unknown", reason: "no declared size band is established", evidence_ids: ids, provenance };
       }
-      if (r === "unknown") return { ...base, result: "unknown", reason: "headcount is not established", evidence_ids: ids, provenance };
+      const required = c.value as { min?: number | null; max?: number | null } | null;
+      const { verdict, reason } = bandSatisfies(required, item.value);
+      if (verdict === "unknown") return { ...base, result: "unknown", reason, evidence_ids: ids, provenance };
       return proven
-        ? { ...base, result: "pass", reason: `headcount ${item.value} is within range`, evidence_ids: ids, provenance }
-        : { ...base, result: "unknown", reason: `headcount ${item.value} is advisory, not proven`, evidence_ids: ids, provenance };
+        ? { ...base, result: verdict, reason, evidence_ids: ids, provenance }
+        : { ...base, result: "unknown", reason: `${reason} — reported on a discovery row, not yet read from the company record`, evidence_ids: ids, provenance };
     }
     case "company_stage": {
       // A STAGE LABEL IS NOT A STAGE DISPROOF. "series_c" does not mention

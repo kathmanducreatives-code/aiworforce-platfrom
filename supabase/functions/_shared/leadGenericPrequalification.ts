@@ -10,9 +10,9 @@
 // cannot support."
 //
 // The first half of that is true. The second half is not. A source without
-// embedded jobs still returns an exact headcount, a description, a domain and a
-// LinkedIn URL — and a company whose KNOWN, EXACT headcount is 500 on a 10-150
-// mission can be refused for free, before two paid calls and roughly 26 seconds
+// embedded jobs still returns a declared size band, a description, a domain and
+// a LinkedIn URL — and a company whose PROVEN declared band is 501-1000 on a
+// 10-150 mission can be refused for free, before two paid calls and roughly 26 seconds
 // of identity resolution and enrichment are spent proving what the row already
 // said. Every non-YC pool paid that, for every company, including the ones
 // qualification was about to reject.
@@ -29,7 +29,7 @@
 // A gate fires only when the field is PRESENT and its declared trust permits
 // it. Add a discovery actor tomorrow, declare its field trust in its
 // normalizer — which is required anyway — and it is triaged here with no change
-// to this file. That is the same mechanism `EXACT_HEADCOUNT_SOURCES` uses for
+// to this file. That is the same mechanism `MEMBER_COUNT_SERIES_SOURCES` uses for
 // the growth series, generalised from one field to all of them.
 //
 // ── WHAT MAY EXCLUDE, AND WHAT MAY ONLY RANK ────────────────────────────────
@@ -38,13 +38,14 @@
 //
 //   artifact       a directory or platform page is not a prospect. Y
 //                  Combinator's own page was once counted as a qualified lead.
-//   employee_size  an exact headcount outside a range the MISSION set, when
-//                  either it is PROVEN (`evidenceAuthority`) or settling it
-//                  would first need a paid identity search. A discovery row's
-//                  count is PLAUSIBLE: for a candidate that already carries its
-//                  LinkedIn identity — one cheap enrichment away from a proven
-//                  count — it ranks the company down and enrichment decides
-//                  (canary 87ecf153).
+//   employee_size  a declared size band wholly outside a range the MISSION
+//                  set, when either it is PROVEN (`evidenceAuthority`) or
+//                  settling it would first need a paid identity search. A
+//                  discovery row's band is PLAUSIBLE: for a candidate that
+//                  already carries its LinkedIn identity — one cheap enrichment
+//                  away from a proven band — it ranks the company down and
+//                  enrichment decides. The LinkedIn associated-member count is
+//                  never a size gate (companySize.ts).
 //
 // Everything else — a description, an identity, a hiring flag, an industry
 // label — ranks. This is the three-valued discipline the ICP gate already
@@ -63,6 +64,7 @@
 // PURE. No network, provider, model or database access.
 
 import { mayRejectOnReportedSize } from "./evidenceAuthority.ts";
+import { bandSatisfies, sizeBandLabel } from "./companySize.ts";
 import type {
   NormalizedHiringCompany, FieldTrust,
 } from "./hiringActorNormalizers.ts";
@@ -88,7 +90,7 @@ export const GENERIC_PREQUALIFICATION_VERSION =
  * is ownership and not a business model; the benchmark says so in those words.
  *
  * `unsafe` is a field OBSERVED WRONG on live data. `employee_range_advisory`
- * carries it on every actor that returns one, and the funding source's industry
+ * (a non-LinkedIn provider's size wording) carries it, and the funding source's industry
  * tags carry it because run 0XchPqe0cJpx0Yc2T returned a biotech tagged
  * "Retail". Gating on an unsafe field is not a strict rule, it is a wrong one.
  */
@@ -165,67 +167,65 @@ export function prequalifyNormalizedCompany(
   const reasons: string[] = [];
   let score = 0;
 
-  // ── SIZE: THE ONE GATE WORTH PAYING FOR ──────────────────────────────────
+  // ── SIZE: THE DECLARED BAND, THE ONE GATE WORTH PAYING FOR ───────────────
   //
-  // Read from `employee_count` and NEVER from `employee_range_advisory`. The
-  // advisory band is declared `unsafe` by every normalizer that sets it and
-  // was observed contradicting the exact count in four of eight rows on the
-  // LinkedIn company search. `mayGateOn` is what enforces that, so the rule is
-  // the trust declaration rather than a field name spelled out here.
-  const exactCount = typeof company.employee_count === "number" &&
-    Number.isFinite(company.employee_count) && company.employee_count > 0 &&
-    mayGateOn(company, "employee_count")
-      ? company.employee_count
-      : null;
-
+  // Read from `company_size_band` — the company's own declared band, the field
+  // LinkedIn's size filter reads (companySize.ts). NEVER from the LinkedIn
+  // associated-member count: that counts members who list the company, not
+  // staff, and it neither ranks nor rejects on size. A non-LinkedIn advisory
+  // text (a YC `teamSize`) is not a band and stays unverified.
+  const band = company.company_size_band && mayGateOn(company, "company_size_band")
+    ? company.company_size_band : null;
+  const bandVerdict = band ? bandSatisfies(size, band) : null;
   const size_status: PrequalifiedCompany["size_status"] =
-    exactCount === null ? "size_unverified"
-    : (size.min != null && exactCount < size.min) ? "below_min"
-    : (size.max != null && exactCount > size.max) ? "above_max"
-    : "in_range";
+    !band || !bandVerdict || bandVerdict.verdict === "unknown" ? "size_unverified"
+    : bandVerdict.verdict === "pass" ? "in_range"
+    : (size.max != null && band.min > size.max) ? "above_max"
+    : "below_min";
   const size_fit = size_status === "in_range";
-  // ── A REPORTED COUNT RANKS; ONLY A PROVEN ONE MAY REJECT ─────────────────
+  // ── A REPORTED BAND RANKS; ONLY A PROVEN ONE MAY REJECT ──────────────────
   //
-  // The row's count is the SOURCE's statement. Whether it may reject before
-  // enrichment is the authority layer's decision, not this module's: a
-  // discovery row is PLAUSIBLE for company size, so an out-of-range figure
-  // ranks the company down and enrichment's proven count decides.
-  const sizeAuthority = exactCount === null ? null
+  // Whether the band may reject before enrichment is the authority layer's
+  // decision: a discovery row's band is PLAUSIBLE, so an out-of-range band
+  // ranks the company down and the company record's band decides.
+  const sizeAuthority = band === null ? null
     : mayRejectOnReportedSize(company.raw_ref?.actor_key ?? company.source_provenance);
   // CHEAP TO SETTLE: a candidate that already carries its LinkedIn identity is
-  // one company-record read (~$0.004) from a PROVEN count. One without it
-  // would first need a paid identity search (~$0.06), and there the free
-  // reported count may still exclude — the cost of settling it exceeds what
-  // the exclusion saves.
+  // one company-record read (~$0.004) from a PROVEN band. One without it would
+  // first need a paid identity search (~$0.06), and there the free reported
+  // band may still exclude — settling it costs more than the exclusion saves.
   const enrichmentIsCheap = !!company.linkedin_company_url;
   const sizeMayReject = sizeAuthority?.authority === "proven" || !enrichmentIsCheap;
   const outOfRange = size_status === "above_max" || size_status === "below_min";
+  const bandText = band ? sizeBandLabel(band) : null;
 
   if (size_fit) {
     score += 30;
-    reasons.push(`exact headcount ${exactCount} is inside the target range`);
+    reasons.push(`declared size band ${bandText} is inside the target range`);
   } else if (outOfRange && !sizeMayReject) {
     score -= 25;
     reasons.push(
-      `reported headcount ${exactCount} is ${size_status === "above_max" ? "above the maximum" : "below the minimum"} — ` +
-      `ranked down, not excluded: a reported figure is not proof (${sizeAuthority?.rule}), ` +
-      `the company already carries its LinkedIn identity, and enrichment's exact count decides`);
+      `declared size band ${bandText} is ${size_status === "above_max" ? "above the maximum" : "below the minimum"} — ` +
+      `ranked down, not excluded: a discovery row's band is not proof (${sizeAuthority?.rule}), ` +
+      `the company already carries its LinkedIn identity, and the company record's band decides`);
   } else if (size_status === "above_max") {
     reasons.push(
-      `exact headcount ${exactCount} exceeds the maximum — excluded before ` +
+      `declared size band ${bandText} exceeds the maximum — excluded before ` +
       `identity resolution and enrichment, which is two paid calls this row ` +
       `already answered`);
   } else if (size_status === "below_min") {
     reasons.push(
-      `exact headcount ${exactCount} is below the minimum — excluded before ` +
+      `declared size band ${bandText} is below the minimum — excluded before ` +
       `any paid call`);
+  } else if (bandVerdict?.verdict === "unknown") {
+    reasons.push(`size unsettled: ${bandVerdict.reason}`);
   } else if (company.employee_range_advisory) {
-    // SAID, NOT USED. Naming the band and refusing to act on it is the
+    // SAID, NOT USED. Naming the figure and refusing to act on it is the
     // difference between a pre-pass that is quiet about what it ignored and
     // one an auditor can check.
     reasons.push(
-      `size unverified: the only figure is the advisory band ` +
-      `"${company.employee_range_advisory}", which is declared unsafe and may ` +
+      `size unverified: the only figure is the advisory text ` +
+      `"${company.employee_range_advisory}", which is not a declared band and may ` +
       `not exclude anyone`);
   } else {
     reasons.push("size unverified — ranks below every verified in-range company");
@@ -288,7 +288,9 @@ export function prequalifyNormalizedCompany(
     // a fabricated fact where a downstream reader expects a provider's.
     yc_url: null,
     yc_id: null,
-    team_size: exactCount,
+    // A YC-SHAPED FIELD: a team size. No non-YC source reports one — the
+    // LinkedIn member count is not staff — so it is honestly empty here.
+    team_size: null,
     batch: null,
     one_liner: null,
     locations: company.geography,
@@ -326,7 +328,7 @@ export interface GenericPrequalificationResult {
   companies: PrequalifiedCompany[];
   employee_size_excluded: number;
   eligible_companies: number;
-  /** How many rows carried an exact, trusted headcount at all. */
+  /** How many rows carried a trusted declared size band at all. */
   companies_with_trusted_size: number;
   /** How many carried a description — the ICP gate's primary input. */
   companies_with_description: number;
@@ -380,7 +382,7 @@ export function prequalifyDiscoveredCompanies(
     }
     byKey.set(scored.company_key, scored);
 
-    if (scored.team_size !== null) withTrustedSize++;
+    if (c.company_size_band && mayGateOn(c, "company_size_band")) withTrustedSize++;
     if ((c.description ?? "").trim().length > 0) withDescription++;
   }
 

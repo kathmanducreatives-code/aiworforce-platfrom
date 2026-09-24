@@ -373,9 +373,9 @@ export async function executeCompanyFirstRoute(
       company_name: e?.company_name ?? r.company.company_name,
       identity_status: r.identity.status,
       enrichment_complete: !!e,
-      // Exact count from ENRICHMENT only. YC teamSize and employeeCountRange
-      // are never read here — both contradicted reality in the benchmark.
-      employee_count: e?.employee_count ?? null,
+      // The DECLARED band from ENRICHMENT only (companySize.ts). A YC teamSize
+      // and the LinkedIn associated-member count are never size facts here.
+      company_size_band: e?.company_size_band ?? null,
       employee_range_advisory: e?.employee_range_advisory ?? r.company.employee_range_advisory,
       employee_min: opts.brain?.employee_min ?? null,
       employee_max: opts.brain?.employee_max ?? null,

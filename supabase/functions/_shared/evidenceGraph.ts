@@ -25,7 +25,7 @@ export const EVIDENCE_GRAPH_VERSION = "evidence-graph-v1" as const;
 
 /** Dimensions where two different values cannot both be true at once. */
 export const SINGLE_VALUED: ReadonlySet<EvidenceDimension> = new Set<EvidenceDimension>([
-  "identity", "geography", "headcount", "business_model", "company_stage", "industry",
+  "identity", "geography", "headcount", "company_size_band", "linkedin_member_count", "business_model", "company_stage", "industry",
 ]);
 
 const METHOD_RANK = { provider_field: 3, deterministic_derivation: 2, model_extraction: 1 } as const;
@@ -61,7 +61,12 @@ function valueKey(e: EvidenceItem): string {
     const r = v as Record<string, unknown>;
     return canonicalJson([r.linkedin_company_url ?? null, r.domain ?? null]);
   }
-  if (e.dimension === "headcount" && typeof v === "number") {
+  if (e.dimension === "company_size_band" && v && typeof v === "object") {
+    // A band is its bounds; the source label is not part of the fact.
+    const b = v as { min?: unknown; max?: unknown };
+    return canonicalJson([b.min ?? null, b.max ?? null]);
+  }
+  if ((e.dimension === "headcount" || e.dimension === "linkedin_member_count") && typeof v === "number") {
     // Two sources a few people apart are the same claim, not a conflict.
     return canonicalJson(v < 10 ? Math.round(v) : Math.round(Math.log(v) / Math.log(1.25)));
   }
@@ -169,7 +174,11 @@ const REGISTRY_DIMENSION: Readonly<Partial<Record<EvidenceType, Dim>>> = Object.
   // Identity is the union's (entityResolution), not a registry claim: the
   // registry's website/identity_match values are a different shape.
   company_description: "web_claim", company_industry: "industry",
-  employee_count: "headcount", company_location: "geography", job_posting: "job", yc_job: "job",
+  // The registry's `employee_count` is the LinkedIn record's `employeeCount`:
+  // associated members, not staff (companySize.ts). Filed where it cannot
+  // answer a size criterion.
+  employee_count: "linkedin_member_count", linkedin_associated_members: "linkedin_member_count",
+  company_size_band: "company_size_band", company_location: "geography", job_posting: "job", yc_job: "job",
   yc_company_record: "company_stage", funding_signal: "funding", expansion_signal: "expansion",
   launch_signal: "product_launch", web_page: "web_claim",
 });
@@ -207,7 +216,7 @@ export function requiredEvidenceDimensions(
   signals: readonly string[] = [],
 ): Dim[] {
   const map: Record<ExecutionDimension, Dim | null> = {
-    geography: "geography", industry: "industry", company_size: "headcount",
+    geography: "geography", industry: "industry", company_size: "company_size_band",
     company_stage: "company_stage", company_kind: null, exclusion: null,
   };
   const out = new Set<Dim>();

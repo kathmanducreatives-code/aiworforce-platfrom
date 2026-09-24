@@ -1,10 +1,15 @@
 // HEADCOUNT GROWTH IS A DELTA, AND A DELTA NEEDS TWO OBSERVATIONS.
 //
+// WHAT IS DIFFERENCED (corrected 2026-09-24): the LinkedIn ASSOCIATED-MEMBER
+// count — members who list the company as a current position — not staff
+// (companySize.ts). A rising series is growth in LinkedIn presence, a proxy for
+// headcount growth, and every verdict says so.
+//
 // ── WHY THIS IS NOT AN ACTOR ────────────────────────────────────────────────
 //
 // Every other signal in this system is answered by asking a provider. Growth
 // cannot be: no registered source returns "this company grew". `harvestapi/
-// linkedin-company` returns an authoritative employee COUNT — one number, as of
+// linkedin-company` returns an associated-member COUNT — one number, as of
 // now — and the scenario matrix has said since Phase 0 that a single snapshot
 // shows hiring, not growth, and that "nothing registered stores history".
 //
@@ -31,7 +36,7 @@ export const HEADCOUNT_GROWTH_VERSION = "headcount-growth-v1" as const;
  * The storage this capability is waiting on, stated so it cannot be forgotten.
  *
  * Two dated employee counts per company, written whenever `company_enrichment`
- * produces an authoritative `employee_count`. Nothing in the current schema
+ * produces an associated-member count. Nothing in the current schema
  * keeps them, so `evaluateHeadcountGrowth` returns `insufficient_evidence` for
  * every company today — truthfully, and by construction rather than by accident.
  */
@@ -40,12 +45,13 @@ export const HEADCOUNT_SNAPSHOT_STORAGE_NOTE =
   "stores them yet, so this capability reports insufficient_evidence until one " +
   "exists. The reading itself is already produced by company_enrichment.";
 
-/** One dated observation of a company's headcount. */
+/** One dated observation of a company's LinkedIn associated-member count. */
 export interface HeadcountSnapshot {
   /** ISO date the count was OBSERVED, not the date the company published it. */
   observed_at: string;
   /**
-   * Exact headcount. Must come from enrichment.
+   * LinkedIn associated members (the store's `employee_count` column), from the
+   * company record. NOT staff.
    *
    * A provider's band ("11-50") is explicitly not accepted: the catalog marks
    * every band advisory, and differencing two bands produces a number that
@@ -167,7 +173,7 @@ export function evaluateHeadcountGrowth(
   if (percent_change >= minPercent) {
     return {
       ...base, verdict: "growth_confirmed",
-      reason: `headcount rose from ${from.employee_count} to ${to.employee_count} ` +
+      reason: `LinkedIn associated members (a proxy, not staff) rose from ${from.employee_count} to ${to.employee_count} ` +
         `(${percent_change}%) over ${days_between} days, from readings dated ` +
         `${from.observed_at.slice(0, 10)} and ${to.observed_at.slice(0, 10)}.`,
     };
@@ -175,7 +181,7 @@ export function evaluateHeadcountGrowth(
 
   return {
     ...base, verdict: "no_growth",
-    reason: `headcount moved from ${from.employee_count} to ${to.employee_count} ` +
+    reason: `LinkedIn associated members (a proxy, not staff) moved from ${from.employee_count} to ${to.employee_count} ` +
       `(${percent_change}%) over ${days_between} days, below the ${minPercent}% ` +
       `threshold. This is a measured NON-result, not a missing one.`,
   };

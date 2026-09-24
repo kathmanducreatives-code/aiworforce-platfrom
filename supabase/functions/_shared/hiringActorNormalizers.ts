@@ -4,13 +4,13 @@
 // does not supply a field, the normalizer emits null and records WHY in
 // `missing_fields`. It never infers one field from another: the benchmark's
 // central lesson is that a plausible-looking value from the wrong field
-// (employeeCountRange standing in for employeeCount, a provider industry label
+// (one LinkedIn size figure standing in for another, a provider industry label
 // standing in for a real industry) is worse than an honest null, because a null
 // stops a gate while a wrong value passes one.
 //
 // Pure. No I/O.
 
-import { usableHeadcount } from "./headcountValue.ts";
+import { linkedInAssociatedMemberCount, linkedInDeclaredSizeBand, type CompanySizeBand } from "./companySize.ts";
 import { normalizeCompanyLinkedInUrl, normalizeWebsite, sanitizeUrl } from "./structuredCompanyEnrichment.ts";
 
 export type FieldTrust = "direct" | "alias" | "transformed" | "semantic" | "unsafe";
@@ -27,9 +27,21 @@ export interface NormalizedHiringCompany {
   provider_industry: string | null;
   /** LinkedIn industry id + hierarchy, when enrichment supplied it. */
   industry_ids: Array<{ id: string; name: string; hierarchy: string | null }>;
-  /** Exact headcount. Only ever from enrichment or full mode. */
-  employee_count: number | null;
-  /** ADVISORY. Kept apart from employee_count because the two contradict. */
+  /**
+   * LinkedIn ASSOCIATED MEMBERS — members who list this company as a current
+   * position. NOT a staff headcount (see companySize.ts): it never passes,
+   * fails or contests a size claim. Informational only.
+   */
+  linkedin_associated_member_count: number | null;
+  /**
+   * The company's DECLARED size band (LinkedIn About tab, `employeeCountRange`).
+   * The canonical answer to an "N–M employees" criterion. Structured, never text.
+   */
+  company_size_band: CompanySizeBand | null;
+  /**
+   * A NON-LinkedIn provider's own size wording (YC `teamSize`, a funding
+   * bucket). ADVISORY text; never the LinkedIn band, which is structured above.
+   */
   employee_range_advisory: string | null;
   geography: string | null;
   /**
@@ -115,8 +127,10 @@ export function normalizeMemo23Company(r: Record<string, unknown>): NormalizedHi
     // YC "B2B" is a YC VERTICAL, not an industry. Kept out of industry_ids.
     provider_industry: null,
     industry_ids: [],
-    // teamSize is self-reported and stale (ShipBob returned 1) — never exact.
-    employee_count: null,
+    // teamSize is self-reported and stale (ShipBob returned 1) — never a band,
+    // never a member count; advisory text only.
+    linkedin_associated_member_count: null,
+    company_size_band: null,
     employee_range_advisory: n(r.teamSize) !== null ? `yc_self_reported:${r.teamSize}` : null,
     geography: s(r.allLocations) ?? (Array.isArray(r.regions) ? (r.regions as string[]).join(", ") : null),
     company_type: null,
@@ -138,7 +152,7 @@ export function normalizeMemo23Company(r: Record<string, unknown>): NormalizedHi
   };
   out.missing_fields = [
     "linkedin_company_url:absent_from_actor_schema",
-    "employee_count:yc_team_size_is_self_reported_not_exact",
+    "company_size_band:yc_team_size_is_self_reported_advisory_only",
     "provider_industry:yc_vertical_is_not_an_industry",
     ...miss(out as unknown as Record<string, unknown>, ["company_name", "website", "description"]),
   ];
@@ -185,7 +199,8 @@ export function normalizeSolidcodeCompany(r: Record<string, unknown>): Normalize
     description: s(r.longDescription) ?? s(r.shortDescription),
     provider_industry: null,
     industry_ids: [],
-    employee_count: null,
+    linkedin_associated_member_count: null,
+    company_size_band: null,
     employee_range_advisory: n(r.teamSize) !== null ? `yc_self_reported:${r.teamSize}` : null,
     geography: s(r.location) ?? s(r.country),
     company_type: null,
@@ -206,7 +221,7 @@ export function normalizeSolidcodeCompany(r: Record<string, unknown>): Normalize
     raw_ref: { actor_key: "apify_yc_companies_solidcode", source_id: (r.companyId as number) ?? null },
   };
   out.missing_fields = [
-    "employee_count:yc_team_size_is_self_reported_not_exact",
+    "company_size_band:yc_team_size_is_self_reported_advisory_only",
     "provider_industry:yc_vertical_is_not_an_industry",
     ...miss(out as unknown as Record<string, unknown>, ["linkedin_company_url", "website", "description"]),
   ];
@@ -221,13 +236,6 @@ function linkedinIndustries(r: Record<string, unknown>) {
     id: String(x.id ?? ""), name: String(x.name ?? ""),
     hierarchy: s(x.hierarchy),
   })).filter((x) => x.id || x.name);
-}
-
-function rangeText(r: Record<string, unknown>): string | null {
-  const er = r.employeeCountRange as Record<string, unknown> | undefined;
-  if (!er || typeof er !== "object") return null;
-  const a = n(er.start), b = n(er.end);
-  return a !== null || b !== null ? `${a ?? "?"}-${b ?? "?"}` : null;
 }
 
 /**
@@ -318,9 +326,11 @@ export function normalizeLinkedInCompanyCandidate(
     // short mode gives `industry` (string); full mode gives `industries` (array).
     provider_industry: inds[0]?.name ?? s(r.industry),
     industry_ids: inds,
-    // Present only in full mode; null in short mode. Never taken from the range.
-    employee_count: usableHeadcount(r.employeeCount),
-    employee_range_advisory: rangeText(r),
+    // Two different facts (companySize.ts). The band is sent in both modes; the
+    // member count only in full mode.
+    linkedin_associated_member_count: linkedInAssociatedMemberCount(r),
+    company_size_band: linkedInDeclaredSizeBand(r),
+    employee_range_advisory: null,
     geography: s((Array.isArray(r.locations) && (r.locations as Record<string, unknown>[])[0]
       ? (r.locations as Record<string, unknown>[])[0].linkedinText : null)) ??
       s((r.location as Record<string, unknown> | undefined)?.linkedinText),
@@ -331,7 +341,7 @@ export function normalizeLinkedInCompanyCandidate(
     field_trust: {
       company_name: "direct", linkedin_company_url: "direct", website: "direct",
       description: "direct", provider_industry: "unsafe",
-      employee_count: "direct", employee_range_advisory: "unsafe",
+      linkedin_associated_member_count: "direct", company_size_band: "direct",
       company_type: "semantic", geography: "transformed",
     },
     missing_fields: [],
@@ -340,8 +350,8 @@ export function normalizeLinkedInCompanyCandidate(
   };
   out.missing_fields = [
     "provider_industry:filter_returned_wrong_industries_use_enrichment",
-    "employee_range_advisory:contradicts_exact_count_use_enrichment",
-    ...(out.employee_count === null ? ["employee_count:null_in_short_mode"] : []),
+    "company_size_band:discovery_row_plausible_until_company_record_read",
+    ...(out.linkedin_associated_member_count === null ? ["linkedin_associated_member_count:null_in_short_mode"] : []),
   ];
   return out;
 }
@@ -461,8 +471,9 @@ export function normalizeLinkedInCompanyEnriched(
     description: s(r.description),
     provider_industry: inds[0]?.name ?? null,
     industry_ids: inds,
-    employee_count: usableHeadcount(r.employeeCount),
-    employee_range_advisory: rangeText(r),
+    linkedin_associated_member_count: linkedInAssociatedMemberCount(r),
+    company_size_band: linkedInDeclaredSizeBand(r),
+    employee_range_advisory: null,
     geography: enrichedGeography(r.locations),
     location_entries: linkedInLocationEntries(r.locations),
     company_type: s(r.companyType),
@@ -473,7 +484,7 @@ export function normalizeLinkedInCompanyEnriched(
     field_trust: {
       company_name: "direct", linkedin_company_url: "direct", website: "direct",
       description: "direct", provider_industry: "direct", industry_ids: "direct",
-      employee_count: "direct", employee_range_advisory: "unsafe",
+      linkedin_associated_member_count: "direct", company_size_band: "direct",
       company_type: "semantic", geography: "transformed",
     },
     missing_fields: [],
@@ -481,7 +492,7 @@ export function normalizeLinkedInCompanyEnriched(
   };
   out.missing_fields = [
     ...(out.startup_evidence === null ? ["founded_year:frequently_null_from_actor"] : []),
-    "employee_range_advisory:contradicts_exact_count_advisory_only",
+    ...(out.company_size_band === null ? ["company_size_band:not_declared_on_record"] : []),
   ];
   return out;
 }
@@ -512,7 +523,8 @@ export function normalizeLinkedInJob(r: Record<string, unknown>): NormalizedHiri
 //
 // A discovery job row carries the EMPLOYER'S LinkedIn company record, not just
 // a name — verified live 2026-09-16 on 10/10 rows: `company.linkedinUrl`,
-// `website`, `universalName`, exact `employeeCount`, `industries`, `locations`
+// `website`, `universalName`, `employeeCountRange` (declared band) and
+// `employeeCount` (associated members), `industries`, `locations`
 // (with the headquarter flagged). So identity is taken from the posting and the
 // guarded Company Search is never needed for these employers.
 
@@ -535,8 +547,9 @@ export function jobEmployerToCompany(r: Record<string, unknown>): NormalizedHiri
     description: s(c.description),
     provider_industry: inds[0]?.name ?? null,
     industry_ids: inds,
-    employee_count: usableHeadcount(c.employeeCount),
-    employee_range_advisory: rangeText(c),
+    linkedin_associated_member_count: linkedInAssociatedMemberCount(c),
+    company_size_band: linkedInDeclaredSizeBand(c),
+    employee_range_advisory: null,
     geography: hqText || null,
     company_type: null,
     startup_evidence: null,
@@ -545,14 +558,14 @@ export function jobEmployerToCompany(r: Record<string, unknown>): NormalizedHiri
     source_provenance: "harvestapi/linkedin-job-search",
     field_trust: {
       company_name: "direct", linkedin_company_url: "direct", website: "direct",
-      description: "direct", provider_industry: "direct", employee_count: "direct",
-      employee_range_advisory: "unsafe", geography: "transformed",
+      description: "direct", provider_industry: "direct", linkedin_associated_member_count: "direct",
+      company_size_band: "direct", geography: "transformed",
     },
     missing_fields: [],
     raw_ref: { actor_key: "apify_linkedin_job_search", source_id: s(r.id) },
   };
   out.missing_fields = [
-    ...(out.employee_count === null ? ["employee_count:absent_on_job_row"] : []),
+    ...(out.company_size_band === null ? ["company_size_band:absent_on_job_row"] : []),
     ...(out.geography === null ? ["geography:no_headquarter_on_job_row"] : []),
   ];
   return out;
@@ -878,7 +891,8 @@ export function fundingRoundToCompany(
     description: null,
     provider_industry: r.provider_industry,
     industry_ids: [],
-    employee_count: null,
+    linkedin_associated_member_count: null,
+    company_size_band: null,
     employee_range_advisory: r.employee_range_advisory,
     geography: r.geography,
     company_type: null,
@@ -902,7 +916,7 @@ export function fundingRoundToCompany(
     raw_ref: r.raw_ref,
   };
   out.missing_fields = miss(out as unknown as Record<string, unknown>, [
-    "company_name", "canonical_domain", "linkedin_company_url", "employee_count",
+    "company_name", "canonical_domain", "linkedin_company_url", "company_size_band",
   ]);
   return out;
 }

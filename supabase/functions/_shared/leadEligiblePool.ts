@@ -24,6 +24,7 @@
 //
 // PURE. No network, provider, model or database access.
 
+import { bandSatisfies } from "./companySize.ts";
 import type { EvidenceRegistry } from "./leadEvidenceRegistry.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 
@@ -77,7 +78,11 @@ export interface PoolGateOptions {
   requireResolvedIdentity?: boolean;
   employee_min?: number | null;
   employee_max?: number | null;
-  /** How far above the ceiling counts as CLEARLY above. */
+  /**
+   * RETIRED (2026-09-24). A tolerance absorbed noise in a count read as staff;
+   * size now gates on the DECLARED band, which is wholly outside a range or it
+   * is not. Accepted and ignored so older callers still compile.
+   */
   ceiling_tolerance?: number;
 }
 
@@ -243,7 +248,6 @@ export function buildEligiblePool(
   const eligible: PoolCandidate[] = [];
   const excluded: ExcludedCandidate[] = [];
   const seen = new Set<string>();
-  const tolerance = opts.ceiling_tolerance ?? 1.0;
   const requiredGeo = opts.mission.company_profile.locations ?? [];
 
   const drop = (c: PoolCandidate, reason: ExclusionReason, detail: string) =>
@@ -281,19 +285,13 @@ export function buildEligiblePool(
         `established "${f.geography}" is outside ${requiredGeo.join(", ")}`);
       continue;
     }
-    // ONLY A VERIFIED COUNT GATES. A null headcount is unknown, and unknown is
-    // a REVIEW question, not an exclusion.
-    if (f.employee_count != null) {
-      const max = opts.employee_max ?? null;
-      const min = opts.employee_min ?? null;
-      if (max != null && f.employee_count > max * (1 + tolerance)) {
-        drop(c, "verified_employee_size_mismatch",
-          `${f.employee_count} is clearly above the ${max} ceiling`);
-        continue;
-      }
-      if (min != null && f.employee_count < min / (1 + tolerance)) {
-        drop(c, "verified_employee_size_mismatch",
-          `${f.employee_count} is clearly below the ${min} floor`);
+    // ONLY A DECLARED BAND WHOLLY OUTSIDE THE RANGE GATES (companySize.ts).
+    // No band, a partial overlap or an exact count is a REVIEW question, not
+    // an exclusion; the LinkedIn associated-member count is never read here.
+    if (f.company_size_band != null && (opts.employee_min != null || opts.employee_max != null)) {
+      const v = bandSatisfies({ min: opts.employee_min ?? null, max: opts.employee_max ?? null }, f.company_size_band);
+      if (v.verdict === "fail") {
+        drop(c, "verified_employee_size_mismatch", v.reason);
         continue;
       }
     }

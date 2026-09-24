@@ -26,6 +26,8 @@
 // PURE. The classifier is INJECTED, so the whole decision is testable with no
 // model call and no network.
 
+import { sizeBandLabel, type CompanySizeBand } from "./companySize.ts";
+
 export const SEMANTIC_FIT_VERSION = "company-brain-semantic-fit-v1" as const;
 
 export type BusinessModel =
@@ -80,7 +82,10 @@ export interface SemanticFitInput {
   /** WEAK METADATA. Never decisive on its own, in either direction. */
   linkedin_industry: string | null;
   linkedin_industry_ids: string[];
-  employee_count: number | null;
+  /** The company's DECLARED size band (companySize.ts). */
+  company_size_band: CompanySizeBand | null;
+  /** LinkedIn associated members — NOT staff. Context for the model only. */
+  linkedin_associated_member_count: number | null;
   employee_advisory: string | null;
   geography: string | null;
   /** The commercial signal already proven by the hiring policy. */
@@ -158,7 +163,7 @@ export function applyMissionPrecedence(i: {
 
 export type HardGate =
   | "identity_mismatch" | "inactive_company" | "unsupported_geography"
-  | "employee_count_far_above_ceiling" | "consumer_only" | "no_commercial_signal"
+  | "size_band_above_ceiling" | "consumer_only" | "no_commercial_signal"
   | "no_agentory_use_case";
 
 export interface HardGateInput {
@@ -166,7 +171,8 @@ export interface HardGateInput {
   active: boolean;
   geography: string | null;
   required_geography: string | null;
-  employee_count: number | null;
+  /** The DECLARED size band. The LinkedIn member count is never a size gate. */
+  company_size_band: CompanySizeBand | null;
   /**
    * The ceiling, or NULL when nobody stated one.
    *
@@ -192,9 +198,6 @@ export interface HardGateInput {
   mission_owns_hiring_role?: boolean;
 }
 
-/** How far above the ceiling counts as "clearly" above. */
-export const CEILING_TOLERANCE = 1.0;
-
 /**
  * The facts that reject on their own.
  *
@@ -212,12 +215,13 @@ export function failedHardGates(i: HardGateInput): HardGate[] {
       !i.geography.toLowerCase().includes(i.required_geography.toLowerCase())) {
     failed.push("unsupported_geography");
   }
-  // A VERIFIED count clearly above a STATED ceiling. An unverified or
-  // borderline count is REVIEW — the audited data had YC self-reports off by up
-  // to 23x — and an ABSENT ceiling is no gate at all.
-  if (i.employee_count != null && i.employee_ceiling != null &&
-      i.employee_count > i.employee_ceiling * (1 + CEILING_TOLERANCE)) {
-    failed.push("employee_count_far_above_ceiling");
+  // A DECLARED band wholly above a STATED ceiling. There is no tolerance: it
+  // existed to absorb noise in a count (a member count read as staff), and a
+  // band is either entirely above the ceiling or it is not. An ABSENT ceiling
+  // is no gate at all; the member count is never read.
+  if (i.company_size_band != null && i.employee_ceiling != null &&
+      i.company_size_band.min > i.employee_ceiling) {
+    failed.push("size_band_above_ceiling");
   }
   if (i.semantic?.business_model === "consumer") failed.push("consumer_only");
   // AN ABSENT COMMERCIAL TIER IS NOT A FALSIFIABLE FACT WHEN THE MISSION NAMED
@@ -255,7 +259,8 @@ export function failedHardGates(i: HardGateInput): HardGate[] {
 //                                     contain "united states" and the check
 //                                     rejected the very companies it was meant
 //                                     to keep.
-//   employee_count_far_above_ceiling  against a ceiling the Mission never set.
+//   employee_count_far_above_ceiling  against a ceiling the Mission never set
+//                                     (now `size_band_above_ceiling`).
 //
 // Both are SEMANTIC judgements wearing a deterministic costume. Whether a
 // location satisfies "the United States", and whether a company's size suits a
@@ -277,7 +282,7 @@ const INTEGRITY_GATES: ReadonlySet<HardGate> = new Set<HardGate>(["identity_mism
  * Verified facts the MISSION ITSELF made disqualifying.
  *
  * These may still reject after the evaluator passes, because the user stated the
- * constraint and the fact is checkable. `employee_count_far_above_ceiling` is
+ * constraint and the fact is checkable. `size_band_above_ceiling` is
  * here ONLY because its ceiling is now nullable: it can fire only when the
  * Mission set a bound, so a workspace preference can never reach this set.
  *
@@ -288,7 +293,7 @@ const INTEGRITY_GATES: ReadonlySet<HardGate> = new Set<HardGate>(["identity_mism
  * they simply no longer carry a veto.
  */
 const MISSION_STATED_GATES: ReadonlySet<HardGate> = new Set<HardGate>([
-  "inactive_company", "employee_count_far_above_ceiling",
+  "inactive_company", "size_band_above_ceiling",
 ]);
 
 // ───────────────────────── grounding: a verifier, not a second authority ────
@@ -650,7 +655,8 @@ export function buildSemanticFitPrompt(i: SemanticFitInput, policy: AppliedPolic
     `Website description: ${i.website_description ?? "(none)"}`,
     `LinkedIn description: ${i.linkedin_description ?? "(none)"}`,
     `LinkedIn industry (WEAK METADATA — never decisive alone): ${i.linkedin_industry ?? "(none)"}`,
-    `Employees: ${i.employee_count ?? "(unknown)"}${i.employee_advisory ? ` (advisory: ${i.employee_advisory})` : ""}`,
+    `Declared company size band: ${i.company_size_band ? sizeBandLabel(i.company_size_band) + " employees" : "(unknown)"}${i.employee_advisory ? ` (advisory: ${i.employee_advisory})` : ""}`,
+    `LinkedIn associated members (people who list the company on their profile — NOT a staff count): ${i.linkedin_associated_member_count ?? "(unknown)"}`,
     `Location: ${i.geography ?? "(unknown)"}`,
     `Current commercial signal: ${i.commercial_signal ?? "(none)"} (tier ${i.commercial_tier ?? "none"})`,
     "",
@@ -883,7 +889,8 @@ export function buildClassifierPayload(
       yc_description: i.yc_description,
       website_description: i.website_description,
       linkedin_description: i.linkedin_description,
-      employee_count: i.employee_count, employee_advisory: i.employee_advisory,
+      company_size_band: i.company_size_band, linkedin_associated_member_count: i.linkedin_associated_member_count,
+      employee_advisory: i.employee_advisory,
       geography: i.geography,
     },
     signal: { strongest: i.commercial_signal, tier: i.commercial_tier },

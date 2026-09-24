@@ -11,6 +11,7 @@
 // Nothing here re-implements a provider normalizer, an Actor input compiler, an
 // identity resolver or the Company Brain gate. Those are correct, tested, and
 // the source of the evidence discipline this engine depends on. The engine
+import { sizeBandLabel } from "./companySize.ts";
 import { YC_MEMO23_MAX_SIZES } from "./hiringActorCatalog.ts";
 import { normalizeCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
 import {
@@ -1765,7 +1766,11 @@ function toTriageInput(c: EngineCompany): TriageCompanyInput {
     domain: c.company.canonical_domain ?? null,
     description: p?.one_liner ?? c.company.description ?? null,
     industries: c.company.provider_industry ? [c.company.provider_industry] : [],
-    employee_count: p?.team_size ?? c.company.employee_count ?? null,
+    // TWO SIZE FACTS, NAMED FOR WHAT THEY ARE (companySize.ts). A YC team size
+    // is advisory text; the LinkedIn band is the declared size.
+    declared_size_band: c.company.company_size_band ? sizeBandLabel(c.company.company_size_band)
+      : p?.team_size != null ? `yc_self_reported:${p.team_size}` : null,
+    linkedin_associated_members: c.company.linkedin_associated_member_count ?? null,
     location: p?.locations ?? c.company.geography ?? null,
     open_roles: (c.yc_open_jobs ?? []).map((j) => j.title).filter(Boolean) as string[],
   };
@@ -2617,10 +2622,12 @@ export async function runCapabilityPlan(
         provider: a.provider, capability: a.capability,
         reason: a.reason ?? "provider call failed",
       })),
+    // The discovery row's DECLARED BAND when the company record declares a
+    // different one — never a member count, which is not a size.
     employee_count_alternatives:
-      c.enriched?.employee_count != null && c.company.employee_count != null &&
-        c.enriched.employee_count !== c.company.employee_count
-        ? [{ source: "discovery", value: c.company.employee_count }]
+      c.enriched?.company_size_band && c.company.company_size_band &&
+        sizeBandLabel(c.enriched.company_size_band) !== sizeBandLabel(c.company.company_size_band)
+        ? [{ source: "discovery_declared_band", value: sizeBandLabel(c.company.company_size_band) }]
         : [],
     // The pages P2 bought, when a second look is asking about them. Empty on
     // the first pass, which runs before any page has been fetched.
@@ -6908,7 +6915,7 @@ export async function runCapabilityPlan(
                 linkedin_company_url: normalized.linkedin_company_url,
                 canonical_domain: normalized.canonical_domain,
                 company_name: normalized.company_name,
-                employee_count: normalized.employee_count,
+                linkedin_associated_member_count: normalized.linkedin_associated_member_count,
                 source: "apify_linkedin_company_details",
                 task_id: opts.identity?.task_id ?? null,
               });
@@ -7467,7 +7474,13 @@ export async function runCapabilityPlan(
           teamStep?.providers.includes("apify_linkedin_company_employees")) {
         const titles = functionTitlesFor(qualificationCtx.role_vocabulary);
         const maxChecks = Math.max(1, Math.min(3, (opts.remainingLeads ?? effectiveRequestedCount(opts.mission)) * 2));
-        const headcount = (c: EngineCompany) => c.enriched?.employee_count ?? c.company.employee_count ?? null;
+        // ORDERING ONLY: the declared band's floor, then LinkedIn associated
+        // members as a tiebreak. Neither decides anything here.
+        const headcount = (c: EngineCompany) => {
+          const b = c.enriched?.company_size_band ?? c.company.company_size_band;
+          const m = c.enriched?.linkedin_associated_member_count ?? c.company.linkedin_associated_member_count ?? null;
+          return b ? b.min * 1e6 + (m ?? 0) : m;
+        };
         // Smallest first: "first in the function" is only a live question at a
         // small team, so the bounded checks go where the answer can be yes.
         const shortlisted = companies.filter((c) => c.enriched && c.hiring_assessment &&
@@ -8159,7 +8172,7 @@ export async function runCapabilityPlan(
           company_name: src.company_name ?? null,
           identity_status: c.identity?.status ?? "unresolved",
           enrichment_complete: c.enriched !== null,
-          employee_count: src.employee_count ?? null,
+          company_size_band: src.company_size_band ?? null,
           employee_range_advisory: src.employee_range_advisory ?? null,
           // MISSION-RESOLVED BOUNDS. The Mission's range when it stated one;
           // otherwise null, because the workspace Brain's bounds are advisory
@@ -8199,7 +8212,7 @@ export async function runCapabilityPlan(
           active: true,
           geography: src.geography ?? null,
           required_geography: opts.brain?.required_geography ?? null,
-          employee_count: src.employee_count ?? null,
+          company_size_band: src.company_size_band ?? null,
           // THE MISSION'S CEILING, OR NONE AT ALL.
           //
           // This used to fall back to `?? 200` when the Mission set no bound,
@@ -8365,14 +8378,15 @@ export async function runCapabilityPlan(
         //   identity_mismatch          the evidence describes a DIFFERENT company
         //   staffing_or_aggregator     the "company" is a job board
         //   excluded_industry          tier 2 — who this workspace can never sell to
-        //   employee_count_*           tier 1 — and ONLY ever a MISSION-stated
+        //   company_size_band_*        tier 1 — and ONLY ever a MISSION-stated
         //                              bound, because `fitBounds.enforceable`
         //                              passes null for an advisory Brain range,
         //                              so these can physically not fire for a
         //                              workspace preference
         //
-        // None is a judgement and none improves by asking a model: a verified
-        // headcount of 400 against a stated maximum of 150 is arithmetic.
+        // None is a judgement and none improves by asking a model: a declared
+        // band of 201-500 against a stated maximum of 150 is arithmetic. (The
+        // LinkedIn associated-member count is never one of these facts.)
         //
         // `geography_mismatch` is deliberately NOT here. Its gate is
         // `geography.includes(required_geography)`, and "San Francisco, CA, USA"
@@ -8384,7 +8398,7 @@ export async function runCapabilityPlan(
         // absent commercial tier — is evidence now, not a wall.
         const FALSIFIABLE_REJECTIONS: readonly string[] = [
           "identity_mismatch", "staffing_or_aggregator", "excluded_industry",
-          "employee_count_above_max", "employee_count_below_min",
+          "company_size_band_above_max", "company_size_band_below_min",
         ];
         const falsifiable = c.fit.stage === "company_fit_reject" &&
           FALSIFIABLE_REJECTIONS.includes(c.fit.reason);

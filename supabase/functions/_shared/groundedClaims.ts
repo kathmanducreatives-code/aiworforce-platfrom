@@ -25,6 +25,7 @@
 //
 // PURE. No network, provider, model or database access.
 
+import { sizeBandLabel } from "./companySize.ts";
 import {
   type BusinessModelFacet, canonicalBusinessModel, excerptInconsistency, statedFacets, unstatedFacets,
 } from "./businessModelMatch.ts";
@@ -146,7 +147,7 @@ export const CLAIM_EVIDENCE_RULES: Readonly<Record<ClaimType, {
   company_fit: {
     allowed: [
       "company_description", "yc_company_record", "company_website",
-      "company_industry", "company_location", "employee_count", "job_posting", "yc_job",
+      "company_industry", "company_location", "company_size_band", "job_posting", "yc_job",
     ],
     contextual_only: ["company_industry"],
   },
@@ -544,7 +545,8 @@ export function businessModelDecision(v: GroundedVerification): BusinessModelDec
 /**
  * Does this claim restate a hard fact WRONGLY?
  *
- * The model may cite an employee count; it may not turn "11-50" into "23", and
+ * The model may cite the declared size band; it may not turn "11-50" into "23",
+ * nor quote a LinkedIn associated-member count as staff, and
  * it may not name a job title nobody posted. These are the assertions that read
  * as authoritative in a Workbench row, so they are checked against the typed
  * values code established rather than against the prose.
@@ -553,16 +555,29 @@ function hardFactMismatch(c: GroundedClaim, r: EvidenceRegistry): string | null 
   const f = r.hard_facts;
   const text = c.claim;
 
-  // EMPLOYEE COUNT. Any number-of-people assertion must match the typed value.
+  // EMPLOYEE COUNT. No source establishes a staff count: the established size
+  // fact is the DECLARED BAND, and the LinkedIn associated-member count is not
+  // staff (companySize.ts). So any exact number-of-people assertion is a
+  // restatement the evidence cannot support — "390 employees" read off the
+  // member count is exactly the failure this catches.
+  // A RANGE that restates the declared band ("11-50 employees") is the band,
+  // not a count; any other range, or a single number, is not established.
+  const range = /(\d[\d,]*)\s*(?:-|–|—|to)\s*(\d[\d,]*)\s*(?:employees|staff|people|headcount)/i.exec(text);
+  if (range) {
+    const [lo, hi] = [Number(range[1].replace(/,/g, "")), Number(range[2].replace(/,/g, ""))];
+    const b = f.company_size_band;
+    if (b && lo === b.min && hi === b.max) return null;
+    return b == null
+      ? `claims ${lo}-${hi} employees but no company size was established`
+      : `claims ${lo}-${hi} employees; the declared size band is ${sizeBandLabel(b)}`;
+  }
   const emp = /(\d[\d,]*)\s*(?:\+)?\s*(?:employees|staff|people|headcount)/i.exec(text);
   if (emp) {
     const claimed = Number(emp[1].replace(/,/g, ""));
-    if (f.employee_count == null) {
-      return `claims ${claimed} employees but no employee count was established`;
-    }
-    if (Number.isFinite(claimed) && claimed !== f.employee_count) {
-      return `claims ${claimed} employees; the established value is ${f.employee_count}`;
-    }
+    return f.company_size_band == null
+      ? `claims ${claimed} employees but no company size was established`
+      : `claims ${claimed} employees; only the declared size band ${sizeBandLabel(f.company_size_band)} is established, ` +
+        `and no source reports an exact staff count`;
   }
 
   // JOB TITLE. A quoted role must be one that was actually posted.

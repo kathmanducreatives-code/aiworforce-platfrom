@@ -1,8 +1,8 @@
 // HOW STRONG IS THIS FACT, FOR THIS CLAIM?
 //
 // A normalized provider field is not "proven" or "plausible" in itself. The
-// same LinkedIn company record carries an exact `employeeCount` — the provider's
-// own count, the best headcount source the catalogue has — and a free-text
+// same LinkedIn company record carries the company's own declared size band —
+// its statement of how big it is — and a free-text
 // description that says nothing a hard business-model rule may rest on. Status
 // was decided inside the adapter (`observationFromCompany`) as one blanket
 // verdict per dimension, so every LinkedIn fact was `plausible` and no hard
@@ -42,10 +42,18 @@ export const EVIDENCE_AUTHORITY_VERSION = "evidence-authority-v1" as const;
 
 export type EvidenceAuthority = "proven" | "plausible" | "insufficient";
 
-/** The claims a fact can be weighed for. */
+/**
+ * The claims a fact can be weighed for.
+ *
+ * `company_size` — "the company has N–M employees": answered by a DECLARED
+ * size band. `headcount` — an EXACT staff count ("exactly 27 employees"): no
+ * catalogued source reports staff, so nothing proves it. `associated_members`
+ * — how many LinkedIn members list the company: informational, and never a
+ * size claim (companySize.ts).
+ */
 export type AuthorityClaim =
-  | "country" | "headquarters" | "headcount" | "company_size" | "industry" | "business_model"
-  | "funding_stage" | "recently_funded" | "open_role";
+  | "country" | "headquarters" | "headcount" | "company_size" | "associated_members"
+  | "industry" | "business_model" | "funding_stage" | "recently_funded" | "open_role";
 
 /** What a normalized fact IS — not where it came from. */
 export type AuthorityField =
@@ -53,10 +61,13 @@ export type AuthorityField =
   | "location_entries"
   /** The provider's own headquarters flag, on exactly one location. */
   | "headquarters_flag"
-  /** An exact employee count. */
-  | "employee_count"
-  /** A provider headcount band ("51-200"). */
-  | "employee_count_range"
+  /** The company's own declared size band (LinkedIn About tab, `employeeCountRange`). */
+  | "declared_size_band"
+  /**
+   * LinkedIn associated members (`employeeCount`): members who list the company
+   * as a current position. Speaks to NO size claim — not staff, not a band.
+   */
+  | "associated_member_count"
   /** A provider industry taxonomy label / id. */
   | "industry_taxonomy"
   /** Self-description text on a profile: description, tagline, specialties. */
@@ -70,8 +81,8 @@ export type AuthorityField =
 
 /** The evidence dimension each claim is read from — whose validity applies. */
 const CLAIM_DIMENSION: Readonly<Record<AuthorityClaim, EvidenceDimension>> = Object.freeze({
-  country: "geography", headquarters: "geography", headcount: "headcount", company_size: "headcount",
-  industry: "industry", business_model: "business_model",
+  country: "geography", headquarters: "geography", headcount: "headcount",
+  company_size: "company_size_band", associated_members: "linkedin_member_count", industry: "industry", business_model: "business_model",
   funding_stage: "funding", recently_funded: "funding", open_role: "hiring",
 });
 
@@ -79,8 +90,10 @@ const CLAIM_DIMENSION: Readonly<Record<AuthorityClaim, EvidenceDimension>> = Obj
 const FIELD_SPEAKS_TO: Readonly<Record<AuthorityField, readonly AuthorityClaim[]>> = Object.freeze({
   location_entries: ["country"],
   headquarters_flag: ["headquarters", "country"],
-  employee_count: ["headcount", "company_size"],
-  employee_count_range: ["headcount", "company_size"],
+  // A band answers a band claim. It never answers an exact staff count.
+  declared_size_band: ["company_size"],
+  // Members are not staff: this field speaks to size in NO form.
+  associated_member_count: ["associated_members"],
   industry_taxonomy: ["industry"],
   profile_text: ["business_model", "industry"],
   grounded_statement: ["business_model", "industry"],
@@ -89,8 +102,6 @@ const FIELD_SPEAKS_TO: Readonly<Record<AuthorityField, readonly AuthorityClaim[]
 });
 
 export interface AuthorityQuality {
-  /** A single, exact value (an employee COUNT, not a band). */
-  exact?: boolean;
   /** Every entry carries a structured country, so the country is read, not guessed. */
   structured_country?: boolean;
   /** Exactly one entry is flagged headquarters by the provider. */
@@ -117,9 +128,10 @@ const COMPANY_RECORD = ["apify_linkedin_company_details"] as const;
 const FUNDING_PAIR = ["apify_funding_atomus", "apify_funding_pvalyou", "funding_corroboration"] as const;
 
 export const AUTHORITY_RULES: readonly AuthorityRule[] = Object.freeze([
-  { id: "li_record_exact_headcount", sources: COMPANY_RECORD, field: "employee_count", claims: ["headcount", "company_size"],
-    requires: (q) => q.exact === true,
-    why: "the provider's own exact employee count on the company record" },
+  { id: "li_record_declared_size_band", sources: COMPANY_RECORD, field: "declared_size_band", claims: ["company_size"],
+    why: "the company's own declared size band on its LinkedIn record (About tab) — a band, not a staff count" },
+  { id: "li_record_associated_members", sources: COMPANY_RECORD, field: "associated_member_count", claims: ["associated_members"],
+    why: "LinkedIn's count of members who list the company as a current position — not staff, and no size claim" },
   { id: "li_record_structured_country", sources: COMPANY_RECORD, field: "location_entries", claims: ["country"],
     requires: (q) => q.structured_country === true,
     why: "structured company locations, each with its country — presence in a market, not headquarters" },
@@ -179,7 +191,7 @@ const DAY = 86_400_000;
  *
  * `insufficient` — the field does not speak to the claim (company enrichment
  * for a funding stage). `plausible` — it speaks, but no rule lets it prove
- * (a LinkedIn industry label, a headcount band, a discovery row, a stale fact).
+ * (a LinkedIn industry label, a discovery row's size band, a stale fact).
  * `proven` — a named rule's source, field, claim and quality all hold, and the
  * fact is within its validity.
  */
@@ -228,17 +240,14 @@ export function authorityRecord(d: AuthorityDecision): NonNullable<EvidenceItem[
 }
 
 /**
- * MAY A HEADCOUNT REJECT A CANDIDATE BEFORE ENRICHMENT?
+ * MAY A DECLARED SIZE BAND REJECT A CANDIDATE BEFORE ENRICHMENT?
  *
- * Only when its authority for company size is PROVEN. A discovery row's count
- * (company search, a YC `teamSize`, a job's employer record) is PLAUSIBLE: it
- * may rank a candidate down, never out, because enrichment — the company
- * record read after identity resolution — settles the claim for a few tenths of
- * a cent. Canary 87ecf153 pruned both candidates on search-row counts (86 and
- * 2,135 for an 11–50 band) and the claim was never actually decided.
+ * Only when its authority for company size is PROVEN. A discovery row's band
+ * (company search, a job's employer record) is PLAUSIBLE: it may rank a
+ * candidate down, never out, because the company record read after identity
+ * resolution settles the claim for a few tenths of a cent. A member count is
+ * not a size fact at all and is never asked this question.
  */
 export function mayRejectOnReportedSize(source: string, observed_at: string | null = new Date().toISOString()): AuthorityDecision {
-  return authorityForEvidence({
-    claim: "company_size", source, field: "employee_count", observed_at, quality: { exact: true },
-  });
+  return authorityForEvidence({ claim: "company_size", source, field: "declared_size_band", observed_at });
 }

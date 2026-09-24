@@ -183,7 +183,7 @@ export function verificationTargets(
     // A failed hard claim already made the candidate ineligible (skipped
     // above). The other two ways a purchase here is wasted:
     //
-    //   a CHEAP hard claim is still open — country or headcount, answered by
+    //   a CHEAP hard claim is still open — country or declared size band, answered by
     //   the company-enrichment stage, not by a verifier. It is settled first:
     //   if it fails, this purchase bought evidence for a rejected company.
     //   Canary 6e4a93b9 bought atomus for Quark, a candidate screened out

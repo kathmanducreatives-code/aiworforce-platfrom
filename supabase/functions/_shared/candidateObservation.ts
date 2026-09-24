@@ -29,7 +29,14 @@ export const CANDIDATE_OBSERVATION_VERSION = "candidate-observation-v1" as const
 
 /** The frozen plan's evidence dimensions (LEAD_V2_SIGNAL_FIRST_FINAL_IMPLEMENTATION_PLAN, Evidence Model). */
 export type EvidenceDimension =
-  | "identity" | "geography" | "industry" | "business_model" | "headcount" | "headcount_growth"
+  | "identity" | "geography" | "industry" | "business_model"
+  /** An EXACT staff count. No catalogued source proves one (companySize.ts). */
+  | "headcount"
+  /** The company's DECLARED size band — what an "N–M employees" criterion reads. */
+  | "company_size_band"
+  /** LinkedIn associated members. Informational: never a size fact. */
+  | "linkedin_member_count"
+  | "headcount_growth"
   | "funding" | "company_stage" | "hiring" | "job" | "team_composition" | "marketing_function"
   | "founder_led_gtm" | "product_launch" | "expansion" | "leadership_change" | "technology" | "web_claim";
 
@@ -137,7 +144,7 @@ export interface CandidateObservation {
 const DAY = 86_400_000;
 /** How long a fact of this kind stays true enough to act on. Null = durable. */
 export const EVIDENCE_VALIDITY_DAYS: Readonly<Partial<Record<EvidenceDimension, number>>> = Object.freeze({
-  job: 30, hiring: 30, headcount: 90, headcount_growth: 90, funding: 365, company_stage: 365,
+  job: 30, hiring: 30, headcount: 90, company_size_band: 90, linkedin_member_count: 90, headcount_growth: 90, funding: 365, company_stage: 365,
   team_composition: 90, marketing_function: 90, product_launch: 90, expansion: 180,
   leadership_change: 180, technology: 180, web_claim: 180,
 });
@@ -243,11 +250,23 @@ export function observationFromCompany(
       confidence: a.authority === "proven" ? "high" : trust.geography === "direct" ? "high" : "medium",
     }));
   }
-  if (usableHeadcount(c.employee_count) != null) {
-    const a = weigh("headcount", "employee_count", { exact: true });
-    ev.push(item(ctx, "headcount", c.employee_count, {
+  // ── SIZE: THE DECLARED BAND, AND ONLY THE BAND ──────────────────────────
+  //
+  // Two LinkedIn numbers, two facts (companySize.ts). The band answers a size
+  // criterion; the associated-member count is kept as its own dimension so it
+  // can be shown and ranked on, and so nothing can mistake it for staff.
+  if (c.company_size_band) {
+    const a = weigh("company_size", "declared_size_band");
+    ev.push(item(ctx, "company_size_band", c.company_size_band, {
       ...base, status: statusForAuthority(a.authority), authority: authorityRecord(a),
-      confidence: a.authority === "proven" ? "high" : trust.employee_count === "direct" ? "medium" : "low",
+      confidence: a.authority === "proven" ? "high" : "medium",
+    }));
+  }
+  if (usableHeadcount(c.linkedin_associated_member_count) != null) {
+    const a = weigh("associated_members", "associated_member_count");
+    ev.push(item(ctx, "linkedin_member_count", c.linkedin_associated_member_count, {
+      ...base, status: statusForAuthority(a.authority), authority: authorityRecord(a),
+      confidence: a.authority === "proven" ? "high" : "medium",
     }));
   }
   if (c.provider_industry) {

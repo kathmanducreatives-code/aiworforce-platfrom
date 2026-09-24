@@ -26,7 +26,7 @@
 //
 // NOT the qualification decision. Triage answers "worth investigating?", the
 // evaluator answers "does it satisfy the Mission?". Triage sees discovery-time
-// data only — no LinkedIn identity, no enrichment, no verified headcount — and
+// data only — no LinkedIn identity, no enrichment, no verified size band — and
 // a stage that cannot see the evidence must not be allowed to qualify anything.
 // Its verdicts are RELEVANT / UNCERTAIN / IRRELEVANT, deliberately not
 // pass/fail, so the two can never be confused in telemetry or in code.
@@ -89,7 +89,16 @@ export interface TriageCompanyInput {
   domain: string | null;
   description: string | null;
   industries: string[];
-  employee_count: number | null;
+  /**
+   * The company's DECLARED size band ("11-50"), as the discovery row reported
+   * it. The size a mission's "N–M employees" is about.
+   */
+  declared_size_band: string | null;
+  /**
+   * LinkedIn associated members — people who list the company on their own
+   * profile. NOT a staff count (companySize.ts); context only.
+   */
+  linkedin_associated_members: number | null;
   location: string | null;
   /** Job titles as the provider wrote them. NEVER pre-filtered by keyword. */
   open_roles: string[];
@@ -151,9 +160,16 @@ export const MISSION_TRIAGE_PROMPT = [
   "stage does that with far better evidence. You are deciding where to spend.",
   "",
   "You see discovery-time data only: name, domain, self-reported description,",
-  "industries, self-reported headcount, location and open role titles. You do",
-  "NOT see verified headcount, LinkedIn data or enriched evidence. Judge",
-  "accordingly, and prefer 'uncertain' to a confident guess.",
+  "industries, the company's declared size band, location and open role titles.",
+  "You do NOT see verified evidence. Judge accordingly, and prefer 'uncertain'",
+  "to a confident guess.",
+  "",
+  "SIZE: `declared_size_band` is the size the company declares for itself — the",
+  "figure a mission's 'N–M employees' refers to. `linkedin_associated_members`",
+  "counts LinkedIn members who list the company on their profile (freelancers,",
+  "contributors and alumni included, staff without profiles excluded). It is NOT",
+  "the number of employees: never call it headcount or employee count, and never",
+  "judge size from it.",
   "",
   "ROLES ARE SEMANTIC, NOT KEYWORDS. If the mission asks for companies hiring",
   "software engineers, then ML Engineer, AI Engineer, Backend Engineer,",

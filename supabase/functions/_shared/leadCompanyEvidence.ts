@@ -24,6 +24,7 @@ import { usableHeadcount } from "./headcountValue.ts";
 import type {
   NormalizedHiringCompany, NormalizedHiringJob,
 } from "./hiringActorNormalizers.ts";
+import { sizeBandLabel, type CompanySizeBand } from "./companySize.ts";
 import type { CapabilityId } from "./leadCapabilityGraph.ts";
 
 export const COMPANY_EVIDENCE_VERSION = "lead-company-evidence-v1" as const;
@@ -50,7 +51,12 @@ export interface CompanyEvidenceRecord {
   identity_state: IdentityState;
 
   geography_evidence: string | null;
-  employee_evidence: number | null;
+  /** The company's declared size band (companySize.ts). What size criteria read. */
+  size_band_evidence: CompanySizeBand | null;
+  /** True when the band was read from the company record, not a discovery row. */
+  size_band_from_company_record: boolean;
+  /** LinkedIn associated members. Informational — NOT staff headcount. */
+  linkedin_member_count_evidence: number | null;
   industry_evidence: string[];
   description: string | null;
 
@@ -98,7 +104,7 @@ export interface BuildEvidenceInput {
  * Assemble the record.
  *
  * ENRICHED EVIDENCE WINS, and where the two sources disagree the disagreement is
- * RECORDED rather than resolved. A discovery row saying 40 employees and an
+ * RECORDED rather than resolved. A discovery row naming 40 LinkedIn members and an
  * enriched row saying 400 is not a rounding difference — it is usually two
  * different companies with the same name, and silently preferring one of them is
  * how a founder gets attached to the wrong employer.
@@ -114,17 +120,22 @@ export function buildCompanyEvidence(i: BuildEvidenceInput): CompanyEvidenceReco
   const url = clean(i.linkedin_company_url) ??
     clean(rich?.linkedin_company_url) ?? clean(base.linkedin_company_url);
 
-  // A zero is LinkedIn's "no number", not a count — see headcountValue.ts.
-  const employees = usableHeadcount(rich?.employee_count) ?? usableHeadcount(base.employee_count);
-  if (rich?.employee_count != null && base.employee_count != null &&
-      rich.employee_count !== base.employee_count) {
-    // A 2x gap is a different company; a small gap is a stale count.
-    const ratio = Math.max(rich.employee_count, base.employee_count) /
-      Math.max(1, Math.min(rich.employee_count, base.employee_count));
-    if (ratio >= 2) {
-      conflicting.push(
-        `employee_count: discovery=${base.employee_count} enriched=${rich.employee_count}`);
-    }
+  // TWO SIZE FACTS, KEPT APART (companySize.ts): the declared band, and the
+  // LinkedIn associated-member count. A zero is LinkedIn's "no number".
+  const band = rich?.company_size_band ?? base.company_size_band ?? null;
+  const members = usableHeadcount(rich?.linkedin_associated_member_count) ??
+    usableHeadcount(base.linkedin_associated_member_count);
+  // AN IDENTITY CHECK, NOT A SIZE CHECK. The same field read twice for what
+  // should be one company: a 2x gap between the discovery row and the enriched
+  // record is usually two companies with one name. It says nothing about size.
+  const dm = usableHeadcount(base.linkedin_associated_member_count);
+  const rm = usableHeadcount(rich?.linkedin_associated_member_count);
+  if (dm != null && rm != null && dm !== rm && Math.max(dm, rm) / Math.max(1, Math.min(dm, rm)) >= 2) {
+    conflicting.push(`linkedin_associated_member_count: discovery=${dm} enriched=${rm}`);
+  }
+  const db = base.company_size_band, rb = rich?.company_size_band;
+  if (db && rb && (db.min !== rb.min || db.max !== rb.max)) {
+    conflicting.push(`company_size_band: discovery=${sizeBandLabel(db)} enriched=${sizeBandLabel(rb)}`);
   }
 
   const geography = clean(rich?.geography) ?? clean(base.geography);
@@ -142,7 +153,7 @@ export function buildCompanyEvidence(i: BuildEvidenceInput): CompanyEvidenceReco
   if (!name) missing.push("company_name");
   if (!domain) missing.push("canonical_domain");
   if (!url) missing.push("linkedin_company_url");
-  if (employees == null) missing.push("employee_count");
+  if (band == null) missing.push("company_size_band");
   if (!geography) missing.push("geography");
   if (!description) missing.push("description");
   if (industries.length === 0) missing.push("industry");
@@ -158,7 +169,9 @@ export function buildCompanyEvidence(i: BuildEvidenceInput): CompanyEvidenceReco
     linkedin_company_url: url,
     identity_state: i.identity_state ?? "not_attempted",
     geography_evidence: geography,
-    employee_evidence: employees,
+    size_band_evidence: band,
+    size_band_from_company_record: !!rich?.company_size_band,
+    linkedin_member_count_evidence: members,
     industry_evidence: industries,
     description,
     source_query: clean(i.source_query),
@@ -255,7 +268,7 @@ export function groupJobsByEmployer(
  *
  * Carries only what a job row can honestly establish: the name and the LinkedIn
  * URL. Size, industry and description are NOT invented from a posting — they are
- * what enrichment is for, and a gate that fired on a guessed employee count
+ * what enrichment is for, and a gate that fired on a guessed size
  * would be worse than one that waits.
  */
 export function employerToCompany(g: EmployerGroup): NormalizedHiringCompany {
@@ -268,7 +281,8 @@ export function employerToCompany(g: EmployerGroup): NormalizedHiringCompany {
     description: null,
     provider_industry: null,
     industry_ids: [],
-    employee_count: null,
+    linkedin_associated_member_count: null,
+    company_size_band: null,
     employee_range_advisory: null,
     geography: g.jobs[0]?.location ?? null,
     company_type: null,
@@ -278,7 +292,7 @@ export function employerToCompany(g: EmployerGroup): NormalizedHiringCompany {
     hiring_status: true,
     source_provenance: "harvestapi/linkedin-job-search",
     field_trust: {},
-    missing_fields: ["employee_count", "industry", "description", "canonical_domain"],
+    missing_fields: ["company_size_band", "industry", "description", "canonical_domain"],
     raw_ref: { actor_key: "apify_linkedin_job_search", source_id: g.jobs[0]?.job_id ?? null },
   };
 }

@@ -273,7 +273,11 @@ export interface ProjectableCompany {
    * 44b82535 sixty successfully enriched companies still reported a null
    * count — the enrichment was bought and then never read.
    */
-  employeeCount?: number | null;
+  employeeCount?: never;
+  /** The company's DECLARED size band ("11-50"), enrichment first. */
+  sizeBand?: string | null;
+  /** LinkedIn associated members — NOT staff. Shown as such, never as employees. */
+  linkedinMembers?: number | null;
 }
 
 /** A value that is a URL, not a name. */
@@ -394,7 +398,10 @@ export interface WorkbenchEvaluationRow {
   /** Null when no provider ever supplied one. NEVER a URL. */
   company_name: string | null;
   domain: string | null;
-  employee_count: number | null;
+  /** The company's DECLARED size band ("11-50"). Null when none was reported. */
+  company_size_band: string | null;
+  /** LinkedIn associated members (companySize.ts). NOT an employee count. */
+  linkedin_associated_members: number | null;
   strongest_signal: string | null;
   signal_tier: "A" | "B" | "C" | null;
   /** The role that earned the shortlist, with its source URL when YC gave one. */
@@ -519,8 +526,10 @@ export function projectEvaluationRows(
         authoritative: c.companyName, prequalified: pq?.name, key: c.key,
       }),
       domain: pq?.canonical_domain ?? null,
-      // Enrichment first — it is the stage that actually measures this.
-      employee_count: c.employeeCount ?? pq?.team_size ?? null,
+      // Enrichment first. Two facts, named for what they are: the declared
+      // band, and the LinkedIn member count (never labelled employees).
+      company_size_band: c.sizeBand ?? (pq?.team_size != null ? `yc_self_reported:${pq.team_size}` : null),
+      linkedin_associated_members: c.linkedinMembers ?? null,
       strongest_signal: pq?.strongest_signal ?? null,
       signal_tier: pq?.best_tier ?? null,
       supporting_job_title: supporting?.title ?? pq?.strongest_signal ?? null,

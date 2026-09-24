@@ -4,6 +4,7 @@
 // Input:  { plan_id | task_plan_id, step_index, agent_slug | agent_id,
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
+import { sizeBandLabel } from "../_shared/companySize.ts";
 import { PendingModelDrain } from "../_shared/executionLedger.ts";
 import { leadQuotaProvenance } from "../_shared/leadMissionV2Request.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -4270,7 +4271,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               // LinkedIn URL — and reported a null size for every company whose
               // enrichment had already been bought.
               companyName: (c.enriched ?? c.company).company_name ?? null,
-              employeeCount: (c.enriched ?? c.company).employee_count ?? null,
+              sizeBand: (c.enriched ?? c.company).company_size_band
+                ? sizeBandLabel((c.enriched ?? c.company).company_size_band!) : null,
+              linkedinMembers: (c.enriched ?? c.company).linkedin_associated_member_count ?? null,
               prequalified: c.prequalified
                 ? {
                   name: c.prequalified.name,

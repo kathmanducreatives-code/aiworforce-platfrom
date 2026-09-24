@@ -91,7 +91,9 @@ export function projectCompanyFirstPersistence(
       enrichment_evidence: enriched
         ? {
           source_provenance: enriched.source_provenance,
-          employee_count: enriched.employee_count,
+          // Two facts, named for what they are (companySize.ts).
+          company_size_band: enriched.company_size_band,
+          linkedin_associated_member_count: enriched.linkedin_associated_member_count,
           industry_ids: enriched.industry_ids,
           company_type: enriched.company_type,
           geography: enriched.geography,
