@@ -4225,8 +4225,18 @@ export async function runCapabilityPlan(
         }
       }
 
+      // The refused proposal's OWN reasoning is kept for the repair log: an
+      // empty first plan logged only as `no_valid_step` said nothing about why
+      // the model declined, and three canaries paid a repair before anyone
+      // could see it was answering a contradiction in its own payload.
+      let firstReasoning: string | null = null;
       const first = executionPlan ?? validateExecutionPlan(
-        stepsOf(await deps.planExecution({ payload, mission_hash: hash })),
+        stepsOf(await (async () => {
+          const proposed = await deps.planExecution!({ payload, mission_hash: hash });
+          const r = (proposed as { reasoning?: unknown } | null)?.reasoning;
+          firstReasoning = typeof r === "string" ? r.slice(0, 1200) : null;
+          return proposed;
+        })()),
         opts.mission, opts.plan);
 
       // ONE REPAIR ROUND, for the same reason discovery gets one: a refusal the
@@ -4242,6 +4252,7 @@ export async function runCapabilityPlan(
         // prints only codes throws that away again.
         log("execution_plan_repair_attempt", {
           violations: blocking.map((v) => ({ code: v.code, actor_key: v.actor_key, message: v.message })),
+          first_reasoning: firstReasoning,
         });
         const repaired = validateExecutionPlan(
           stepsOf(await deps.planExecution({

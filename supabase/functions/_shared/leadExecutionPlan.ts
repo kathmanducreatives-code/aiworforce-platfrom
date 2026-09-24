@@ -509,6 +509,19 @@ export function buildExecutionPlannerPayload(
       // and readiness policy the phase itself uses; a claim no executable
       // verifier answers is NOT listed, so it is still refused as before.
       verified_after_eligibility: verifiedAfter,
+      // A LIST IS NOT A PROMISE. Shown bare, Luna read these claims as facts
+      // "listed but not available as an authorized executable capability" and
+      // returned no steps — the empty first plan behind a ~$0.02 Terra repair
+      // on canaries c6, c10 and c11. The list is the phase's own schedule, so
+      // say so in the words the planner reasons in.
+      verified_after_eligibility_note:
+        "Every claim in verified_after_eligibility HAS AN OWNER and is never a " +
+        "reason to return an empty plan. Where verified_by names a capability " +
+        "in authorised_capabilities, plan that step as usual — it is how the " +
+        "claim gets proven. Where it names one that is NOT listed there (e.g. " +
+        "funding_verification), the verification phase runs it per company " +
+        "after qualification: do not plan it and do not treat it as missing. " +
+        "Plan the chain that discovers, enriches and qualifies the candidates it will verify.",
     } : {}),
     task: "plan_the_whole_job",
     request: {

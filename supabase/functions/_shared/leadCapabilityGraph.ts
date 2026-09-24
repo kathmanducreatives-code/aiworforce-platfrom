@@ -35,6 +35,7 @@ import { isMonitoringMission } from "./monitoringMission.ts";
 import { cohortRefusalFor } from "./leadDiscoveryStrategy.ts";
 import { capabilityRunnable, PRODUCTION_READINESS, type ReadinessPolicy, type RouteMode } from "./routeReadiness.ts";
 import { hiringActorCard } from "./hiringActorCatalog.ts";
+import { verifiedAfterEligibility } from "./claimPlan.ts";
 
 export const CAPABILITY_GRAPH_VERSION = "lead-capability-graph-v1" as const;
 
@@ -1368,8 +1369,22 @@ export function buildCapabilityGraph(
   // it has no company input — so there is no way to prove funding over a pool
   // this plan found some other way, and the planner needs to know that before
   // it decides the shape is good enough.
+  //
+  // UNLESS FUNDING HAS AN OWNER. Since P6 a hard, windowed funding claim is
+  // answered per company by the claim-verification phase (atomus by company
+  // URL) after eligibility — the fact the planner payload states as
+  // `verified_after_eligibility`. Saying "funding cannot be proven over this
+  // pool" beside it contradicts it, and the planner is also told an empty plan
+  // is a correct answer when a fact has no route: canaries c6, c10 and c11
+  // drew exactly that empty first plan (~250 output tokens against ~700 for a
+  // real one) and each bought a ~$0.02 Terra repair to undo it. The advisory
+  // now fires only when no executable verifier owns the funding claim, from
+  // the same claim plan and readiness the verification phase itself uses.
+  const fundingVerifiedAfter = () => verifiedAfterEligibility(mission, entry, readiness)
+    .some((v) => v.claim === "recently_funded" || v.claim === "funding_stage");
   if (hasSignal(mission, "funding") &&
-      !steps.some((st) => st.capability === "funding_signal_discovery")) {
+      !steps.some((st) => st.capability === "funding_signal_discovery") &&
+      !fundingVerifiedAfter()) {
     routing_advisories.push(
       "This mission requires funding evidence and this plan schedules no " +
       "funding step, because its declared research shape discovers companies " +
