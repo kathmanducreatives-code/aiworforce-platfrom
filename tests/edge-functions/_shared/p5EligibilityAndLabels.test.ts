@@ -101,7 +101,7 @@ Deno.test("SEM-1: a preference that fails never makes a candidate ineligible", (
 
   // Every hard criterion proven; the size PREFERENCE is violated outright
   // (4,000 people against a 1–150 band) and the anchor is proven.
-  const g = graphOf([...hardProven(), ev("headcount", 4000), ev("hiring", true)]);
+  const g = graphOf([...hardProven(), ev("company_size_band", { min: 1001, max: 5000, source: "linkedin_declared" }), ev("hiring", true)]);
   const r = evaluateEligibility(CRITERIA_PREF, g);
   assertEquals(r.eligibility, "eligible", "a preference cannot reject");
   assertEquals(r.disproven, []);
@@ -109,7 +109,7 @@ Deno.test("SEM-1: a preference that fails never makes a candidate ineligible", (
     "the failure is recorded — it just does not reject");
 
   // A DISPROVEN preference changes nothing either.
-  const g2 = graphOf([...hardProven(), ev("headcount", 4000, { status: "disproven" }), ev("hiring", true)]);
+  const g2 = graphOf([...hardProven(), ev("company_size_band", { min: 1001, max: 5000, source: "linkedin_declared" }, { status: "disproven" }), ev("hiring", true)]);
   assertEquals(evaluateEligibility(CRITERIA_PREF, g2).eligibility, "eligible");
   // Only hard dimensions appear in the hard checks. `company_stage` is absent
   // because "Company kind: startup" is `unprovable_today` (P5.2) — disclosed on
@@ -218,10 +218,10 @@ Deno.test("the ceiling rises with the evidence, and pending or ineligible have n
     return computeCeiling({ criteria, graph: g, eligibility: evaluateEligibility(criteria, g), anchor: "hiring" });
   };
   // Anchor proven and every usable target proven (size within the band).
-  const exact = ceilingFor(CRITERIA_PREF, [...hardProven(), hiring, ev("headcount", 20), seedProven()]);
+  const exact = ceilingFor(CRITERIA_PREF, [...hardProven(), hiring, ev("company_size_band", { min: 11, max: 50, source: "linkedin_declared" }), seedProven()]);
   assertEquals(exact.ceiling, "exact_match", JSON.stringify(exact.targets_unproven));
 
-  // Anchor proven, headcount unknown — one unproven target.
+  // Anchor proven, size band unknown — one unproven target.
   const strong = ceilingFor(CRITERIA_PREF, [...hardProven(), hiring, seedProven()]);
   assertEquals([strong.ceiling, strong.targets_unproven.length], ["strong_opportunity", 1]);
 
@@ -264,7 +264,7 @@ Deno.test("GPT may not promote past the ceiling, cite what does not exist, or hi
 
 Deno.test("a reasoner that declines to promote is honoured, and a missing reasoner still explains", () => {
   const hiring = ev("hiring", true);
-  const g = graphOf([...hardProven(), hiring, ev("headcount", 20), seedProven()]);
+  const g = graphOf([...hardProven(), hiring, ev("company_size_band", { min: 11, max: 50, source: "linkedin_declared" }), seedProven()]);
   const ceiling = computeCeiling({ criteria: CRITERIA_PREF, graph: g, eligibility: evaluateEligibility(CRITERIA_PREF, g), anchor: "hiring" });
   assertEquals(ceiling.ceiling, "exact_match");
   const modest = applyReasoning(ceiling, {
@@ -370,7 +370,7 @@ Deno.test("WB-1: the view of a real engine run reconciles — one bucket each, s
       if (call.actorKey === "apify_linkedin_company_details") {
         return Promise.resolve(((input.companies as string[]) ?? []).map((u) => {
           const c = byUrl.get(u)!;
-          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, description: c.description, industries: c.industries, locations: c.locations };
+          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, employeeCountRange: c.employeeCountRange, description: c.description, industries: c.industries, locations: c.locations };
         }));
       }
       return Promise.resolve([]);

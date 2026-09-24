@@ -75,7 +75,13 @@ Deno.test("a job-route row normalizes into a CandidateObservation with full prov
   assertEquals(o.entity_hint.linkedin_company_url, "https://www.linkedin.com/company/useentropy");
   assertEquals(o.entity_hint.domain, "useentropy.com");
   const dims = o.evidence.map((e) => e.dimension);
-  for (const d of ["identity", "geography", "headcount", "job", "hiring"]) assert(dims.includes(d as never), `${d} in ${dims}`);
+  for (const d of ["identity", "geography", "company_size_band", "linkedin_member_count", "job", "hiring"]) {
+    assert(dims.includes(d as never), `${d} in ${dims}`);
+  }
+  // The employer's size arrives as its declared band — and nothing claims a staff count.
+  assertFalse(dims.includes("headcount" as never), "a job row never carries a staff count");
+  assertEquals(o.evidence.find((e) => e.dimension === "company_size_band")!.status, "plausible",
+    "a discovery row's band is plausible until the company record is read");
   assert(o.evidence.every((e) => e.source.provider_call_id === "pc_job_1" && e.source.actor === "apify_linkedin_job_search"));
   const job = o.evidence.find((e) => e.dimension === "job")!;
   assertEquals(job.status, "proven");
@@ -223,9 +229,9 @@ Deno.test("targets and preferences never become required evidence or rejection r
   const pref = compileLeadMission({ originalUserQuery: CANONICAL, proposal, companyBrain: { employee_min: 1, employee_max: 150 } }).final_mission;
   const policy = criteriaExecutionPolicy(pref);
   assertEquals(policy.dimensions.company_size.may_reject, false);
-  assertFalse(requiredEvidenceDimensions(policy).includes("headcount"), "a Brain size PREFERENCE is not a required dimension");
+  assertFalse(requiredEvidenceDimensions(policy).includes("company_size_band"), "a Brain size PREFERENCE is not a required dimension");
   const rule = compileLeadMission({ originalUserQuery: CANONICAL, proposal, companyBrain: { employee_min: 1, employee_max: 150, employee_policy: true } }).final_mission;
-  assert(requiredEvidenceDimensions(criteriaExecutionPolicy(rule)).includes("headcount"), "an enforced Brain RULE is");
+  assert(requiredEvidenceDimensions(criteriaExecutionPolicy(rule)).includes("company_size_band"), "an enforced Brain RULE is");
   assert(requiredEvidenceDimensions(criteriaExecutionPolicy(MISSION)).includes("geography"));
 });
 

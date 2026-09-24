@@ -154,8 +154,9 @@ export const ACTOR_EVIDENCE: readonly ActorEvidenceRecord[] = Object.freeze([
     actor_key: "apify_linkedin_company_details",
     unlock_gated: false,
     cohort_scope: null,
-    // Firmographic enrichment. Authoritative employeeCount and industry, but a
-    // single reading — and a headcount CHANGE needs two, at different times.
+    // Firmographic enrichment. The declared size band and industry, plus a
+    // LinkedIn member count — a single reading, and a CHANGE needs two, at
+    // different times (and is a change in members, not staff).
     produces: [],
   },
   {

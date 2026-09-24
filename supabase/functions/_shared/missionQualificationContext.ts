@@ -360,6 +360,11 @@ export function buildQualificationContext(
  * eleven of them and to run a hiring search on three, including
  * "Confidential Careers" at 29,946 and "Stealth Startup" at 37,306.
  *
+ * (Re-read 2026-09-24: those figures are LinkedIn ASSOCIATED MEMBERS, not
+ * staff — both pages declare 2-10 / 11-50 (companySize.ts). They are now
+ * removed as placeholder employer pages, on identity, and size is gated on
+ * the declared band only.)
+ *
  * ── WHAT DECIDES, AND WHAT DID NOT CHANGE ─────────────────────────────────
  *
  * The Brain's OWN declaration decides, because the Brain is the thing that
@@ -373,9 +378,10 @@ export function buildQualificationContext(
  * declares no hard constraints. The Mission still outranks the Brain on an axis
  * it owns, which is tier 1 and also unchanged.
  *
- * THIS IS NOT A SIZE HEURISTIC. The gate it feeds reads `employee_count` only
- * when `mayGateOn` says the field is trustworthy, and never reads the advisory
- * band — see `leadGenericPrequalification`. Making the bound enforceable
+ * THIS IS NOT A SIZE HEURISTIC. The gate it feeds reads the DECLARED size band
+ * only when `mayGateOn` says the field is trustworthy, never a member count and
+ * never a non-LinkedIn advisory text — see `leadGenericPrequalification`. The
+ * axis keeps its historical name, `employee_count`, in `hard_constraints`. Making the bound enforceable
  * changes WHO MAY REJECT, not what counts as evidence.
  */
 export function resolveEmployeeBounds(

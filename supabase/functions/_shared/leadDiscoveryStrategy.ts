@@ -445,7 +445,7 @@ export function missionNeedsSemanticDiscovery(mission: LeadMissionV1): boolean {
   // companies still read as a semantic search, so `actor_not_for_semantic_
   // discovery` blocked `apify_linkedin_company_search` — a company-NAME matcher,
   // which is exactly the right actor for a named-account cohort and the only
-  // discovery source carrying a trusted exact headcount.
+  // discovery source carrying a declared size band on every full-mode row.
   //
   // Read defensively at both levels: a caller constructing a partial mission in
   // a test may put it either place, and the whole failure here was one reader

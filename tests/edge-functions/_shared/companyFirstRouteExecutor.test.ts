@@ -140,8 +140,9 @@ Deno.test("canonical query: memo23 first, then enrich, gate, verify hiring, then
 Deno.test("a company-fit reject never reaches job verification or founder search", async () => {
   const h = harness({
     apify_yc_companies_memo23: [YC_COMPANY()],
-    // Enriched headcount 4642 — far outside the 1-200 ICP band.
-    apify_linkedin_company_details: [ENRICHED({ employeeCount: 4642 })],
+    // The record DECLARES 1001-5000 — wholly outside the 1-200 ICP band. (Its
+    // 4,642 LinkedIn members would not reject anything on their own.)
+    apify_linkedin_company_details: [ENRICHED({ employeeCount: 4642, employeeCountRange: { start: 1001, end: 5000 } })],
     apify_linkedin_job_search: [JOB()],
     apify_linkedin_company_employees: [PERSON()],
   });
@@ -157,7 +158,7 @@ Deno.test("a company-fit reject never reaches job verification or founder search
   assertFalse(h.order().includes("apify_linkedin_company_employees"),
     "a reject must not cost a founder call");
   assertEquals(res.funnel.qualified_companies, 0);
-  assert(res.diagnostics.company_brain.failed_gates.employee_count_above_max === 1);
+  assert(res.diagnostics.company_brain.failed_gates.company_size_band_above_max === 1);
 });
 
 Deno.test("a staffing/aggregator company is rejected before any paid verification", async () => {

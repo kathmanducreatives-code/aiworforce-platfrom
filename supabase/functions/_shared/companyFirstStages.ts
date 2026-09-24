@@ -207,7 +207,8 @@ export function evaluateCompanyFit(i: CompanyFitInput): CompanyFitResult {
   // SIZE — the declared band only. Wholly outside the range rejects; a
   // partial overlap (or an exact staff count) is unsettled, never a reject.
   if (i.employee_min != null || i.employee_max != null) {
-    if (i.company_size_band === null) {
+    // `== null`: a caller built on the old shape passes no band at all.
+    if (i.company_size_band == null) {
       missing.push("company_size_band_unknown" +
         (i.employee_range_advisory ? `:advisory_text_present_but_not_a_band` : ""));
     } else {

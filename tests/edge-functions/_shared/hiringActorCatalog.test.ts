@@ -70,12 +70,13 @@ Deno.test("2. memo23 supplies no LinkedIn URL and never invents one", () => {
 });
 
 // ═══ 3. memo23 stale teamSize is not authoritative ═══════════════════════════
-Deno.test("3. memo23 teamSize is advisory only — never an exact employee count", () => {
+Deno.test("3. memo23 teamSize is advisory only — never a size band or member count", () => {
   const c = normalizeMemo23Company({ ...MEMO23_COMPANIES[0], teamSize: 1 });
-  assertEquals(c.employee_count, null, "self-reported YC size must never become exact headcount");
+  assertEquals(c.company_size_band, null, "self-reported YC size must never become a declared band");
+  assertEquals(c.linkedin_associated_member_count, null);
   assertEquals(c.employee_range_advisory, "yc_self_reported:1");
   assertEquals(c.field_trust.employee_range_advisory, "unsafe");
-  assert(c.missing_fields.some((m) => m.startsWith("employee_count:")));
+  assert(c.missing_fields.some((m) => m.startsWith("company_size_band:")));
 });
 
 // ═══ 4. solidcode rejects multi-value teamSize BEFORE execution ══════════════
@@ -126,19 +127,23 @@ Deno.test("6. LinkedIn company-search output is marked candidate-only", () => {
     HIRING_ACTOR_CATALOG.apify_linkedin_company_search.requires_enrichment_before_qualification, true);
 });
 
-// ═══ 7. employeeCountRange cannot override exact employeeCount ═══════════════
-Deno.test("7. employeeCountRange is advisory and never overrides the exact count", () => {
-  // Cisco Networking Academy: 4642 actual, tagged 51-200 by the range.
+// ═══ 7. the declared band and the member count are two facts ════════════════
+Deno.test("7. employeeCountRange is the declared band; employeeCount is associated members", () => {
+  // Cisco Networking Academy: declared 51-200, with 4,642 LinkedIn members —
+  // an academy whose STUDENTS list it. That gap was once read as the band
+  // "contradicting the exact count"; it is two different facts (companySize.ts).
   const wide = LINKEDIN_CANDIDATES.find((c) =>
     typeof c.employeeCount === "number" && (c.employeeCount as number) > 500);
-  assert(wide, "fixture must contain the contradicting row");
+  assert(wide, "fixture must contain the wide-membership row");
   const c = normalizeLinkedInCompanyCandidate(wide!);
-  assertEquals(c.employee_count, wide!.employeeCount);
-  assert(c.employee_range_advisory && c.employee_range_advisory !== String(c.employee_count));
-  assertEquals(c.field_trust.employee_range_advisory, "unsafe");
-  assertEquals(c.field_trust.employee_count, "direct");
-  // They are separate fields — a consumer cannot accidentally read one for the other.
-  assert(c.employee_count! > 500 && c.employee_range_advisory!.includes("51-200"));
+  assertEquals(c.company_size_band, { min: 51, max: 200, source: "linkedin_declared" });
+  assertEquals(c.linkedin_associated_member_count, wide!.employeeCount);
+  assertEquals(c.field_trust.company_size_band, "direct");
+  assertEquals(c.field_trust.linkedin_associated_member_count, "direct");
+  // No LinkedIn figure is squeezed into the non-LinkedIn advisory text.
+  assertEquals(c.employee_range_advisory, null);
+  // They are separate fields, and neither is named as a staff count.
+  assert(!("employee_count" in c), "no field may claim to be an employee count");
 });
 
 // ═══ 8. company-search industry cannot satisfy Company Brain ═════════════════
@@ -156,12 +161,13 @@ Deno.test("8. candidate provider_industry is untrusted and demands enrichment", 
   }
 });
 
-// ═══ 9. enrichment maps exact count and industry hierarchy ══════════════════
-Deno.test("9. enrichment supplies exact employeeCount and industry id + hierarchy", () => {
+// ═══ 9. enrichment maps the declared band and industry hierarchy ═════════════
+Deno.test("9. enrichment supplies the declared band, the member count, and industry id + hierarchy", () => {
   const rows = LINKEDIN_ENRICHED.map(normalizeLinkedInCompanyEnriched);
   const trademo = rows.find((r) => r.company_name === "Trademo")!;
-  assertEquals(trademo.employee_count, 147);
-  assertEquals(trademo.field_trust.employee_count, "direct");
+  assertEquals(trademo.company_size_band, { min: 51, max: 200, source: "linkedin_declared" });
+  assertEquals(trademo.field_trust.company_size_band, "direct");
+  assertEquals(trademo.linkedin_associated_member_count, 147, "members, not staff");
   assertEquals(trademo.industry_ids[0].id, "4");
   assertEquals(trademo.industry_ids[0].name, "Software Development");
   assert(trademo.industry_ids[0].hierarchy?.includes("Software Development"));
@@ -525,7 +531,8 @@ Deno.test("24. compilation is deterministic and identifies its batch", () => {
 Deno.test("25. solidcode normalizes identity fields memo23 cannot supply", () => {
   const c = normalizeSolidcodeCompany(SOLIDCODE_COMPANIES[0]);
   assert(c.external_source_id.startsWith("yc_solidcode:"));
-  assertEquals(c.employee_count, null, "YC self-reported size is never exact");
+  assertEquals(c.company_size_band, null, "YC self-reported size is never a declared band");
+  assertEquals(c.linkedin_associated_member_count, null);
   const ev = c.startup_evidence as Record<string, unknown>;
   assertEquals(ev.source, "y_combinator");
   assert("year_founded" in ev, "solidcode's extra identity evidence is why it is the fallback");

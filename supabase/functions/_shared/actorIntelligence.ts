@@ -46,7 +46,7 @@ export interface ActorReadinessRecord {
 
 export const ACTOR_READINESS: readonly ActorReadinessRecord[] = Object.freeze([
   { actor: "apify_linkedin_job_search", capability: "job_discovery", readiness: "READY",
-    reason: "P3 job-first route; employer URL/website/headcount from the row", live_evidence: "canary 2a215d44 (2026-09-17)" },
+    reason: "P3 job-first route; employer URL/website/declared size band from the row", live_evidence: "canary 2a215d44 (2026-09-17)" },
   { actor: "apify_linkedin_job_search", capability: "hiring_verification", readiness: "READY",
     reason: "company-scoped open-role check", live_evidence: "canary 03f4c9c6 (2026-09-17)" },
   { actor: "apify_linkedin_company_search", capability: "company_identity_resolution", readiness: "READY",
@@ -54,7 +54,7 @@ export const ACTOR_READINESS: readonly ActorReadinessRecord[] = Object.freeze([
   { actor: "apify_linkedin_company_search", capability: "general_company_discovery", readiness: "CARDED_BUT_NOT_LIVE",
     reason: "carded for company_discovery; never run as a V2 discovery route", live_evidence: null },
   { actor: "apify_linkedin_company_details", capability: "company_enrichment", readiness: "READY",
-    reason: "headcount/industry/HQ by LinkedIn URL", live_evidence: "canary 2a215d44 (2026-09-17)" },
+    reason: "declared size band/industry/HQ by LinkedIn URL", live_evidence: "canary 2a215d44 (2026-09-17)" },
   { actor: "apify_yc_companies_memo23", capability: "startup_company_discovery", readiness: "READY",
     reason: "YC directory with open jobs", live_evidence: "P2 canaries (2026-09-16)", gated_by: "mission names the YC cohort" },
   { actor: "apify_yc_companies_solidcode", capability: "startup_company_discovery", readiness: "CARDED_BUT_NOT_LIVE",

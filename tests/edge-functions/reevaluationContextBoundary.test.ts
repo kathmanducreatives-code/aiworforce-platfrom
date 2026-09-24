@@ -130,7 +130,8 @@ Deno.test("an empty registry still yields a usable mission/brain context", () =>
   assertEquals(reg.company_key, "");
   // A claim checked against it is dropped, so it can never stand in for a real
   // registry where a verdict is decided.
-  assertEquals(reg.hard_facts.employee_count, null);
+  assertEquals(reg.hard_facts.company_size_band, null);
+  assertEquals(reg.hard_facts.linkedin_associated_member_count, null);
   assertEquals(reg.hard_facts.geography, null);
 });
 

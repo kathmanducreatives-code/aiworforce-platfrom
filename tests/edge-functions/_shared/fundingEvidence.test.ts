@@ -259,8 +259,9 @@ Deno.test("10. the company projection carries the round without promoting its ta
   // A funding source says NOTHING about hiring. Null, never false — false would
   // be a claim this Actor cannot support.
   assertEquals(c.hiring_status, null);
-  // And no exact headcount is invented from the provider's band.
-  assertEquals(c.employee_count, null);
+  // And no size fact is invented from the provider's bucket: it stays advisory
+  // text, never the declared band and never a member count.
+  assertEquals([c.company_size_band, c.linkedin_associated_member_count], [null, null]);
   assertEquals(c.field_trust.employee_range_advisory, "unsafe");
 });
 
@@ -424,7 +425,7 @@ Deno.test("18. the provider's company tags are UNSAFE, as the live run proved", 
 
   // And the projection must not promote any of it into a qualifying fact.
   const c = fundingRoundToCompany(r);
-  assertEquals(c.employee_count, null);
+  assertEquals([c.company_size_band, c.linkedin_associated_member_count], [null, null]);
   assertEquals(c.industry_ids, []);
   assertEquals(c.field_trust.provider_industry, "unsafe");
   assertEquals(c.hiring_status, null);

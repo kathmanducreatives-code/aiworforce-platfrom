@@ -3,6 +3,7 @@ import {
   LIFECYCLE_LABEL, notQualifiedRows, resumableRows, notInvestigatedRows,
   type EvaluationRow,
 } from '@/lib/workbench/evaluationRows';
+import { companySizeText, linkedinMembersText, readCompanySizeFacts, LINKEDIN_MEMBERS_HINT } from '@/lib/workbench/companySize';
 
 /**
  * Companies the run worked on and did NOT deliver as leads.
@@ -43,7 +44,16 @@ export default function EvaluatedCompaniesTable({ rows }: { rows: EvaluationRow[
         <div className="text-[12px] text-[#C9D1D9]">{r.company_name}</div>
         {r.domain && <div className="text-[11px] text-[#7D8590]">{r.domain}</div>}
       </td>
-      <td className="py-2 pr-3 text-[12px] text-[#7D8590]">{r.employee_count ?? '—'}</td>
+      <td className="py-2 pr-3 text-[12px] text-[#7D8590]">
+        {/* The DECLARED band is the company's size; LinkedIn members are shown
+            as members, never as employees (lib/workbench/companySize.ts). */}
+        <div>{companySizeText(readCompanySizeFacts(r as unknown as Record<string, unknown>)) ?? '—'}</div>
+        {r.linkedin_associated_members != null && (
+          <div className="text-[10.5px] text-[#6e7681]" title={LINKEDIN_MEMBERS_HINT}>
+            {linkedinMembersText(r.linkedin_associated_members)}
+          </div>
+        )}
+      </td>
       <td className="py-2 pr-3">
         {r.strongest_signal
           ? (
@@ -160,7 +170,7 @@ export default function EvaluatedCompaniesTable({ rows }: { rows: EvaluationRow[
     <thead>
       <tr className="text-[10px] uppercase tracking-wider text-[#7D8590]">
         <th className="pb-1 pr-3 font-normal">Company</th>
-        <th className="pb-1 pr-3 font-normal">Employees</th>
+        <th className="pb-1 pr-3 font-normal">Company size</th>
         <th className="pb-1 pr-3 font-normal">Strongest signal</th>
         <th className="pb-1 pr-3 font-normal">Triage</th>
         <th className="pb-1 pr-3 font-normal">Score</th>

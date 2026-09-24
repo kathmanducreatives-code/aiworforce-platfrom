@@ -28,6 +28,7 @@
 import { resolveQualification, type QualificationRecord } from '../qualifiedLead/qualification.ts';
 import { qualificationFromRow, type QualifiableRow } from '../qualifiedLead/rowQualification.ts';
 import { effectiveFit, hasHiringSignal, sourceOf, type FilterableLead } from './leadFilters.ts';
+import { bandLabel } from './companySize.ts';
 
 export type ExportableLead = FilterableLead & QualifiableRow & {
   signal_source_url?: string | null;
@@ -103,7 +104,9 @@ export const WORKBENCH_EXPORT_COLUMNS: ReadonlyArray<
   ['Website', 'website', (r) => r.website],
   ['LinkedIn', 'company_linkedin_url', (r) => r.company_linkedin_url],
   ['Location', 'company_location', (r) => r.company_location],
-  ['Employees', 'employee_count', (r) => r.employee_count],
+  // Two facts, never "Employees": the declared band, and LinkedIn members.
+  ['Company size (declared)', 'company_size_band', (r) => (r.company_size_band ? bandLabel(r.company_size_band) : '')],
+  ['LinkedIn members (not staff)', 'linkedin_associated_members', (r) => r.linkedin_associated_members ?? ''],
   ['Industry', 'industries', (r) => (r.industries ?? []).join(' · ')],
   ['Hiring status', 'job_title', (r) => (hasHiringSignal(r) ? (r.job_title || 'Hiring signal found') : 'No hiring signal')],
   ['Hiring evidence', 'job_url', (r) => r.job_url || r.signal_source_url || ''],

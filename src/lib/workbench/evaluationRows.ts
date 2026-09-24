@@ -2,6 +2,7 @@ import {
   readMissionView, LABEL_BUCKETS, describeHardCheck,
   type CanonicalBucket, type CanonicalEvidenceGap, type CanonicalHardCheck, type CanonicalMissionView,
 } from './missionView.ts';
+import { readCompanySizeFacts } from './companySize.ts';
 
 // EVALUATED COMPANIES — visible, explained, and never actionable.
 //
@@ -44,7 +45,14 @@ export interface EvaluationRow {
   company_key: string;
   company_name: string;
   domain: string | null;
-  employee_count: number | null;
+  /** The DECLARED LinkedIn size band label ("11-50"), when one was read. */
+  company_size_band: string | null;
+  /** LinkedIn associated members — NOT a staff count (companySize.ts). */
+  linkedin_associated_members: number | null;
+  /** A YC directory's self-reported team size. */
+  self_reported_team_size: number | null;
+  /** A pre-2026-09-24 row's single `employee_count`: reported, unverified. */
+  legacy_reported_count: number | null;
   strongest_signal: string | null;
   signal_tier: 'A' | 'B' | 'C' | null;
   supporting_job_title: string | null;
@@ -142,7 +150,10 @@ export function canonicalEvaluationRows(view: CanonicalMissionView): EvaluationR
         company_key: l.company.key,
         company_name: l.company.name ?? l.company.key,
         domain: l.company.domain,
-        employee_count: null,
+        company_size_band: null,
+        linkedin_associated_members: null,
+        self_reported_team_size: null,
+        legacy_reported_count: null,
         strongest_signal: null,
         signal_tier: null,
         supporting_job_title: null,
@@ -192,7 +203,12 @@ export function readEvaluationRows(result: unknown): EvaluationRow[] {
         company_key: String(r.company_key ?? ''),
         company_name: String(r.company_name ?? r.company_key ?? 'Unknown'),
         domain: typeof r.domain === 'string' ? r.domain : null,
-        employee_count: typeof r.employee_count === 'number' ? r.employee_count : null,
+        ...((f) => ({
+          company_size_band: f.declared_band ? `${f.declared_band.min}${f.declared_band.max === null ? '+' : `-${f.declared_band.max}`}` : null,
+          linkedin_associated_members: f.linkedin_members,
+          self_reported_team_size: f.self_reported_team_size,
+          legacy_reported_count: f.legacy_reported_count,
+        }))(readCompanySizeFacts(r)),
         strongest_signal: typeof r.strongest_signal === 'string' ? r.strongest_signal : null,
         signal_tier: (r.signal_tier === 'A' || r.signal_tier === 'B' || r.signal_tier === 'C')
           ? r.signal_tier : null,

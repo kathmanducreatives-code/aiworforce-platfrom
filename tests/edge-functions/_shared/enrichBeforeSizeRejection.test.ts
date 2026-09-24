@@ -1,18 +1,21 @@
-// A REPORTED HEADCOUNT RANKS; ENRICHMENT DECIDES. A SPENT ALLOWANCE PLANS NOTHING.
+// A REPORTED SIZE RANKS; THE COMPANY RECORD DECIDES. A SPENT ALLOWANCE PLANS NOTHING.
 //
-// Canary 87ecf153 (local, 2026-09-24): company search returned ByteByteGo (86)
-// and Psychology Today (2,135) for an 11–50 mission. The pre-pass excluded both
-// on those search-row counts — PLAUSIBLE evidence — so enrichment never ran and
-// size was never actually decided. Then a second slice spent model calls
-// planning discovery the candidate allowance could no longer buy.
+// Canary 87ecf153 (local, 2026-09-24): company search returned ByteByteGo and
+// Psychology Today for an 11–50 mission. The pre-pass excluded both on their
+// search-row `employeeCount` (86 and 2,135) — which is LinkedIn ASSOCIATED
+// MEMBERS, not staff. Both companies DECLARE 11-50: the search's own
+// `companySize: ["11-50"]` filter reads exactly that declared band, which is
+// why they were returned at all (companySize.ts).
 //
 // Replayed here through the real engine with rows shaped like the canary's:
 //
-//   company search → plausible headcount → ranked down, NOT excluded
-//   → enrichment (one batched company-details read) → PROVEN exact count
-//   → size FAIL → ineligible → no Atomus
+//   company search → plausible declared band 11-50 → ranked UP, not excluded
+//   → enrichment (one batched company-details read) → PROVEN declared band
+//   → size PASS (the member count is shown, never decides) → Atomus target
 //
-// and with the allowance spent, no discovery planning — this slice or the next.
+// a company whose record DECLARES a band outside the range still fails and
+// buys no Atomus, and with the allowance spent, no discovery planning — this
+// slice or the next.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { missionCandidatesFrom, runCapabilityPlan } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
@@ -38,10 +41,14 @@ const MISSION = (() => {
   return mergeCompanyBrainIntoMission(stated, { industries: ["b2b saas", "fintech"] } as never).mission;
 })();
 
-/** Rows shaped like the canary's harvestapi company records (full mode). */
-const row = (slug: string, name: string, employeeCount: number) => ({
+/**
+ * Rows shaped like the canary's harvestapi company records (full mode):
+ * `employeeCount` is LinkedIn associated members, `employeeCountRange` the
+ * declared band (11-50 for every canary row — the search filtered on it).
+ */
+const row = (slug: string, name: string, employeeCount: number, band: [number, number] = [11, 50]) => ({
   id: slug, name, linkedinUrl: `https://www.linkedin.com/company/${slug}/`, website: `https://${slug}.com`,
-  description: `${name} does something.`, employeeCount, employeeCountRange: { start: 11, end: 50 },
+  description: `${name} does something.`, employeeCount, employeeCountRange: { start: band[0], end: band[1] },
   industries: [{ id: 4, name: "Software Development" }],
   locations: [{ parsed: { text: "San Francisco, CA, United States", countryFull: "United States" }, country: "US", headquarter: true }],
 });
@@ -95,47 +102,68 @@ const grounded = (result: unknown): Grounded[] => (missionCandidatesFrom(result 
     return { ...c, eligibility: e.eligibility, hard_checks: (e.checks ?? []).filter((x) => x.kind === "hard"), attempted_routes: c.attempted_routes ?? [] };
   });
 
-Deno.test("CANARY 87ecf153 REPLAY: out-of-range search rows reach enrichment, fail on the PROVEN count, and buy no Atomus", async () => {
+const atomusTargets = (cands: Grounded[]) => verificationTargets({ route_actor: "apify_funding_atomus", max_targets: 6 },
+  cands as never, (id) => CRITERIA.find((c) => c.id === id)?.value, undefined, PROBE);
+
+Deno.test("CANARY 87ecf153 REPLAY: declared 11-50 with 86 / 2,135 members — enriched, size PASSES on the band, both reach Atomus", async () => {
   const h = harness(CANARY_ROWS);
   const result = await runCapabilityPlan(h.deps as never, h.opts as never) as unknown as { state: Record<string, any> };
 
-  // Discovery ranked them down; it did not exclude them.
+  // Discovery ranks them IN on the declared band; the member count moved nothing.
   for (const p of result.state.prequalification.companies) {
-    assertEquals([p.size_status, p.exclusion, p.eligible], ["above_max", null, true], p.name);
-    assert(p.reasons.some((r: string) => /ranked down, not excluded/.test(r)), p.reasons.join(" | "));
+    assertEquals([p.size_status, p.exclusion, p.eligible], ["in_range", null, true], p.name);
   }
   // Both reached enrichment, in one batched read.
   const details = h.sent.filter((s) => s.actor === "apify_linkedin_company_details");
   assertEquals(details.length, 1);
   assertEquals((details[0].input.companies as string[]).length, 2);
 
-  // Size is decided on the enriched, PROVEN count — and fails.
+  // Size is decided on the enriched, PROVEN declared band — and passes.
   const cands = grounded(result);
   for (const c of cands) {
     const size = c.hard_checks.find((x: Grounded) => x.dimension === "company_size")!;
-    assertEquals(size.result, "fail", c.name);
-    const item = c.graph.claims.find((x: any) => x.dimension === "headcount").current;
-    assertEquals([item.source.actor, item.status, item.authority?.rule],
-      ["apify_linkedin_company_details", "proven", "li_record_exact_headcount"], c.name);
-    assertEquals(c.eligibility, "ineligible", c.name);
+    assertEquals(size.result, "pass", c.name);
+    const band = c.graph.claims.find((x: any) => x.dimension === "company_size_band").current;
+    assertEquals([band.source.actor, band.status, band.authority?.rule],
+      ["apify_linkedin_company_details", "proven", "li_record_declared_size_band"], c.name);
+    // The member count is recorded, as members, and decided nothing.
+    const members = c.graph.claims.find((x: any) => x.dimension === "linkedin_member_count")?.current;
+    assert(members && members.value > 50, `${c.name}: member count kept for display`);
+    assert(!c.graph.claims.some((x: any) => x.dimension === "headcount"), "no staff-count claim exists");
+    assertEquals(c.eligibility, "pending", `${c.name}: funding is the open claim`);
   }
-  // A failed candidate is never handed to the funding verifier.
-  const atomus = verificationTargets({ route_actor: "apify_funding_atomus", max_targets: 6 }, cands as never,
-    (id) => CRITERIA.find((c) => c.id === id)?.value, undefined, PROBE);
-  assertEquals(atomus, []);
+  // Viable on proven evidence, so both are handed to the funding verifier.
+  assertEquals(atomusTargets(cands).map((t) => t.name).sort(), ["ByteByteGo", "Psychology Today"]);
+});
+
+Deno.test("OUT-OF-BAND: a company record that DECLARES 201-500 fails size on the proven band and buys no Atomus", async () => {
+  // The fail path the canary rows used to exercise, now stated on the fact
+  // that decides it: the declared band, not the member count (here only 40).
+  const h = harness([row("bigband", "Bigband Co", 40, [201, 500])]);
+  const result = await runCapabilityPlan(h.deps as never, h.opts as never) as unknown as { state: Record<string, any> };
+  const [p] = result.state.prequalification.companies;
+  assertEquals([p.size_status, p.exclusion, p.eligible], ["above_max", null, true], "ranked down, not out, before enrichment");
+  assert(p.reasons.some((r: string) => /ranked down, not excluded/.test(r)), p.reasons.join(" | "));
+  const [c] = grounded(result);
+  const size = c.hard_checks.find((x: Grounded) => x.dimension === "company_size")!;
+  assertEquals(size.result, "fail");
+  assertEquals(size.reason, "declared size band 201-500 is outside 11-50");
+  assertEquals(c.eligibility, "ineligible");
+  assertEquals(atomusTargets([c]), []);
   assert(!h.sent.some((s) => s.actor === "apify_funding_atomus"));
 });
 
-Deno.test("CANARY 87ecf153 REPLAY: an in-range candidate from the same search is viable and reaches Atomus", async () => {
+Deno.test("CANARY 87ecf153 REPLAY: an in-range candidate from the same search is viable, and so is the in-band canary row", async () => {
   const h = harness([row("inrange", "InRange Co", 30), ...CANARY_ROWS]);
   const result = await runCapabilityPlan(h.deps as never, h.opts as never);
   const cands = grounded(result);
   const viable = cands.find((c) => c.name === "InRange Co")!;
   assertEquals(viable.hard_checks.map((x: any) => [x.dimension, x.result]),
     [["geography", "pass"], ["company_size", "pass"], ["funding", "unknown"]]);
-  const atomus = verificationTargets({ route_actor: "apify_funding_atomus", max_targets: 6 }, cands as never,
-    (id) => CRITERIA.find((c) => c.id === id)?.value, undefined, PROBE);
-  assertEquals(atomus.map((t) => t.name), ["InRange Co"]);
+  // The pool is two candidates (run budget). ByteByteGo DECLARES 11-50 too, so
+  // its 86 members no longer keep it from the verifier: both are viable.
+  assertEquals(cands.length, 2);
+  assertEquals(atomusTargets(cands).map((t) => t.name).sort(), ["ByteByteGo", "InRange Co"]);
 });
 
 Deno.test("SPENT ALLOWANCE: no discovery planning in this slice, and a forced replenishment slice plans and buys nothing", async () => {
@@ -178,7 +206,7 @@ const CANARY_2978_TRIAGE = irrelevantBecause((k) => [
   "Entertainment news media does not align with the mission's stated B2B SaaS or fintech preferences.",
 ]);
 
-Deno.test("CANARY 2978a5ba REPLAY: both triaged `irrelevant` still reach enrichment; size is decided on the PROVEN count", async () => {
+Deno.test("CANARY 2978a5ba REPLAY: both triaged `irrelevant` still reach enrichment; size PASSES on the proven declared band", async () => {
   const h = harness(CANARY_2978_ROWS, CANARY_2978_TRIAGE);
   const result = await runCapabilityPlan(h.deps as never, h.opts as never) as unknown as {
     state: Record<string, any>; companies: Array<Record<string, any>>;
@@ -191,13 +219,14 @@ Deno.test("CANARY 2978a5ba REPLAY: both triaged `irrelevant` still reach enrichm
   const details = h.sent.filter((s) => s.actor === "apify_linkedin_company_details");
   assertEquals((details[0]?.input.companies as string[] | undefined)?.length, 2, "both enriched");
   for (const c of grounded(result)) {
-    const headcount = c.graph.claims.find((x: Grounded) => x.dimension === "headcount").current;
-    assertEquals([headcount.status, headcount.authority?.rule], ["proven", "li_record_exact_headcount"], c.name);
-    assertEquals(c.hard_checks.find((x: Grounded) => x.dimension === "company_size")!.result, "fail", c.name);
-    assertEquals(c.eligibility, "ineligible", c.name);
+    const band = c.graph.claims.find((x: Grounded) => x.dimension === "company_size_band").current;
+    assertEquals([band.status, band.authority?.rule], ["proven", "li_record_declared_size_band"], c.name);
+    // Triage's "self-reported employee count is 190" was a member count; it decides nothing.
+    assertEquals(c.hard_checks.find((x: Grounded) => x.dimension === "company_size")!.result, "pass", c.name);
+    assertEquals(c.eligibility, "pending", c.name);
   }
-  assertEquals(verificationTargets({ route_actor: "apify_funding_atomus", max_targets: 6 }, grounded(result) as never,
-    (id) => CRITERIA.find((c) => c.id === id)?.value, undefined, PROBE), [], "failed candidates stop before Atomus");
+  assertEquals(atomusTargets(grounded(result)).map((t) => t.name).sort(), ["Deadline Hollywood", "How to AI"],
+    "viable on proven evidence, whatever triage said");
 });
 
 Deno.test("TRIAGE: missing evidence and a soft Brain industry never reject — an in-range company still reaches Atomus", async () => {

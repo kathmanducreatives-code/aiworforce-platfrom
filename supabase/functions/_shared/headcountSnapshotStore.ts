@@ -144,9 +144,10 @@ export function companyKeyFor(
 /**
  * Turn an enrichment observation into a row, or refuse it with a reason.
  *
- * REFUSAL IS THE COMMON CASE and is not an error. Most enrichment results carry
- * no exact count, and writing a row anyway — with a band, or with a guess — is
- * how a growth capability starts reporting provider disagreement as hiring.
+ * REFUSAL IS THE COMMON CASE and is not an error. Many observations carry no
+ * member count from the company record, and writing a row anyway — with a
+ * band, or with a guess — is how a growth capability starts reporting provider
+ * disagreement as change.
  */
 export function buildSnapshotRow(i: SnapshotInput): SnapshotBuildResult {
   const reject = (rejected: SnapshotRejection, reason: string): SnapshotBuildResult =>

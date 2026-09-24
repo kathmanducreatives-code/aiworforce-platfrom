@@ -103,7 +103,7 @@ export const CAPABILITY_EXECUTABILITY: Readonly<Record<CapabilityId, CapabilityE
       capability: "job_discovery", state: "executable",
       primitives: P(true, true, true, true, true),
       limitations: [
-        "LinkedIn job search only: no company-size input, so size is judged from each row's exact employeeCount",
+        "LinkedIn job search only: no company-size input, so size is read from each employer's declared band (plausible until enrichment)",
         "staffing-agency postings are dropped by a deterministic guard, not by the provider",
         "the four job-board Actors remain uncarded and are never selected",
       ],

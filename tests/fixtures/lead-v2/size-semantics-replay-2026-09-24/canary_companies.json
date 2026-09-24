@@ -1,0 +1,870 @@
+{
+ "source": "local canary tasks tasks.result.lead_resume_checkpoint + workbench_mission_view (2026-09-24)",
+ "note": "Rows are REBUILT from the normalized snapshot the canary persisted: employeeCount = the LinkedIn associated-member count the old code stored as employee_count; employeeCountRange = the declared band it stored as employee_range_advisory. No provider was called to build this file.",
+ "mission": {
+  "version": "lead-mission-v1",
+  "criteria": [
+   {
+    "id": "industry:b2b_saas",
+    "kind": "target",
+    "label": "Industry: b2b saas",
+    "value": "b2b saas",
+    "source": "company_brain_preference",
+    "status": "ok",
+    "dimension": "industry",
+    "rationale": "your Company Brain's ICP; you did not state it in this request",
+    "user_phrase": ""
+   },
+   {
+    "id": "industry:fintech",
+    "kind": "target",
+    "label": "Industry: fintech",
+    "value": "fintech",
+    "source": "company_brain_preference",
+    "status": "ok",
+    "dimension": "industry",
+    "rationale": "your Company Brain's ICP; you did not state it in this request",
+    "user_phrase": ""
+   },
+   {
+    "id": "geography:united_states",
+    "kind": "hard",
+    "label": "Geography: United States",
+    "value": "United States",
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "geography",
+    "rationale": "stated in the request",
+    "user_phrase": ""
+   },
+   {
+    "id": "company_stage:seed",
+    "kind": "target",
+    "label": "Company kind: seed",
+    "value": "seed",
+    "source": "company_brain_preference",
+    "status": "ok",
+    "dimension": "company_stage",
+    "rationale": "your Company Brain's ICP",
+    "user_phrase": ""
+   },
+   {
+    "id": "company_stage:series_a",
+    "kind": "target",
+    "label": "Company kind: series_a",
+    "value": "series_a",
+    "source": "company_brain_preference",
+    "status": "ok",
+    "dimension": "company_stage",
+    "rationale": "your Company Brain's ICP",
+    "user_phrase": ""
+   },
+   {
+    "id": "company_size:_min_11_max_50_",
+    "kind": "hard",
+    "label": "Company size: 11–50 employees",
+    "value": {
+     "max": 50,
+     "min": 11
+    },
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "company_size",
+    "rationale": "stated in the request",
+    "user_phrase": ""
+   },
+   {
+    "id": "funding:_event_funding_subject_company_qualifier_",
+    "kind": "hard",
+    "label": "Funding",
+    "value": {
+     "event": "funding",
+     "subject": "company",
+     "qualifier": {}
+    },
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "funding",
+    "rationale": "a funding window the request states, which the funding pair can verify",
+    "time_window": {
+     "days": 730,
+     "rule": "recently funded / raised",
+     "basis": "announced",
+     "source": "user_explicit",
+     "enforced": false
+    },
+    "user_phrase": "Find 1 US company with 11–50 employees that raised funding in the last 2 years."
+   }
+  ],
+  "confidence": 0.99,
+  "directives": {
+   "source_strategy": [],
+   "adjacent_signals": [],
+   "excluded_signals": [],
+   "preferred_signals": [
+    "funding"
+   ],
+   "required_evidence": [],
+   "allowed_broadening": {
+    "geographies": [],
+    "company_types": [],
+    "role_families": [],
+    "employee_range": {
+     "max": null,
+     "min": null
+    }
+   },
+   "execution_preference": "balanced",
+   "disallowed_broadening": [],
+   "evaluation_instructions": "",
+   "founder_unlock_recommended": false,
+   "requested_contact_ready_count": null
+  },
+  "mission_type": "company_research",
+  "target_entity": "company",
+  "company_profile": {
+   "stages": [
+    "seed",
+    "series_a"
+   ],
+   "locations": [
+    "United States"
+   ],
+   "verticals": [
+    "b2b saas",
+    "fintech"
+   ],
+   "employee_range": {
+    "max": 50,
+    "min": 11
+   },
+   "business_models": []
+  },
+  "decision_makers": {
+   "roles": [],
+   "current_employment_required": false
+  },
+  "planner_runtime": {
+   "role": "planner",
+   "dirty": false,
+   "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+   "function": "lead-mission-compiler",
+   "git_short": "046b61b0",
+   "build_timestamp": "2026-08-29T10:44:33.276Z",
+   "lead_intelligence_contract_version": "v1"
+  },
+  "requested_count": 1,
+  "field_provenance": {
+   "target_entity": "explicit_user_request",
+   "requested_count": "explicit_user_request",
+   "requested_output": "explicit_user_request",
+   "required_signals": "explicit_user_request",
+   "decision_makers.roles": "gpt_inference",
+   "company_profile.stages": "company_brain",
+   "company_profile.locations": "explicit_user_request",
+   "company_profile.verticals": "company_brain",
+   "company_profile.business_models": "gpt_inference"
+  },
+  "hard_constraints": {
+   "company_profile.locations": {
+    "value": [
+     "United States"
+    ],
+    "reason": "stated explicitly in the user's query",
+    "operator": "in"
+   }
+  },
+  "requested_output": "qualified_companies",
+  "required_signals": [
+   {
+    "type": "funding",
+    "event": "funding",
+    "phrase": "funding",
+    "subject": "company",
+    "qualifier": {},
+    "timeframe_days": 730
+   }
+  ],
+  "soft_preferences": {},
+  "mission_semantics": {
+   "goal": "Find 1 US company with 11–50 employees that raised funding in the last 2 years.",
+   "stage": null,
+   "version": "mission-semantics-v1",
+   "hypotheses": [],
+   "corrections": [],
+   "window_sources": {
+    "funding": {
+     "source": "user_explicit"
+    }
+   },
+   "requested_count": 1,
+   "canonical_signals": [
+    {
+     "kind": "funding",
+     "alias": "reader",
+     "phrase": "Find 1 US company with 11–50 employees that raised funding in the last 2 years.",
+     "source": "user_explicit",
+     "subject": "company",
+     "legacy_event": "funding"
+    }
+   ],
+   "unmapped_signal_language": []
+  },
+  "original_user_query": "Find 1 US company with 11–50 employees that raised funding in the last 2 years.",
+  "required_capabilities": [],
+  "prohibited_capabilities": [
+   "founder_discovery",
+   "employer_verification",
+   "contact_enrichment"
+  ],
+  "lead_intelligence_contract_version": "v1"
+ },
+ "companies": [
+  {
+   "task": "87ecf153",
+   "name": "ByteByteGo",
+   "discovery_row": {
+    "id": "80245327",
+    "name": "ByteByteGo",
+    "linkedinUrl": "https://www.linkedin.com/company/bytebytego",
+    "website": "https://blog.bytebytego.com",
+    "description": "A popular weekly newsletter covering topics and trends in large-scale system design, from the authors of the best-selling System Design Interview series.",
+    "employeeCount": 86,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "4",
+      "name": "Software Development",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Software Development"
+     }
+    ],
+    "locations": []
+   },
+   "company_record_row": null,
+   "old": {
+    "prequal_size_status": "above_max",
+    "prequal_exclusion": "employee_size",
+    "investigation_state": "excluded_permanently",
+    "triage": "uncertain",
+    "enriched": false,
+    "bucket": "screened_out",
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "unknown",
+     "company_size": "unknown"
+    },
+    "size_reason": "headcount 86 is reported outside the range, not verified"
+   }
+  },
+  {
+   "task": "87ecf153",
+   "name": "Psychology Today",
+   "discovery_row": {
+    "id": "53201",
+    "name": "Psychology Today",
+    "linkedinUrl": "https://www.linkedin.com/company/psychology-today",
+    "website": "https://www.psychologytoday.com",
+    "description": "Psychology Today is devoted exclusively to everybody's favorite subject: ourselves.\n\nAt PsychologyToday.com, we have gathered renowned academics, psychiatrists, psychologists and authors in our field to contribute their thoughts and ideas on what makes us tick—there are over 900 of them—creating a truly live stream of what's going on in \"psychology today.\"​\n\nOur magazine, first launched in 1967, continues to thrive.\n\nPsychology Today's Therapy Directory (powered by Sussex Directories, Inc) provides a comprehensive directory of therapists, psychiatrists and treatment facilities near you.",
+    "employeeCount": 2135,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "3132",
+      "name": "Internet Publishing",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Information Services > Internet Publishing"
+     }
+    ],
+    "locations": []
+   },
+   "company_record_row": null,
+   "old": {
+    "prequal_size_status": "above_max",
+    "prequal_exclusion": "employee_size",
+    "investigation_state": "excluded_permanently",
+    "triage": "irrelevant",
+    "enriched": false,
+    "bucket": "screened_out",
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "unknown",
+     "company_size": "unknown"
+    },
+    "size_reason": "headcount 2135 is reported outside the range, not verified"
+   }
+  },
+  {
+   "task": "2978a5ba",
+   "name": "Deadline Hollywood",
+   "discovery_row": {
+    "id": "2647971",
+    "name": "Deadline Hollywood",
+    "linkedinUrl": "https://www.linkedin.com/company/deadline-com",
+    "website": "http://www.deadline.com",
+    "description": "Deadline.com is the premier news source covering the business of entertainment, including movies, television, online, digital and related areas. Deadline was founded by veteran journalist Nikki Finke in 2006. Since then, the site has grown to feature a number of additional prominent and experienced entertainment editors from around the world.",
+    "employeeCount": 190,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "113",
+      "name": "Online Audio and Video Media",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Information Services > Internet Publishing > Online Audio and Video Media"
+     }
+    ],
+    "locations": []
+   },
+   "company_record_row": null,
+   "old": {
+    "prequal_size_status": "above_max",
+    "prequal_exclusion": null,
+    "investigation_state": "excluded_permanently",
+    "triage": "irrelevant",
+    "enriched": false,
+    "bucket": "screened_out",
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "unknown",
+     "company_size": "unknown"
+    },
+    "size_reason": "headcount 190 is reported outside the range, not verified"
+   }
+  },
+  {
+   "task": "2978a5ba",
+   "name": "How to AI",
+   "discovery_row": {
+    "id": "96214400",
+    "name": "How to AI",
+    "linkedinUrl": "https://www.linkedin.com/company/how-to-ai-guide",
+    "website": "https://how-to-ai.guide",
+    "description": "Subscribe for free at https://how-to-ai.guide",
+    "employeeCount": 100,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "3129",
+      "name": "Business Content",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Information Services > Internet Publishing > Business Content"
+     }
+    ],
+    "locations": []
+   },
+   "company_record_row": null,
+   "old": {
+    "prequal_size_status": "above_max",
+    "prequal_exclusion": null,
+    "investigation_state": "excluded_permanently",
+    "triage": "irrelevant",
+    "enriched": false,
+    "bucket": "screened_out",
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "unknown",
+     "company_size": "unknown"
+    },
+    "size_reason": "headcount 100 is reported outside the range, not verified"
+   }
+  },
+  {
+   "task": "ee68e102",
+   "name": "Recode",
+   "discovery_row": {
+    "id": "3573599",
+    "name": "Recode",
+    "linkedinUrl": "https://www.linkedin.com/company/re-code-news",
+    "website": "http://recode.net",
+    "description": "Recode is a tech news, reviews and analysis site, from the most informed and respected journalists in technology and media. Because everything in tech and media is constantly being rethought, refreshed, and renewed, Recode’s aim is to reimagine tech journalism.  Recode is the producer and host of the Code Conference events founded in 2014. \r\n\r\nRecode is part of the Vox Media family and joined by The Verge, Vox.com, SB Nation, Polygon, Eater, Racked, Curbed. Vox Media is redefining the modern media company by empowering the smartest creative voices with the technology to create and distribute premium content, and that connects with an audience of 165 million.",
+    "employeeCount": 490,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "113",
+      "name": "Online Audio and Video Media",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Information Services > Internet Publishing > Online Audio and Video Media"
+     }
+    ],
+    "locations": []
+   },
+   "company_record_row": {
+    "id": "3573599",
+    "name": "Recode",
+    "linkedinUrl": "https://www.linkedin.com/company/re-code-news",
+    "website": "http://recode.net",
+    "description": "Recode is a tech news, reviews and analysis site, from the most informed and respected journalists in technology and media. Because everything in tech and media is constantly being rethought, refreshed, and renewed, Recode’s aim is to reimagine tech journalism.  Recode is the producer and host of the Code Conference events founded in 2014. \r\n\r\nRecode is part of the Vox Media family and joined by The Verge, Vox.com, SB Nation, Polygon, Eater, Racked, Curbed. Vox Media is redefining the modern media company by empowering the smartest creative voices with the technology to create and distribute premium content, and that connects with an audience of 165 million.",
+    "employeeCount": 490,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "113",
+      "name": "Online Audio and Video Media",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Information Services > Internet Publishing > Online Audio and Video Media"
+     }
+    ],
+    "companyType": "Privately Held",
+    "locations": [
+     {
+      "parsed": {
+       "text": "San Francisco, CA, United States",
+       "countryFull": "United States of America"
+      },
+      "headquarter": true
+     }
+    ],
+    "foundedOn": {
+     "year": 2014
+    }
+   },
+   "old": {
+    "prequal_size_status": "above_max",
+    "prequal_exclusion": null,
+    "investigation_state": "investigated",
+    "triage": "irrelevant",
+    "enriched": true,
+    "bucket": "ineligible",
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "pass",
+     "company_size": "fail"
+    },
+    "size_reason": "headcount 490 is outside the required range"
+   }
+  },
+  {
+   "task": "ee68e102",
+   "name": "Design Milk",
+   "discovery_row": {
+    "id": "2759127",
+    "name": "Design Milk",
+    "linkedinUrl": "https://www.linkedin.com/company/design-milk",
+    "website": "https://design-milk.com",
+    "description": "Design Milk is a leader in the modern design, digital media, interior and architectural trade, and consumer industries. We support the world’s best independent brands, emerging designers, destinations, design events, and products through exceptional, award-winning content across the worlds of art, architecture, interior design, furniture, fashion, and technology.",
+    "employeeCount": 697,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "113",
+      "name": "Online Audio and Video Media",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Information Services > Internet Publishing > Online Audio and Video Media"
+     }
+    ],
+    "locations": []
+   },
+   "company_record_row": {
+    "id": "2759127",
+    "name": "Design Milk",
+    "linkedinUrl": "https://www.linkedin.com/company/design-milk",
+    "website": "https://design-milk.com",
+    "description": "Design Milk is a leader in the modern design, digital media, interior and architectural trade, and consumer industries. We support the world’s best independent brands, emerging designers, destinations, design events, and products through exceptional, award-winning content across the worlds of art, architecture, interior design, furniture, fashion, and technology.",
+    "employeeCount": 697,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "113",
+      "name": "Online Audio and Video Media",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Information Services > Internet Publishing > Online Audio and Video Media"
+     }
+    ],
+    "companyType": "Public Company",
+    "locations": [
+     {
+      "parsed": {
+       "text": "Boca Raton, FL, United States",
+       "countryFull": "United States of America"
+      },
+      "headquarter": true
+     }
+    ],
+    "foundedOn": {
+     "year": 2006
+    }
+   },
+   "old": {
+    "prequal_size_status": "above_max",
+    "prequal_exclusion": null,
+    "investigation_state": "investigated",
+    "triage": "irrelevant",
+    "enriched": true,
+    "bucket": "ineligible",
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "pass",
+     "company_size": "fail"
+    },
+    "size_reason": "headcount 697 is outside the required range"
+   }
+  },
+  {
+   "task": "ebd44262",
+   "name": "Braintrust",
+   "discovery_row": {
+    "id": "18842066",
+    "name": "Braintrust",
+    "linkedinUrl": "https://www.linkedin.com/company/usebraintrust",
+    "website": "http://www.usebraintrust.com",
+    "description": "Braintrust is revolutionizing hiring with Braintrust AIR, the world's first and only end-to-end AI recruiting platform. Trained with human insights and proprietary data, Braintrust AIR reduces time to hire from months to days, instantly matching you with pre-vetted qualified candidates, and conducting the first round phone screen for you. Trusted by hundreds of Fortune 1000 enterprises including Nestlé, Porsche, Atlassian, Goldman Sachs, and Nike, Braintrust AIR is making talent acquisition professionals 100x more effective and saving companies hundreds of thousands of dollars in recruiting costs.",
+    "employeeCount": 390,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "6",
+      "name": "Technology, Information and Internet",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet"
+     }
+    ],
+    "locations": []
+   },
+   "company_record_row": {
+    "id": "18842066",
+    "name": "Braintrust",
+    "linkedinUrl": "https://www.linkedin.com/company/usebraintrust",
+    "website": "http://www.usebraintrust.com",
+    "description": "Braintrust is revolutionizing hiring with Braintrust AIR, the world's first and only end-to-end AI recruiting platform. Trained with human insights and proprietary data, Braintrust AIR reduces time to hire from months to days, instantly matching you with pre-vetted qualified candidates, and conducting the first round phone screen for you. Trusted by hundreds of Fortune 1000 enterprises including Nestlé, Porsche, Atlassian, Goldman Sachs, and Nike, Braintrust AIR is making talent acquisition professionals 100x more effective and saving companies hundreds of thousands of dollars in recruiting costs.",
+    "employeeCount": 390,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "6",
+      "name": "Technology, Information and Internet",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet"
+     }
+    ],
+    "companyType": "Nonprofit",
+    "locations": [
+     {
+      "parsed": {
+       "text": "San Francisco, CA, United States",
+       "countryFull": "United States of America"
+      },
+      "headquarter": true
+     }
+    ],
+    "foundedOn": {
+     "year": 2018
+    }
+   },
+   "old": {
+    "prequal_size_status": "above_max",
+    "prequal_exclusion": null,
+    "investigation_state": "investigated",
+    "triage": "irrelevant",
+    "enriched": true,
+    "bucket": "ineligible",
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "pass",
+     "company_size": "fail"
+    },
+    "size_reason": "headcount 390 is outside the required range"
+   }
+  },
+  {
+   "task": "ebd44262",
+   "name": "DeepLearning.AI",
+   "discovery_row": {
+    "id": "18246783",
+    "name": "DeepLearning.AI",
+    "linkedinUrl": "https://www.linkedin.com/company/deeplearningai",
+    "website": "http://deeplearning.ai",
+    "description": "DeepLearning.AI is making a world-class AI education accessible to people around the globe. DeepLearning.AI was founded by Andrew Ng, a global leader in AI.",
+    "employeeCount": 658,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "4",
+      "name": "Software Development",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Software Development"
+     }
+    ],
+    "locations": []
+   },
+   "company_record_row": {
+    "id": "18246783",
+    "name": "DeepLearning.AI",
+    "linkedinUrl": "https://www.linkedin.com/company/deeplearningai",
+    "website": "http://deeplearning.ai",
+    "description": "DeepLearning.AI is making a world-class AI education accessible to people around the globe. DeepLearning.AI was founded by Andrew Ng, a global leader in AI.",
+    "employeeCount": 658,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "4",
+      "name": "Software Development",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Software Development"
+     }
+    ],
+    "companyType": "Privately Held",
+    "locations": [
+     {
+      "parsed": {
+       "text": "Mountain View, CA, United States",
+       "countryFull": "United States of America"
+      },
+      "headquarter": true
+     }
+    ],
+    "foundedOn": {
+     "year": 2017
+    }
+   },
+   "old": {
+    "prequal_size_status": "above_max",
+    "prequal_exclusion": null,
+    "investigation_state": "investigated",
+    "triage": "irrelevant",
+    "enriched": true,
+    "bucket": "ineligible",
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "pass",
+     "company_size": "fail"
+    },
+    "size_reason": "headcount 658 is outside the required range"
+   }
+  },
+  {
+   "task": "ebd44262",
+   "name": "Wall Street Oasis",
+   "discovery_row": {
+    "id": "1469345",
+    "name": "Wall Street Oasis",
+    "linkedinUrl": "https://www.linkedin.com/company/wall-street-oasis",
+    "website": "https://www.wallstreetoasis.com/academy",
+    "description": "🧠 What Is Wall Street Oasis (WSO)?\n\nWall Street Oasis (WSO) is the largest online community and career platform for students and professionals pursuing careers in finance, consulting, and related industries. Founded by Patrick Curtis, a former investment banker, WSO combines expert education, mentorship, and a massive peer-driven ecosystem to help people break into elite finance roles—from investment banking and private equity to hedge funds, venture capital, and management consulting.\n\n🌐 The Community\n\nAt its core, WSO began as a forum—a place where finance professionals and aspiring candidates could share insights, discuss recruiting tips, and demystify the industry. Over time, it’s grown into a global community of over 900,000 members, including analysts, associates, VPs, partners, and students from top universities worldwide.\n\nThe forums cover topics such as:\nInterview and recruiting experiences\nResume and networking advice\nCompensation data and bonus reports\nMBA and graduate program discussions\nLateral transitions and career changes\n\n🚀 WSO Academy\n\nWSO Academy is the platform’s flagship educational program—a structured, high-touch accelerator designed to help students and career changers land top finance offers within months, not years.\n\nIt combines:\nLive office hours with senior mentors and finance professionals\nBootcamps covering financial modeling, valuation, and technical interview prep\nAccess to 2,000+ mentors across investment banking, private equity, and hedge funds\nNetworking and application strategy guidance\nFull tuition refund guarantee if students don’t land a lucrative offer within a set timeframe\n\nThe program is tailored to four key groups:\n🎓 Target school students\n🏫 Non-target students\n🔁 Career changers\n🌍 International candidates",
+    "employeeCount": 834,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "43",
+      "name": "Financial Services",
+      "hierarchy": "Financial Services"
+     }
+    ],
+    "locations": []
+   },
+   "company_record_row": {
+    "id": "1469345",
+    "name": "Wall Street Oasis",
+    "linkedinUrl": "https://www.linkedin.com/company/wall-street-oasis",
+    "website": "https://www.wallstreetoasis.com/academy",
+    "description": "🧠 What Is Wall Street Oasis (WSO)?\n\nWall Street Oasis (WSO) is the largest online community and career platform for students and professionals pursuing careers in finance, consulting, and related industries. Founded by Patrick Curtis, a former investment banker, WSO combines expert education, mentorship, and a massive peer-driven ecosystem to help people break into elite finance roles—from investment banking and private equity to hedge funds, venture capital, and management consulting.\n\n🌐 The Community\n\nAt its core, WSO began as a forum—a place where finance professionals and aspiring candidates could share insights, discuss recruiting tips, and demystify the industry. Over time, it’s grown into a global community of over 900,000 members, including analysts, associates, VPs, partners, and students from top universities worldwide.\n\nThe forums cover topics such as:\nInterview and recruiting experiences\nResume and networking advice\nCompensation data and bonus reports\nMBA and graduate program discussions\nLateral transitions and career changes\n\n🚀 WSO Academy\n\nWSO Academy is the platform’s flagship educational program—a structured, high-touch accelerator designed to help students and career changers land top finance offers within months, not years.\n\nIt combines:\nLive office hours with senior mentors and finance professionals\nBootcamps covering financial modeling, valuation, and technical interview prep\nAccess to 2,000+ mentors across investment banking, private equity, and hedge funds\nNetworking and application strategy guidance\nFull tuition refund guarantee if students don’t land a lucrative offer within a set timeframe\n\nThe program is tailored to four key groups:\n🎓 Target school students\n🏫 Non-target students\n🔁 Career changers\n🌍 International candidates",
+    "employeeCount": 834,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "43",
+      "name": "Financial Services",
+      "hierarchy": "Financial Services"
+     }
+    ],
+    "companyType": "Privately Held",
+    "locations": [
+     {
+      "parsed": {
+       "text": "Saratoga, CA, United States",
+       "countryFull": "United States of America"
+      },
+      "headquarter": true
+     }
+    ],
+    "foundedOn": {
+     "year": 2006
+    }
+   },
+   "old": {
+    "prequal_size_status": "above_max",
+    "prequal_exclusion": null,
+    "investigation_state": "investigated",
+    "triage": "irrelevant",
+    "enriched": true,
+    "bucket": "ineligible",
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "pass",
+     "company_size": "fail"
+    },
+    "size_reason": "headcount 834 is outside the required range"
+   }
+  },
+  {
+   "task": "ebd44262",
+   "name": "BigRio",
+   "discovery_row": {
+    "id": "2987720",
+    "name": "BigRio",
+    "linkedinUrl": "https://www.linkedin.com/company/bigrio",
+    "website": "http://www.bigr.io",
+    "description": "BigRio is a technology consulting firm empowering data to drive innovation and advanced analytics. We specialize in cutting-edge Big Data, Machine Learning, and Custom Software strategy, analysis, architecture, and implementation solutions. We are an elite group with MIT roots, shining when tasked with complex missions. Whether it’s assembling mounds of data from a variety of sources, surfacing intelligence with Deep Learning, or building high-volume, highly-available systems, we consistently deliver.\n \nWith extensive domain knowledge, BigRio’s scientists and engineers design and build best-in-class solutions across a variety of verticals. This diverse industry exposure and our constant run-in with cutting-edge technology equips us with invaluable tools, strategies, and techniques. Our knowledge and horsepower bring innovative, cost-conscious, and extensible results to complex business challenges.",
+    "employeeCount": 124,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "4",
+      "name": "Software Development",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Software Development"
+     }
+    ],
+    "locations": []
+   },
+   "company_record_row": {
+    "id": "2987720",
+    "name": "BigRio",
+    "linkedinUrl": "https://www.linkedin.com/company/bigrio",
+    "website": "http://www.bigr.io",
+    "description": "BigRio is a technology consulting firm empowering data to drive innovation and advanced analytics. We specialize in cutting-edge Big Data, Machine Learning, and Custom Software strategy, analysis, architecture, and implementation solutions. We are an elite group with MIT roots, shining when tasked with complex missions. Whether it’s assembling mounds of data from a variety of sources, surfacing intelligence with Deep Learning, or building high-volume, highly-available systems, we consistently deliver.\n \nWith extensive domain knowledge, BigRio’s scientists and engineers design and build best-in-class solutions across a variety of verticals. This diverse industry exposure and our constant run-in with cutting-edge technology equips us with invaluable tools, strategies, and techniques. Our knowledge and horsepower bring innovative, cost-conscious, and extensible results to complex business challenges.",
+    "employeeCount": 124,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "4",
+      "name": "Software Development",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Software Development"
+     }
+    ],
+    "companyType": "Privately Held",
+    "locations": [
+     {
+      "parsed": {
+       "text": "Boston, MA, United States",
+       "countryFull": "United States of America"
+      },
+      "headquarter": true
+     }
+    ],
+    "foundedOn": {
+     "year": 2013
+    }
+   },
+   "old": {
+    "prequal_size_status": "above_max",
+    "prequal_exclusion": null,
+    "investigation_state": "investigated",
+    "triage": "irrelevant",
+    "enriched": true,
+    "bucket": "ineligible",
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "pass",
+     "company_size": "fail"
+    },
+    "size_reason": "headcount 124 is outside the required range"
+   }
+  },
+  {
+   "task": "ebd44262",
+   "name": "Inman",
+   "discovery_row": {
+    "id": "606348",
+    "name": "Inman",
+    "linkedinUrl": "https://www.linkedin.com/company/inman-news",
+    "website": "http://www.inman.com",
+    "description": "The smartest real estate professionals start their day with Inman.\n\nInman is the leading source of news, events, insights, and community for the residential real estate industry. Trusted by real estate agents, brokers, executives, and decision-makers across the housing landscape, Inman delivers independent journalism covering market trends, technology, business strategy, economic forces, and the people shaping the future of real estate.\n\nBuilt on a foundation of journalistic integrity and powered by a modern media platform, Inman has helped real estate professionals navigate an ever-changing industry for decades. Guided by the belief that independent reporting can thrive alongside live events, industry sponsorships, digital media, and a robust professional community, Inman has earned its reputation as one of the most trusted media brands in the country.\n\nNEWS\nInman Select is the premium subscription platform, providing exclusive access to industry-leading journalism, sharp analysis, special reports, market insights, and expert commentary. Subscribers gain the information and perspective needed to understand market shifts, identify emerging trends, and make informed business decisions.\n\nEVENTS\nInman Connect is where real estate's brightest minds gather to learn, network, and grow in person. Keynotes, panels, workshops, and curated networking opportunities put attendees in the room with the leaders defining the industry while delivering practical knowledge attendees can apply to their businesses. For thousands, Inman Connect serves as a much needed change of scenery and space to learn, grow, and connect.\n\nCOMMUNITY\nInman Community is an online platform available to Inman event attendees and members, empowering them to connect, network, share knowledge, and have niche conversations with their peers before, during, and after events. \n\nTo learn more about Inman Select, attend Inman Connect, submit a story, or explore sponsorship opportunities, visit Inman.com.",
+    "employeeCount": 169,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "3124",
+      "name": "Internet News",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Information Services > Internet Publishing > Online Audio and Video Media > Internet News"
+     }
+    ],
+    "locations": []
+   },
+   "company_record_row": {
+    "id": "606348",
+    "name": "Inman",
+    "linkedinUrl": "https://www.linkedin.com/company/inman-news",
+    "website": "http://www.inman.com",
+    "description": "The smartest real estate professionals start their day with Inman.\n\nInman is the leading source of news, events, insights, and community for the residential real estate industry. Trusted by real estate agents, brokers, executives, and decision-makers across the housing landscape, Inman delivers independent journalism covering market trends, technology, business strategy, economic forces, and the people shaping the future of real estate.\n\nBuilt on a foundation of journalistic integrity and powered by a modern media platform, Inman has helped real estate professionals navigate an ever-changing industry for decades. Guided by the belief that independent reporting can thrive alongside live events, industry sponsorships, digital media, and a robust professional community, Inman has earned its reputation as one of the most trusted media brands in the country.\n\nNEWS\nInman Select is the premium subscription platform, providing exclusive access to industry-leading journalism, sharp analysis, special reports, market insights, and expert commentary. Subscribers gain the information and perspective needed to understand market shifts, identify emerging trends, and make informed business decisions.\n\nEVENTS\nInman Connect is where real estate's brightest minds gather to learn, network, and grow in person. Keynotes, panels, workshops, and curated networking opportunities put attendees in the room with the leaders defining the industry while delivering practical knowledge attendees can apply to their businesses. For thousands, Inman Connect serves as a much needed change of scenery and space to learn, grow, and connect.\n\nCOMMUNITY\nInman Community is an online platform available to Inman event attendees and members, empowering them to connect, network, share knowledge, and have niche conversations with their peers before, during, and after events. \n\nTo learn more about Inman Select, attend Inman Connect, submit a story, or explore sponsorship opportunities, visit Inman.com.",
+    "employeeCount": 169,
+    "employeeCountRange": {
+     "start": 11,
+     "end": 50
+    },
+    "industries": [
+     {
+      "id": "3124",
+      "name": "Internet News",
+      "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Information Services > Internet Publishing > Online Audio and Video Media > Internet News"
+     }
+    ],
+    "companyType": "Privately Held",
+    "locations": [
+     {
+      "parsed": {
+       "text": "Tallahassee, FL, United States",
+       "countryFull": "United States of America"
+      },
+      "headquarter": true
+     }
+    ],
+    "foundedOn": {
+     "year": 1983
+    }
+   },
+   "old": {
+    "prequal_size_status": "above_max",
+    "prequal_exclusion": null,
+    "investigation_state": "investigated",
+    "triage": "irrelevant",
+    "enriched": true,
+    "bucket": "ineligible",
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "pass",
+     "company_size": "fail"
+    },
+    "size_reason": "headcount 169 is outside the required range"
+   }
+  }
+ ]
+}

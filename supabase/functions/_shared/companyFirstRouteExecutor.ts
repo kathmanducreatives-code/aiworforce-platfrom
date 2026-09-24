@@ -250,16 +250,16 @@ export async function executeCompanyFirstRoute(
     } else if (source === "apify_linkedin_company_search") {
       // CANDIDATE GENERATOR ONLY. Nothing this Actor returns may satisfy a Brain
       // gate: its industry filter returned TechCrunch and a staffing firm under
-      // "Software Development", and its size filter reads employeeCountRange,
-      // which contradicted the exact count by up to 23x. Enrichment decides.
+      // "Software Development", and a search row's declared size band is only
+      // plausible (companySize.ts). Enrichment decides.
       const compiled = compileHarvestCompanySearchInput({
         // A concept phrase is deliberately NOT passed here.
         ...(opts.companyNameSearch ? { searchQuery: opts.companyNameSearch } : {}),
         locations: opts.generalLocations ?? ["United States"],
         industryIds: opts.generalIndustryIds ?? [],
         companySize: opts.generalCompanySizes ?? [],
-        // `short` costs half and its employeeCount is null either way — the
-        // exact count comes from enrichment, so paying for `full` buys nothing.
+        // `short` costs half and carries no size figure at all — the declared
+        // band comes from enrichment's company record, so `full` buys nothing.
         scraperMode: "short",
         maxItems: maxCandidates,
       });

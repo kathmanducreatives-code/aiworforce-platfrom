@@ -398,10 +398,15 @@ export interface WorkbenchEvaluationRow {
   /** Null when no provider ever supplied one. NEVER a URL. */
   company_name: string | null;
   domain: string | null;
-  /** The company's DECLARED size band ("11-50"). Null when none was reported. */
+  /** The company's DECLARED LinkedIn size band ("11-50"). Null when none was reported. */
   company_size_band: string | null;
   /** LinkedIn associated members (companySize.ts). NOT an employee count. */
   linkedin_associated_members: number | null;
+  /**
+   * A YC directory's SELF-REPORTED team size — kept apart from the declared
+   * band, because it is neither a band nor verified (ShipBob reported 1).
+   */
+  self_reported_team_size: number | null;
   strongest_signal: string | null;
   signal_tier: "A" | "B" | "C" | null;
   /** The role that earned the shortlist, with its source URL when YC gave one. */
@@ -526,10 +531,12 @@ export function projectEvaluationRows(
         authoritative: c.companyName, prequalified: pq?.name, key: c.key,
       }),
       domain: pq?.canonical_domain ?? null,
-      // Enrichment first. Two facts, named for what they are: the declared
-      // band, and the LinkedIn member count (never labelled employees).
-      company_size_band: c.sizeBand ?? (pq?.team_size != null ? `yc_self_reported:${pq.team_size}` : null),
+      // Enrichment first. Each size figure named for what it is: the declared
+      // band, the LinkedIn member count (never labelled employees), and a YC
+      // self-report — three fields, so no column can pass one off as another.
+      company_size_band: c.sizeBand ?? null,
       linkedin_associated_members: c.linkedinMembers ?? null,
+      self_reported_team_size: pq?.team_size ?? null,
       strongest_signal: pq?.strongest_signal ?? null,
       signal_tier: pq?.best_tier ?? null,
       supporting_job_title: supporting?.title ?? pq?.strongest_signal ?? null,

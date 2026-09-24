@@ -474,7 +474,7 @@ export const CAPABILITY_REGISTRY: Readonly<Record<CapabilityId, CapabilitySpec>>
     cost_units: 1,
     max_attempts: 2,
     fallback_policy: "provider_fallback_only",
-    evidence_required: ["employee_count or industry_ids or description"],
+    evidence_required: ["company_size_band or industry_ids or description"],
   },
   hiring_verification: {
     id: "hiring_verification",
@@ -1320,7 +1320,7 @@ export function buildCapabilityGraph(
     routing_advisories.push(
       "This mission is hiring-led and enters through job_discovery. " +
       "apify_linkedin_job_search called WITHOUT `company` discovers employers that have the open role " +
-      "right now; every row carries the employer's LinkedIn URL, website and exact headcount, so " +
+      "right now; every row carries the employer's LinkedIn URL, website and declared size band, so " +
       "identity resolution reuses that URL. Plan job_discovery with actor-native input — jobTitles " +
       "as one boolean OR query of the role's real titles, locations for a hard geography, postedLimit, " +
       "maxItems — then identity resolution, enrichment, hiring verification and qualification.",

@@ -289,7 +289,12 @@ export function makeCompanyEnrichmentExecutor(
 export interface CompanyRawPatch {
   company_website?: string;
   company_industries?: string[];
+  /**
+   * LEGACY, NO LONGER WRITTEN: size evidence is the declared band only
+   * (`company_employee_range`); a LinkedIn member count is not staff.
+   */
   company_employee_count?: number;
+  /** The company's DECLARED size band — the only size fact this patch carries. */
   company_employee_range?: { start?: number; end?: number };
   company_country?: string;
   company_country_code?: string;

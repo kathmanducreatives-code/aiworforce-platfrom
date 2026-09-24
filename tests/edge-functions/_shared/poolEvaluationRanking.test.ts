@@ -63,7 +63,8 @@ function company(over: Record<string, unknown> = {}) {
     description: "Acme sells electronic-design software to engineering teams.",
     provider_industry: "Software Development",
     industry_ids: [{ id: "4", name: "B2B SaaS", hierarchy: "Tech" }],
-    employee_count: 60, employee_range_advisory: null, geography: "United States",
+    company_size_band: { min: 51, max: 200, source: "linkedin_declared" }, linkedin_associated_member_count: 60,
+    employee_range_advisory: null, geography: "United States",
     company_type: null, startup_evidence: null, hiring_status: true,
     source_provenance: "harvestapi/linkedin-company", field_trust: {},
     missing_fields: [], raw_ref: { actor_key: "x", source_id: "x" },
@@ -111,16 +112,23 @@ Deno.test("1. a verified geography mismatch is removed before any model call", (
   assert(geographyContradicts("Berlin, Germany", ["United States"]));
 });
 
-Deno.test("2. a verified employee-size mismatch is removed; an unknown one is not", () => {
+Deno.test("2. a declared band wholly outside the range is removed; an unknown or partial one is not", () => {
+  const band = (min: number, max: number) => ({ min, max, source: "linkedin_declared" });
   const pool = buildEligiblePool([
-    candidate("right-size", { employee_count: 60 }),
-    candidate("far-too-big", { employee_count: 5000 }),
-    candidate("size-unknown", { employee_count: null }),
+    candidate("right-size", { company_size_band: band(11, 50) }),
+    candidate("far-too-big", { company_size_band: band(1001, 5000) }),
+    candidate("straddles", { company_size_band: band(51, 200) }),
+    candidate("size-unknown", { company_size_band: null }),
+    // 5,000 LinkedIn members and no declared band: members are not staff.
+    candidate("members-only", { company_size_band: null, linkedin_associated_member_count: 5000 }),
   ], { mission: MISSION, employee_max: 150 });
   const keys = pool.eligible.map((c) => c.company_key);
   assert(keys.includes("right-size"));
-  assert(keys.includes("size-unknown"), "an unknown headcount must not gate");
+  assert(keys.includes("size-unknown"), "an unknown size must not gate");
+  assert(keys.includes("straddles"), "a band that only partly overlaps is a review question");
+  assert(keys.includes("members-only"), "a member count must not gate");
   assertFalse(keys.includes("far-too-big"));
+  assertEquals(pool.excluded.find((e) => e.company_key === "far-too-big")?.reason, "verified_employee_size_mismatch");
 });
 
 Deno.test("3. duplicates are evaluated once", () => {

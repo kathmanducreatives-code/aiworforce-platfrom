@@ -5,6 +5,7 @@ import {
 import { X, ExternalLink, Building2, User, Sparkles, Mail, FileText, Activity, Code2, Search, Users, Briefcase, Target, Linkedin } from 'lucide-react';
 import type { LeadTableRow } from '@/hooks/useLeadResults';
 import { ContactStatusChip, RowStatusChip } from './StatusChip';
+import { companySizeText, linkedinMembersText, LINKEDIN_MEMBERS_HINT } from '@/lib/workbench/companySize';
 
 function Link({ href, label }: { href?: string | null; label: string }) {
   if (!href) return null;
@@ -88,7 +89,13 @@ export default function LeadDetailDrawer({ row, onClose }: Props) {
           </div>
           <Field k="Website" v={<Link href={row.website} label={row.website?.replace(/^https?:\/\//, '') ?? ''} />} />
           <Field k="LinkedIn" v={row.company_linkedin_url ? <a href={row.company_linkedin_url} target="_blank" rel="noopener noreferrer" className="text-sky-300 hover:text-sky-200 inline-flex items-center gap-1"><Linkedin className="h-2.5 w-2.5" /> company page<ExternalLink className="h-2.5 w-2.5" /></a> : null} />
-          <Field k="Employees" v={typeof row.employee_count === 'number' ? `~${row.employee_count}` : null} />
+          <Field k="Company size" v={companySizeText({
+            declared_band: row.company_size_band ?? null, linkedin_members: row.linkedin_associated_members ?? null,
+            self_reported_team_size: null, legacy_reported_count: row.legacy_reported_count ?? null,
+          })} />
+          <Field k="LinkedIn members" v={row.linkedin_associated_members != null
+            ? <span title={LINKEDIN_MEMBERS_HINT}>{linkedinMembersText(row.linkedin_associated_members)} · not a staff count</span>
+            : null} />
           <Field k="Industries" v={(row.industries ?? []).join(' · ')} />
           <Field k="Location" v={row.company_location} />
           <Field k="About" v={excerpt(row.company_description, 400)} />

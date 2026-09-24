@@ -138,7 +138,10 @@ export function readDiagnosticsFromResult(result: unknown): CompanyDiagnosticVie
  */
 export function gateLabel(gate: string): string {
   const known: Record<string, string> = {
-    employee_count: 'Employee count outside the target range',
+    // Legacy code from before the size split; kept so old runs still read.
+    employee_count: 'Company size outside the target range',
+    company_size_band_above_max: 'Declared company size above the target range',
+    company_size_band_below_min: 'Declared company size below the target range',
     business_model: 'Business model does not match the ICP',
     industry: 'Industry does not match the ICP',
     company_vertical: 'Industry does not match the ICP',

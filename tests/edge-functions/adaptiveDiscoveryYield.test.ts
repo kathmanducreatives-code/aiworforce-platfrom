@@ -35,9 +35,15 @@ import {
 } from "../../supabase/functions/_shared/leadResumeState.ts";
 import type { NormalizedHiringCompany } from "../../supabase/functions/_shared/hiringActorNormalizers.ts";
 
-/** A normalized row with a trusted exact headcount, as `full` mode returns. */
+/**
+ * A normalized row with a trusted DECLARED size band, as the company search
+ * returns (companySize.ts). `[51, 200]` sits inside the 20–200 bounds below;
+ * `[1001, 5000]` is wholly outside them.
+ */
+const IN: [number, number] = [51, 200];
+const BIG: [number, number] = [1001, 5000];
 function company(
-  name: string, employees: number | null,
+  name: string, band: [number, number] | null,
 ): NormalizedHiringCompany {
   return {
     external_source_id: `linkedin:${name}`,
@@ -48,14 +54,15 @@ function company(
     description: `${name} does something`,
     provider_industry: "Software Development",
     industry_ids: [],
-    employee_count: employees,
+    company_size_band: band ? { min: band[0], max: band[1], source: "linkedin_declared" } : null,
+    linkedin_associated_member_count: null,
     employee_range_advisory: null,
     geography: "London, England, United Kingdom",
     company_type: null,
     startup_evidence: null,
     hiring_status: null,
     source_provenance: "harvestapi/linkedin-company-search",
-    field_trust: { employee_count: "direct" as const },
+    field_trust: { company_size_band: "direct" as const },
     missing_fields: [],
     raw_ref: { actor_key: "apify_linkedin_company_search", source_id: name },
   } as unknown as NormalizedHiringCompany;
@@ -64,8 +71,8 @@ function company(
 /** The 7e71d8bc shape: 50 rows, 34 inside 20–200. */
 function poolOf(inRange: number, outOfRange: number): NormalizedHiringCompany[] {
   const out: NormalizedHiringCompany[] = [];
-  for (let i = 0; i < inRange; i++) out.push(company(`InRange${i}`, 50 + i));
-  for (let i = 0; i < outOfRange; i++) out.push(company(`TooBig${i}`, 5000 + i));
+  for (let i = 0; i < inRange; i++) out.push(company(`InRange${i}`, IN));
+  for (let i = 0; i < outOfRange; i++) out.push(company(`TooBig${i}`, BIG));
   return out;
 }
 
@@ -136,8 +143,8 @@ Deno.test("admission never consults geography", () => {
   // Same rows, one with a US-only geography string. Presence semantics are
   // unchanged by this work and HQ filtering is not introduced: the only thing
   // that may reject here is the employee range.
-  const uk = company("Alpha", 100);
-  const us = { ...company("Beta", 100), geography: "San Francisco, California, US" };
+  const uk = company("Alpha", IN);
+  const us = { ...company("Beta", IN), geography: "San Francisco, California, US" };
   assertEquals(
     admittedCandidateCount([uk, us] as NormalizedHiringCompany[], BOUNDS, ENFORCED),
     2,
@@ -278,7 +285,7 @@ Deno.test("merge across pages dedupes rather than double-counting", () => {
   // inflate, or replenishment would stop on companies it already held.
   const page1 = poolOf(20, 5);
   const page2 = [...page1.slice(15), ...poolOf(0, 0), ...[
-    company("Fresh1", 40), company("Fresh2", 60), company("Fresh3", 80),
+    company("Fresh1", IN), company("Fresh2", IN), company("Fresh3", IN),
   ]];
   const merged = mergePrequalification(
     emptyPrequalificationResult(),

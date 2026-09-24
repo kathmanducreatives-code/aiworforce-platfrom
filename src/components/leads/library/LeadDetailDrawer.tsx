@@ -116,7 +116,9 @@ export function LeadDetailDrawer({
         {/* Account overview */}
         <Section icon={Building2} title="Account overview">
           <Field k="Industry" v={lead.industry} />
-          <Field k="Employees" v={lead.employeeCount != null ? `${lead.employeeCount}` : null} />
+          {/* `accounts.employee_count` is free text of mixed provenance — often a
+              LinkedIn member count, which is not staff. Shown as REPORTED. */}
+          <Field k="Company size (reported)" v={lead.employeeCount != null ? `${lead.employeeCount}` : null} />
           <Field k="Location" v={lead.location} />
           <Field k="Website" v={lead.websiteUrl ? <Link href={lead.websiteUrl} label={lead.websiteUrl.replace(/^https?:\/\//, "")} /> : null} />
           <Field

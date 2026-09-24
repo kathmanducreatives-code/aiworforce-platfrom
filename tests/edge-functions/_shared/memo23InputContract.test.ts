@@ -195,7 +195,8 @@ Deno.test("9. the real 10-150 bound is enforced AFTER enrichment, not by the Act
       if (c.actorKey === "apify_linkedin_company_details") {
         return Promise.resolve([{ id: "big", name: "BigCo",
           linkedinUrl: "https://www.linkedin.com/company/bigco",
-          website: "https://bigco.com", employeeCount: 400,
+          // DECLARES 201-500 on its record; 90 LinkedIn members play no part.
+          website: "https://bigco.com", employeeCount: 90, employeeCountRange: { start: 201, end: 500 },
           description: "BigCo is a B2B SaaS platform sold on subscription.",
           industries: [{ id: "4", name: "B2B SaaS", hierarchy: "Technology" }],
           locations: [{ linkedinText: "United States" }] }]);
@@ -213,10 +214,10 @@ Deno.test("9. the real 10-150 bound is enforced AFTER enrichment, not by the Act
   }, { mission: m, plan, brain: BRAIN });
 
   assertEquals(run.state.qualified_company_keys.length, 0,
-    "400 employees is outside 10-150 and must be rejected from ENRICHED evidence");
+    "a declared 201-500 is wholly outside 10-150 and must be rejected from ENRICHED evidence");
   const rejected = run.companies.find((c) => c.verdict === "reject");
   assert(rejected, "the company must be explicitly rejected");
-  assert(rejected!.fit?.failed_gates.includes("employee_count_above_max"));
+  assert(rejected!.fit?.failed_gates.includes("company_size_band_above_max"));
 });
 
 Deno.test("9b. a Brain-only size bound does NOT reject when the Mission is silent", async () => {
@@ -247,7 +248,8 @@ Deno.test("9b. a Brain-only size bound does NOT reject when the Mission is silen
       if (c.actorKey === "apify_linkedin_company_details") {
         return Promise.resolve([{ id: "big", name: "BigCo",
           linkedinUrl: "https://www.linkedin.com/company/bigco",
-          website: "https://bigco.com", employeeCount: 400,
+          // DECLARES 201-500 on its record; 90 LinkedIn members play no part.
+          website: "https://bigco.com", employeeCount: 90, employeeCountRange: { start: 201, end: 500 },
           description: "BigCo is a B2B SaaS platform sold on subscription.",
           industries: [{ id: "4", name: "B2B SaaS", hierarchy: "Technology" }],
           locations: [{ linkedinText: "United States" }] }]);
@@ -265,7 +267,7 @@ Deno.test("9b. a Brain-only size bound does NOT reject when the Mission is silen
   const co = run.companies.find((c) => c.key.includes("bigco") || c.company.company_name === "BigCo");
   assert(co, "the company must still be evaluated");
   assertFalse(
-    co!.fit?.failed_gates.includes("employee_count_above_max") ?? false,
+    co!.fit?.failed_gates.includes("company_size_band_above_max") ?? false,
     "a Brain-only bound must not fail the size gate when the Mission set none",
   );
 });

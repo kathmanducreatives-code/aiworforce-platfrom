@@ -99,8 +99,9 @@ export interface HarvestJobSearchInput {
  * LEAD V2 P3 — the same Actor asked a DISCOVERY question: open roles across
  * employers, no `company[]`. Verified live 2026-09-16 (run
  * `p3/probe_rows.json`, 10 rows): every row carried `company.linkedinUrl`,
- * `website`, `universalName` and an exact `employeeCount`, so the employer's
- * identity arrives with the posting.
+ * `website`, `universalName`, the declared `employeeCountRange` and
+ * `employeeCount` (LinkedIn associated members), so the employer's identity
+ * arrives with the posting.
  */
 export interface HarvestJobDiscoveryInput {
   /** LinkedIn boolean syntax is supported: `"growth marketer" OR "head of growth"`. */
@@ -553,10 +554,10 @@ export function compileHarvestCompanySearchInput(
   // it is a call that cannot succeed — and six of them were paid for.
   if (e.length) return fail(K, e);
   if (i.companySize?.length) {
-    w.push("companySize filters employeeCountRange, which contradicts exact employeeCount — a hint, not proof");
+    w.push("companySize filters the DECLARED band (employeeCountRange) — plausible on a search row; the company record settles it");
   }
   if (i.industryIds?.length) w.push("provider industry is not proof of industry — enrichment is required");
-  if (i.scraperMode === "short") w.push("short mode returns employeeCount=null — size is unverifiable here");
+  if (i.scraperMode === "short") w.push("short mode returns no size band and no member count — size is unreadable here");
   w.push("CANDIDATES ONLY — output cannot satisfy a Company Brain hard gate without enrichment");
   const per = i.scraperMode === "full" ? 0.004 : 0.002;
   return build(K, i, "company", cost(K, i.maxItems, per), w, i.scraperMode);

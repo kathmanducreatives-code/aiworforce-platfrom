@@ -195,7 +195,9 @@ export interface NormalizedCompanyDetails {
   tagline?: string;
   industries?: string[];
   companyType?: string;
+  /** LinkedIn ASSOCIATED MEMBERS (`employeeCount`) — NOT staff (companySize.ts). */
   employeeCount?: number;
+  /** The company's DECLARED size band (`employeeCountRange`) — the size fact. */
   employeeRange?: { start?: number; end?: number };
   foundedYear?: number;
   headquarters?: { country?: string; countryCode?: string; region?: string; city?: string; text?: string };
@@ -308,8 +310,12 @@ export function normalizeCompanyActorItem(
   if (company.description || company.tagline) {
     evidence.push(mk("company_business_model", company.description ?? company.tagline, "low"));
   }
-  if (company.employeeCount != null || company.employeeRange) {
-    evidence.push(mk("company_size", company.employeeCount ?? company.employeeRange, "medium"));
+  // SIZE IS THE DECLARED BAND. This used to prefer `employeeCount`, which is
+  // LinkedIn associated members — so a company declaring 11-50 with 490
+  // members carried "490" as its size (companySize.ts). The member count stays
+  // on `company` for display and is never size evidence.
+  if (company.employeeRange) {
+    evidence.push(mk("company_size", company.employeeRange, "medium"));
   }
   if (company.headquarters) evidence.push(mk("company_geography", company.headquarters, "medium"));
 

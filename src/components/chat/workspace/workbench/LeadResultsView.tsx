@@ -51,6 +51,7 @@ import type { EvaluationRow } from '@/lib/workbench/evaluationRows';
 import { workbenchFunnelCounts } from '@/lib/workbench/evaluationRows';
 import RunSummaryHero from './RunSummaryHero';
 import RunDetails from './RunDetails';
+import { companySizeText, readCompanySizeFacts } from '@/lib/workbench/companySize';
 
 interface Props {
   meta: LeadResultsPanelMeta;
@@ -670,9 +671,9 @@ export default function LeadResultsView({
               >
                 <span className="text-[13.5px] text-[#C9D1D9] truncate">
                   {c.company_name}
-                  {c.employee_count != null && (
+                  {companySizeText(readCompanySizeFacts(c as unknown as Record<string, unknown>)) && (
                     <span className="text-[11.5px] text-[#6e7681] ml-2 tabular-nums">
-                      {c.employee_count} employees
+                      {companySizeText(readCompanySizeFacts(c as unknown as Record<string, unknown>))}
                     </span>
                   )}
                 </span>

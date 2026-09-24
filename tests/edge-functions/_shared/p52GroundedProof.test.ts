@@ -96,7 +96,9 @@ const grounded = (value: string, bm: "accepted" | "review", verdict: "pass" | "r
 });
 const graphOf = (items: EvidenceItem[]) => buildCompanyEvidenceGraph("c1", items, { now: NOW });
 const US = () => ev("geography", "Austin, TX, United States");
-const SMALL = () => ev("headcount", 20);
+/** The company's DECLARED size band (companySize.ts), proven on its LinkedIn record. */
+const band = (min: number, max: number | null) => ({ min, max, source: "linkedin_declared" });
+const SMALL = () => ev("company_size_band", band(11, 50));
 
 // ═══════════════════════════════════════════════════════════════ BRAIN-1 ══
 
@@ -186,12 +188,14 @@ Deno.test("SEM-2: supporting proof passes, verified contradiction fails, missing
   assertEquals(e.eligibility, "ineligible");
   assertEquals(e.disproven.length, 1);
 
-  // The same rule for geography and headcount: only VERIFIED contradiction rejects.
+  // The same rule for geography and size: only VERIFIED contradiction rejects.
   assertEquals(evaluateEligibility(cs, graphOf([ev("geography", "Berlin, Germany")])).hard_checks.geography, "fail");
   assertEquals(evaluateEligibility(cs, graphOf([ev("geography", "Berlin, Germany", { status: "plausible" })])).hard_checks.geography, "unknown");
   const sized = deriveMissionCriteria(mergeCompanyBrainIntoMission(mission, CANARY_BRAIN).mission);
-  assertEquals(evaluateEligibility(sized, graphOf([ev("headcount", 4000)])).hard_checks.company_size, "fail");
-  assertEquals(evaluateEligibility(sized, graphOf([ev("headcount", 4000, { status: "plausible" })])).hard_checks.company_size, "unknown");
+  assertEquals(evaluateEligibility(sized, graphOf([ev("company_size_band", band(1001, 5000))])).hard_checks.company_size, "fail");
+  assertEquals(evaluateEligibility(sized, graphOf([ev("company_size_band", band(1001, 5000), { status: "plausible" })])).hard_checks.company_size, "unknown");
+  // …and a LinkedIn associated-member count is no contradiction at all, however large.
+  assertEquals(evaluateEligibility(sized, graphOf([ev("linkedin_member_count", 4000)])).hard_checks.company_size, "unknown");
 });
 
 // ══════════════════════════════════════════════════════════════ REVIEW-1 ══
@@ -559,39 +563,42 @@ Deno.test("VOCAB-1: free-text answers through the REAL batch verifier reach elig
 
 // ════════════════════════════════════════════════════════════════ HEAD-0 ══
 
-Deno.test("HEAD-0: LinkedIn's employeeCount 0 is a missing number — unknown at every layer, never a FAIL", () => {
+Deno.test("HEAD-0: LinkedIn's employeeCount 0 is a missing number — and no member count, of any value, decides size", () => {
   // The rule.
   for (const v of [0, -3, Number.NaN, Number.POSITIVE_INFINITY, "12", null, undefined]) {
     assertEquals(usableHeadcount(v), null, String(v));
   }
   assertEquals(usableHeadcount(57), 57);
 
-  // Where a count ENTERS: every normalizer that reads employeeCount.
+  // Where a count ENTERS: every normalizer that reads employeeCount — as
+  // LinkedIn ASSOCIATED MEMBERS, never as staff (companySize.ts).
   const li = "https://www.linkedin.com/company/dime9";
-  assertEquals(normalizeLinkedInCompanyEnriched({ name: "Dime9", linkedinUrl: li, employeeCount: 0 }).employee_count, null);
-  assertEquals(normalizeLinkedInCompanyEnriched({ name: "Dime9", linkedinUrl: li, employeeCount: 57 }).employee_count, 57);
-  assertEquals(normalizeLinkedInCompanyCandidate({ name: "Dime9", linkedinUrl: li, employeeCount: 0 })?.employee_count ?? null, null);
-  assertEquals(jobEmployerToCompany({ company: { name: "Dime9", linkedinUrl: li, employeeCount: 0 } })?.employee_count ?? null, null);
+  assertEquals(normalizeLinkedInCompanyEnriched({ name: "Dime9", linkedinUrl: li, employeeCount: 0 }).linkedin_associated_member_count, null);
+  assertEquals(normalizeLinkedInCompanyEnriched({ name: "Dime9", linkedinUrl: li, employeeCount: 57 }).linkedin_associated_member_count, 57);
+  assertEquals(normalizeLinkedInCompanyCandidate({ name: "Dime9", linkedinUrl: li, employeeCount: 0 })?.linkedin_associated_member_count ?? null, null);
+  assertEquals(jobEmployerToCompany({ company: { name: "Dime9", linkedinUrl: li, employeeCount: 0 } })?.linkedin_associated_member_count ?? null, null);
   const job = JSON.stringify(normalizeApifyJobRow({ companyName: "Dime9", companyEmployeesCount: 0, title: "Growth Marketer", link: "https://x.test/j" }));
   assertFalse(/"employee_count":0\b/.test(job), "the job-row normalizer does not emit a zero count");
 
-  // Where a count DECIDES, even if a zero slips past a normalizer.
+  // Where a count is RECORDED, even if a zero slips past a normalizer.
   const zero = { company_name: "Dime9", linkedin_company_url: li, canonical_domain: null, website: null, geography: null,
-    external_source_id: "li:dime9", employee_count: 0 } as never;
+    external_source_id: "li:dime9", linkedin_associated_member_count: 0, company_size_band: null } as never;
   const record = buildCompanyEvidence({ company_key: li, source_capability: "job_discovery" as never, company: zero, enriched: zero, identity_state: "resolved" });
-  assertEquals(record.employee_evidence, null, "the registry holds no verified count");
+  assertEquals(record.linkedin_member_count_evidence, null, "the registry holds no member count");
   const obs = observationFromCompany(zero, { capability: "job_discovery", actor_key: "apify_linkedin_job_search", provider: "apify",
     route_id: null, plan_version: null, provider_call_id: null, mission_id: null, observed_at: "2026-09-18T00:00:00Z" });
-  assertFalse(obs.evidence.some((e) => e.dimension === "headcount"), "no headcount observation from a zero");
+  assertFalse(obs.evidence.some((e) => e.dimension === "linkedin_member_count"), "no member-count observation from a zero");
 
-  // And eligibility: a proven zero is unknown (pending), a proven 4,000 still fails.
+  // And eligibility: a member count — zero, small or huge — never answers size;
+  // the declared band does.
   const sized = deriveMissionCriteria(mergeCompanyBrainIntoMission(
     compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission, CANARY_BRAIN).mission);
-  const size = (n: number) => evaluateEligibility(sized, graphOf([ev("headcount", n)])).hard_checks.company_size;
-  assertEquals(size(0), "unknown");
-  assertEquals(size(4000), "fail");
-  assertEquals(size(20), "pass");
-  assertFalse(evaluateEligibility(sized, graphOf([US(), grounded("b2b saas", "accepted"), ev("headcount", 0)])).eligibility === "ineligible");
+  const byMembers = (n: number) => evaluateEligibility(sized, graphOf([ev("linkedin_member_count", n)])).hard_checks.company_size;
+  for (const n of [0, 20, 4000]) assertEquals(byMembers(n), "unknown", `${n} members`);
+  const byBand = (min: number, max: number) => evaluateEligibility(sized, graphOf([ev("company_size_band", band(min, max))])).hard_checks.company_size;
+  assertEquals(byBand(1001, 5000), "fail");
+  assertEquals(byBand(11, 50), "pass");
+  assertFalse(evaluateEligibility(sized, graphOf([US(), grounded("b2b saas", "accepted"), ev("linkedin_member_count", 0)])).eligibility === "ineligible");
 });
 
 

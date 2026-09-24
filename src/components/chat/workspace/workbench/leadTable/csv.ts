@@ -5,6 +5,7 @@ import {
   buildQualifiedLeadDiagnostics, QUALIFIED_LEAD_EXTRA_COLUMNS,
   type RunDiagnosticsSource,
 } from '@/lib/qualifiedLead/diagnostics';
+import { bandLabel } from '@/lib/workbench/companySize';
 
 // "Locked" only means the user has not run the unlock action yet. After running,
 // the persisted status tells the real story (Part F).
@@ -28,7 +29,7 @@ function esc(v: unknown): string {
 export function rowsToCsv(rows: LeadTableRow[], run?: RunDiagnosticsSource | null): string {
   const headers = [
     'company', 'website', 'domain', 'company_linkedin_url', 'company_logo', 'company_slogan',
-    'company_description', 'industries', 'employee_count', 'location',
+    'company_description', 'industries', 'company_size_band_declared', 'linkedin_associated_members', 'location',
     'address_country', 'address_region', 'address_locality',
     'signal_type',
     // Lead Intelligence Engine hiring-signal proof + quality columns.
@@ -163,7 +164,8 @@ export function rowsToCsv(rows: LeadTableRow[], run?: RunDiagnosticsSource | nul
       esc(r.company_slogan),
       esc(r.company_description),
       esc(arr(r.industries)),
-      esc(r.employee_count),
+      esc(r.company_size_band ? bandLabel(r.company_size_band) : (r.legacy_reported_count != null ? `${r.legacy_reported_count} reported (unverified)` : '')),
+      esc(r.linkedin_associated_members),
       esc(r.company_location),
       esc(addr.country),
       esc(addr.region),

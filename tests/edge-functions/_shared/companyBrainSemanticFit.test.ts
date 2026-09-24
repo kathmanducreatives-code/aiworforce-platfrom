@@ -22,10 +22,12 @@ const POLICY = applyMissionPrecedence({
   workspace_industries: ["B2B SaaS", "AI SaaS", "Recruiting Agencies"],
 });
 
+/** A company's DECLARED size band (companySize.ts). */
+const band = (min: number, max: number | null) => ({ min, max, source: "linkedin_declared" as const });
 const gates = (o: Partial<HardGateInput> = {}): HardGateInput => ({
   identity_status: "verified_match", active: true,
   geography: "United States", required_geography: "United States",
-  employee_count: 40, employee_ceiling: 200, commercial_tier: "A", semantic: null, ...o,
+  company_size_band: band(11, 50), employee_ceiling: 200, commercial_tier: "A", semantic: null, ...o,
 });
 const semantic = (o: Partial<SemanticFitAssessment> = {}): SemanticFitAssessment => ({
   business_model: "b2b_saas", company_fit: "pass", confidence: 0.85,
@@ -64,7 +66,7 @@ Deno.test("9/10. neither exact 'B2B SaaS' nor exact 'Sales Operations' is requir
   // The deterministic stage no longer HARD-FAILS on industry wording.
   const fit = evaluateCompanyFit({
     company_key: "k", company_name: "SnapMagic", identity_status: "verified_match",
-    enrichment_complete: true, employee_count: 23, employee_range_advisory: null,
+    enrichment_complete: true, company_size_band: band(11, 50), employee_range_advisory: null,
     employee_min: 10, employee_max: 150,
     industry_ids: [{ id: "4", name: "Software Development" }],
     positive_industries: ["b2b saas"], excluded_industries: [],
@@ -128,7 +130,8 @@ Deno.test("5/6. a SaaS mission ignores Recruiting Agencies", () => {
     workspace_industries: [], company_name: "SnapMagic",
     yc_description: "AI-assisted electronics design", website_description: null,
     linkedin_description: null, linkedin_industry: "Software Development",
-    linkedin_industry_ids: ["4"], employee_count: 23, employee_advisory: null,
+    linkedin_industry_ids: ["4"], company_size_band: band(11, 50), linkedin_associated_member_count: 23,
+    employee_advisory: null,
     geography: "United States", commercial_signal: "Head of Sales", commercial_tier: "A",
   }, POLICY);
   assert(prompt.includes("IGNORE these unrelated workspace categories: Recruiting Agencies"));
@@ -154,7 +157,7 @@ Deno.test("7. every eligible company gets QUALIFIED, REVIEW or REJECT", () => {
     [{}, null, true],
     [{ identity_status: "rejected_mismatch" }, semantic(), true],
     [{ active: false }, semantic(), true],
-    [{ employee_count: 900 }, semantic(), true],
+    [{ company_size_band: band(501, 1000) }, semantic(), true],
     [{ commercial_tier: null }, semantic(), true],
     [{ geography: "Germany" }, semantic(), true],
     [{}, semantic({ agentory_use_case: "none" }), false],
@@ -171,16 +174,18 @@ Deno.test("hard gates reject only on FACTS", () => {
   assert(failedHardGates(gates({ identity_status: "rejected_mismatch" })).includes("identity_mismatch"));
   assert(failedHardGates(gates({ active: false })).includes("inactive_company"));
   assert(failedHardGates(gates({ geography: "Germany" })).includes("unsupported_geography"));
-  assert(failedHardGates(gates({ employee_count: 900 })).includes("employee_count_far_above_ceiling"));
+  assert(failedHardGates(gates({ company_size_band: band(501, 1000) })).includes("size_band_above_ceiling"));
   assert(failedHardGates(gates({ commercial_tier: null })).includes("no_commercial_signal"));
 
   // …and NOT on uncertainty.
   assertEquals(failedHardGates(gates({ geography: null })).length, 0,
     "unknown geography is a review question, not a rejection");
-  assertEquals(failedHardGates(gates({ employee_count: null })).length, 0,
-    "unknown headcount is not a rejection");
-  assertEquals(failedHardGates(gates({ employee_count: 210 })).length, 0,
-    "a count near the ceiling is REVIEW, not REJECT");
+  assertEquals(failedHardGates(gates({ company_size_band: null })).length, 0,
+    "an unknown size is not a rejection");
+  assertEquals(failedHardGates(gates({ company_size_band: band(51, 200) })).length, 0,
+    "a band that reaches the ceiling is REVIEW, not REJECT");
+  assertEquals(failedHardGates(gates({ company_size_band: band(11, 50), linkedin_associated_member_count: 9_000 } as never)).length, 0,
+    "a LinkedIn member count is not a size fact, however large");
   assertEquals(failedHardGates(gates({ identity_status: "unresolved" })).length, 0,
     "unresolved is not the same as proven wrong");
 });

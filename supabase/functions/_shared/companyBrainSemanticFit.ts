@@ -19,7 +19,7 @@
 // never a silent reject.
 //
 // WHAT STAYS DETERMINISTIC. Facts that are checkable stay checkable: identity
-// mismatch, inactive company, geography, a verified headcount clearly over the
+// mismatch, inactive company, geography, a declared size band wholly over the
 // ceiling, consumer-only evidence, absent commercial signal. The model is asked
 // to interpret ambiguity, never to overrule a fact.
 //

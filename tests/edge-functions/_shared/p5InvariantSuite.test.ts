@@ -47,7 +47,14 @@ const proposal = {
   disallowed_broadening: [], required_evidence: [], required_capabilities: ["startup_company_discovery", "hiring_verification"],
   preferred_source_strategy: [], evaluation_instructions: "", founder_unlock_recommended: false, confidence: 0.85, unknowns: [],
 };
-const BRAIN = { industries: ["B2B SaaS (founder-led or small teams)"], employee_min: 1, employee_max: 150, employee_policy: true };
+/**
+ * The Brain's hard size rule. 1-200, not 1-150: size is answered by the
+ * company's DECLARED LinkedIn band (companySize.ts), and the fixture's lead,
+ * Audicus, declares 51-200 — a band 1-150 only partly overlaps, which leaves it
+ * correctly PENDING on size. This suite is about continuation and decisions,
+ * so it uses a range the real bands can settle.
+ */
+const BRAIN = { industries: ["B2B SaaS (founder-led or small teams)"], employee_min: 1, employee_max: 200, employee_policy: true };
 const MISSION = mergeCompanyBrainIntoMission(
   compileLeadMission({ originalUserQuery: CANONICAL, proposal, companyBrain: BRAIN as never }).final_mission, BRAIN).mission;
 const CRITERIA = deriveMissionCriteria(MISSION);
@@ -94,11 +101,18 @@ Deno.test("INV accepted evidence PASS · verified contradiction FAIL · ambiguou
   assertEquals(hard([US(), bm("consumer", "review")]).industry, "unknown", "review never disproves either");
 });
 
-Deno.test("INV zero / invalid headcount is unknown; a verified out-of-range count FAILS", () => {
-  for (const n of [0, -5, Number.NaN]) assertEquals(hard([ev("headcount", n)]).company_size, "unknown", String(n));
-  assertEquals(hard([ev("headcount", 151)]).company_size, "fail");
-  assertEquals(hard([ev("headcount", 150)]).company_size, "pass");
-  assertEquals(hard([ev("headcount", 151, { status: "plausible" })]).company_size, "unknown", "an unverified band never rejects");
+const band = (min: number, max: number | null) => ({ min, max, source: "linkedin_declared" });
+
+Deno.test("INV a member count never decides size; a verified declared band wholly outside FAILS", () => {
+  for (const n of [0, -5, Number.NaN, 20, 5000]) {
+    assertEquals(hard([ev("linkedin_member_count", n)]).company_size, "unknown", `${n} LinkedIn members`);
+  }
+  assertEquals(hard([ev("company_size_band", band(201, 500))]).company_size, "fail");
+  assertEquals(hard([ev("company_size_band", band(51, 200))]).company_size, "pass");
+  assertEquals(hard([ev("company_size_band", band(201, 500), { status: "plausible" })]).company_size, "unknown",
+    "an unverified band never rejects");
+  assertEquals(hard([ev("company_size_band", band(51, 200)), ev("linkedin_member_count", 5000)]).company_size, "pass",
+    "a member count far outside the band does not contest it");
 });
 
 Deno.test("INV a quote that argues against the label sends the business model to review", () => {
@@ -124,8 +138,8 @@ const cand = (key: string, items: EvidenceItem[], over: Partial<MissionCandidate
 
 Deno.test("INV the canonical Workbench count controls continuation — no stale legacy counter", () => {
   const anchor = "hiring";
-  const surfaced = cand("a", [US(), ev("headcount", 20), bm("b2b saas", "accepted"), ev("hiring", true)]);
-  const pending = cand("b", [US(), ev("headcount", 20), bm("b2b saas", "review")]);
+  const surfaced = cand("a", [US(), ev("company_size_band", band(11, 50)), bm("b2b saas", "accepted"), ev("hiring", true)]);
+  const pending = cand("b", [US(), ev("company_size_band", band(11, 50)), bm("b2b saas", "review")]);
   const counts = decisionCounts({ criteria: CRITERIA, candidates: [surfaced, pending], anchor });
   const summary = decisionSummary(counts);
   assertEquals([summary.qualified, summary.pending], [1, 1]);
@@ -289,7 +303,7 @@ function harness(specMode: "enforce" | "off", employees: "disabled" | "empty" = 
       if (call.actorKey === "apify_linkedin_company_details") {
         return Promise.resolve(((call.input.companies as string[]) ?? []).map((u) => {
           const c = byUrl.get(u)!;
-          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, description: SYNTHETIC_DESCRIPTION[String(c.name)] ?? c.description, industries: c.industries, locations: c.locations };
+          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, employeeCountRange: c.employeeCountRange, description: SYNTHETIC_DESCRIPTION[String(c.name)] ?? c.description, industries: c.industries, locations: c.locations };
         }));
       }
       return Promise.resolve([]);

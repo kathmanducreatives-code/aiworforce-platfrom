@@ -214,8 +214,8 @@ export const ACTOR_INPUT_STRATEGIES:
     discovery_pattern:
       "JOB-FIRST: ask LinkedIn for the ROLE the mission is about, in the mission's " +
       "hard geography, inside a recency window — and omit `company` entirely. " +
-      "Each row names its employer with a LinkedIn URL, website and exact " +
-      "headcount, so identity comes from the posting and size/stage are judged " +
+      "Each row names its employer with a LinkedIn URL, website and declared " +
+      "size band, so identity comes from the posting and size/stage are judged " +
       "afterwards from those fields, never guessed in the query.",
     verification_pattern:
       "Company-scoped: `company` = the resolved LinkedIn URLs, `jobTitles` = the " +

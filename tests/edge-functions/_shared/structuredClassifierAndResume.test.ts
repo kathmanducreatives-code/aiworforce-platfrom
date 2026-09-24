@@ -28,7 +28,8 @@ const POLICY = applyMissionPrecedence({
 });
 const gates = (o: Partial<HardGateInput> = {}): HardGateInput => ({
   identity_status: "verified_match", active: true, geography: "United States",
-  required_geography: "United States", employee_count: 40, employee_ceiling: 200,
+  required_geography: "United States",
+  company_size_band: { min: 11, max: 50, source: "linkedin_declared" }, employee_ceiling: 200,
   commercial_tier: "A", semantic: null, ...o,
 });
 
@@ -132,17 +133,17 @@ Deno.test("8/9/10. review, missing evidence and hard gates", () => {
 
   // A DETERMINISTIC hard failure overrides a semantic pass.
   const overridden = decideCompanyBrain({
-    gates: gates({ employee_count: 900 }),
+    gates: gates({ company_size_band: { min: 501, max: 1000, source: "linkedin_declared" } }),
     semantic: { business_model: "b2b_saas", company_fit: "pass", confidence: 0.95,
       agentory_use_case: "strong", supporting_evidence: ["e"], conflicting_evidence: [],
       unknown_fields: [], reason: "great fit" },
     policy: POLICY, hiring_verified: true });
   assertEquals(overridden.outcome, "REJECT");
-  assert(overridden.failed_hard_gates.includes("employee_count_far_above_ceiling"));
+  assert(overridden.failed_hard_gates.includes("size_band_above_ceiling"));
 
   // Weak/missing evidence must not become a hard REJECT.
   assertEquals(decideCompanyBrain({
-    gates: gates({ geography: null, employee_count: null }),
+    gates: gates({ geography: null, company_size_band: null }),
     semantic: { ...FALLBACK_REVIEW }, policy: POLICY, hiring_verified: true,
   }).outcome, "REVIEW");
 });
@@ -154,7 +155,8 @@ Deno.test("11/12. the payload is versioned and the prompt states the rules", () 
     workspace_industries: [], company_name: "SnapMagic",
     yc_description: "AI-assisted electronics design", website_description: null,
     linkedin_description: null, linkedin_industry: "Software Development",
-    linkedin_industry_ids: ["Software Development"], employee_count: 23,
+    linkedin_industry_ids: ["Software Development"],
+    company_size_band: { min: 11, max: 50, source: "linkedin_declared" }, linkedin_associated_member_count: 23,
     employee_advisory: null, geography: "United States",
     commercial_signal: "Head of Sales", commercial_tier: "A",
   }, POLICY);

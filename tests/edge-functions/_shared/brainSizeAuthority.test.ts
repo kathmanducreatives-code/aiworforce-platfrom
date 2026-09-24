@@ -37,7 +37,7 @@ import {
   buildQualificationContext, resolveEmployeeBounds,
 } from "../../../supabase/functions/_shared/missionQualificationContext.ts";
 import {
-  admittedCandidateCount, prequalifyNormalizedCompany,
+  admittedCandidateCount, isPlaceholderEmployerName, prequalifyDiscoveredCompanies, prequalifyNormalizedCompany,
 } from "../../../supabase/functions/_shared/leadGenericPrequalification.ts";
 import { parseLeadMissionDeterministic } from "../../../supabase/functions/_shared/leadMission.ts";
 
@@ -101,21 +101,35 @@ Deno.test("an unrelated hard constraint does not make size enforceable", () => {
 });
 
 // ── WHAT IT DOES TO THE COMPANIES THAT ACTUALLY COST MONEY ────────────────
+//
+// CORRECTED 2026-09-24 (companySize.ts). The figures below were once read as
+// staff; `employeeCount` is LinkedIn ASSOCIATED MEMBERS and the band is the
+// company's DECLARED size. Under the Brain's hard 1-150:
+//
+//   * the four placeholder-employer pages are removed on IDENTITY — the member
+//     count used to keep them out by accident, and may not any more;
+//   * every real company declares 51-200, which only partly overlaps 1-150, so
+//     size is unsettled — none ruled in, none ruled out, all investigable;
+//   * nothing is excluded, for free or otherwise, on a member count.
 
-const company = (name: string, employee_count: number, band: string) => ({
+const bandOf = (b: string) => {
+  const [min, max] = b.split("-").map(Number);
+  return { min, max, source: "linkedin_declared" as const };
+};
+const company = (name: string, members: number, band: string) => ({
   external_source_id: `li:${name}`, company_name: name,
   canonical_domain: `${name.toLowerCase().replace(/\W+/g, "")}.com`,
   linkedin_company_url: `https://www.linkedin.com/company/${name}`,
   website: null, description: "a company", provider_industry: null,
-  industry_ids: [], employee_count, employee_range_advisory: band,
+  industry_ids: [], linkedin_associated_member_count: members, company_size_band: bandOf(band),
+  employee_range_advisory: null,
   geography: null, company_type: null, startup_evidence: null, hiring_status: null,
   source_provenance: "harvestapi/linkedin-company-search",
-  field_trust: { company_name: "direct", employee_count: "direct",
-    employee_range_advisory: "unsafe" },
+  field_trust: { company_name: "direct", linkedin_associated_member_count: "direct", company_size_band: "direct" },
   missing_fields: [], raw_ref: null,
 } as never);
 
-/** The real pool, with the exact counts and self-reported bands it carried. */
+/** The real pool: LinkedIn associated members, and the band each DECLARES. */
 const LIVE_POOL = [
   ["Confidential Careers", 29946, "2-10"],
   ["Stealth Startup", 37306, "11-50"],
@@ -127,35 +141,43 @@ const LIVE_POOL = [
   ["Hire Feed", 84, "51-200"],
   ["Blue Signal Search", 100, "51-200"],
 ] as const;
+const PLACEHOLDERS = ["Confidential Careers", "Stealth Startup", "Freelance | Self-Employed", "Empresa Confidencial"];
+const REAL = ["micro1", "Hugging Face", "Crossing Hurdles", "Hire Feed", "Blue Signal Search"];
 
-Deno.test("the live pool: only the two genuinely in-range companies are admitted; the rest rank down, then enrichment decides", () => {
+Deno.test("the live pool: placeholder employer pages are removed on identity; real companies stay investigable on an unsettled band", () => {
   const bounds = resolveEmployeeBounds(CTX, BRAIN_HARD);
-  const verdicts = LIVE_POOL.map(([n, c, b]) => ({
-    name: n,
-    v: prequalifyNormalizedCompany(company(n, c, b), { min: bounds.min, max: bounds.max },
-      { size_enforceable: bounds.enforceable }),
-  }));
-  // Every row carries its LinkedIn identity, so its REPORTED count is one
-  // company-record read from a proven one: out of range ranks down, and the
-  // Brain's hard rule rejects on the enriched count (canary 87ecf153).
-  assertEquals(verdicts.filter((x) => x.v.size_status === "in_range").map((x) => x.name),
-    ["Hire Feed", "Blue Signal Search"], "84 and 100 are inside 1-150; nothing else in that pool was");
-  const top = Math.min(...verdicts.filter((x) => x.v.size_status === "in_range").map((x) => x.v.score));
-  for (const x of verdicts.filter((x) => x.v.size_status !== "in_range")) {
-    assertEquals([x.v.exclusion, x.v.eligible], [null, true], x.name);
-    assert(x.v.score < top, `${x.name} ranks below every in-range company`);
+  const res = prequalifyDiscoveredCompanies(LIVE_POOL.map(([n, c, b]) => company(n, c, b)),
+    { min: bounds.min, max: bounds.max }, { size_enforceable: bounds.enforceable });
+  assertEquals(res.excluded.map((e) => e.name).sort(), [...PLACEHOLDERS].sort());
+  assert(res.excluded.every((e) => /placeholder employer page/.test(e.reason)));
+  assertEquals(res.companies.map((c) => c.name).sort(), [...REAL].sort());
+  for (const c of res.companies) {
+    // Declared 51-200 against 1-150: it may be inside, it may not — PENDING.
+    assertEquals([c.size_status, c.exclusion, c.eligible], ["size_unverified", null, true], c.name);
+    assert(c.reasons.some((r) => /only partly overlaps/.test(r)), c.reasons.join(" | "));
   }
-  // Discovery sizes its pool on the admitted count: still only the two.
+  // Discovery sizes its pool on the admitted count: an unsettled band is not a
+  // reported mismatch, so all five real companies count.
   assertEquals(admittedCandidateCount(LIVE_POOL.map(([n, c, b]) => company(n, c, b)),
-    { min: bounds.min, max: bounds.max }, { size_enforceable: bounds.enforceable }), 2);
+    { min: bounds.min, max: bounds.max }, { size_enforceable: bounds.enforceable }), 5);
 });
 
-Deno.test("…and WITHOUT a LinkedIn identity the Brain's hard rule still excludes, free", () => {
+Deno.test("…and WITHOUT a LinkedIn identity only a DECLARED band wholly outside excludes free — never a member count", () => {
   const bounds = resolveEmployeeBounds(CTX, BRAIN_HARD);
-  for (const [n, c, b] of LIVE_POOL.filter(([, c]) => c > 150)) {
+  for (const [n, c, b] of LIVE_POOL.filter(([n]) => REAL.includes(n))) {
     const row = { ...(company(n, c, b) as Record<string, unknown>), linkedin_company_url: null } as never;
     const v = prequalifyNormalizedCompany(row, { min: bounds.min, max: bounds.max }, { size_enforceable: bounds.enforceable });
-    assertEquals(v.exclusion, "employee_size", n);
+    assertEquals(v.exclusion, null, `${n}: ${c} members exclude nothing`);
+  }
+  const wholly = { ...(company("Bigco", 90, "201-500") as Record<string, unknown>), linkedin_company_url: null } as never;
+  assertEquals(prequalifyNormalizedCompany(wholly, { min: bounds.min, max: bounds.max },
+    { size_enforceable: bounds.enforceable }).exclusion, "employee_size");
+});
+
+Deno.test("placeholder detection is exact-name only — a real company containing the word is untouched", () => {
+  for (const n of PLACEHOLDERS) assert(isPlaceholderEmployerName(n), n);
+  for (const n of ["Confidential Computing Inc", "Stealth Security", "Freelance Hub", "Self Employed Tax Co"]) {
+    assert(!isPlaceholderEmployerName(n), n);
   }
 });
 
@@ -171,21 +193,21 @@ Deno.test("the same pool under a PREFERENCE keeps everyone eligible", () => {
   }
 });
 
-// ── THE ADVISORY BAND IS STILL NEVER A HEADCOUNT ──────────────────────────
+// ── A NON-LINKEDIN ADVISORY SIZE IS STILL NEVER A SIZE FACT ───────────────
 
-Deno.test("a company with ONLY an advisory band is never excluded by it", () => {
-  // The user's constraint, pinned: enforcing the Brain's rule must not turn the
-  // self-reported band into evidence. "Freelance | Self-Employed" self-reports
-  // 2-10 and has 414,811 members — believing the band would have ADMITTED it.
-  const noExact = { ...(company("Freelance", 0, "2-10") as never as Record<string, unknown>),
-    employee_count: null } as never;
-  const v = prequalifyNormalizedCompany(noExact, { min: 1, max: 150 },
+Deno.test("a company with ONLY advisory size text is never excluded by it", () => {
+  // Enforcing the Brain's rule must not turn a provider's size WORDING (a YC
+  // team size, a funding bucket) into a declared band.
+  const advisoryOnly = { ...(company("Somebody", 0, "2-10") as never as Record<string, unknown>),
+    company_size_band: null, linkedin_associated_member_count: null,
+    employee_range_advisory: "yc_self_reported:4" } as never;
+  const v = prequalifyNormalizedCompany(advisoryOnly, { min: 1, max: 150 },
     { size_enforceable: true });
   assertEquals(v.size_status, "size_unverified");
   assertEquals(v.eligible, true, "an unverified size may not exclude anyone");
   assertEquals(v.exclusion, null);
   assert(
-    v.reasons.some((r) => /declared unsafe and may\s+not exclude anyone/.test(r)),
+    v.reasons.some((r) => /not a declared band and may\s+not exclude anyone/.test(r)),
     v.reasons.join(" | "),
   );
 });

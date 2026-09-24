@@ -369,9 +369,10 @@ Deno.test("E1. job rows collapse onto employers, newest evidence first", () => {
 
   // The employer row carries only what a posting can establish.
   const c = employerToCompany(acme);
-  assertEquals(c.employee_count, null, "a posting does not prove headcount");
+  assertEquals(c.company_size_band, null, "a posting does not state a company's size");
+  assertEquals(c.linkedin_associated_member_count, null);
   assertEquals(c.hiring_status, true, "a posting does prove hiring");
-  assert(c.missing_fields.includes("employee_count"));
+  assert(c.missing_fields.includes("company_size_band"));
 });
 
 Deno.test("E2. the evidence record names absences and reports conflicts", () => {
@@ -385,16 +386,27 @@ Deno.test("E2. the evidence record names absences and reports conflicts", () => 
   const bare = buildCompanyEvidence({
     company_key: "acme", source_capability: "job_discovery", company: base,
   });
-  assert(bare.missing_fields.includes("employee_count"));
+  assert(bare.missing_fields.includes("company_size_band"));
   assert(bare.missing_fields.includes("commercial_job_evidence"));
   assertEquals(bare.identity_state, "not_attempted");
 
-  // Two sources disagreeing by more than 2x is a DIFFERENT COMPANY, reported.
+  // The same LinkedIn member count read twice for one company, 10x apart, is
+  // usually two companies with one name — an IDENTITY conflict, reported. It
+  // says nothing about size.
   const conflicted = buildCompanyEvidence({
     company_key: "acme", source_capability: "general_company_discovery",
-    company: { ...base, employee_count: 40 },
-    enriched: { ...base, employee_count: 400 },
+    company: { ...base, linkedin_associated_member_count: 40 },
+    enriched: { ...base, linkedin_associated_member_count: 400 },
   });
-  assert(conflicted.conflicting_evidence.some((c) => /employee_count/.test(c)),
-    "a 10x headcount gap is reported, never silently resolved");
+  assert(conflicted.conflicting_evidence.some((c) => /linkedin_associated_member_count/.test(c)),
+    "a 10x member-count gap is reported, never silently resolved");
+  // Two different DECLARED bands are reported too; the company record's wins.
+  const bands = buildCompanyEvidence({
+    company_key: "acme", source_capability: "general_company_discovery",
+    company: { ...base, company_size_band: { min: 11, max: 50, source: "linkedin_declared" } },
+    enriched: { ...base, company_size_band: { min: 51, max: 200, source: "linkedin_declared" } },
+  });
+  assert(bands.conflicting_evidence.some((c) => c === "company_size_band: discovery=11-50 enriched=51-200"),
+    bands.conflicting_evidence.join(" | "));
+  assertEquals([bands.size_band_evidence?.min, bands.size_band_from_company_record], [51, true]);
 });

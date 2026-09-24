@@ -225,14 +225,17 @@ Deno.test("10-11. the projection carries enrichment through, and never a URL", (
     identityResolved: true, identityAttempted: true,
     enriched: true, hiringVerified: false, verdict: null, contactCount: 0,
     // What the failed run had bought but never read.
-    companyName: "ABR Talent", employeeCount: 42,
+    companyName: "ABR Talent", sizeBand: "11-50", linkedinMembers: 42,
   }]);
 
   assertEquals(out.rows.length, 1);
   assertEquals(out.rows[0].company_name, "ABR Talent");
   assertFalse(looksLikeUrl(out.rows[0].company_name));
   // 11. Enrichment reaches the Workbench. This was null for all 94 rows.
-  assertEquals(out.rows[0].employee_count, 42);
+  // Two facts, named for what they are: the declared band, and LinkedIn members.
+  assertEquals(out.rows[0].company_size_band, "11-50");
+  assertEquals(out.rows[0].linkedin_associated_members, 42);
+  assertFalse("employee_count" in out.rows[0], "no row field calls a member count employees");
   // The URL still lives in the key, which is its correct home.
   assertEquals(out.rows[0].company_key, key);
 });

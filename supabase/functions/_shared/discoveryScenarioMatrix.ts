@@ -337,9 +337,9 @@ export const SCENARIO_MATRIX: Readonly<Record<ScenarioId, ScenarioSpec>> = Objec
     fallback_actors: [],
     corroborating_actors: [],
     minimum_evidence:
-      "an ENRICHED exact headcount. Every discovery source here reports a band " +
-      "or a self-reported figure, and the LinkedIn company search's own size " +
-      "filter disagreed with reality in four of eight observed rows",
+      "the ENRICHED company record's DECLARED size band. A discovery row's band is only " +
+      "plausible, a YC team size is self-reported, and a LinkedIn member count " +
+      "is not a staff count at all",
     freshness_requirement: "any",
   },
   geographic_discovery: {

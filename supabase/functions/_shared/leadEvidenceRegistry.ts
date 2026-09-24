@@ -150,7 +150,10 @@ export interface HardFacts {
 
 /** Deterministic, order-independent, and short enough to read in a log. */
 export function fingerprint(parts: readonly (string | null | undefined)[]): string {
-  const s = parts.map((p) => String(p ?? "")).join("");
+  // "\u0000" as an ESCAPE, never a raw byte: a raw NUL made this file binary
+  // to git and grep. The separator itself must stay — without one ["ab","c"]
+  // and ["a","bc"] collide — and must stay NUL, or every stored item id moves.
+  const s = parts.map((p) => String(p ?? "")).join("\u0000");
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
   return h.toString(16).padStart(8, "0");

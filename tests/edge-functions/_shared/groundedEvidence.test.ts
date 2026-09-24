@@ -34,6 +34,9 @@ const DESCRIPTION =
   "SnapMagic sells electronic-design software to engineering teams on a subscription.";
 const NOW = Date.parse("2026-08-06T00:00:00Z");
 
+/** A DECLARED LinkedIn size band (companySize.ts). */
+const BAND = (min: number, max: number | null) => ({ min, max, source: "linkedin_declared" as const });
+
 function company(over: Record<string, unknown> = {}) {
   return {
     external_source_id: "snapmagic", company_name: "SnapMagic",
@@ -42,7 +45,8 @@ function company(over: Record<string, unknown> = {}) {
     website: "https://snapmagic.com", description: DESCRIPTION,
     provider_industry: "Software Development",
     industry_ids: [{ id: "4", name: "Software Development", hierarchy: "Tech" }],
-    employee_count: 75, employee_range_advisory: null,
+    // Declared 51-200 on its LinkedIn record; 75 LinkedIn associated members.
+    company_size_band: BAND(51, 200), linkedin_associated_member_count: 75, employee_range_advisory: null,
     geography: "United States", company_type: null, startup_evidence: null,
     hiring_status: true, source_provenance: "harvestapi/linkedin-company",
     field_trust: {}, missing_fields: [],
@@ -84,7 +88,8 @@ const R = registry();
 const descId = R.items.find((x) => x.evidence_type === "company_description")!.evidence_id;
 const jobId = R.items.find((x) => x.evidence_type === "job_posting")!.evidence_id;
 const industryId = R.items.find((x) => x.evidence_type === "company_industry")!.evidence_id;
-const empId = R.items.find((x) => x.evidence_type === "employee_count")!.evidence_id;
+const bandId = R.items.find((x) => x.evidence_type === "company_size_band")!.evidence_id;
+const membersId = R.items.find((x) => x.evidence_type === "linkedin_associated_members")!.evidence_id;
 
 function claim(over: Partial<GroundedClaim> = {}): GroundedClaim {
   return {
@@ -161,29 +166,36 @@ Deno.test("3. a provider failure is not a negative company fact", () => {
   assertEquals(withFailure.hard_facts.job_titles, []);
 });
 
-Deno.test("4. conflicting employee evidence stays explicit", () => {
-  const conflicted = registry({
-    evidence: buildCompanyEvidence({
-      company_key: "snapmagic", source_capability: "startup_company_discovery",
-      company: company({ employee_count: 20 }),
-      enriched: company({ employee_count: 75 }),
-      identity_state: "resolved",
-    }),
-    jobs: [], now: NOW,
-    employee_count_alternatives: [{ source: "yc", value: 20 }],
-  });
-  const emp = conflicted.items.filter((x) => x.evidence_type === "employee_count");
-  assert(emp.length >= 2, "both readings are kept");
-  assert(emp.some((x) => x.verification_state === "conflicting"),
+/** A discovery row declaring 11-50 where the company record declares 51-200. */
+const bandConflict = (jobs: typeof HEAD_OF_SALES[]) => registry({
+  evidence: buildCompanyEvidence({
+    company_key: "snapmagic", source_capability: "startup_company_discovery",
+    company: company({ company_size_band: BAND(11, 50) }),
+    enriched: company({ company_size_band: BAND(51, 200) }),
+    identity_state: "resolved",
+  }),
+  jobs, now: NOW,
+  employee_count_alternatives: [{ source: "discovery_declared_band", value: "11-50" }],
+});
+
+Deno.test("4. conflicting declared size bands stay explicit", () => {
+  const conflicted = bandConflict([]);
+  const bands = conflicted.items.filter((x) => x.evidence_type === "company_size_band");
+  assert(bands.length >= 2, "both readings are kept");
+  assert(bands.some((x) => x.verification_state === "conflicting"),
     "the disagreement is marked, not reconciled");
+  // The member count is never part of a size conflict.
+  assert(conflicted.items.filter((x) => x.evidence_type === "linkedin_associated_members")
+    .every((x) => x.verification_state === "reported"));
 });
 
 Deno.test("5. original source text is preserved verbatim", () => {
   const d = findEvidence(R, descId)!;
   assertEquals(d.source_text, DESCRIPTION, "provider words are never rewritten");
   assertEquals(d.structured_value, null);
-  const e = findEvidence(R, empId)!;
-  assertEquals(e.structured_value, 75, "a typed fact stays typed");
+  const e = findEvidence(R, bandId)!;
+  assertEquals(e.structured_value, BAND(51, 200), "a typed fact stays typed");
+  assertEquals(findEvidence(R, membersId)!.structured_value, 75);
 });
 
 // ═══════════════════════════════════════════════ 6-18. claim verification ══
@@ -244,16 +256,24 @@ Deno.test("10. an unsupported evidence type fails", () => {
   assert(v.rejected_claims.some((r) => r.reason === "unsupported_evidence_type"));
 });
 
-Deno.test("11. a hard employee mismatch fails", () => {
-  const v = verify(result({
-    supporting_claims: [claim({
-      claim: "SnapMagic has 23 employees.", claim_type: "company_fit",
-      evidence_ids: [empId], evidence_excerpts: [],
-    })],
+Deno.test("11. a staff count the evidence cannot support fails; restating the declared band does not", () => {
+  const sizeClaim = (text: string, id: string) => verify(result({
+    supporting_claims: [claim({ claim: text, claim_type: "company_fit", evidence_ids: [id], evidence_excerpts: [] })],
+  })).rejected_claims.find((x) => x.reason === "hard_fact_mismatch");
+  const exact = sizeClaim("SnapMagic has 23 employees.", bandId);
+  assert(exact, "no source reports an exact staff count");
+  assert(exact!.detail.includes("51-200"), exact!.detail);
+  // The LinkedIn member count read as staff: refused outright — a member count
+  // is not permitted evidence for any company-fit claim at all.
+  const asStaff = verify(result({
+    supporting_claims: [claim({ claim: "SnapMagic has 75 employees.", claim_type: "company_fit",
+      evidence_ids: [membersId], evidence_excerpts: [] })],
   }));
-  const r = v.rejected_claims.find((x) => x.reason === "hard_fact_mismatch");
-  assert(r, "the model may cite a count; it may not restate it");
-  assert(r!.detail.includes("75"));
+  assert(asStaff.rejected_claims.some((x) => x.claim === "SnapMagic has 75 employees."), "75 is LinkedIn members, not staff");
+  assertFalse(asStaff.validated_claims.some((x) => x.claim === "SnapMagic has 75 employees."));
+  // A band restated as a band is the fact itself.
+  assertEquals(sizeClaim("SnapMagic has 51-200 employees.", bandId), undefined);
+  assert(sizeClaim("SnapMagic has 11-50 employees.", bandId), "a different band is a mismatch");
 });
 
 Deno.test("12. a hard geography mismatch fails", () => {
@@ -389,7 +409,7 @@ Deno.test("19. a fully grounded pass can become QUALIFIED", () => {
     gates: {
       identity_status: "verified_match", active: true,
       geography: "United States", required_geography: null,
-      employee_count: 75, employee_ceiling: 150, commercial_tier: "A",
+      company_size_band: BAND(51, 200), employee_ceiling: 150, commercial_tier: "A",
     } as never,
     semantic: {
       business_model: "b2b_software", company_fit: "pass", confidence: 0.9,
@@ -447,16 +467,7 @@ Deno.test("21. invalid claims are removed from the Workbench output", () => {
 });
 
 Deno.test("22. conflicting material evidence prevents confident qualification", () => {
-  const conflicted = registry({
-    evidence: buildCompanyEvidence({
-      company_key: "snapmagic", source_capability: "startup_company_discovery",
-      company: company({ employee_count: 20 }),
-      enriched: company({ employee_count: 75 }),
-      identity_state: "resolved",
-    }),
-    jobs: [HEAD_OF_SALES], now: NOW,
-    employee_count_alternatives: [{ source: "yc", value: 20 }],
-  });
+  const conflicted = bandConflict([HEAD_OF_SALES]);
   const cDesc = conflicted.items.find((x) => x.evidence_type === "company_description")!;
   const cJob = conflicted.items.find((x) => x.evidence_type === "job_posting")!;
   const v = verifyGroundedResult({
@@ -478,7 +489,7 @@ Deno.test("22. conflicting material evidence prevents confident qualification", 
     "an unacknowledged size conflict cannot leave a confident pass");
   assert(v.unacknowledged_conflicts.length > 0);
   const ui = buildWorkbenchExplanation(v, conflicted);
-  assert(ui.uncertainty.some((u) => /employee count|differs/i.test(u)),
+  assert(ui.uncertainty.some((u) => /company size band|differs/i.test(u)),
     "the user is told what is uncertain");
 });
 
@@ -486,7 +497,7 @@ Deno.test("23. missing evidence does not become REJECT", () => {
   const bare = buildEvidenceRegistry({
     evidence: buildCompanyEvidence({
       company_key: "snapmagic", source_capability: "general_company_discovery",
-      company: company({ description: null, employee_count: null, geography: null }),
+      company: company({ description: null, company_size_band: null, linkedin_associated_member_count: null, geography: null }),
     }),
     jobs: [], now: NOW,
   });
@@ -536,7 +547,7 @@ Deno.test("25. an explicit hard mismatch can still REJECT", () => {
     gates: {
       identity_status: "verified_match", active: true,
       geography: "United States", required_geography: null,
-      employee_count: 75, employee_ceiling: 150, commercial_tier: "A",
+      company_size_band: BAND(51, 200), employee_ceiling: 150, commercial_tier: "A",
     } as never,
     semantic: {
       business_model: "consumer", company_fit: "fail", confidence: 0.9,

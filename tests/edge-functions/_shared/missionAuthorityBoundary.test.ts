@@ -24,10 +24,12 @@
 //                                     pre-evaluator list — and the gate survived
 //                                     inside the Brain, where it still fired.
 //   employee_count_far_above_ceiling  against `?? 200`, a ceiling the Mission
-//                                     never stated. With CEILING_TOLERANCE at
-//                                     1.0 that rejected every verified count
-//                                     above 400 on a Mission that said nothing
-//                                     about size.
+//                                     never stated. With its 2x tolerance that
+//                                     rejected every count above 400 on a
+//                                     Mission that said nothing about size —
+//                                     and the "count" was LinkedIn associated
+//                                     members. Now `size_band_above_ceiling`,
+//                                     read from the declared band only.
 //
 // ── WHAT REPLACES IT ─────────────────────────────────────────────────────────
 //
@@ -49,7 +51,7 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   applyMissionPrecedence, decideCompanyBrain, failedHardGates,
-  gatesThatOutrankTheMission, groundingRefutes, CEILING_TOLERANCE,
+  gatesThatOutrankTheMission, groundingRefutes,
   type HardGate, type HardGateInput,
 } from "../../../supabase/functions/_shared/companyBrainSemanticFit.ts";
 import {
@@ -61,13 +63,16 @@ const POLICY = applyMissionPrecedence({
   mission_verticals: ["ai"], mission_geography: null, workspace_industries: [],
 });
 
+/** A declared band wholly above any ceiling these tests state. */
+const BIG_BAND = { min: 1001, max: 5000, source: "linkedin_declared" as const };
+
 /** A clean gate input: nothing wrong with this company. */
 const gates = (over: Partial<HardGateInput> = {}): HardGateInput => ({
   identity_status: "verified_match",
   active: true,
   geography: "San Francisco, CA, USA",
   required_geography: null,
-  employee_count: 120,
+  company_size_band: { min: 51, max: 200, source: "linkedin_declared" },
   employee_ceiling: null,
   commercial_tier: "A",
   mission_owns_hiring_role: true,
@@ -118,43 +123,48 @@ Deno.test("1b. an UNSTATED size ceiling cannot reject what the evaluator passed"
   // no range. Previously it passed `?? 200`, so this company was rejected on a
   // bound nobody expressed.
   const d = decideCompanyBrain({
-    gates: gates({ employee_count: 5000, employee_ceiling: null }),
+    gates: gates({ company_size_band: BIG_BAND, employee_ceiling: null }),
     semantic: missionVerdict("pass"),
     policy: POLICY, hiring_verified: true, grounding: null,
   });
   assertEquals(d.outcome, "QUALIFIED");
-  assertFalse(d.failed_hard_gates.includes("employee_count_far_above_ceiling"),
+  assertFalse(d.failed_hard_gates.includes("size_band_above_ceiling"),
     "with no stated ceiling there is no gate to fail");
 });
 
 Deno.test("1c. a MISSION-STATED size ceiling still rejects — and names its authority",
   () => {
-    // THE OTHER SIDE OF THE BOUNDARY. The user asked for ≤150; this company
-    // verifiably has 5000. That is a falsifiable fact about a constraint the
+    // THE OTHER SIDE OF THE BOUNDARY. The user asked for ≤150; this company's
+    // own record declares 1001-5000. That is a falsifiable fact about a constraint the
     // user expressed, so it survives the evaluator.
     const d = decideCompanyBrain({
-      gates: gates({ employee_count: 5000, employee_ceiling: 150 }),
+      gates: gates({ company_size_band: BIG_BAND, employee_ceiling: 150 }),
       semantic: missionVerdict("pass"),
       policy: POLICY, hiring_verified: true, grounding: null,
     });
     assertEquals(d.outcome, "REJECT");
     assert(d.reason.includes("mission-stated constraint failed"),
       `the rejection must name its authority, got: ${d.reason}`);
-    assert(d.reason.includes("employee_count_far_above_ceiling"));
+    assert(d.reason.includes("size_band_above_ceiling"));
   });
 
-Deno.test("1d. the ceiling still has its tolerance — a borderline count is not rejected",
+Deno.test("1d. a declared band that STRADDLES the ceiling is not rejected — there is no tolerance to tune",
   () => {
-    // CEILING_TOLERANCE exists because the audited YC self-reports were off by
-    // up to 23x. A stated max of 150 rejects at 300+, not at 151.
-    assertEquals(CEILING_TOLERANCE, 1.0);
-    const borderline = decideCompanyBrain({
-      gates: gates({ employee_count: 220, employee_ceiling: 150 }),
+    // The 2x tolerance absorbed noise in a count that was really LinkedIn
+    // associated members. A declared band is wholly above a ceiling or it is
+    // not: 51-200 against a stated 150 may be inside, so it is not a veto.
+    const straddle = decideCompanyBrain({
+      gates: gates({ company_size_band: { min: 51, max: 200, source: "linkedin_declared" }, employee_ceiling: 150 }),
       semantic: missionVerdict("pass"),
       policy: POLICY, hiring_verified: true, grounding: null,
     });
-    assertEquals(borderline.outcome, "QUALIFIED",
-      "220 against a stated 150 is inside tolerance — this is the AfterQuery case");
+    assertEquals(straddle.outcome, "QUALIFIED");
+    const above = decideCompanyBrain({
+      gates: gates({ company_size_band: { min: 201, max: 500, source: "linkedin_declared" }, employee_ceiling: 150 }),
+      semantic: missionVerdict("pass"),
+      policy: POLICY, hiring_verified: true, grounding: null,
+    });
+    assertEquals(above.outcome, "REJECT", "201-500 is wholly above 150");
   });
 
 // ══════════════════════════════ 2. integrity is a HOLD, never a rejection ══
@@ -176,12 +186,12 @@ Deno.test("2. a MISMATCHED identity voids the verdict — REVIEW, not REJECT", (
 
 Deno.test("2b. integrity outranks a mission-stated gate — the weaker claim wins", () => {
   // Both fire. If we cannot trust that the evidence is about this company, we
-  // cannot trust the headcount we read from it either, so the honest answer is
+  // cannot trust the size band we read from it either, so the honest answer is
   // the one that claims less.
   const d = decideCompanyBrain({
     gates: gates({
       identity_status: "rejected_mismatch",
-      employee_count: 5000, employee_ceiling: 150,
+      company_size_band: BIG_BAND, employee_ceiling: 150,
     }),
     semantic: missionVerdict("pass"),
     policy: POLICY, hiring_verified: true, grounding: null,
@@ -254,7 +264,7 @@ Deno.test("3c. grounding may DOWNGRADE a pass but never rescue a fail", () => {
 Deno.test("4. every gate is classified, and only two may outrank the mission", () => {
   const ALL: HardGate[] = [
     "identity_mismatch", "inactive_company", "unsupported_geography",
-    "employee_count_far_above_ceiling", "consumer_only", "no_commercial_signal",
+    "size_band_above_ceiling", "consumer_only", "no_commercial_signal",
     "no_agentory_use_case",
   ];
   const split = gatesThatOutrankTheMission(ALL);
@@ -265,7 +275,7 @@ Deno.test("4. every gate is classified, and only two may outrank the mission", (
     [...ALL].sort());
   assertEquals(split.integrity, ["identity_mismatch"]);
   assertEquals(split.mission_stated.sort(),
-    ["employee_count_far_above_ceiling", "inactive_company"]);
+    ["inactive_company", "size_band_above_ceiling"]);
   // THE FOUR THAT LOST THEIR VETO, named. Each is either a question about
   // Agentory's own buyer or a judgement the evaluator is better placed to make.
   assertEquals(split.context_only.sort(), [
@@ -291,11 +301,11 @@ Deno.test("4c. an absent ceiling is no gate, on every path", () => {
   // The nullable ceiling must not accidentally re-arm as `0`, which would
   // reject everything.
   assertEquals(
-    failedHardGates({ ...gates(), employee_count: 999_999, employee_ceiling: null }),
+    failedHardGates({ ...gates(), company_size_band: BIG_BAND, employee_ceiling: null }),
     []);
   assert(
-    failedHardGates({ ...gates(), employee_count: 999_999, employee_ceiling: 0 })
-      .includes("employee_count_far_above_ceiling"),
+    failedHardGates({ ...gates(), company_size_band: BIG_BAND, employee_ceiling: 0 })
+      .includes("size_band_above_ceiling"),
     "an explicit zero IS a stated bound and still gates");
 });
 

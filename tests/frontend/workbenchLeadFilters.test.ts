@@ -78,18 +78,26 @@ Deno.test("2. location matches the whole free-text string, not just the tail", (
   );
 });
 
-Deno.test("2b. an unknown headcount is not a match for a headcount band", () => {
+Deno.test("2b. the size filter reads the DECLARED band — never a member count, never an unknown", () => {
   const rows: FilterableLead[] = [
-    lead({ company_name: "in", employee_count: 120 }),
-    lead({ company_name: "edge_low", employee_count: 20 }),
-    lead({ company_name: "edge_high", employee_count: 200 }),
-    lead({ company_name: "out", employee_count: 900 }),
-    lead({ company_name: "unknown", employee_count: null }),
+    lead({ company_name: "in", company_size_band: { min: 51, max: 200 } }),
+    lead({ company_name: "smaller", company_size_band: { min: 11, max: 50 } }),
+    lead({ company_name: "out", company_size_band: { min: 501, max: 1000 } }),
+    lead({ company_name: "unknown", company_size_band: null }),
+    // 120 LinkedIn members and no declared band: members are not staff.
+    lead({ company_name: "members_only", company_size_band: null, linkedin_associated_members: 120 }),
   ];
   assertEquals(
-    applyWorkbenchFilters(rows, f({ size: "smb" })).map((r) => r.company_name),
-    ["in", "edge_low", "edge_high"],
+    applyWorkbenchFilters(rows, f({ size: "51_200" })).map((r) => r.company_name),
+    ["in"],
   );
+  assertEquals(applyWorkbenchFilters(rows, f({ size: "11_50" })).map((r) => r.company_name), ["smaller"]);
+  // Every LinkedIn declared band lands in exactly one option.
+  for (const [min, max] of [[1, 10], [11, 50], [51, 200], [201, 500], [501, 1000], [1001, 5000], [10001, null]] as const) {
+    const hits = SIZE_BANDS.filter((b) => applyWorkbenchFilters(
+      [lead({ company_size_band: { min, max } })], f({ size: b.id })).length === 1);
+    assertEquals(hits.length, 1, `${min}-${max ?? "+"} must land in exactly one option`);
+  }
   // The band boundaries partition the whole range with no gap and no overlap.
   for (let i = 1; i < SIZE_BANDS.length; i++) {
     assertEquals(SIZE_BANDS[i].min, SIZE_BANDS[i - 1].max + 1);
@@ -133,12 +141,12 @@ Deno.test("2d. options are derived from the rows on screen, never a fixed vocabu
 
 Deno.test("3. multiple filters compose as AND across axes", () => {
   const rows: FilterableLead[] = [
-    lead({ company_name: "match", company_location: "London, United Kingdom", employee_count: 50, job_title: "SDR", website: "m.com" }),
-    lead({ company_name: "wrong_country", company_location: "Austin, United States", employee_count: 50, job_title: "SDR", website: "w.com" }),
-    lead({ company_name: "too_big", company_location: "London, United Kingdom", employee_count: 5000, job_title: "SDR", website: "t.com" }),
-    lead({ company_name: "no_signal", company_location: "London, United Kingdom", employee_count: 50, website: "n.com" }),
+    lead({ company_name: "match", company_location: "London, United Kingdom", company_size_band: { min: 11, max: 50 }, job_title: "SDR", website: "m.com" }),
+    lead({ company_name: "wrong_country", company_location: "Austin, United States", company_size_band: { min: 11, max: 50 }, job_title: "SDR", website: "w.com" }),
+    lead({ company_name: "too_big", company_location: "London, United Kingdom", company_size_band: { min: 1001, max: 5000 }, job_title: "SDR", website: "t.com" }),
+    lead({ company_name: "no_signal", company_location: "London, United Kingdom", company_size_band: { min: 11, max: 50 }, website: "n.com" }),
   ];
-  const applied = f({ location: "United Kingdom", size: "smb", hiring: "has_signal" });
+  const applied = f({ location: "United Kingdom", size: "11_50", hiring: "has_signal" });
   assertEquals(applyWorkbenchFilters(rows, applied).map((r) => r.company_name), ["match"]);
   assertEquals(activeFilterCount(applied), 3);
 });
@@ -158,10 +166,11 @@ Deno.test("3b. Clear filters resets the view to every row on the tab", () => {
 });
 
 Deno.test("3c. one chip clears one axis and leaves the rest standing", () => {
-  const applied = f({ location: "United Kingdom", size: "smb", minFit: 75, hasWebsite: true });
+  const applied = f({ location: "United Kingdom", size: "11_50", minFit: 75, hasWebsite: true });
   const chips = filterChips(applied);
   assertEquals(chips.map((c) => c.key), ["location", "size", "minFit", "hasWebsite"]);
-  assertStringIncludes(chips[1].label, "20–200");
+  assertStringIncludes(chips[1].label, "11–50");
+  assertStringIncludes(chips[1].label, "(declared)");
   const after = clearFilterKey(applied, "size");
   assertEquals(after.size, "any");
   assertEquals(after.location, "United Kingdom");
@@ -169,7 +178,7 @@ Deno.test("3c. one chip clears one axis and leaves the rest standing", () => {
 });
 
 Deno.test("3d. an empty filter set never removes a row", () => {
-  const rows: FilterableLead[] = [lead({}), lead({ company_name: null }), lead({ employee_count: null })];
+  const rows: FilterableLead[] = [lead({}), lead({ company_name: null }), lead({ company_size_band: null })];
   assertEquals(applyWorkbenchFilters(rows, { ...EMPTY_WORKBENCH_FILTERS }).length, 3);
 });
 
@@ -216,10 +225,12 @@ Deno.test("4c. an empty export is a header, not an empty file", () => {
 Deno.test("5. the export carries business columns and no engine internals", () => {
   const header = workbenchCsvHeader();
   for (const h of [
-    "Company", "Website", "LinkedIn", "Location", "Employees", "Industry",
+    "Company", "Website", "LinkedIn", "Location", "Company size (declared)", "LinkedIn members (not staff)", "Industry",
     "Hiring status", "Hiring evidence", "Source",
     "Qualification status", "Qualification score", "Qualification reason",
   ]) assertStringIncludes(header, h);
+  // A LinkedIn member count is never exported under an employee heading.
+  assert(!/\bEmployees\b/.test(header), "no column may call a member count Employees");
 
   // The ~110-column diagnostic export (leadTable/csv.ts) still owns all of this
   // and keeps its own menu entry. None of it belongs in a file someone shares.
@@ -264,23 +275,24 @@ Deno.test("5d. filenames are safe and name their scope", () => {
 // controlling verdict inside `raw` where `qualificationFromRow` reads it.
 
 interface Spec {
-  name: string; country: string; size: number | null; fit: number;
+  /** The DECLARED LinkedIn band, as [min, max]; null max is open-ended. */
+  name: string; country: string; size: [number, number | null] | null; fit: number;
   qualified: boolean; job?: string | null; industry?: string;
 }
 
 const SPECS: Spec[] = [
   // ── qualified ──
-  { name: "Storm4", country: "United Kingdom", size: 120, fit: 92, qualified: true, job: "Account Executive" },
-  { name: "Talentoma", country: "United Kingdom", size: 45, fit: 88, qualified: true, job: "SDR" },
-  { name: "EVONA", country: "United Kingdom", size: 900, fit: 81, qualified: true, job: "Recruiter" },
-  { name: "Storm3", country: "United States", size: 60, fit: 77, qualified: true, job: "Head of Sales" },
-  { name: "CareerXperts", country: "India", size: 12, fit: 64, qualified: true, job: null },
+  { name: "Storm4", country: "United Kingdom", size: [51, 200], fit: 92, qualified: true, job: "Account Executive" },
+  { name: "Talentoma", country: "United Kingdom", size: [11, 50], fit: 88, qualified: true, job: "SDR" },
+  { name: "EVONA", country: "United Kingdom", size: [501, 1000], fit: 81, qualified: true, job: "Recruiter" },
+  { name: "Storm3", country: "United States", size: [51, 200], fit: 77, qualified: true, job: "Head of Sales" },
+  { name: "CareerXperts", country: "India", size: [11, 50], fit: 64, qualified: true, job: null },
   // ── ruled out ──
-  { name: "Bigcorp", country: "United Kingdom", size: 40000, fit: 30, qualified: false, job: "VP Sales" },
-  { name: "Staffing Ltd", country: "United Kingdom", size: 80, fit: 22, qualified: false, job: "Consultant" },
+  { name: "Bigcorp", country: "United Kingdom", size: [10001, null], fit: 30, qualified: false, job: "VP Sales" },
+  { name: "Staffing Ltd", country: "United Kingdom", size: [51, 200], fit: 22, qualified: false, job: "Consultant" },
   { name: "Nowhere Inc", country: "United States", size: null, fit: 10, qualified: false, job: null },
-  { name: "Quiet Co", country: "Germany", size: 150, fit: 45, qualified: false, job: null },
-  { name: "Tiny AG", country: "Germany", size: 4, fit: 51, qualified: false, job: "Founder" },
+  { name: "Quiet Co", country: "Germany", size: [51, 200], fit: 45, qualified: false, job: null },
+  { name: "Tiny AG", country: "Germany", size: [2, 10], fit: 51, qualified: false, job: "Founder" },
 ];
 
 const FIXTURE: ExportableLead[] = SPECS.map((s) => lead({
@@ -289,7 +301,7 @@ const FIXTURE: ExportableLead[] = SPECS.map((s) => lead({
   company_location: `Somewhere, ${s.country}`,
   website: `https://${s.name.toLowerCase().replace(/\W/g, "")}.com`,
   company_linkedin_url: `https://linkedin.com/company/${s.name.toLowerCase().replace(/\W/g, "")}`,
-  employee_count: s.size,
+  company_size_band: s.size ? { min: s.size[0], max: s.size[1] } : null,
   industries: [s.industry ?? "Staffing & Recruiting"],
   fit_score: s.fit,
   job_title: s.job ?? null,
@@ -326,12 +338,13 @@ Deno.test("6b. Qualified + UK yields the expected subset, and nothing from anoth
   assert(!shown.some((r) => r.company_name === "Staffing Ltd"));
 });
 
-Deno.test("6c. Qualified + UK + 20–200 + hiring signal narrows to two", () => {
+Deno.test("6c. Qualified + UK + 51–200 + hiring signal narrows to one", () => {
+  // Storm4 DECLARES 51-200; Talentoma declares 11-50, a different option.
   const shown = applyWorkbenchFilters(
     tabRows("qualified"),
-    f({ location: "United Kingdom", size: "smb", hiring: "has_signal" }),
+    f({ location: "United Kingdom", size: "51_200", hiring: "has_signal" }),
   );
-  assertEquals(shown.map((r) => r.company_name), ["Storm4", "Talentoma"]);
+  assertEquals(shown.map((r) => r.company_name), ["Storm4"]);
 });
 
 Deno.test("6d. Export current view is EXACTLY the rows on screen", () => {
@@ -349,8 +362,8 @@ Deno.test("6d. Export current view is EXACTLY the rows on screen", () => {
 });
 
 Deno.test("6e. Export qualified leads ignores the tab and the filters", () => {
-  const shown = applyWorkbenchFilters(tabRows("qualified"), f({ location: "United Kingdom", size: "smb" }));
-  assertEquals(shown.length, 2);
+  const shown = applyWorkbenchFilters(tabRows("qualified"), f({ location: "United Kingdom", size: "51_200" }));
+  assertEquals(shown.length, 1);
   const rows = rowsForScope("qualified", { visible: shown, all: FIXTURE });
   assertEquals(rows.map((r) => r.company_name),
     ["Storm4", "Talentoma", "EVONA", "Storm3", "CareerXperts"]);

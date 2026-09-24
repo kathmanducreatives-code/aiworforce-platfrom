@@ -29,6 +29,7 @@
 //
 // ZERO network, ZERO Actor runs, ZERO model calls, ZERO database writes.
 
+import { sizeBandLabel } from "../../../supabase/functions/_shared/companySize.ts";
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   parseLeadMissionDeterministic, LEAD_MISSION_VERSION, type LeadMissionV1,
@@ -115,10 +116,11 @@ function searchRow(name: string, slug: string) {
     location: "San Francisco, CA",
   };
 }
+/** `employeeCount` is LinkedIn associated members; the declared band is 11-50. */
 function enrichRow(name: string, slug: string, employeeCount = 42) {
   return {
     id: slug, name, linkedinUrl: `https://www.linkedin.com/company/${slug}`,
-    website: `https://${slug}.com`, employeeCount,
+    website: `https://${slug}.com`, employeeCount, employeeCountRange: { start: 11, end: 50 },
     description: `${name} is a B2B SaaS platform sold on subscription.`,
     industries: [{ id: "4", name: "B2B SaaS", hierarchy: "Technology" }],
     locations: [{ linkedinText: "United States" }],
@@ -211,7 +213,10 @@ async function runHiring(
       key: c.key,
       shortlisted: c.shortlisted,
       companyName: (c.enriched ?? c.company).company_name ?? null,
-      employeeCount: (c.enriched ?? c.company).employee_count ?? null,
+      // As run-agent projects it: the declared band, and LinkedIn members.
+      sizeBand: (c.enriched ?? c.company).company_size_band
+        ? sizeBandLabel((c.enriched ?? c.company).company_size_band!) : null,
+      linkedinMembers: (c.enriched ?? c.company).linkedin_associated_member_count ?? null,
       prequalified: c.prequalified,
       identityResolved: !!c.identity && identityIsActionable(c.identity),
       identityAttempted: c.identity !== null,
@@ -279,7 +284,9 @@ Deno.test("E2E: a hiring Mission produces Workbench-visible companies", async ()
   const sortly = r.run!.companies.find((c) => c.company.company_name === "Sortly");
   assert(sortly, "Sortly must survive normalization");
   assert(sortly!.identity && identityIsActionable(sortly!.identity), "identity resolved");
-  assertEquals(sortly!.enriched?.employee_count, 42, "enrichment measured the size");
+  assertEquals(sortly!.enriched?.company_size_band, { min: 11, max: 50, source: "linkedin_declared" },
+    "enrichment read the declared size");
+  assertEquals(sortly!.enriched?.linkedin_associated_member_count, 42, "…and the LinkedIn member count, separately");
 
   // 7 — hiring evidence is attached to THAT company, not floating.
   assert(sortly!.prequalified, "prequalification ran on embedded YC jobs");
@@ -385,7 +392,8 @@ Deno.test("variation: multiple constraints (vertical + geography + size) all hol
   const r = await runHiring(m);
   assert(r.authorization.authorized, r.authorization.reason);
   const sortly = r.run!.companies.find((c) => c.company.company_name === "Sortly");
-  assertEquals(sortly!.enriched?.employee_count, 42, "inside the stated range");
+  assertEquals(sortly!.enriched?.company_size_band, { min: 11, max: 50, source: "linkedin_declared" },
+    "a declared band inside the stated range");
 });
 
 Deno.test("variation: a general (non-startup) hiring mission is authorised, then honestly refused", async () => {

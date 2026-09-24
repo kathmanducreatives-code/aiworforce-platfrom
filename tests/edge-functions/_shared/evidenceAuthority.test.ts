@@ -1,9 +1,10 @@
 // CLAIM-SPECIFIC EVIDENCE AUTHORITY — how strong a normalized fact is FOR A CLAIM.
 //
 // The rows are real harvestapi company records (fixture run-1e52d43c): Tara AI
-// (27 employees, single US headquarters) and Uplane (a Berlin office, a US
-// headquarters). The same LinkedIn record proves headcount and presence, and
-// proves neither industry nor business model, nor funding, nor an open role.
+// (declared band 11-50, 27 LinkedIn associated members, single US
+// headquarters) and Uplane (a Berlin office, a US headquarters). The same
+// LinkedIn record proves the declared size BAND and presence, and proves no
+// staff count, no industry, no business model, no funding and no open role.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
@@ -48,34 +49,47 @@ const criterion = (dimension: string, value: unknown, kind: "hard" | "target" = 
   user_phrase: "", rationale: "", status: "ok",
 }) as unknown as MissionCriterion;
 
-// ══════════════════════════════════════════════════════════════ headcount ══
+// ═══════════════════════════════════════════════════════════ company size ══
 
-Deno.test("1. a fresh exact employeeCount on the company record PROVES headcount", () => {
-  const a = authorityForEvidence({ claim: "headcount", source: DETAILS, field: "employee_count",
-    observed_at: NOW.toISOString(), quality: { exact: true }, now: NOW });
-  assertEquals([a.authority, a.rule], ["proven", "li_record_exact_headcount"]);
-  const h = dim(itemsFor(TARA), "headcount");
-  assertEquals([h.value, h.status, h.authority?.rule], [27, "proven", "li_record_exact_headcount"]);
+Deno.test("1. the company record's DECLARED band proves the band claim; the member count proves no size", () => {
+  const a = authorityForEvidence({ claim: "company_size", source: DETAILS, field: "declared_size_band",
+    observed_at: NOW.toISOString(), now: NOW });
+  assertEquals([a.authority, a.rule], ["proven", "li_record_declared_size_band"]);
+  const b = dim(itemsFor(TARA), "company_size_band");
+  assertEquals([b.value, b.status, b.authority?.rule],
+    [{ min: 11, max: 50, source: "linkedin_declared" }, "proven", "li_record_declared_size_band"]);
+  // `employeeCount` is LinkedIn associated members: its own dimension, and it
+  // speaks to no size claim in any form.
+  const m = dim(itemsFor(TARA), "linkedin_member_count");
+  assertEquals(m.value, 27);
+  for (const claim of ["company_size", "headcount"] as const) {
+    assertEquals(authorityForEvidence({ claim, source: DETAILS, field: "associated_member_count",
+      observed_at: NOW.toISOString(), now: NOW }).authority, "insufficient", claim);
+  }
+  assert(!itemsFor(TARA).some((i) => i.dimension === "headcount"), "no item claims to be a staff count");
 });
 
-Deno.test("2. an employee RANGE alone stays plausible", () => {
-  const a = authorityForEvidence({ claim: "headcount", source: DETAILS, field: "employee_count_range",
-    observed_at: NOW.toISOString(), quality: { exact: false }, now: NOW });
-  assertEquals(a.authority, "plausible");
-  // …and a count that is not exact does not prove either.
-  assertEquals(authorityForEvidence({ claim: "headcount", source: DETAILS, field: "employee_count",
-    observed_at: NOW.toISOString(), quality: { exact: false }, now: NOW }).authority, "plausible");
-  // The record's range is never turned into a headcount item at all.
-  assert(!itemsFor(TARA).some((i) => i.dimension === "headcount" && typeof i.value === "string"));
+Deno.test("2. an EXACT staff count is proven by nothing the catalogue has", () => {
+  // A band answers a band claim, never an exact number.
+  assertEquals(authorityForEvidence({ claim: "headcount", source: DETAILS, field: "declared_size_band",
+    observed_at: NOW.toISOString(), now: NOW }).authority, "insufficient");
+  assert(!AUTHORITY_RULES.some((r) => r.claims.includes("headcount")), "no rule proves an exact staff count");
+  const exact = checkCriterion(criterion("company_size", { min: 27, max: 27 }), graphOf("tara", itemsFor(TARA)));
+  assertEquals(exact.result, "unknown");
+  assert(exact.reason.includes("exact staff count"), exact.reason);
 });
 
-Deno.test("3. a proven employeeCount deterministically proves the size band (27 → 11–50 PASS, 51–200 FAIL)", () => {
+Deno.test("3. the proven band grounds the size claim (11-50 → 11–50 PASS, 51–200 FAIL, 20–80 unknown)", () => {
   const g = graphOf("tara", itemsFor(TARA));
   const inBand = checkCriterion(criterion("company_size", { min: 11, max: 50 }), g);
-  assertEquals([inBand.result, inBand.reason], ["pass", "headcount 27 is within range"]);
+  assertEquals([inBand.result, inBand.reason], ["pass", "declared size band 11-50 is within 11-50"]);
   assertEquals(checkCriterion(criterion("company_size", { min: 51, max: 200 }), g).result, "fail");
-  assertEquals(authorityForEvidence({ claim: "company_size", source: DETAILS, field: "employee_count",
-    observed_at: NOW.toISOString(), quality: { exact: true }, now: NOW }).authority, "proven");
+  assertEquals(checkCriterion(criterion("company_size", { min: 20, max: 80 }), g).result, "unknown",
+    "a partial overlap cannot be settled by a band");
+  // …and the member count (27) played no part: a record whose members sit far
+  // outside the band still passes on the band.
+  const crowded = graphOf("tara", itemsFor({ ...TARA, employeeCount: 490 }));
+  assertEquals(checkCriterion(criterion("company_size", { min: 11, max: 50 }), crowded).result, "pass");
 });
 
 // ══════════════════════════════════════════════════════ country vs HQ ══
@@ -161,19 +175,20 @@ Deno.test("10. company enrichment cannot prove open_role; job evidence can", () 
 // ═══════════════════════════════════════════════════ freshness, pending ══
 
 Deno.test("11. stale evidence loses proving authority — by the canonical validity table", () => {
-  const old = new Date(NOW.getTime() - 120 * 86_400_000).toISOString(); // headcount validity is 90 days
-  const a = authorityForEvidence({ claim: "headcount", source: DETAILS, field: "employee_count",
-    observed_at: old, quality: { exact: true }, now: NOW });
-  assertEquals([a.authority, a.rule], ["plausible", "li_record_exact_headcount:stale"]);
+  const old = new Date(NOW.getTime() - 120 * 86_400_000).toISOString(); // size-band validity is 90 days
+  const a = authorityForEvidence({ claim: "company_size", source: DETAILS, field: "declared_size_band",
+    observed_at: old, now: NOW });
+  assertEquals([a.authority, a.rule], ["plausible", "li_record_declared_size_band:stale"]);
   // Job evidence (30 days) and funding (365) expire on the same table.
   const jobOld = new Date(NOW.getTime() - 45 * 86_400_000).toISOString();
   assertEquals(authorityForEvidence({ claim: "open_role", source: "apify_linkedin_job_search", field: "job_posting",
     observed_at: jobOld, now: NOW }).authority, "plausible");
   // And a proven item past its valid_until no longer speaks in the graph.
-  const h = dim(itemsFor(TARA, DETAILS, old), "headcount");
-  const g = buildCompanyEvidenceGraph("tara", [{ ...h, status: "proven" }], { now: NOW });
+  const b = dim(itemsFor(TARA, DETAILS, old), "company_size_band");
+  const g = buildCompanyEvidenceGraph("tara", [{ ...b, status: "proven" }], { now: NOW });
   const check = checkCriterion(criterion("company_size", { min: 11, max: 50 }), g);
-  assertEquals([check.result, check.reason], ["unknown", "the only headcount evidence has expired"]);
+  assertEquals(check.result, "unknown");
+  assert(check.reason.includes("expired"), check.reason);
 });
 
 Deno.test("12. a hard claim resting only on plausible evidence stays PENDING", () => {
@@ -187,7 +202,7 @@ Deno.test("12. a hard claim resting only on plausible evidence stays PENDING", (
 
 Deno.test("13. a discovery search row alone cannot make a company eligible", () => {
   const items = itemsFor(TARA, SEARCH);
-  for (const d of ["geography", "headcount", "industry"]) {
+  for (const d of ["geography", "company_size_band", "industry"]) {
     assertEquals(dim(items, d).status, "plausible", `${d} from a search row`);
   }
   const e = evaluateEligibility([

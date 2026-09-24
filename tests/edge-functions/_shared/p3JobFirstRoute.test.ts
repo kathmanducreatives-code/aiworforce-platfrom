@@ -81,6 +81,8 @@ const FIRST_HIRE_ROW = (() => {
   });
   Object.assign(c, { id: "900001", universalName: "pipewise", name: "Pipewise",
     linkedinUrl: "https://www.linkedin.com/company/pipewise", website: "https://pipewise.io", employeeCount: 9,
+    // Its own DECLARED band — not the one cloned from Bobyard (51-200).
+    employeeCountRange: { start: 2, end: 10 },
     description: "Pipewise is B2B SaaS for revenue teams." });
   return base;
 })();
@@ -120,6 +122,7 @@ function deps(sent: Sent[], opts: { refuseTeam?: boolean; chainOmitsHiring?: boo
         return Promise.resolve(((input.companies as string[]) ?? []).map((u) => {
           const c = byUrl.get(u)!;
           return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount,
+            employeeCountRange: c.employeeCountRange,
             description: c.description, industries: c.industries, locations: c.locations };
         }));
       }
@@ -161,7 +164,9 @@ Deno.test("the probe proves the contract: employer identity arrives on every job
     const c = jobEmployerToCompany(r)!;
     assert(c.linkedin_company_url?.startsWith("https://www.linkedin.com/company/"), String(r.id));
     assert(c.canonical_domain, `${c.company_name}: domain`);
-    assert(typeof c.employee_count === "number", `${c.company_name}: exact headcount`);
+    // The employer's DECLARED band and its LinkedIn member count, as two facts.
+    assert(c.company_size_band, `${c.company_name}: declared size band`);
+    assert(typeof c.linkedin_associated_member_count === "number", `${c.company_name}: LinkedIn members`);
   }
   assertEquals(PROBE.probes["harvestapi~linkedin-job-search"].chargedEventCounts, { job: 10, "actor-start": 1 });
   const reasons = Object.fromEntries(PROBE_ROWS.map((r) => [(r.company as { name: string }).name, jobEmployerAgencyReason(r)]));
@@ -289,8 +294,11 @@ Deno.test("hiring verification buys nothing it holds; the team check runs only w
   assertFalse(team.some((t) => (t.input.companies as string[])[0] === "https://www.linkedin.com/company/pipewise"));
   assertEquals(team.length, 2, "bounded to twice the requested count, and used");
   const checked = team.map((t) => (t.input.companies as string[])[0]);
-  assertEquals(checked, ["https://www.linkedin.com/company/useentropy", "https://www.linkedin.com/company/audicus"],
-    "smallest shortlisted employers first (5, then 77 employees); Pipewise was settled by its posting");
+  // Ordered by the DECLARED band: "nothing else" declares 0-1 (with 197 LinkedIn
+  // members — the count that used to put it third), Entropy 11-50, Audicus
+  // 51-200. Two checks, so Audicus is the one the bound leaves out.
+  assertEquals(checked, ["https://www.linkedin.com/company/thenothingelse", "https://www.linkedin.com/company/useentropy"],
+    "smallest declared band first; Pipewise was settled by its posting");
   const linkedin = result.companies.find((c) => c.company.linkedin_company_url === "https://www.linkedin.com/company/linkedin")!;
   assertFalse(checked.includes("https://www.linkedin.com/company/linkedin"));
   assert(linkedin.first_in_function === undefined || linkedin.first_in_function.source !== "team_composition");

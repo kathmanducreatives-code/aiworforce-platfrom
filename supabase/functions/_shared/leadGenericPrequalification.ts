@@ -78,6 +78,33 @@ export const GENERIC_PREQUALIFICATION_VERSION =
   "generic-prequalification-v1" as const;
 
 /**
+ * LinkedIn company pages people select as an employer when they have none to
+ * name: "Stealth Startup", "Confidential Careers", "Freelance | Self-Employed".
+ *
+ * ── WHY THIS IS AN IDENTITY RULE, NOT A SIZE RULE ──────────────────────────
+ *
+ * Run fafd9912 returned all three inside the requested size band — they
+ * DECLARE 2-10 or 11-50 — with 414,811, 29,946 and 37,306 LinkedIn associated
+ * members. Until 2026-09-24 the member count was misread as staff and kept
+ * them out by accident; it is not staff (companySize.ts) and may not exclude
+ * anyone, so the thing that actually disqualifies these rows has to be said
+ * directly: the page names no company.
+ *
+ * EXACT normalized names only. A real company that merely contains one of these
+ * words ("Confidential Computing Inc", "Stealth Security") is untouched.
+ */
+const PLACEHOLDER_EMPLOYER_NAMES: ReadonlySet<string> = new Set([
+  "stealth", "stealth startup", "stealth mode", "stealth mode startup", "stealth company",
+  "confidential", "confidential company", "confidential careers", "empresa confidencial",
+  "self employed", "freelance", "freelancer", "freelance self employed", "self employed freelance",
+]);
+
+export function isPlaceholderEmployerName(name: string | null | undefined): boolean {
+  const n = String(name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return n.length > 0 && PLACEHOLDER_EMPLOYER_NAMES.has(n);
+}
+
+/**
  * Trust levels a field may be GATED on.
  *
  * ── WHY `semantic` AND `unsafe` ARE ABSENT ─────────────────────────────────
@@ -362,11 +389,19 @@ export function prequalifyDiscoveredCompanies(
       });
       continue;
     }
-    // THE ONLY EXCLUSION THAT REMOVES A ROW OUTRIGHT. Y Combinator's own page
-    // reached persistence as a qualified lead on an earlier run.
+    // ONE OF TWO EXCLUSIONS THAT REMOVE A ROW OUTRIGHT. Y Combinator's own
+    // page reached persistence as a qualified lead on an earlier run.
     if (domain && ARTIFACT_DOMAINS.includes(domain)) {
       excluded.push({
         name, domain, reason: "directory/platform artifact, not a prospect",
+      });
+      continue;
+    }
+    // …and the other: a PLACEHOLDER EMPLOYER page, which is an identity fact,
+    // not a size one. See `isPlaceholderEmployerName`.
+    if (isPlaceholderEmployerName(name)) {
+      excluded.push({
+        name, domain, reason: "placeholder employer page (not a company anyone can sell to)",
       });
       continue;
     }
@@ -472,7 +507,8 @@ export function emptyPrequalificationResult(): PrequalificationResult {
  *
  * v1 admission is exactly what that pass already enforces:
  *   * a usable identity — a row with neither name nor domain is not a company;
- *   * a directory/platform artifact is not a prospect;
+ *   * a directory/platform artifact, or a placeholder employer page, is not a
+ *     prospect;
  *   * the employee range, and ONLY when the mission itself expressed one.
  *
  * No geography. Presence semantics are unchanged, and HQ filtering is not
@@ -483,9 +519,9 @@ export function admittedCandidateCount(
   size: GenericSizeBounds = {},
   policy: GenericPrequalificationPolicy = {},
 ): number {
-  // A row whose REPORTED size is outside an enforced range is no longer
+  // A row whose REPORTED band is outside an enforced range is no longer
   // excluded when enrichment can cheaply settle it (it is ranked down, and
-  // decided on the proven count). It still does not count toward "enough
+  // decided on the company record's proven band). It still does not count toward "enough
   // candidates": sizing discovery on rows we already expect to fail is how a
   // pool of 12 usable companies and 38 far too large would read as full.
   return prequalifyDiscoveredCompanies(companies, size, policy).companies

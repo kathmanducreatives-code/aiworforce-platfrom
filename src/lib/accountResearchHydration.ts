@@ -23,6 +23,7 @@
 
 import type { LeadTableRow } from '@/hooks/useLeadResults';
 import { hydrateOutreachStage } from './outreachStageView';
+import { bandLabel, readCompanySizeFacts } from './workbench/companySize';
 import {
   buildCompanyResearchView,
   sanitizeSummary,
@@ -210,13 +211,11 @@ function employeeRange(row: LeadTableRow, jsonb: Json): string | null {
   const ce = companyEnrichment(jsonb);
   const explicit = str((ce ?? {}).employee_range) ?? str(jsonb.employee_range);
   if (explicit) return explicit;
-  const count = num(row.employee_count) ?? num(jsonb.employee_count);
-  if (count == null) return null;
-  if (count < 11) return '1–10';
-  if (count < 51) return '11–50';
-  if (count < 201) return '51–200';
-  if (count < 1001) return '201–1000';
-  return '1000+';
+  // THE DECLARED BAND, NEVER A BUCKETED COUNT. A bare `employee_count` was
+  // usually LinkedIn associated members; bucketing 490 of them into "201–1000"
+  // manufactured a size the company never declared (lib/workbench/companySize).
+  const band = row.company_size_band ?? readCompanySizeFacts(jsonb as unknown as Record<string, unknown>).declared_band;
+  return band ? bandLabel(band) : null;
 }
 
 function bestSummary(row: LeadTableRow, jsonb: Json): string | null {

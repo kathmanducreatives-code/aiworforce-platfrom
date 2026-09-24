@@ -1,3 +1,4 @@
+import { declaredBandWithin, type DeclaredBand } from './companySize.ts';
 // FILTERING THE ACTIVE WORKBENCH RESULT SET.
 //
 // ── WHAT THIS IS A FORWARD PORT OF ─────────────────────────────────────────
@@ -45,7 +46,10 @@ export interface FilterableLead {
   company_linkedin_url?: string | null;
   company_description?: string | null;
   industries?: string[];
-  employee_count?: number | null;
+  /** The DECLARED LinkedIn size band — the only figure the size filter reads. */
+  company_size_band?: DeclaredBand | null;
+  /** LinkedIn associated members — shown and exported, never filtered on. */
+  linkedin_associated_members?: number | null;
   fit_score?: number | null;
   final_overall_fit?: number | null;
   signal_type?: string | null;
@@ -60,7 +64,7 @@ export interface FilterableLead {
   evidence_summary?: string | null;
 }
 
-export type SizeBandId = 'any' | 'micro' | 'smb' | 'mid' | 'large';
+export type SizeBandId = 'any' | '1_10' | '11_50' | '51_200' | '201_1000' | '1001_plus';
 export type HiringFilter = 'any' | 'has_signal' | 'no_signal';
 export type ContactFilter = 'any' | 'ready' | 'needed';
 
@@ -95,19 +99,21 @@ export const EMPTY_WORKBENCH_FILTERS: Readonly<WorkbenchFilters> = Object.freeze
 });
 
 /**
- * Headcount bands.
+ * Company-size bands, ALIGNED TO LINKEDIN'S DECLARED BANDS.
  *
- * `20–200` is a band rather than a boundary between two because it is the range
- * the product's own missions are written in — the live B2B SaaS mission carries
- * `employee_range` 20–200 — so the most common question a reader has is
- * expressible in one click instead of two.
+ * The size a company has is the band it DECLARES (lib/workbench/companySize.ts)
+ * — 1-10, 11-50, 51-200, 201-500, 501-1000, 1001+. A filter drawn across those
+ * (the old 1–19 / 20–200) could not place an 11-50 company in any option,
+ * because a declared band that straddles a boundary is not inside either side.
+ * 201-500 and 501-1000 share an option; every LinkedIn band lands in exactly one.
  */
 export const SIZE_BANDS: ReadonlyArray<{ id: SizeBandId; label: string; min: number; max: number }> =
   Object.freeze([
-    { id: 'micro', label: '1–19', min: 1, max: 19 },
-    { id: 'smb', label: '20–200', min: 20, max: 200 },
-    { id: 'mid', label: '201–1000', min: 201, max: 1000 },
-    { id: 'large', label: '1000+', min: 1001, max: Number.MAX_SAFE_INTEGER },
+    { id: '1_10', label: '1–10', min: 1, max: 10 },
+    { id: '11_50', label: '11–50', min: 11, max: 50 },
+    { id: '51_200', label: '51–200', min: 51, max: 200 },
+    { id: '201_1000', label: '201–1,000', min: 201, max: 1000 },
+    { id: '1001_plus', label: '1,001+', min: 1001, max: Number.MAX_SAFE_INTEGER },
   ]);
 
 export const HIRING_LABEL: Readonly<Record<HiringFilter, string>> = Object.freeze({
@@ -201,13 +207,11 @@ function matchesQuery(r: FilterableLead, q: string): boolean {
 
 function matchesSize(r: FilterableLead, band: SizeBandId): boolean {
   if (band === 'any') return true;
-  const n = typeof r.employee_count === 'number' ? r.employee_count : null;
-  // An UNKNOWN headcount is not a match for a headcount band. Treating it as one
-  // would put companies of unknown size inside "20–200" and make the count a
-  // claim the data does not support.
-  if (n === null) return false;
+  // THE DECLARED BAND, WHOLLY INSIDE THE OPTION. An unknown size is not a match
+  // (it would make the count a claim the data does not support), and a LinkedIn
+  // member count is never read: it counts members, not staff.
   const b = SIZE_BANDS.find((x) => x.id === band);
-  return !!b && n >= b.min && n <= b.max;
+  return !!b && declaredBandWithin(r.company_size_band ?? null, b.min, b.max);
 }
 
 /**
@@ -270,7 +274,7 @@ export function filterChips(f: WorkbenchFilters): FilterChip[] {
   if (f.industry !== 'any') chips.push({ key: 'industry', label: f.industry });
   if (f.size !== 'any') {
     const b = SIZE_BANDS.find((x) => x.id === f.size);
-    if (b) chips.push({ key: 'size', label: `${b.label} employees` });
+    if (b) chips.push({ key: 'size', label: `${b.label} employees (declared)` });
   }
   if (f.hiring !== 'any') chips.push({ key: 'hiring', label: HIRING_LABEL[f.hiring] });
   if (f.contact !== 'any') chips.push({ key: 'contact', label: CONTACT_LABEL[f.contact] });

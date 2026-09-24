@@ -28,6 +28,7 @@
 //
 // ZERO network, ZERO Actor runs, ZERO model calls, ZERO real database writes.
 
+import { sizeBandLabel } from "../../../supabase/functions/_shared/companySize.ts";
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   LEAD_MISSION_VERSION, type LeadMissionV1,
@@ -173,7 +174,8 @@ const searchRow = (name: string, slug: string) => ({
 });
 const enrichRow = (name: string, slug: string) => ({
   id: slug, name, linkedinUrl: `https://www.linkedin.com/company/${slug}`,
-  website: `https://${slug}.com`, employeeCount: 42,
+  // `employeeCount` is LinkedIn associated members; the declared band is 11-50.
+  website: `https://${slug}.com`, employeeCount: 42, employeeCountRange: { start: 11, end: 50 },
   description: `${name} is a B2B SaaS platform sold on subscription.`,
   industries: [{ id: "4", name: "B2B SaaS", hierarchy: "Technology" }],
   locations: [{ linkedinText: "United States" }],
@@ -271,7 +273,9 @@ async function runHiringWithPersistence(
     ? projectEvaluationRows(run.companies.map((c) => ({
       key: c.key, shortlisted: c.shortlisted,
       companyName: (c.enriched ?? c.company).company_name ?? null,
-      employeeCount: (c.enriched ?? c.company).employee_count ?? null,
+      sizeBand: (c.enriched ?? c.company).company_size_band
+        ? sizeBandLabel((c.enriched ?? c.company).company_size_band!) : null,
+      linkedinMembers: (c.enriched ?? c.company).linkedin_associated_member_count ?? null,
       prequalified: c.prequalified,
       identityResolved: !!c.identity && identityIsActionable(c.identity),
       identityAttempted: c.identity !== null,
@@ -569,8 +573,9 @@ Deno.test("persistence failure: reported, and the Workbench result survives", as
 Deno.test("a MISSION-STATED size constraint still rejects, and writes nothing", async () => {
   // THE CONSTRAINT THE USER ACTUALLY EXPRESSED.
   //
-  // `employee_range` on the mission makes the bound ENFORCEABLE, so a verified
-  // 5000-employee company fails a falsifiable fact the mission itself stated.
+  // `employee_range` on the mission makes the bound ENFORCEABLE, so a company
+  // whose record DECLARES 1001-5000 fails a falsifiable fact the mission itself
+  // stated.
   // That rejection survives the evaluator — see `MISSION_STATED_GATES` — because
   // the user asked for it, and it is checkable.
   const db = memoryDb();
@@ -582,7 +587,7 @@ Deno.test("a MISSION-STATED size constraint still rejects, and writes nothing", 
     },
   } as never), {
     ...HAPPY,
-    apify_linkedin_company_details: [{ ...enrichRow("Sortly", "sortly"), employeeCount: 5000 }],
+    apify_linkedin_company_details: [{ ...enrichRow("Sortly", "sortly"), employeeCountRange: { start: 1001, end: 5000 } }],
   }, db);
   assertEquals(r.run!.state.qualified_company_keys.length, 0);
   assertEquals(db.rows("lead_candidates").length, 0);
@@ -605,13 +610,13 @@ Deno.test("a WORKSPACE PREFERENCE does not reject what the evaluator passed", as
   const db = memoryDb();
   const r = await runHiringWithPersistence(hiringMission(), {
     ...HAPPY,
-    apify_linkedin_company_details: [{ ...enrichRow("Sortly", "sortly"), employeeCount: 5000 }],
+    apify_linkedin_company_details: [{ ...enrichRow("Sortly", "sortly"), employeeCountRange: { start: 1001, end: 5000 } }],
   }, db);
   const brains = r.run!.companies.map((c) => c.brain).filter(Boolean);
   assert(brains.length > 0, "the company must reach the Brain");
   assertFalse(
     brains.some((b) => b!.outcome === "REJECT" &&
-      b!.reason.includes("employee_count_far_above_ceiling")),
+      b!.reason.includes("size_band_above_ceiling")),
     "a workspace preference may not produce a rejection",
   );
 });

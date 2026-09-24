@@ -320,20 +320,20 @@ export function icpDiscoveryConstraints(
   const companySize = companySizeBandsFor(employeeWindow);
   // ── NAMED FOR WHAT IT ACTUALLY CONSTRAINS ────────────────────────────────
   //
-  // `companySize` filters LinkedIn's SELF-REPORTED band (`employeeCountRange`),
-  // not the exact figure the Company Brain gates on (`employeeCount`). Run
-  // fafd9912 proved they are different quantities, not noisy versions of one:
-  // every row it returned was inside the requested bands, and
+  // `companySize` filters LinkedIn's DECLARED band (`employeeCountRange`) — the
+  // very fact a size criterion is answered by (companySize.ts). `employeeCount`
+  // is LinkedIn associated members, a different quantity: every row run
+  // fafd9912 returned was inside the requested bands, and
   //
   //     Freelance | Self-Employed   band 2-10    employeeCount 414,811
   //     Confidential Careers        band 2-10    employeeCount  29,946
   //     Stealth Startup             band 11-50   employeeCount  37,306
   //
-  // So the provenance says `→employeeCountRange`. Discovery NARROWS on the
-  // advisory band because that is the only size lever a search has; nothing
-  // downstream may read that as a headcount, and nothing does —
-  // `prequalifyGenericCompany` gates on `employee_count` via `mayGateOn` and
-  // refuses the advisory band by name.
+  // — placeholder employer pages whose members are not staff. So the provenance
+  // says `→employeeCountRange`: discovery narrows on the declared band, the
+  // search row's band is PLAUSIBLE until the company record is read, and the
+  // placeholder pages are removed on identity in the pre-pass, never on their
+  // member count (`isPlaceholderEmployerName`).
   const sizeFrom = employeeWindow.source === "mission"
     ? "company_profile.employee_range→employeeCountRange"
     : employeeWindow.source === "company_brain_policy"

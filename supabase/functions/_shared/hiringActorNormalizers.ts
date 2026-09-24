@@ -326,8 +326,8 @@ export function normalizeLinkedInCompanyCandidate(
     // short mode gives `industry` (string); full mode gives `industries` (array).
     provider_industry: inds[0]?.name ?? s(r.industry),
     industry_ids: inds,
-    // Two different facts (companySize.ts). The band is sent in both modes; the
-    // member count only in full mode.
+    // Two different facts (companySize.ts). Both arrive in FULL mode only:
+    // short-mode rows carry neither (run 4250f181, 108 of 108 rows).
     linkedin_associated_member_count: linkedInAssociatedMemberCount(r),
     company_size_band: linkedInDeclaredSizeBand(r),
     employee_range_advisory: null,
@@ -350,7 +350,9 @@ export function normalizeLinkedInCompanyCandidate(
   };
   out.missing_fields = [
     "provider_industry:filter_returned_wrong_industries_use_enrichment",
-    "company_size_band:discovery_row_plausible_until_company_record_read",
+    out.company_size_band === null
+      ? "company_size_band:absent_on_row_short_mode_or_undeclared"
+      : "company_size_band:discovery_row_plausible_until_company_record_read",
     ...(out.linkedin_associated_member_count === null ? ["linkedin_associated_member_count:null_in_short_mode"] : []),
   ];
   return out;

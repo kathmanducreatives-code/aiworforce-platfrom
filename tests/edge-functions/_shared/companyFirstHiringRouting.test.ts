@@ -147,15 +147,17 @@ Deno.test("9/10. a YC candidate without a LinkedIn URL resolves, and a name-only
   assert(identityIsPending(unresolved));
 });
 
-Deno.test("11. YC self-reported teamSize cannot satisfy the exact employee-count gate", () => {
+const declared = (min: number, max: number | null) => ({ min, max, source: "linkedin_declared" as const });
+
+Deno.test("11. YC self-reported teamSize cannot satisfy the declared-band size gate", () => {
   // ShipBob returned teamSize 1 while employing thousands.
   const fit = evaluateCompanyFit({
     company_key: "yc:shipbob", identity_status: "verified_match", enrichment_complete: true,
-    employee_count: null, employee_range_advisory: "yc_self_reported:1",
+    company_size_band: null, employee_range_advisory: "yc_self_reported:1",
     employee_min: 1, employee_max: 150, industry_ids: [],
   });
   assertEquals(fit.stage, "company_fit_pending");
-  assert(fit.missing_evidence.some((m) => m.startsWith("employee_count_unknown")),
+  assert(fit.missing_evidence.some((m) => m.startsWith("company_size_band_unknown")),
     "an advisory range must leave the size gate UNSATISFIED, not pass it");
 });
 
@@ -164,17 +166,17 @@ Deno.test("12/13. open jobs are judged only after company-fit, and drive whether
   // 12. company-fit reject => the jobs are never evaluated for qualification.
   const reject = evaluateCompanyFit({
     company_key: "c1", identity_status: "verified_match", enrichment_complete: true,
-    employee_count: 4000, employee_range_advisory: null, employee_min: 1, employee_max: 150,
+    company_size_band: declared(1001, 5000), employee_range_advisory: null, employee_min: 1, employee_max: 150,
     industry_ids: [{ id: "4", name: "Software Development" }],
   });
   assertEquals(reject.stage, "company_fit_reject");
-  assert(reject.failed_gates.includes("employee_count_above_max"));
+  assert(reject.failed_gates.includes("company_size_band_above_max"));
 
   // 13. company-fit pass, but no YC job matches the pack => LinkedIn job-search
   //     is the escalation. With a matching YC job it would not be needed.
   const pass = evaluateCompanyFit({
     company_key: "c2", identity_status: "verified_match", enrichment_complete: true,
-    employee_count: 82, employee_range_advisory: null, employee_min: 1, employee_max: 150,
+    company_size_band: declared(51, 100), employee_range_advisory: null, employee_min: 1, employee_max: 150,
     industry_ids: [{ id: "4", name: "Software Development" }],
     positive_industries: ["software development"],
   });
@@ -187,36 +189,51 @@ Deno.test("12/13. open jobs are judged only after company-fit, and drive whether
 });
 
 // ═══ GENERAL ROUTE (16-20) ════════════════════════════════════════════════
-Deno.test("16/17. employeeCountRange cannot satisfy size; enriched exact count controls it", () => {
-  // Cisco Networking Academy: 4642 actual, range says 51-200.
+Deno.test("16/17. the declared band decides size; the LinkedIn member count never does", () => {
+  // Cisco Networking Academy: declared 51-200, with 4,642 LinkedIn members —
+  // its students list it. Read as staff, that count once REJECTED a company
+  // whose own declared size sits inside the mission's range.
+  const cisco = normalizeLinkedInCompanyEnriched(LINKEDIN_ENRICHED.find((c) => c.name === "Cisco Networking Academy") ??
+    { name: "Cisco Networking Academy", employeeCount: 4642, employeeCountRange: { start: 51, end: 200 } });
+  assertEquals(cisco.linkedin_associated_member_count, 4642);
   const wide = evaluateCompanyFit({
     company_key: "cisco-academy", identity_status: "verified_match", enrichment_complete: true,
-    employee_count: 4642, employee_range_advisory: "51-200",
+    company_size_band: cisco.company_size_band, employee_range_advisory: null,
     employee_min: 11, employee_max: 200, industry_ids: [{ id: "4", name: "Software Development" }],
   });
-  assertEquals(wide.stage, "company_fit_reject");
-  assert(wide.failed_gates.includes("employee_count_above_max"),
-    "the exact count must decide even when the advisory range says otherwise");
+  assertEquals(wide.stage, "company_fit_pass", "4,642 members must not override a declared 51-200");
+  assertFalse(wide.failed_gates.some((g) => g.startsWith("company_size_band")));
 
-  const inRange = evaluateCompanyFit({
-    company_key: "trademo", identity_status: "verified_match", enrichment_complete: true,
-    employee_count: 147, employee_range_advisory: "51-200",
+  // A declared band wholly outside the range still rejects…
+  const big = evaluateCompanyFit({
+    company_key: "bigco", identity_status: "verified_match", enrichment_complete: true,
+    company_size_band: declared(201, 500), employee_range_advisory: null,
     employee_min: 11, employee_max: 200, industry_ids: [{ id: "4", name: "Software Development" }],
   });
-  assertEquals(inRange.stage, "company_fit_pass");
+  assertEquals(big.stage, "company_fit_reject");
+  assert(big.failed_gates.includes("company_size_band_above_max"));
+
+  // …and one that only partly overlaps is unsettled, never a reject.
+  const straddle = evaluateCompanyFit({
+    company_key: "mid", identity_status: "verified_match", enrichment_complete: true,
+    company_size_band: declared(11, 50), employee_range_advisory: null,
+    employee_min: 20, employee_max: 80, industry_ids: [{ id: "4", name: "Software Development" }],
+  });
+  assertEquals(straddle.stage, "company_fit_pending");
+  assert(straddle.missing_evidence.includes("company_size_band_unsettled"));
 });
 
 Deno.test("18. the enriched industry hierarchy controls industry evidence", () => {
   const t = normalizeLinkedInCompanyEnriched(LINKEDIN_ENRICHED.find((c) => c.name === "Trademo")!);
   const ok = evaluateCompanyFit({
     company_key: "trademo", identity_status: "verified_match", enrichment_complete: true,
-    employee_count: t.employee_count, employee_range_advisory: t.employee_range_advisory,
+    company_size_band: t.company_size_band, employee_range_advisory: t.employee_range_advisory,
     industry_ids: t.industry_ids, positive_industries: ["software development"],
   });
   assertEquals(ok.stage, "company_fit_pass");
   const excluded = evaluateCompanyFit({
     company_key: "trademo", identity_status: "verified_match", enrichment_complete: true,
-    employee_count: t.employee_count, employee_range_advisory: null,
+    company_size_band: t.company_size_band, employee_range_advisory: null,
     industry_ids: t.industry_ids, excluded_industries: ["software development"],
   });
   assertEquals(excluded.stage, "company_fit_reject");
@@ -227,7 +244,7 @@ Deno.test("19. a Swooped-style staffing candidate is rejected on structured evid
   const s = normalizeLinkedInCompanyEnriched(LINKEDIN_ENRICHED.find((c) => c.name === "Swooped")!);
   const fit = evaluateCompanyFit({
     company_key: "swooped", identity_status: "verified_match", enrichment_complete: true,
-    employee_count: s.employee_count, employee_range_advisory: s.employee_range_advisory,
+    company_size_band: s.company_size_band, employee_range_advisory: s.employee_range_advisory,
     employee_min: 11, employee_max: 200, industry_ids: s.industry_ids,
     description: s.description, canonical_domain: s.canonical_domain,
   });

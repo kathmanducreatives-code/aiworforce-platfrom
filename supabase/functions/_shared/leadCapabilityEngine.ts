@@ -1176,9 +1176,10 @@ export const IDENTITY_SEARCH_MAX_ITEMS = 15;
  * The execution plan asked for `full` as well; the merge policy lets execution
  * own `scraperMode`, and execution now agrees with it.
  *
- * `full` also returns `employeeCount` and `industries`, which the card says not
- * to trust from a search. Nothing here trusts them: size and industry are still
- * settled by `company_enrichment`. The extra $0.002 a row buys the one field
+ * `full` also returns the declared size band, the LinkedIn member count and
+ * `industries`, none of which a search row PROVES: the band is plausible here,
+ * the member count is never a size, and size and industry are settled by
+ * `company_enrichment`. The extra $0.002 a row buys the one field
  * identity cannot be proved without.
  */
 export const SEARCH_SCRAPER_MODE: "short" | "full" = "full";
@@ -1821,7 +1822,11 @@ export function refusedBeforeAnyRun(e: unknown): boolean {
     .test(String((e as Error)?.message ?? e));
 }
 
-/** P3 — above this headcount a first-hire team check is not bought. */
+/**
+ * P3 — a company whose DECLARED size band starts above this is too large for a
+ * first hire in the function to be plausible, so its team check is not bought.
+ * Read from the band's floor, never the LinkedIn member count (companySize.ts).
+ */
 export const TEAM_CHECK_MAX_HEADCOUNT = 200;
 
 /** P3 — this company was found through its own open posting. */
@@ -2410,8 +2415,8 @@ export async function runCapabilityPlan(
    * returned and the caller persists them — the same separation that keeps
    * every other engine output testable without Postgres.
    *
-   * Only exact counts from a source verified to produce them reach this list;
-   * `buildSnapshotRow` refuses the rest.
+   * Only LinkedIn associated-member counts from the company record reach this
+   * list (a series of members, not staff); `buildSnapshotRow` refuses the rest.
    */
   const headcountSnapshots: HeadcountSnapshotRow[] = [];
 
@@ -5428,8 +5433,8 @@ export async function runCapabilityPlan(
               strategyInput: { ...sel.input, ...(query ? { searchQuery: query } : {}) },
               executionConstraints: {
                 maxItems: maxCandidates,
-                // `full` is required: `short` returns employeeCount === null, and
-                // an unverifiable size cannot settle an employee-ceiling gate.
+                // `full` is required: `short` returns no declared size band at all
+                // (run 4250f181, 108 of 108 rows), so size could not even rank.
                 scraperMode: "full",
               },
             });
@@ -5969,8 +5974,8 @@ export async function runCapabilityPlan(
       // exactly what a source that returns no embedded jobs cannot support."
       //
       // The premise was too strong. A source with no embedded jobs still
-      // returns an exact headcount, a description, a domain and a LinkedIn URL.
-      // A company whose KNOWN exact headcount is 500 on a 10-150 mission was
+      // returns a declared size band, a description, a domain and a LinkedIn URL.
+      // A company DECLARING 501-1000 on a 10-150 mission was
       // being carried through identity resolution and enrichment — two paid
       // calls, ~26s — to reach a conclusion its discovery row already stated.
       //
@@ -6897,17 +6902,17 @@ export async function runCapabilityPlan(
             const normalized = normalizeLinkedInCompanyEnriched(row);
             const url = normalized.linkedin_company_url;
             const matches = url ? byUrl.get(url) ?? [] : [];
-            // ── THE HEADCOUNT READING, KEPT ─────────────────────────────
+            // ── THE MEMBER-COUNT READING, KEPT ──────────────────────────
             //
-            // This actor returns an authoritative EXACT `employeeCount`, and
-            // until now the run used it once for a size gate and discarded it.
+            // This actor returns `employeeCount` — LinkedIn associated members,
+            // not staff (companySize.ts) — and until now the run discarded it.
             // Growth is a delta between two dated readings, so discarding the
             // first is precisely why `headcount_change` has never been
             // answerable for any company.
             //
             // The row is BUILT here and written by the caller: the engine takes
             // no database dependency, and `buildSnapshotRow` refuses anything
-            // that is not an exact count from a source verified to produce one.
+            // that is not a member count read from the company record.
             {
               const snap = buildSnapshotRow({
                 workspace_id: opts.identity?.workspace_id ??
@@ -7474,12 +7479,14 @@ export async function runCapabilityPlan(
           teamStep?.providers.includes("apify_linkedin_company_employees")) {
         const titles = functionTitlesFor(qualificationCtx.role_vocabulary);
         const maxChecks = Math.max(1, Math.min(3, (opts.remainingLeads ?? effectiveRequestedCount(opts.mission)) * 2));
-        // ORDERING ONLY: the declared band's floor, then LinkedIn associated
-        // members as a tiebreak. Neither decides anything here.
+        // TWO KEYS, NEVER ONE. The spend rule reads the DECLARED band's floor
+        // only; the sort adds LinkedIn associated members as a tiebreak inside
+        // a band, and a member count alone never decides anything here.
+        const bandFloor = (c: EngineCompany) => (c.enriched?.company_size_band ?? c.company.company_size_band)?.min ?? null;
         const headcount = (c: EngineCompany) => {
-          const b = c.enriched?.company_size_band ?? c.company.company_size_band;
+          const floor = bandFloor(c);
           const m = c.enriched?.linkedin_associated_member_count ?? c.company.linkedin_associated_member_count ?? null;
-          return b ? b.min * 1e6 + (m ?? 0) : m;
+          return floor !== null ? floor * 1e6 + (m ?? 0) : m;
         };
         // Smallest first: "first in the function" is only a live question at a
         // small team, so the bounded checks go where the answer can be yes.
@@ -7516,10 +7523,10 @@ export async function runCapabilityPlan(
           // A SPEND rule, not a criterion: the company stays in the pool and is
           // ranked as usual; only the paid check is not bought where a first
           // hire in the function is implausible.
-          const hc = headcount(c);
-          if (hc !== null && hc > TEAM_CHECK_MAX_HEADCOUNT) {
+          const floor = bandFloor(c);
+          if (floor !== null && floor > TEAM_CHECK_MAX_HEADCOUNT) {
             c.first_in_function ??= { status: "unverified", source: "none",
-              reason: `team check not bought: ${hc} employees makes a first hire in the function implausible` };
+              reason: `team check not bought: a declared size of ${floor}+ employees makes a first hire in the function implausible` };
             continue;
           }
           if (teamChecks.attempted >= maxChecks) break;
@@ -7636,7 +7643,7 @@ export async function runCapabilityPlan(
       // much larger change.
       //
       // And what it adds is weak. Every one of the thirteen additions was
-      // `tier: none` with no verified headcount — REVIEW-shaped candidates
+      // `tier: none` with no settled size — REVIEW-shaped candidates
       // arriving at the stage that is already the wall-clock bottleneck, where
       // they can only displace stronger ones or fill a requested_count with
       // leads nobody would want.
@@ -7986,7 +7993,7 @@ export async function runCapabilityPlan(
       //
       // So the second partition sorts the not-yet-paid-for remainder by what
       // makes a verdict worth having: a real commercial tier first, then
-      // enriched companies (verified headcount and geography), then the rest.
+      // enriched companies (proven size band and geography), then the rest.
       // Stable within each band, so nothing is reordered arbitrarily.
       const strength = (c: EngineCompany): number => {
         const tier = c.hiring_assessment?.tier ?? null;

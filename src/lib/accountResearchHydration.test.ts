@@ -40,7 +40,8 @@ function sourcedRow(over: Partial<LeadTableRow> = {}, jsonb: Record<string, unkn
     posted_at: recent,
     why_now: 'Hiring a Revenue Operations Associate',
     industries: ['B2B SaaS'],
-    employee_count: 120,
+    company_size_band: { min: 51, max: 200 },
+    linkedin_associated_members: 120,
     fit_score: 82,
     why_this_lead: 'Matches target industry and size',
     raw: {

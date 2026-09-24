@@ -30,7 +30,7 @@ import {
   parseMissionEvaluationStrict,
 } from "../../../supabase/functions/_shared/missionEvaluation.ts";
 import {
-  CEILING_TOLERANCE, failedHardGates,
+  failedHardGates,
 } from "../../../supabase/functions/_shared/companyBrainSemanticFit.ts";
 import type {
   EvidenceRegistry,
@@ -190,7 +190,7 @@ Deno.test("2. in the production configuration every hard gate is inert or falsif
     geography: "San Francisco, CA, USA",
     // `run-agent` passes null. This is the load-bearing value — see 2b.
     required_geography: null,
-    employee_count: 220,
+    company_size_band: { min: 51, max: 200, source: "linkedin_declared" },
     employee_ceiling: 200,
     commercial_tier: null,
     mission_owns_hiring_role: true,
@@ -232,7 +232,7 @@ Deno.test("2b. HAZARD, PINNED: a non-null required_geography would veto GPT on a
     identity_status: "verified_match", active: true,
     geography: "San Francisco, CA, USA",
     required_geography: "united states",
-    employee_count: 100, employee_ceiling: 200,
+    company_size_band: { min: 51, max: 200, source: "linkedin_declared" }, employee_ceiling: 200,
     commercial_tier: null, mission_owns_hiring_role: true,
     semantic: {
       business_model: "unknown", company_fit: "pass", confidence: 0.9,
@@ -244,9 +244,7 @@ Deno.test("2b. HAZARD, PINNED: a non-null required_geography would veto GPT on a
     "documented hazard: the match is textual, not geographic");
 });
 
-Deno.test("2c. the employee gate rejects only a grossly falsifiable count", () => {
-  assertEquals(CEILING_TOLERANCE, 1.0,
-    "the ceiling doubles before it rejects — a preference must not become a gate");
+Deno.test("2c. the size gate rejects only a DECLARED band wholly above the stated ceiling", () => {
   const base = {
     identity_status: "verified_match" as const, active: true,
     geography: null, required_geography: null,
@@ -257,14 +255,21 @@ Deno.test("2c. the employee gate rejects only a grossly falsifiable count", () =
       supporting_evidence: [], conflicting_evidence: [], unknown_fields: [], reason: "",
     },
   };
-  // AfterQuery, 220 employees, against a 10–150 workspace preference that
-  // falls back to the generous 200 ceiling: MUST NOT be rejected.
-  assertEquals(
-    failedHardGates({ ...base, employee_count: 220, employee_ceiling: 200 } as never), []);
-  // Twenty times the ceiling is a falsifiable contradiction, and still rejects.
-  assertEquals(
-    failedHardGates({ ...base, employee_count: 4000, employee_ceiling: 200 } as never),
-    ["employee_count_far_above_ceiling"]);
+  const band = (min: number, max: number | null) => ({ min, max, source: "linkedin_declared" as const });
+  // A band that reaches the ceiling is not above it. (The old count gate needed
+  // a 2x tolerance to absorb noise in a figure that was really a LinkedIn
+  // member count; a declared band has no such noise — companySize.ts.)
+  assertEquals(failedHardGates({ ...base, company_size_band: band(51, 200), employee_ceiling: 200 } as never), []);
+  assertEquals(failedHardGates({ ...base, company_size_band: band(51, 200), employee_ceiling: 150 } as never), [],
+    "a band straddling the ceiling is unsettled, never a reject");
+  // Wholly above: a falsifiable contradiction of a stated bound.
+  assertEquals(failedHardGates({ ...base, company_size_band: band(1001, 5000), employee_ceiling: 200 } as never),
+    ["size_band_above_ceiling"]);
+  // The LinkedIn member count is not an input: 99,999 members change nothing.
+  assertEquals(failedHardGates({ ...base, company_size_band: band(11, 50), employee_ceiling: 200,
+    linkedin_associated_member_count: 99_999 } as never), []);
+  assertEquals(failedHardGates({ ...base, company_size_band: null, employee_ceiling: 200,
+    linkedin_associated_member_count: 99_999 } as never), [], "no band, no size gate");
 });
 
 // ══════════════════════════════ 3. absence of the evaluator is never a pass ══

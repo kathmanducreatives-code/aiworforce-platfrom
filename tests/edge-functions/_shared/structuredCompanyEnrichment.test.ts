@@ -1,3 +1,4 @@
+import { companyPatchFromEvidence } from "../../../supabase/functions/_shared/runAgentCompanyEnrichment.ts";
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   buildCompanyEnrichmentInput, normalizeCompanyActorItem, interpretCompanyActorResponse,
@@ -122,6 +123,20 @@ Deno.test("11: employee count/range normalize safely; invalid strings are NOT co
   assertEquals(bad.company.employeeCount, undefined);        // "about fifty" not fabricated
   assertEquals(bad.company.employeeRange, undefined);
   assert(!bad.evidence.some((e) => e.category === "company_size"));
+});
+
+Deno.test("11b: size evidence is the DECLARED band — never the LinkedIn member count", () => {
+  // 490 LinkedIn associated members on a company that declares 11-50 (Recode,
+  // canary ee68e102). The member count is kept for display; size is the band.
+  const crowded = normalizeCompanyActorItem({ ...FIXTURE_COMPLETE, employeeCount: 490 }, "k", { observedAt: NOW })!;
+  assertEquals(crowded.company.employeeCount, 490);
+  const size = crowded.evidence.filter((e) => e.category === "company_size");
+  assertEquals(size.map((e) => e.value), [{ start: 11, end: 50 }]);
+  // A member count with no declared band is no size evidence at all.
+  const noBand = normalizeCompanyActorItem({ ...FIXTURE_COMPLETE, employeeCount: 490, employeeCountRange: undefined }, "k", { observedAt: NOW })!;
+  assert(!noBand.evidence.some((e) => e.category === "company_size"));
+  const patch = companyPatchFromEvidence(crowded.evidence);
+  assertEquals([patch?.company_employee_count, patch?.company_employee_range], [undefined, { start: 11, end: 50 }]);
 });
 
 Deno.test("12: headquarters prefers headquarter=true", () => {

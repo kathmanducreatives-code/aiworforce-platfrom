@@ -74,7 +74,8 @@ function searchRow(name: string, slug: string) {
 function enrichRow(name: string, slug: string) {
   return {
     id: slug, name, linkedinUrl: `https://www.linkedin.com/company/${slug}`,
-    website: `https://${slug}.com`, employeeCount: 42,
+    // `employeeCount` is LinkedIn associated members; the declared band is 11-50.
+    website: `https://${slug}.com`, employeeCount: 42, employeeCountRange: { start: 11, end: 50 },
     description: `${name} is a B2B SaaS platform sold on subscription.`,
     // `industries`, not `industry` — the enriched ids are what the gate reads.
     industries: [{ id: "4", name: "B2B SaaS", hierarchy: "Technology" }],
@@ -179,7 +180,8 @@ Deno.test("3. enrichment happens BEFORE qualification, and qualification uses it
   const sortly = run.companies.find((c) => c.company.company_name === "Sortly");
   assert(sortly, "Sortly must be in the working set");
   assert(sortly!.enriched, "Sortly must carry enriched evidence");
-  assertEquals(sortly!.enriched!.employee_count, 42);
+  assertEquals(sortly!.enriched!.company_size_band, { min: 11, max: 50, source: "linkedin_declared" });
+  assertEquals(sortly!.enriched!.linkedin_associated_member_count, 42);
 });
 
 Deno.test("4. founder discovery does not run automatically at all", async () => {

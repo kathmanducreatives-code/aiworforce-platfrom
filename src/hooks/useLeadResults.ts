@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { workbenchQueryKey, type WorkbenchOwnership } from '@/lib/workbench/workbenchSession';
+import { readCompanySizeFacts, type DeclaredBand } from '@/lib/workbench/companySize';
 
 export type ContactStatus = 'needs_contact' | 'profile_found' | 'email_found' | 'verified';
 export type EnrichmentStatus = 'locked' | 'not_started' | 'enrichable' | 'enriched' | 'failed';
@@ -48,7 +49,12 @@ export interface LeadTableRow {
   company_slogan?: string | null;
   company_description?: string | null;
   industries?: string[];
-  employee_count?: number | null;
+  /** The company's DECLARED LinkedIn size band (lib/workbench/companySize.ts). */
+  company_size_band?: DeclaredBand | null;
+  /** LinkedIn associated members — NOT a staff count. */
+  linkedin_associated_members?: number | null;
+  /** A legacy row's single `employee_count`: reported, unverified. */
+  legacy_reported_count?: number | null;
 
   // Hiring-signal / job evidence.
   job_title?: string | null;
@@ -276,7 +282,13 @@ export function useLeadResults(ownership: WorkbenchOwnership) {
           company_slogan: s(rawMeta.company_slogan),
           company_description: s(rawMeta.company_description),
           industries: a(rawMeta.industries),
-          employee_count: n(rawMeta.employee_count),
+          // Size: the declared band, the LinkedIn member count and a legacy
+          // reported figure are three facts, never merged into "employees".
+          ...((f) => ({
+            company_size_band: f.declared_band,
+            linkedin_associated_members: f.linkedin_members,
+            legacy_reported_count: f.legacy_reported_count,
+          }))(readCompanySizeFacts(rawMeta)),
           // Job evidence.
           job_title: s(rawMeta.job_title),
           job_url: s(rawMeta.job_url),

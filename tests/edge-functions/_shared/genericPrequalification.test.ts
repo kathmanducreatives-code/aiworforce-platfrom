@@ -6,7 +6,7 @@
 // the LinkedIn company search, the funding source or the news source got no
 // free triage at all — every company went to identity resolution and enrichment
 // (two paid calls, ~26s) before anything decided it was worth keeping, including
-// companies whose discovery row ALREADY carried an exact headcount outside the
+// companies whose discovery row ALREADY carried a declared size band outside the
 // mission's range.
 //
 // ── THE TWO WAYS THIS COULD GO WRONG, AND WHAT PINS EACH ───────────────────
@@ -50,13 +50,20 @@ const SRC = new URL(
   "../../../supabase/functions/_shared/leadGenericPrequalification.ts",
   import.meta.url);
 
-/** A LinkedIn company-search row, in `full` mode — the shape with a real count. */
+/**
+ * A LinkedIn company-search row, in `full` mode. `employeeCountRange` is the
+ * company's DECLARED band (11-50); `employeeCount` is LinkedIn associated
+ * members (60 here — above the band, as for 22 of 112 audited companies), and
+ * is never a size fact (companySize.ts).
+ */
+const band = (start: number, end: number | null) => ({ start, ...(end === null ? {} : { end }) });
 const liRow = (over: Record<string, unknown> = {}) => ({
   id: "vaultline", name: "Vaultline",
   linkedinUrl: "https://www.linkedin.com/company/vaultline",
   website: "https://vaultline.io",
   description: "Vaultline sells encrypted document workflow software to banks.",
   employeeCount: 60,
+  employeeCountRange: band(11, 50),
   industries: [{ id: "4", name: "Computer Software", hierarchy: null }],
   locations: [{ linkedinText: "Berlin, Germany" }],
   companyType: "Privately Held",
@@ -67,79 +74,98 @@ const MISSION_10_150 = { min: 10, max: 150 };
 
 // ═══════════════ 1. THE GATE THAT PAYS FOR ITSELF ══════════════════════════
 
-Deno.test("1. an out-of-range headcount excludes for free ONLY where settling it would cost a paid identity search", () => {
-  // Before this pass existed, a 500-person company discovered by the LinkedIn
+Deno.test("1. an out-of-range declared band excludes for free ONLY where settling it would cost a paid identity search", () => {
+  // Before this pass existed, a 501-1000 company discovered by the LinkedIn
   // search was carried through identity resolution and enrichment to reach a
   // conclusion its discovery row already stated. That saving is kept where it
   // is real: a row with no LinkedIn identity would need a paid name search
-  // (~$0.06) before the company record could settle the count.
-  const bigNoIdentity = normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 500, linkedinUrl: undefined }));
+  // (~$0.06) before the company record could settle the band.
+  const bigNoIdentity = normalizeLinkedInCompanyCandidate(liRow({ employeeCountRange: band(501, 1000), linkedinUrl: undefined }));
   const v = prequalifyNormalizedCompany(bigNoIdentity, MISSION_10_150);
   assertEquals(v.size_status, "above_max");
   assertEquals(v.exclusion, "employee_size");
   assertFalse(v.eligible);
   // The reason must say what was SAVED, not merely that a bound was crossed.
   assert(v.reasons.some((r) => /before identity resolution and enrichment/.test(r)), v.reasons.join(" | "));
-  const smallNoIdentity = normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 3, linkedinUrl: undefined }));
+  const smallNoIdentity = normalizeLinkedInCompanyCandidate(liRow({ employeeCountRange: band(1, 1), linkedinUrl: undefined }));
   assertEquals(prequalifyNormalizedCompany(smallNoIdentity, MISSION_10_150).exclusion, "employee_size");
 
   // A row that CARRIES its LinkedIn identity is one company-record read away
-  // from a PROVEN count, and its own count is only PLAUSIBLE (evidenceAuthority).
-  // Canary 87ecf153 pruned both candidates this way and never decided the claim.
-  const big = normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 500 }));
+  // from a PROVEN band, and its own band is only PLAUSIBLE (evidenceAuthority).
+  const big = normalizeLinkedInCompanyCandidate(liRow({ employeeCountRange: band(501, 1000) }));
   const ranked = prequalifyNormalizedCompany(big, MISSION_10_150);
   assertEquals(ranked.size_status, "above_max");
   assertEquals(ranked.exclusion, null);
-  assert(ranked.eligible, "ranked down, not out — enrichment decides");
-  assert(ranked.reasons.some((r) => /ranked down, not excluded/.test(r) && /enrichment's exact count decides/.test(r)),
+  assert(ranked.eligible, "ranked down, not out — the company record decides");
+  assert(ranked.reasons.some((r) => /ranked down, not excluded/.test(r) && /company record's band decides/.test(r)),
     ranked.reasons.join(" | "));
 
   // …and an in-range company outranks it.
   const ok = prequalifyNormalizedCompany(normalizeLinkedInCompanyCandidate(liRow()), MISSION_10_150);
   assertEquals([ok.size_status, ok.exclusion, ok.eligible], ["in_range", null, true]);
   assert(ok.score > ranked.score);
+
+  // A partial overlap (10-150 against a declared 51-200) is not a fact about
+  // either side, so it neither ranks up nor excludes.
+  const straddle = prequalifyNormalizedCompany(
+    normalizeLinkedInCompanyCandidate(liRow({ employeeCountRange: band(51, 200), linkedinUrl: undefined })), MISSION_10_150);
+  assertEquals([straddle.size_status, straddle.exclusion], ["size_unverified", null]);
+  assert(straddle.reasons.some((r) => /only partly overlaps/.test(r)), straddle.reasons.join(" | "));
 });
 
 // ═══════════════ 2-5. THE WAYS IT MUST REFUSE TO EXCLUDE ═══════════════════
 
-Deno.test("2. an UNSAFE advisory band may never exclude anyone", () => {
-  // `employee_range_advisory` is declared `unsafe` by every normalizer that
-  // sets one: the LinkedIn company search's own band disagreed with the exact
-  // count in four of eight observed rows. A band that says "201-500" against a
-  // 10-150 mission is the single most tempting free exclusion available here,
-  // and acting on it would reject companies over a field the system already
-  // knows to be wrong.
-  const banded = normalizeLinkedInCompanyCandidate(liRow({
-    employeeCount: null,                       // no exact figure at all
-    employeeCountRange: { start: 201, end: 500 },
+Deno.test("2a. the LinkedIn associated-member count never excludes, and never ranks on size", () => {
+  // 5,000 associated members on a 10-150 mission, NO identity (so a real size
+  // fact would exclude for free here) and NO declared band. The member count
+  // counts people who list the company — not staff — so it settles nothing.
+  const crowded = normalizeLinkedInCompanyCandidate(liRow({
+    employeeCount: 5000, employeeCountRange: undefined, linkedinUrl: undefined,
   }));
-  assertEquals(banded.employee_count, null);
-  assertEquals(banded.field_trust.employee_range_advisory, "unsafe");
-  assertFalse(mayGateOn(banded, "employee_range_advisory"));
+  assertEquals([crowded.company_size_band, crowded.linkedin_associated_member_count], [null, 5000]);
+  const v = prequalifyNormalizedCompany(crowded, MISSION_10_150);
+  assertEquals([v.size_status, v.exclusion, v.eligible], ["size_unverified", null, true]);
+  // Its score is exactly that of the same row with no member count at all.
+  const bare = prequalifyNormalizedCompany(normalizeLinkedInCompanyCandidate(liRow({
+    employeeCount: undefined, employeeCountRange: undefined, linkedinUrl: undefined,
+  })), MISSION_10_150);
+  assertEquals(v.score, bare.score, "the member count moved the score");
+  // And a member count far outside a band that IS in range does not contest it.
+  const inBand = prequalifyNormalizedCompany(normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 490 })), MISSION_10_150);
+  assertEquals([inBand.size_status, inBand.exclusion], ["in_range", null]);
+});
 
-  const v = prequalifyNormalizedCompany(banded, MISSION_10_150);
-  assertEquals(v.size_status, "size_unverified");
-  assertEquals(v.exclusion, null);
-  assert(v.eligible, "an unsafe band must not be able to reject a company");
+Deno.test("2b. a non-LinkedIn advisory size text may never exclude anyone", () => {
+  // `employee_range_advisory` is a provider's own size WORDING that is not the
+  // LinkedIn declared band — here a funding source's employee bucket, which is
+  // declared `unsafe` because run 0XchPqe0cJpx0Yc2T showed its company tags
+  // wrong. "201-500" against a 10-150 mission is a tempting free exclusion.
+  const funded = fundingRoundToCompany(normalizeDatahyenaFundingRound({
+    company: { name: "Bucketco", domain: "bucketco.io", employeeCountBucket: "201-500" },
+    roundType: "Seed", announcedDate: "2026-07-02",
+  }));
+  assertEquals(funded.company_size_band, null, "a bucket is not the declared band");
+  assertEquals(funded.employee_range_advisory, "201-500");
+  assertFalse(mayGateOn(funded, "employee_range_advisory"));
 
+  const v = prequalifyNormalizedCompany(funded, MISSION_10_150);
+  assertEquals([v.size_status, v.exclusion], ["size_unverified", null]);
+  assert(v.eligible, "an advisory text must not be able to reject a company");
   // AND IT MUST SAY SO. Silently ignoring the only size figure present would
   // leave an auditor unable to tell this apart from a row that carried nothing.
-  if (banded.employee_range_advisory) {
-    assert(v.reasons.some((r) => /declared unsafe and may not exclude/.test(r)),
-      v.reasons.join(" | "));
-  }
+  assert(v.reasons.some((r) => /not a declared band and may not exclude/.test(r)), v.reasons.join(" | "));
 });
 
 Deno.test("3. ABSENCE never excludes — the three-valued rule, kept", () => {
-  // memo23 returns no `employeeCount` at all: YC `teamSize` is self-reported and
-  // was observed stale (ShipBob returned 1), so the normalizer omits it and
-  // records the reason in `missing_fields`. A company nobody could size is not a
-  // company of the wrong size.
+  // memo23 returns no LinkedIn band: YC `teamSize` is self-reported and was
+  // observed stale (ShipBob returned 1), so the normalizer keeps it as advisory
+  // text only and records the reason in `missing_fields`. A company nobody
+  // could size is not a company of the wrong size.
   const yc = normalizeMemo23Company({
     name: "Letara", website: "https://letara.space", teamSize: 4,
     oneLiner: "Hybrid propulsion systems for spacecraft.", batch: "W23",
   });
-  assertEquals(yc.employee_count, null);
+  assertEquals([yc.company_size_band, yc.linkedin_associated_member_count], [null, null]);
 
   const v = prequalifyNormalizedCompany(yc, MISSION_10_150);
   assertEquals(v.size_status, "size_unverified");
@@ -168,7 +194,7 @@ Deno.test("4. a SEMANTIC field may never gate — company_type is ownership", ()
   assertEquals(li.field_trust.provider_industry, "unsafe");
   assertFalse(mayGateOn(li, "provider_industry"));
   // The two trust levels that exist to be untrusted are both refused.
-  assert(mayGateOn(li, "employee_count"), "direct must be gate-worthy");
+  assert(mayGateOn(li, "company_size_band"), "direct must be gate-worthy");
   assert(mayGateOn(li, "geography"), "transformed is still the provider's own value");
 });
 
@@ -178,7 +204,7 @@ Deno.test("5. an ADVISORY range the MISSION never set may rank but not reject", 
   // companies were excluded on Brain bounds on TEST run cf6cce3d, and the rule
   // that fixed it must hold on this side of the pass too.
   // No LinkedIn identity, so an enforced bound may exclude for free (test 1).
-  const big = normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 500, linkedinUrl: undefined }));
+  const big = normalizeLinkedInCompanyCandidate(liRow({ employeeCountRange: band(501, 1000), linkedinUrl: undefined }));
 
   const enforced = prequalifyNormalizedCompany(big, MISSION_10_150, {
     size_enforceable: true,
@@ -231,7 +257,7 @@ Deno.test("7. EVERY discovery normalizer flows through with no per-actor code", 
     normalizeLinkedInCompanyEnriched(liRow({
       id: "harbor", name: "Harbor Metrics", website: "https://harbormetrics.com",
       linkedinUrl: "https://www.linkedin.com/company/harbormetrics",
-      employeeCount: 85,
+      employeeCount: 85, employeeCountRange: band(51, 200),
     })),
     fundingRoundToCompany(normalizeDatahyenaFundingRound({
       company: {
@@ -264,9 +290,9 @@ Deno.test("7. EVERY discovery normalizer flows through with no per-actor code", 
 
   // ── WHAT THE POOL ACTUALLY CONTAINS, PER SOURCE ─────────────────────────
   //
-  // Only the two LinkedIn sources carry an exact headcount. YC `teamSize` is
-  // omitted by its normalizer as self-reported, and the funding source carries
-  // a band at best.
+  // Only the two LinkedIn sources carry a declared size band. YC `teamSize` is
+  // advisory text by its normalizer as self-reported, and the funding source's
+  // bucket is advisory at best.
   assertEquals(res.companies_with_trusted_size, 2);
 
   // FOUR OF FIVE, and the fifth is the finding. `fundingRoundToCompany` sets
@@ -353,7 +379,7 @@ Deno.test("10. merging never claims role evidence the generic pass cannot have",
   // An out-of-range generic company shows up in the exclusion count, because
   // that number drives the funnel and must describe the whole pool.
   const big = prequalifyDiscoveredCompanies(
-    [normalizeLinkedInCompanyCandidate(liRow({ employeeCount: 900, linkedinUrl: undefined }))], MISSION_10_150);
+    [normalizeLinkedInCompanyCandidate(liRow({ employeeCountRange: band(501, 1000), linkedinUrl: undefined }))], MISSION_10_150);
   assertEquals(mergePrequalification(yc, big).employee_size_excluded,
     yc.employee_size_excluded + 1);
 });
@@ -365,7 +391,7 @@ Deno.test("11. an empty YC result is a valid base for a pure non-YC pool", () =>
   const empty = emptyPrequalificationResult();
   const generic = prequalifyDiscoveredCompanies([
     normalizeLinkedInCompanyCandidate(liRow()),
-    normalizeLinkedInCompanyCandidate(liRow({ id: "b", name: "Bigco", website: "https://bigco.com", employeeCount: 4000, linkedinUrl: undefined })),
+    normalizeLinkedInCompanyCandidate(liRow({ id: "b", name: "Bigco", website: "https://bigco.com", employeeCountRange: band(1001, 5000), linkedinUrl: undefined })),
   ], MISSION_10_150);
 
   const merged = mergePrequalification(empty, generic);

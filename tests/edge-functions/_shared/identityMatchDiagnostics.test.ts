@@ -414,11 +414,13 @@ Deno.test("17. the two fields `full` adds are the two the card says not to trust
   const defects = search.known_defects.map((d) => d.id);
   assert(defects.includes("company_search_size_filters_wrong_field"));
   assert(defects.includes("company_search_industry_unreliable"));
-  assert(search.known_defects.some((d) => /Only enriched employeeCount/.test(d.mitigation)));
+  assert(search.known_defects.some((d) => /company record's declared band settles a size criterion/.test(d.mitigation)));
+  assert(search.known_defects.some((d) => /member count never passes, fails or contests size/.test(d.mitigation)));
   assert(search.known_defects.some((d) => /Enrichment supplies the authoritative/.test(d.mitigation)));
 
   // And the enrichment stage claims exactly them.
-  assert(enrich.best_for.some((b) => /employeeCount/.test(b)));
+  assert(enrich.best_for.some((b) => /declared size band \(employeeCountRange\)/.test(b)));
+  assert(enrich.best_for.some((b) => /employeeCount\) — informational, NOT staff/.test(b)));
   assert(enrich.best_for.some((b) => /industry id/.test(b)));
   assert(enrich.best_for.some((b) => /correcting company-search/.test(b)),
     "the enrichment card says outright that it exists to correct the search");

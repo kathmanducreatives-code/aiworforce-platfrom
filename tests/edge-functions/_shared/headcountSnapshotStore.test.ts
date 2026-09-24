@@ -8,7 +8,9 @@
 // not one series, or that a provider's observation time is not the write time.
 //
 // Those three are the rules that decide whether a growth verdict means
-// anything, and they live in `headcountSnapshotStore`. Each is asserted here
+// anything, and they live in `headcountSnapshotStore`. The reading is LinkedIn's
+// ASSOCIATED-MEMBER count (companySize.ts) — one consistent definition on the
+// company record, so its deltas compare; it is never called a staff count. Each is asserted here
 // against the case that would otherwise produce confident, invented growth.
 //
 // PURE. No database, no network, no model call.
@@ -17,7 +19,7 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   buildSnapshotRow, companyKeyFor, readSeries, seriesReadiness,
-  isSameDayDuplicate, isExactHeadcountSource, EXACT_HEADCOUNT_SOURCES,
+  isSameDayDuplicate, isMemberCountSeriesSource, MEMBER_COUNT_SERIES_SOURCES,
   HEADCOUNT_SNAPSHOT_TABLE, type HeadcountSnapshotRow,
 } from "../../../supabase/functions/_shared/headcountSnapshotStore.ts";
 import {
@@ -38,7 +40,7 @@ const input = (over: Record<string, unknown> = {}) => ({
   linkedin_company_url: LI,
   canonical_domain: "vaultline.io",
   company_name: "Vaultline",
-  employee_count: 50,
+  linkedin_associated_member_count: 50,
   observed_at: "2026-05-01T00:00:00.000Z",
   source: "apify_linkedin_company_details",
   ...over,
@@ -46,36 +48,36 @@ const input = (over: Record<string, unknown> = {}) => ({
 
 // ═══════════════ 1-3. ONLY A MEASUREMENT MAY ENTER A SERIES ════════════════
 
-Deno.test("1. only a source verified to return an EXACT count may write a reading", () => {
+Deno.test("1. only the company record's associated-member count may write a reading", () => {
   // A number is not a measurement because it is a number. The YC scraper's
   // teamSize was observed stale (ShipBob returned 1), the company SEARCH's band
   // disagreed with reality in four of eight rows, and the funding source's
   // bucket was populated on 28%. Differencing any of those measures provider
   // disagreement rather than hiring.
-  assertEquals(EXACT_HEADCOUNT_SOURCES, ["apify_linkedin_company_details"]);
-  assert(isExactHeadcountSource("apify_linkedin_company_details"));
+  assertEquals(MEMBER_COUNT_SERIES_SOURCES, ["apify_linkedin_company_details"]);
+  assert(isMemberCountSeriesSource("apify_linkedin_company_details"));
 
   for (const wrong of [
     "apify_yc_companies_memo23", "apify_linkedin_company_search",
     "apify_funding_rounds_datahyena", "apify_yc_companies_solidcode",
   ]) {
-    assertFalse(isExactHeadcountSource(wrong));
+    assertFalse(isMemberCountSeriesSource(wrong));
     const r = buildSnapshotRow(input({ source: wrong }));
     assertEquals(r.row, null, `${wrong} must not be able to write a reading`);
-    assertEquals(r.rejected, "source_not_exact");
+    assertEquals(r.rejected, "source_not_member_count");
     assert(/band|self-declared/.test(r.reason));
   }
 });
 
 Deno.test("2. a missing count is not a zero, and a band is not a count", () => {
   for (const bad of [undefined, null, 0, -5, 12.5, Number.NaN]) {
-    const r = buildSnapshotRow(input({ employee_count: bad }));
-    assertEquals(r.row, null, `employee_count ${String(bad)} must be refused`);
-    assertEquals(r.rejected, "no_exact_count");
+    const r = buildSnapshotRow(input({ linkedin_associated_member_count: bad }));
+    assertEquals(r.row, null, `member count ${String(bad)} must be refused`);
+    assertEquals(r.rejected, "no_member_count");
   }
   // A band arriving as text is refused by the same rule.
-  assertEquals(buildSnapshotRow(input({ employee_count: "51-200" })).rejected,
-    "no_exact_count");
+  assertEquals(buildSnapshotRow(input({ linkedin_associated_member_count: "51-200" })).rejected,
+    "no_member_count");
 
   assert(buildSnapshotRow(input()).row, "a real integer reading is accepted");
 });
@@ -162,7 +164,7 @@ Deno.test("7. a second reading on the same day is a repeat, not an observation",
 // ═══════════════ 8-10. THE SERIES FEEDS THE VERDICT ════════════════════════
 
 const row = (day: string, n: number): HeadcountSnapshotRow =>
-  buildSnapshotRow(input({ observed_at: `${day}T00:00:00.000Z`, employee_count: n })).row!;
+  buildSnapshotRow(input({ observed_at: `${day}T00:00:00.000Z`, linkedin_associated_member_count: n })).row!;
 
 Deno.test("8. stored rows become the series the evaluator consumes, oldest first", () => {
   // Deliberately inserted out of order: storage order is arrival order, and the
@@ -177,7 +179,7 @@ Deno.test("8. stored rows become the series the evaluator consumes, oldest first
   // is not a series.
   const other = buildSnapshotRow(input({
     linkedin_company_url: "https://www.linkedin.com/company/other",
-    canonical_domain: null, employee_count: 999,
+    canonical_domain: null, linkedin_associated_member_count: 999,
   })).row!;
   assertEquals(readSeries([...rows, other], "li:vaultline").length, 3);
 });
