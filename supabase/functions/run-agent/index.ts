@@ -4,6 +4,10 @@
 // Input:  { plan_id | task_plan_id, step_index, agent_slug | agent_id,
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
+import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
+import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
+import { hiringSearchTitles } from "../_shared/hiringSearchVocabulary.ts";
+import { roleMatchesFamily, type RoleFamily } from "../_shared/roleFamilies.ts";
 import { sizeBandLabel } from "../_shared/companySize.ts";
 import { PendingModelDrain } from "../_shared/executionLedger.ts";
 import { leadQuotaProvenance } from "../_shared/leadMissionV2Request.ts";
@@ -180,7 +184,7 @@ import {
   persistP2Spine, settleAndPersistP2Spine, type SpineDb, type SpineState,
 } from "../_shared/p2SpinePersistence.ts";
 import { fetchApifyRunReceipt, settlementAttempts } from "../_shared/providerReceipts.ts";
-import { specGovernedPageFetcher, webEvidenceCreditRate } from "../_shared/webEvidenceSpec.ts";
+import { specGovernedMapper, specGovernedPageFetcher, webEvidenceCreditRate } from "../_shared/webEvidenceSpec.ts";
 import {
   readFreshPages, readResearchedRequirements,
 } from "../_shared/webEvidenceStore.ts";
@@ -4445,7 +4449,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                         return specGovernedPageFetcher({
                           state: capabilityRun.state as never,
                           scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
-                          usd_per_credit: webEvidenceCreditRate(readEnvSafe).usd_per_credit,
+                          // THE ONE RATE: unpriced (and so refused) under a USD cap
+                          // with no account rate configured.
+                          usd_per_credit: webEvidenceCreditRate(readEnvSafe, { usd_capped: runBudget?.provider_usd != null }).usd_per_credit,
                           send: (spec) => fetchOne({
                             url: String(spec.serialized_input.url), request_id: spec.idempotency_key, spec,
                           }),
@@ -4953,6 +4959,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     attempted_routes: cand.attempted_routes ?? [],
                   };
                 });
+                /** Which verifier capability an actor's refusal is recorded under. */
+                const VERIFIER_CAPABILITY_OF: Record<string, string> = {
+                  apify_funding_atomus: "funding_verification", apify_funding_pvalyou: "funding_verification",
+                  apify_linkedin_job_search: "hiring_verification",
+                };
                 const verifierLog = (event: string, meta?: Record<string, unknown>) =>
                   console.log(`[run-agent][claim-verifier][${event}]`, { task_id: task.id, ...(meta ?? {}) });
                 const unavailable = (actorKey: string) => unavailableProvider(vState.unavailable_providers, actorKey,
@@ -4995,30 +5006,33 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                         // idempotent and ledger-visible like everything else.
                         // Canonical verification only: the V1 collector above
                         // passes no mapper and keeps guessing exactly as before.
-                        mapSite: async ({ domain }: { domain: string }) => {
-                          const r = await runTool("scrape_url", {
-                            url: `https://${domain}`,
-                            mode: "map",
-                            max_pages: MAP_MAX_URLS,
-                            capability_key: "web_evidence_verification",
-                            audit_stage: "company_enrichment",
-                            audit_reason: "discover_pages_for_claim",
-                            actor_id: "firecrawl_map",
-                            ...auditOwnership(),
-                          }, baseCtx);
-                          const d = (r.data ?? {}) as Record<string, unknown>;
-                          const raw = Array.isArray(d.links)
-                            ? d.links
-                            : Array.isArray(d.urls)
-                            ? d.urls
-                            : Array.isArray(d.pages)
-                            ? d.pages
-                            : [];
-                          return raw
-                            .map((x) => typeof x === "string" ? x : String((x as Record<string, unknown>)?.url ?? ""))
-                            .filter(Boolean)
-                            .slice(0, MAP_MAX_URLS);
-                        },
+                        // THE MAP IS A PURCHASE TOO: spec → reserve → send → settle
+                        // on the mission ledger, at the same rate as the pages. No
+                        // spec spine, or a USD cap without it, means no map.
+                        mapSite: p2Specs ? specGovernedMapper({
+                          state: engineRun.state as never,
+                          scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
+                          usd_per_credit: webEvidenceCreditRate(readEnvSafe, { usd_capped: runBudget?.provider_usd != null }).usd_per_credit,
+                          max_urls: MAP_MAX_URLS,
+                          send: async (spec) => {
+                            const r = await runTool("scrape_url", {
+                              ...spec.serialized_input,
+                              capability_key: "web_evidence_verification",
+                              audit_stage: "company_enrichment",
+                              audit_reason: "discover_pages_for_claim",
+                              actor_id: "firecrawl_map",
+                              ...auditOwnership(),
+                            }, baseCtx);
+                            const d = (r.data ?? {}) as Record<string, unknown>;
+                            const raw = Array.isArray(d.links) ? d.links
+                              : Array.isArray(d.urls) ? d.urls
+                              : Array.isArray(d.pages) ? d.pages : [];
+                            return raw
+                              .map((x) => typeof x === "string" ? x : String((x as Record<string, unknown>)?.url ?? ""))
+                              .filter(Boolean);
+                          },
+                          log: (event, meta) => verifierLog(`map:${event}`, meta),
+                        }) : null,
                         log: (event, meta) => verifierLog(`pages:${event}`, meta),
                       },
                     });
@@ -5071,7 +5085,32 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     const o = r.outcomes[0];
                     return { status: o?.status ?? null, decision: o?.decision ?? null, skipped: o?.skipped ?? null };
                   },
+                  // The ordering estimate uses the SAME rate its page/map specs will.
+                  usd_per_credit: webEvidenceCreditRate(readEnvSafe, { usd_capped: runBudget?.provider_usd != null }).usd_per_credit,
                 });
+                // ── THE OPEN-ROLE VERIFIER, ONLY FOR A HARD HIRING CLAIM ─────────
+                //
+                // A target (soft) hiring criterion buys nothing: it ranks. A hard
+                // one is answered here, per still-viable candidate, with the
+                // mission's OWN role vocabulary (a growth role searches "growth",
+                // never the sales ladder) and a deterministic family test on every
+                // returned title.
+                const hiringCriterion = vCriteria.find((c) => c.dimension === "hiring" && c.kind === "hard" && c.status === "ok");
+                const hiringVerifier = (() => {
+                  if (!hiringCriterion) return null;
+                  const families = (((hiringCriterion.value as { qualifier?: { role_families?: unknown } } | null)
+                    ?.qualifier?.role_families ?? []) as unknown[]).map(String);
+                  const vocab = buildQualificationContext(vMission, { criteriaAuthority: true }).role_vocabulary;
+                  const titles = hiringSearchTitles(vocab);
+                  const lowered = vocab.required_titles.map((t) => String(t).toLowerCase());
+                  return hiringClaimVerifier({
+                    titles, role_families: families,
+                    window_days: hiringCriterion.time_window?.days ?? null,
+                    matchesRole: (title) => families.length > 0
+                      ? families.some((f) => roleMatchesFamily(title, f as RoleFamily))
+                      : lowered.some((t) => title.toLowerCase().includes(t)),
+                  });
+                })();
                 // THE CLAIM PLAN: which HARD claims the mission needs, which the
                 // entry already carries, and which READY routes can answer the
                 // rest. Only verifiers answering a hard claim are run.
@@ -5091,7 +5130,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     identity: { task_id: String(task.id) },
                   }).length,
                   criteriaValue: (id) => vCriteria.find((c) => c.id === id)?.value ?? null,
-                  verifiers: [fundingStageVerifier(), businessModel],
+                  verifiers: [fundingStageVerifier(), businessModel, ...(hiringVerifier ? [hiringVerifier] : [])],
                   readiness: leadReadiness,
                   unavailable,
                   pending: vState.verifier_pending_runs ?? [],
@@ -5129,7 +5168,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                       },
                       onRefused: (actorKey, reason) => {
                         vState.unavailable_providers = markProviderUnavailable(vState.unavailable_providers, {
-                          provider: actorKey, capability: "funding_verification", reason,
+                          provider: actorKey, capability: VERIFIER_CAPABILITY_OF[actorKey] ?? "funding_verification", reason,
                           refused_at: new Date().toISOString(),
                           readiness_at_refusal: leadReadiness.decide(actorKey, "funding_verification").readiness,
                         });

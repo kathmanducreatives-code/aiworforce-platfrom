@@ -151,7 +151,9 @@ export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
     routes: [{
       actor: "apify_linkedin_job_search", capability: "hiring_verification",
       purpose: "the company's open roles on LinkedIn", evidence_actors: ["apify_linkedin_job_search", "linkedin_jobs"],
-      canonical_executor: true, executor_note: "in-slice hiring verification",
+      // The open-role CLAIM VERIFIER (`hiringClaimVerifier.ts`): per still-viable
+      // candidate, after the cheap claims, with the mission's own role family.
+      canonical_executor: true, executor_note: "open-role claim verifier (per viable candidate)",
       cost_hint_usd: 0.011,
     }],
   },

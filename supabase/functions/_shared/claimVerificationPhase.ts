@@ -72,8 +72,10 @@ export interface VerificationPhaseInput {
 
 export interface VerificationPhaseReport {
   version: typeof CLAIM_VERIFICATION_PHASE_VERSION;
-  /** Verifiers in the order they were considered (cheapest route first). */
+  /** Verifiers in the order they were considered (cheapest estimate first). */
   order: string[];
+  /** The per-target estimate each verifier was ordered by. */
+  order_estimates?: Record<string, number | null>;
   ran: Array<{ verifier: string; targets: string[]; findings: number; recorded: number; pending: number }>;
   /** Why the phase stopped buying early, when it did. */
   stopped: "quota_met" | null;
@@ -95,10 +97,22 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
   const registry = i.registry ?? CLAIM_REGISTRY;
   const policy = i.readiness ?? PRODUCTION_READINESS;
   const log = i.log ?? (() => {});
-  const ordered = [...i.verifiers].sort((a, b) =>
-    (routeOf(a, registry)?.cost_hint_usd ?? Infinity) - (routeOf(b, registry)?.cost_hint_usd ?? Infinity));
+  // CHEAPEST UNRESOLVED VERIFIER FIRST, by the canonical estimate each verifier
+  // publishes (the price its spec will be compiled with), else the registry's
+  // static hint. Re-grounding between verifiers happens through `candidates()`:
+  // a company a cheaper verifier disproved is never a later verifier's target.
+  const costOf = (v: ClaimVerifier): number => {
+    if (v.estimate_per_target_usd) {
+      const e = v.estimate_per_target_usd();
+      return e == null || !Number.isFinite(e) ? Infinity : e;
+    }
+    return routeOf(v, registry)?.cost_hint_usd ?? Infinity;
+  };
+  const ordered = [...i.verifiers].sort((a, b) => costOf(a) - costOf(b));
   const report: VerificationPhaseReport = {
-    version: CLAIM_VERIFICATION_PHASE_VERSION, order: ordered.map((v) => v.key), ran: [], stopped: null,
+    version: CLAIM_VERIFICATION_PHASE_VERSION, order: ordered.map((v) => v.key),
+    order_estimates: Object.fromEntries(ordered.map((v) => [v.key, Number.isFinite(costOf(v)) ? costOf(v) : null])),
+    ran: [], stopped: null,
     irrelevant: [], pending: [], changed: 0,
   };
   const relevant = i.claim_plan ? relevantVerifierActors(i.claim_plan) : null;

@@ -103,6 +103,7 @@ const MISSION_FAMILY_TO_CANONICAL: Readonly<Record<string, RoleFamily>> = {
   sales_operations: "sales_operations",
   gtm_sales: "gtm_sales",
   marketing_growth: "marketing_growth",
+  growth: "growth",
   ops: "ops",
   finance: "finance",
 };

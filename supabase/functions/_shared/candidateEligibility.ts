@@ -268,6 +268,25 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
       if (item.value === false) return { ...base, result: "fail", reason: `${dim} is false`, evidence_ids: ids, provenance };
       return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}`, evidence_ids: ids, provenance };
     }
+    case "hiring": {
+      // ── THE ROLE THE CLAIM NAMED, NOT ANY OPENING ─────────────────────────
+      //
+      // Presence of a proven `hiring` item used to satisfy every hiring
+      // criterion, so an Account Executive opening proved "hiring a growth
+      // role". Evidence that says WHICH role it found (the open-role verifier's
+      // `{ open_role, role_families }`) must name a family the criterion asked
+      // for. A bare `true` (a posting-sourced company, whose search already
+      // asked for the role) keeps its meaning.
+      if (!proven) return { ...base, result: "unknown", reason: `${dim} is reported, not proven`, evidence_ids: ids, provenance };
+      if (item.value === false) return { ...base, result: "fail", reason: `${dim} is false`, evidence_ids: ids, provenance };
+      const wanted = ((c.value as { qualifier?: { role_families?: unknown } } | null)?.qualifier?.role_families ?? []) as unknown[];
+      const found = (item.value && typeof item.value === "object")
+        ? ((item.value as { role_families?: unknown }).role_families ?? []) as unknown[] : null;
+      if (found !== null && wanted.length > 0 && !wanted.some((w) => found.includes(w))) {
+        return { ...base, result: "unknown", reason: `an open role was found, but not in ${wanted.join(" / ")}`, evidence_ids: ids, provenance };
+      }
+      return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}`, evidence_ids: ids, provenance };
+    }
     default: {
       // Signal dimensions: presence of a fresh, proven item satisfies them.
       if (!proven) return { ...base, result: "unknown", reason: `${dim} is reported, not proven`, evidence_ids: ids, provenance };

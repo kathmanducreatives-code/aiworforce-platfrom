@@ -13,6 +13,7 @@ export type RoleFamily =
   | "sales_operations"
   | "gtm_sales"
   | "marketing_growth"
+  | "growth"
   | "engineering"
   | "ops"
   | "finance"
@@ -35,7 +36,11 @@ export const ROLE_FAMILY_ALIASES: Record<Exclude<RoleFamily, null | "custom">, s
   // a Sales-Operations discipline hire.
   gtm_sales: [
     "SDR", "BDR", "Sales Development Representative", "Account Executive",
-    "Founding SDR", "Founding AE", "Head of Sales", "Growth", "GTM",
+    // NOT "Growth" (2026-09-24). A bare "growth" alias here made "hiring a
+    // growth role" resolve to THIS family, so an ordinary Account Executive or
+    // SDR opening satisfied it and the search asked for 20 sales titles. Growth
+    // is its own family below.
+    "Founding SDR", "Founding AE", "Head of Sales", "GTM",
     "Go-to-Market", "Business Development", "Demand Generation", "Revenue",
     "Salesperson", "Sales Representative", "Territory Sales Manager",
     // COLLOQUIAL FORMS THE LIST WAS MISSING. A request for "enterprise sellers"
@@ -64,6 +69,19 @@ export const ROLE_FAMILY_ALIASES: Record<Exclude<RoleFamily, null | "custom">, s
     "Founding Marketer", "Marketing Generalist", "Demand Generation",
     "Growth Lead", "Head of Growth", "Growth Manager",
     "Head of Marketing", "Marketing Lead",
+  ],
+  // ── GROWTH: THE FUNCTION, NARROWLY ────────────────────────────────────────
+  //
+  // "A growth role" names the growth function and nothing wider: it is not a
+  // sales request (AE/SDR stay out) and not the whole marketing discipline.
+  // Titles here are the growth-function forms NOT already in `marketing_growth`
+  // (so "growth marketer" / "head of growth" keep resolving to that family by
+  // the reader's longest-alias rule), and "Growth" itself, which as a title
+  // keyword covers every "…Growth…" title (`hiringSearchTitles` searches the
+  // covering keyword once rather than every longer form).
+  growth: [
+    "Growth", "VP of Growth", "Director of Growth", "Growth Product Manager",
+    "Growth Operations", "Growth Analyst",
   ],
   engineering: [
     "Software Engineer", "Backend Engineer", "Frontend Engineer", "Full Stack Engineer",
@@ -105,7 +123,10 @@ const FAMILY_DETECT: Array<[Exclude<RoleFamily, null | "custom">, RegExp]> = [
   // Operations" request can never be captured by it) because `\bsales\b` does not
   // reach inside "salesperson"/"salespeople", which is why these resolved to null.
   ["gtm_sales", /\b(sdrs?|bdrs?|account executives?|\baes?\b|sales development|founding (?:sdr|ae)|head of sales|gtm|go-?to-?market|business development|demand gen(?:eration)?|sales ?(?:person|people)|salesperson|salespeople|\bsales\b|revenue)\b/i],
-  ["marketing_growth", /\b(growth marketers?|product marketing|content marketing|lifecycle marketing|performance marketing|growth marketing|brand marketing|\bmarketing\b|\bgrowth\b)\b/i],
+  ["marketing_growth", /\b(growth marketers?|product marketing|content marketing|lifecycle marketing|performance marketing|growth marketing|brand marketing|\bmarketing\b)\b/i],
+  // AFTER marketing_growth, so "growth marketing" / "growth marketer" stay
+  // marketing; a bare "growth" names the growth function.
+  ["growth", /\bgrowth\b/i],
   ["engineering", /\b(software engineers?|backend engineers?|frontend engineers?|full ?stack|ai engineers?|ml engineers?|\bengineers?\b|developers?|\bswe\b)\b/i],
   ["customer_success", /\b(customer success|\bcsm\b|account managers?|customer support|onboarding specialists?|support engineers?)\b/i],
   ["finance", /\b(fp&a|controllers?|accountants?|finance managers?|head of finance|\bcfo\b)\b/i],

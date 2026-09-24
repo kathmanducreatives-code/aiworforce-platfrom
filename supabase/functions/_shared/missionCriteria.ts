@@ -49,7 +49,7 @@ import { isControlledPhrase } from "./businessModelMatch.ts";
 import { readSignalPhrase, type SignalQualifier } from "./missionSignalDescriptor.ts";
 import {
   CANONICAL_SIGNAL_KINDS, DEFAULT_SIGNAL_WINDOWS, EXEC_TITLE_RE, aliasKindFor,
-  descriptorForReading, explicitWindowDays, kindForEvent, readCanonicalSignals,
+  descriptorForReading, explicitWindowDays, kindForEvent, readCanonicalSignals, sameWindow,
   readHypotheses, unmappedSignalLanguage,
   type CanonicalSignalKind, type CanonicalSignalReading, type HypothesisReading, type WindowBasis,
 } from "./signalKinds.ts";
@@ -247,7 +247,39 @@ export function readMissionLanguage(query: string) {
     unmapped: unmappedSignalLanguage(query, readings, hypotheses),
     stage: readStageIntent(query),
     explicit_window_days: explicitWindowDays(query),
+    window_days_by_kind: windowDaysByKind(query, readings),
   };
+}
+
+/**
+ * WHICH SIGNAL A STATED WINDOW BELONGS TO.
+ *
+ * "…must have raised funding within the last 12 months, and must currently be
+ * hiring a growth role" states ONE window, and it is funding's. Applying it to
+ * every temporal signal made "currently hiring" accept a posting eleven months
+ * old. A window now goes to the signal whose own clause states it (the clause
+ * carrying that signal's cue, as `requirementElevation` reads it). When no
+ * clause claims it — or only one temporal signal was named — it applies to all,
+ * which is exactly the previous reading for a single-signal request.
+ */
+function windowDaysByKind(query: string, readings: readonly CanonicalSignalReading[]):
+  Partial<Record<CanonicalSignalKind, number>> {
+  const stated = explicitWindowDays(query);
+  const out: Partial<Record<CanonicalSignalKind, number>> = {};
+  if (stated == null) return out;
+  const kinds = [...new Set(readings.map((r) => r.kind))].filter((k) => k !== "technology");
+  let claimed = false;
+  for (const k of kinds) {
+    const cue = SIGNAL_CUE[k];
+    if (!cue) continue;
+    const phrase = readings.find((r) => r.kind === k)?.phrase ?? "";
+    const own = [...(phrase || query).toLowerCase().split(CLAUSE_BREAK)].reverse()
+      .map((c) => c.trim()).find((c) => cue.test(c));
+    const days = own ? explicitWindowDays(own) : null;
+    if (days != null) { out[k] = days; claimed = true; }
+  }
+  if (!claimed) for (const k of kinds) out[k] = stated;
+  return out;
 }
 
 const eventOf = (s: Partial<MissionSignal>): string =>
@@ -330,12 +362,21 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
   signals = signals.map((s) => {
     const k = kindOfSignal(s);
     if (!k || k === "technology") return s;
-    if (lang.explicit_window_days != null) {
+    const statedForK = lang.window_days_by_kind[k];
+    if (statedForK != null) {
       windowSources[k] = { source: "user_explicit" };
-      if (s.timeframe_days !== lang.explicit_window_days) {
-        changes.push(`window_from_user_words:${k}:${lang.explicit_window_days}d`);
+      if (s.timeframe_days !== statedForK) {
+        changes.push(`window_from_user_words:${k}:${statedForK}d`);
       }
-      return { ...s, timeframe_days: lang.explicit_window_days };
+      return { ...s, timeframe_days: statedForK };
+    }
+    // A window the user stated for ANOTHER signal is not this one's: the
+    // default applies, and a carried copy of that window is replaced.
+    if (lang.explicit_window_days != null && s.timeframe_days != null &&
+        sameWindow(s.timeframe_days, lang.explicit_window_days) && DEFAULT_SIGNAL_WINDOWS[k]) {
+      windowSources[k] = { source: "system_default", rule: DEFAULT_SIGNAL_WINDOWS[k]!.rule };
+      changes.push(`window_belongs_to_another_signal:${k}:${DEFAULT_SIGNAL_WINDOWS[k]!.days}d`);
+      return { ...s, timeframe_days: DEFAULT_SIGNAL_WINDOWS[k]!.days };
     }
     if (s.timeframe_days != null) {
       windowSources[k] = i.proposal?.signal_recency_days != null &&
@@ -524,6 +565,51 @@ function signalDetail(k: CanonicalSignalKind, s: Partial<MissionSignal>, subkind
  * Callable on any mission: one compiled before P1 (no `mission_semantics`)
  * is read from its original query on the fly, so the card can show it too.
  */
+/**
+ * IS THIS SIGNAL STATED AS A REQUIREMENT?
+ *
+ * Read from the CLAUSE that carries the signal's own verb, not from a fixed
+ * window of characters before a phrase. The old check looked 30 characters
+ * before the reader's phrase — but the reader's phrase for "…and must currently
+ * be hiring a growth role" STARTS with "must", so nothing preceded it and the
+ * requirement was read as a preference. And widening the window would be worse:
+ * "must be based in the US and recently raised" would make funding hard on a
+ * modal that belongs to geography.
+ *
+ * So: split the signal's text into clauses, take the clause that contains the
+ * signal's cue ("hiring", "raised", "funding" …), and ask whether THAT clause
+ * says must / required to / needs to / has to / only / strictly. A signal with
+ * no cue map keeps the previous reading.
+ */
+const SIGNAL_CUE: Partial<Record<CanonicalSignalKind, RegExp>> = {
+  hiring: /\b(?:hiring|recruit(?:ing|s)?|open roles?|job openings?|to hire)\b/,
+  funding: /\b(?:fund(?:ed|ing|raise|raising)?|rais(?:ed|e|es|ing)|round|series [a-e]\b|seed)\b/,
+};
+const REQUIREMENT_MODAL =
+  /\b(must(?:\s+(?:currently|already|actively|still))?(?:\s+(?:be|have))?|required to|requires?|needs? to|has to|have to|only|strictly)\b/;
+const CLAUSE_BREAK = /[,;.:]|\s+(?:and|but|or|which|that|who|whose|while|with)\s+/;
+
+export function requirementElevation(kind: CanonicalSignalKind, phrase: string, query: string):
+  RegExpMatchArray | null {
+  const cue = SIGNAL_CUE[kind];
+  if (cue) {
+    const text = (phrase || query).toLowerCase();
+    const clauses = text.split(CLAUSE_BREAK).map((c) => c.trim()).filter(Boolean);
+    // The LAST clause naming the signal: a phrase can carry earlier clauses
+    // that belong to other requirements ("…must be based in the US, …").
+    const own = [...clauses].reverse().find((c) => cue.test(c));
+    if (own) {
+      const at = own.search(cue);
+      const m = own.slice(0, at).match(REQUIREMENT_MODAL);
+      if (m) return m;
+    }
+    return null;
+  }
+  const q = query.toLowerCase();
+  const idx = phrase ? q.indexOf(phrase.toLowerCase()) : -1;
+  return idx > 0 ? q.slice(Math.max(0, idx - 30), idx).match(/\b(must(?: currently)?(?: be)?|only|required to|strictly)\b[^.]*$/) : null;
+}
+
 export function deriveMissionCriteria(
   mission: LeadMissionV1,
   /**
@@ -798,8 +884,7 @@ export function deriveMissionCriteria(
     const rec = sem?.canonical_signals.find((c) => c.kind === k);
     const reading = readings.find((r) => r.kind === k);
     const phrase = String(rec?.phrase ?? reading?.phrase ?? s.phrase ?? s.type);
-    const idx = phrase ? q.indexOf(phrase.toLowerCase()) : -1;
-    const elevated = idx > 0 ? q.slice(Math.max(0, idx - 30), idx).match(/\b(must(?: currently)?(?: be)?|only|required to|strictly)\b[^.]*$/) : null;
+    const elevated = requirementElevation(k, phrase, q);
     const source: CriterionSource = userKinds.has(k) ? "user_explicit" : "user_inferred";
     const def = DEFAULT_SIGNAL_WINDOWS[k];
     const ws = sem?.window_sources?.[k];
@@ -807,7 +892,7 @@ export function deriveMissionCriteria(
     const time_window: CriterionTimeWindow | undefined = carried
       ? {
         days: s.timeframe_days!, basis: def?.basis ?? "observed",
-        source: ws?.source ?? (lang?.explicit_window_days != null ? "user_explicit" : "system_default"),
+        source: ws?.source ?? (lang?.window_days_by_kind?.[k] != null ? "user_explicit" : "system_default"),
         ...(ws?.rule ? { rule: ws.rule } : def ? { rule: def.rule } : {}), enforced: false,
       }
       // Hiring's default is display-only (never carried), so it is shown even
@@ -833,14 +918,15 @@ export function deriveMissionCriteria(
     // while carrying the 180-day default, and a hard requirement on the wrong
     // window would reject a company the user asked for.
     const fundingWindow = !elevated && k === "funding" && source === "user_explicit" &&
-      time_window?.source === "user_explicit" && time_window.days === explicitWindowDays(query) &&
+      time_window?.source === "user_explicit" &&
+      sameWindow(time_window.days, lang?.window_days_by_kind?.funding ?? explicitWindowDays(query)) &&
       fundingVerifierReady(readiness);
     push({
       kind: elevated || fundingWindow ? "hard" : "target",
       dimension: k, value: { event: eventOf(s), subject: s.subject ?? "company", qualifier: s.qualifier ?? {} },
       label: signalDetail(k, s, rec?.subkind ?? reading?.subkind),
       source, ...(time_window ? { time_window } : {}),
-      ...(elevated ? { elevated_by: elevated[1].startsWith("must") ? "must" : elevated[1] as MissionCriterion["elevated_by"] } : {}),
+      ...(elevated ? { elevated_by: /^(?:only|strictly)$/.test(elevated[1]) ? elevated[1] as MissionCriterion["elevated_by"] : "must" } : {}),
       user_phrase: source === "user_explicit" ? phrase : "",
       rationale: fundingWindow
         ? "a funding window the request states, which the funding pair can verify"

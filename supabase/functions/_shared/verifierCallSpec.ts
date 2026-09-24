@@ -25,6 +25,11 @@ import { hiringActorCard } from "./hiringActorCatalog.ts";
 import { compileProviderCallSpec, type ProviderCallSpec } from "./providerCallSpec.ts";
 import type { ReadinessPolicy } from "./routeReadiness.ts";
 
+/** Which run-budget route a verifier capability spends from. */
+const VERIFIER_ROUTE_ANCHOR: Readonly<Record<string, string>> = Object.freeze({
+  funding_verification: "funding", hiring_verification: "hiring", web_evidence: "company_profile",
+});
+
 /** An actor with no card price is unaffordable, never free: its estimate is Infinity. */
 const UNPRICED: CostModelLike = Object.freeze({ start_usd: Number.POSITIVE_INFINITY, per_result_usd: Number.POSITIVE_INFINITY });
 
@@ -46,7 +51,8 @@ export function verifierSpecCompiler(o: VerifierSpecContext): (c: VerifierCall) 
       proposed: null, engine: c.input, policy: o.policy,
       plan: {
         plan_id: o.plan?.plan_id ?? null, version: o.plan?.version ?? null,
-        route_id: null, route_anchor: "funding", route_refused: null,
+        // The per-route ceiling this call draws on, by the capability it serves.
+        route_id: null, route_anchor: VERIFIER_ROUTE_ANCHOR[c.capability] ?? "funding", route_refused: null,
       },
       candidate_keys: c.candidate_keys, scope: o.scope, mission_hash: o.mission_hash,
       ceilings: o.ceilings(),

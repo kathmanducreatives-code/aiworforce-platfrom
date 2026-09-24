@@ -133,6 +133,14 @@ export interface ClaimVerifier {
   route_actor: string;
   /** Companies per slice — the verifier's own bound, below every ledger ceiling. */
   max_targets: number;
+  /**
+   * What verifying ONE company costs, from the same canonical price its spec
+   * will be compiled with (the actor card, or the Firecrawl account rate).
+   * The phase orders verifiers by this, cheapest first. Null = cannot be priced
+   * (e.g. Firecrawl unpriced under a USD cap): ordered last, and its spec is
+   * refused anyway. Absent = the Claim Registry's static hint.
+   */
+  estimate_per_target_usd?: () => number | null;
   verify(targets: VerificationTarget[], deps: VerifierDeps, ctx: {
     mission_id: string | null;
     /** This verifier's runs from earlier slices, to adopt first. */

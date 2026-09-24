@@ -36,7 +36,7 @@
 //
 // PURE. No network, provider, model or database access.
 
-import { ROLE_FAMILY_ALIASES } from "./roleFamilies.ts";
+import { classifyRoleFamily, ROLE_FAMILY_ALIASES } from "./roleFamilies.ts";
 
 export const SIGNAL_DESCRIPTOR_VERSION = "mission-signal-descriptor-v1" as const;
 
@@ -377,6 +377,18 @@ function extractRoleQualifier(t: string): Pick<SignalQualifier, "role_families" 
   // "hiring X" is the far more common ordering.
   if (terms.length === 0) {
     keep(t.match(/\b((?:[a-z][a-z0-9/&-]*\s+){0,2}[a-z][a-z0-9/&-]*)\s+(?:hiring|hires|recruitment)\b/)?.[1]);
+  }
+
+  // NO ALIAS, BUT A NAMED DISCIPLINE. "Hiring a sales role" matches no title
+  // alias ("sales role" is nobody's job title) and used to fall through to the
+  // default commercial ladder — sales operations and growth titles included.
+  // The user's own term is classified by the same family reader; only when the
+  // alias table found nothing, so an alias match is never second-guessed.
+  if (families.length === 0) {
+    for (const term of terms) {
+      const fam = classifyRoleFamily(term);
+      if (fam && fam !== "custom" && !families.includes(fam)) families.push(fam);
+    }
   }
 
   return {

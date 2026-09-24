@@ -359,9 +359,12 @@ Deno.test("COMBINED: one entry, discovery evidence reused, only needed verifiers
   // ONE discovery entry.
   assertEquals(r.plan.entry_capability, "funding_signal_discovery");
   assertEquals([...new Set(discoveryCalls(r).map((c) => c.actor))], ["apify_funding_rounds_datahyena"]);
-  // Cheapest verifier first, and the later-round company was never bought for:
-  // discovery already FAILED Vaultline's stage.
-  assertEquals(r.phase.order, ["business_model_first_party_pages", "funding_stage_corroboration"]);
+  // Cheapest verifier first — by the CANONICAL per-target estimate each
+  // verifier publishes (atomus: its card, $0.00355 a company), not the static
+  // registry hint the page verifier falls back to when no Firecrawl rate is
+  // passed ($0.0192). The later-round company was never bought for: discovery
+  // already FAILED Vaultline's stage.
+  assertEquals(r.phase.order, ["funding_stage_corroboration", "business_model_first_party_pages"]);
   for (const c of r.calls.filter((x) => x.actor === "firecrawl" || x.actor === "apify_funding_atomus")) {
     assertFalse(JSON.stringify(c.input).includes("vaultline"), `no verification bought for a disproven company: ${JSON.stringify(c.input)}`);
   }

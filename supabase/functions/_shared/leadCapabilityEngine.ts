@@ -7133,7 +7133,25 @@ export async function runCapabilityPlan(
       // P3: a company found by the job search was already answered by it.
       const toCheck = targets.filter((t) => !jobSourced(t));
       const needsPaid: Array<{ c: EngineCompany; url: string; opKey: string | null }> = [];
-      for (const c of toCheck) {
+      // ── UNDER THE SPEC SPINE, THIS STAGE BUYS NOTHING ──────────────────────
+      //
+      // It bought a job search for EVERY identity-resolved company, before
+      // country, size band, business model or funding were grounded — a company
+      // already disproven on country still paid for one (pre-canary compile,
+      // 2026-09-24). Under Lead V2 a paid hiring check is the open-role CLAIM
+      // VERIFIER's (`hiringClaimVerifier.ts`): bought only for a still-viable
+      // candidate whose HARD hiring claim is open, after the cheaper claims are
+      // settled, ordered by its real estimate. Free evidence a company already
+      // carries is still assessed below; only the purchase moved. Legacy
+      // (non-spec) runs are unchanged.
+      const claimVerifierOwnsPaidHiring = specOn;
+      if (claimVerifierOwnsPaidHiring) {
+        log("hiring_purchase_deferred_to_claim_verifier", {
+          companies: toCheck.length,
+          reason: "paid hiring is bought per viable candidate by the open-role claim verifier",
+        });
+      }
+      for (const c of claimVerifierOwnsPaidHiring ? [] : toCheck) {
         // Named `assessment` deliberately: the paid-search gate below is the
         // same expression the per-company loop used, and
         // `commercialPolicyAndPortfolio` pins it by name as the guarantee that

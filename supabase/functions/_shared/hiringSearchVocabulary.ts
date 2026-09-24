@@ -83,6 +83,24 @@ function roundRobin(lists: ReadonlyArray<readonly string[]>, limit: number): str
 }
 
 /**
+ * THE SMALLEST LIST OF TITLE KEYWORDS THAT STILL FINDS EVERY TITLE ASKED FOR.
+ *
+ * The provider's title filter is a keyword search: "Growth" returns "VP of
+ * Growth" and "Growth Product Manager" as well. Sending both the keyword and
+ * every longer title that contains it asks the same question several times —
+ * and the job-search card prices a call by `maxItems × jobTitles`, so a family
+ * of eight growth titles priced as eight searches when one covers them. A title
+ * is dropped only when another listed title appears inside it as WHOLE words
+ * ("ae" covers "enterprise ae"; "ae" does not cover "aerospace"). Order kept.
+ */
+export function coveringTitles(titles: readonly string[]): string[] {
+  const keys = titles.map((t) => norm(t));
+  const words = (k: string) => ` ${k.replace(/[^a-z0-9&+#]+/g, " ").trim()} `;
+  return titles.filter((_, i) => !keys.some((other, j) =>
+    j !== i && other.length > 0 && other.length < keys[i].length && words(keys[i]).includes(words(other))));
+}
+
+/**
  * The titles to ask the provider for, given what the mission asked about.
  *
  * ── A MISSION THAT SPOKE IS NOT TOPPED UP ──────────────────────────────────
@@ -109,6 +127,6 @@ export function hiringSearchTitles(
   const fromMission = vocab?.source === "mission"
     ? (vocab.required_titles ?? []).filter((t) => norm(t).length > 0)
     : [];
-  if (fromMission.length > 0) return roundRobin([fromMission], limit);
+  if (fromMission.length > 0) return roundRobin([coveringTitles(fromMission)], limit);
   return roundRobin([TIER_A_TITLES, TIER_B_TITLES], limit);
 }

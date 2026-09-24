@@ -318,7 +318,9 @@ Deno.test("companies found by the job search are never re-searched by paid hirin
   const src = Deno.readTextFileSync(new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url));
   assert(src.includes("const toCheck = targets.filter((t) => !jobSourced(t));"));
   const at = src.indexOf("const needsPaid:");
-  assert(src.slice(at, at + 200).includes("for (const c of toCheck) {"), "the paid loop iterates the filtered set");
+  const loop = src.slice(at, at + 2000);
+  assert(loop.includes("for (const c of claimVerifierOwnsPaidHiring ? [] : toCheck) {"),
+    "the paid loop iterates the filtered set — and nothing at all under the spec spine, where the claim verifier buys");
 });
 
 Deno.test("a continuation does not repeat the discovery purchase", async () => {

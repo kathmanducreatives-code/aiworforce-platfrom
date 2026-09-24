@@ -1331,6 +1331,18 @@ export function buildCapabilityGraph(
           "verification, and no paid team lookup is scheduled for it. No extra step is needed."]
         : []),
     );
+  } else if (enforceExecutability && hasSignal(mission, "hiring")) {
+    // V2: WHAT IS TRUE NOW, IN POSITIVE WORDS. Since P3 `apify_linkedin_job_search`
+    // discovers employers (job_discovery, READY) and verifies open roles for a
+    // company it is given; the pre-P3 sentence below claimed neither was
+    // possible and stayed in V2 briefings (pre-canary compile, 2026-09-24).
+    routing_advisories.push(
+      `This mission names a hiring requirement and enters through ${entry}. ` +
+      "A HARD hiring requirement is verified per still-viable candidate by the open-role verifier " +
+      "(apify_linkedin_job_search with `company`), after country and size are settled and with the " +
+      "mission's own role titles; a hiring TARGET ranks candidates and schedules no purchase. " +
+      "Plan discovery, identity resolution, enrichment and qualification as usual.",
+    );
   } else if (strategy.includes("job_signal_first") || hasSignal(mission, "hiring")) {
     routing_advisories.push(
       "This mission is hiring-first. No registered Actor can DISCOVER open job " +
@@ -1342,7 +1354,19 @@ export function buildCapabilityGraph(
       "discovery first and hiring verification second over the pool it returns.",
     );
   }
-  if (!jobFirstRoute && mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s))) {
+  if (enforceExecutability && !jobFirstRoute && mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s))) {
+    // V2: the old sentence said a general company index "cannot prove" stage,
+    // team size or hiring. The company record PROVES the declared size band
+    // (companySize.ts), the funding pair answers stage, the open-role verifier
+    // answers hiring — so it was false, and "cannot" is the word that makes a
+    // planner return no plan.
+    routing_advisories.push(
+      "The mission mentions a startup stage. Startup-cohort sources carry stage and hiring state " +
+      "natively; on a general company index, the company record supplies the declared size band, " +
+      "a hard stage claim is answered by the funding verifier, and a hard hiring claim by the " +
+      "open-role verifier — a stage or hiring TARGET ranks candidates.",
+    );
+  } else if (!jobFirstRoute && mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s))) {
     routing_advisories.push(
       "The mission targets startups. Startup-cohort sources carry stage, team " +
       "size and hiring state natively; a general company index does not and " +
@@ -1382,7 +1406,18 @@ export function buildCapabilityGraph(
   // the same claim plan and readiness the verification phase itself uses.
   const fundingVerifiedAfter = () => verifiedAfterEligibility(mission, entry, readiness)
     .some((v) => v.claim === "recently_funded" || v.claim === "funding_stage");
-  if (hasSignal(mission, "funding") &&
+  if (enforceExecutability && hasSignal(mission, "funding") &&
+      !steps.some((st) => st.capability === "funding_signal_discovery") &&
+      !fundingVerifiedAfter() && readiness.decide("apify_funding_atomus", "funding_verification").executable) {
+    // V2 WITH A READY FUNDING VERIFIER: the signal is soft (no stated window, no
+    // requirement language), which is why nothing owns it after eligibility —
+    // not because funding "cannot be proven". Said as it is.
+    routing_advisories.push(
+      "The funding signal here is a preference: the request states no window or requirement, so " +
+      "no funding verification is scheduled. It ranks candidates; a stated window (\"raised funding " +
+      "in the last 12 months\") or requirement language would make it a verified claim.",
+    );
+  } else if (hasSignal(mission, "funding") &&
       !steps.some((st) => st.capability === "funding_signal_discovery") &&
       !fundingVerifiedAfter()) {
     routing_advisories.push(

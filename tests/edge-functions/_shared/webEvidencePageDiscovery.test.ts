@@ -154,11 +154,13 @@ Deno.test("the map itself is a metered, budgeted provider call", async () => {
   const src = await Deno.readTextFile(
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url),
   );
-  const m = src.indexOf("mapSite: async ({ domain }");
-  assert(m > 0, "the canonical verifier must supply a mapper");
-  const body = src.slice(m, m + 1200);
+  const m = src.indexOf("mapSite: p2Specs ? specGovernedMapper({");
+  assert(m > 0, "the canonical verifier must supply a mapper — spec-governed, reserved on the mission ledger");
+  const body = src.slice(m, m + 1400);
   assert(body.includes('runTool("scrape_url"'), "the map goes through the paid tool path");
+  assert(body.includes("...spec.serialized_input"), "sending exactly the spec's input");
   assert(body.includes('capability_key: "web_evidence_verification"'), "under the claim's capability");
   assert(body.includes("auditOwnership()"), "and is attributed in the ledger");
-  assert(body.includes("MAP_MAX_URLS"), "the returned list is bounded");
+  assert(body.includes("max_urls: MAP_MAX_URLS"), "the returned list is bounded");
+  assert(body.includes("usd_capped: runBudget?.provider_usd != null"), "priced at the one canonical rate");
 });

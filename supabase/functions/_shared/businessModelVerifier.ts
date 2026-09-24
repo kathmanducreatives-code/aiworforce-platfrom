@@ -56,6 +56,18 @@ export interface BusinessModelVerifierIO {
     Promise<Record<string, PageCollection>>;
   /** Re-ground the canonical business-model claim on the stored pages; the engine writes it. */
   reground(companyKey: string): Promise<RegroundResult>;
+  /**
+   * The canonical Firecrawl USD rate (`webEvidenceCreditRate`), so the ordering
+   * estimate is the price the page and map specs will carry. Null = unpriced
+   * under a USD cap. Omitted = order by the registry hint.
+   */
+  usd_per_credit?: number | null;
+}
+
+/** One company's worst case: one `/map` plus the page budget, each one credit. */
+export function businessModelEstimatePerTargetUsd(usdPerCredit: number | null): number | null {
+  if (usdPerCredit === null) return null;
+  return Number(((1 + BUSINESS_MODEL_MAX_PAGES) * usdPerCredit).toFixed(6));
 }
 
 export function businessModelVerifier(io: BusinessModelVerifierIO): ClaimVerifier {
@@ -64,6 +76,9 @@ export function businessModelVerifier(io: BusinessModelVerifierIO): ClaimVerifie
     claim: "business_model",
     route_actor: BUSINESS_MODEL_ROUTE_ACTOR,
     max_targets: BUSINESS_MODEL_MAX_TARGETS,
+    ...(io.usd_per_credit !== undefined
+      ? { estimate_per_target_usd: () => businessModelEstimatePerTargetUsd(io.usd_per_credit ?? null) }
+      : {}),
     async verify(targets, deps) {
       const findings: VerifierFinding[] = [];
       // NOT READY IS NO ANSWER. Nothing is bought and nothing is marked, so the

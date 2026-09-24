@@ -511,7 +511,8 @@ Deno.test("run-agent runs the verifiers on canonical gaps, before the view, boun
   for (const wired of [
     `readEnvSafe("LEAD_V2_CLAIM_VERIFIERS")`,
     "const phase = await runClaimVerificationPhase({",
-    "verifiers: [fundingStageVerifier(), businessModel],",
+    // The open-role verifier joins only for a HARD hiring claim (hiringClaimVerifier.ts).
+    "verifiers: [fundingStageVerifier(), businessModel, ...(hiringVerifier ? [hiringVerifier] : [])],",
     "readiness: leadReadiness,",
     "call: ledgerBoundCall({",
     // The verifier path is the spine: spec, guard, readiness-aware criteria, settlement.

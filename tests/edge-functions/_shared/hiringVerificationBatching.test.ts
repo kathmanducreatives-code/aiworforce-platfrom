@@ -258,7 +258,7 @@ Deno.test("a company already answered is not re-asked", () => {
     new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
   );
   const i = ENGINE.indexOf("const needsPaid:");
-  const block = ENGINE.slice(i, i + 1200);
+  const block = ENGINE.slice(i, i + 2600);
   assert(block.includes("shouldSkipProviderCall"), "the resume ledger is consulted");
   assert(block.includes("completed_operations.includes(opKey)"),
     "and so is this run's own record of what it has already asked");

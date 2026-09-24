@@ -92,17 +92,54 @@ export const DEFAULT_SIGNAL_WINDOWS: Readonly<Partial<Record<CanonicalSignalKind
   });
 
 /**
- * A window the user stated in numbers: "in the last 60 days", "past 6 months".
- * Null when none is stated — a bare "recently" is not a number.
+ * A window the user stated in words: "in the last 60 days", "past 6 months",
+ * "within the last year". Null when none is stated — a bare "recently" is not
+ * a window. Returned in CANONICAL days (`canonicalWindowDays`), so "12 months",
+ * "1 year" and "365 days" are the same number.
  */
 export function explicitWindowDays(text: string): number | null {
   const m = String(text ?? "").toLowerCase().match(
-    /\b(?:in|within|over|during)?\s*the\s+(?:last|past)\s+(\d{1,3})\s*(day|week|month|year)s?\b/);
+    /\b(?:in|within|over|during)?\s*the\s+(?:last|past)\s+(?:(\d{1,3}|a|one)\s*)?(day|week|month|year)s?\b/);
   if (!m) return null;
-  const n = Number(m[1]);
+  const n = m[1] === undefined || m[1] === "a" || m[1] === "one" ? 1 : Number(m[1]);
   const per: Record<string, number> = { day: 1, week: 7, month: 30, year: 365 };
-  const days = n * (per[m[2]] ?? 1);
-  return days > 0 ? days : null;
+  const unit = m[2];
+  // Whole years are years however they were said ("12 months", "24 months").
+  if (unit === "month" && n > 0 && n % 12 === 0) return (n / 12) * 365;
+  const days = n * (per[unit] ?? 1);
+  return days > 0 ? canonicalWindowDays(days) : null;
+}
+
+/**
+ * ONE REPRESENTATION FOR A TIME WINDOW.
+ *
+ * Two compilers that read the same words can carry different integers: "12
+ * months" as 360 (30-day months) or 365, "6 months" as 180 or 183, "2 years" as
+ * 720 or 730. Whether a funding window is a HARD requirement used to hang on
+ * `days === explicitWindowDays(query)`, so the same sentence could flip between
+ * hard and soft on a rounding choice. A window is compared here as the calendar
+ * span it names, never as a raw integer:
+ *
+ *   within ~1.5% of a whole number of YEARS   → that many years × 365
+ *   within ~3 days of a whole number of MONTHS → that many months × 30
+ *   anything else                              → the days themselves
+ *
+ * Months keep the 30-day convention the rest of the system already uses (a
+ * stated "6 months" has always been 180), so only whole years change value.
+ */
+export function canonicalWindowDays(days: number): number {
+  if (!Number.isFinite(days) || days <= 0) return days;
+  const years = Math.round(days / 365);
+  if (years >= 1 && Math.abs(days - years * 365) <= Math.max(5, years * 6)) return years * 365;
+  const months = Math.round(days / 30.4375);
+  if (months >= 1 && months < 12 && Math.abs(days - months * 30.4375) <= 3) return months * 30;
+  return Math.round(days);
+}
+
+/** Do two windows name the same calendar span? */
+export function sameWindow(a: number | null | undefined, b: number | null | undefined): boolean {
+  if (a == null || b == null) return false;
+  return canonicalWindowDays(a) === canonicalWindowDays(b);
 }
 
 // ── ALIASES THE SHARED READER DOES NOT COVER ────────────────────────────────

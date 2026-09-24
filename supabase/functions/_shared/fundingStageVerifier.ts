@@ -26,6 +26,8 @@
 // Nothing here infers a stage: no age, size, branding or model reading reaches
 // the decision (`fundingStageClaim` takes rounds and nothing else).
 
+import { hiringActorCard } from "./hiringActorCatalog.ts";
+import { estimateCallUsd } from "./budgetPolicy.ts";
 import {
   batches, type ClaimVerifier, type PendingVerifierRun, type VerificationTarget,
   type VerifierDeps, type VerifierFinding,
@@ -105,6 +107,12 @@ export function fundingStageVerifier(): ClaimVerifier {
     claim: "funding_stage",
     route_actor: ATOMUS_FUNDING_ACTOR_KEY,
     max_targets: FUNDING_MAX_TARGETS,
+    // The first purchase for a company is one atomus read, at the card's price.
+    estimate_per_target_usd: () => {
+      const card = hiringActorCard(ATOMUS_FUNDING_ACTOR_KEY);
+      return card ? estimateCallUsd(ATOMUS_FUNDING_ACTOR_KEY, card.cost_model,
+        { companies: ["https://www.linkedin.com/company/estimate"] }) : null;
+    },
     async verify(targets, deps, ctx) {
       const findings: VerifierFinding[] = [];
       const pending: PendingVerifierRun[] = [];
