@@ -3,6 +3,69 @@
  "terminal_status": "search_exhausted",
  "workbench_mission_view": {
   "stage": "complete",
+  "mission": {
+   "criteria": [
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "label": "Industry: b2b saas",
+     "source": "company_brain_preference",
+     "status": "ok",
+     "window": null
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "label": "Industry: fintech",
+     "source": "company_brain_preference",
+     "status": "ok",
+     "window": null
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "label": "Geography: United States",
+     "source": "user_explicit",
+     "status": "ok",
+     "window": null
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "label": "Company kind: seed",
+     "source": "company_brain_preference",
+     "status": "ok",
+     "window": null
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "label": "Company kind: series_a",
+     "source": "company_brain_preference",
+     "status": "ok",
+     "window": null
+    },
+    {
+     "id": "company_size:_min_11_max_50_",
+     "kind": "hard",
+     "label": "Company size: 11\u201350 employees",
+     "source": "user_explicit",
+     "status": "ok",
+     "window": null
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "label": "Funding",
+     "source": "user_explicit",
+     "status": "ok",
+     "window": "last 730 days"
+    }
+   ],
+   "unsupported": [],
+   "execution_limit": 1,
+   "requested_count": 1
+  },
   "counts": {
    "pending": 1,
    "discovered": 2,

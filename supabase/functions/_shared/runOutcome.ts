@@ -137,8 +137,13 @@ export interface QualificationFacts {
    * field above is DERIVED from this, so the completion message, the run list
    * and the Workbench describe one set of decisions. Null for a run that
    * predates the canonical view; the fields above are then the legacy counters.
+   *
+   * OPTIONAL ON INPUT, ALWAYS PRESENT ON THE RECORD. A caller that has no
+   * canonical view may omit it; `buildRunOutcome` writes `null`, and a stored
+   * `RunOutcomeV1` always carries the key (`OutcomeQualification`), so
+   * `undefined` never reaches a reader or a round-trip.
    */
-  canonical: CanonicalDecisionFacts | null;
+  canonical?: CanonicalDecisionFacts | null;
 }
 
 /** Candidate state as the canonical eligibility decided it — nothing else. */
@@ -155,6 +160,13 @@ export interface CanonicalDecisionFacts {
   screened_out: number;
   /** Still owed investigation or identity — work, not a decision. */
   undecided: number;
+  /**
+   * The dimensions the mission's criteria name (hard and target), as the same
+   * view states them. Decides what a message may talk about: a mission with no
+   * `hiring` criterion is never told about hiring. Null when the view carried
+   * no criteria (an older or trimmed record) — then nothing is suppressed.
+   */
+  mission_dimensions: string[] | null;
 }
 
 export interface PersistenceFacts {
@@ -180,9 +192,13 @@ export interface RunFacts {
   gaps: ReadonlyArray<{ code: string; detail: string }>;
 }
 
+/** Qualification as a stored outcome holds it: `canonical` is null or a value, never absent. */
+export type OutcomeQualification = QualificationFacts & { canonical: CanonicalDecisionFacts | null };
+
 export interface RunOutcomeV1 extends RunFacts {
   version: typeof RUN_OUTCOME_VERSION;
   state: RunState;
+  qualification: OutcomeQualification;
 }
 
 /**
@@ -323,13 +339,42 @@ export function renderOutstandingClause(o: RunOutcomeV1): string {
   return ` ${parts.join(" and ")}.`;
 }
 
+/**
+ * THE COMPLETION MESSAGE'S ACCOUNT OF CANDIDATES, from the canonical decisions.
+ *
+ * The panel message used to build its own: discovered, "embedded open roles",
+ * "strong commercial expansion signals", "N qualified" from the legacy
+ * qualification list, and "marked not qualified" for every shortlisted company.
+ * On canary 89adf8fb — a FUNDING mission — that would have said "evaluated 0
+ * embedded open roles", "2 showed strong commercial expansion signals" and
+ * called BigRio "not qualified" while the Workbench showed it PENDING.
+ *
+ * With canonical decisions present this is the only account: the discovered
+ * count and the qualification clause the Workbench agrees with, and a tail that
+ * names pending as pending. Null when the outcome has no canonical view — the
+ * caller then keeps its legacy sentence for rows written before it existed.
+ */
+export function renderCanonicalCompletion(o: RunOutcomeV1): { evidence: string; tail: string } | null {
+  const c = o.qualification.canonical;
+  if (!c) return null;
+  const found = `I discovered ${c.discovered} ${c.discovered === 1 ? "company" : "companies"}` +
+    (c.screened_out > 0 ? ` and screened out ${c.screened_out} before any paid research` : "") + ".";
+  const tail = c.qualified > 0 ? ""
+    : c.pending > 0
+    ? ` ${c.pending === 1 ? "The pending company is" : "The pending companies are"} in Workbench with the requirement still to be established.`
+    : " None qualified yet.";
+  return { evidence: `${found} ${renderQualificationClause(o)}`, tail };
+}
+
 /** The whole message, assembled from clauses that each read a fact. */
 export function renderRunOutcome(o: RunOutcomeV1): string {
   const led = o.persistence.leads_written;
   const head = `${led} of ${o.requested} ${led === 1 ? "lead" : "leads"} saved.`;
-  const funnel =
-    `I looked at ${o.funnel.discovered} ${o.funnel.discovered === 1 ? "company" : "companies"}, ` +
-    `shortlisted ${o.funnel.shortlisted}, and confirmed hiring at ${o.funnel.hiring_verified}.`;
+  // A mission that asked nothing about hiring is not told about hiring.
+  const looked = `I looked at ${o.funnel.discovered} ${o.funnel.discovered === 1 ? "company" : "companies"}`;
+  const funnel = hiringInScope(o) === false
+    ? `${looked} and shortlisted ${o.funnel.shortlisted}.`
+    : `${looked}, shortlisted ${o.funnel.shortlisted}, and confirmed hiring at ${o.funnel.hiring_verified}.`;
   return [
     head, funnel, renderQualificationClause(o).trim(),
     renderSpendClause(o).trim(),
@@ -445,6 +490,8 @@ function readCanonical(v: unknown): CanonicalDecisionFacts | null {
     source: "workbench_mission_view",
     discovered: num(c.discovered), qualified: num(c.qualified), pending: num(c.pending),
     ineligible: num(c.ineligible), screened_out: num(c.screened_out), undecided: num(c.undecided),
+    mission_dimensions: Array.isArray(c.mission_dimensions)
+      ? (c.mission_dimensions as unknown[]).filter((d): d is string => typeof d === "string") : null,
   };
 }
 
@@ -466,7 +513,35 @@ export function canonicalDecisionFacts(result: unknown): CanonicalDecisionFacts 
     strong_opportunity: num(counts.strong_opportunity), worth_considering: num(counts.worth_considering),
     low_priority: num(counts.low_priority), ineligible: num(counts.ineligible),
   };
-  return { source: "workbench_mission_view", ...decisionSummary(full) };
+  return {
+    source: "workbench_mission_view", ...decisionSummary(full),
+    mission_dimensions: missionDimensions(rec(rec(result).workbench_mission_view).mission),
+  };
+}
+
+/**
+ * The criterion dimensions the canonical view lists, sorted and unique. The
+ * view states `dimension`; a view stored before it did is read from the id,
+ * whose format `${dimension}:${slug}` is `deriveMissionCriteria`'s own.
+ */
+function missionDimensions(mission: unknown): string[] | null {
+  const criteria = rec(mission).criteria;
+  if (!Array.isArray(criteria) || criteria.length === 0) return null;
+  const dims = criteria.map((c) => {
+    const r = rec(c);
+    if (typeof r.dimension === "string" && r.dimension) return r.dimension;
+    return typeof r.id === "string" && r.id.includes(":") ? r.id.slice(0, r.id.indexOf(":")) : null;
+  }).filter((d): d is string => !!d);
+  return dims.length ? [...new Set(dims)].sort() : null;
+}
+
+/**
+ * May this outcome talk about hiring? False only when the canonical view says
+ * the mission names no hiring criterion; null (unknown) keeps legacy wording.
+ */
+export function hiringInScope(o: RunOutcomeV1): boolean | null {
+  const dims = o.qualification.canonical?.mission_dimensions ?? null;
+  return dims === null ? null : dims.includes("hiring");
 }
 
 /**

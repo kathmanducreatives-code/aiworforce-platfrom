@@ -412,7 +412,7 @@ import { buildQualifiedLeadRunContext } from "../_shared/qualifiedLeadRunContext
 import { decideClaimAttempt, claimContinuation, claimContinuationViaRpc, releaseContinuationViaRpc, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb, type RpcDb } from "../_shared/continuationClaim.ts";
 import {
   buildRunOutcome, readFactsFromResult, readModelSpendUsd, readPersistedRunOutcome, readSpendFacts,
-  renderQualificationClause, RUN_OUTCOME_RESULT_KEY,
+  renderCanonicalCompletion, renderQualificationClause, RUN_OUTCOME_RESULT_KEY,
   renderSpendClause, type OutcomeDb, type SpendFacts,
 } from "../_shared/runOutcome.ts";
 import {
@@ -735,7 +735,14 @@ async function persistLeadResultsPanel(
       ? ` The shortlisted ${m.shortlisted === 1 ? "company is" : "companies are"} in Workbench for review, marked not qualified.`
       : summary.eligible > 0 ? ""
       : summary.deliverable === "company" ? " None qualified yet." : " None produced a contact-ready lead yet.";
-    const content = `I opened the results in Workbench — ${delivered}. ${evidence}${tail} Nothing was sent.`;
+    // ONE ACCOUNT OF THE CANDIDATES. With canonical decisions on the outcome,
+    // the evidence sentence and tail are the Workbench's, and the legacy
+    // counters above (open roles, commercial signals, the legacy qualified
+    // list) are not read. `m` stays for rows written before the canonical view.
+    const canonicalLine = renderCanonicalCompletion(summaryOutcome);
+    const content = canonicalLine
+      ? `I opened the results in Workbench — ${delivered}. ${canonicalLine.evidence}${canonicalLine.tail} Nothing was sent.`
+      : `I opened the results in Workbench — ${delivered}. ${evidence}${tail} Nothing was sent.`;
 
     await db.from("messages").insert({
       conversation_id: conversationId,

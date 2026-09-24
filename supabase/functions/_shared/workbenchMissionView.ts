@@ -108,7 +108,11 @@ export interface WorkbenchMissionView {
   mission: {
     requested_count: number;
     execution_limit: number | null;
-    criteria: Array<{ id: string; label: string; kind: MissionCriterion["kind"]; source: string; window: string | null; status: string }>;
+    criteria: Array<{
+      id: string; label: string; kind: MissionCriterion["kind"]; source: string; window: string | null; status: string;
+      /** Stated, not parsed from `id`, so a reader never has to know the id format. */
+      dimension: MissionCriterion["dimension"];
+    }>;
     unsupported: string[];
   };
   stage: MissionStage;
@@ -368,7 +372,7 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
       requested_count: i.mission.requested_count,
       execution_limit: i.mission.execution_limit,
       criteria: i.criteria.filter((c) => c.status === "ok").map((c) => ({
-        id: c.id, label: c.label, kind: c.kind, source: c.source,
+        id: c.id, label: c.label, kind: c.kind, source: c.source, dimension: c.dimension,
         window: c.time_window ? `last ${c.time_window.days} days` : null,
         status: c.status,
       })),
