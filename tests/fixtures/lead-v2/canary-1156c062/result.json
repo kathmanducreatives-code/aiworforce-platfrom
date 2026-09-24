@@ -1,0 +1,1224 @@
+{
+ "_source": "local live canary task 1156c062-8cb8-42c7-add8-e918cce6997d (plan c92afb1a, commit 6d1c185b, 2026-09-24): tasks.result and the Pilot-compiled mission, trimmed to what the continuation replay reads",
+ "lead_mission": {
+  "version": "lead-mission-v1",
+  "criteria": [
+   {
+    "id": "industry:b2b_saas",
+    "kind": "hard",
+    "label": "Industry: b2b saas",
+    "value": "b2b saas",
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "industry",
+    "rationale": "stated in the request",
+    "user_phrase": "b2b saas"
+   },
+   {
+    "id": "industry:saas",
+    "kind": "hard",
+    "label": "Industry: saas",
+    "value": "saas",
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "industry",
+    "rationale": "stated in the request",
+    "user_phrase": "saas"
+   },
+   {
+    "id": "geography:united_states",
+    "kind": "hard",
+    "label": "Geography: United States",
+    "value": "United States",
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "geography",
+    "rationale": "stated in the request",
+    "user_phrase": ""
+   },
+   {
+    "id": "company_stage:seed",
+    "kind": "target",
+    "label": "Company kind: seed",
+    "value": "seed",
+    "source": "company_brain_preference",
+    "status": "ok",
+    "dimension": "company_stage",
+    "rationale": "your Company Brain's ICP",
+    "user_phrase": ""
+   },
+   {
+    "id": "company_stage:series_a",
+    "kind": "target",
+    "label": "Company kind: series_a",
+    "value": "series_a",
+    "source": "company_brain_preference",
+    "status": "ok",
+    "dimension": "company_stage",
+    "rationale": "your Company Brain's ICP",
+    "user_phrase": ""
+   },
+   {
+    "id": "company_size:_min_11_max_50_",
+    "kind": "hard",
+    "label": "Company size: 11\u201350 employees",
+    "value": {
+     "max": 50,
+     "min": 11
+    },
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "company_size",
+    "rationale": "stated in the request",
+    "user_phrase": ""
+   },
+   {
+    "id": "funding:_event_funding_subject_company_qualifier_",
+    "kind": "hard",
+    "label": "Funding",
+    "value": {
+     "event": "funding",
+     "subject": "company",
+     "qualifier": {}
+    },
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "funding",
+    "rationale": "an observable signal the request asks for",
+    "elevated_by": "must",
+    "time_window": {
+     "days": 365,
+     "rule": "recently funded / raised",
+     "basis": "announced",
+     "source": "user_explicit",
+     "enforced": false
+    },
+    "user_phrase": "Find 1 company that must be based in the US, must have a LinkedIn-declared company size of 11\u201350, must be B2B SaaS, must have raised funding within the last 12 months,"
+   },
+   {
+    "id": "hiring:_event_hiring_subject_company_qualifier_role_families_growth",
+    "kind": "hard",
+    "label": "Hiring: growth role",
+    "value": {
+     "event": "hiring",
+     "subject": "company",
+     "qualifier": {
+      "role_terms": [
+       "growth role"
+      ],
+      "role_families": [
+       "growth"
+      ]
+     }
+    },
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "hiring",
+    "rationale": "an observable signal the request asks for",
+    "elevated_by": "must",
+    "time_window": {
+     "days": 30,
+     "rule": "currently / actively hiring",
+     "basis": "posted",
+     "source": "system_default",
+     "enforced": false
+    },
+    "user_phrase": "must currently be hiring a growth role."
+   }
+  ],
+  "confidence": 0.99,
+  "directives": {
+   "source_strategy": [],
+   "adjacent_signals": [],
+   "excluded_signals": [],
+   "preferred_signals": [
+    "funding",
+    "hiring"
+   ],
+   "required_evidence": [],
+   "allowed_broadening": {
+    "geographies": [],
+    "company_types": [],
+    "role_families": [],
+    "employee_range": {
+     "max": null,
+     "min": null
+    }
+   },
+   "execution_preference": "balanced",
+   "disallowed_broadening": [],
+   "evaluation_instructions": "",
+   "founder_unlock_recommended": false,
+   "requested_contact_ready_count": null
+  },
+  "mission_type": "company_research",
+  "target_entity": "company",
+  "company_profile": {
+   "stages": [
+    "seed",
+    "series_a"
+   ],
+   "locations": [
+    "United States"
+   ],
+   "verticals": [
+    "b2b saas",
+    "saas"
+   ],
+   "employee_range": {
+    "max": 50,
+    "min": 11
+   },
+   "business_models": []
+  },
+  "decision_makers": {
+   "roles": [],
+   "current_employment_required": false
+  },
+  "planner_runtime": {
+   "role": "planner",
+   "dirty": false,
+   "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+   "function": "lead-mission-compiler",
+   "git_short": "046b61b0",
+   "build_timestamp": "2026-08-29T10:44:33.276Z",
+   "lead_intelligence_contract_version": "v1"
+  },
+  "requested_count": 1,
+  "field_provenance": {
+   "target_entity": "explicit_user_request",
+   "requested_count": "explicit_user_request",
+   "requested_output": "explicit_user_request",
+   "required_signals": "explicit_user_request",
+   "decision_makers.roles": "gpt_inference",
+   "company_profile.stages": "company_brain",
+   "company_profile.locations": "explicit_user_request",
+   "company_profile.verticals": "explicit_user_request",
+   "company_profile.business_models": "gpt_inference"
+  },
+  "hard_constraints": {
+   "company_profile.locations": {
+    "value": [
+     "United States"
+    ],
+    "reason": "stated explicitly in the user's query",
+    "operator": "in"
+   }
+  },
+  "requested_output": "qualified_companies",
+  "required_signals": [
+   {
+    "type": "funding",
+    "event": "funding",
+    "phrase": "funding",
+    "subject": "company",
+    "qualifier": {},
+    "timeframe_days": 365
+   },
+   {
+    "type": "hiring",
+    "event": "hiring",
+    "phrase": "hiring growth role",
+    "subject": "company",
+    "qualifier": {
+     "role_terms": [
+      "growth role"
+     ],
+     "role_families": [
+      "growth"
+     ]
+    },
+    "role_families": [
+     "growth"
+    ],
+    "timeframe_days": 30
+   }
+  ],
+  "soft_preferences": {},
+  "brain_refinements": [
+   {
+    "field": "company_profile.verticals",
+    "qualifier": "b2b",
+    "user_value": "saas",
+    "brain_value": "b2b saas"
+   }
+  ],
+  "mission_semantics": {
+   "goal": "Find 1 company that must be based in the US, must have a LinkedIn-declared company size of 11\u201350, must be B2B SaaS, must have raised funding within the last 12 months, and must currently be hiring a growth role.",
+   "stage": null,
+   "version": "mission-semantics-v1",
+   "hypotheses": [],
+   "corrections": [
+    "window_belongs_to_another_signal:hiring:30d"
+   ],
+   "window_sources": {
+    "hiring": {
+     "rule": "currently / actively hiring",
+     "source": "system_default"
+    },
+    "funding": {
+     "source": "user_explicit"
+    }
+   },
+   "requested_count": 1,
+   "canonical_signals": [
+    {
+     "kind": "funding",
+     "alias": "reader",
+     "phrase": "Find 1 company that must be based in the US, must have a LinkedIn-declared company size of 11\u201350, must be B2B SaaS, must have raised funding within the last 12 months,",
+     "source": "user_explicit",
+     "subject": "company",
+     "legacy_event": "funding"
+    },
+    {
+     "kind": "hiring",
+     "alias": "reader",
+     "phrase": "must currently be hiring a growth role.",
+     "source": "user_explicit",
+     "subject": "company",
+     "legacy_event": "hiring"
+    }
+   ],
+   "unmapped_signal_language": []
+  },
+  "original_user_query": "Find 1 company that must be based in the US, must have a LinkedIn-declared company size of 11\u201350, must be B2B SaaS, must have raised funding within the last 12 months, and must currently be hiring a growth role.",
+  "required_capabilities": [],
+  "required_signal_terms": [
+   "growth role"
+  ],
+  "prohibited_capabilities": [
+   "founder_discovery",
+   "employer_verification",
+   "contact_enrichment"
+  ],
+  "lead_intelligence_contract_version": "v1"
+ },
+ "run_budget": {
+  "provider_usd": 0.1,
+  "max_candidates": 2
+ },
+ "lead_resume_checkpoint": {
+  "companies": [
+   {
+    "company_key": "https://www.linkedin.com/company/superagi",
+    "company_name": "SuperAGI",
+    "completed_operations": [
+     "verify:apify_funding_atomus"
+    ],
+    "snapshot": {
+     "observations": [
+      {
+       "version": "candidate-observation-v1",
+       "evidence": [
+        {
+         "value": {
+          "name": "SuperAGI",
+          "domain": "superagi.com",
+          "linkedin_company_url": "https://www.linkedin.com/company/superagi"
+         },
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": "https://www.linkedin.com/company/superagi",
+          "actor": "apify_linkedin_company_search",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_40b1dcde9bfbb83eed02a5f529"
+         },
+         "status": "proven",
+         "dimension": "identity",
+         "confidence": "high",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/superagi",
+         "evidence_id": "ev_44cc91435a64221280b66690",
+         "observed_at": "2026-09-24T15:08:28.848Z",
+         "valid_until": null,
+         "derived_from": []
+        },
+        {
+         "value": {
+          "max": 50,
+          "min": 11,
+          "source": "linkedin_declared"
+         },
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_search",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_40b1dcde9bfbb83eed02a5f529"
+         },
+         "status": "plausible",
+         "authority": {
+          "rule": "no_proving_rule",
+          "claim": "company_size",
+          "level": "plausible",
+          "reason": "apify_linkedin_company_search declared_size_band can suggest company_size but no rule lets it prove it",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "company_size_band",
+         "confidence": "medium",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/superagi",
+         "evidence_id": "ev_cc0d2bb92ecb61e6decb709c",
+         "observed_at": "2026-09-24T15:08:28.848Z",
+         "valid_until": "2026-12-23T15:08:28.848Z",
+         "derived_from": []
+        },
+        {
+         "value": 125,
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_search",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_40b1dcde9bfbb83eed02a5f529"
+         },
+         "status": "plausible",
+         "authority": {
+          "rule": "no_proving_rule",
+          "claim": "associated_members",
+          "level": "plausible",
+          "reason": "apify_linkedin_company_search associated_member_count can suggest associated_members but no rule lets it prove it",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "linkedin_member_count",
+         "confidence": "medium",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/superagi",
+         "evidence_id": "ev_68c6c7824a929a437396fb93",
+         "observed_at": "2026-09-24T15:08:28.848Z",
+         "valid_until": "2026-12-23T15:08:28.848Z",
+         "derived_from": []
+        },
+        {
+         "value": "Technology, Information and Internet",
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_search",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_40b1dcde9bfbb83eed02a5f529"
+         },
+         "status": "plausible",
+         "authority": {
+          "rule": "no_proving_rule",
+          "claim": "industry",
+          "level": "plausible",
+          "reason": "apify_linkedin_company_search industry_taxonomy can suggest industry but no rule lets it prove it",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "industry",
+         "confidence": "low",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/superagi",
+         "evidence_id": "ev_547439b83efcc39f57ffb087",
+         "observed_at": "2026-09-24T15:08:28.848Z",
+         "valid_until": null,
+         "derived_from": []
+        }
+       ],
+       "provider": "apify",
+       "route_id": "general_company_discovery:apify_linkedin_company_search",
+       "actor_key": "apify_linkedin_company_search",
+       "capability": "general_company_discovery",
+       "source_url": "https://www.linkedin.com/company/superagi",
+       "entity_hint": {
+        "name": "SuperAGI",
+        "domain": "superagi.com",
+        "country": null,
+        "website": "https://superagi.com",
+        "external_ids": [
+         "li_company:91427575"
+        ],
+        "linkedin_company_url": "https://www.linkedin.com/company/superagi"
+       },
+       "observed_at": "2026-09-24T15:08:28.848Z",
+       "plan_version": 1,
+       "observation_id": "obs_38b8be7072e0a071f6eea4cf",
+       "provider_call_id": "pc_40b1dcde9bfbb83eed02a5f529",
+       "source_record_id": "91427575"
+      },
+      {
+       "version": "candidate-observation-v1",
+       "evidence": [
+        {
+         "value": {
+          "name": "SuperAGI",
+          "domain": "superagi.com",
+          "linkedin_company_url": "https://www.linkedin.com/company/superagi"
+         },
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": "https://www.linkedin.com/company/superagi",
+          "actor": "apify_linkedin_company_details",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59"
+         },
+         "status": "proven",
+         "dimension": "identity",
+         "confidence": "high",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/superagi",
+         "evidence_id": "ev_a4d711ca723f778eb8abab62",
+         "observed_at": "2026-09-24T15:09:00.989Z",
+         "valid_until": null,
+         "derived_from": []
+        },
+        {
+         "value": "Palo Alto, CA, United States; Bengaluru, India",
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_details",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59"
+         },
+         "status": "proven",
+         "authority": {
+          "rule": "li_record_structured_country",
+          "claim": "country",
+          "level": "proven",
+          "reason": "structured company locations, each with its country \u2014 presence in a market, not headquarters",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "geography",
+         "confidence": "high",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/superagi",
+         "evidence_id": "ev_4ba7996483cd1395a091198c",
+         "observed_at": "2026-09-24T15:09:00.989Z",
+         "valid_until": null,
+         "derived_from": []
+        },
+        {
+         "value": {
+          "max": 50,
+          "min": 11,
+          "source": "linkedin_declared"
+         },
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_details",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59"
+         },
+         "status": "proven",
+         "authority": {
+          "rule": "li_record_declared_size_band",
+          "claim": "company_size",
+          "level": "proven",
+          "reason": "the company's own declared size band on its LinkedIn record (About tab) \u2014 a band, not a staff count",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "company_size_band",
+         "confidence": "high",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/superagi",
+         "evidence_id": "ev_1a424c553b0003f610066331",
+         "observed_at": "2026-09-24T15:09:00.989Z",
+         "valid_until": "2026-12-23T15:09:00.989Z",
+         "derived_from": []
+        },
+        {
+         "value": 125,
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_details",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59"
+         },
+         "status": "proven",
+         "authority": {
+          "rule": "li_record_associated_members",
+          "claim": "associated_members",
+          "level": "proven",
+          "reason": "LinkedIn's count of members who list the company as a current position \u2014 not staff, and no size claim",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "linkedin_member_count",
+         "confidence": "high",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/superagi",
+         "evidence_id": "ev_96dbcbfcc93bfb8e87443b1c",
+         "observed_at": "2026-09-24T15:09:00.989Z",
+         "valid_until": "2026-12-23T15:09:00.989Z",
+         "derived_from": []
+        },
+        {
+         "value": "Technology, Information and Internet",
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_details",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59"
+         },
+         "status": "plausible",
+         "authority": {
+          "rule": "no_proving_rule",
+          "claim": "industry",
+          "level": "plausible",
+          "reason": "apify_linkedin_company_details industry_taxonomy can suggest industry but no rule lets it prove it",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "industry",
+         "confidence": "low",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/superagi",
+         "evidence_id": "ev_c57f5dc7928f7c3160910c41",
+         "observed_at": "2026-09-24T15:09:00.989Z",
+         "valid_until": null,
+         "derived_from": []
+        }
+       ],
+       "provider": "apify",
+       "route_id": null,
+       "actor_key": "apify_linkedin_company_details",
+       "capability": "company_enrichment",
+       "source_url": "https://www.linkedin.com/company/superagi",
+       "entity_hint": {
+        "name": "SuperAGI",
+        "domain": "superagi.com",
+        "country": "india",
+        "website": "https://superagi.com",
+        "external_ids": [
+         "li_company:91427575"
+        ],
+        "linkedin_company_url": "https://www.linkedin.com/company/superagi"
+       },
+       "observed_at": "2026-09-24T15:09:00.989Z",
+       "plan_version": 1,
+       "observation_id": "obs_f5930b3a492fbe790ebc29a0",
+       "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59",
+       "source_record_id": "91427575"
+      },
+      {
+       "version": "candidate-observation-v1",
+       "evidence": [
+        {
+         "value": {
+          "claim": "funding_record",
+          "record": {
+           "actor": "apify_funding_atomus",
+           "rounds": [
+            {
+             "method": "provider_field",
+             "investors": [
+              "Newlands VC",
+              "Kae Capital"
+             ],
+             "amount_usd": 10000000,
+             "provenance": [
+              {
+               "role": "reported",
+               "actor": "apify_funding_atomus",
+               "provider_call_id": "pc_418f3a1e3548c8e2b010a57a3d"
+              }
+             ],
+             "round_type": "SERIES_A",
+             "source_urls": [],
+             "announced_date": "2024-03-11"
+            }
+           ],
+           "provider": "apify",
+           "source_url": "https://www.linkedin.com/company/superagi",
+           "observed_at": "2026-09-21",
+           "completeness": {
+            "actor": "apify_funding_atomus",
+            "complete": true,
+            "history_complete": null,
+            "provider_call_id": "pc_418f3a1e3548c8e2b010a57a3d",
+            "reported_round_count": 1
+           },
+           "history_complete": null,
+           "provider_call_id": "pc_418f3a1e3548c8e2b010a57a3d",
+           "provider_call_ids": [
+            "pc_418f3a1e3548c8e2b010a57a3d"
+           ],
+           "reported_round_count": 1
+          },
+          "amount_usd": 10000000,
+          "round_type": "series-a",
+          "announced_date": "2024-03-11"
+         },
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": "https://www.linkedin.com/company/superagi",
+          "actor": "apify_funding_atomus",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_418f3a1e3548c8e2b010a57a3d",
+          "provider_call_ids": [
+           "pc_418f3a1e3548c8e2b010a57a3d"
+          ]
+         },
+         "status": "proven",
+         "dimension": "funding",
+         "confidence": "medium",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/superagi",
+         "evidence_id": "fdr_https://www.linkedin.com/company/superagi_apify_funding_atom",
+         "observed_at": "2026-09-24T15:10:03.541Z",
+         "valid_until": null,
+         "derived_from": []
+        }
+       ],
+       "provider": "apify",
+       "route_id": null,
+       "actor_key": "apify_funding_atomus",
+       "capability": "claim_verification",
+       "source_url": "https://www.linkedin.com/company/superagi",
+       "entity_hint": {
+        "name": "SuperAGI",
+        "domain": "superagi.com",
+        "country": null,
+        "website": "https://superagi.com",
+        "external_ids": [
+         "li_company:91427575"
+        ],
+        "linkedin_company_url": "https://www.linkedin.com/company/superagi"
+       },
+       "observed_at": "2026-09-24T15:10:03.541Z",
+       "plan_version": null,
+       "observation_id": "obs_vfy_fdr_https://www.linkedin.com/company/superagi_apify_fund",
+       "provider_call_id": "pc_418f3a1e3548c8e2b010a57a3d",
+       "source_record_id": null
+      }
+     ]
+    }
+   },
+   {
+    "company_key": "https://www.linkedin.com/company/how-to-ai-guide",
+    "company_name": "How to AI",
+    "completed_operations": [
+     "verify:apify_funding_atomus"
+    ],
+    "snapshot": {
+     "observations": [
+      {
+       "version": "candidate-observation-v1",
+       "evidence": [
+        {
+         "value": {
+          "name": "How to AI",
+          "domain": "how-to-ai.guide",
+          "linkedin_company_url": "https://www.linkedin.com/company/how-to-ai-guide"
+         },
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": "https://www.linkedin.com/company/how-to-ai-guide",
+          "actor": "apify_linkedin_company_search",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_40b1dcde9bfbb83eed02a5f529"
+         },
+         "status": "proven",
+         "dimension": "identity",
+         "confidence": "high",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/how-to-ai-guide",
+         "evidence_id": "ev_e7c6aa54b314ccb8c7f5cbc2",
+         "observed_at": "2026-09-24T15:08:28.853Z",
+         "valid_until": null,
+         "derived_from": []
+        },
+        {
+         "value": {
+          "max": 50,
+          "min": 11,
+          "source": "linkedin_declared"
+         },
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_search",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_40b1dcde9bfbb83eed02a5f529"
+         },
+         "status": "plausible",
+         "authority": {
+          "rule": "no_proving_rule",
+          "claim": "company_size",
+          "level": "plausible",
+          "reason": "apify_linkedin_company_search declared_size_band can suggest company_size but no rule lets it prove it",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "company_size_band",
+         "confidence": "medium",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/how-to-ai-guide",
+         "evidence_id": "ev_f25e710f120014d5073869dd",
+         "observed_at": "2026-09-24T15:08:28.853Z",
+         "valid_until": "2026-12-23T15:08:28.853Z",
+         "derived_from": []
+        },
+        {
+         "value": 100,
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_search",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_40b1dcde9bfbb83eed02a5f529"
+         },
+         "status": "plausible",
+         "authority": {
+          "rule": "no_proving_rule",
+          "claim": "associated_members",
+          "level": "plausible",
+          "reason": "apify_linkedin_company_search associated_member_count can suggest associated_members but no rule lets it prove it",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "linkedin_member_count",
+         "confidence": "medium",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/how-to-ai-guide",
+         "evidence_id": "ev_3ca28dd00e158808224fbd35",
+         "observed_at": "2026-09-24T15:08:28.853Z",
+         "valid_until": "2026-12-23T15:08:28.853Z",
+         "derived_from": []
+        },
+        {
+         "value": "Business Content",
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_search",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_40b1dcde9bfbb83eed02a5f529"
+         },
+         "status": "plausible",
+         "authority": {
+          "rule": "no_proving_rule",
+          "claim": "industry",
+          "level": "plausible",
+          "reason": "apify_linkedin_company_search industry_taxonomy can suggest industry but no rule lets it prove it",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "industry",
+         "confidence": "low",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/how-to-ai-guide",
+         "evidence_id": "ev_4451f4ad312f44a672e2255a",
+         "observed_at": "2026-09-24T15:08:28.853Z",
+         "valid_until": null,
+         "derived_from": []
+        }
+       ],
+       "provider": "apify",
+       "route_id": "general_company_discovery:apify_linkedin_company_search",
+       "actor_key": "apify_linkedin_company_search",
+       "capability": "general_company_discovery",
+       "source_url": "https://www.linkedin.com/company/how-to-ai-guide",
+       "entity_hint": {
+        "name": "How to AI",
+        "domain": "how-to-ai.guide",
+        "country": null,
+        "website": "https://how-to-ai.guide",
+        "external_ids": [
+         "li_company:96214400"
+        ],
+        "linkedin_company_url": "https://www.linkedin.com/company/how-to-ai-guide"
+       },
+       "observed_at": "2026-09-24T15:08:28.853Z",
+       "plan_version": 1,
+       "observation_id": "obs_9080f28bb669f35d5ef03726",
+       "provider_call_id": "pc_40b1dcde9bfbb83eed02a5f529",
+       "source_record_id": "96214400"
+      },
+      {
+       "version": "candidate-observation-v1",
+       "evidence": [
+        {
+         "value": {
+          "name": "How to AI",
+          "domain": "how-to-ai.guide",
+          "linkedin_company_url": "https://www.linkedin.com/company/how-to-ai-guide"
+         },
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": "https://www.linkedin.com/company/how-to-ai-guide",
+          "actor": "apify_linkedin_company_details",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59"
+         },
+         "status": "proven",
+         "dimension": "identity",
+         "confidence": "high",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/how-to-ai-guide",
+         "evidence_id": "ev_d9df40bb63793f87ad21dc54",
+         "observed_at": "2026-09-24T15:09:00.989Z",
+         "valid_until": null,
+         "derived_from": []
+        },
+        {
+         "value": "New York City, NY, United States; Hong Kong, Hong Kong",
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_details",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59"
+         },
+         "status": "proven",
+         "authority": {
+          "rule": "li_record_structured_country",
+          "claim": "country",
+          "level": "proven",
+          "reason": "structured company locations, each with its country \u2014 presence in a market, not headquarters",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "geography",
+         "confidence": "high",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/how-to-ai-guide",
+         "evidence_id": "ev_c566da026d8981ebb53cc492",
+         "observed_at": "2026-09-24T15:09:00.989Z",
+         "valid_until": null,
+         "derived_from": []
+        },
+        {
+         "value": {
+          "max": 50,
+          "min": 11,
+          "source": "linkedin_declared"
+         },
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_details",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59"
+         },
+         "status": "proven",
+         "authority": {
+          "rule": "li_record_declared_size_band",
+          "claim": "company_size",
+          "level": "proven",
+          "reason": "the company's own declared size band on its LinkedIn record (About tab) \u2014 a band, not a staff count",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "company_size_band",
+         "confidence": "high",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/how-to-ai-guide",
+         "evidence_id": "ev_ebcdbe1d97182eb2dd1eb2c2",
+         "observed_at": "2026-09-24T15:09:00.989Z",
+         "valid_until": "2026-12-23T15:09:00.989Z",
+         "derived_from": []
+        },
+        {
+         "value": 100,
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_details",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59"
+         },
+         "status": "proven",
+         "authority": {
+          "rule": "li_record_associated_members",
+          "claim": "associated_members",
+          "level": "proven",
+          "reason": "LinkedIn's count of members who list the company as a current position \u2014 not staff, and no size claim",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "linkedin_member_count",
+         "confidence": "high",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/how-to-ai-guide",
+         "evidence_id": "ev_96d0119e8e129d1ad971970b",
+         "observed_at": "2026-09-24T15:09:00.989Z",
+         "valid_until": "2026-12-23T15:09:00.989Z",
+         "derived_from": []
+        },
+        {
+         "value": "Business Content",
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": null,
+          "actor": "apify_linkedin_company_details",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59"
+         },
+         "status": "plausible",
+         "authority": {
+          "rule": "no_proving_rule",
+          "claim": "industry",
+          "level": "plausible",
+          "reason": "apify_linkedin_company_details industry_taxonomy can suggest industry but no rule lets it prove it",
+          "version": "evidence-authority-v1"
+         },
+         "dimension": "industry",
+         "confidence": "low",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/how-to-ai-guide",
+         "evidence_id": "ev_7397a7697682678a5d32abe8",
+         "observed_at": "2026-09-24T15:09:00.989Z",
+         "valid_until": null,
+         "derived_from": []
+        }
+       ],
+       "provider": "apify",
+       "route_id": null,
+       "actor_key": "apify_linkedin_company_details",
+       "capability": "company_enrichment",
+       "source_url": "https://www.linkedin.com/company/how-to-ai-guide",
+       "entity_hint": {
+        "name": "How to AI",
+        "domain": "how-to-ai.guide",
+        "country": "hong kong",
+        "website": "https://how-to-ai.guide",
+        "external_ids": [
+         "li_company:96214400"
+        ],
+        "linkedin_company_url": "https://www.linkedin.com/company/how-to-ai-guide"
+       },
+       "observed_at": "2026-09-24T15:09:00.989Z",
+       "plan_version": 1,
+       "observation_id": "obs_5e72ef79c4795fbe73b410c5",
+       "provider_call_id": "pc_fa16e2f313dd06bae6fc076e59",
+       "source_record_id": "96214400"
+      },
+      {
+       "version": "candidate-observation-v1",
+       "evidence": [
+        {
+         "value": {
+          "claim": "funding_record",
+          "record": {
+           "actor": "apify_funding_atomus",
+           "rounds": [],
+           "provider": "apify",
+           "source_url": "https://www.linkedin.com/company/how-to-ai-guide",
+           "observed_at": "2026-09-21",
+           "completeness": null,
+           "history_complete": null,
+           "provider_call_id": "pc_418f3a1e3548c8e2b010a57a3d",
+           "provider_call_ids": [
+            "pc_418f3a1e3548c8e2b010a57a3d"
+           ],
+           "reported_round_count": null
+          },
+          "amount_usd": null,
+          "round_type": null,
+          "announced_date": null
+         },
+         "method": "provider_field",
+         "origin": "lead_mission",
+         "source": {
+          "url": "https://www.linkedin.com/company/how-to-ai-guide",
+          "actor": "apify_funding_atomus",
+          "excerpt": null,
+          "provider": "apify",
+          "provider_call_id": "pc_418f3a1e3548c8e2b010a57a3d",
+          "provider_call_ids": [
+           "pc_418f3a1e3548c8e2b010a57a3d"
+          ]
+         },
+         "status": "plausible",
+         "dimension": "funding",
+         "confidence": "medium",
+         "mission_id": "1156c062-8cb8-42c7-add8-e918cce6997d",
+         "company_key": "https://www.linkedin.com/company/how-to-ai-guide",
+         "evidence_id": "fdr_https://www.linkedin.com/company/how-to-ai-guide_apify_fundi",
+         "observed_at": "2026-09-24T15:10:03.541Z",
+         "valid_until": null,
+         "derived_from": []
+        }
+       ],
+       "provider": "apify",
+       "route_id": null,
+       "actor_key": "apify_funding_atomus",
+       "capability": "claim_verification",
+       "source_url": "https://www.linkedin.com/company/how-to-ai-guide",
+       "entity_hint": {
+        "name": "How to AI",
+        "domain": "how-to-ai.guide",
+        "country": null,
+        "website": "https://how-to-ai.guide",
+        "external_ids": [
+         "li_company:96214400"
+        ],
+        "linkedin_company_url": "https://www.linkedin.com/company/how-to-ai-guide"
+       },
+       "observed_at": "2026-09-24T15:10:03.541Z",
+       "plan_version": null,
+       "observation_id": "obs_vfy_fdr_https://www.linkedin.com/company/how-to-ai-guide_api",
+       "provider_call_id": "pc_418f3a1e3548c8e2b010a57a3d",
+       "source_record_id": null
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "discovery_source_state": {
+  "stop_reason": "candidate_budget_spent",
+  "exhausted": true,
+  "raw_rows": 2
+ },
+ "workbench_mission_view_as_recorded": {
+  "counts": {
+   "pending": 1,
+   "discovered": 2,
+   "ineligible": 1,
+   "exact_match": 0,
+   "low_priority": 0,
+   "screened_out": 0,
+   "investigating": 0,
+   "worth_considering": 0,
+   "strong_opportunity": 0,
+   "identity_unresolved": 0
+  },
+  "evidence_gaps": {
+   "blocked": 0,
+   "pending": 1,
+   "version": "evidence-gap-router-v1",
+   "capability_gaps": [
+    {
+     "claim": "recently_funded",
+     "routes": [
+      {
+       "why": "apify_funding_atomus already answered for this company",
+       "actor": "apify_funding_atomus"
+      }
+     ],
+     "dimension": "funding",
+     "candidates": 1,
+     "deferred_to": null
+    }
+   ],
+   "with_executable_route": 1,
+   "unresolved_hard_checks": {
+    "hiring": 1,
+    "funding": 1,
+    "industry": 2
+   }
+  }
+ },
+ "continuation_as_recorded": {
+  "slice_1": {
+   "decision": "verification_required",
+   "qualified": 0,
+   "requested": 1,
+   "frontier_remaining": 0,
+   "continuations_used": 1,
+   "cost_units_used": 2,
+   "barren_slices": 0
+  },
+  "barren_slices_after": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "provider_calls_after_slice_1": 0,
+  "queue": "failed",
+  "terminal_reason": "retry_budget_exhausted",
+  "task_terminal_status": "retry_budget_exhausted"
+ },
+ "run_outcome_as_recorded": {
+  "gaps": [],
+  "spend": {
+   "usd_reported": 0.0242,
+   "provider_calls": 3,
+   "credits_charged": 3,
+   "reused_operations": 0,
+   "unsettled_operations": 0
+  },
+  "state": "PARTIALLY_SATISFIED",
+  "funnel": {
+   "deferred": 0,
+   "enriched": 2,
+   "excluded": [],
+   "cited_rows": 0,
+   "discovered": 2,
+   "shortlisted": 2,
+   "hiring_refuted": 0,
+   "hiring_verified": 0,
+   "identity_resolved": 2,
+   "hiring_evidence_unavailable": 2
+  },
+  "version": "run-outcome-v1",
+  "requested": 1,
+  "persistence": {
+   "leads_written": 0,
+   "signals_written": 0
+  },
+  "continuation": {
+   "reason": null,
+   "required": true,
+   "resumable": true
+  },
+  "qualification": {
+   "eligible": 0,
+   "rejected": 1,
+   "canonical": {
+    "source": "workbench_mission_view",
+    "pending": 1,
+    "qualified": 0,
+    "undecided": 0,
+    "discovered": 2,
+    "ineligible": 1,
+    "screened_out": 0,
+    "mission_dimensions": [
+     "company_size",
+     "company_stage",
+     "funding",
+     "geography",
+     "hiring",
+     "industry"
+    ]
+   },
+   "evaluated": 2,
+   "qualified": 0,
+   "not_reached": 0,
+   "not_reached_reason": null
+  },
+  "completed_capabilities": [
+   "general_company_discovery",
+   "company_identity_resolution",
+   "company_enrichment"
+  ]
+ }
+}

@@ -260,13 +260,35 @@ export function evidenceGapsFor(
   });
 }
 
+/**
+ * CAN THIS PENDING CANDIDATE STILL REACH QUALIFICATION?
+ *
+ * The ONE viability rule, read by the verifier phase (`verificationTargets`)
+ * and by continuation (`summarizeGaps` → `with_executable_route`) alike. A
+ * candidate can progress only when EVERY unknown hard claim still has an
+ * executable route that could close it. One blocked claim — funding Atomus
+ * answered with no rounds and no complete history, and nothing else permitted
+ * to ask — means no purchase on any OTHER claim can make it eligible.
+ *
+ * Canary 1156c062 (2026-09-24) is why this is one function: the verifier phase
+ * refused to buy for How to AI on exactly this rule, while continuation counted
+ * its open business-model and hiring gaps as work, re-queued it four times with
+ * nothing to buy, and the queue ended `retry_budget_exhausted`.
+ */
+export function canStillQualify(gaps: readonly Pick<EvidenceGap, "next">[]): boolean {
+  return gaps.length > 0 && gaps.every((g) => g.next === "verify");
+}
+
 export interface GapSummary {
   version: typeof EVIDENCE_GAP_ROUTER_VERSION;
   /** Pending candidates. */
   pending: number;
-  /** Pending candidates with at least one gap an executable route could close. */
+  /**
+   * Pending candidates that can still reach qualification: every unknown hard
+   * claim has an executable route (`canStillQualify`). What continuation reads.
+   */
   with_executable_route: number;
-  /** Pending candidates every one of whose gaps is blocked. */
+  /** Pending candidates with at least one hard claim no executable route can close. */
   blocked: number;
   /** Unknown hard checks across pending candidates, by criterion dimension. */
   unresolved_hard_checks: Record<string, number>;
@@ -279,7 +301,7 @@ export function summarizeGaps(pending: ReadonlyArray<{ gaps: readonly EvidenceGa
   const capability = new Map<string, GapSummary["capability_gaps"][number]>();
   let executable = 0;
   for (const p of pending) {
-    if (p.gaps.some((g) => g.next === "verify")) executable++;
+    if (canStillQualify(p.gaps)) executable++;
     for (const g of p.gaps) {
       unresolved[g.dimension] = (unresolved[g.dimension] ?? 0) + 1;
       if (g.next !== "blocked") continue;

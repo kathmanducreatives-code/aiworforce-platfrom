@@ -15,7 +15,7 @@ import {
   isServiceRoleBearer, jwtRole, looksLikeServiceCredential, resetServiceAuthCache,
 } from "../../../supabase/functions/_shared/serviceRoleAuth.ts";
 import {
-  applyTerminalPatch, finalQueueStatus, planTerminalReconciliation, RETRY_BUDGET_EXHAUSTED,
+  applyTerminalPatch, CONTINUATION_ATTEMPTS_EXHAUSTED, finalQueueStatus, planTerminalReconciliation, RETRY_BUDGET_EXHAUSTED,
   terminalReasonFor, terminalViolations, V2_MAX_ATTEMPTS, type TerminalRows,
 } from "../../../supabase/functions/_shared/leadMissionTerminal.ts";
 
@@ -124,7 +124,10 @@ Deno.test("the worker states the final status itself on the last attempt", () =>
   const resumable = { status: "continuation_required", terminal: false };
   assertEquals(finalQueueStatus(resumable, 4), "resumable");
   assertEquals(finalQueueStatus(resumable, V2_MAX_ATTEMPTS), "failed");
-  assertEquals(terminalReasonFor(resumable, V2_MAX_ATTEMPTS), RETRY_BUDGET_EXHAUSTED);
+  // A CLEAN last attempt that still asked to continue spent its allowance on
+  // work, not on failures; only an errored or aborted one is a retry failure.
+  assertEquals(terminalReasonFor(resumable, V2_MAX_ATTEMPTS), CONTINUATION_ATTEMPTS_EXHAUSTED);
+  assertEquals(terminalReasonFor({ ...resumable, error: "timeout" }, V2_MAX_ATTEMPTS), RETRY_BUDGET_EXHAUSTED);
   assertEquals(finalQueueStatus({ status: "quota_met", terminal: true }, 1), "complete");
   assertEquals(finalQueueStatus({ status: "failed:provider_failure", terminal: true }, 2), "failed");
 });

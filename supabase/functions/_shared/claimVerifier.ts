@@ -30,7 +30,7 @@ import {
 import type { ProviderCallSpec } from "./providerCallSpec.ts";
 import type { EvidenceItem } from "./candidateObservation.ts";
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
-import { evidenceGapsFor, type ClaimDefinition, CLAIM_REGISTRY } from "./evidenceGapRouter.ts";
+import { canStillQualify, evidenceGapsFor, type ClaimDefinition, CLAIM_REGISTRY } from "./evidenceGapRouter.ts";
 import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import type { TraceEventType } from "./missionTrace.ts";
 
@@ -202,9 +202,13 @@ export function verificationTargets(
     //
     // Open gaps routed to a verifier (this one, or another claim verifier) do
     // not block — those are the claims this phase exists to answer.
-    const blocking = gaps.find((g) => g !== mine && g.route?.actor !== verifier.route_actor && (
-      g.next !== "verify" || g.considered.some((r) => CHEAP_STAGE_CAPABILITIES.has(r.capability) && !r.tried)));
-    if (blocking) continue;
+    // THE ONE VIABILITY RULE (`canStillQualify`), shared with continuation: a
+    // hard claim no executable route can close means nothing bought here can
+    // make the candidate eligible.
+    if (!canStillQualify(gaps)) continue;
+    const cheapFirst = gaps.find((g) => g !== mine && g.route?.actor !== verifier.route_actor &&
+      g.considered.some((r) => CHEAP_STAGE_CAPABILITIES.has(r.capability) && !r.tried));
+    if (cheapFirst) continue;
     out.push({
       company_key: c.company_key, name: c.name, domain: c.domain, linkedin_url: c.linkedin_url,
       criterion: { criterion_id: mine.criterion_id, dimension: mine.dimension, value: criteriaValue(mine.criterion_id) },

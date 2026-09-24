@@ -289,7 +289,12 @@ export function decideAutoContinuation(
     // executor count — a READY actor whose result cannot move the claim does
     // not. Bounded by the same ceilings as every other slice.
     const verifiable = Math.max(0, Math.trunc(i.verificationRoutesRemain ?? 0));
-    if (verifiable > 0 && i.continuationsUsed < i.maxContinuations && i.costUnitsUsed < i.maxCostUnits) {
+    // NO ZERO-PURCHASE LOOP. `verificationRoutesRemain` counts only candidates
+    // that can still qualify (`canStillQualify`, the verifier phase's own rule).
+    // As a backstop, verification slices that change nothing are bounded like
+    // every other barren slice: after MAX_BARREN_SLICES the pool is an answer.
+    if (verifiable > 0 && (i.barrenSlices ?? 0) < MAX_BARREN_SLICES &&
+        i.continuationsUsed < i.maxContinuations && i.costUnitsUsed < i.maxCostUnits) {
       return {
         continue: true,
         reason: "verification_required",

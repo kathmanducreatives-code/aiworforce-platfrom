@@ -30,8 +30,19 @@ import { queueStatusFor, type QueueReleaseStatus } from "./leadMissionV2Request.
  */
 export const V2_MAX_ATTEMPTS = 5;
 
-/** The terminal reason a mission that ran out of attempts carries. */
+/**
+ * The terminal reason for a mission whose attempts were spent by a real,
+ * retriable execution failure — an error or an abort on the last attempt.
+ */
 export const RETRY_BUDGET_EXHAUSTED = "retry_budget_exhausted";
+/**
+ * The terminal reason for a mission whose last attempt ended CLEANLY and still
+ * asked to continue: every slice ran, nothing failed, and the queue's attempt
+ * allowance was spent on real work. Not a reliability failure, and not to be
+ * reported as one. (An evidence-exhausted mission never reaches this: it ends
+ * `search_exhausted` through continuation — `canStillQualify`.)
+ */
+export const CONTINUATION_ATTEMPTS_EXHAUSTED = "continuation_attempts_exhausted";
 
 export type QueueTerminalStatus = "complete" | "failed" | "cancelled";
 
@@ -49,10 +60,13 @@ export function finalQueueStatus(
 }
 
 export function terminalReasonFor(
-  outcome: { status: string; terminal: boolean },
+  outcome: { status: string; terminal: boolean; error?: unknown; aborted?: boolean },
   attempts: number,
 ): string {
-  if (!outcome.terminal && attempts >= V2_MAX_ATTEMPTS) return RETRY_BUDGET_EXHAUSTED;
+  if (!outcome.terminal && attempts >= V2_MAX_ATTEMPTS) {
+    const failedRun = !!outcome.error || outcome.aborted === true;
+    return failedRun ? RETRY_BUDGET_EXHAUSTED : CONTINUATION_ATTEMPTS_EXHAUSTED;
+  }
   return outcome.status;
 }
 

@@ -312,8 +312,12 @@ Deno.test("replenishment that widens nothing stops: barren slices end it (canary
   assert(!d.continue, d.detail);
   assertEquals(d.reason, "no_progress");
   assert(/widened nothing/.test(d.detail), d.detail);
-  // Verifying before discovering still outranks it: a pending candidate with a
-  // ready route is closer to a lead than any page the route might add.
-  assertEquals(decideAutoContinuation({ ...base, barrenSlices: 2, verificationRoutesRemain: 1 }).reason,
+  // Verifying before discovering outranks WIDENING — but not a barren streak.
+  // Two slices that changed nothing are an answer even when a candidate still
+  // reads as verifiable: that is the zero-purchase loop canary 1156c062 ran
+  // four times before the queue gave up (continuationViability.test.ts).
+  assertEquals(decideAutoContinuation({ ...base, barrenSlices: 1, verificationRoutesRemain: 1 }).reason,
     "verification_required");
+  assertEquals(decideAutoContinuation({ ...base, barrenSlices: 2, verificationRoutesRemain: 1 }).reason,
+    "no_progress");
 });
