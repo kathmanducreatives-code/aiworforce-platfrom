@@ -51,8 +51,23 @@ export const ACTOR_READINESS: readonly ActorReadinessRecord[] = Object.freeze([
     reason: "company-scoped open-role check", live_evidence: "canary 03f4c9c6 (2026-09-17)" },
   { actor: "apify_linkedin_company_search", capability: "company_identity_resolution", readiness: "READY",
     reason: "guarded name search when no LinkedIn URL is known", live_evidence: "P2 canaries (2026-09-16)" },
-  { actor: "apify_linkedin_company_search", capability: "general_company_discovery", readiness: "CARDED_BUT_NOT_LIVE",
-    reason: "carded for company_discovery; never run as a V2 discovery route", live_evidence: null },
+  // ── READY: 2026-09-24, THROUGH THE SPINE ────────────────────────────────
+  //
+  // Local canary task 89adf8fb (plan 55635e2c, run_budget $0.04 / 2
+  // candidates): "Find 1 US company with 11–50 employees that raised funding
+  // in the last 2 years." Company search (full mode, 2 rows) → CandidateObservation
+  // → triage ranked only → one batched company-details read → the DECLARED
+  // size band proven on the company record, LinkedIn members kept as
+  // information (companySize.ts) → country grounded → Atomus for both →
+  // recently_funded PASS/FAIL/PENDING → eligibility → Workbench → terminal
+  // `search_exhausted`. BigRio (11-50, 124 members) pending on funding;
+  // Talentify.io (11-50, 275 members) ineligible on a 2017 round. 3 provider
+  // calls, each spec-compiled, guarded and receipt-settled: $0.0242. No
+  // replanning after the candidate allowance was spent; no Pvalyou,
+  // Firecrawl, Datahyena or job actor.
+  { actor: "apify_linkedin_company_search", capability: "general_company_discovery", readiness: "READY",
+    reason: "candidate generator for general company discovery missions (full mode, declared size band plausible until the company record proves it); never a qualifying fact on its own",
+    live_evidence: "spine canary 2026-09-24 task 89adf8fb: search→details→band+country grounding→Atomus→eligibility→Workbench, $0.0242 settled" },
   { actor: "apify_linkedin_company_details", capability: "company_enrichment", readiness: "READY",
     reason: "declared size band/industry/HQ by LinkedIn URL", live_evidence: "canary 2a215d44 (2026-09-17)" },
   { actor: "apify_yc_companies_memo23", capability: "startup_company_discovery", readiness: "READY",

@@ -38,9 +38,9 @@ Deno.test("PRODUCTION: READY runs; carded, experimental and needs-work do not", 
 Deno.test("PROVIDER PROBE: only the named carded routes open, and only in probe mode", () => {
   const probe = readinessPolicy({ mode: "provider_probe", probe_routes: [DATAHYENA] });
   assertEquals(probe.decide("apify_funding_rounds_datahyena", "funding_signal_discovery").via, "provider_probe");
-  // A carded route the probe does not NAME stays shut. (The funding pair used
-  // to be the example here; it has been READY since 2026-09-22.)
-  assertFalse(probe.decide("apify_linkedin_company_search", "general_company_discovery").executable, "not named: still shut");
+  // A carded route the probe does not NAME stays shut. (The funding pair, then
+  // company-search discovery, used to be the example here; both are READY now.)
+  assertFalse(probe.decide("apify_yc_companies_solidcode", "startup_company_discovery").executable, "not named: still shut");
   assertFalse(probe.decide("apify_linkedin_company_employees", "hiring_verification").executable,
     "a probe opens carded routes, never NEEDS_PROVIDER_WORK");
   // The same list in production mode opens nothing.

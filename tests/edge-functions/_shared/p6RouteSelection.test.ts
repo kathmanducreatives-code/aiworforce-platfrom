@@ -65,13 +65,17 @@ Deno.test("a hiring-led mission enters through the role, on a READY actor, with 
   assertFalse(plan.entry_selection!.considered.some((c) => c.capability === "startup_company_discovery"));
 });
 
-Deno.test("PRODUCTION: an entry never run live is not taken — the mission has no runnable entry", () => {
+Deno.test("PRODUCTION: an entry never run live is not taken — profile and funding missions enter by the READY company search", () => {
+  // general_company_discovery has been READY since canary 89adf8fb (2026-09-24).
+  // Funding DISCOVERY is still carded: it is weighed, refused, and the mission
+  // falls through to the proven route — funding is then VERIFIED per company.
   for (const m of [FUNDED, PROFILE]) {
     const plan = buildCapabilityGraph(m, V2);
-    assertFalse(plan.entry_selection!.runnable, "no READY discovery route serves it");
-    assert(plan.entry_selection!.considered.every((c) => !c.applies), "every row was refused");
-    assertEquals(plan.entry_selection!.mode, "production");
-    assert(plan.executability!.unexecutable.some((u) => u.role === "entry" && u.readiness === "CARDED_BUT_NOT_LIVE"));
+    assert(plan.entry_selection!.runnable);
+    assertEquals([plan.entry_capability, plan.entry_selection!.mode, plan.entry_selection!.readiness],
+      ["general_company_discovery", "production", "READY"]);
+    const funding = plan.entry_selection!.considered.filter((c) => c.capability === "funding_signal_discovery");
+    assert(funding.every((c) => !c.applies), "the unproven funding-discovery row is weighed and refused");
     assertFalse(plan.allowed_providers.includes("apify_funding_rounds_datahyena"), "no unproven actor is handed on");
     assertFalse(plan.allowed_providers.includes("apify_yc_companies_solidcode"));
   }
@@ -83,10 +87,13 @@ Deno.test("PROVIDER PROBE: the opened route is taken, and the plan says it is a 
   assert(plan.entry_selection!.runnable);
   assertEquals([plan.entry_selection!.mode, plan.entry_selection!.readiness], ["provider_probe", "CARDED_BUT_NOT_LIVE"]);
   assert(plan.routing_advisories.some((a) => a.startsWith("PROVIDER PROBE") && a.includes("apify_funding_rounds_datahyena")));
-  // A probe opens exactly what it names: the profile route stays shut in a funding-only probe.
+  // A probe opens exactly what it names — and leaves READY routes READY: a
+  // profile mission under a funding-only probe enters by production readiness.
   const fundingOnly = { ...V2, readiness: readinessPolicy({ mode: "provider_probe",
     probe_routes: ["apify_funding_rounds_datahyena|funding_signal_discovery"] }) };
-  assertFalse(buildCapabilityGraph(PROFILE, fundingOnly).entry_selection!.runnable);
+  const profile = buildCapabilityGraph(PROFILE, fundingOnly);
+  assertEquals([profile.entry_capability, profile.entry_selection!.readiness], ["general_company_discovery", "READY"]);
+  assertFalse(profile.allowed_providers.includes("apify_funding_rounds_datahyena"), "the probe's route is not this mission's");
 });
 
 Deno.test("the ENTRY GATE is the readiness decision: demote the job actor and a hiring mission cannot enter by jobs", () => {
@@ -106,7 +113,10 @@ Deno.test("the ENTRY GATE is the readiness decision: demote the job actor and a 
 
 Deno.test("EXPERIMENTAL runs only when explicitly allowed", () => {
   const exp = { "apify_funding_rounds_datahyena|funding_signal_discovery": "EXPERIMENTAL" as const };
-  assertFalse(buildCapabilityGraph(FUNDED, { ...V2, readiness: readinessPolicy({ overrides: exp }) }).entry_selection!.runnable);
+  // Not allowed: the funding-discovery entry is refused and the READY company search is taken instead.
+  const refused = buildCapabilityGraph(FUNDED, { ...V2, readiness: readinessPolicy({ overrides: exp }) });
+  assert(refused.entry_capability !== "funding_signal_discovery");
+  assertFalse(refused.allowed_providers.includes("apify_funding_rounds_datahyena"));
   const allowed = readinessPolicy({ overrides: exp, allow_experimental: ["apify_funding_rounds_datahyena|funding_signal_discovery"] });
   assertEquals(buildCapabilityGraph(FUNDED, { ...V2, readiness: allowed }).entry_capability, "funding_signal_discovery");
 });

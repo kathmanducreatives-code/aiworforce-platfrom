@@ -35,6 +35,7 @@
 // what may be said about them and nothing else.
 
 import { canonicalProviderCostUsd, type ProviderCostColumns } from "./executionLedger.ts";
+import { decisionSummary, type WorkbenchCounts } from "./workbenchMissionView.ts";
 
 export const RUN_OUTCOME_VERSION = "run-outcome-v1" as const;
 
@@ -128,6 +129,32 @@ export interface QualificationFacts {
   not_reached: number;
   /** Why nothing was evaluated, when nothing was. */
   not_reached_reason: string | null;
+  /**
+   * THE CANONICAL DECISIONS, when the run produced them (Lead V2).
+   *
+   * The Workbench's own counts (`workbench_mission_view.counts`) summarised by
+   * the same `decisionSummary` the continuation gate reads. When present, every
+   * field above is DERIVED from this, so the completion message, the run list
+   * and the Workbench describe one set of decisions. Null for a run that
+   * predates the canonical view; the fields above are then the legacy counters.
+   */
+  canonical: CanonicalDecisionFacts | null;
+}
+
+/** Candidate state as the canonical eligibility decided it — nothing else. */
+export interface CanonicalDecisionFacts {
+  source: "workbench_mission_view";
+  discovered: number;
+  /** Surfaced leads: every eligible candidate, whatever its label. */
+  qualified: number;
+  /** A hard requirement not yet established: evidence is owed, nothing is disproven. */
+  pending: number;
+  /** A hard requirement disproven on verified evidence. */
+  ineligible: number;
+  /** Removed by the free pre-pass, before any paid research. */
+  screened_out: number;
+  /** Still owed investigation or identity — work, not a decision. */
+  undecided: number;
 }
 
 export interface PersistenceFacts {
@@ -180,7 +207,12 @@ export function buildRunOutcome(facts: RunFacts): RunOutcomeV1 {
     // Nothing delivered, nothing left to do, nothing broken: the honest answer
     // is that the request was served and came up short, not that it failed.
     : "PARTIALLY_SATISFIED";
-  return { version: RUN_OUTCOME_VERSION, state, ...facts };
+  // `canonical` is always present on the record — null when the run has no
+  // canonical view — so a stored outcome round-trips field for field.
+  return {
+    version: RUN_OUTCOME_VERSION, state, ...facts,
+    qualification: { ...facts.qualification, canonical: facts.qualification.canonical ?? null },
+  };
 }
 
 // ─────────────────────────────────────────────────────────── the sentences ───
@@ -232,6 +264,19 @@ export function renderSpendClause(o: RunOutcomeV1): string {
  */
 export function renderQualificationClause(o: RunOutcomeV1): string {
   const q = o.qualification;
+  // THE CANONICAL DECISIONS, said as the Workbench says them.
+  const c = q.canonical;
+  if (c) {
+    const decided = c.qualified + c.pending + c.ineligible;
+    if (decided === 0 && c.undecided === 0) return "No company reached qualification.";
+    const parts = [`${c.qualified} qualified`];
+    if (c.pending > 0) parts.push(`${c.pending} pending (a requirement is not yet established)`);
+    if (c.ineligible > 0) parts.push(`${c.ineligible} ruled out`);
+    const head = `${decided} ${decided === 1 ? "company was" : "companies were"} checked against your requirements: ${parts.join(", ")}.`;
+    return c.undecided > 0
+      ? `${head} ${c.undecided} ${c.undecided === 1 ? "was" : "were"} not reached.`
+      : head;
+  }
   if (q.eligible === 0) {
     return "No company reached qualification.";
   }
@@ -261,6 +306,12 @@ export function renderQualificationClause(o: RunOutcomeV1): string {
  * conflating them is what let a scheduling failure read as a business answer.
  */
 export function renderOutstandingClause(o: RunOutcomeV1): string {
+  // The canonical decisions already say what is owed (pending, not reached),
+  // in `renderQualificationClause`. A legacy hiring counter must not add a
+  // second account of it — a funding mission was told "2 still need a hiring
+  // check" (canary 89adf8fb) because the legacy funnel counts every company
+  // without a hiring verdict, hiring requirement or not.
+  if (o.qualification.canonical) return "";
   const parts: string[] = [];
   const f = o.funnel;
   if (f.hiring_evidence_unavailable > 0) {
@@ -368,6 +419,7 @@ export function readPersistedRunOutcome(result: unknown): RunOutcomeV1 | null {
       not_reached: num(q.not_reached),
       not_reached_reason: typeof q.not_reached_reason === "string"
         ? q.not_reached_reason : null,
+      canonical: readCanonical(q.canonical),
     },
     persistence: {
       leads_written: num(pr.leads_written), signals_written: num(pr.signals_written),
@@ -386,6 +438,37 @@ export function readPersistedRunOutcome(result: unknown): RunOutcomeV1 | null {
   };
 }
 
+function readCanonical(v: unknown): CanonicalDecisionFacts | null {
+  const c = rec(v);
+  if (c.source !== "workbench_mission_view") return null;
+  return {
+    source: "workbench_mission_view",
+    discovered: num(c.discovered), qualified: num(c.qualified), pending: num(c.pending),
+    ineligible: num(c.ineligible), screened_out: num(c.screened_out), undecided: num(c.undecided),
+  };
+}
+
+/**
+ * The canonical decisions a result carries, or null.
+ *
+ * Read from `workbench_mission_view.counts` — the counts the Workbench renders —
+ * through `decisionSummary`, the same summary the continuation gate uses. There
+ * is no second derivation here: a run_outcome that disagreed with the Workbench
+ * would be two interpretations of one set of candidates.
+ */
+export function canonicalDecisionFacts(result: unknown): CanonicalDecisionFacts | null {
+  const counts = rec(rec(rec(result).workbench_mission_view).counts);
+  if (Object.keys(counts).length === 0) return null;
+  const full: WorkbenchCounts = {
+    discovered: num(counts.discovered), screened_out: num(counts.screened_out),
+    investigating: num(counts.investigating), identity_unresolved: num(counts.identity_unresolved),
+    pending: num(counts.pending), exact_match: num(counts.exact_match),
+    strong_opportunity: num(counts.strong_opportunity), worth_considering: num(counts.worth_considering),
+    low_priority: num(counts.low_priority), ineligible: num(counts.ineligible),
+  };
+  return { source: "workbench_mission_view", ...decisionSummary(full) };
+}
+
 /**
  * A one-line verdict for a list, from the same record.
  *
@@ -399,10 +482,13 @@ export function renderRunHeadline(o: RunOutcomeV1): string {
   const money = o.spend.credits_charged > 0
     ? `${o.spend.credits_charged} ${o.spend.credits_charged === 1 ? "credit" : "credits"}`
     : "no credits";
+  const c = o.qualification.canonical;
   const tail = o.continuation.required && o.continuation.resumable
     ? ", can be continued"
     : o.qualification.not_reached > 0
     ? `, ${o.qualification.not_reached} not yet evaluated`
+    : c && c.pending > 0
+    ? `, ${c.pending} pending evidence`
     : "";
   return `${led} of ${o.requested} saved · ${money}${tail}`;
 }
@@ -541,6 +627,7 @@ export function readFactsFromResult(result: unknown, requested: number): RunFact
   const countHiring = (stage: string) =>
     companies.filter((c) => c.hiring === stage).length;
 
+  const canonical = canonicalDecisionFacts(result);
   const eligible = num(paths.eligible ?? progress.eligible_opportunities);
   const evaluated = num(paths.reached_evaluation);
   const completed = Array.isArray(state.completed_capabilities)
@@ -574,19 +661,40 @@ export function readFactsFromResult(result: unknown, requested: number): RunFact
       excluded: Object.entries(rec(progress.exclusion_reasons))
         .map(([reason, count]) => ({ reason, count: num(count) })),
     },
-    qualification: {
-      eligible, evaluated,
-      qualified: num(progress.qualified_companies),
-      rejected: Math.max(0, evaluated - num(progress.qualified_companies)),
-      not_reached: Math.max(0, eligible - evaluated),
-      // THE SENTENCE THAT DID NOT EXIST. Only set when nothing was evaluated,
-      // because that is the only case a verdict may not be reported for.
-      not_reached_reason: eligible > 0 && evaluated === 0
-        ? (typeof state.terminal_reason === "string" && state.terminal_reason
-          ? state.terminal_reason
-          : "the run stopped first")
-        : null,
-    },
+    qualification: canonical
+      // ONE INTERPRETATION. With the canonical view present, every count is
+      // derived from it: eligible = surfaced (every eligible candidate is a
+      // lead), evaluated = every candidate the canonical eligibility decided or
+      // is holding, rejected = hard claims disproven, not_reached = work still
+      // owed. The legacy `evaluation_paths` counters (canary 89adf8fb: "eligible
+      // 2, evaluated 0") are not read at all.
+      ? {
+        eligible: canonical.qualified,
+        evaluated: canonical.qualified + canonical.pending + canonical.ineligible,
+        qualified: canonical.qualified,
+        rejected: canonical.ineligible,
+        not_reached: canonical.undecided,
+        not_reached_reason: canonical.undecided > 0
+          ? (typeof state.terminal_reason === "string" && state.terminal_reason
+            ? state.terminal_reason
+            : "the run stopped first")
+          : null,
+        canonical,
+      }
+      : {
+        eligible, evaluated,
+        qualified: num(progress.qualified_companies),
+        rejected: Math.max(0, evaluated - num(progress.qualified_companies)),
+        not_reached: Math.max(0, eligible - evaluated),
+        // THE SENTENCE THAT DID NOT EXIST. Only set when nothing was evaluated,
+        // because that is the only case a verdict may not be reported for.
+        not_reached_reason: eligible > 0 && evaluated === 0
+          ? (typeof state.terminal_reason === "string" && state.terminal_reason
+            ? state.terminal_reason
+            : "the run stopped first")
+          : null,
+        canonical: null,
+      },
     persistence: {
       leads_written: num(persistence.persisted),
       signals_written: num(rec(r.lead_runtime).signals_written),

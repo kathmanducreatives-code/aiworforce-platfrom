@@ -307,7 +307,7 @@ Deno.test("adding a second route requires a valid amendment: trigger, readiness,
   };
   assertEquals(refused(add(), { continuation: true }), "continuation_holds_plan");
   assertEquals(refused(add({ actor_key: "apify_linkedin_company_employees", capability: "hiring_verification" })), "actor_not_ready");
-  assertEquals(refused(add({ actor_key: "apify_linkedin_company_search", capability: "general_company_discovery" })), "actor_not_ready",
+  assertEquals(refused(add({ actor_key: "apify_funding_rounds_datahyena", capability: "funding_signal_discovery" })), "actor_not_ready",
     "carded but never live as discovery");
   assertEquals(refused(add(), { summary: wave(plan, { admitted: { available: 9, target: 8 } }) }), "trigger_not_supported_by_feedback");
   assertEquals(refused(add(), { estimateUsd: () => 5 }), "no_budget_room");

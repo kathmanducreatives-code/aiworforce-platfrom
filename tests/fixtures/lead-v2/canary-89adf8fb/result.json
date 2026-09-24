@@ -1,0 +1,182 @@
+{
+ "_source": "local canary task 89adf8fb (2026-09-24), tasks.result \u2014 trimmed to what run_outcome and the Workbench read",
+ "terminal_status": "search_exhausted",
+ "workbench_mission_view": {
+  "stage": "complete",
+  "counts": {
+   "pending": 1,
+   "discovered": 2,
+   "ineligible": 1,
+   "exact_match": 0,
+   "low_priority": 0,
+   "screened_out": 0,
+   "investigating": 0,
+   "worth_considering": 0,
+   "strong_opportunity": 0,
+   "identity_unresolved": 0
+  },
+  "leads": [
+   {
+    "company": {
+     "name": "BigRio",
+     "key": "https://www.linkedin.com/company/bigrio"
+    },
+    "bucket": "pending",
+    "label": null,
+    "hard_checks": {
+     "funding": "unknown",
+     "geography": "pass",
+     "company_size": "pass"
+    }
+   },
+   {
+    "company": {
+     "name": "Talentify.io",
+     "key": "https://www.linkedin.com/company/talentify-io"
+    },
+    "bucket": "ineligible",
+    "label": null,
+    "hard_checks": {
+     "funding": "fail",
+     "geography": "pass",
+     "company_size": "pass"
+    }
+   }
+  ]
+ },
+ "evaluation_paths": {
+  "counts": {
+   "not_reached": 2,
+   "fabricated_pass": 0,
+   "model_evaluated": 0,
+   "fabricated_reject": 0,
+   "model_unavailable": 0,
+   "restored_decision": 0
+  },
+  "version": "evaluation-path-telemetry-v1",
+  "companies": [
+   {
+    "icp_fit": null,
+    "verdict": null,
+    "decision": null,
+    "grounded": false,
+    "company_key": "https://www.linkedin.com/company/bigrio",
+    "match_score": null,
+    "mission_fit": null,
+    "company_name": "BigRio",
+    "brain_outcome": null,
+    "decision_source": "not_evaluated",
+    "evaluation_path": "not_reached"
+   },
+   {
+    "icp_fit": null,
+    "verdict": null,
+    "decision": null,
+    "grounded": false,
+    "company_key": "https://www.linkedin.com/company/talentify-io",
+    "match_score": null,
+    "mission_fit": null,
+    "company_name": "Talentify.io",
+    "brain_outcome": null,
+    "decision_source": "not_evaluated",
+    "evaluation_path": "not_reached"
+   }
+  ],
+  "decided_by_model": 0,
+  "reached_evaluation": 0,
+  "decided_without_model": 0
+ },
+ "capability_execution_state": {
+  "progress": {
+   "stage": "qualified",
+   "evaluated": 2,
+   "in_progress": true,
+   "shortlisted": 2,
+   "accounts_found": 2,
+   "hiring_verified": 0,
+   "exclusion_reasons": {},
+   "identity_resolved": 2,
+   "companies_enriched": 2,
+   "identity_unresolved": 0,
+   "open_jobs_evaluated": 0,
+   "qualified_companies": 0,
+   "awaiting_external_run": false,
+   "eligible_opportunities": 2,
+   "decision_makers_verified": 0
+  },
+  "completed_capabilities": [
+   "general_company_discovery",
+   "company_identity_resolution",
+   "company_enrichment"
+  ],
+  "terminal_reason": null
+ },
+ "lead_resume_checkpoint": {
+  "companies": [
+   {
+    "company_name": "BigRio",
+    "hiring": "evidence_unavailable",
+    "identity": "resolved"
+   },
+   {
+    "company_name": "Talentify.io",
+    "hiring": "evidence_unavailable",
+    "identity": "resolved"
+   }
+  ]
+ },
+ "lead_library_persistence": {
+  "planned": 0,
+  "results": [],
+  "skipped": [],
+  "version": "lead-mission-persistence-projection-v1",
+  "persisted": 0
+ },
+ "run_outcome_as_recorded": {
+  "gaps": [],
+  "spend": {
+   "usd_reported": 0.0242,
+   "provider_calls": 3,
+   "credits_charged": 3,
+   "reused_operations": 0,
+   "unsettled_operations": 0
+  },
+  "state": "PARTIALLY_SATISFIED",
+  "funnel": {
+   "deferred": 0,
+   "enriched": 2,
+   "excluded": [],
+   "cited_rows": 0,
+   "discovered": 2,
+   "shortlisted": 2,
+   "hiring_refuted": 0,
+   "hiring_verified": 0,
+   "identity_resolved": 2,
+   "hiring_evidence_unavailable": 2
+  },
+  "version": "run-outcome-v1",
+  "requested": 1,
+  "persistence": {
+   "leads_written": 0,
+   "signals_written": 0
+  },
+  "continuation": {
+   "reason": null,
+   "required": false,
+   "resumable": true
+  },
+  "qualification": {
+   "eligible": 2,
+   "rejected": 0,
+   "evaluated": 0,
+   "qualified": 0,
+   "not_reached": 2,
+   "not_reached_reason": "the run stopped first"
+  },
+  "completed_capabilities": [
+   "general_company_discovery",
+   "company_identity_resolution",
+   "company_enrichment"
+  ]
+ }
+}

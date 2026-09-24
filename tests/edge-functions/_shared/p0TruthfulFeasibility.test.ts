@@ -69,23 +69,47 @@ const codes = (f: FeasibilityReport) => f.refusals.map((r) => r.code);
 
 // ── production: a route never proven live is refused, before any spend ───────
 
-Deno.test("PRODUCTION: profile and funding-first missions are refused while their discovery actors are unproven", () => {
+Deno.test("PRODUCTION: a profile mission runs on the READY company search; a funding requirement needs a HARD claim", () => {
+  // general_company_discovery has been READY since canary 89adf8fb (2026-09-24).
   const prod = readinessPolicy();
-  for (const [m, entry] of [
-    [parseLeadMissionDeterministic("Find US B2B SaaS companies."), "general_company_discovery"],
-    [mission("q4"), "general_company_discovery"],
-  ] as Array<[LeadMissionV1, string]>) {
-    const { plan, f, preflightBlocks } = enforce(m, prod);
-    assertFalse(plan.entry_selection!.runnable, "no READY entry");
-    assertEquals(plan.entry_capability, entry);
-    assertFalse(f.ok);
-    const refusal = f.refusals.find((r) => r.code === "entry_not_executable")!;
-    assert(refusal && /CARDED_BUT_NOT_LIVE/.test(refusal.message), refusal?.message);
-    assert(preflightBlocks.includes("request_not_feasible"), "blocked before the first paid call");
-    assertEquals(plan.steps.find((s) => s.capability === entry)!.providers, [], "no unproven actor is handed to the engine");
-  }
-  // The same missions under a probe that opens the routes run (below).
-  assert(enforce(mission("q4"), PROBE).f.ok);
+
+  // A profile mission: feasible, entered by the proven route.
+  const profile = enforce(parseLeadMissionDeterministic("Find US B2B SaaS companies."), prod);
+  assert(profile.plan.entry_selection!.runnable);
+  assertEquals(profile.plan.entry_capability, "general_company_discovery");
+  assert(profile.f.ok, JSON.stringify(profile.f.refusals));
+  assertEquals(profile.plan.steps.find((s) => s.capability === "general_company_discovery")!.providers,
+    ["apify_linkedin_company_search"]);
+
+  // The canary's own mission: funding is a HARD recently-funded claim, which
+  // the READY funding pair verifies per company after eligibility.
+  const CANARY = JSON.parse(Deno.readTextFileSync(new URL(
+    "../../fixtures/lead-v2/size-semantics-replay-2026-09-24/canary_companies.json", import.meta.url))).mission as LeadMissionV1;
+  const canary = enforce(CANARY, prod);
+  assertEquals(canary.plan.entry_capability, "general_company_discovery");
+  assert(canary.f.ok, JSON.stringify(canary.f.refusals));
+  assert(canary.f.requirements.some((r) => r.status === "satisfied" && r.by_capability === "funding_verification"),
+    JSON.stringify(canary.f.requirements));
+  assertFalse(canary.plan.allowed_providers.includes("apify_funding_rounds_datahyena"), "funding DISCOVERY is still unproven");
+
+  // q4 names funding only as a TARGET (no user-explicit provenance). A target
+  // never buys verification, and funding DISCOVERY is still carded, so nothing
+  // may establish it — refused truthfully, before the first paid call.
+  const q4 = enforce(mission("q4"), prod);
+  assert(q4.plan.entry_selection!.runnable, "the entry itself is READY now");
+  assertFalse(q4.f.ok);
+  assert(q4.f.refusals.some((r) => r.code === "no_requirement_provable" && /funding_signal_discovery/.test(r.message)),
+    JSON.stringify(q4.f.refusals));
+  assert(q4.preflightBlocks.includes("request_not_feasible"), "blocked before the first paid call");
+
+  // And an entry whose only actor is still carded is refused outright: demote
+  // the promoted route and the profile mission is blocked again.
+  const demoted = readinessPolicy({ overrides: { "apify_linkedin_company_search|general_company_discovery": "CARDED_BUT_NOT_LIVE" } });
+  const blocked = enforce(parseLeadMissionDeterministic("Find US B2B SaaS companies."), demoted);
+  assertFalse(blocked.plan.entry_selection!.runnable);
+  assertFalse(blocked.f.ok);
+  assert(/CARDED_BUT_NOT_LIVE/.test(blocked.f.refusals.find((r) => r.code === "entry_not_executable")?.message ?? ""));
+  assert(blocked.preflightBlocks.includes("request_not_feasible"));
 });
 
 Deno.test("PRODUCTION: a hiring mission still runs — its whole route is READY", () => {
