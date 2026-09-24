@@ -20,6 +20,10 @@ import { usableHeadcount } from "./headcountValue.ts";
 import { sha256Hex } from "./providerInputFingerprint.ts";
 import type { NormalizedHiringCompany, NormalizedHiringJob } from "./hiringActorNormalizers.ts";
 import { normalizeCompanyLinkedInUrl, normalizeWebsite } from "./structuredCompanyEnrichment.ts";
+import {
+  authorityForEvidence, authorityRecord, statusForAuthority,
+  type AuthorityClaim, type AuthorityField, type AuthorityQuality,
+} from "./evidenceAuthority.ts";
 
 export const CANDIDATE_OBSERVATION_VERSION = "candidate-observation-v1" as const;
 
@@ -61,6 +65,18 @@ export interface EvidenceItem {
   derived_from: string[];
   mission_id: string | null;
   origin: EvidenceOrigin;
+  /**
+   * How the status was decided: the claim the fact was weighed for, the
+   * authority it earned, and the rule (`evidenceAuthority`). Absent on items
+   * whose status is decided elsewhere (a verdict, a derivation).
+   */
+  authority?: {
+    version: string;
+    claim: string;
+    level: "proven" | "plausible" | "insufficient";
+    rule: string;
+    reason: string;
+  };
   /**
    * P5.2 — the assessment that produced a model-extracted item, carried so
    * eligibility can say what a claim rests on. Absent on provider fields.
@@ -159,6 +175,7 @@ function item(
   o: {
     status: EvidenceStatus; method?: EvidenceMethod; confidence: EvidenceItem["confidence"];
     url?: string | null; excerpt?: string | null; derived_from?: string[]; source_record_id?: string | null;
+    authority?: EvidenceItem["authority"];
   },
 ): EvidenceItem {
   const source = {
@@ -171,6 +188,7 @@ function item(
     method: o.method ?? "provider_field", observed_at: ctx.observed_at,
     valid_until: validUntil(dimension, ctx.observed_at), confidence: o.confidence,
     derived_from: o.derived_from ?? [], mission_id: ctx.mission_id, origin: ctx.origin ?? "lead_mission",
+    ...(o.authority ? { authority: o.authority } : {}),
   };
 }
 
@@ -204,19 +222,40 @@ export function observationFromCompany(
       linkedin_company_url: hint.linkedin_company_url, domain: hint.domain, name: hint.name,
     }, { ...base, status: "proven", confidence: hint.linkedin_company_url ? "high" : "medium", url: hint.linkedin_company_url ?? hint.website }));
   }
+  // ── STATUS IS THE AUTHORITY LAYER'S, NOT THIS ADAPTER'S ─────────────────
+  //
+  // This function reports WHAT the row says and which field said it; how much
+  // that proves for the claim the dimension answers is `authorityForEvidence`.
+  // A discovery row (company search, job search, a YC record) proves none of
+  // these — no rule names it — and the company record read after identity
+  // resolution proves exactly what its rules allow.
+  const weigh = (claim: AuthorityClaim, field: AuthorityField, quality: AuthorityQuality = {}) =>
+    authorityForEvidence({ claim, source: ctx.actor_key, field, observed_at: ctx.observed_at, quality });
   if (c.geography) {
+    // PRESENCE, NOT HEADQUARTERS: the rendered list of every office. Proving
+    // needs each entry's structured country, so nothing is read from text.
+    const entries = c.location_entries ?? [];
+    const a = weigh("country", "location_entries", {
+      structured_country: entries.length > 0 && entries.every((e) => !!e.country),
+    });
     ev.push(item(ctx, "geography", c.geography, {
-      ...base, status: "plausible", confidence: trust.geography === "direct" ? "high" : "medium",
+      ...base, status: statusForAuthority(a.authority), authority: authorityRecord(a),
+      confidence: a.authority === "proven" ? "high" : trust.geography === "direct" ? "high" : "medium",
     }));
   }
   if (usableHeadcount(c.employee_count) != null) {
+    const a = weigh("headcount", "employee_count", { exact: true });
     ev.push(item(ctx, "headcount", c.employee_count, {
-      ...base, status: "plausible", confidence: trust.employee_count === "direct" ? "medium" : "low",
+      ...base, status: statusForAuthority(a.authority), authority: authorityRecord(a),
+      confidence: a.authority === "proven" ? "high" : trust.employee_count === "direct" ? "medium" : "low",
     }));
   }
   if (c.provider_industry) {
-    // The provider's label is never proof of industry (hiringActorNormalizers).
-    ev.push(item(ctx, "industry", c.provider_industry, { ...base, status: "plausible", confidence: "low" }));
+    // A taxonomy label: no rule lets it prove an industry (hiringActorNormalizers).
+    const a = weigh("industry", "industry_taxonomy");
+    ev.push(item(ctx, "industry", c.provider_industry, {
+      ...base, status: statusForAuthority(a.authority), authority: authorityRecord(a), confidence: "low",
+    }));
   }
   const cohort = c.startup_evidence && typeof c.startup_evidence === "object"
     ? str((c.startup_evidence as Record<string, unknown>).batch) : null;

@@ -2041,6 +2041,24 @@ function firecrawlCost(d: Record<string, unknown>): ExecutionCost | null {
   };
 }
 
+/**
+ * The actor input this call SENT — what its price depends on.
+ *
+ * A compiled invocation carries `compiled_actor_input: true` as a FLAG and the
+ * payload under `input` (the passthrough above sends exactly that). Pricing
+ * read `input.compiled_actor_input ?? input`, i.e. the boolean `true`, so a
+ * mode-priced actor lost its mode: company search's `scraperMode: "full"` was
+ * invisible, no per-row price applied, and the completion figure was the start
+ * fee alone — $0.001 for runs Apify billed $0.009 (canary 6e4a93b9).
+ */
+export function sentActorInput(input: Record<string, unknown>): Record<string, unknown> {
+  const inner = input.input;
+  if (input.compiled_actor_input === true && inner && typeof inner === "object" && !Array.isArray(inner)) {
+    return inner as Record<string, unknown>;
+  }
+  return input;
+}
+
 function outcomeFromToolResult(
   r: ToolResult,
   input: Record<string, unknown>,
@@ -2098,7 +2116,7 @@ function outcomeFromToolResult(
         actorKey: String(d.selected_actor_key ?? d.actor_id ?? ""),
         // BILLED rows, not returned rows: a funding actor's "not found" row is free.
         itemCount: billableResultCount(String(d.selected_actor_key ?? d.actor_id ?? ""), items),
-        input: (input.compiled_actor_input ?? input) as Record<string, unknown>,
+        input: sentActorInput(input),
         run: (d.provider_usage ?? null) as ProviderRunUsage | null,
         started: !resumed,
         // THE POSITIVE SIGNAL. `resumed` is the only thing that knows this call
@@ -2133,7 +2151,7 @@ function outcomeFromToolResult(
       actorKey: String(d.selected_actor_key ?? d.actor_id ?? ""),
       // No rows arrived, so only the start charge applies.
       itemCount: 0,
-      input: (input.compiled_actor_input ?? input) as Record<string, unknown>,
+      input: sentActorInput(input),
       run: (d.provider_usage ?? null) as ProviderRunUsage | null,
       started: runId !== null,
     }),

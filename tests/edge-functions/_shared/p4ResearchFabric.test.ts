@@ -370,7 +370,7 @@ const tail = [
 ];
 const jobStep = (input: Record<string, unknown>) => ({ capability: "job_discovery", actor_key: "apify_linkedin_job_search", purpose: "open roles", input, depends_on: [] });
 
-async function engine(o: { steps: Array<Record<string, unknown>>; control?: (i: any) => unknown; resume?: any }) {
+async function engine(o: { steps: Array<Record<string, unknown>>; control?: (i: any) => unknown; resume?: any; runBudget?: unknown }) {
   const sent: Sent[] = [];
   const d = engineDeps(sent, o);
   const result = await runCapabilityPlan(d.deps as never, {
@@ -378,6 +378,7 @@ async function engine(o: { steps: Array<Record<string, unknown>>; control?: (i: 
     readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
     specMode: "enforce", specScope: { workspace_id: "ws-p4", lineage_id: "lineage-p4" },
     ...(o.resume ? { priorState: o.resume.state, resume: o.resume.resume } : {}),
+    ...(o.runBudget ? { runBudget: o.runBudget } : {}),
   } as never) as never as { state: Record<string, any>; companies: EngineCompany[] };
   return { sent, result, controls: d.controls };
 }
@@ -534,4 +535,32 @@ Deno.test("engine: a DISCOVERY PLANNER proposal outside the graph is refused by 
     assertEquals(a.outcome, "refused_policy");
     assert(String(a.reason).includes("outside this mission's capability graph"));
   }
+});
+
+Deno.test("RUN BUDGET: max_candidates bounds the MISSION's discovery, not each call — a second wave is refused before it is sent", async () => {
+  // Canary 6e4a93b9: a 2-candidate budget bought 2 + 2 rows over two waves,
+  // because each call's maxItems was clamped to the allowance on its own.
+  const { sent, result } = await engine({
+    steps: [jobStep(JOB_A), ...tail],
+    control: (i) => i.summary.wave === 1 ? addRoute(JOB_B) : { action: "continue" },
+    runBudget: { provider_usd: null, max_candidates: 3 },
+  });
+  const discovery = jobCalls(sent);
+  assertEquals(discovery.length, 1, "route B's wave is refused: the allowance is spent");
+  assert(Number(discovery[0].input.maxItems) <= 3, `wave 1 asks for at most the allowance (${discovery[0].input.maxItems})`);
+  assertEquals(result.state.discovery_rows_bought, A_ROWS.length, "the mission's running total");
+  const refused = (result.state.mission_trace?.events ?? []).filter((e: any) => e.type === "call_refused_budget");
+  assert(refused.some((e: any) => e.detail.ceiling === "max_candidates" && e.detail.limit === 3), JSON.stringify(refused));
+  assertEquals(result.companies.filter((c) => c.company.company_name === "Audicus").length, 0, "nothing from the refused wave");
+});
+
+Deno.test("RUN BUDGET: the later call is clamped to what is LEFT of the allowance", async () => {
+  const { sent } = await engine({
+    steps: [jobStep(JOB_A), ...tail],
+    control: (i) => i.summary.wave === 1 ? addRoute(JOB_B) : { action: "continue" },
+    runBudget: { provider_usd: null, max_candidates: 5 },
+  });
+  const discovery = jobCalls(sent).filter((x) => Number(x.input.startPage ?? 1) === 1);
+  assertEquals(discovery.length, 2);
+  assertEquals(Number(discovery[1].input.maxItems), 5 - A_ROWS.length, "only the 2 candidates left");
 });

@@ -180,6 +180,7 @@ import {
 } from "./companyFirstStages.ts";
 import { missionTargetsIntermediaries } from "./companyAggregatorEvidence.ts";
 import { mergeDiscoveryActorInput } from "./discoveryInputMerge.ts";
+import { authorityForEvidence, authorityRecord, statusForAuthority } from "./evidenceAuthority.ts";
 import {
   identityIsActionable, resolveIdentityAgainstLookups, type IdentityResolution,
 } from "./companyIdentityResolution.ts";
@@ -594,6 +595,16 @@ export interface CapabilityExecutionState {
   mission_trace?: MissionTrace;
   /** Compact form of every compiled ProviderCallSpec (the ledger row holds the full spec). */
   provider_call_specs?: Array<ReturnType<typeof specSummary>>;
+  /**
+   * Discovery rows this MISSION has bought, across every wave and slice.
+   *
+   * `run_budget.max_candidates` is "the most candidates discovery may buy",
+   * and it was enforced per call: each call's `maxItems` was clamped to it,
+   * so a second wave bought the allowance again (canary 6e4a93b9: a 2-candidate
+   * budget bought 2 + 2 rows over two pages). This is the running total the
+   * clamp is taken against.
+   */
+  discovery_rows_bought?: number;
   // ── P4: THE RESEARCH FABRIC'S FEEDBACK, CARRIED WITH THE STATE ──
   /** One summary per discovery wave, oldest first (researchFeedback). */
   research_waves?: ResearchWaveSummary[];
@@ -3519,6 +3530,21 @@ export async function runCapabilityPlan(
       const purpose = purposeForCapability(capability);
       const countField = (p2Card?.input_limits && "maxResults" in p2Card.input_limits) ? "maxResults" : "maxItems";
       const engineCount = typeof engineInput[countField] === "number" ? engineInput[countField] as number : null;
+      // ── THE RUN'S CANDIDATE ALLOWANCE IS FOR THE MISSION, NOT PER CALL ────
+      const candidateCap = purpose === "discovery" ? (opts.runBudget?.max_candidates ?? null) : null;
+      const candidatesLeft = candidateCap === null ? null : Math.max(0, candidateCap - (state.discovery_rows_bought ?? 0));
+      if (candidatesLeft === 0) {
+        appendTrace(state.mission_trace!, "call_refused_budget", {
+          actor: provider, capability, purpose, ceiling: "max_candidates",
+          limit: candidateCap, bought: state.discovery_rows_bought ?? 0,
+        }, { plan_version: plan?.version ?? null, provider_call_id: null, idempotency_key: null });
+        record("refused_budget", 0, `run budget: ${candidateCap} discovery candidate(s) already bought`);
+        log("discovery_candidate_budget_reached", { capability, provider, limit: candidateCap, bought: state.discovery_rows_bought ?? 0 });
+        return [];
+      }
+      const discoveryBound = candidatesLeft === null
+        ? opts.maxCandidates
+        : Math.min(candidatesLeft, opts.maxCandidates ?? candidatesLeft);
       callSpec = compileProviderCallSpec({
         actorKey: provider, capability, purpose,
         proposed: entry ? (entry.kind === "route" ? entry.route.proposed_input : entry.stage.proposed_input) : null,
@@ -3534,8 +3560,12 @@ export async function runCapabilityPlan(
         contract_fields: P2_ACTOR_CONTRACTS[provider]?.fields ?? null,
         card_enums: p2Card?.verified_enums, card_limits: p2Card?.input_limits,
         count_bounds: purpose === "discovery"
-          ? (typeof opts.maxCandidates === "number"
-            ? [{ value: opts.maxCandidates, changed_by: "budget_policy" as const, reason: "discovery pool size for the requested count" }]
+          ? (typeof discoveryBound === "number"
+            ? [{
+              value: discoveryBound, changed_by: "budget_policy" as const,
+              reason: candidatesLeft !== null && discoveryBound === candidatesLeft && candidatesLeft < (opts.maxCandidates ?? Infinity)
+                ? "candidates left in the run budget" : "discovery pool size for the requested count",
+            }]
             : [])
           : (engineCount && engineCount > 0 && purpose !== "identity"
             ? [{ value: engineCount, changed_by: "budget_policy" as const, reason: "engine batch sizing for this stage" }]
@@ -3820,6 +3850,11 @@ export async function runCapabilityPlan(
       // was asked and paid for, and asking it again buys the same silence.
       if (operationKey && company && !company.completed_operations.includes(operationKey)) {
         company.completed_operations.push(operationKey);
+      }
+      // Rows THIS call bought: an adopted or already-completed run was paid for
+      // by the call that started it, and is not counted twice.
+      if (callSpec && callSpec.purpose === "discovery" && !inFlight && !completedMatch && !adoptedRunId) {
+        state.discovery_rows_bought = (state.discovery_rows_bought ?? 0) + rows.length;
       }
       if (callSpec && !inFlight && !completedMatch && p2Card) {
         const floor = derivedFloorUsd(provider, p2Card.cost_model, callSpec.serialized_input as Record<string, unknown>, rows.length);
@@ -10616,9 +10651,16 @@ export function groundedBusinessModelItem(
   // hard check can link to its source instead of saying "grounded evaluation".
   const cited = new Set(claims.flatMap((x) => x.evidence_ids));
   const url = (c.evidence_registry?.items ?? []).find((it) => cited.has(it.evidence_id) && !!it.source_url)?.source_url ?? null;
+  // The weight is the authority layer's: an ACCEPTED website statement proves
+  // (or, by contradiction, disproves) a business-model rule; a `review` does not.
+  const authority = authorityForEvidence({
+    claim: "business_model", source: "grounded_evidence_evaluation", field: "grounded_statement",
+    observed_at: at, quality: { grounding: accepted ? "accepted" : "review" },
+  });
   return {
     evidence_id: `grd_${c.key}_business_model`, company_key: c.key, dimension: "business_model",
-    value: bm.value.replace(/_/g, " "), status: accepted ? "proven" : "plausible",
+    value: bm.value.replace(/_/g, " "), status: statusForAuthority(authority.authority),
+    authority: authorityRecord(authority),
     source: {
       provider: "engine", actor: "grounded_evidence_evaluation", provider_call_id: null,
       url, excerpt: excerpt ? excerpt.slice(0, 280) : null,

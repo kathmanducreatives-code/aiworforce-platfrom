@@ -32,6 +32,12 @@ export interface NormalizedHiringCompany {
   /** ADVISORY. Kept apart from employee_count because the two contradict. */
   employee_range_advisory: string | null;
   geography: string | null;
+  /**
+   * The structured locations `geography` was rendered from, when the provider
+   * sent them — each with its own headquarters flag and country. Facts only:
+   * how much they prove is `evidenceAuthority`'s decision.
+   */
+  location_entries?: LinkedInLocationEntry[];
   /** Ownership type ("Privately Held"), NOT a business model. */
   company_type: string | null;
   /** YC vertical/batch evidence. Kept out of canonical industry on purpose. */
@@ -385,6 +391,12 @@ export interface LinkedInLocationEntry {
   text: string;
   /** The provider's own `headquarter` flag. Never inferred from position. */
   is_headquarters: boolean;
+  /**
+   * The structured country the provider attached to this entry, when it did
+   * (`parsed.countryFull`, else `country`). Null when only free text exists —
+   * which is what makes a location list ambiguous (see `evidenceAuthority`).
+   */
+  country: string | null;
 }
 
 /**
@@ -411,6 +423,7 @@ export function linkedInLocationEntries(
   for (const entry of raw as unknown[]) {
     let text: string | null = null;
     let hq = false;
+    let country: string | null = null;
     if (typeof entry === "string") {
       if (!opts.acceptStrings) continue;
       text = s(entry);
@@ -420,10 +433,11 @@ export function linkedInLocationEntries(
       text = s(parsed?.text) ??
         ([s(e.city), s(parsed?.countryFull) ?? s(e.country)].filter(Boolean).join(", ") || null);
       hq = e.headquarter === true || e.isHeadquarter === true || e.is_headquarters === true;
+      country = s(parsed?.countryFull) ?? s(e.country) ?? s(parsed?.country);
     }
     if (!text || seen.has(text)) continue;
     seen.add(text);
-    out.push({ text, is_headquarters: hq });
+    out.push({ text, is_headquarters: hq, country });
   }
   return out;
 }
@@ -450,6 +464,7 @@ export function normalizeLinkedInCompanyEnriched(
     employee_count: usableHeadcount(r.employeeCount),
     employee_range_advisory: rangeText(r),
     geography: enrichedGeography(r.locations),
+    location_entries: linkedInLocationEntries(r.locations),
     company_type: s(r.companyType),
     startup_evidence: founded && n(founded.year) !== null
       ? { year_founded: n(founded.year) } : null,

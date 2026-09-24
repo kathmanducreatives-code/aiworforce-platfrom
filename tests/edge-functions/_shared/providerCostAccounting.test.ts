@@ -239,3 +239,37 @@ Deno.test("RUN-AGENT: the view's cost comes from the ledgers, after settlement a
   assert(src.indexOf("[run-agent][p2-spine][final]") < view);
   assert(src.indexOf("[run-agent][p2-spine][claim-verifier]") < view);
 });
+
+// ═══════════════════════ the price reads the input the call actually SENT ══
+
+import { outcomeFromToolResultForTest, sentActorInput } from "../../../supabase/functions/_shared/toolRegistry.ts";
+
+Deno.test("COMPANY SEARCH: a compiled envelope is priced from its payload — full-mode rows, not the start fee alone", () => {
+  // Canary 6e4a93b9, runs uieidmanaOmb52ct2 / LdTEgbXfldnvFBoWs: 2 × full-company
+  // at $0.004 + $0.001 start = $0.009 billed; the completion figure said $0.001
+  // because pricing read the `compiled_actor_input: true` FLAG as the input.
+  const envelope = {
+    compiled_actor_input: true, selected_actor_key: "apify_linkedin_company_search",
+    input: { maxItems: 2, locations: ["Germany"], companySize: ["51-200"], industryIds: ["4"], scraperMode: "full" },
+  };
+  assertEquals(sentActorInput(envelope).scraperMode, "full");
+  const out = outcomeFromToolResultForTest({
+    ok: true,
+    data: {
+      items: [{ name: "3CX" }, { name: "EMQ Technologies" }], run_id: "uieidmanaOmb52ct2",
+      selected_actor_key: "apify_linkedin_company_search",
+      provider_usage: {
+        usageTotalUsd: 0.001, chargedEventCounts: { "apify-actor-start": 1 },
+        eventPrices: { "apify-actor-start": 0.001, "short-company": 0.002, "full-company": 0.004 },
+      },
+    },
+  } as never, envelope);
+  assertEquals([out.cost?.source, out.cost?.actual_usd], ["provider_reported", 0.009]);
+});
+
+Deno.test("sentActorInput: a legacy envelope (no compiled flag) is its own input; a flag without a payload is not trusted", () => {
+  const legacy = { scraperMode: "short", maxItems: 5 };
+  assertEquals(sentActorInput(legacy), legacy);
+  const flagOnly = { compiled_actor_input: true, input: "not an object" };
+  assertEquals(sentActorInput(flagOnly), flagOnly);
+});
