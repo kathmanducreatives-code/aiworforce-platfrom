@@ -41,6 +41,13 @@ import {
   COUNT_FIELD, CRITERIA_FILTER_ROLES, PRIMARY_GEOGRAPHY_FIELD, PROTECTED_ROLES, roleOf, type FieldRole,
 } from "./actorFieldRoles.ts";
 import { canonicalJson, sha256Hex } from "./providerInputFingerprint.ts";
+import { industryIdsForVertical } from "./icpDiscoveryConstraints.ts";
+
+/**
+ * Discovery actors whose industry filter selects a population rather than
+ * qualifying one (candidate generation only; see `evidenceAuthority`).
+ */
+export const POPULATION_FILTER_ACTORS: ReadonlySet<string> = new Set(["apify_linkedin_company_search"]);
 
 export const PROVIDER_CALL_SPEC_VERSION = "provider-call-spec-v1" as const;
 
@@ -53,6 +60,8 @@ export type ChangedBy =
   | "operational_requirement"
   | "mission_hard_constraint"
   | "criteria_policy"
+  /** A soft criterion allowed to SELECT a discovery population (never to reject). */
+  | "discovery_population"
   | "provider_contract"
   | "budget_policy"
   | "evidence_planner"
@@ -321,6 +330,31 @@ export function compileProviderCallSpec(i: SpecCompileInput): ProviderCallSpec {
     if (registered[field]) continue;
     if (!mayFilter(i.policy, dim)) {
       if (isUnrestricted(final[field])) continue;
+      // ── A SOFT INDUSTRY MAY SELECT A DISCOVERY POPULATION ────────────────
+      //
+      // Company search needs an industry to select a population at all —
+      // geography and headcount alone return arbitrary companies (see the
+      // engine's population guard). A Company Brain industry is a TARGET: it
+      // ranks and never rejects, and that does not change. What it may do is
+      // say WHICH companies to look at: on discovery only, its LinkedIn
+      // industry ids stay in the search. Nothing else about it is hard — the
+      // candidate's industry is still only a plausible label, never PASS.
+      //
+      // Only the ids those target industries map to (`industryIdsForVertical`)
+      // survive, so a planner cannot widen or swap the population.
+      if (dim === "industry" && i.purpose === "discovery" && POPULATION_FILTER_ACTORS.has(i.actorKey)) {
+        const allowed = new Set(i.policy.dimensions.industry.target_values
+          .flatMap((v) => typeof v === "string" ? industryIdsForVertical(v) : []));
+        const proposed = Array.isArray(final[field]) ? (final[field] as unknown[]).map(String) : [];
+        const kept = proposed.filter((id) => allowed.has(id));
+        if (kept.length > 0) {
+          const before = final[field];
+          set(field, kept);
+          record(field, before, kept, "discovery_population",
+            "soft industry preference selects the discovery population only — it never filters eligibility or proves industry");
+          continue;
+        }
+      }
       const before = final[field];
       delete final[field];
       record(field, before, undefined, "criteria_policy",

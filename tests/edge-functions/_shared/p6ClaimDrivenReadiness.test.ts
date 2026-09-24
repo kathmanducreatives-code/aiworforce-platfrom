@@ -200,10 +200,24 @@ Deno.test("PHASE: a verifier answering no HARD claim of the plan is not run", as
 
 Deno.test("PHASE: readiness and per-mission refusals decide `ready` for each verifier's own capability", async () => {
   const log: string[] = [];
-  await runClaimVerificationPhase(phaseBase(log, { readiness: PRE_PROMOTION, unavailable: (a: string) => a === "firecrawl" }) as never);
-  // A not-ready funding route is not executable, so it has no targets at all;
-  // firecrawl is READY but refused this mission, so its verifier is told so.
+  // Only the industry claim is open: firecrawl is READY but refused this
+  // mission, so its verifier is told so; a not-ready funding route has no
+  // targets at all.
+  const industryOnly = (key: string) => ({ ...industryGap(key), hard_checks: [industryGap(key).hard_checks[0]] });
+  await runClaimVerificationPhase(phaseBase(log, {
+    readiness: PRE_PROMOTION, unavailable: (a: string) => a === "firecrawl",
+    candidates: () => ["a", "b", "c"].map(industryOnly),
+  }) as never);
   assertEquals(log, ["pages:a,b,c:not_ready"]);
+});
+
+Deno.test("PHASE: a candidate with a hard claim NO route can answer is not viable — nothing is bought for it", async () => {
+  // Under PRE_PROMOTION the stage claim has no executable route, so the
+  // company can never become eligible and web pages for its industry would be
+  // money spent on a foregone PENDING.
+  const log: string[] = [];
+  await runClaimVerificationPhase(phaseBase(log, { readiness: PRE_PROMOTION }) as never);
+  assertEquals(log, [], "neither verifier is handed a candidate that cannot qualify");
 });
 
 Deno.test("PHASE: `ready` is the policy's decision for EVERY actor a verifier asks about, not just its route actor", async () => {

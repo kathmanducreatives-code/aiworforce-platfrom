@@ -158,6 +158,12 @@ export interface VerifiableCandidate {
  * route. The most promising first — fewest hard checks still unknown — capped
  * at the verifier's own bound.
  */
+/**
+ * Pipeline stages that answer hard claims cheaply and before any claim
+ * verifier: a claim still waiting on one is settled there first.
+ */
+export const CHEAP_STAGE_CAPABILITIES: ReadonlySet<string> = new Set(["company_enrichment"]);
+
 export function verificationTargets(
   verifier: Pick<ClaimVerifier, "route_actor" | "max_targets">,
   candidates: readonly VerifiableCandidate[],
@@ -172,6 +178,25 @@ export function verificationTargets(
     const gaps = evidenceGapsFor(c.hard_checks, c.graph, registry, new Set(c.attempted_routes), policy);
     const mine = gaps.find((g) => g.next === "verify" && g.route?.actor === verifier.route_actor);
     if (!mine) continue;
+    // ── ONLY A VIABLE CANDIDATE IS WORTH ANOTHER PURCHASE ─────────────────
+    //
+    // A failed hard claim already made the candidate ineligible (skipped
+    // above). The other two ways a purchase here is wasted:
+    //
+    //   a CHEAP hard claim is still open — country or headcount, answered by
+    //   the company-enrichment stage, not by a verifier. It is settled first:
+    //   if it fails, this purchase bought evidence for a rejected company.
+    //   Canary 6e4a93b9 bought atomus for Quark, a candidate screened out
+    //   before enrichment whose country and size were never read.
+    //
+    //   another hard claim has NO route: the company can never become
+    //   eligible, so evidence for this claim cannot change its outcome.
+    //
+    // Open gaps routed to a verifier (this one, or another claim verifier) do
+    // not block — those are the claims this phase exists to answer.
+    const blocking = gaps.find((g) => g !== mine && g.route?.actor !== verifier.route_actor && (
+      g.next !== "verify" || g.considered.some((r) => CHEAP_STAGE_CAPABILITIES.has(r.capability) && !r.tried)));
+    if (blocking) continue;
     out.push({
       company_key: c.company_key, name: c.name, domain: c.domain, linkedin_url: c.linkedin_url,
       criterion: { criterion_id: mine.criterion_id, dimension: mine.dimension, value: criteriaValue(mine.criterion_id) },
