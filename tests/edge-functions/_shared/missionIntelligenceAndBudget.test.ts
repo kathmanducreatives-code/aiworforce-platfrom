@@ -243,7 +243,7 @@ Deno.test("3d. the budget never exceeds the candidates that exist", () => {
 
 // ══════════════════════════════════ 4. the shortlist ranks, and says why ══
 
-Deno.test("4. relevant outranks uncertain, and only IRRELEVANT excludes", () => {
+Deno.test("4. relevant outranks uncertain; IRRELEVANT ranks last and excludes nobody", () => {
   const budget = resolveInvestigationBudget({
     requestedCount: 5, poolSize: 10, read: () => undefined,
   });
@@ -253,9 +253,20 @@ Deno.test("4. relevant outranks uncertain, and only IRRELEVANT excludes", () => 
     { company_key: "out", eligible: true, relevance: "irrelevant", confidence: 0.9, signal_strength: 99 },
   ], budget);
 
-  assertEquals(d.ranking, ["strong", "weak"], "tier beats every other signal");
-  assertFalse(d.selected.includes("out"));
-  assertEquals(d.excluded.find((e) => e.company_key === "out")?.reason, "triage_irrelevant");
+  // Tier beats every other signal — `out` has the highest signal strength and
+  // still ranks last. It is a ranking, not a verdict: it stays in the pool and
+  // is investigated with budget no better-ranked candidate wanted.
+  assertEquals(d.ranking, ["strong", "weak", "out"], "tier beats every other signal");
+  assert(d.selected.includes("out"), "a budget of 5 reaches it");
+  assertEquals(d.excluded.find((e) => e.company_key === "out"), undefined, "triage never excludes");
+
+  // Where the budget runs out, the lowest tier is what waits — as budget, not as a verdict.
+  const tight = buildSmartShortlist([
+    { company_key: "strong", eligible: true, relevance: "relevant", confidence: 0.5, signal_strength: 50 },
+    { company_key: "out", eligible: true, relevance: "irrelevant", confidence: 0.9, signal_strength: 99 },
+  ], { ...budget, budget: 1 });
+  assertEquals(tight.selected, ["strong"]);
+  assertEquals(tight.excluded.find((e) => e.company_key === "out")?.reason, "budget_exhausted");
 });
 
 Deno.test("4b. GPT can rescue a company the deterministic pass called ineligible", () => {
@@ -514,7 +525,7 @@ Deno.test("5b. THE FIX: GPT triage restores them and they are investigated", asy
   }
 });
 
-Deno.test("5c. an IRRELEVANT verdict is the one thing that excludes", async () => {
+Deno.test("5c. an IRRELEVANT verdict ranks the company last — it is never excluded", async () => {
   const run = await runEngine({
     titles: BREADTH_ROLES,
     triage: ({ company_keys }) => Promise.resolve({
@@ -525,10 +536,13 @@ Deno.test("5c. an IRRELEVANT verdict is the one thing that excludes", async () =
       })),
     }),
   });
-  const excluded = run.companies.filter((c) => !c.shortlisted);
-  assertEquals(excluded.length, 1);
-  assertEquals(excluded[0].shortlist_exclusion, "triage_irrelevant");
-  assertEquals(run.state.triage?.irrelevant, 1);
+  // AI decides what to investigate first; it does not decide what is true.
+  assertEquals(run.companies.filter((c) => c.shortlist_exclusion === "triage_irrelevant").length, 0);
+  assertEquals(run.companies.filter((c) => c.investigation_state === "excluded_permanently").length, 0);
+  assertEquals(run.state.triage?.irrelevant, 1, "the verdict is still recorded, as a ranking signal");
+  const ranking = run.state.investigation_ranking ?? [];
+  const irrelevantKey = run.companies.find((c) => c.triage?.relevance === "irrelevant")!.key;
+  assertEquals(ranking[ranking.length - 1], irrelevantKey, "ranked last");
 });
 
 Deno.test("5d. a THROWING triage call excludes nobody", async () => {

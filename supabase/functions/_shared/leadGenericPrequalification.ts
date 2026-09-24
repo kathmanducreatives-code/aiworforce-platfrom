@@ -486,8 +486,21 @@ export function admittedCandidateCount(
   // decided on the proven count). It still does not count toward "enough
   // candidates": sizing discovery on rows we already expect to fail is how a
   // pool of 12 usable companies and 38 far too large would read as full.
-  const enforce = policy.size_enforceable !== false;
   return prequalifyDiscoveredCompanies(companies, size, policy).companies
-    .filter((c) => c.eligible && !(enforce && (c.size_status === "above_max" || c.size_status === "below_min")))
-    .length;
+    .filter((c) => isAdmitted(c, policy)).length;
+}
+
+/**
+ * ADMITTED: counts toward "does discovery have enough candidates".
+ *
+ * Eligible, and — under an enforced range — not reported outside it. A row
+ * ranked down on its reported size stays investigable (enrichment decides) but
+ * is not the kind of candidate discovery should size its pool on. One
+ * predicate, so the engine's live count and this one cannot disagree.
+ */
+export function isAdmitted(
+  c: Pick<PrequalifiedCompany, "eligible" | "size_status">, policy: GenericPrequalificationPolicy = {},
+): boolean {
+  const enforce = policy.size_enforceable !== false;
+  return c.eligible && !(enforce && (c.size_status === "above_max" || c.size_status === "below_min"));
 }

@@ -137,7 +137,7 @@ const runFlow = async () => {
     },
     verifyEmployer: () => ({ verified: true, outcome: "ok" }),
 
-    // STAGE 2 — every company relevant except Acme0, which GPT excludes.
+    // STAGE 2 — every company relevant except Acme0, which GPT ranks last.
     triageCompanies: ({ company_keys }) => {
       seen.triageBatches++;
       return Promise.resolve({
@@ -183,10 +183,13 @@ Deno.test("the whole flow runs, and every stage records what it did", async () =
     assert(c.triage, `${c.key} carries a triage verdict`);
   }
 
-  // 3 SMART SHORTLIST + BUDGET — only the irrelevant one is excluded outright.
+  // 3 SMART SHORTLIST + BUDGET — triage RANKS; nobody is excluded on its word.
   const excludedByTriage = run.companies.filter(
     (c) => c.shortlist_exclusion === "triage_irrelevant");
-  assertEquals(excludedByTriage.length, 1);
+  assertEquals(excludedByTriage.length, 0, "an irrelevant verdict ranks last, it does not exclude");
+  const acme0 = run.companies.find((c) => c.key.includes("acme0"))!;
+  assertEquals(acme0.triage?.relevance, "irrelevant");
+  assert(acme0.investigation_state !== "excluded_permanently");
   assert(run.state.shortlist_decision, "the budget decision is recorded");
   assertEquals(run.state.shortlist_decision!.budget.requested_count, 5,
     "requested count is RECORDED and never multiplied into the budget");

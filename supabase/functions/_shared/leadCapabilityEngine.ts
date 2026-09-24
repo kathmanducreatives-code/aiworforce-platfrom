@@ -71,7 +71,7 @@ import type { NormalizedNewsArticle } from "./hiringActorNormalizers.ts";
 import { normalizeNewsArticle } from "./hiringActorNormalizers.ts";
 import {
   prequalifyDiscoveredCompanies, mergePrequalification,
-  genericPrequalificationKey, admittedCandidateCount,
+  genericPrequalificationKey, admittedCandidateCount, isAdmitted,
 } from "./leadGenericPrequalification.ts";
 import {
   assessSignals, verdictsClaimingUninvestigatedSignals,
@@ -3262,8 +3262,9 @@ export async function runCapabilityPlan(
       const permanent = why != null && why.reason !== "budget_exhausted" &&
         why.reason !== "not_selected";
       if (permanent) {
-        // CLOSED BY A DECISION. GPT said irrelevant, or a mission-stated
-        // constraint is verifiably violated. These never re-enter the frontier.
+        // CLOSED BY A DECISION: a mission-stated constraint is verifiably
+        // violated. (Triage never lands here: it ranks.) These never re-enter
+        // the frontier.
         c.investigation_state = "excluded_permanently";
         c.shortlist_exclusion = why!.reason;
       } else if (wasInvestigated(c.investigation_state)) {
@@ -4900,8 +4901,9 @@ export async function runCapabilityPlan(
       //
       // Both already exist and both are already authoritative:
       //
-      //   `excluded_permanently` — "closed by a decision: GPT said irrelevant,
-      //   or a mission constraint". `isUnfinishedFrontier` refuses to re-queue
+      //   `excluded_permanently` — "closed by a decision": a deterministic
+      //   mission constraint (a GPT `irrelevant` no longer closes anyone — it
+      //   ranks; see `buildSmartShortlist`). `isUnfinishedFrontier` refuses to re-queue
       //   one for exactly this reason: it was a DECISION, not a deferral.
       //
       //   `nextStageFor` — the stage machine every resumed slice already routes
@@ -4917,7 +4919,8 @@ export async function runCapabilityPlan(
           { size_enforceable: admissionEnforceable },
         );
         const admittedKeys = new Set(
-          scored.companies.filter((p) => p.eligible).map((p) => p.company_key),
+          scored.companies.filter((p) => isAdmitted(p, { size_enforceable: admissionEnforceable }))
+            .map((p) => p.company_key),
         );
         let n = 0;
         for (const c of companies) {

@@ -47,11 +47,13 @@ const row = (slug: string, name: string, employeeCount: number) => ({
 });
 const CANARY_ROWS = [row("bytebytego", "ByteByteGo", 86), row("psychology-today", "Psychology Today", 2135)];
 
-function harness(rows: Record<string, unknown>[]) {
+type Triage = (i: { company_keys: string[] }) => Promise<unknown>;
+function harness(rows: Record<string, unknown>[], triage?: Triage) {
   const sent: Array<{ actor: string; input: Record<string, unknown> }> = [];
   const calls = { planDiscovery: 0, controlRoutes: 0 };
   const byUrl = (u: string) => rows.find((r) => String(r.linkedinUrl).replace(/\/$/, "") === u.replace(/\/$/, ""));
   const deps = {
+    ...(triage ? { triageCompanies: triage } : {}),
     planDiscovery: (x: unknown) => { calls.planDiscovery++; return (emptyDiscoverySelector() as (y: unknown) => unknown)(x); },
     planExecution: () => Promise.resolve({ reasoning: "replay", steps: [
       { capability: "general_company_discovery", actor_key: "apify_linkedin_company_search", purpose: "profile discovery",
@@ -153,4 +155,72 @@ Deno.test("SPENT ALLOWANCE: no discovery planning in this slice, and a forced re
   } as never);
   assertEquals(h.sent.length - before, 0, "no provider call");
   assertEquals([h.calls.planDiscovery, h.calls.controlRoutes], [0, 0], "no discovery-planning model call");
+});
+
+// ═══════════════════════════════ MISSION TRIAGE RANKS; IT NEVER REJECTS ══
+//
+// Canary 2978a5ba (local, 2026-09-24): the model triaged both candidates
+// `irrelevant` — on a PLAUSIBLE self-reported headcount, on evidence nobody had
+// bought yet, and on a soft Company Brain industry preference — and that
+// verdict removed them before enrichment. AI decides what to investigate; code
+// decides what is true.
+
+/** The canary's own triage answer, reason for reason. */
+const irrelevantBecause = (reasons: (key: string) => string[]): Triage => ({ company_keys }) => Promise.resolve({
+  verdicts: company_keys.map((k) => ({
+    company_key: k, relevance: "irrelevant", confidence: 0.99, signal_strength: 5, matched_roles: [], reasons: reasons(k),
+  })),
+});
+const CANARY_2978_ROWS = [row("deadline-com", "Deadline Hollywood", 190), row("how-to-ai-guide", "How to AI", 100)];
+const CANARY_2978_TRIAGE = irrelevantBecause((k) => [
+  `Self-reported employee count is ${k.includes("deadline") ? 190 : 100}, clearly outside the mission's required range of 11–50.`,
+  "No explicit United States location or recent funding evidence is provided.",
+  "Entertainment news media does not align with the mission's stated B2B SaaS or fintech preferences.",
+]);
+
+Deno.test("CANARY 2978a5ba REPLAY: both triaged `irrelevant` still reach enrichment; size is decided on the PROVEN count", async () => {
+  const h = harness(CANARY_2978_ROWS, CANARY_2978_TRIAGE);
+  const result = await runCapabilityPlan(h.deps as never, h.opts as never) as unknown as {
+    state: Record<string, any>; companies: Array<Record<string, any>>;
+  };
+  for (const c of result.companies) {
+    assertEquals(c.triage?.relevance, "irrelevant", "the verdict is kept, as a ranking signal");
+    assertEquals([c.shortlisted, c.shortlist_exclusion], [true, null], c.company.company_name);
+    assert(c.investigation_state !== "excluded_permanently", c.company.company_name);
+  }
+  const details = h.sent.filter((s) => s.actor === "apify_linkedin_company_details");
+  assertEquals((details[0]?.input.companies as string[] | undefined)?.length, 2, "both enriched");
+  for (const c of grounded(result)) {
+    const headcount = c.graph.claims.find((x: Grounded) => x.dimension === "headcount").current;
+    assertEquals([headcount.status, headcount.authority?.rule], ["proven", "li_record_exact_headcount"], c.name);
+    assertEquals(c.hard_checks.find((x: Grounded) => x.dimension === "company_size")!.result, "fail", c.name);
+    assertEquals(c.eligibility, "ineligible", c.name);
+  }
+  assertEquals(verificationTargets({ route_actor: "apify_funding_atomus", max_targets: 6 }, grounded(result) as never,
+    (id) => CRITERIA.find((c) => c.id === id)?.value, undefined, PROBE), [], "failed candidates stop before Atomus");
+});
+
+Deno.test("TRIAGE: missing evidence and a soft Brain industry never reject — an in-range company still reaches Atomus", async () => {
+  // Triage calls it irrelevant for exactly the two reasons that may only rank.
+  const h = harness([row("inrange", "InRange Co", 30)], irrelevantBecause(() => [
+    "No explicit United States location or recent funding evidence is provided.",
+    "Does not align with the mission's stated B2B SaaS or fintech preferences.",
+  ]));
+  const result = await runCapabilityPlan(h.deps as never, h.opts as never) as unknown as { companies: Array<Record<string, any>> };
+  assertEquals(result.companies[0].triage?.relevance, "irrelevant");
+  assert(h.sent.some((s) => s.actor === "apify_linkedin_company_details"), "enriched");
+  const [c] = grounded(result);
+  assertEquals(c.hard_checks.map((x: Grounded) => [x.dimension, x.result]),
+    [["geography", "pass"], ["company_size", "pass"], ["funding", "unknown"]]);
+  assertEquals(verificationTargets({ route_actor: "apify_funding_atomus", max_targets: 6 }, [c] as never,
+    (id) => CRITERIA.find((x) => x.id === id)?.value, undefined, PROBE).map((t) => t.name), ["InRange Co"],
+    "viable on proven evidence, so it may reach Atomus whatever triage said");
+});
+
+Deno.test("TRIAGE: no model-backed relevance field can close a candidate — the shortlist excludes only on a deterministic disqualifier", async () => {
+  const src = Deno.readTextFileSync(new URL("../../../supabase/functions/_shared/leadInvestigationBudget.ts", import.meta.url));
+  const body = src.slice(src.indexOf("export function buildSmartShortlist"), src.indexOf("// ─", src.indexOf("export function buildSmartShortlist")));
+  assert(!/relevance === "irrelevant"[\s\S]{0,200}excluded\.push/.test(body), "an irrelevant verdict never pushes an exclusion");
+  const pushes = [...body.matchAll(/excluded\.push\(\{[^}]*reason: ([^,}]+)/g)].map((m) => m[1].trim());
+  assert(pushes.every((r) => !/triage/.test(r)), JSON.stringify(pushes));
 });

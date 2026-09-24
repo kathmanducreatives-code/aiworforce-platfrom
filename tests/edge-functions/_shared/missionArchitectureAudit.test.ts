@@ -209,9 +209,12 @@ Deno.test("1. DISCOVERY → … → WORKBENCH: every stage leaves its mark", asy
   assertEquals(byKey.get("irrelevant2.com")!.triage!.relevance, "irrelevant");
   assertEquals(byKey.get("uncertain3.com")!.triage!.relevance, "uncertain");
 
-  // SMART SHORTLIST + BUDGET: irrelevant is the only thing triage removes.
-  assertFalse(byKey.get("irrelevant2.com")!.shortlisted);
-  assertEquals(byKey.get("irrelevant2.com")!.shortlist_exclusion, "triage_irrelevant");
+  // SMART SHORTLIST + BUDGET: triage RANKS. Irrelevant is investigated last —
+  // it costs priority, never a place in the run (canary 2978a5ba).
+  assert(byKey.get("irrelevant2.com")!.shortlisted, "IRRELEVANT IS A RANKING, NOT A REJECTION");
+  assertEquals(byKey.get("irrelevant2.com")!.shortlist_exclusion, null);
+  const ranking = run.state.investigation_ranking ?? [];
+  assertEquals(ranking[ranking.length - 1], "irrelevant2.com", "ranked last");
   assert(byKey.get("uncertain3.com")!.shortlisted,
     "UNCERTAIN IS NOT A REJECTION — it costs priority, never a place in the run");
   for (const k of ["relevant0.com", "relevant1.com"]) {
@@ -227,24 +230,22 @@ Deno.test("1. DISCOVERY → … → WORKBENCH: every stage leaves its mark", asy
     assertEquals(c.verdict, "pass", c.key);
   }
 
-  // PERSISTENCE + WORKBENCH.
-  assertEquals(run.state.qualified_company_keys.length, 3);
+  // PERSISTENCE + WORKBENCH. The triage-irrelevant company was investigated
+  // like the others, and the evaluator (evidence, not triage) decided it.
+  assertEquals(run.state.qualified_company_keys.length, 4);
   const wb = workbench(run);
-  assertEquals(wb.counts.qualified, 3);
+  assertEquals(wb.counts.qualified, 4);
   // A qualified company LEAVES the evaluation projection — it gets a real lead
-  // row instead — so the only Workbench row here is the triaged-out one.
-  assertEquals(wb.rows.length, 1);
-  assertEquals(wb.rows[0].company_key, "irrelevant2.com");
-  assertEquals(wb.rows[0].status, "not_investigated");
-  assertFalse(wb.rows[0].decided, "triage is not a qualification decision");
+  // row instead — so nothing is left in it.
+  assertEquals(wb.rows.length, 0, "no row is withheld on a triage verdict");
 
   // THE FUNNEL BALANCES — nobody was lost silently anywhere in the chain.
   const f = missionFunnelFor(run.companies);
   assert(funnelIsBalanced(f), JSON.stringify(unbalancedStages(f)));
   assertEquals(f.summary.discovered, 4);
-  assertEquals(f.summary.investigated, 3);
-  assertEquals(f.summary.qualified, 3);
-  assertEquals(f.summary.never_investigated, 1);
+  assertEquals(f.summary.investigated, 4);
+  assertEquals(f.summary.qualified, 4);
+  assertEquals(f.summary.never_investigated, 0);
 });
 
 // ══════════════════════ 2. GPT is the final semantic authority ══════════════
@@ -380,7 +381,8 @@ Deno.test("5. no state collapses into a generic failure", async () => {
 
   // ENRICHMENT VOCABULARY.
   assertEquals(byKey.get("relevant0.com")!.enrichment_outcome, "success");
-  assertEquals(byKey.get("irrelevant2.com")!.enrichment_outcome, "not_attempted");
+  // A triage `irrelevant` no longer withholds evidence: it is enriched like any other.
+  assertEquals(byKey.get("irrelevant2.com")!.enrichment_outcome, "success");
 
   // VERDICT VOCABULARY — qualified / rejected / unknown, kept apart.
   assertEquals(byKey.get("relevant0.com")!.verdict, "pass");
@@ -391,7 +393,9 @@ Deno.test("5. no state collapses into a generic failure", async () => {
   const statuses = new Set(wb.rows.map((r) => r.status));
   assert(statuses.has("not_qualified"), "the judged rejection");
   assert(statuses.has("held_for_evidence"), "the held company");
-  assert(statuses.has("not_investigated"), "the one nothing was spent on");
+  // Nothing is left un-investigated on a model's word: the triage-irrelevant
+  // company was investigated and is held like any other undecided one.
+  assertFalse(statuses.has("not_investigated"), "triage no longer withholds a company");
   // EXACTLY ONE of them is a decision.
   assertEquals(wb.rows.filter((r) => r.decided).length, 1);
 });

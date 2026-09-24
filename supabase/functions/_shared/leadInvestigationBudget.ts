@@ -851,8 +851,8 @@ export interface ShortlistCandidate {
   /**
    * A MISSION-STATED, VERIFIED reason this candidate is disqualified.
    *
-   * The one thing other than an explicit GPT `irrelevant` that removes a
-   * candidate from the pool — and only ever `employee_size`, which fires solely
+   * The ONLY thing that removes a candidate from the pool (a GPT `irrelevant`
+   * no longer does — it ranks) — and only ever `employee_size`, which fires solely
    * when the MISSION set a range and the company's size is known to be outside
    * it. That is a falsifiable fact about a constraint the user actually
    * expressed, so paying to investigate it buys a lead that cannot qualify.
@@ -895,7 +895,7 @@ export interface ShortlistDecision {
  * is split by the deterministic pass — an `eligible` company ranks with the
  * uncertain ones, an ineligible one ranks last but STAYS IN THE RUN.
  */
-const TIER: Record<string, number> = { relevant: 0, uncertain: 1 };
+const TIER: Record<string, number> = { relevant: 0, uncertain: 1, irrelevant: 3 };
 const NO_TRIAGE_ELIGIBLE_TIER = 1;
 const NO_TRIAGE_INELIGIBLE_TIER = 2;
 
@@ -908,10 +908,22 @@ const NO_TRIAGE_INELIGIBLE_TIER = 2;
  * discovered the same pool twice investigated the same alphabetical prefix
  * twice. Name remains only as the final tiebreak, beneath three real signals.
  *
- * `irrelevant` is the ONLY verdict that excludes, and only when GPT explicitly
- * said it about a company it was shown. Everything else is ranked, and a company
- * that merely runs out of budget is recorded as `budget_exhausted` — it was not
- * judged, it was not reached.
+ * ── TRIAGE RANKS; IT NEVER EXCLUDES ─────────────────────────────────────────
+ *
+ * `irrelevant` used to be the one verdict that removed a candidate. Canary
+ * 2978a5ba showed what that verdict rests on: "self-reported employee count is
+ * 190" (a PLAUSIBLE search-row figure), "no explicit United States location or
+ * recent funding evidence" (evidence nobody had bought yet), and "does not
+ * align with the B2B SaaS or fintech preferences" (a soft Brain preference that
+ * may never reject). Removing a candidate on that is a model deciding what is
+ * true before any evidence exists — AI decides what to investigate; code
+ * decides what is true.
+ *
+ * So `irrelevant` is now the LOWEST tier: investigated last, only with budget
+ * no better-ranked candidate wanted, and never removed. The one exclusion left
+ * is `hard_exclusion`, a deterministic, mission-stated disqualifier. A company
+ * that merely runs out of budget is `budget_exhausted` — not judged, not
+ * reached.
  *
  * ── THE DETERMINISTIC PASS RANKS; IT NO LONGER EXCLUDES ─────────────────────
  *
@@ -943,7 +955,7 @@ export function buildSmartShortlist(
   };
 
   const ranked = candidates.filter((c) => {
-    // ── THE TWO WAYS OUT OF THE POOL, AND THERE ARE ONLY TWO ─────────────
+    // ── THE ONLY WAY OUT OF THE POOL IS A DETERMINISTIC DISQUALIFIER ──────
     //
     // A MISSION-STATED, VERIFIED DISQUALIFIER. Checked first, and NOT
     // overridable by triage: if the Mission asked for 10-150 employees and this
@@ -970,12 +982,7 @@ export function buildSmartShortlist(
       });
       return false;
     }
-    // AN EXPLICIT GPT `irrelevant`, about a company GPT was actually shown.
-    if (c.relevance === "irrelevant") {
-      counts.irrelevant++;
-      excluded.push({ company_key: c.company_key, reason: "triage_irrelevant" });
-      return false;
-    }
+    // A GPT `irrelevant` is a RANKING signal (lowest tier), never an exclusion.
     if (c.relevance) counts[c.relevance]++;
     else {
       counts.no_triage++;

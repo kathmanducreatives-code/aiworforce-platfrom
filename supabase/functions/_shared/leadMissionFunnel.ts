@@ -177,7 +177,9 @@ export function buildMissionFunnel(
     irrelevant: triaged.filter((c) => c.triage === "irrelevant").length,
     not_triaged: n - triaged.length,
   };
-  // Irrelevant is the only triage verdict that removes anyone.
+  // Triage no longer removes anyone (it ranks; see `buildSmartShortlist`).
+  // Counted for records restored from before that change, which may still
+  // carry the old exclusion.
   const triageExcluded = companies.filter(
     (c) => !c.shortlisted && c.shortlist_exclusion === "triage_irrelevant").length;
 
