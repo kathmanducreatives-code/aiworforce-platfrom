@@ -37,7 +37,7 @@ import {
   normalizeAtomusFunding, normalizePvalyouFunding, PVALYOU_FUNDING_ACTOR_KEY, stampFundingCall,
 } from "./fundingCorroboration.ts";
 import {
-  fundingStageEvidenceItem, recordCompleteness, type FundingRecordFact, type FundingStageDecision,
+  decideRecentlyFunded, fundingStageEvidenceItem, recordCompleteness, type FundingRecordFact, type FundingStageDecision,
 } from "./fundingStageClaim.ts";
 
 export const FUNDING_STAGE_VERIFIER_KEY = "funding_stage_corroboration" as const;
@@ -164,9 +164,71 @@ export function fundingStageVerifier(): ClaimVerifier {
         settleWithPvalyou(carry, null, null);
       };
 
+      // ── RECENCY: THE ATOMUS READING, AND THE PVALYOU FALLBACK WHEN IT IS OPEN ──
+      //
+      // One finding per company. The ATOMUS record (when there is one) is the
+      // item; a Pvalyou record is recorded beside it, so the eligibility check
+      // reads every dated round either provider holds. Pvalyou never states a
+      // complete history (normalizePvalyouFunding: no round count, no
+      // history_complete), so it can PASS a claim — a verified dated round inside
+      // the window — but never FAIL one: absence is not completeness.
+      const recencyFinding = (t: VerificationTarget, atomus: FundingRecordFact | null, atomusCall: string | null,
+        pv: FundingRecordFact | null, stage: string): VerifierFinding => {
+        const at2 = at;
+        const atomusItem = atomus
+          ? fundingRecordEvidenceItem({ company_key: t.company_key, record: atomus, mission_id: ctx.mission_id, observed_at: at2 })
+          : null;
+        const pvItem = pv
+          ? fundingRecordEvidenceItem({ company_key: t.company_key, record: pv, mission_id: ctx.mission_id, observed_at: at2 })
+          : null;
+        const item = atomusItem ?? pvItem;
+        const window = t.criterion.window_days ?? null;
+        const after = decideRecentlyFunded({ window_days: window, records: [...discoveredOf(t), ...(atomus ? [atomus] : []), ...(pv ? [pv] : [])], now: at2 });
+        return {
+          company_key: t.company_key, answered: true, item,
+          ...(atomusItem && pvItem ? { supporting: [pvItem] } : {}),
+          detail: {
+            stage, claim: "recently_funded", provider_call_id: atomusCall,
+            rounds: atomus?.rounds.length ?? 0, history_complete: atomus ? recordCompleteness(atomus)?.complete === true : false,
+            ...(stage !== "atomus_recency" ? { pvalyou_rounds: pv?.rounds.length ?? 0, pvalyou_call_id: pv?.provider_call_id ?? null } : {}),
+            verdict_after: after.verdict, reasons: after.reasons,
+          },
+        };
+      };
+      const runRecencyFallback = async (carry: PvalyouCarry, resume?: PendingVerifierRun) => {
+        const input = resume?.input ?? {
+          tier: "basic", companies: carry.targets.map((t) => carry.inputs[t.company_key]),
+        };
+        const out = await deps.call({
+          actor_key: PVALYOU_FUNDING_ACTOR_KEY, capability: FUNDING_VERIFICATION_CAPABILITY, input, purpose: "funding_evidence",
+          candidate_keys: carry.targets.map((t) => t.company_key), resume_run_id: resume?.run_id ?? null,
+        });
+        if (out.status === "running") {
+          pending.push({
+            verifier: FUNDING_STAGE_VERIFIER_KEY, stage: "pvalyou_recency", actor_key: PVALYOU_FUNDING_ACTOR_KEY,
+            run_id: out.run_id, input, candidate_keys: carry.targets.map((t) => t.company_key),
+            started_at: resume?.started_at ?? at, carry: carry as unknown as Record<string, unknown>,
+          });
+          deps.log("funding_recency_fallback_pending", { run_id: out.run_id, companies: carry.targets.length });
+          return;
+        }
+        const reads = out.status === "ok" ? out.rows.map(normalizePvalyouFunding) : [];
+        if (out.status !== "ok") deps.log("funding_recency_fallback_unavailable", { status: out.status, reason: out.reason });
+        for (const t of carry.targets) {
+          const sent = carry.inputs[t.company_key];
+          const pv = reads.find((r) => r.input === sent) ?? null;
+          const pvRecord = pv?.record && out.status === "ok" ? stampFundingCall(pv.record, out.provider_call_id) : null;
+          findings.push(recencyFinding(t, carry.atomus[t.company_key] ?? null, carry.atomus_call_id, pvRecord,
+            out.status === "ok" ? "atomus_then_pvalyou" : "atomus_only_fallback_unavailable"));
+        }
+      };
+
       // ── 1. adopt what earlier slices started ─────────────────────────────
       for (const p of ctx.pending.filter((x) => x.verifier === FUNDING_STAGE_VERIFIER_KEY && x.stage === "pvalyou")) {
         await runPvalyou(p.carry as unknown as PvalyouCarry, p);
+      }
+      for (const p of ctx.pending.filter((x) => x.verifier === FUNDING_STAGE_VERIFIER_KEY && x.stage === "pvalyou_recency")) {
+        await runRecencyFallback(p.carry as unknown as PvalyouCarry, p);
       }
       const inFlight = new Set(ctx.pending.flatMap((p) => p.candidate_keys));
       const fresh = targets.filter((t) => !inFlight.has(t.company_key));
@@ -175,6 +237,8 @@ export function fundingStageVerifier(): ClaimVerifier {
       // ── 2. atomus, one batch, for every target with a LinkedIn page ──────
       const atomusRecords: Record<string, FundingRecordFact | null> = {};
       let atomusCallId: string | null = null;
+      /** Did the atomus call itself RUN? A refused or failed call is not an answer to fall back from. */
+      let atomusRan = false;
       const byPage = fresh.map((t) => ({ t, page: atomusInput(t.linkedin_url) }));
       const withPage = byPage.filter((x) => x.page);
       if (withPage.length > 0 && deps.ready(ATOMUS_FUNDING_ACTOR_KEY)) {
@@ -185,6 +249,7 @@ export function fundingStageVerifier(): ClaimVerifier {
         });
         if (out.status === "ok") {
           atomusCallId = out.provider_call_id;
+          atomusRan = true;
           const reads = out.rows.map(normalizeAtomusFunding);
           for (const { t, page } of withPage) {
             const want = slugOf(page);
@@ -200,6 +265,8 @@ export function fundingStageVerifier(): ClaimVerifier {
       // ── 3. what atomus settles alone, or with what discovery carried ─────
       const needCitation: VerificationTarget[] = [];
       const discovered: Record<string, FundingRecordFact[]> = {};
+      const recencyFallback: VerificationTarget[] = [];
+      const recencyInputs: Record<string, string> = {};
       for (const t of fresh) {
         const atomus = atomusRecords[t.company_key] ?? null;
         // ── A RECENCY GAP NEEDS THE DATED HISTORY, NOT A STAGE VERDICT ──────
@@ -214,16 +281,37 @@ export function fundingStageVerifier(): ClaimVerifier {
         // No atomus record (no LinkedIn page, not found, or refused) leaves the
         // claim PENDING: absence is never disproof.
         if (t.criterion.dimension === "funding") {
-          findings.push({
-            company_key: t.company_key, answered: true,
-            item: atomus
-              ? fundingRecordEvidenceItem({ company_key: t.company_key, record: atomus, mission_id: ctx.mission_id, observed_at: at })
-              : null,
-            detail: {
-              stage: "atomus_recency", claim: "recently_funded", provider_call_id: atomus ? atomusCallId : null,
-              rounds: atomus?.rounds.length ?? 0, history_complete: atomus ? recordCompleteness(atomus)?.complete === true : false,
-            },
-          });
+          // ── THE NARROW PVALYOU FALLBACK ──────────────────────────────────
+          //
+          // Atomus is the PRIMARY recency verifier. Pvalyou is asked ONCE, and
+          // only when every one of these holds:
+          //   the claim is HARD and the candidate viable — the only targets the
+          //     gap router ever hands a verifier;
+          //   atomus RAN (a refused or failed call is not an answer);
+          //   atomus was NOT decisive: no verified dated round inside the window
+          //     and no complete history — `decideRecentlyFunded` still PENDING;
+          //   Pvalyou has not already answered for this company;
+          //   there is a key it can be asked by, and the route is READY.
+          // Canaries 1156c062 and 5bfa76db: Atomus found How to AI, BigRio and
+          // Design Milk and returned zero rounds, so recency stayed PENDING and
+          // every later verifier was (correctly) never bought.
+          const known = [...discoveredOf(t), ...(atomus ? [atomus] : [])];
+          // DECISIVE = a verdict under the claim's window. Without a window (a
+          // caller that passed none), a COMPLETE Atomus history is decisive —
+          // it is the whole answer — and only an incomplete or empty one is open.
+          const window = t.criterion.window_days ?? null;
+          const atomusComplete = atomus ? recordCompleteness(atomus)?.complete === true : false;
+          const openAfterAtomus = window != null
+            ? decideRecentlyFunded({ window_days: window, records: known, now: at }).verdict === "pending"
+            : !atomusComplete;
+          const pvalyouAnswered = known.some((r) => r.actor === PVALYOU_FUNDING_ACTOR_KEY);
+          const key = t.domain ?? t.linkedin_url;
+          if (atomusRan && openAfterAtomus && !pvalyouAnswered && key && deps.ready(PVALYOU_FUNDING_ACTOR_KEY)) {
+            recencyFallback.push(t);
+            recencyInputs[t.company_key] = key;
+            continue;
+          }
+          findings.push(recencyFinding(t, atomus, atomus ? atomusCallId : null, null, "atomus_recency"));
           continue;
         }
         discovered[t.company_key] = discoveredOf(t);
@@ -249,6 +337,11 @@ export function fundingStageVerifier(): ClaimVerifier {
           }
         }
         needCitation.push(t);
+      }
+
+      // ── 3b. the recency fallback, batched like the stage citation ──────────
+      for (const group of batches(recencyFallback, PVALYOU_BATCH)) {
+        await runRecencyFallback({ targets: group, atomus: atomusRecords, inputs: recencyInputs, atomus_call_id: atomusCallId });
       }
 
       // ── 4. pvalyou cites, for Seed / pre-seed / unclear ──────────────────

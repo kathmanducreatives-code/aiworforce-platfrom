@@ -5130,6 +5130,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     identity: { task_id: String(task.id) },
                   }).length,
                   criteriaValue: (id) => vCriteria.find((c) => c.id === id)?.value ?? null,
+                  // A recency claim's window, so the funding verifier knows whether
+                  // Atomus was decisive before any fallback is considered.
+                  criteriaWindow: (id) => vCriteria.find((c) => c.id === id)?.time_window?.days ?? null,
                   verifiers: [fundingStageVerifier(), businessModel, ...(hiringVerifier ? [hiringVerifier] : [])],
                   readiness: leadReadiness,
                   unavailable,

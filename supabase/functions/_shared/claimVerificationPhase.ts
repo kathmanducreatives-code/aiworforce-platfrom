@@ -51,6 +51,8 @@ export interface VerificationPhaseInput {
   /** The canonical qualified count as it stands now. */
   qualified: () => number;
   criteriaValue: (criterionId: string) => unknown;
+  /** The criterion's time window in days (a recency claim's), or null. */
+  criteriaWindow?: (criterionId: string) => number | null;
   verifiers: readonly ClaimVerifier[];
   /** Call, clock, log. `ready` is derived here from the readiness policy. */
   deps: Omit<VerifierDeps, "ready">;
@@ -126,7 +128,7 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
     const need = Math.max(1, i.requested_count) - i.qualified();
     if (need <= 0) report.stopped = "quota_met";
     // A RUN ALREADY PAID FOR IS STILL ADOPTED; NOTHING NEW IS BOUGHT.
-    const targets = need <= 0 ? [] : verificationTargets(verifier, i.candidates(), i.criteriaValue, registry, policy)
+    const targets = need <= 0 ? [] : verificationTargets(verifier, i.candidates(), i.criteriaValue, registry, policy, i.criteriaWindow)
       .slice(0, need * SHORTFALL_MARGIN);
     if (targets.length === 0 && mine.length === 0) continue;
     const deps: VerifierDeps = {

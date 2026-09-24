@@ -51,8 +51,8 @@ export interface VerificationTarget {
   name: string | null;
   domain: string | null;
   linkedin_url: string | null;
-  /** The hard criterion this verification answers. */
-  criterion: { criterion_id: string; dimension: string; value: unknown };
+  /** The hard criterion this verification answers — with its time window, when it has one. */
+  criterion: { criterion_id: string; dimension: string; value: unknown; window_days?: number | null };
   /**
    * What the mission already holds about this company. A verifier reads it
    * before it buys anything — evidence discovery carried is never re-bought.
@@ -179,6 +179,8 @@ export function verificationTargets(
   registry: readonly ClaimDefinition[] = CLAIM_REGISTRY,
   /** The same readiness decision the router and the planner read. */
   policy: ReadinessPolicy = PRODUCTION_READINESS,
+  /** The criterion's time window (days), so a verifier can tell a decisive answer from an open one. */
+  criteriaWindow?: (criterionId: string) => number | null,
 ): VerificationTarget[] {
   const out: Array<VerificationTarget & { open: number }> = [];
   for (const c of candidates) {
@@ -211,7 +213,10 @@ export function verificationTargets(
     if (cheapFirst) continue;
     out.push({
       company_key: c.company_key, name: c.name, domain: c.domain, linkedin_url: c.linkedin_url,
-      criterion: { criterion_id: mine.criterion_id, dimension: mine.dimension, value: criteriaValue(mine.criterion_id) },
+      criterion: {
+        criterion_id: mine.criterion_id, dimension: mine.dimension, value: criteriaValue(mine.criterion_id),
+        window_days: criteriaWindow ? criteriaWindow(mine.criterion_id) : null,
+      },
       graph: c.graph,
       open: gaps.length,
     });
