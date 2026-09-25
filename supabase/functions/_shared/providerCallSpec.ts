@@ -179,7 +179,13 @@ export function registeredEngineFields(actorKey: string, purpose: CallPurpose): 
         searchQuery: { changed_by: "identity_strategy", reason: "guarded name search for a candidate without a source LinkedIn URL" },
         scraperMode: { changed_by: "operational_requirement", reason: "domain confirmation needs each row's website; short rows omit it" },
         startPage: { changed_by: "operational_requirement", reason: "identity reads the first page only" },
-      } : {};
+      } : {
+        // THE ENGINE OWNS THE RETRIEVAL MODE: `full` rows carry the declared
+        // size band size ranks on; under the funding screen the pool is ranked
+        // by funding instead, and `short` rows are what the priced pool buys.
+        // Canary 8ac3d99e: the planner's `full` stood over the screen's `short`.
+        scraperMode: { changed_by: "operational_requirement", reason: "the engine sets the retrieval mode: full for size ranking, short under the funding screen" },
+      };
     case "apify_linkedin_company_details": return {
       companies: { changed_by: "template_binding", reason: "the resolved LinkedIn URLs of this batch" },
       searches: { changed_by: "template_binding", reason: "the resolved identities of this batch" },

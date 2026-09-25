@@ -155,15 +155,36 @@ async function run(o: { screen?: boolean; recentlyChecked?: string[]; atomus?: R
     },
     verifyEmployer: () => ({ verified: true, outcome: "ok" }),
     evaluateMission: stubMissionEvaluator({ mission_fit: "pass" }),
+    // THE LIVE CHAIN on canary 8ac3d99e: the execution planner's discovery step
+    // proposes FULL mode, so the retrieval plan carries `scraperMode: "full"` —
+    // the proposal the spec kept over the screen's `short`.
+    planExecution: () => Promise.resolve({ reasoning: "replay 8ac3d99e", steps: [
+      { capability: "general_company_discovery", actor_key: "apify_linkedin_company_search", purpose: "profile discovery",
+        input: { scraperMode: "full", maxItems: 5, locations: ["United States"], industryIds: ["4", "6"], companySize: ["11-50"],
+          startPage: 1, takePages: 2 }, depends_on: [] },
+      { capability: "company_identity_resolution", actor_key: "apify_linkedin_company_search", purpose: "only without a page",
+        input: { searchQuery: "{{name}}", maxItems: 5 }, depends_on: [1] },
+      { capability: "company_enrichment", actor_key: "apify_linkedin_company_details", purpose: "details", input: { companies: ["{{url}}"] }, depends_on: [2] },
+      { capability: "company_brain_qualification", actor_key: null, purpose: "qualify", input: {}, depends_on: [3] },
+      { capability: "persistence", actor_key: null, purpose: "save", input: {}, depends_on: [4] },
+    ] }),
+    // WHAT THE LIVE STRATEGY PROPOSED on canary 8ac3d99e: full mode, five rows.
     planDiscovery: () => Promise.resolve([{
       actor_key: "apify_linkedin_company_search", role: "primary",
-      input: { locations: ["United States"], industryIds: ["4"], companySize: ["11-50"] },
+      input: { scraperMode: "full", maxItems: 5, locations: ["United States"], industryIds: ["4", "6"], companySize: ["11-50"],
+        startPage: 1, takePages: 2 },
     }]),
   } as never, {
     // AS run-agent BUILDS IT for Lead V2: the executability gate enforced.
     mission: MISSION, plan: GRAPH,
     maxCandidates: o.screen === false ? 2 : PLAN.pool_rows, remainingLeads: 1, readEnv: () => undefined,
     identity: { workspace_id: "ws-test", task_id: "task-screen" },
+    // AS LEAD V2 RUNS: the ProviderCallSpec spine on, under the run's budget.
+    // Canary 8ac3d99e failed exactly here — the spec capped discovery at
+    // max_candidates and kept the planner's full mode — and these tests did not
+    // turn the spec on.
+    specMode: "enforce", specScope: { workspace_id: "ws-test", lineage_id: "lineage-screen" },
+    readiness: PRODUCTION_READINESS, runBudget: parseRunBudget({ provider_usd: 0.14, max_candidates: 2 }),
     ...(o.screen === false ? {} : {
       fundingScreen: {
         plan: PLAN,

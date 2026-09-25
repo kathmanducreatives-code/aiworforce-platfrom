@@ -2722,6 +2722,16 @@ export async function runCapabilityPlan(
     }
   }
   /**
+   * THE DISCOVERY ROWS THIS MISSION MAY BUY: the SCREENED POOL under the
+   * funding screen (`plan.pool_rows`, priced before discovery), otherwise the
+   * run's `max_candidates`. Under the screen `max_candidates` caps the companies
+   * ADMITTED past the pool instead (`takeInvestigationSlice`). One reader, so
+   * the call cap, the spent check and the replenishment log cannot disagree —
+   * canary 8ac3d99e's call cap read `max_candidates` alone and bought 2 rows.
+   */
+  const discoveryRowAllowance = (): number | null =>
+    opts.fundingScreen?.plan.pool_rows ?? opts.runBudget?.max_candidates ?? null;
+  /**
    * THE MISSION'S CANDIDATE ALLOWANCE IS SPENT: no further discovery purchase
    * can happen (`run_budget.max_candidates`, counted in `discovery_rows_bought`),
    * so neither may a model call that exists only to plan one — a re-plan, a
@@ -2730,7 +2740,7 @@ export async function runCapabilityPlan(
    * refused.
    */
   const candidateBudgetSpent = (): boolean => {
-    const limit = opts.runBudget?.max_candidates ?? null;
+    const limit = discoveryRowAllowance();
     return limit !== null && (state.discovery_rows_bought ?? 0) >= limit;
   };
   /** Adaptive reserve left: the reserve minus spend by calls from amended versions. */
@@ -3675,7 +3685,8 @@ export async function runCapabilityPlan(
       const countField = (p2Card?.input_limits && "maxResults" in p2Card.input_limits) ? "maxResults" : "maxItems";
       const engineCount = typeof engineInput[countField] === "number" ? engineInput[countField] as number : null;
       // ── THE RUN'S CANDIDATE ALLOWANCE IS FOR THE MISSION, NOT PER CALL ────
-      const candidateCap = purpose === "discovery" ? (opts.runBudget?.max_candidates ?? null) : null;
+      // The screened pool under the funding screen — `discoveryRowAllowance`.
+      const candidateCap = purpose === "discovery" ? discoveryRowAllowance() : null;
       const candidatesLeft = candidateCap === null ? null : Math.max(0, candidateCap - (state.discovery_rows_bought ?? 0));
       if (candidatesLeft === 0) {
         appendTrace(state.mission_trace!, "call_refused_budget", {
@@ -4683,7 +4694,7 @@ export async function runCapabilityPlan(
     const replenishmentDebt = replenishmentWanted && !candidateBudgetSpent();
     if (replenishmentWanted && !replenishmentDebt) {
       log("discovery_not_reopened_candidate_budget_spent", {
-        capability: cap, limit: opts.runBudget?.max_candidates ?? null, bought: state.discovery_rows_bought ?? 0,
+        capability: cap, limit: discoveryRowAllowance(), bought: state.discovery_rows_bought ?? 0,
         note: "no further discovery purchase is possible this mission, so no slice plans one",
       });
     }
