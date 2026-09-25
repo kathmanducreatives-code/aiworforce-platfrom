@@ -30,6 +30,10 @@ import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedg
 import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
 import { executabilityGateFor } from "../_shared/capabilityExecutability.ts";
 import { readinessPolicyFor } from "../_shared/routeReadiness.ts";
+import { deriveMissionCriteria } from "../_shared/missionCriteria.ts";
+import {
+  defaultScreenRunBudget, kickoffRunBudget, screenDownstreamVerifiersUsd, type DefaultScreenBudget,
+} from "../_shared/fundingScreenDefaults.ts";
 import { validateV2KickoffBody } from "../_shared/leadMissionV2Request.ts";
 import {
   resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, spendRefusalMessage,
@@ -1648,6 +1652,41 @@ Return ONLY valid JSON, no prose, no markdown:
       ? effectiveRequestedCount(missionForRouting)
       : DEFAULT_REQUESTED_COUNT;
 
+    // ── THE RUN BUDGET: THE CALLER'S, OR THE FUNDING SCREEN'S DEFAULT ─────
+    //
+    // Nothing in the product sent `run_budget`, so the funding screen — which
+    // exists only under one — never ran for a real user (architecture audit,
+    // 2026-09-25). A screen-eligible Lead V2 mission now gets the default
+    // ($0.14 and 2 candidates per lead, 1–2 leads), decided by the SAME graph,
+    // readiness and pricing run-agent will execute under. Every other mission
+    // gets none and runs exactly as before; a caller's own budget always wins.
+    const callerRunBudget = parseRunBudget((body as Record<string, unknown>).run_budget);
+    const screenDefault: DefaultScreenBudget | null = !callerRunBudget && missionForRouting
+      ? (() => {
+        const read = (k: string) => Deno.env.get(k);
+        const readiness = readinessPolicyFor(workspace_id, read);
+        const executability = executabilityGateFor(workspace_id, read);
+        const criteria = deriveMissionCriteria(missionForRouting, readiness);
+        return defaultScreenRunBudget({
+          leadV2: executability === "enforce",
+          entryCapability: buildCapabilityGraph(missionForRouting, { executability, readiness }).entry_capability,
+          criteria,
+          requestedCount: effectiveRequestedCount(missionForRouting),
+          downstream_verifiers_usd: screenDownstreamVerifiersUsd(missionForRouting, criteria, read),
+        });
+      })()
+      : null;
+    const kickoffBudget = kickoffRunBudget(callerRunBudget, screenDefault);
+    console.log("[orchestrate][run-budget]", {
+      workspace_id, source: kickoffBudget.source, run_budget: kickoffBudget.budget,
+      default_reason: screenDefault?.reason ?? null,
+      screen: screenDefault?.plan
+        ? { first_rows: screenDefault.plan.first_rows, topup_rows: screenDefault.plan.topup_rows,
+            screen_max: screenDefault.plan.screen_max, admit: screenDefault.plan.admit,
+            worst_case_usd: screenDefault.plan.worst_case_usd }
+        : null,
+    });
+
     // THE HANDOFF STAYS IN THE BACKGROUND, BUT IS NO LONGER SILENT.
     //
     // It cannot be awaited — run-agent runs the whole step, Actor calls
@@ -1675,9 +1714,8 @@ Return ONLY valid JSON, no prose, no markdown:
         // THE RUN'S OWN BUDGET, carried to whichever executor takes the step —
         // the edge function or, through the queue, the worker. Re-validated by
         // run-agent; tighten-only either way (runBudget.ts).
-        ...(parseRunBudget((body as Record<string, unknown>).run_budget)
-          ? { run_budget: parseRunBudget((body as Record<string, unknown>).run_budget) }
-          : {}),
+        // …or, when none was sent, the funding screen's default (see above).
+        ...(kickoffBudget.budget ? { run_budget: kickoffBudget.budget } : {}),
         // QUALIFIED-LEAD ROUTE. run-agent's company-first branch needs (a) an
         // unpinned actor so it compiles the entity intent itself, and (b) the
         // FINAL-LEAD quota. Without these the request silently degrades to the

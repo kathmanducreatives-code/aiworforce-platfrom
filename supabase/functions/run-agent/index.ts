@@ -5,7 +5,7 @@
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
 import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
-import { hiringClaimVerifier, hiringEstimatePerTargetUsd } from "../_shared/hiringClaimVerifier.ts";
+import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
 import { hiringSearchTitles } from "../_shared/hiringSearchVocabulary.ts";
 import { roleMatchesFamily, type RoleFamily } from "../_shared/roleFamilies.ts";
 import { sizeBandLabel } from "../_shared/companySize.ts";
@@ -174,10 +174,11 @@ import { verifierSpecCompiler } from "../_shared/verifierCallSpec.ts";
 import { runClaimVerificationPhase } from "../_shared/claimVerificationPhase.ts";
 import { buildClaimPlan } from "../_shared/claimPlan.ts";
 import {
-  businessModelEstimatePerTargetUsd, businessModelVerifier, claimPageBudget, claimPageDebts, claimPagePlan,
+  businessModelVerifier, claimPageBudget, claimPageDebts, claimPagePlan,
 } from "../_shared/businessModelVerifier.ts";
 import { fundingStageVerifier } from "../_shared/fundingStageVerifier.ts";
 import { fundingScreenPlan, recentlyCheckedPages } from "../_shared/fundingPoolScreen.ts";
+import { screenDownstreamVerifiersUsd } from "../_shared/fundingScreenDefaults.ts";
 import { hiringActorCard } from "../_shared/hiringActorCatalog.ts";
 import { hashInput as claimVerifierHashInput } from "../_shared/hiringActorInputs.ts";
 import { markProviderUnavailable, unavailableProvider } from "../_shared/providerAvailability.ts";
@@ -2325,19 +2326,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             return { plan: null, reason: "not_lead_v2_general_discovery", priced: [] };
           }
           const criteria = deriveMissionCriteria(persistedMission, leadReadiness);
-          const hiring = criteria.find((c) => c.kind === "hard" && c.dimension === "hiring");
-          const jobs = hiring
-            ? hiringEstimatePerTargetUsd({
-              titles: hiringSearchTitles(buildQualificationContext(persistedMission, { criteriaAuthority: true }).role_vocabulary),
-              window_days: hiring.time_window?.days ?? null,
-            })
-            : 0;
-          // First-party pages, always priced in: conservative when no claim needs them.
-          const pages = businessModelEstimatePerTargetUsd(
-            webEvidenceCreditRate(readEnvSafe, { usd_capped: runBudget?.provider_usd != null }).usd_per_credit);
+          // THE SAME downstream estimate orchestrate priced the default budget with.
           return fundingScreenPlan({
             criteria, runBudget, requestedCount: quota.requestedLeadCount,
-            downstream_verifiers_usd: jobs == null || pages == null ? null : jobs + pages,
+            downstream_verifiers_usd: screenDownstreamVerifiersUsd(persistedMission, criteria, readEnvSafe),
           });
         })();
         /** Search rows discovery may buy: the screened pool, or the run's candidate pool. */
