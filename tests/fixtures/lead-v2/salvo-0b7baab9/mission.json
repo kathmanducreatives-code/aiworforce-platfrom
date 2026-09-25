@@ -1,0 +1,133 @@
+{
+ "version": "lead-mission-v1",
+ "criteria": [
+  {
+   "id": "funding:_event_funding_subject_company_qualifier_",
+   "kind": "hard",
+   "label": "Funding",
+   "value": {
+    "event": "funding",
+    "subject": "company",
+    "qualifier": {}
+   },
+   "source": "user_explicit",
+   "status": "ok",
+   "dimension": "funding",
+   "rationale": "an observable signal the request asks for",
+   "elevated_by": "must",
+   "time_window": {
+    "days": 1095,
+    "rule": "recently funded / raised",
+    "basis": "announced",
+    "source": "user_explicit",
+    "enforced": false
+   },
+   "user_phrase": "Has Salvo Software (https://www.linkedin.com/company/salvosoftware) raised funding in the last 3 years?"
+  }
+ ],
+ "confidence": 0.99,
+ "directives": {
+  "source_strategy": [],
+  "adjacent_signals": [],
+  "excluded_signals": [],
+  "preferred_signals": [
+   "funding"
+  ],
+  "required_evidence": [],
+  "allowed_broadening": {
+   "geographies": [],
+   "company_types": [],
+   "role_families": [],
+   "employee_range": {
+    "max": null,
+    "min": null
+   }
+  },
+  "execution_preference": "balanced",
+  "disallowed_broadening": [],
+  "evaluation_instructions": "",
+  "founder_unlock_recommended": false,
+  "requested_contact_ready_count": null
+ },
+ "mission_type": "company_research",
+ "target_entity": "company",
+ "company_profile": {
+  "stages": [],
+  "locations": [],
+  "verticals": [],
+  "business_models": [],
+  "known_companies": [
+   "https://www.linkedin.com/company/salvosoftware"
+  ]
+ },
+ "decision_makers": {
+  "roles": [],
+  "current_employment_required": false
+ },
+ "planner_runtime": {
+  "role": "planner",
+  "dirty": false,
+  "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+  "function": "lead-mission-compiler",
+  "git_short": "046b61b0",
+  "build_timestamp": "2026-08-29T10:44:33.276Z",
+  "lead_intelligence_contract_version": "v1"
+ },
+ "requested_count": 1,
+ "field_provenance": {
+  "target_entity": "explicit_user_request",
+  "requested_count": "explicit_user_request",
+  "requested_output": "explicit_user_request",
+  "required_signals": "explicit_user_request",
+  "company_profile.known_companies": "explicit_user_request"
+ },
+ "hard_constraints": {},
+ "requested_output": "qualified_companies",
+ "required_signals": [
+  {
+   "type": "funding",
+   "event": "funding",
+   "phrase": "funding",
+   "subject": "company",
+   "qualifier": {},
+   "timeframe_days": 1095
+  }
+ ],
+ "soft_preferences": {},
+ "brain_refinements": [],
+ "mission_semantics": {
+  "goal": "Has Salvo Software (https://www.linkedin.com/company/salvosoftware) raised funding in the last 3 years?",
+  "stage": null,
+  "version": "mission-semantics-v1",
+  "hypotheses": [],
+  "corrections": [],
+  "window_sources": {
+   "funding": {
+    "source": "user_explicit"
+   }
+  },
+  "requested_count": 1,
+  "canonical_signals": [
+   {
+    "kind": "funding",
+    "alias": "reader",
+    "phrase": "Has Salvo Software (https://www.linkedin.com/company/salvosoftware) raised funding in the last 3 years?",
+    "source": "user_explicit",
+    "subject": "company",
+    "legacy_event": "funding"
+   }
+  ],
+  "unmapped_signal_language": []
+ },
+ "original_user_query": "Has Salvo Software (https://www.linkedin.com/company/salvosoftware) raised funding in the last 3 years?",
+ "required_capabilities": [
+  "known_company_resolution"
+ ],
+ "required_signal_terms": [],
+ "prohibited_capabilities": [
+  "founder_discovery",
+  "employer_verification",
+  "contact_enrichment"
+ ],
+ "lead_intelligence_contract_version": "v1"
+}

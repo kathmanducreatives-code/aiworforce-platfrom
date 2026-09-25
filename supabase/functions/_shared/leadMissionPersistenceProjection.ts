@@ -49,6 +49,8 @@ import {
 import { resolveCompanyIdentity, type CompanyIdentity } from "./companyIdentity.ts";
 import { identityIsActionable } from "./companyIdentityResolution.ts";
 import type { CandidateDecision } from "./workbenchMissionView.ts";
+import type { PlaybookAuthorization } from "./leadPlaybookExecution.ts";
+import type { ResearchPlaybookSelection } from "./leadResearchPlaybooks.ts";
 
 export const MISSION_PERSISTENCE_PROJECTION_VERSION =
   "lead-mission-persistence-projection-v1" as const;
@@ -227,4 +229,61 @@ export function missionPersistenceSummary(
     persisted,
     skipped: p.skipped.map((s) => `${s.company_key}:${s.reason}`),
   };
+}
+
+/**
+ * MAY THIS RUN WRITE ITS QUALIFIED COMPANIES TO THE LEAD LIBRARY?
+ *
+ * The playbook boundary decides what executes, so it used to decide what
+ * persists — and it governs only a hiring-only selection. Every other mission
+ * returned `applies: false` and wrote nothing, which under Lead V2 meant a
+ * company the canonical view had QUALIFIED never reached the Library.
+ *
+ * Canary 0b7baab9 (2026-09-25, Salvo Software, "raised funding in the last 3
+ * years"): Atomus then Pvalyou proved a dated debt round inside the window, the
+ * Workbench and run_outcome.canonical said 1 of 1 qualified, and
+ * `leads_written` stayed 0 — so the run read PARTIALLY_SATISFIED for a request
+ * it had met.
+ *
+ *   governed by the hiring playbook → only when it authorised the plan
+ *                                     (unchanged);
+ *   not governed, Lead V2 canonical → yes, when EVERY research shape the
+ *                                     mission asked for is runnable. The
+ *                                     canonical decision is then the gate: a
+ *                                     company is written only when it carries
+ *                                     a label, i.e. every hard criterion is
+ *                                     proven.
+ *   not governed, a shape blocked   → no. A social or news ask this build
+ *                                     cannot research is not satisfied by the
+ *                                     criteria it CAN check.
+ *   not governed, V1 (no canonical) → no (unchanged: V1 funding, social and
+ *                                     news missions never had Library rows).
+ *
+ * Pure.
+ */
+export interface MissionPersistenceGate {
+  allowed: boolean;
+  reason:
+    | "hiring_playbook_authorized" | "hiring_playbook_refused" | "canonical_all_shapes_runnable"
+    | "research_shape_blocked" | "legacy_ungoverned" | "no_mission";
+}
+
+export function missionPersistenceGate(i: {
+  authorization: Pick<PlaybookAuthorization, "applies" | "authorized"> | null;
+  selection: Pick<ResearchPlaybookSelection, "runnable" | "blocked"> | null;
+  /** True when the run projects Lead V2 canonical decisions (P2 specs and a mission plan). */
+  canonical: boolean;
+}): MissionPersistenceGate {
+  const a = i.authorization;
+  if (!a) return { allowed: false, reason: "no_mission" };
+  if (a.applies) {
+    return a.authorized
+      ? { allowed: true, reason: "hiring_playbook_authorized" }
+      : { allowed: false, reason: "hiring_playbook_refused" };
+  }
+  if (!i.canonical) return { allowed: false, reason: "legacy_ungoverned" };
+  if (!i.selection || i.selection.blocked.length > 0 || i.selection.runnable.length === 0) {
+    return { allowed: false, reason: "research_shape_blocked" };
+  }
+  return { allowed: true, reason: "canonical_all_shapes_runnable" };
 }

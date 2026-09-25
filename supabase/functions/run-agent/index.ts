@@ -215,7 +215,7 @@ import {
   authorizePlaybookExecution, playbookAuthorizationSummary,
 } from "../_shared/leadPlaybookExecution.ts";
 import {
-  projectMissionCompanyRows, missionPersistenceSummary,
+  projectMissionCompanyRows, missionPersistenceSummary, missionPersistenceGate,
   MISSION_PERSISTENCE_PROJECTION_VERSION,
 } from "../_shared/leadMissionPersistenceProjection.ts";
 
@@ -5339,8 +5339,16 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             // ungated write here would give `social`, `news` and `funding`
             // missions Lead Library records they have never had. The boundary
             // decides what executes; it therefore decides what persists.
-            const missionPersistence = (playbookAuthorization?.applies &&
-                playbookAuthorization.authorized)
+            //
+            // Under Lead V2 a run the boundary does NOT govern (a supplied-company
+            // or funding mission) is gated by the canonical decision instead, when
+            // every shape it asked for is runnable — see `missionPersistenceGate`
+            // (canary 0b7baab9: 1 of 1 qualified, 0 written).
+            const persistenceGate = missionPersistenceGate({
+              authorization: playbookAuthorization, selection: playbookSelection,
+              canonical: !!(p2Specs && missionPlan),
+            });
+            const missionPersistence = persistenceGate.allowed
               ? projectMissionCompanyRows(
                 capabilityRun.companies, workspace_id,
                 // THE SAME PREDICATE THE ENGINE COUNTS QUOTA WITH. Passing it
@@ -5412,6 +5420,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             console.log("[run-agent][capability-engine][lead-library]", {
               task_id: task.id,
               ...missionPersistenceSummary(missionPersistence, missionPersisted),
+              gate: persistenceGate.reason,
               failed: missionPersistResults.filter((r) => !r.ok).map((r) => r.reason ?? "unknown"),
             });
 

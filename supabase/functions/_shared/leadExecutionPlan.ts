@@ -360,6 +360,41 @@ export function validateExecutionPlan(
     });
   }
 
+  // ── THE GRAPH'S OWN FREE ENTRY IS NEVER THE MODEL'S TO FORGET ──────────────
+  //
+  // `known_company_resolution` puts the companies the USER supplied into the
+  // pool. It runs no provider, costs nothing and decides nothing — the graph
+  // chose it as the entry from a decided mission field. Canary 0b7baab9
+  // (2026-09-25, Salvo Software): the model planned identity → enrichment →
+  // qualification → persistence and left the entry out ("the user supplied
+  // Salvo Software … broad discovery is unnecessary"), so every step was
+  // dropped as `consumer_without_producer` and a $0.0186 repair round on the
+  // larger model was bought to restore a step no one had a choice about.
+  //
+  // Restored here, first, as a repair: only the graph's entry, only when it is
+  // authorised, produces companies and runs no provider, and only when the
+  // model proposed other steps to follow it. Dependencies shift by one so each
+  // still points at the step it named.
+  const entry = graph.entry_capability;
+  if (
+    entry && authorised.has(entry) && PRODUCERS.has(entry) &&
+    (CAPABILITY_REGISTRY[entry].providers as readonly string[]).length === 0 &&
+    kept.length > 0 && !kept.some((s) => s.capability === entry)
+  ) {
+    violations.push({
+      code: "entry_step_restored", message:
+        `${entry} is this mission's entry and runs no provider; the plan omitted ` +
+        `it, so it was restored as step 1`,
+      severity: "repair",
+    });
+    repaired = true;
+    kept.splice(0, kept.length, {
+      step: 1, capability: entry, actor_key: null,
+      purpose: "Put the companies the user supplied into the pool (restored: the graph's entry).",
+      input: {}, depends_on: [],
+    }, ...kept.map((s) => ({ ...s, depends_on: s.depends_on.map((d) => d + 1) })));
+  }
+
   // ── A CONSUMER WITHOUT A PRODUCER IS NOT A PLAN ────────────────────────────
   //
   // "Enrich the companies" with nothing that finds companies is a chain with no

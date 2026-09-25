@@ -1,0 +1,101 @@
+{
+ "counts": {
+  "pending": 0,
+  "discovered": 1,
+  "ineligible": 0,
+  "exact_match": 0,
+  "low_priority": 1,
+  "screened_out": 0,
+  "investigating": 0,
+  "worth_considering": 0,
+  "strong_opportunity": 0,
+  "identity_unresolved": 0
+ },
+ "lead": {
+  "company": {
+   "key": "https://www.linkedin.com/company/salvosoftware",
+   "name": "Salvo Software",
+   "domain": "salvosoftware.com",
+   "linkedin_url": "https://www.linkedin.com/company/salvosoftware"
+  },
+  "bucket": "low_priority",
+  "label": "low_priority",
+  "hard_checks": {
+   "funding": "pass",
+   "known_companies": "pass"
+  },
+  "hard_check_details": [
+   {
+    "reason": "one of the companies you supplied (salvosoftware)",
+    "result": "pass",
+    "dimension": "known_companies",
+    "provenance": {
+     "url": "https://www.linkedin.com/company/salvosoftware",
+     "actor": "apify_linkedin_company_details",
+     "method": "provider_field",
+     "status": "proven",
+     "excerpt": null,
+     "dimension": "identity",
+     "confidence": "high",
+     "evidence_id": "ev_1616da92266722e9d9b67e05",
+     "grounding_decision": null,
+     "business_model_decision": null
+    },
+    "criterion_id": "known_companies:_https_www_linkedin_com_company_salvosoftware_"
+   },
+   {
+    "reason": "a verified funding event (Debt Financing) was announced 2024-06-06, 841 day(s) ago, inside the 1095-day window",
+    "result": "pass",
+    "dimension": "funding",
+    "provenance": {
+     "url": null,
+     "actor": "apify_funding_pvalyou",
+     "method": "provider_field",
+     "status": "proven",
+     "excerpt": null,
+     "dimension": "funding",
+     "confidence": "high",
+     "evidence_id": "fdr_https://www.linkedin.com/company/salvosoftware_apif~acb4758b",
+     "grounding_decision": null,
+     "business_model_decision": null
+    },
+    "criterion_id": "funding:_event_funding_subject_company_qualifier_"
+   }
+  ]
+ },
+ "run_outcome": {
+  "state": "PARTIALLY_SATISFIED",
+  "persistence": {
+   "leads_written": 0,
+   "signals_written": 0
+  },
+  "qualification": {
+   "eligible": 1,
+   "rejected": 0,
+   "canonical": {
+    "source": "workbench_mission_view",
+    "pending": 0,
+    "qualified": 1,
+    "undecided": 0,
+    "discovered": 1,
+    "ineligible": 0,
+    "screened_out": 0,
+    "mission_dimensions": [
+     "funding",
+     "known_companies"
+    ]
+   },
+   "evaluated": 1,
+   "qualified": 1,
+   "not_reached": 0,
+   "not_reached_reason": null
+  }
+ },
+ "lead_library_persistence": {
+  "planned": 0,
+  "results": [],
+  "skipped": [],
+  "version": "lead-mission-persistence-projection-v1",
+  "persisted": 0
+ }
+}
