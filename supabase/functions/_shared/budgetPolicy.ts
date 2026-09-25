@@ -254,6 +254,29 @@ export function release(l: SpendLedger, key: string): SpendReservation | null {
   return r;
 }
 
+/**
+ * Settle a call whose provider returns NO receipt, by its published pricing
+ * contract (Firecrawl: credits per endpoint × the configured account rate).
+ *
+ * Final at once — there is no later receipt to wait for — and labelled
+ * `derived_floor`, never `provider_receipt`: the figure is derived from what
+ * came back under the published rule, not reported by the provider. Canary
+ * 3be88a89's Firecrawl map stayed `executed` at its estimate forever because
+ * the only settlement pass waits for an Apify run receipt it can never get.
+ */
+export function settleByPublishedRule(l: SpendLedger, key: string, usd: number): SpendReservation | null {
+  const r = find(l, key);
+  if (!r || (r.status !== "executed" && r.status !== "reserved")) return r ?? null;
+  const settled = round4(usd);
+  r.provisional_usd = r.provisional_usd ?? settled;
+  r.settled_usd = settled;
+  r.settlement_source = "derived_floor";
+  r.variance_usd = round4(settled - r.estimate_usd);
+  r.settlement_stable = true;
+  r.status = "settled";
+  return r;
+}
+
 /** Settle from the provider's receipt. The receipt is the truth. */
 export function settle(
   l: SpendLedger, key: string, receipt_usd: number, mayBeFinal = true,

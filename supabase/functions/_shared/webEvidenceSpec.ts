@@ -16,7 +16,7 @@
 // provider receipt.
 
 import {
-  callCeilingFor, markExecuted, release, reserve, type SpendLedger,
+  callCeilingFor, markExecuted, release, reserve, settleByPublishedRule, type SpendLedger,
 } from "./budgetPolicy.ts";
 import { firecrawlCredits, resolveFirecrawlCreditPrice } from "./firecrawlCostModel.ts";
 import { appendTrace, type MissionTrace } from "./missionTrace.ts";
@@ -212,8 +212,29 @@ export function specGovernedPageFetcher(i: SpecGovernedFetcherInput): PageFetche
       actor: spec.actor, url, status: res.status, credits, provisional_usd: usd,
       cost_basis: "published_credit_rule",
     }, refs);
+    // CLOSED NOW: `/scrape` returns no charge and no run id, so nothing will ever
+    // settle it later. The published rule on what came back is the settlement.
+    settleWebEvidenceCall(ledger, trace, spec, refs, usd, credits);
     return res;
   };
+}
+
+/**
+ * Close a Firecrawl call on the ledger: settled, final, `derived_floor`, at the
+ * published credit rule × the configured rate — the pricing authority stays
+ * `FIRECRAWL_USD_PER_CREDIT`. Firecrawl gives no receipt to wait for.
+ */
+function settleWebEvidenceCall(
+  ledger: SpendLedger, trace: MissionTrace, spec: ProviderCallSpec,
+  refs: { plan_version: number | null; provider_call_id: string; idempotency_key: string },
+  usd: number, credits: number,
+): void {
+  const r = settleByPublishedRule(ledger, spec.idempotency_key, usd);
+  if (!r) return;
+  appendTrace(trace, "call_settled", {
+    actor: spec.actor, credits, settled_usd: r.settled_usd, variance_usd: r.variance_usd,
+    stable: true, settlement_source: "derived_floor", cost_basis: "published_credit_rule",
+  }, refs);
 }
 
 // ── THE MAP, UNDER THE SAME SPINE ────────────────────────────────────────────
@@ -286,6 +307,7 @@ export function specGovernedMapper(i: SpecGovernedMapperInput):
       actor: spec.actor, domain, urls: urls.length, credits: FIRECRAWL_CREDITS_PER_MAP, provisional_usd: usd,
       cost_basis: "published_credit_rule",
     }, refs);
+    settleWebEvidenceCall(ledger, trace, spec, refs, usd, FIRECRAWL_CREDITS_PER_MAP);
     return urls.slice(0, i.max_urls);
   };
 }

@@ -5141,6 +5141,12 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                             const r = await runTool("scrape_url", {
                               ...spec.serialized_input,
                               capability_key: "web_evidence_verification",
+                              // THE SPEC IN THE ENVELOPE, as every page fetch and
+                              // Apify call carries it: the ledger row gets the
+                              // spec's `provider_call_id`/`idempotency_key`, so the
+                              // settlement can find it (canary 3be88a89's map row
+                              // had neither, and was never settled).
+                              provider_call_spec: spec,
                               audit_stage: "company_enrichment",
                               audit_reason: "discover_pages_for_claim",
                               actor_id: "firecrawl_map",

@@ -90,7 +90,9 @@ export function settlementPatches(ledger: SpendLedger) {
       provider_run_id: r.provider_run_id ?? null,
       patch: {
         settled_usd: r.status === "settled" ? r.settled_usd : r.provisional_usd,
-        settlement_source: r.status === "settled" ? "provider_receipt" : "derived_floor",
+        // The reservation's own source: a Firecrawl call is settled by its
+        // published rule (`derived_floor`), an Apify call by its receipt.
+        settlement_source: r.status === "settled" ? (r.settlement_source ?? "provider_receipt") : "derived_floor",
         variance_usd: r.status === "settled" ? r.variance_usd : null,
       },
     }));

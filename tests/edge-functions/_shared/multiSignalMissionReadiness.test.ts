@@ -157,7 +157,10 @@ Deno.test("FIRECRAWL: a configured rate is the ONE price — estimate, reservati
     usd_per_credit: rate.usd_per_credit, max_urls: 50, send: () => { sent++; return Promise.resolve(["https://acme.com/pricing"]); } });
   assertEquals(await map({ domain: "acme.com", company_key: "acme" }), ["https://acme.com/pricing"]);
   const r = state.spend_ledger.reservations.find((x) => x.purpose === "web_evidence")!;
-  assertEquals([sent, r.estimate_usd, r.status], [1, 0.002, "executed"]);
+  // SETTLED, not left `executed`: Firecrawl gives no receipt to wait for, so the
+  // published rule at the configured rate closes it (canary 3be88a89).
+  assertEquals([sent, r.estimate_usd, r.status, r.settled_usd, r.settlement_source, r.settlement_stable],
+    [1, 0.002, "settled", 0.002, "derived_floor", true]);
   // …and unpriced, it is never sent.
   const unpriced = specGovernedMapper({ state: { ...state, spend_ledger: ledger() } as never, scope: { workspace_id: "w", lineage_id: "l" },
     usd_per_credit: null, max_urls: 50, send: () => { sent++; return Promise.resolve([]); } });

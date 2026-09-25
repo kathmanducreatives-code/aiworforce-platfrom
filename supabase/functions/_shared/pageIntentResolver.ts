@@ -219,8 +219,12 @@ export function resolvePagesFromMap(
   for (const intent of intents) {
     if (out.length >= maxPages) break;
     if (intent === "homepage") {
-      // The homepage is whichever mapped URL is the bare root.
-      const root = onSite.find((u) => pathOf(u) === "/") ?? `https://${host}/`;
+      // The homepage is the bare root of the company's OWN host (apex or www).
+      // A subdomain's root is same-site but is not the homepage: comfy.org's
+      // map can list docs.comfy.org/ before comfy.org/, and the docs root does
+      // not say what the company sells. No own-host root mapped → the canonical
+      // root of the domain itself.
+      const root = onSite.find((u) => pathOf(u) === "/" && registrableDomain(u) === host) ?? `https://${host}/`;
       take(intent, root);
       continue;
     }

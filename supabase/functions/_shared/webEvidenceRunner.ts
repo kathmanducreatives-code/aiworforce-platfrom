@@ -39,6 +39,22 @@ import {
 } from "./pageIntentResolver.ts";
 import { toStoredRows, writeWebEvidence } from "./webEvidenceStore.ts";
 
+/** Mapped URLs a `map` log line may carry, at most. */
+export const MAP_LOG_SAMPLE = 12;
+
+/** Up to `n` distinct mapped paths, in map order — enough to diagnose selection, never the whole map. */
+export function mappedSample(mapped: readonly string[], n: number): string[] {
+  const out: string[] = [];
+  for (const u of mapped) {
+    if (out.length >= n) break;
+    let path: string;
+    try { path = new URL(u).pathname || "/"; } catch { continue; }
+    if (!out.includes(path)) out.push(path);
+  }
+  return out;
+}
+
+
 export interface EvidenceRunBudget extends PlannerBudget {
   max_companies: number;
   /** Across the whole slice, all companies together. */
@@ -273,9 +289,25 @@ export async function runEvidenceCollection(i: {
         .catch(() => [] as string[]);
       mappedCount = Array.isArray(mapped) ? mapped.length : 0;
       targets = resolvePagesFromMap(req.domain, req.page_intents, mapped ?? [], allowance);
+      // ── THE HOMEPAGE, WHEN NO PREFERRED PAGE EXISTS ────────────────────
+      //
+      // Canary 3be88a89: comfy.org mapped 120 URLs, none served product,
+      // pricing, customers, docs or about, so nothing was read and ComfyUI's
+      // business model stayed PENDING one claim short of qualifying. The site's
+      // own root is the page most likely to say what the company sells and to
+      // whom. Fallback ONLY: preferred pages win whenever one matches; the root
+      // must be same-site (it is resolved from the same mapped, same-site,
+      // non-excluded URLs); and it is one page inside the existing allowance.
+      let homepageFallback = false;
+      if (targets.length === 0 && mappedCount > 0 && allowance > 0 && !req.page_intents.includes("homepage")) {
+        targets = resolvePagesFromMap(req.domain, ["homepage"], mapped ?? [], 1);
+        homepageFallback = targets.length > 0;
+      }
       log("map", {
         company: debt.company_name, domain: req.domain,
-        mapped: mappedCount, selected: targets.map((t) => t.url),
+        mapped: mappedCount, selected: targets.map((t) => t.url), homepage_fallback: homepageFallback,
+        // A bounded sample for diagnosis — never the whole map.
+        mapped_sample: mappedSample(mapped ?? [], MAP_LOG_SAMPLE),
       });
     } else {
       // V1 / Company Brain callers: unchanged.

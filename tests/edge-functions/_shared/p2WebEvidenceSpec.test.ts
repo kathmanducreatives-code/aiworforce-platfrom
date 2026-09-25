@@ -49,8 +49,9 @@ Deno.test("a governed fetch sends exactly the spec, reserves it, and records the
   assertEquals(sent, [{ url: "https://fuseai.com/pricing", extraction_goal: "requirement evidence", max_pages: 1 }]);
   const res = s.spend_ledger.reservations;
   assertEquals(res.length, 1);
-  assertEquals([res[0].status, res[0].purpose, res[0].provisional_usd, res[0].candidate_keys], ["executed", "web_evidence", 0.0064, ["fuse"]]);
-  assertEquals(s.mission_trace.events.map((e) => e.type), ["spec_compiled", "call_reserved", "call_executed"]);
+  assertEquals([res[0].status, res[0].purpose, res[0].provisional_usd, res[0].settled_usd, res[0].settlement_source, res[0].candidate_keys],
+    ["settled", "web_evidence", 0.0064, 0.0064, "derived_floor", ["fuse"]]);
+  assertEquals(s.mission_trace.events.map((e) => e.type), ["spec_compiled", "call_reserved", "call_executed", "call_settled"]);
   assertEquals(s.mission_trace.events[2].detail.credits, 1);
 });
 
