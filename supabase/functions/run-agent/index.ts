@@ -2355,9 +2355,28 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             return recentlyCheckedPages((data ?? []) as Array<{ task_id: string | null; candidate_keys: unknown }>, String(task.id));
           })()
           : new Set<string>();
+        // PAGES THIS WORKSPACE ALREADY READ: earlier company-search DISCOVERY
+        // inputs, so the screen's first page is the next unread one for the
+        // same filters (`nextUnreadPage`). This task's own calls are excluded —
+        // within a lineage the page cursor is carried by the checkpoint.
+        const priorFundingScreenSearches = fundingScreen.plan
+          ? await (async () => {
+            const since = new Date(Date.now() - fundingScreen.plan!.recently_checked_days * 86_400_000).toISOString();
+            const { data, error } = await supabase.from("lead_execution_calls")
+              .select("task_id, input:request_input->provider_call_spec->serialized_input")
+              .eq("workspace_id", workspace_id).eq("record_kind", "provider_call").eq("stage", "company_discovery")
+              .eq("request_input->>selected_actor_key", "apify_linkedin_company_search").eq("status", "succeeded")
+              .gte("created_at", since).limit(500);
+            if (error) console.error("[run-agent][funding-screen] prior-searches read failed", error.message);
+            return ((data ?? []) as Array<{ task_id: string | null; input: unknown }>)
+              .filter((r) => r.task_id !== String(task.id) && !!r.input && typeof r.input === "object")
+              .map((r) => r.input as Record<string, unknown>);
+          })()
+          : [];
         console.log("[run-agent][funding-screen]", {
           task_id: task.id, reason: fundingScreen.reason, plan: fundingScreen.plan,
-          priced: fundingScreen.priced, recently_checked: recentlyFundingChecked.size,
+          priced: fundingScreen.priced.length, recently_checked: recentlyFundingChecked.size,
+          prior_searches: priorFundingScreenSearches.length,
         });
         console.log("[run-agent][lead-mission]", {
           task_id: task.id,
@@ -4082,6 +4101,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 fundingScreen: {
                   plan: fundingScreen.plan,
                   recentlyChecked: recentlyFundingChecked,
+                  priorSearches: priorFundingScreenSearches,
                   screen: async (targets, state) => (await fundingStageVerifier({ fallback: false }).verify(targets, {
                     call: await verifierCallFor(state),
                     now: () => new Date().toISOString(),

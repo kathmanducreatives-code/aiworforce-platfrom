@@ -12,8 +12,8 @@
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  fundingScreenPlan, recentlyCheckedPages, screenAdmissionOrder, SCREEN_MAX_POOL_ROWS,
-  type FundingScreenPlan,
+  fundingScreenPlan, nextUnreadPage, recentlyCheckedPages, screenAdmissionOrder, searchShape, SCREEN_MAX_POOL_ROWS,
+  SCREEN_MAX_TOPUP_ROWS, type FundingScreenPlan,
 } from "../../../supabase/functions/_shared/fundingPoolScreen.ts";
 import { deriveMissionCriteria } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import { PRODUCTION_READINESS } from "../../../supabase/functions/_shared/routeReadiness.ts";
@@ -42,16 +42,40 @@ type Row = Record<string, unknown>;
 
 // ═══════════════════════════════════════════════════════════════ the plan ══
 
-Deno.test("PRICED FIRST: at $0.14 / 2 candidates the widest pool that fits is 5 rows, worst case $0.139", () => {
+Deno.test("PRICED FIRST: at $0.14 / 2 candidates — first page 4, top-up up to 2, ONE Atomus read of <=4, worst case $0.1385", () => {
   const r = fundingScreenPlan({ criteria: CRITERIA, runBudget: parseRunBudget({ provider_usd: 0.14, max_candidates: 2 }),
     requestedCount: 1, downstream_verifiers_usd: DOWNSTREAM });
   assertEquals(r.reason, "screening");
-  assertEquals([r.plan!.pool_rows, r.plan!.admit, r.plan!.scraper_mode], [5, 2, "short"]);
-  assertEquals(r.plan!.worst_case_usd, 0.139);
-  assert(r.plan!.worst_case_usd <= 0.14 && r.plan!.worst_case_usd <= 0.15);
-  assertEquals(r.plan!.window_days, 365);
-  // Every pool size tried is recorded, so "why five?" is answerable.
-  assertEquals(r.priced.map((p) => [p.pool_rows, p.worst_case_usd]), [[3, 0.128], [4, 0.1335], [5, 0.139]]);
+  const p = r.plan!;
+  assertEquals([p.first_rows, p.topup_rows, p.pool_rows, p.screen_max, p.fresh_target, p.admit, p.scraper_mode],
+    [4, 2, 6, 4, 3, 2, "short"]);
+  assertEquals(p.worst_case_usd, 0.1385);
+  assert(p.worst_case_usd <= 0.14 - 0.001, "priced with the margin kept under provider_usd");
+  assertEquals(p.window_days, 365);
+  // Every shape tried is recorded; the five-company shapes do not fit with a top-up.
+  const s5 = r.priced.filter((x) => x.screen_max === 5 && x.topup_rows > 0);
+  assert(s5.length > 0 && s5.every((x) => x.worst_case_usd > 0.139), JSON.stringify(s5));
+});
+
+Deno.test("WITHOUT A TOP-UP NOTHING CHEAPER IS HIDDEN: the single-page shape is only the fallback", () => {
+  // At $0.14 a single 5-row page (the canary-6 shape, $0.139) also fits, but a
+  // shape that can fetch fresh candidates is preferred whenever one fits.
+  const r = fundingScreenPlan({ criteria: CRITERIA, runBudget: parseRunBudget({ provider_usd: 0.14, max_candidates: 2 }),
+    requestedCount: 1, downstream_verifiers_usd: DOWNSTREAM });
+  assert(r.plan!.topup_rows > 0);
+  assert(r.priced.some((x) => x.topup_rows === 0) === false, "never reached the fallback pass");
+});
+
+Deno.test("THE PAGE CURSOR: past every page a same-shaped search read; filters decide 'same'; bounded by the actor", () => {
+  const us = { locations: ["United States"], industryIds: ["4", "6"], companySize: ["11-50"] };
+  assertEquals(nextUnreadPage([], us), 1);
+  assertEquals(nextUnreadPage([{ ...us, maxItems: 2 }, { ...us, maxItems: 5, startPage: 1, takePages: 5 }], us), 2,
+    "every canary read the top of page 1");
+  assertEquals(nextUnreadPage([{ ...us, industryIds: ["6", "4"], maxItems: 2, startPage: 3 }], us), 4, "order of filters is not shape");
+  assertEquals(nextUnreadPage([{ ...us, maxItems: 25, startPage: 2 }], us), 5, "a 25-row read spans pages 2-4");
+  assertEquals(nextUnreadPage([{ ...us, industryIds: ["4"], maxItems: 2 }], us), 1, "a different filter set is a different search");
+  assertEquals(nextUnreadPage([{ ...us, maxItems: 2, startPage: 20 }], us), 20, "never past the actor's page bound");
+  assertEquals(searchShape({ ...us, maxItems: 9, scraperMode: "short", startPage: 7 }), searchShape(us), "paging and size of read are not shape");
 });
 
 Deno.test("NEVER WEAKENS THE BUDGET: at $0.10 no wider pool fits, so the screen is OFF and discovery is unchanged", () => {
@@ -111,14 +135,18 @@ const atomusRounds = (slug: string, dates: string[], complete: boolean): Row => 
   company: { financial: { funding: { type: "SEED", num_funding_rounds: complete ? dates.length : dates.length + 3,
     rounds: dates.map((d) => ({ announced_at: d, raised_amount: 1_000_000, type: "SEED_ROUND" })), date: dates[0] } } } });
 
-/** Five companies, in LinkedIn's order: two recently funded, one long-ago-and-complete, two unknown. */
-const POOL = ["alpha", "bravo", "charlie", "delta", "echo"];
+/** LinkedIn's result pages for the mission's filters: page 1 is the head every canary read. */
+const PAGES: Record<number, Row[]> = {
+  1: ["alpha", "bravo", "charlie", "delta"].map(searchRow),
+  2: ["echo", "foxtrot", "golf", "hotel"].map(searchRow),
+};
 const ATOMUS_SAYS: Record<string, (s: string) => Row> = {
   alpha: atomusEmpty,
   bravo: (s) => atomusRounds(s, [daysAgo(800)], true),       // complete history, nothing recent → FAIL
   charlie: (s) => atomusRounds(s, [daysAgo(90)], false),     // a dated round inside 365 days → PASS
-  delta: atomusEmpty,
-  echo: (s) => atomusRounds(s, [daysAgo(200)], false),       // PASS
+  delta: (s) => atomusRounds(s, [daysAgo(200)], false),      // PASS
+  echo: (s) => atomusRounds(s, [daysAgo(120)], false),       // PASS
+  foxtrot: atomusEmpty,
 };
 
 const PLAN: FundingScreenPlan = fundingScreenPlan({ criteria: CRITERIA, runBudget: parseRunBudget({ provider_usd: 0.14, max_candidates: 2 }),
@@ -132,8 +160,12 @@ Deno.test("THE CANARY'S GRAPH: Lead V2 enters through general company discovery 
 
 async function run(o: {
   screen?: boolean; recentlyChecked?: string[]; atomus?: Record<string, (s: string) => Row>;
-  /** The search rows, when not the default five. */
-  rows?: Row[];
+  /** LinkedIn's pages, when not the default two. */
+  pages?: Record<number, Row[]>;
+  /** This workspace's earlier same-window company searches (the page cursor's input). */
+  priorSearches?: Record<string, unknown>[];
+  /** A plan other than the priced one (e.g. a narrower Atomus cap). */
+  plan?: FundingScreenPlan;
   /** A continuation: the previous slice's state and resume records. */
   resume?: { state: Record<string, unknown>; records: unknown[] };
 } = {}) {
@@ -146,7 +178,8 @@ async function run(o: {
       const input = (call as unknown as { input: Record<string, unknown> }).input ?? {};
       calls.push({ actorKey: call.actorKey, input });
       if (call.actorKey === "apify_linkedin_company_search") {
-        return Promise.resolve((o.rows ?? POOL.map(searchRow)).slice(0, Number(input.maxItems ?? POOL.length)) as Row[]);
+        const onPage = (o.pages ?? PAGES)[Number(input.startPage ?? 1)] ?? [];
+        return Promise.resolve(onPage.slice(0, Number(input.maxItems ?? onPage.length)) as Row[]);
       }
       if (call.actorKey === "apify_linkedin_company_details") {
         return Promise.resolve(((input.companies as string[]) ?? []).map((u) => ({
@@ -183,7 +216,7 @@ async function run(o: {
   } as never, {
     // AS run-agent BUILDS IT for Lead V2: the executability gate enforced.
     mission: MISSION, plan: GRAPH,
-    maxCandidates: o.screen === false ? 2 : PLAN.pool_rows, remainingLeads: 1, readEnv: () => undefined,
+    maxCandidates: o.screen === false ? 2 : (o.plan ?? PLAN).pool_rows, remainingLeads: 1, readEnv: () => undefined,
     identity: { workspace_id: "ws-test", task_id: "task-screen" },
     // AS LEAD V2 RUNS: the ProviderCallSpec spine on, under the run's budget.
     // Canary 8ac3d99e failed exactly here — the spec capped discovery at
@@ -197,8 +230,9 @@ async function run(o: {
     } : {}),
     ...(o.screen === false ? {} : {
       fundingScreen: {
-        plan: PLAN,
+        plan: o.plan ?? PLAN,
         recentlyChecked: new Set(o.recentlyChecked ?? []),
+        priorSearches: o.priorSearches ?? [],
         screen: async (targets: VerificationTarget[], _state: unknown) => {
           screened.push(targets.map((t) => t.company_key));
           const r = await fundingStageVerifier({ fallback: false }).verify(targets, {
@@ -228,20 +262,20 @@ async function run(o: {
   };
 }
 
-Deno.test("SCREEN: 5 short rows, ONE Atomus read over the pool, the two PASSES admitted — details bought for them alone", async () => {
+Deno.test("SCREEN: a fresh first page of 4 short rows, ONE Atomus read, the two PASSES admitted — details for them alone, no top-up", async () => {
   const r = await run();
-  assertEquals(r.search.length, 1);
-  assertEquals([r.search[0].input.maxItems, r.search[0].input.scraperMode], [5, "short"]);
+  assertEquals(r.search.length, 1, "the first page held enough fresh candidates: no second page");
+  assertEquals([r.search[0].input.maxItems, r.search[0].input.scraperMode, r.search[0].input.startPage], [4, "short", 1]);
   assertEquals(r.screened.length, 1, "one Atomus read");
-  assertEquals(r.screened[0].length, 5, "over the whole pool");
+  assertEquals(r.screened[0].length, 4, "over the whole pool");
   assertEquals(r.pvalyouBought, [], "the screen never asks Pvalyou");
-  assertEquals([...r.detailsFor].sort(), [page("charlie"), page("echo")], "only the admitted two get details");
+  assertEquals([...r.detailsFor].sort(), [page("charlie"), page("delta")], "only the admitted two get details");
   assertEquals(r.byKey("bravo").investigation_state, "excluded_permanently");
   assertEquals(r.byKey("bravo").shortlist_exclusion, "funding_screen_fail");
   // ISSUE 3 (canary 16699a45): with both admissions spent, the still-open rest
   // of the pool can never be investigated this mission — closed, with a reason,
   // so continuation does not count it as work.
-  for (const s of ["alpha", "delta"]) {
+  for (const s of ["alpha"]) {
     assertEquals(r.byKey(s).investigation_state, "excluded_permanently", `${s} is closed, not waiting`);
     assertEquals(r.byKey(s).shortlist_exclusion, "screen_not_admitted");
   }
@@ -249,7 +283,7 @@ Deno.test("SCREEN: 5 short rows, ONE Atomus read over the pool, the two PASSES a
 });
 
 Deno.test("SCREEN: no pass in the pool → the top two still-open companies by rank are admitted; the FAIL never is", async () => {
-  const r = await run({ atomus: { ...ATOMUS_SAYS, charlie: atomusEmpty, echo: atomusEmpty } });
+  const r = await run({ atomus: { ...ATOMUS_SAYS, charlie: atomusEmpty, delta: atomusEmpty } });
   assertEquals([...r.detailsFor].sort(), [page("alpha"), page("charlie")]);
   assertFalse(r.detailsFor.includes(page("bravo")));
 });
@@ -258,12 +292,13 @@ Deno.test("SCREEN: a company this workspace checked recently is not screened aga
   const r = await run({ recentlyChecked: [page("charlie") + "/"] });
   assertFalse(r.screened[0].includes(page("charlie")), "no second Atomus read");
   assertEquals(r.byKey("charlie").shortlist_exclusion, "recently_funding_checked");
-  assertEquals(r.screened[0].length, 4);
-  assertEquals([...r.detailsFor].sort(), [page("alpha"), page("echo")], "echo passes; alpha is the best-ranked open one");
+  assertEquals(r.screened[0].length, 3);
+  assertEquals(r.search.length, 1, "three fresh is the target: no top-up for one repeat");
+  assertEquals([...r.detailsFor].sort(), [page("alpha"), page("delta")], "delta passes; alpha is the best-ranked open one");
 });
 
 Deno.test("SCREEN → FALLBACK: an admitted company Atomus left open routes to Pvalyou next — not blocked, not re-read by Atomus", async () => {
-  const r = await run({ atomus: { ...ATOMUS_SAYS, charlie: atomusEmpty, echo: atomusEmpty } });
+  const r = await run({ atomus: { ...ATOMUS_SAYS, charlie: atomusEmpty, delta: atomusEmpty } });
   const cands = missionCandidatesFrom({ companies: r.companies }, { missionId: "task-screen" });
   const alpha = cands.find((c) => c.company_key === page("alpha"))!;
   const e = evaluateEligibility(CRITERIA, alpha.graph);
@@ -280,7 +315,8 @@ Deno.test("REGRESSION: without a screen, discovery is exactly what it was — fu
 });
 
 Deno.test("THE CAP HOLDS: the pool is at most SCREEN_MAX_POOL_ROWS, and admission never exceeds max_candidates", async () => {
-  assert(PLAN.pool_rows <= SCREEN_MAX_POOL_ROWS);
+  assert(PLAN.pool_rows <= SCREEN_MAX_POOL_ROWS + SCREEN_MAX_TOPUP_ROWS);
+  assert(PLAN.screen_max <= SCREEN_MAX_POOL_ROWS);
   const r = await run();
   const investigated = r.companies.filter((c) => c.investigation_state === "in_flight" || c.investigation_state === "investigated");
   assertEquals(investigated.length, PLAN.admit);
@@ -298,13 +334,79 @@ Deno.test("ISSUE 1 — A CLOSED COMPANY STAYS CLOSED ACROSS A RESUME: the screen
   assertEquals(s2.companies.filter((c) => c.investigation_state === "pending_investigation").length, 0,
     "no frontier for continuation to chase");
   assertEquals(s2.screened, [], "and nothing is screened twice");
+  assertEquals(s2.search.length, 0, "and no search page is bought twice");
 });
 
 Deno.test("ISSUE 2 — A DOMAINLESS PLACEHOLDER PAGE never reaches the paid screen", async () => {
   // "Stealth Startup" with no website — canary 16699a45's third new row, which Atomus was paid to read.
   const stealth = { ...searchRow("stealth-startup-community"), name: "Stealth Startup", website: null };
-  const r = await run({ rows: [stealth, ...["alpha", "bravo", "charlie", "delta"].map(searchRow)] });
+  const r = await run({ pages: { 1: [stealth, ...["alpha", "bravo", "charlie"].map(searchRow)], 2: PAGES[2] } });
   assertFalse(r.screened.flat().includes(page("stealth-startup-community")), "no Atomus read for a placeholder");
   assertFalse(r.companies.some((c) => c.key === page("stealth-startup-community")), "it leaves the working set");
-  assertEquals(r.screened[0].length, 4);
+  assertEquals(r.screened[0].length, 3);
+});
+
+// ═════════════════════════════════════════════ fresh candidates: cursor and top-up ══
+
+/** The first call's input as the engine sends it, to use as an earlier "same-shaped" search. */
+async function firstSearchInput() { return (await run()).search[0].input; }
+
+Deno.test("CURSOR: the first page is the next one this workspace has not read — canary history reads page 1, so page 2", async () => {
+  const prior = { ...(await firstSearchInput()), maxItems: 2, startPage: 1 };
+  const r = await run({ priorSearches: [prior] });
+  assertEquals([r.search[0].input.startPage, r.search[0].input.maxItems, r.search[0].input.scraperMode], [2, 4, "short"]);
+  assertEquals([...r.screened[0]].sort(), ["echo", "foxtrot", "golf", "hotel"].map(page).sort(), "fresh companies, not the head");
+  assertEquals(r.search.length, 1);
+});
+
+Deno.test("TOP-UP: a first page that is mostly RECENTLY CHECKED buys ONE later page, within the row allowance", async () => {
+  const r = await run({ recentlyChecked: ["alpha", "bravo", "charlie"].map(page) });
+  assertEquals(r.search.length, 2, "one top-up page");
+  assertEquals([r.search[1].input.startPage, r.search[1].input.maxItems, r.search[1].input.scraperMode], [2, 2, "short"],
+    "the next page, only the rows the allowance has left");
+  const rows = r.search.reduce((n, c) => n + Number(c.input.maxItems), 0);
+  assert(rows <= PLAN.pool_rows, `${rows} rows > ${PLAN.pool_rows}`);
+  assertEquals(r.screened.length, 1, "still ONE Atomus read, after both pages");
+  assertEquals([...r.screened[0]].sort(), ["delta", "echo", "foxtrot"].map(page).sort(), "only fresh companies are screened");
+  assertEquals([...r.detailsFor].sort(), [page("delta"), page("echo")], "the two passes are admitted");
+});
+
+Deno.test("TOP-UP: placeholders and duplicates on the first page are not fresh either", async () => {
+  const stealth = { ...searchRow("stealth-startup-community"), name: "Stealth Startup", website: null };
+  const confidential = { ...searchRow("confidential-careers"), name: "Confidential Careers", website: null };
+  const dup = { ...searchRow("alpha"), name: "Alpha Inc." };
+  const r = await run({ pages: { 1: [stealth, searchRow("alpha"), dup, confidential], 2: PAGES[2] } });
+  assertEquals(r.search.length, 2, "one fresh company of four rows → the top-up page");
+  assertEquals(r.search[1].input.startPage, 2);
+  assertEquals([...r.screened[0]].sort(), ["alpha", "echo", "foxtrot"].map(page).sort());
+  assertEquals(r.screened[0].filter((k) => k === page("alpha")).length, 1, "a duplicate is screened once");
+});
+
+Deno.test("TOP-UP IS BOUNDED: an empty later page ends discovery — no third page, no re-plan onto another provider", async () => {
+  const r = await run({ recentlyChecked: ["alpha", "bravo", "charlie", "delta"].map(page), pages: { 1: PAGES[1], 2: [] } });
+  assertEquals(r.search.length, 2);
+  assert(r.calls.every((c) => ["apify_linkedin_company_search", "apify_linkedin_company_details"].includes(c.actorKey)),
+    JSON.stringify(r.calls.map((c) => c.actorKey)));
+  assertEquals(r.screened, [], "nothing fresh to screen, nothing bought");
+  assertEquals(r.detailsFor, []);
+});
+
+Deno.test("SCREEN CAP: a fresh pool wider than one Atomus read is screened up to screen_max; the rest is closed, never admitted unscreened", async () => {
+  const r = await run({ plan: { ...PLAN, screen_max: 3 } });
+  assertEquals(r.screened[0].length, 3);
+  assertEquals(r.byKey("delta").investigation_state, "excluded_permanently");
+  assertEquals(r.byKey("delta").shortlist_exclusion, "screen_pool_overflow");
+  assertFalse(r.detailsFor.includes(page("delta")));
+});
+
+Deno.test("TOP-UP BELOW THE YIELD FLOOR: a first page of nothing but placeholders still gets its later page", async () => {
+  // Admitted over raw is 0 here — beneath MIN_PAGINATION_YIELD, where ordinary
+  // pagination reads "this index does not hold what the mission wants". For the
+  // screen a stale page is exactly when the top-up must run.
+  const ph = (slug: string, name: string) => ({ ...searchRow(slug), name, website: null });
+  const r = await run({ pages: { 1: [ph("stealth-a", "Stealth Startup"), ph("conf-b", "Confidential"),
+    ph("free-c", "Freelance"), ph("self-d", "Self Employed")], 2: PAGES[2] } });
+  assertEquals(r.search.length, 2, "the top-up ran");
+  assertEquals([r.search[1].input.startPage, r.search[1].input.maxItems], [2, 2]);
+  assertEquals([...r.screened[0]].sort(), ["echo", "foxtrot"].map(page).sort(), "no placeholder is ever screened");
 });

@@ -274,7 +274,7 @@ import { hashInput as p2HashInput } from "./hiringActorInputs.ts";
 import { toRepoKey } from "./actorIdentity.ts";
 import { tightenCeilings, type RunBudget } from "./runBudget.ts";
 import {
-  screenAdmissionOrder, type FundingScreenPlan, type ScreenVerdict,
+  nextUnreadPage, screenAdmissionOrder, type FundingScreenPlan, type ScreenVerdict,
 } from "./fundingPoolScreen.ts";
 
 /**
@@ -2242,6 +2242,11 @@ export interface CapabilityEngineOpts {
     screen: (targets: VerificationTarget[], state: CapabilityExecutionState) => Promise<VerifierFinding[]>;
     /** LinkedIn company URLs this workspace funding-checked within `plan.recently_checked_days`. */
     recentlyChecked?: ReadonlySet<string>;
+    /**
+     * This workspace's earlier company-search DISCOVERY inputs (same window), so
+     * the screen's first page starts past every page a same-shaped search read.
+     */
+    priorSearches?: readonly Record<string, unknown>[];
   };
   /**
    * Qualified leads still owed, for sizing the ADMITTED target.
@@ -3112,9 +3117,16 @@ export async function runCapabilityPlan(
       c.shortlisted = false;
       recentlyChecked.push(c.key);
     }
-    const pool = companies.filter((c) => open(c) && pageOf(c))
-      .sort((a, b) => a.investigation_rank - b.investigation_rank)
-      .slice(0, fs.plan.pool_rows);
+    const openPool = companies.filter((c) => open(c) && pageOf(c))
+      .sort((a, b) => a.investigation_rank - b.investigation_rank);
+    const pool = openPool.slice(0, fs.plan.screen_max);
+    // BEYOND ONE ATOMUS READ, CLOSED. A company the screen did not read would be
+    // admitted unscreened and bought a second Atomus call by the verifier.
+    for (const c of openPool.slice(fs.plan.screen_max)) {
+      c.investigation_state = "excluded_permanently";
+      c.shortlist_exclusion = "screen_pool_overflow";
+      c.shortlisted = false;
+    }
     // Verdicts from an earlier invocation's screen, so their order survives a re-rank.
     const verdicts = new Map<string, ScreenVerdict>(Object.entries(state.funding_screen?.verdicts ?? {}));
     if (pool.length > 0) {
@@ -3744,13 +3756,21 @@ export async function runCapabilityPlan(
         contract_fields: P2_ACTOR_CONTRACTS[provider]?.fields ?? null,
         card_enums: p2Card?.verified_enums, card_limits: p2Card?.input_limits,
         count_bounds: purpose === "discovery"
-          ? (typeof discoveryBound === "number"
-            ? [{
-              value: discoveryBound, changed_by: "budget_policy" as const,
-              reason: candidatesLeft !== null && discoveryBound === candidatesLeft && candidatesLeft < (opts.maxCandidates ?? Infinity)
-                ? "candidates left in the run budget" : "discovery pool size for the requested count",
-            }]
-            : [])
+          ? [
+            ...(typeof discoveryBound === "number"
+              ? [{
+                value: discoveryBound, changed_by: "budget_policy" as const,
+                reason: candidatesLeft !== null && discoveryBound === candidatesLeft && candidatesLeft < (opts.maxCandidates ?? Infinity)
+                  ? "candidates left in the run budget" : "discovery pool size for the requested count",
+              }]
+              : []),
+            // THE FUNDING SCREEN'S PAGE SIZE: the first page asks for
+            // `first_rows`, leaving the rest of the allowance for the top-up. The
+            // planner's own count must not spend the top-up on page one.
+            ...(opts.fundingScreen && engineCount && engineCount > 0
+              ? [{ value: engineCount, changed_by: "budget_policy" as const, reason: "funding screen page size" }]
+              : []),
+          ]
           : (engineCount && engineCount > 0 && purpose !== "identity"
             ? [{ value: engineCount, changed_by: "budget_policy" as const, reason: "engine batch sizing for this stage" }]
             : []),
@@ -5092,7 +5112,7 @@ export async function runCapabilityPlan(
       //   this company still owe a stage?
       //
       // Nothing new is invented, and a company is available only if BOTH agree.
-      const availableAdmittedNow = (): number => {
+      const availableAdmittedNow = (skip?: (c: EngineCompany) => boolean): number => {
         const scored = prequalifyDiscoveredCompanies(
           companies.map((c) => c.company),
           admissionBounds,
@@ -5109,10 +5129,24 @@ export async function runCapabilityPlan(
           if (!admittedKeys.has(genericPrequalificationKey(c.company))) continue;
           if (c.investigation_state === "excluded_permanently") continue;
           if (nextStageFor(toResumeRecord(c)) === null) continue;
+          if (skip?.(c)) continue;
           n++;
         }
         return n;
       };
+      // ── UNDER THE FUNDING SCREEN, "ENOUGH" MEANS ENOUGH FRESH ────────────
+      //
+      // A company this workspace funding-checked recently is admitted by the
+      // free pass but will be closed by the screen before any spend, so it is
+      // not a candidate this run can use. Counting it made a page of repeats
+      // look full (canary 16699a45: 2 of 5 rows were recently checked).
+      // Placeholders and duplicates are already outside `availableAdmittedNow`.
+      const screenRecent = new Set([...(opts.fundingScreen?.recentlyChecked ?? [])]
+        .map((u) => atomusInput(u)).filter((u): u is string => !!u));
+      const freshAvailableNow = (): number => availableAdmittedNow((c) => {
+        const page = atomusInput(c.identity?.linkedin_company_url ?? c.company.linkedin_company_url ?? null);
+        return !!page && screenRecent.has(page);
+      });
 
       // ── HOW MANY ADMITTED CANDIDATES THIS SLICE ACTUALLY NEEDS ───────────
       //
@@ -5127,6 +5161,10 @@ export async function runCapabilityPlan(
         1,
         opts.remainingLeads ?? effectiveRequestedCount(opts.mission),
       );
+      /** Does the pool hold enough to stop discovering? The one rule both loops read. */
+      const enoughCandidates = (): boolean => opts.fundingScreen
+        ? freshAvailableNow() >= opts.fundingScreen.plan.fresh_target
+        : availableAdmittedNow() >= admittedTarget;
       const admittedTarget = Math.min(
         maxCandidates,
         Math.max(MINIMUM_ADMITTED_TARGET, owedLeads * ADMITTED_PER_OWED_LEAD),
@@ -5367,7 +5405,7 @@ export async function runCapabilityPlan(
           // ADMITTED, NOT RETURNED. A pool of `maxCandidates` unusable rows is
           // not a finished pool, and this is the line that used to say it was.
           // The raw length still bounds spend below.
-          if (availableAdmittedNow() >= admittedTarget) break;
+          if (enoughCandidates()) break;
           // AND A HARD CEILING ON WHAT MAY BE BOUGHT. Admission decides whether
           // the pool is good enough; this decides how much of it we will pay to
           // hold at all, so a source with a very low admission rate cannot page
@@ -5605,6 +5643,22 @@ export async function runCapabilityPlan(
                 overruled: merged.strategy_overruled,
                 provenance: merged.provenance.filter(
                   (p) => merged.strategy_overruled.includes(p.field)),
+              });
+            }
+            // ── THE SCREEN'S FIRST PAGE: THE NEXT ONE THIS WORKSPACE HAS NOT READ ──
+            //
+            // Every canary read page 1 of the same filters and got the same head.
+            // The first screened call starts past every page a same-shaped search
+            // in this workspace already read, and asks for `first_rows`; a later
+            // page (the top-up) is the pass loop's ordinary pagination from there.
+            if (opts.fundingScreen && pagesTaken[provider] === undefined) {
+              const page = nextUnreadPage(opts.fundingScreen.priorSearches ?? [], merged.input as Record<string, unknown>);
+              (merged.input as Record<string, unknown>).startPage = page;
+              (merged.input as Record<string, unknown>).maxItems = opts.fundingScreen.plan.first_rows;
+              pagesTaken[provider] = page;
+              log("funding_screen_first_page", {
+                provider, page, rows: opts.fundingScreen.plan.first_rows,
+                prior_searches: opts.fundingScreen.priorSearches?.length ?? 0,
               });
             }
             const compiled = compileHarvestCompanySearchInput(
@@ -5892,7 +5946,7 @@ export async function runCapabilityPlan(
           discoveryStop = schemaFailure ? "schema_failure" : "run_pending";
           break;
         }
-        if (availableAdmittedNow() >= admittedTarget) {
+        if (enoughCandidates()) {
           discoveryStop = "admitted_target_met";
           break;
         }
@@ -5909,7 +5963,7 @@ export async function runCapabilityPlan(
         // Measured on admitted rows for the same reason as the pass above: a
         // re-plan is exactly what a pool of unusable rows needs, and the row
         // count was the thing hiding that it needed one.
-        const shortfall = availableAdmittedNow() < admittedTarget ||
+        const shortfall = !enoughCandidates() ||
           summary.observed_problems.length > 0;
         if (!shortfall) { discoveryStop = "admitted_target_met"; break; }
 
@@ -5934,11 +5988,15 @@ export async function runCapabilityPlan(
         const rawYield = companies.length > 0
           ? admittedNow() / companies.length
           : 0;
+        // UNDER THE FUNDING SCREEN the next page is the TOP-UP: it runs exactly
+        // when the first page was mostly stale (recently checked, placeholders,
+        // duplicates), which is when the yield floor would refuse it. Bounded by
+        // the screen's row allowance through `candidateBudgetSpent` and the spec.
         if (
           lastCard &&
           acceptedInputFields(lastCard).includes("startPage") &&
           pageLimit > pagesSoFar &&
-          rawYield >= MIN_PAGINATION_YIELD
+          (opts.fundingScreen ? opts.fundingScreen.plan.topup_rows > 0 : rawYield >= MIN_PAGINATION_YIELD)
         ) {
           const nextPage = pagesSoFar + 1;
           // THE SAME SELECTION, ONE PAGE ON. Rebuilt from the selection that ran
