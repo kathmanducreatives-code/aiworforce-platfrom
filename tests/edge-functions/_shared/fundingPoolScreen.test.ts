@@ -466,3 +466,61 @@ Deno.test("NO SLOT LEFT, NO SCREEN: an unscreened company still open after the a
   assertEquals(s2.byKey("alpha").investigation_state, "excluded_permanently");
   assertEquals(s2.byKey("alpha").shortlist_exclusion, "screen_not_admitted");
 });
+
+// ══════════════════ canary 207dbdb6: the screen reads ONCE, then discovery is over ══
+
+/** Canary 8's page 4: three long-dormant funding histories and one company nobody holds rounds for. */
+const PAGE_4: Row[] = ["loyyal", "tumblr", "cryptobriefing", "thehustle"].map(searchRow);
+const DORMANT: Record<string, (s: string) => Row> = {
+  loyyal: (s) => atomusRounds(s, [daysAgo(2612)], true),
+  tumblr: (s) => atomusRounds(s, [daysAgo(4181)], true),
+  thehustle: (s) => atomusRounds(s, [daysAgo(3483)], true),
+  cryptobriefing: atomusEmpty,
+};
+
+Deno.test("SCREEN READ → DISCOVERY EXHAUSTED even with an admission slot left (1 of 2 used)", async () => {
+  const s1 = await run({ pages: { 1: PAGE_4, 2: PAGES[2] }, atomus: DORMANT });
+  const st = s1.state as { funding_screen?: { screened?: boolean; admissions_spent?: boolean };
+    discovery_source_state?: { exhausted: boolean; stop_reason: string } };
+  assertEquals(s1.detailsFor, [page("cryptobriefing")], "the one company that did not fail is the only admission");
+  assertFalse(st.funding_screen?.admissions_spent === true, "a slot is still free");
+  assertEquals(st.funding_screen?.screened, true);
+  assertEquals([st.discovery_source_state?.exhausted, st.discovery_source_state?.stop_reason], [true, "screen_complete"]);
+  const d = decideAutoContinuation({
+    cancelled: false, qualified: 0, requestedCount: 1, frontierRemaining: 0, continuationsUsed: 2, maxContinuations: 5,
+    costUnitsUsed: 2, maxCostUnits: 50, barrenSlices: 1, providerFailed: false, pendingRuns: 0,
+    discoveryRoutesRemain: !st.discovery_source_state!.exhausted, verificationRoutesRemain: 0,
+  } as never);
+  assertFalse(d.continue);
+  assert(d.reason !== "replenishment_required", d.reason);
+});
+
+Deno.test("REPLAY 207dbdb6: a forced replenishment after the screen buys NO page 5 and NO second Atomus read", async () => {
+  const s1 = await run({ pages: { 1: PAGE_4, 2: PAGES[2] }, atomus: DORMANT });
+  const pages = (s1.state as { discovery_source_state?: { pages_taken: Record<string, number> } }).discovery_source_state!.pages_taken;
+  const s2 = await run({ resume: { state: s1.state, records: s1.resume_records }, replenish: pages, atomus: DORMANT });
+  assertEquals(s2.search.length, 0, "no second discovery page");
+  assertEquals(s2.screened, [], "no second Atomus read");
+  assertEquals(s2.detailsFor, []);
+});
+
+Deno.test("THE TOP-UP STILL RUNS: it is BEFORE the screen, so a stale first page is still topped up", async () => {
+  const r = await run({ recentlyChecked: ["alpha", "bravo", "charlie"].map(page) });
+  assertEquals(r.search.length, 2);
+  assertEquals(r.screened.length, 1, "and the screen still reads once, after both pages");
+  assertEquals((r.state as { funding_screen?: { screened?: boolean } }).funding_screen?.screened, true);
+});
+
+Deno.test("ONE READ: after the screen read its pool, an unscreened open company is closed — never a second Atomus read — even with a slot free", async () => {
+  const s1 = await run({ pages: { 1: PAGE_4, 2: PAGES[2] }, atomus: DORMANT });
+  const records = structuredClone(s1.resume_records) as Array<{ company_key: string; completed_operations?: string[];
+    snapshot?: { investigation_state?: string; shortlist_exclusion?: string | null } }>;
+  const loyyal = records.find((r) => r.company_key === page("loyyal"))!;
+  loyyal.completed_operations = (loyyal.completed_operations ?? []).filter((o) => !o.endsWith(ATOMUS));
+  loyyal.snapshot = { ...loyyal.snapshot, investigation_state: "pending_investigation", shortlist_exclusion: null };
+  const state = structuredClone(s1.state) as { funding_screen?: { verdicts: Record<string, string> } };
+  delete state.funding_screen!.verdicts[page("loyyal")];
+  const s2 = await run({ resume: { state: state as Record<string, unknown>, records }, atomus: DORMANT });
+  assertEquals(s2.screened, [], "the one priced read is already spent");
+  assertEquals(s2.byKey("loyyal").investigation_state, "excluded_permanently");
+});

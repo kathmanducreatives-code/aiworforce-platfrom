@@ -729,7 +729,9 @@ export interface CapabilityExecutionState {
       /** `run_budget.max_candidates` is spent: nothing further may be bought, or planned. */
       | "candidate_budget_spent"
       /** The funding screen admitted all it may: nothing discovered later could be investigated. */
-      | "screen_admissions_spent";
+      | "screen_admissions_spent"
+      /** The funding screen has read its pool: its one priced Atomus read is spent. */
+      | "screen_complete";
   };
   /**
    * Stage removals the chain PROPOSED and containment refused.
@@ -1037,6 +1039,14 @@ export interface CapabilityExecutionState {
      * never admit.
      */
     admissions_spent?: boolean;
+    /**
+     * The screen has READ the pool (its one Atomus call was made). The plan
+     * prices exactly one read, so discovery is over for the mission whether or
+     * not every admission was used — canary 207dbdb6 admitted 1 of 2 (three
+     * funding FAILs), reopened discovery for the free slot and bought page 5,
+     * which only a second, unpriced Atomus read could have screened.
+     */
+    screened?: boolean;
   };
   /** One entry per slice taken. "Why only ten?" is answerable from this. */
   investigation_slices: Array<{
@@ -2759,7 +2769,8 @@ export async function runCapabilityPlan(
   const candidateBudgetSpent = (): boolean => {
     // UNDER THE FUNDING SCREEN, SPENT ADMISSIONS SPEND THE BUDGET TOO: rows left
     // in the allowance could only find companies no slot remains for.
-    if (opts.fundingScreen && state.funding_screen?.admissions_spent === true) return true;
+    if (opts.fundingScreen &&
+      (state.funding_screen?.admissions_spent === true || state.funding_screen?.screened === true)) return true;
     const limit = discoveryRowAllowance();
     return limit !== null && (state.discovery_rows_bought ?? 0) >= limit;
   };
@@ -3114,9 +3125,10 @@ export async function runCapabilityPlan(
   const applyFundingScreen = async (companies: EngineCompany[]): Promise<void> => {
     const fs = opts.fundingScreen;
     if (!fs) return;
-    // NO SLOT LEFT, NO SCREEN. A company found after the admissions were spent
-    // can never be investigated; reading its funding is spend with no use.
-    if (state.funding_screen?.admissions_spent === true) {
+    // NO SLOT LEFT, OR THE ONE READ ALREADY MADE: NO SCREEN. A company found
+    // after the admissions were spent can never be investigated, and one found
+    // after the screen read its pool would need a second, unpriced Atomus read.
+    if (state.funding_screen?.admissions_spent === true || state.funding_screen?.screened === true) {
       let closed = 0;
       for (const c of companies) {
         if (c.investigation_state !== "pending_investigation") continue;
@@ -3165,6 +3177,13 @@ export async function runCapabilityPlan(
         criterion: { criterion_id: fs.plan.criterion_id, dimension: "funding", value: null, window_days: fs.plan.window_days },
       }));
       const findings = await fs.screen(targets, state);
+      // THE ONE PRICED READ IS SPENT: discovery is over for this mission. Recorded
+      // on the state the checkpoint carries, so the next slice's continuation
+      // reads "no discovery routes remain".
+      state.funding_screen = { ...state.funding_screen, verdicts: state.funding_screen?.verdicts ?? {}, screened: true };
+      if (state.discovery_source_state) {
+        state.discovery_source_state = { ...state.discovery_source_state, exhausted: true, stop_reason: "screen_complete" };
+      }
       for (const f of findings) {
         const c = pool.find((x) => x.key === f.company_key);
         if (!c) continue;
@@ -3596,7 +3615,7 @@ export async function runCapabilityPlan(
       // routes remain" instead of the pre-admission record that said rows were
       // left (canary 1a0c3234: `replenishment_required` on 4 of 6 rows bought).
       if (state.funding_screen?.admissions_spent !== true) {
-        state.funding_screen = { verdicts: state.funding_screen?.verdicts ?? {}, admissions_spent: true };
+        state.funding_screen = { ...state.funding_screen, verdicts: state.funding_screen?.verdicts ?? {}, admissions_spent: true };
         if (state.discovery_source_state) {
           state.discovery_source_state = {
             ...state.discovery_source_state, exhausted: true, stop_reason: "screen_admissions_spent",
