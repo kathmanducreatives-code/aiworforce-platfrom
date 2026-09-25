@@ -14,7 +14,7 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { fundingStageVerifier } from "../../../supabase/functions/_shared/fundingStageVerifier.ts";
 import type {
-  ClaimVerifier, VerificationTarget, VerifierCall, VerifierCallOutcome, VerifierFinding,
+  ClaimVerifier, PendingVerifierRun, VerificationTarget, VerifierCall, VerifierCallOutcome, VerifierFinding,
 } from "../../../supabase/functions/_shared/claimVerifier.ts";
 import { attemptedRoutes, ledgerBoundCall, verificationTargets } from "../../../supabase/functions/_shared/claimVerifier.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
@@ -189,10 +189,19 @@ const item = (k: string, dimension: string, value: unknown): EvidenceItem => ({
   method: "provider_field", observed_at: NOW.toISOString(), valid_until: null, confidence: "high", derived_from: [], mission_id: "m", origin: "web",
 } as EvidenceItem);
 
-async function phase(o: { pvalyou: (domains: string[]) => Row[]; criteria?: typeof CRITERIA; qualifiedAlready?: number; mutate?: (w: ReturnType<typeof canaryWorld>) => void }) {
+async function phase(o: {
+  pvalyou: (domains: string[]) => Row[] | "running"; criteria?: typeof CRITERIA; qualifiedAlready?: number;
+  mutate?: (w: ReturnType<typeof canaryWorld>) => void;
+  /** Atomus's row per slug; empty-but-found (the live shape) by default. */
+  atomus?: (slug: string) => Row;
+  /** A later slice: the same world, and the runs the earlier slice left in flight. */
+  world?: ReturnType<typeof canaryWorld>; pending?: PendingVerifierRun[];
+}) {
   const crit = o.criteria ?? CRITERIA;
-  const w = canaryWorld(); o.mutate?.(w);
+  const w = o.world ?? canaryWorld(); o.mutate?.(w);
   const bought: Record<string, string[][]> = { atomus: [], pvalyou: [], jobs: [], firecrawl: [] };
+  /** Pvalyou calls that re-attached to an earlier run rather than starting one. */
+  const resumed: string[] = [];
   const candidates = () => [...w.items.entries()].map(([k, its]) => {
     const graph = buildCompanyEvidenceGraph(k, its, { now: NOW });
     const e = evaluateEligibility(crit, graph);
@@ -209,21 +218,23 @@ async function phase(o: { pvalyou: (domains: string[]) => Row[]; criteria?: type
     candidates, qualified: () => (o.qualifiedAlready ?? 0) + candidates().filter((c) => c.eligibility === "eligible").length,
     criteriaValue: (id) => crit.find((c) => c.id === id)?.value ?? null,
     criteriaWindow: (id) => crit.find((c) => c.id === id)?.time_window?.days ?? null,
-    verifiers: [fundingStageVerifier(), hiring, firecrawl], readiness: PRODUCTION_READINESS, pending: [],
+    verifiers: [fundingStageVerifier(), hiring, firecrawl], readiness: PRODUCTION_READINESS, pending: o.pending ?? [],
     apply: (f, v) => { w.tried.get(f.company_key)!.push(v.route_actor);
       if (f.item) w.items.get(f.company_key)!.push(f.item, ...(f.supporting ?? [])); return !!f.item; },
     deps: { now: () => NOW.toISOString(), log: () => {}, call: (c) => {
       const list = (c.input.companies as string[] | undefined) ?? (c.input.company as string[]);
       const which = c.actor_key === ATOMUS ? "atomus" : c.actor_key === PVALYOU ? "pvalyou" : "jobs";
-      bought[which].push(list);
-      const rows = which === "atomus" ? list.map((u) => atomusEmpty(u.split("/company/")[1]))
-        : which === "pvalyou" ? o.pvalyou(list)
+      if (c.resume_run_id) resumed.push(c.resume_run_id); else bought[which].push(list);
+      const pv = which === "pvalyou" ? o.pvalyou(list) : [];
+      if (pv === "running") return Promise.resolve({ status: "running", run_id: "run_pv_1", provider_call_id: "pc_pvalyou" } as VerifierCallOutcome);
+      const rows = which === "atomus" ? list.map((u) => (o.atomus ?? ((s: string) => atomusEmpty(s)))(u.split("/company/")[1]))
+        : which === "pvalyou" ? pv
         : list.map((u) => ({ id: "j", title: "Head of Growth", postedDate: NOW.toISOString(), linkedinUrl: "https://www.linkedin.com/jobs/view/1",
           company: { name: "x", linkedinUrl: u } }));
       return Promise.resolve({ status: "ok", rows, provider_call_id: `pc_${which}` } as VerifierCallOutcome); } },
   });
   const final = Object.fromEntries(candidates().map((c) => [c.company_key, c.eligibility]));
-  return { report, bought, final, candidates };
+  return { report, bought, final, candidates, world: w, resumed };
 }
 
 Deno.test("REPLAY BigRio-style: Atomus empty → Pvalyou PASS → funding unlocked → hiring and Firecrawl follow → qualified", async () => {
@@ -293,4 +304,58 @@ Deno.test("no window passed: a COMPLETE Atomus history is decisive → zero Pval
   assertEquals(complete.pv.length, 0);
   const empty = await verify([noWindow("bigrio")], { atomus: (s) => s.map(atomusEmpty), pvalyou: () => [] });
   assertEquals(empty.pv.length, 1);
+});
+
+// ── A PAID RUN STILL IN FLIGHT HOLDS ITS COMPANIES (canary 4a0611b0) ─────────
+//
+// Live 2026-09-24: Atomus found How to AI and Psychology Today and returned no
+// usable rounds; the ONE batched Pvalyou fallback outlived the call's wait and
+// was recorded as running. The phase then moved on and bought a job search for
+// both while their funding was still open. Cheapest-first means the cheap
+// answer arrives first: a company with a run in flight is held from every
+// verifier's new purchases until that run is adopted.
+
+Deno.test("REPLAY 4a0611b0-style: Pvalyou still running → no job search, no Firecrawl; both held, one run pending", async () => {
+  const r = await phase({ pvalyou: () => "running" });
+  assertEquals(r.bought.atomus.length, 1);
+  assertEquals(r.bought.pvalyou, [["bigrio.com", "design-milk.com"]], "the fallback started once, batched");
+  assertEquals([r.bought.jobs.length, r.bought.firecrawl.length], [0, 0], "nothing later is bought while funding is in flight");
+  assertEquals(r.report.held.sort(), [BIGRIO, DESIGNMILK].sort());
+  assertEquals(r.report.pending.map((p) => [p.stage, p.run_id, p.candidate_keys.length]), [["pvalyou_recency", "run_pv_1", 2]]);
+  assertEquals(Object.values(r.final), ["pending", "pending"]);
+});
+
+Deno.test("next slice ADOPTS the same run (no new purchase); a PASS then unlocks hiring and Firecrawl in that slice", async () => {
+  const s1 = await phase({ pvalyou: () => "running" });
+  const s2 = await phase({ world: s1.world, pending: s1.report.pending,
+    pvalyou: (d) => d.filter((x) => x.startsWith("bigrio")).map((x) => pvalyouRow(x, ["2026-06-15"])) });
+  assertEquals(s2.resumed, ["run_pv_1"], "re-attached to the run already paid for");
+  assertEquals([s2.bought.atomus.length, s2.bought.pvalyou.length], [0, 0], "no second Atomus, no second Pvalyou");
+  assert(s2.bought.jobs.flat().includes(BIGRIO), "funding PASS unlocks the hiring gap once the run lands");
+  assert(s2.bought.firecrawl.flat().includes(BIGRIO));
+  assertFalse(s2.bought.jobs.flat().includes(DESIGNMILK), "Design Milk's funding stayed open: nothing bought for it");
+  assertEquals(s2.report.pending, []);
+  assertEquals(s2.report.held, []);
+  assertEquals(s2.final[BIGRIO], "eligible");
+});
+
+Deno.test("next slice, run STILL running → still held: nothing new bought, the run carried forward once", async () => {
+  const s1 = await phase({ pvalyou: () => "running" });
+  const s2 = await phase({ world: s1.world, pending: s1.report.pending, pvalyou: () => "running" });
+  assertEquals(s2.resumed, ["run_pv_1"]);
+  assertEquals([s2.bought.atomus.length, s2.bought.pvalyou.length, s2.bought.jobs.length, s2.bought.firecrawl.length], [0, 0, 0, 0]);
+  assertEquals(s2.report.pending.map((p) => p.run_id), ["run_pv_1"], "one run, not a second");
+  assertEquals(s2.report.held.sort(), [BIGRIO, DESIGNMILK].sort());
+});
+
+Deno.test("the hold is per company: one whose funding Atomus PASSED is still verified while the other waits", async () => {
+  const r = await phase({
+    atomus: (slug) => slug === "design-milk" ? atomusRounds(slug, ["2026-05-01"], false) : atomusEmpty(slug),
+    pvalyou: () => "running",
+  });
+  assertEquals(r.bought.pvalyou, [["bigrio.com"]], "the fallback is asked only for the company Atomus left open");
+  assert(r.bought.jobs.flat().includes(DESIGNMILK), "Design Milk's funding passed: its hiring gap is bought");
+  assertFalse(r.bought.jobs.flat().includes(BIGRIO), "BigRio waits for its run");
+  assertFalse(r.bought.firecrawl.flat().includes(BIGRIO));
+  assertEquals(r.report.held, [BIGRIO]);
 });

@@ -27,6 +27,11 @@
 //     promising first), never its whole pool: one lead short buys two checks.
 //   * A target (preference) never reaches here: only HARD unknown checks are
 //     gaps, so a ranking-only criterion cannot trigger a purchase.
+//   * A company with a paid run STILL IN FLIGHT is held from every verifier's
+//     new purchases until that run is adopted. Its answer may disprove it, and
+//     cheapest-first only means something if the cheap answer arrives first.
+//     Canary 4a0611b0: Pvalyou outlived the call's wait, the phase moved on,
+//     and both companies got a job search while their funding was still open.
 //
 // Pure orchestration; every effect is an injected function.
 
@@ -81,6 +86,8 @@ export interface VerificationPhaseReport {
   ran: Array<{ verifier: string; targets: string[]; findings: number; recorded: number; pending: number }>;
   /** Why the phase stopped buying early, when it did. */
   stopped: "quota_met" | null;
+  /** Companies held from a verifier's new purchases because ANOTHER verifier's paid run for them was still in flight. */
+  held: string[];
   /** Verifiers the claim plan made irrelevant: no hard claim they answer. */
   irrelevant: string[];
   pending: PendingVerifierRun[];
@@ -114,9 +121,16 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
   const report: VerificationPhaseReport = {
     version: CLAIM_VERIFICATION_PHASE_VERSION, order: ordered.map((v) => v.key),
     order_estimates: Object.fromEntries(ordered.map((v) => [v.key, Number.isFinite(costOf(v)) ? costOf(v) : null])),
-    ran: [], stopped: null,
+    ran: [], stopped: null, held: [],
     irrelevant: [], pending: [], changed: 0,
   };
+  // IN FLIGHT: runs earlier slices started whose verifier has not adopted them
+  // yet this slice, plus every run still pending after this slice's verifiers.
+  const adoptedBy = new Set<string>();
+  const inFlight = (): Set<string> => new Set([
+    ...i.pending.filter((r) => !adoptedBy.has(r.verifier)).flatMap((r) => r.candidate_keys),
+    ...report.pending.flatMap((r) => r.candidate_keys),
+  ]);
   const relevant = i.claim_plan ? relevantVerifierActors(i.claim_plan) : null;
   for (const verifier of ordered) {
     if (relevant && !relevant.has(verifier.route_actor) && !i.pending.some((r) => r.verifier === verifier.key)) {
@@ -128,7 +142,16 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
     const need = Math.max(1, i.requested_count) - i.qualified();
     if (need <= 0) report.stopped = "quota_met";
     // A RUN ALREADY PAID FOR IS STILL ADOPTED; NOTHING NEW IS BOUGHT.
+    // A verifier's OWN in-flight companies are excluded too (it adopts them via
+    // `mine`), but only another verifier's run counts as a hold in the report.
+    const held = inFlight();
+    const own = new Set(mine.flatMap((r) => r.candidate_keys));
     const targets = need <= 0 ? [] : verificationTargets(verifier, i.candidates(), i.criteriaValue, registry, policy, i.criteriaWindow)
+      .filter((t) => {
+        if (!held.has(t.company_key)) return true;
+        if (!own.has(t.company_key) && !report.held.includes(t.company_key)) report.held.push(t.company_key);
+        return false;
+      })
       .slice(0, need * SHORTFALL_MARGIN);
     if (targets.length === 0 && mine.length === 0) continue;
     const deps: VerifierDeps = {
@@ -147,6 +170,7 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
         !(i.unavailable?.(actor) ?? false),
     };
     const result = await verifier.verify(targets, deps, { mission_id: i.mission_id, pending: mine });
+    adoptedBy.add(verifier.key);
     let recorded = 0;
     for (const f of result.findings) {
       if (i.apply(f, verifier)) recorded++;
@@ -162,6 +186,7 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
       recorded, pending: result.pending.length,
     });
   }
+  if (report.held.length > 0) log("verification_held_in_flight", { companies: report.held, pending_runs: report.pending.length });
   if (report.stopped) log("verification_stopped", { reason: report.stopped, qualified: i.qualified(), requested: i.requested_count });
   return report;
 }
