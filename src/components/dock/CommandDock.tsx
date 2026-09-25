@@ -187,7 +187,7 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
           bottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
         }}
       >
-        <div className={cn('w-full max-w-3xl pointer-events-auto relative', !isMobile && 'ml-[68px]')}>
+        <div className={cn('w-full max-w-4xl pointer-events-auto relative', !isMobile && 'ml-4')}>
           {/* Ambient emerald glow */}
           <motion.div
             aria-hidden
@@ -197,7 +197,7 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
             className="absolute -inset-2.5 rounded-2xl bg-emerald-500/10 blur-xl pointer-events-none"
           />
 
-          <div className={cn('glass-surface relative rounded-2xl border border-white/[0.08] bg-[#0A0A0A]/85 backdrop-blur-xl shadow-2xl', isMobile ? 'p-3' : 'p-4')}>
+          <div className={cn('glass-surface relative rounded-2xl border border-white/[0.08] bg-[#0A0A0A]/85 backdrop-blur-xl shadow-2xl', isMobile ? 'p-3' : 'p-5')}>
             {/* Suggestion chips — desktop only, hidden when focused/typing */}
             {!isMobile && (
               <div className="relative mb-3 h-7 empty:hidden">
@@ -243,14 +243,14 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
                   placeholder=""
                   className={cn(
                     'w-full resize-none bg-transparent outline-none text-foreground placeholder:text-neutral-600 py-1 font-sans',
-                    isMobile ? 'text-[14px] leading-[20px] min-h-[36px]' : 'text-[14px] leading-[22px] min-h-[28px]',
+                    isMobile ? 'text-[14px] leading-[20px] min-h-[36px]' : 'text-[15px] leading-[24px] min-h-[32px]',
                   )}
                   style={{ maxHeight: 88 }}
                 />
                 {!value && (
                   <div className={cn(
                     'pointer-events-none absolute inset-0 py-1 text-neutral-500 font-sans',
-                    isMobile ? 'text-[14px] leading-[20px]' : 'text-[14px] leading-[22px]',
+                    isMobile ? 'text-[14px] leading-[20px]' : 'text-[15px] leading-[24px]',
                   )}>
                     {PLACEHOLDER}
                   </div>
