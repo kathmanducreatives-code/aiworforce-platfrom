@@ -128,6 +128,8 @@ Deno.test("a settled plan does not read on the heartbeat, visible or not", async
   assertEquals(h.calls.reads, after, "a finished plan is not polled");
 });
 
-Deno.test("the heartbeat interval is the 4s safety net, not a data path", () => {
-  assertEquals(PLAN_HEARTBEAT_MS, 4000);
+Deno.test("the heartbeat interval is the 15s safety net, not a data path", () => {
+  // 4s until the 2026-09-25 egress audit: realtime carries every change, so the
+  // heartbeat only bounds staleness on a dropped socket (planEgressBounds.test.ts).
+  assertEquals(PLAN_HEARTBEAT_MS, 15_000);
 });

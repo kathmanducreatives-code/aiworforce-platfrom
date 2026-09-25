@@ -28,10 +28,44 @@ export type RefetchReason =
   | 'plan_without_tasks'
   /** The workflow is still moving; keep reading. */
   | 'workflow_active'
+  /**
+   * Still "running" but nothing has changed for `ACTIVE_QUIET_AFTER_MS`: read
+   * at most once per `QUIET_REFETCH_EVERY_MS` (`should` says whether this tick
+   * is the one). A stuck task no longer reads on every heartbeat for 24 hours.
+   */
+  | 'workflow_quiet'
+  /**
+   * Waiting on a person. Nothing moves until someone approves, and that
+   * approval arrives as a realtime event (and on focus) — never by polling.
+   */
+  | 'awaiting_approval'
   /** The tab regained focus after being hidden. */
   | 'regained_focus'
   /** Settled state, focused, nothing to chase. */
   | 'settled';
+
+// ── EGRESS BOUNDS (2026-09-25 audit) ─────────────────────────────────────────
+//
+// Production's Free-plan egress was exhausted. Every heartbeat read reloads the
+// plan's tasks through `TASK_LIST_COLUMNS` — 25 kB a lead task on average, up
+// to 91 kB — and two states kept that read firing on every tick indefinitely:
+// a pending approval (no time bound at all) and a task left `running`/`pending`
+// (bounded only by the 24-hour stale guard). One open tab on either was
+// roughly 0.6-2 GB a day. Both are now bounded:
+//
+//   awaiting approval → no polling; realtime and focus deliver the approval
+//   running, recent   → every heartbeat, as before
+//   running, quiet    → one read a minute, until the stale guard ends it
+//   no tasks yet      → every heartbeat, but only while the plan is open and
+//                       younger than EMPTY_PLAN_WAIT_MS — the insert race is
+//                       seconds long, not forever
+
+/** A running workflow with no new activity for this long is "quiet". */
+export const ACTIVE_QUIET_AFTER_MS = 10 * 60 * 1000;
+/** A quiet workflow is read at most this often. */
+export const QUIET_REFETCH_EVERY_MS = 60 * 1000;
+/** How long a plan may wait for its first task before the view stops asking. */
+export const EMPTY_PLAN_WAIT_MS = 10 * 60 * 1000;
 
 export interface RefetchDecision {
   should: boolean;
@@ -41,6 +75,8 @@ export interface RefetchDecision {
 export interface RefetchInput extends Pick<DeriveWorkflowInput, 'plan' | 'tasks' | 'approvals' | 'lastActivityAt' | 'now'> {
   /** True when this evaluation was triggered by the tab regaining focus. */
   regainedFocus?: boolean;
+  /** When the store last completed a read (ms), for the quiet-workflow throttle. */
+  lastReadAt?: number | null;
 }
 
 /**
@@ -59,21 +95,45 @@ export interface RefetchInput extends Pick<DeriveWorkflowInput, 'plan' | 'tasks'
  *
  * A settled, focused plan reads nothing. This is deliberately not polling: once
  * the workflow reaches a terminal or checkpointed state the heartbeat goes quiet
- * and stays quiet.
+ * and stays quiet. A plan waiting on an approval, a quiet run and a plan that
+ * never got a task are bounded too — see EGRESS BOUNDS above.
  */
 export function decidePlanRefetch(input: RefetchInput): RefetchDecision {
   if (!input.plan) return { should: false, reason: 'no_plan' };
+  const now = input.now ?? Date.now();
 
-  if (input.tasks.length === 0) return { should: true, reason: 'plan_without_tasks' };
+  if (input.tasks.length === 0) {
+    const open = input.plan.status === 'planning' || input.plan.status === 'executing';
+    const age = now - Date.parse(input.plan.created_at);
+    if (open && !(age > EMPTY_PLAN_WAIT_MS)) return { should: true, reason: 'plan_without_tasks' };
+    // A plan that never got a task (or ended without one) is settled.
+    return input.regainedFocus
+      ? { should: true, reason: 'regained_focus' }
+      : { should: false, reason: 'settled' };
+  }
 
   const uiState = deriveWorkflowUiState({
     plan: input.plan,
     tasks: input.tasks,
     approvals: input.approvals,
     lastActivityAt: input.lastActivityAt,
-    now: input.now,
+    now,
   });
-  if (isWorkflowActive(uiState)) return { should: true, reason: 'workflow_active' };
+
+  if (uiState === 'waiting_confirmation') {
+    return input.regainedFocus
+      ? { should: true, reason: 'regained_focus' }
+      : { should: false, reason: 'awaiting_approval' };
+  }
+
+  if (isWorkflowActive(uiState)) {
+    const last = Date.parse(input.lastActivityAt ?? input.plan.created_at);
+    const quiet = Number.isFinite(last) && now - last > ACTIVE_QUIET_AFTER_MS;
+    if (!quiet) return { should: true, reason: 'workflow_active' };
+    if (input.regainedFocus) return { should: true, reason: 'regained_focus' };
+    const due = input.lastReadAt == null || now - input.lastReadAt >= QUIET_REFETCH_EVERY_MS;
+    return { should: due, reason: 'workflow_quiet' };
+  }
 
   if (input.regainedFocus) return { should: true, reason: 'regained_focus' };
 

@@ -370,10 +370,22 @@ export async function fetchToolCallOutput(id: string): Promise<unknown | null> {
   return (data as { output_json?: unknown } | null)?.output_json ?? null;
 }
 
+/**
+ * The plan view's realtime channel.
+ *
+ * `tasks` is subscribed for INSERT only. Realtime sends the WHOLE new row with
+ * every event, and a lead task's row carries `result` — 128 kB on average, up to
+ * 572 kB — rewritten ~18 times a run (2026-09-25 egress audit). The callback
+ * ignores the payload and reloads through the projected `TASK_LIST_COLUMNS`
+ * anyway, so an UPDATE push was pure egress. An INSERT (the first task landing
+ * seconds after the plan, `result` still empty) stays instant; a task's later
+ * progress arrives with the `task_plans` / `activity_feed` events run-agent
+ * writes alongside it, and the heartbeat covers a dropped socket.
+ */
 export const subscribePlan = (planId: string, cb: () => void) => {
   const ch = supabase.channel(uniqueTopic(`realtime:plan:${planId}`))
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'task_plans', filter: `id=eq.${planId}` }, cb)
-    .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'tasks', filter: `plan_id=eq.${planId}` }, cb)
+    .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'tasks', filter: `plan_id=eq.${planId}` }, cb)
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'activity_feed', filter: `plan_id=eq.${planId}` }, cb)
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'approvals', filter: `plan_id=eq.${planId}` }, cb)
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'tool_calls', filter: `plan_id=eq.${planId}` }, cb)

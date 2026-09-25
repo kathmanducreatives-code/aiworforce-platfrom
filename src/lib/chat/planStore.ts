@@ -13,8 +13,10 @@
 // This module holds ONE store per plan id, reference-counted:
 //
 //   realtime  → the primary path; every change pushes, and the store reloads
-//   heartbeat → a safety net for a dropped socket, and ONLY while the tab is
-//               visible and the workflow is still moving (`decidePlanRefetch`)
+//   heartbeat → a safety net for a dropped socket, every 15s and ONLY while
+//               the tab is visible and the workflow is still moving
+//               (`decidePlanRefetch`: never for a pending approval, once a
+//               minute for a run that has gone quiet)
 //   focus     → one read when a hidden tab comes back, closing the socket gap
 //
 // The last consumer to leave tears all three down. Every effect is injected, so
@@ -24,8 +26,15 @@ import { coalesceLoads } from './coalescedLoad';
 import { decidePlanRefetch } from './planRefetch';
 import type { DBActivity, DBApproval, DBPlan, DBTask, DBToolCall } from '@/lib/orchestration';
 
-/** How often the safety net may fire. Realtime is what actually keeps state fresh. */
-export const PLAN_HEARTBEAT_MS = 4000;
+/**
+ * How often the safety net may fire. Realtime is what actually keeps state fresh.
+ *
+ * 15s, not 4s (2026-09-25 egress audit): each read reloads the plan's tasks at
+ * 25-91 kB a lead task, and realtime already delivers every plan, activity and
+ * approval change the moment it lands — so this only bounds how stale a view on
+ * a dropped socket can be.
+ */
+export const PLAN_HEARTBEAT_MS = 15_000;
 
 export interface PlanSnapshot {
   plan: DBPlan | null;
@@ -108,6 +117,8 @@ export function createPlanStoreRegistry(io: PlanStoreIo): PlanStoreRegistry {
     let snapshot: PlanSnapshot = { ...EMPTY, lastChangeAt: io.now() };
     const listeners = new Set<() => void>();
     let stopped = false;
+    /** When the last read completed — the quiet-workflow throttle reads it. */
+    let lastReadAt: number | null = null;
     const emit = () => { for (const l of [...listeners]) l(); };
     const set = (patch: Partial<PlanSnapshot>) => {
       snapshot = { ...snapshot, ...patch };
@@ -118,6 +129,7 @@ export function createPlanStoreRegistry(io: PlanStoreIo): PlanStoreRegistry {
       set({ loading: true });
       const r = await io.read(planId);
       if (stopped) return;
+      lastReadAt = io.now();
       const latest = latestActivityTs(r);
       const changed = latest !== snapshot.lastActivityAt;
       set({
@@ -141,7 +153,7 @@ export function createPlanStoreRegistry(io: PlanStoreIo): PlanStoreRegistry {
       if (io.isHidden()) return;
       const decision = decidePlanRefetch({
         plan: snapshot.plan, tasks: snapshot.tasks, approvals: snapshot.approvals,
-        lastActivityAt: snapshot.lastActivityAt,
+        lastActivityAt: snapshot.lastActivityAt, now: io.now(), lastReadAt,
       });
       if (decision.should) load();
       // Re-render consumers so "still working" labels re-evaluate. No network.
@@ -153,7 +165,7 @@ export function createPlanStoreRegistry(io: PlanStoreIo): PlanStoreRegistry {
       if (io.isHidden()) return;
       const decision = decidePlanRefetch({
         plan: snapshot.plan, tasks: snapshot.tasks, approvals: snapshot.approvals,
-        lastActivityAt: snapshot.lastActivityAt, regainedFocus: true,
+        lastActivityAt: snapshot.lastActivityAt, regainedFocus: true, now: io.now(), lastReadAt,
       });
       if (decision.should) load();
     });
