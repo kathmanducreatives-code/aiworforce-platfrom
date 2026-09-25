@@ -159,6 +159,23 @@ export function fingerprint(parts: readonly (string | null | undefined)[]): stri
   return h.toString(16).padStart(8, "0");
 }
 
+/** The longest evidence or observation id the engine stores. */
+export const MAX_STABLE_ID_LENGTH = 64;
+
+/**
+ * `full`, bounded to `max` characters WITHOUT collisions.
+ *
+ * An id that fits is returned unchanged. A longer one keeps a readable prefix
+ * and ends in a hash of the WHOLE id. A plain `.slice(0, 64)` dropped whatever
+ * came after the company key: canary 11 (2026-09-25) stored Atomus and
+ * Pvalyou funding records for `…/company/salvosoftware` under one id, and the
+ * graph kept only the first.
+ */
+export function boundedId(full: string, max = MAX_STABLE_ID_LENGTH): string {
+  if (full.length <= max) return full;
+  return `${full.slice(0, max - 9)}~${fingerprint([full])}`;
+}
+
 /**
  * `type:source:hash` — stable across runs for the same fact.
  *

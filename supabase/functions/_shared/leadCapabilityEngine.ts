@@ -118,7 +118,7 @@ import {
 } from "./companyBrainSemanticFit.ts";
 import type { PortfolioCandidate } from "./opportunityPortfolio.ts";
 import {
-  buildEvidenceRegistry, emptyEvidenceRegistry, type EvidenceRegistry,
+  boundedId, buildEvidenceRegistry, emptyEvidenceRegistry, MAX_STABLE_ID_LENGTH, type EvidenceRegistry,
 } from "./leadEvidenceRegistry.ts";
 import { buildCompanyEvidence } from "./leadCompanyEvidence.ts";
 import type { GroundedVerification } from "./groundedClaims.ts";
@@ -8606,7 +8606,7 @@ export async function runCapabilityPlan(
           if (bmItem) {
             recordObservation(c, {
               version: CANDIDATE_OBSERVATION_VERSION,
-              observation_id: `obs_grd_${bmItem.evidence_id}`.slice(0, 64),
+              observation_id: observationIdFor("obs_grd_", bmItem.evidence_id),
               capability: "company_brain_qualification", actor_key: "grounded_evidence_evaluation",
               provider: "engine", route_id: null, plan_version: currentPlan()?.version ?? null,
               provider_call_id: null, source_record_id: null, source_url: null,
@@ -11277,6 +11277,38 @@ export function projectResearchFabric(
 }
 
 /** Adds a non-discovery observation (enrichment, verification). Not a `found_by` entry. */
+/**
+ * The observation that carries one evidence item: `prefix + evidence_id`,
+ * bounded without collisions (`boundedId`). Cutting it to 64 characters, as
+ * before canary 11, dropped the tail of a long evidence id — the part that
+ * tells two funding records apart.
+ */
+function observationIdFor(prefix: string, evidenceId: string): string {
+  return boundedId(`${prefix}${evidenceId}`);
+}
+
+/**
+ * The id a checkpoint written BEFORE `observationIdFor` stored for the same
+ * observation (the raw id cut to 64), when that differs from today's. Matched
+ * so a mission resumed across the change REPLACES its old observation rather
+ * than standing a fresh one beside it — where the stale copy, listed first,
+ * would win. Null for an id that was never cut.
+ *
+ * Exact for every item whose OWN evidence id did not change (a funding stage,
+ * a hiring answer, a grounded business model — the ones re-answered under one
+ * id). A funding RECORD's id did change, so its pre-change observation is not
+ * matched and the new one stands beside it: harmless, as a record is a fixed
+ * fact and both copies read the same rounds.
+ */
+function legacyObservationId(o: CandidateObservation): string | null {
+  const m = /^(obs_(?:vfy|fdr|grd)_)/.exec(o.observation_id);
+  if (!m || o.observation_id.length < MAX_STABLE_ID_LENGTH || !o.evidence[0]) return null;
+  // The item the id was built from is the observation's first.
+  const raw = `${m[1]}${o.evidence[0].evidence_id}`;
+  const legacy = raw.slice(0, MAX_STABLE_ID_LENGTH);
+  return legacy === o.observation_id ? null : legacy;
+}
+
 function recordObservation(c: EngineCompany, o: CandidateObservation): void {
   const obs = c.observations ?? [];
   // REPLACED, NOT SKIPPED. An observation id is stable per source, so a second
@@ -11285,7 +11317,8 @@ function recordObservation(c: EngineCompany, o: CandidateObservation): void {
   // observation items before the live ones and the graph keeps the first of an
   // evidence id, so leaving the old copy in place would let the stale reading
   // win over the fresh one.
-  const at = obs.findIndex((x) => x.observation_id === o.observation_id);
+  const legacy = legacyObservationId(o);
+  const at = obs.findIndex((x) => x.observation_id === o.observation_id || (legacy !== null && x.observation_id === legacy));
   if (at >= 0) obs[at] = withCompanyKey(o, c.key);
   else if (obs.length < MAX_OBSERVATIONS_PER_COMPANY + 2) obs.push(withCompanyKey(o, c.key));
   c.observations = obs;
@@ -11321,7 +11354,7 @@ export function applyVerifierFinding(
   if (f.item) {
     recordObservation(c, {
       version: CANDIDATE_OBSERVATION_VERSION,
-      observation_id: `obs_vfy_${f.item.evidence_id}`.slice(0, 64),
+      observation_id: observationIdFor("obs_vfy_", f.item.evidence_id),
       capability: "claim_verification", actor_key: f.item.source.actor,
       provider: f.item.source.provider, route_id: null, plan_version: null,
       provider_call_id: f.item.source.provider_call_id, source_record_id: null, source_url: f.item.source.url,
@@ -11359,7 +11392,7 @@ export function recordDiscoveredFunding(
   const item = fundingRecordEvidenceItem({ company_key: c.key, record, mission_id: ctx.mission_id, observed_at: ctx.observed_at });
   recordObservation(c, {
     version: CANDIDATE_OBSERVATION_VERSION,
-    observation_id: `obs_fdr_${item.evidence_id}`.slice(0, 64),
+    observation_id: observationIdFor("obs_fdr_", item.evidence_id),
     capability: ctx.capability, actor_key: ctx.actor_key, provider: ctx.provider,
     route_id: ctx.route_id, plan_version: ctx.plan_version, provider_call_id: ctx.provider_call_id,
     source_record_id: null, source_url: record.source_url, observed_at: ctx.observed_at,
@@ -11385,7 +11418,7 @@ export function applyRegroundedVerification(
   if (!item) return { item: null, decision: null };
   recordObservation(c, {
     version: CANDIDATE_OBSERVATION_VERSION,
-    observation_id: `obs_grd_${item.evidence_id}`.slice(0, 64),
+    observation_id: observationIdFor("obs_grd_", item.evidence_id),
     capability: "web_evidence_verification", actor_key: "grounded_evidence_evaluation",
     provider: "engine", route_id: null, plan_version: null,
     provider_call_id: null, source_record_id: null, source_url: item.source.url,

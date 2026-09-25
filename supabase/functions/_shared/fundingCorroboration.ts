@@ -36,6 +36,7 @@ import {
   type FundingProvenanceRef, type FundingRecordFact, type FundingRoundFact, type FundingStageDecision,
 } from "./fundingStageClaim.ts";
 import type { EvidenceItem } from "./candidateObservation.ts";
+import { boundedId } from "./leadEvidenceRegistry.ts";
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 
 export const FUNDING_CORROBORATION_VERSION = "funding-corroboration-v1" as const;
@@ -224,7 +225,10 @@ export function fundingRecordEvidenceItem(i: {
   const cited = (r?.source_urls.length ?? 0) > 0;
   const ids = recordCallIds(i.record);
   return {
-    evidence_id: `fdr_${i.company_key}_${i.record.actor}_${r?.announced_date ?? "undated"}_${value.round_type ?? "x"}`.slice(0, 64),
+    // Bounded, never cut: the actor, date and type are what tell two records
+    // apart, and they come AFTER the company key (canary 11: Atomus and
+    // Pvalyou for one long LinkedIn slug shared an id).
+    evidence_id: boundedId(`fdr_${i.company_key}_${i.record.actor}_${r?.announced_date ?? "undated"}_${value.round_type ?? "x"}`),
     company_key: i.company_key, dimension: "funding", value,
     status: r?.announced_date ? "proven" : "plausible",
     source: {
