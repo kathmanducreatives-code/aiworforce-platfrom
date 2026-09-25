@@ -276,6 +276,8 @@ export interface CompanyWorkingSetSnapshot {
    * companies back on the frontier rather than stranding them.
    */
   investigation_state?: string | null;
+  /** Why a closed company was closed (`excluded_permanently`); absent on older checkpoints. */
+  shortlist_exclusion?: string | null;
   /** Position in the persisted triage ranking. */
   investigation_rank?: number | null;
   /** The triage verdict, so a continuation never re-pays for triage. */
@@ -812,6 +814,7 @@ function readWorkingSetSnapshot(raw: unknown): CompanyWorkingSetSnapshot | null 
     prequal_key: asStringOrNull(s.prequal_key),
     shortlisted: s.shortlisted === true,
     investigation_state: asStringOrNull(s.investigation_state),
+    shortlist_exclusion: asStringOrNull(s.shortlist_exclusion),
     investigation_rank: typeof s.investigation_rank === "number" &&
         Number.isFinite(s.investigation_rank)
       ? s.investigation_rank

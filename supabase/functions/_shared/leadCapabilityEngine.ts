@@ -72,7 +72,7 @@ import type { NormalizedNewsArticle } from "./hiringActorNormalizers.ts";
 import { normalizeNewsArticle } from "./hiringActorNormalizers.ts";
 import {
   prequalifyDiscoveredCompanies, mergePrequalification,
-  genericPrequalificationKey, admittedCandidateCount, isAdmitted,
+  genericPrequalificationKey, admittedCandidateCount, isAdmitted, isPlaceholderEmployerName,
 } from "./leadGenericPrequalification.ts";
 import {
   assessSignals, verdictsClaimingUninvestigatedSignals,
@@ -2798,10 +2798,11 @@ export async function runCapabilityPlan(
     if (prior.snapshot && !frontierRestored.has(c.key)) {
       frontierRestored.add(c.key);
       const snap = prior.snapshot as unknown as {
-        investigation_state?: unknown; investigation_rank?: unknown;
+        investigation_state?: unknown; investigation_rank?: unknown; shortlist_exclusion?: unknown;
         identity?: unknown; enriched?: unknown;
       };
       c.investigation_state = asInvestigationState(snap.investigation_state);
+      if (typeof snap.shortlist_exclusion === "string") c.shortlist_exclusion = snap.shortlist_exclusion;
       if (typeof snap.investigation_rank === "number") {
         c.investigation_rank = snap.investigation_rank;
       }
@@ -3396,6 +3397,15 @@ export async function runCapabilityPlan(
         // the frontier.
         c.investigation_state = "excluded_permanently";
         c.shortlist_exclusion = why!.reason;
+      } else if (c.investigation_state === "excluded_permanently") {
+        // ALREADY CLOSED BY A DECISION this ranking did not make — a funding
+        // screen FAIL, a recently-checked company, an earlier invocation's
+        // mission constraint. "These never re-enter the frontier" held only for
+        // this call's own exclusions: canary 16699a45's screen closed Stealth
+        // Startup (funding 975 days old, complete history), the resumed slice
+        // re-ranked it back to `pending_investigation`, and continuation ran two
+        // empty slices chasing a company nothing could be bought for. The state
+        // and its reason stand.
       } else if (wasInvestigated(c.investigation_state)) {
         // ALREADY PAID FOR, by an earlier pass or an earlier invocation. The
         // ranking may reorder the frontier; it may never return a company that
@@ -3523,6 +3533,24 @@ export async function runCapabilityPlan(
       c.shortlisted = true;
       c.shortlist_exclusion = null;
     }
+    // ── THE SCREEN'S ADMISSIONS ARE SPENT: THE REST OF THE POOL IS CLOSED ──
+    //
+    // Under the funding screen the run admits `plan.admit` companies for its
+    // whole life. Once they are admitted, a company still waiting can never be
+    // investigated this mission — it is not a frontier, it is a decision the
+    // run's budget already made. Left pending, continuation counted it as work
+    // and re-dispatched slices that could buy nothing (canary 16699a45).
+    let notAdmitted = 0;
+    if (opts.fundingScreen &&
+      companies.filter((c) => wasInvestigated(c.investigation_state)).length >= opts.fundingScreen.plan.admit) {
+      for (const c of companies) {
+        if (c.investigation_state !== "pending_investigation") continue;
+        c.investigation_state = "excluded_permanently";
+        c.shortlist_exclusion = "screen_not_admitted";
+        c.shortlisted = false;
+        notAdmitted++;
+      }
+    }
     // THE RUNNING TOTAL OF AUTHORISED SPEND. Every downstream report of "how
     // many did we shortlist" reads this rather than the ranking's own count.
     // Carried work counts: this invocation buys those searches too.
@@ -3543,6 +3571,7 @@ export async function runCapabilityPlan(
       budget: budget.budget, budget_source: budget.source,
       // "Why did this pass only take two?" — because it inherited eight.
       carried_in_flight: carried, allowance,
+      ...(notAdmitted > 0 ? { closed_not_admitted: notAdmitted } : {}),
     });
     return slice.selected.length;
   };
@@ -9793,6 +9822,9 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       // pool is frozen at whatever the first invocation selected.
       investigation_state: c.investigation_state,
       investigation_rank: c.investigation_rank,
+      // WHY a closed company was closed — a continuation otherwise restores the
+      // state with no reason, and the Workbench cannot say what closed it.
+      shortlist_exclusion: c.shortlist_exclusion,
       triage: (c.triage ?? null) as unknown as Record<string, unknown> | null,
       // ── THE RESOLVED IDENTITY ITSELF ────────────────────────────────────
       //
@@ -10048,6 +10080,7 @@ export function restoreWorkingSet(
     // NARROWED, and an absent value returns the company to the FRONTIER rather
     // than closing it — the safe direction for a pre-frontier checkpoint.
     c.investigation_state = asInvestigationState(s.investigation_state);
+    c.shortlist_exclusion = typeof s.shortlist_exclusion === "string" ? s.shortlist_exclusion : null;
     c.investigation_rank = typeof s.investigation_rank === "number"
       ? s.investigation_rank
       : Number.MAX_SAFE_INTEGER;
@@ -10503,6 +10536,11 @@ export function applyPrequalification(
     if (c.prequalified !== null) continue;
     const domain = c.company.canonical_domain;
     if (domain && artifactKeys.has(domain)) { companies.splice(i, 1); continue; }
+    // A PLACEHOLDER EMPLOYER PAGE leaves too, website or not. Prequalification
+    // excludes it by NAME, and the domain match above only removes what has a
+    // domain: canary 16699a45's "Stealth Startup" had none, stayed in the pool,
+    // and the funding screen paid Atomus to read it.
+    if (isPlaceholderEmployerName(c.company.company_name)) { companies.splice(i, 1); continue; }
     // THE MODULE THAT SCORED IT OWNS THE KEY. Deriving it here would be a
     // second implementation of the same rule, and the two would disagree the
     // first time either changed.

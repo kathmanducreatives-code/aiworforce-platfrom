@@ -130,7 +130,13 @@ Deno.test("THE CANARY'S GRAPH: Lead V2 enters through general company discovery 
   assertEquals((GRAPH as unknown as { entry_capability: string }).entry_capability, "general_company_discovery");
 });
 
-async function run(o: { screen?: boolean; recentlyChecked?: string[]; atomus?: Record<string, (s: string) => Row> } = {}) {
+async function run(o: {
+  screen?: boolean; recentlyChecked?: string[]; atomus?: Record<string, (s: string) => Row>;
+  /** The search rows, when not the default five. */
+  rows?: Row[];
+  /** A continuation: the previous slice's state and resume records. */
+  resume?: { state: Record<string, unknown>; records: unknown[] };
+} = {}) {
   const calls: Array<{ actorKey: string; input: Record<string, unknown> }> = [];
   const screened: string[][] = [];
   const pvalyouBought: string[][] = [];
@@ -140,7 +146,7 @@ async function run(o: { screen?: boolean; recentlyChecked?: string[]; atomus?: R
       const input = (call as unknown as { input: Record<string, unknown> }).input ?? {};
       calls.push({ actorKey: call.actorKey, input });
       if (call.actorKey === "apify_linkedin_company_search") {
-        return Promise.resolve(POOL.slice(0, Number(input.maxItems ?? POOL.length)).map(searchRow) as Row[]);
+        return Promise.resolve((o.rows ?? POOL.map(searchRow)).slice(0, Number(input.maxItems ?? POOL.length)) as Row[]);
       }
       if (call.actorKey === "apify_linkedin_company_details") {
         return Promise.resolve(((input.companies as string[]) ?? []).map((u) => ({
@@ -185,6 +191,10 @@ async function run(o: { screen?: boolean; recentlyChecked?: string[]; atomus?: R
     // turn the spec on.
     specMode: "enforce", specScope: { workspace_id: "ws-test", lineage_id: "lineage-screen" },
     readiness: PRODUCTION_READINESS, runBudget: parseRunBudget({ provider_usd: 0.14, max_candidates: 2 }),
+    ...(o.resume ? {
+      state: o.resume.state,
+      resume: { workspace_id: "ws-test", lineage_root_task_id: "lineage-screen", records: o.resume.records },
+    } : {}),
     ...(o.screen === false ? {} : {
       fundingScreen: {
         plan: PLAN,
@@ -208,9 +218,10 @@ async function run(o: { screen?: boolean; recentlyChecked?: string[]; atomus?: R
       },
     }),
   } as never);
-  const companies = (result as unknown as { companies: EngineCompany[] }).companies;
+  const run_ = result as unknown as { companies: EngineCompany[]; state: Record<string, unknown>; resume_records: unknown[] };
+  const companies = run_.companies;
   return {
-    calls, screened, pvalyouBought, companies,
+    calls, screened, pvalyouBought, companies, state: run_.state, resume_records: run_.resume_records,
     search: calls.filter((c) => c.actorKey === "apify_linkedin_company_search"),
     detailsFor: calls.filter((c) => c.actorKey === "apify_linkedin_company_details").flatMap((c) => c.input.companies as string[]),
     byKey: (slug: string) => companies.find((c) => c.key === page(slug))!,
@@ -227,7 +238,14 @@ Deno.test("SCREEN: 5 short rows, ONE Atomus read over the pool, the two PASSES a
   assertEquals([...r.detailsFor].sort(), [page("charlie"), page("echo")], "only the admitted two get details");
   assertEquals(r.byKey("bravo").investigation_state, "excluded_permanently");
   assertEquals(r.byKey("bravo").shortlist_exclusion, "funding_screen_fail");
-  for (const s of ["alpha", "delta"]) assertEquals(r.byKey(s).investigation_state, "pending_investigation", `${s} waits`);
+  // ISSUE 3 (canary 16699a45): with both admissions spent, the still-open rest
+  // of the pool can never be investigated this mission — closed, with a reason,
+  // so continuation does not count it as work.
+  for (const s of ["alpha", "delta"]) {
+    assertEquals(r.byKey(s).investigation_state, "excluded_permanently", `${s} is closed, not waiting`);
+    assertEquals(r.byKey(s).shortlist_exclusion, "screen_not_admitted");
+  }
+  assertEquals(r.companies.filter((c) => c.investigation_state === "pending_investigation").length, 0, "no frontier left");
 });
 
 Deno.test("SCREEN: no pass in the pool → the top two still-open companies by rank are admitted; the FAIL never is", async () => {
@@ -266,4 +284,27 @@ Deno.test("THE CAP HOLDS: the pool is at most SCREEN_MAX_POOL_ROWS, and admissio
   const r = await run();
   const investigated = r.companies.filter((c) => c.investigation_state === "in_flight" || c.investigation_state === "investigated");
   assertEquals(investigated.length, PLAN.admit);
+});
+
+// ══════════════════════════════════════ canary 16699a45: the three engine issues ══
+
+Deno.test("ISSUE 1 — A CLOSED COMPANY STAYS CLOSED ACROSS A RESUME: the screen's FAIL is not re-ranked back onto the frontier", async () => {
+  const s1 = await run();
+  assertEquals(s1.byKey("bravo").investigation_state, "excluded_permanently");
+  // The continuation slice: the same pool restored from the checkpoint, triage and ranking re-applied.
+  const s2 = await run({ resume: { state: s1.state, records: s1.resume_records } });
+  assertEquals(s2.byKey("bravo").investigation_state, "excluded_permanently", "the FAIL was reopened on resume");
+  assertEquals(s2.byKey("bravo").shortlist_exclusion, "funding_screen_fail", "and it keeps the reason it was closed for");
+  assertEquals(s2.companies.filter((c) => c.investigation_state === "pending_investigation").length, 0,
+    "no frontier for continuation to chase");
+  assertEquals(s2.screened, [], "and nothing is screened twice");
+});
+
+Deno.test("ISSUE 2 — A DOMAINLESS PLACEHOLDER PAGE never reaches the paid screen", async () => {
+  // "Stealth Startup" with no website — canary 16699a45's third new row, which Atomus was paid to read.
+  const stealth = { ...searchRow("stealth-startup-community"), name: "Stealth Startup", website: null };
+  const r = await run({ rows: [stealth, ...["alpha", "bravo", "charlie", "delta"].map(searchRow)] });
+  assertFalse(r.screened.flat().includes(page("stealth-startup-community")), "no Atomus read for a placeholder");
+  assertFalse(r.companies.some((c) => c.key === page("stealth-startup-community")), "it leaves the working set");
+  assertEquals(r.screened[0].length, 4);
 });
