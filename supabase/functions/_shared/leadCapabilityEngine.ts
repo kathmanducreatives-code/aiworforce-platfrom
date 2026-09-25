@@ -727,7 +727,9 @@ export interface CapabilityExecutionState {
       /** P2: a replan's amendment was refused (trigger, reserve or validation). */
       | "amendment_refused"
       /** `run_budget.max_candidates` is spent: nothing further may be bought, or planned. */
-      | "candidate_budget_spent";
+      | "candidate_budget_spent"
+      /** The funding screen admitted all it may: nothing discovered later could be investigated. */
+      | "screen_admissions_spent";
   };
   /**
    * Stage removals the chain PROPOSED and containment refused.
@@ -1025,7 +1027,17 @@ export interface CapabilityExecutionState {
    * kept so a continuation that re-ranks the frontier still admits passes
    * first. Absent when no screen ran.
    */
-  funding_screen?: { verdicts: Record<string, ScreenVerdict> };
+  funding_screen?: {
+    verdicts: Record<string, ScreenVerdict>;
+    /**
+     * The screen's admissions (`plan.admit`) are all spent. From here nothing
+     * this mission discovers can be admitted, so nothing more is discovered or
+     * screened — canary 1a0c3234 reopened discovery after its two admissions,
+     * bought page 3 and started a second Atomus read on companies it could
+     * never admit.
+     */
+    admissions_spent?: boolean;
+  };
   /** One entry per slice taken. "Why only ten?" is answerable from this. */
   investigation_slices: Array<{
     pass: number;
@@ -2745,6 +2757,9 @@ export async function runCapabilityPlan(
    * refused.
    */
   const candidateBudgetSpent = (): boolean => {
+    // UNDER THE FUNDING SCREEN, SPENT ADMISSIONS SPEND THE BUDGET TOO: rows left
+    // in the allowance could only find companies no slot remains for.
+    if (opts.fundingScreen && state.funding_screen?.admissions_spent === true) return true;
     const limit = discoveryRowAllowance();
     return limit !== null && (state.discovery_rows_bought ?? 0) >= limit;
   };
@@ -3099,6 +3114,20 @@ export async function runCapabilityPlan(
   const applyFundingScreen = async (companies: EngineCompany[]): Promise<void> => {
     const fs = opts.fundingScreen;
     if (!fs) return;
+    // NO SLOT LEFT, NO SCREEN. A company found after the admissions were spent
+    // can never be investigated; reading its funding is spend with no use.
+    if (state.funding_screen?.admissions_spent === true) {
+      let closed = 0;
+      for (const c of companies) {
+        if (c.investigation_state !== "pending_investigation") continue;
+        c.investigation_state = "excluded_permanently";
+        c.shortlist_exclusion = "screen_not_admitted";
+        c.shortlisted = false;
+        closed++;
+      }
+      if (closed > 0) log("funding_screen_skipped_admissions_spent", { closed });
+      return;
+    }
     const ATOMUS = "apify_funding_atomus";
     const screenedOp = verifyOpKey(ATOMUS);
     const pageOf = (c: EngineCompany) =>
@@ -3153,7 +3182,7 @@ export async function runCapabilityPlan(
       c.shortlist_exclusion = "funding_screen_fail";
       c.shortlisted = false;
     }
-    state.funding_screen = { verdicts: Object.fromEntries(verdicts) };
+    state.funding_screen = { ...state.funding_screen, verdicts: Object.fromEntries(verdicts) };
     // PASSES FIRST, then the still-open, each in the free ranking's own order —
     // every screened company still on the frontier, this invocation's or not.
     const screened = companies.filter((c) => c.investigation_state === "pending_investigation" && verdicts.has(c.key));
@@ -3561,6 +3590,22 @@ export async function runCapabilityPlan(
         c.shortlist_exclusion = "screen_not_admitted";
         c.shortlisted = false;
         notAdmitted++;
+      }
+      // …AND DISCOVERY IS OVER FOR THIS MISSION. Recorded on the state the
+      // checkpoint carries, so the next slice's continuation reads "no discovery
+      // routes remain" instead of the pre-admission record that said rows were
+      // left (canary 1a0c3234: `replenishment_required` on 4 of 6 rows bought).
+      if (state.funding_screen?.admissions_spent !== true) {
+        state.funding_screen = { verdicts: state.funding_screen?.verdicts ?? {}, admissions_spent: true };
+        if (state.discovery_source_state) {
+          state.discovery_source_state = {
+            ...state.discovery_source_state, exhausted: true, stop_reason: "screen_admissions_spent",
+          };
+        }
+        log("funding_screen_admissions_spent", {
+          admitted: opts.fundingScreen.plan.admit, closed_not_admitted: notAdmitted,
+          discovery_exhausted: state.discovery_source_state?.exhausted ?? null,
+        });
       }
     }
     // THE RUNNING TOTAL OF AUTHORISED SPEND. Every downstream report of "how

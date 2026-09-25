@@ -30,6 +30,7 @@ import { CLAIM_REGISTRY, evidenceGapsFor } from "../../../supabase/functions/_sh
 import { attemptedRoutes, type VerificationTarget, type VerifierCallOutcome } from "../../../supabase/functions/_shared/claimVerifier.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 import { stubMissionEvaluator } from "./missionEvaluatorFixture.ts";
+import { decideAutoContinuation } from "../../../supabase/functions/_shared/leadAutoContinuation.ts";
 
 globalThis.fetch = () => { throw new Error("these tests must not reach the network"); };
 
@@ -168,6 +169,8 @@ async function run(o: {
   plan?: FundingScreenPlan;
   /** A continuation: the previous slice's state and resume records. */
   resume?: { state: Record<string, unknown>; records: unknown[] };
+  /** The continuation asked for a wider pool (`replenishment_required`), from these pages. */
+  replenish?: Record<string, number>;
 } = {}) {
   const calls: Array<{ actorKey: string; input: Record<string, unknown> }> = [];
   const screened: string[][] = [];
@@ -224,6 +227,12 @@ async function run(o: {
     // turn the spec on.
     specMode: "enforce", specScope: { workspace_id: "ws-test", lineage_id: "lineage-screen" },
     readiness: PRODUCTION_READINESS, runBudget: parseRunBudget({ provider_usd: 0.14, max_candidates: 2 }),
+    ...(o.replenish ? {
+      discoveryReplenishment: {
+        reason: "replenishment_required", pages_taken: o.replenish,
+        sources_attempted: ["apify_linkedin_company_search"],
+      },
+    } : {}),
     ...(o.resume ? {
       state: o.resume.state,
       resume: { workspace_id: "ws-test", lineage_root_task_id: "lineage-screen", records: o.resume.records },
@@ -409,4 +418,51 @@ Deno.test("TOP-UP BELOW THE YIELD FLOOR: a first page of nothing but placeholder
   assertEquals(r.search.length, 2, "the top-up ran");
   assertEquals([r.search[1].input.startPage, r.search[1].input.maxItems], [2, 2]);
   assertEquals([...r.screened[0]].sort(), ["echo", "foxtrot"].map(page).sort(), "no placeholder is ever screened");
+});
+
+// ═══════════════════ canary 1a0c3234: no discovery once the admissions are spent ══
+
+Deno.test("ADMISSIONS SPENT → DISCOVERY EXHAUSTED: the state the checkpoint carries says no routes remain, though rows are left", async () => {
+  const s1 = await run();
+  const st = s1.state as { funding_screen?: { admissions_spent?: boolean }; discovery_source_state?: { exhausted: boolean; stop_reason: string } };
+  assertEquals(s1.search.reduce((n, c) => n + Number(c.input.maxItems), 0), 4, "4 of the 6-row allowance bought");
+  assertEquals(st.funding_screen?.admissions_spent, true);
+  assertEquals([st.discovery_source_state?.exhausted, st.discovery_source_state?.stop_reason], [true, "screen_admissions_spent"]);
+  // Continuation reads `!exhausted` as "discovery routes remain" (run-agent). With both admitted
+  // companies investigated and none qualified, it now ends instead of asking for a wider pool.
+  const d = decideAutoContinuation({
+    cancelled: false, qualified: 0, requestedCount: 1, frontierRemaining: 0, continuationsUsed: 2, maxContinuations: 5,
+    costUnitsUsed: 2, maxCostUnits: 50, barrenSlices: 1, providerFailed: false, pendingRuns: 0,
+    discoveryRoutesRemain: !st.discovery_source_state!.exhausted, verificationRoutesRemain: 0,
+  } as never);
+  assertFalse(d.continue);
+  assert(d.reason !== "replenishment_required", d.reason);
+});
+
+Deno.test("REPLAY 1a0c3234: a replenishment slice after the admissions are spent buys NO page and NO second Atomus read", async () => {
+  const s1 = await run();
+  const pages = (s1.state as { discovery_source_state?: { pages_taken: Record<string, number> } }).discovery_source_state!.pages_taken;
+  // Forced, as the pre-fix continuation did: `replenishment_required` with rows left in the allowance.
+  const s2 = await run({ resume: { state: s1.state, records: s1.resume_records }, replenish: pages });
+  assertEquals(s2.search.length, 0, "no page 3");
+  assertEquals(s2.screened, [], "no second Atomus read");
+  assertEquals(s2.detailsFor, []);
+  assertEquals(s2.companies.filter((c) => c.investigation_state === "pending_investigation").length, 0);
+});
+
+Deno.test("NO SLOT LEFT, NO SCREEN: an unscreened company still open after the admissions are spent is closed, never read by Atomus", async () => {
+  const s1 = await run();
+  // A checkpoint that carries an open, never-screened company past the admissions (defence in
+  // depth: discovery cannot add one once the budget reads spent, but a restored pool could hold one).
+  const records = structuredClone(s1.resume_records) as Array<{ company_key: string; completed_operations?: string[];
+    snapshot?: { investigation_state?: string; shortlist_exclusion?: string | null } }>;
+  const alpha = records.find((r) => r.company_key === page("alpha"))!;
+  alpha.completed_operations = (alpha.completed_operations ?? []).filter((o) => !o.endsWith(ATOMUS));
+  alpha.snapshot = { ...alpha.snapshot, investigation_state: "pending_investigation", shortlist_exclusion: null };
+  const state = structuredClone(s1.state) as { funding_screen?: { verdicts: Record<string, string> } };
+  delete state.funding_screen!.verdicts[page("alpha")];
+  const s2 = await run({ resume: { state: state as Record<string, unknown>, records } });
+  assertEquals(s2.screened, [], "no Atomus read with no slot left");
+  assertEquals(s2.byKey("alpha").investigation_state, "excluded_permanently");
+  assertEquals(s2.byKey("alpha").shortlist_exclusion, "screen_not_admitted");
 });
