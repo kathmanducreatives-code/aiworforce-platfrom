@@ -220,6 +220,28 @@ export function isVerifiedRound(r: FundingRoundFact): boolean {
   return (r.source_urls?.length ?? 0) > 0 || !!r.announced_date;
 }
 
+/**
+ * A TRUSTWORTHY DATED FUNDING EVENT — what `recently_funded` counts.
+ *
+ * Deliberately NOT `isVerifiedRound`: recency asks WHEN the company last raised,
+ * not WHICH rung it raised. A dated debt facility, grant or corporate round is
+ * a funding event with a date, so it can answer "funded in the last N days"
+ * even though it names no stage. The stage claim keeps its own test, so none
+ * of these can satisfy "Seed" or "Series A".
+ *
+ * Trustworthy means a provider field (never a model extraction) with an
+ * announced date. Not a funding EVENT: a secondary sale, which moves shares
+ * between holders and raises nothing for the company.
+ */
+export function isVerifiedFundingEvent(r: FundingRoundFact): boolean {
+  if (r.method === "model_extraction") return false;
+  if (!r.announced_date || !Number.isFinite(Date.parse(r.announced_date))) return false;
+  return !NON_RAISING_ROUND_TYPES.includes(normalizeRoundType(r.round_type) ?? "");
+}
+
+/** Funding rounds that raise nothing for the company: never a recency event. */
+export const NON_RAISING_ROUND_TYPES: readonly string[] = Object.freeze(["secondary"]);
+
 function label(rank: number): string {
   for (const [k, v] of Object.entries(FUNDING_STAGE_LADDER)) if (v === rank && k !== "angel") return k;
   return "unknown";
@@ -559,10 +581,16 @@ export function fundingStageEvidenceItem(i: {
 //
 // The asymmetry of `decideFundingStage` is kept, for the same reason:
 //
-//   a verified round inside the window                      → PASS
-//   no round inside it, and the history is COMPLETE         → FAIL
-//   no round inside it, and the history may be partial      → PENDING
+//   a trustworthy dated funding EVENT inside the window     → PASS
+//   none inside it, and the history is COMPLETE             → FAIL
+//   none inside it, and the history may be partial          → PENDING
+//   an in-window event only a model extracted               → PENDING
 //   no rounds, undated rounds, or no record at all          → PENDING
+//
+// An EVENT, not a stage (`isVerifiedFundingEvent`): debt, a grant or a
+// corporate round counts here — the claim is about a date. Canary 11: Salvo's
+// dated 2024-06-06 debt round was invisible to this rule, and inside a 730-day
+// window was explained as "older than the window".
 //
 // Absence is never disproof: "we have not seen a recent round" and "there has
 // not been one" are different claims, and only a complete history closes the
@@ -573,6 +601,7 @@ export type RecentFundingReason =
   | "no_dated_rounds"
   | "round_inside_window"
   | "no_round_inside_window"
+  | "unverified_round_inside_window"
   | "history_incomplete"
   | "no_window_requested";
 
@@ -624,46 +653,69 @@ export function decideRecentlyFunded(i: {
   if (records.length === 0) {
     return { ...base, reasons: ["no_funding_record"], explanation: "no funding record was retrieved" };
   }
-  const cutoff = now - i.window_days * 86_400_000;
+  // Every dated funding EVENT (a secondary sale is none), trusted or not: an
+  // untrusted one inside the window still blocks a FAIL.
   const dated = records.flatMap((r) => r.rounds.map((round) => ({ round, at: Date.parse(round.announced_date ?? "") })))
-    .filter((x) => Number.isFinite(x.at));
+    .filter((x) => Number.isFinite(x.at) && !NON_RAISING_ROUND_TYPES.includes(normalizeRoundType(x.round.round_type) ?? ""));
   if (dated.length === 0) {
     return { ...base, reasons: ["no_dated_rounds"],
-      explanation: "funding is reported, but no round carries an announced date" };
+      explanation: "funding is reported, but no funding event carries an announced date" };
   }
-  const latest = dated.reduce((a, b) => (b.at > a.at ? b : a));
-  base.latest_announced_date = latest.round.announced_date;
+  const trusted = dated.filter((x) => isVerifiedFundingEvent(x.round));
+  const latestOf = (xs: typeof dated) => xs.reduce((a, b) => (b.at > a.at ? b : a));
+  // WHOLE days elapsed — the age the explanation states is the age the window
+  // is judged on, so "N day(s) ago, inside the W-day window" always means N ≤ W.
+  const ago = (at: number) => Math.floor((now - at) / 86_400_000);
+  const inWindow = (x: { at: number }) => ago(x.at) <= i.window_days!;
+  const describe = (x: (typeof dated)[number]) =>
+    `(${x.round.round_type ?? "unlabelled"}) was announced ${String(x.round.announced_date).slice(0, 10)}, ${ago(x.at)} day(s) ago`;
 
-  // PASS: a round we can VERIFY (a provider field with a citation or a date),
-  // announced inside the window.
-  const inside = dated.filter((x) => x.at >= cutoff && isVerifiedRound(x.round));
+  // PASS: a trustworthy dated funding event inside the window — the latest one.
+  const inside = trusted.filter(inWindow);
   if (inside.length > 0) {
-    const days = Math.round((now - latest.at) / 86_400_000);
+    const last = latestOf(inside);
+    base.latest_announced_date = last.round.announced_date;
     return {
       ...base, verdict: "pass", reasons: ["round_inside_window"],
       carrier_rounds: inside.map((x) => x.round),
       provenance: prov("pass", inside.map((x) => x.round), null),
-      explanation: `a verified ${normalizeRoundType(inside[0].round.round_type) ?? "funding"} round was announced ` +
-        `${days} day(s) ago, inside the ${i.window_days}-day window`,
+      explanation: `a verified funding event ${describe(last)}, inside the ${i.window_days}-day window`,
     };
   }
+
+  // An event inside the window that nothing trustworthy states: it cannot PASS,
+  // and it contradicts "nothing recent", so it cannot FAIL either.
+  const unverifiedInside = dated.filter(inWindow);
+  if (unverifiedInside.length > 0) {
+    const last = latestOf(unverifiedInside);
+    base.latest_announced_date = last.round.announced_date;
+    return {
+      ...base, reasons: ["unverified_round_inside_window"], carrier_rounds: [last.round],
+      provenance: prov("pending", [last.round], null),
+      explanation: `a funding event ${describe(last)}, inside the ${i.window_days}-day window, ` +
+        `but no provider field states it (model extraction only)`,
+    };
+  }
+
+  // Everything we hold is older than the window. Name the latest event.
+  const latest = latestOf(trusted.length > 0 ? trusted : dated);
+  base.latest_announced_date = latest.round.announced_date;
 
   // FAIL needs the whole record: "nothing recent" is a claim about rounds we
   // have not seen unless the provider says there are none.
   const completeRecord = records.find(historyIsComplete) ?? null;
   if (completeRecord) {
-    const days = Math.round((now - latest.at) / 86_400_000);
     return {
       ...base, verdict: "fail", reasons: ["no_round_inside_window"], carrier_rounds: [latest.round],
       provenance: prov("fail", [latest.round], completeRecord),
-      explanation: `the most recent round in a complete history was announced ${days} day(s) ago, ` +
+      explanation: `the most recent funding event in a complete history ${describe(latest)}, ` +
         `outside the ${i.window_days}-day window`,
     };
   }
   return {
     ...base, reasons: ["history_incomplete"], carrier_rounds: [latest.round],
     provenance: prov("pending", [latest.round], null),
-    explanation: `the rounds we hold are all older than the ${i.window_days}-day window, ` +
-      `but no provider states this is the full history`,
+    explanation: `the latest funding event we hold ${describe(latest)}, outside the ${i.window_days}-day window, ` +
+      `and no provider states this is the full history`,
   };
 }
