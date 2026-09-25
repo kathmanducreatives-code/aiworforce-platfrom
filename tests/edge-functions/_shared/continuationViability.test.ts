@@ -17,6 +17,13 @@
 // (search, details, Atomus rows) and attempted routes, and runs them through the
 // real eligibility, gap router, verifier targeting, continuation and outcome.
 //
+// THE FALLBACK THAT CAME AFTER. The canary ran before the Pvalyou recency
+// fallback (2944d7d7). Today the same funding verification asks Pvalyou in the
+// same call when Atomus is open, so the replay's default marks Pvalyou as having
+// answered — the state How to AI would be in now. `replay({ pvalyouAnswered:
+// false })` is the state exactly as recorded, which the router now sends to the
+// fallback rather than blocking.
+//
 // Pure. No provider, model, network or database.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
@@ -43,9 +50,10 @@ const AT = new Date("2026-09-24T15:10:30.000Z");
 const CRITERIA = deriveMissionCriteria(FX.lead_mission, PRODUCTION_READINESS);
 const SUPERAGI = "https://www.linkedin.com/company/superagi";
 const HOWTOAI = "https://www.linkedin.com/company/how-to-ai-guide";
+const PVALYOU = "apify_funding_pvalyou";
 
-/** Each candidate, rebuilt from exactly what the canary bought. */
-function replay() {
+/** Each candidate, rebuilt from exactly what the canary bought (plus, by default, today's fallback). */
+function replay(o: { pvalyouAnswered?: boolean } = {}) {
   return (FX.lead_resume_checkpoint.companies as Array<{
     company_key: string; company_name: string; completed_operations: string[];
     snapshot: { observations: Array<{ evidence: EvidenceItem[] }> };
@@ -53,7 +61,7 @@ function replay() {
     const items = c.snapshot.observations.flatMap((o) => o.evidence).map((e) => ({ ...e, company_key: c.company_key }));
     const graph = buildCompanyEvidenceGraph(c.company_key, items, { now: AT });
     const e = evaluateEligibility(CRITERIA, graph);
-    const attempted = attemptedRoutes(c.completed_operations);
+    const attempted = [...attemptedRoutes(c.completed_operations), ...(o.pvalyouAnswered === false ? [] : [PVALYOU])];
     const hard = e.checks.filter((x) => x.kind === "hard");
     const gaps = evidenceGapsFor(hard, graph, CLAIM_REGISTRY, new Set(attempted), PRODUCTION_READINESS);
     return {
@@ -97,7 +105,7 @@ Deno.test("REPLAY How to AI: funding PENDING and BLOCKED — so its open gaps ca
   const h = byKey(HOWTOAI);
   assertEquals(h.eligibility, "pending");
   const byDim = Object.fromEntries(h.gaps.map((g) => [g.dimension, g.next]));
-  assertEquals(byDim.funding, "blocked", "Atomus already answered; nothing else may ask");
+  assertEquals(byDim.funding, "blocked", "Atomus and its Pvalyou fallback both answered; nothing else may ask");
   assertEquals([byDim.hiring, byDim.industry], ["verify", "verify"], "these alone WOULD be verifiable");
   assertFalse(canStillQualify(h.gaps), "one blocked hard claim means no purchase can make it eligible");
 });
@@ -110,6 +118,30 @@ Deno.test("REPLAY: the verifier phase and continuation now read the SAME rule �
   }
   const summary = summarizeGaps(all.filter((c) => c.eligibility === "pending").map((c) => ({ gaps: c.gaps })));
   assertEquals([summary.pending, summary.with_executable_route, summary.blocked], [1, 0, 1]);
+});
+
+Deno.test("AS RECORDED (Atomus only): the router sends How to AI to the Pvalyou fallback, and the verifier and continuation AGREE", () => {
+  const all = replay({ pvalyouAnswered: false });
+  const h = all.find((c) => c.company_key === HOWTOAI)!;
+  const funding = h.gaps.find((g) => g.dimension === "funding")!;
+  assertEquals([funding.next, funding.route?.actor], ["verify", PVALYOU]);
+  // The funding verifier is handed How to AI through its fallback route…
+  const targets = verificationTargets({ route_actor: "apify_funding_atomus", route_actors: ["apify_funding_atomus", PVALYOU], max_targets: 6 },
+    all as never, (id) => CRITERIA.find((c) => c.id === id)?.value, CLAIM_REGISTRY, PRODUCTION_READINESS);
+  assertEquals(targets.map((t) => t.company_key), [HOWTOAI]);
+  // …and continuation counts exactly that one candidate as work. One rule.
+  const summary = summarizeGaps(all.filter((c) => c.eligibility === "pending").map((c) => ({ gaps: c.gaps })));
+  assertEquals([summary.pending, summary.with_executable_route, summary.blocked], [1, 1, 0]);
+  // In ISOLATION hiring and Firecrawl would target it too — an open gap with a
+  // route does not block another verifier. What keeps them from buying before
+  // funding is answered is the phase: the funding verifier runs first (cheapest),
+  // its fallback's answer blocks the claim, and a fallback still running holds
+  // the company (`claimVerificationPhase`). Asserted end to end in
+  // fundingRecencyFallback.test.ts.
+  for (const route_actor of ["apify_linkedin_job_search", "firecrawl"]) {
+    assertEquals(verificationTargets({ route_actor, max_targets: 5 }, all as never,
+      (id) => CRITERIA.find((c) => c.id === id)?.value, CLAIM_REGISTRY, PRODUCTION_READINESS).length, 1, route_actor);
+  }
 });
 
 Deno.test("REPLAY: continuation STOPS — frontier_exhausted → search_exhausted, PARTIALLY_SATISFIED, 0/1/1", () => {

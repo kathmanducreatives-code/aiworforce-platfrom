@@ -5,7 +5,7 @@
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
 import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
-import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
+import { hiringClaimVerifier, hiringEstimatePerTargetUsd } from "../_shared/hiringClaimVerifier.ts";
 import { hiringSearchTitles } from "../_shared/hiringSearchVocabulary.ts";
 import { roleMatchesFamily, type RoleFamily } from "../_shared/roleFamilies.ts";
 import { sizeBandLabel } from "../_shared/companySize.ts";
@@ -97,7 +97,7 @@ import { resolveIndustryExclusions } from "../_shared/industryPrecedence.ts";
 import { AUTO_RESUME_SUPPRESSED_KEY } from "../_shared/stalledLeadResume.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 import { executabilityGateFor } from "../_shared/capabilityExecutability.ts";
-import { readinessPolicyFor } from "../_shared/routeReadiness.ts";
+import { readinessPolicyFor, routeActorReady } from "../_shared/routeReadiness.ts";
 // GPT chooses the discovery Actors. `validateDiscoveryStrategy` in the engine
 // decides which of its choices are allowed; this only supplies the proposal.
 import { makeGptDiscoveryPlanner } from "../_shared/gptDiscoveryPlanner.ts";
@@ -174,9 +174,10 @@ import { verifierSpecCompiler } from "../_shared/verifierCallSpec.ts";
 import { runClaimVerificationPhase } from "../_shared/claimVerificationPhase.ts";
 import { buildClaimPlan } from "../_shared/claimPlan.ts";
 import {
-  businessModelVerifier, claimPageBudget, claimPageDebts, claimPagePlan,
+  businessModelEstimatePerTargetUsd, businessModelVerifier, claimPageBudget, claimPageDebts, claimPagePlan,
 } from "../_shared/businessModelVerifier.ts";
 import { fundingStageVerifier } from "../_shared/fundingStageVerifier.ts";
+import { fundingScreenPlan, recentlyCheckedPages } from "../_shared/fundingPoolScreen.ts";
 import { hiringActorCard } from "../_shared/hiringActorCatalog.ts";
 import { hashInput as claimVerifierHashInput } from "../_shared/hiringActorInputs.ts";
 import { markProviderUnavailable, unavailableProvider } from "../_shared/providerAvailability.ts";
@@ -2267,6 +2268,97 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         const missionPlan = persistedMission
           ? buildCapabilityGraph(persistedMission, { executability: leadExecutabilityGate, readiness: leadReadiness })
           : null;
+        // ── ONE VERIFIER SPINE ──────────────────────────────────────────────
+        //
+        // A claim verifier's paid call: a ProviderCallSpec (readiness, contract,
+        // units, estimate vs ceiling), the ledger reservation under the spec's
+        // key, `guardedInvoker` at the moment of spending, and the spec in the
+        // envelope so the ledger row carries `provider_call_id` and settles.
+        // Shared by the FUNDING SCREEN (inside the engine, before admission) and
+        // the verification phase (after it), so both purchases read
+        // spec → reserve → execute → settle against the same ledger.
+        const VERIFIER_CAPABILITY_OF: Record<string, string> = {
+          apify_funding_atomus: "funding_verification", apify_funding_pvalyou: "funding_verification",
+          apify_linkedin_job_search: "hiring_verification",
+        };
+        const verifierCallFor = async (vState: CapabilityExecutionState) => ledgerBoundCall({
+          ledger: vState.spend_ledger!,
+          spec: verifierSpecCompiler({
+            scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
+            mission_hash: await missionHash(persistedMission!),
+            policy: criteriaExecutionPolicy(persistedMission!),
+            ceilings: () => vState.spend_ledger!.ceilings,
+            readiness: leadReadiness,
+            plan: (() => {
+              const rp = vState.retrieval_plans?.[vState.retrieval_plans.length - 1];
+              return rp ? { plan_id: rp.plan_id, version: rp.version } : null;
+            })(),
+          }),
+          actorIdFor: (actorKey) => hiringActorCard(actorKey)?.actor_id ?? null,
+          invoke: guardedInvoker(null, (call) => capabilityInvoke(call), (actorKey, error) => {
+            console.error("[run-agent][claim-verifier][guard_refused]", {
+              task_id: task.id, actorKey, kind: error.kind, reason: error.message.slice(0, 200),
+            });
+          }, leadReadiness),
+          hash: (input, actorKey) => claimVerifierHashInput(input, actorKey),
+          // THE SAME TRACE the engine's calls and every settlement write to.
+          trace: (type, detail, refs) => {
+            if (vState.mission_trace) appendTrace(vState.mission_trace, type, detail, refs);
+          },
+          onRefused: (actorKey, reason) => {
+            vState.unavailable_providers = markProviderUnavailable(vState.unavailable_providers, {
+              provider: actorKey, capability: VERIFIER_CAPABILITY_OF[actorKey] ?? "funding_verification", reason,
+              refused_at: new Date().toISOString(),
+              readiness_at_refusal: leadReadiness.decide(actorKey, "funding_verification").readiness,
+            });
+          },
+        });
+        // ── THE FUNDING SCREEN (`fundingPoolScreen.ts`) ─────────────────────
+        //
+        // Lead V2 general discovery with a HARD windowed funding claim and a run
+        // budget: buy a wider short-mode pool, screen it with ONE Atomus read,
+        // admit `max_candidates`. Priced here, before discovery — the widest pool
+        // whose worst case fits `provider_usd` — or it does not run at all.
+        const fundingScreen = (() => {
+          if (!persistedMission || leadExecutabilityGate !== "enforce" || !p2Specs ||
+            missionPlan?.entry_capability !== "general_company_discovery") {
+            return { plan: null, reason: "not_lead_v2_general_discovery", priced: [] };
+          }
+          const criteria = deriveMissionCriteria(persistedMission, leadReadiness);
+          const hiring = criteria.find((c) => c.kind === "hard" && c.dimension === "hiring");
+          const jobs = hiring
+            ? hiringEstimatePerTargetUsd({
+              titles: hiringSearchTitles(buildQualificationContext(persistedMission, { criteriaAuthority: true }).role_vocabulary),
+              window_days: hiring.time_window?.days ?? null,
+            })
+            : 0;
+          // First-party pages, always priced in: conservative when no claim needs them.
+          const pages = businessModelEstimatePerTargetUsd(
+            webEvidenceCreditRate(readEnvSafe, { usd_capped: runBudget?.provider_usd != null }).usd_per_credit);
+          return fundingScreenPlan({
+            criteria, runBudget, requestedCount: quota.requestedLeadCount,
+            downstream_verifiers_usd: jobs == null || pages == null ? null : jobs + pages,
+          });
+        })();
+        /** Search rows discovery may buy: the screened pool, or the run's candidate pool. */
+        const discoveryRows = fundingScreen.plan?.pool_rows ?? candidatePool(quota.requestedLeadCount, runBudget);
+        // CHECKED BY THIS WORKSPACE RECENTLY: the screen does not buy them again.
+        const recentlyFundingChecked = fundingScreen.plan
+          ? await (async () => {
+            const since = new Date(Date.now() - fundingScreen.plan!.recently_checked_days * 86_400_000).toISOString();
+            const { data, error } = await supabase.from("lead_execution_calls")
+              .select("task_id, candidate_keys:request_input->provider_call_spec->candidate_keys")
+              .eq("workspace_id", workspace_id).eq("record_kind", "provider_call")
+              .eq("request_input->>selected_actor_key", "apify_funding_atomus").eq("status", "succeeded")
+              .gte("created_at", since).limit(500);
+            if (error) console.error("[run-agent][funding-screen] recently-checked read failed", error.message);
+            return recentlyCheckedPages((data ?? []) as Array<{ task_id: string | null; candidate_keys: unknown }>, String(task.id));
+          })()
+          : new Set<string>();
+        console.log("[run-agent][funding-screen]", {
+          task_id: task.id, reason: fundingScreen.reason, plan: fundingScreen.plan,
+          priced: fundingScreen.priced, recently_checked: recentlyFundingChecked.size,
+        });
         console.log("[run-agent][lead-mission]", {
           task_id: task.id,
           has_mission: persistedMission !== null,
@@ -2500,7 +2592,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             requestedCount: quota.requestedLeadCount,
             // The discovery ceiling, not MAX_SAFE_INTEGER: the pool bound is
             // meaningful and passing infinity made `pool_bound` unreachable.
-            poolSize: candidatePool(quota.requestedLeadCount, runBudget),
+            poolSize: discoveryRows,
           }).budget,
         });
         console.log("[run-agent][mission-evaluation][binding]", {
@@ -2527,7 +2619,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         const triageBinding = buildMissionTriageBinding({
           workspaceId: workspace_id,
           onModelCall: modelCalls.sink,
-          poolSize: candidatePool(quota.requestedLeadCount, runBudget),
+          poolSize: discoveryRows,
           // THE ROUTER'S SIGNAL. Triage is the same work at any quota; what the
           // quota changes is whether a misordering costs a position or a lead.
           requestedCount: quota.requestedLeadCount,
@@ -2639,7 +2731,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // it.
         const firstCall = missionPlan
           ? compileFirstProviderCall(missionPlan, {
-            maxCandidates: candidatePool(quota.requestedLeadCount, runBudget),
+            maxCandidates: discoveryRows,
           })
           : { provider: null, compiled: null };
         const paidPreflight = buildPaidExecutionPreflight({
@@ -3983,7 +4075,23 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               // owed — see `ADMITTED_PER_OWED_LEAD`.
               // Ten raw rows per lead (at least ten) unless the run's budget
               // lowers it — see `candidatePool`, the one owner of this number.
-              maxCandidates: candidatePool(quota.requestedLeadCount, runBudget),
+              maxCandidates: discoveryRows,
+              // THE FUNDING SCREEN: the funding verifier with its fallback off,
+              // through the one verifier spine, before any company is admitted.
+              ...(fundingScreen.plan ? {
+                fundingScreen: {
+                  plan: fundingScreen.plan,
+                  recentlyChecked: recentlyFundingChecked,
+                  screen: async (targets, state) => (await fundingStageVerifier({ fallback: false }).verify(targets, {
+                    call: await verifierCallFor(state),
+                    now: () => new Date().toISOString(),
+                    log: (event, meta) => console.log(`[run-agent][funding-screen][${event}]`, { task_id: task.id, ...(meta ?? {}) }),
+                    ready: (actor) => routeActorReady(actor, "funding_verification", leadReadiness).ready &&
+                      unavailableProvider(state.unavailable_providers, actor,
+                        leadReadiness.decide(actor, "funding_verification").readiness, readEnvSafe) === null,
+                  }, { mission_id: String(task.id), pending: [] })).findings,
+                },
+              } : {}),
               runBudget,
               remainingLeads: quota.requestedLeadCount,
               discoveryReplenishment,
@@ -4959,11 +5067,6 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     attempted_routes: cand.attempted_routes ?? [],
                   };
                 });
-                /** Which verifier capability an actor's refusal is recorded under. */
-                const VERIFIER_CAPABILITY_OF: Record<string, string> = {
-                  apify_funding_atomus: "funding_verification", apify_funding_pvalyou: "funding_verification",
-                  apify_linkedin_job_search: "hiring_verification",
-                };
                 const verifierLog = (event: string, meta?: Record<string, unknown>) =>
                   console.log(`[run-agent][claim-verifier][${event}]`, { task_id: task.id, ...(meta ?? {}) });
                 const unavailable = (actorKey: string) => unavailableProvider(vState.unavailable_providers, actorKey,
@@ -5143,40 +5246,8 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     // ledger reservation under the spec's key, `guardedInvoker`
                     // at the moment of spending, and the spec in the envelope
                     // so the ledger row carries `provider_call_id` and settles.
-                    call: ledgerBoundCall({
-                      ledger: vState.spend_ledger!,
-                      spec: verifierSpecCompiler({
-                        scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
-                        mission_hash: await missionHash(vMission),
-                        policy: criteriaExecutionPolicy(vMission),
-                        ceilings: () => vState.spend_ledger!.ceilings,
-                        readiness: leadReadiness,
-                        plan: (() => {
-                          const rp = vState.retrieval_plans?.[vState.retrieval_plans.length - 1];
-                          return rp ? { plan_id: rp.plan_id, version: rp.version } : null;
-                        })(),
-                      }),
-                      actorIdFor: (actorKey) => hiringActorCard(actorKey)?.actor_id ?? null,
-                      invoke: guardedInvoker(null, (call) => capabilityInvoke(call), (actorKey, error) => {
-                        console.error("[run-agent][claim-verifier][guard_refused]", {
-                          task_id: task.id, actorKey, kind: error.kind, reason: error.message.slice(0, 200),
-                        });
-                      }, leadReadiness),
-                      hash: (input, actorKey) => claimVerifierHashInput(input, actorKey),
-                      // THE SAME TRACE the engine's calls and every settlement
-                      // write to, so a verifier purchase reads spec → reserve →
-                      // execute → settle like any other.
-                      trace: (type, detail, refs) => {
-                        if (vState.mission_trace) appendTrace(vState.mission_trace, type, detail, refs);
-                      },
-                      onRefused: (actorKey, reason) => {
-                        vState.unavailable_providers = markProviderUnavailable(vState.unavailable_providers, {
-                          provider: actorKey, capability: VERIFIER_CAPABILITY_OF[actorKey] ?? "funding_verification", reason,
-                          refused_at: new Date().toISOString(),
-                          readiness_at_refusal: leadReadiness.decide(actorKey, "funding_verification").readiness,
-                        });
-                      },
-                    }),
+                    // THE ONE VERIFIER SPINE (`verifierCallFor`), shared with the funding screen.
+                    call: await verifierCallFor(vState),
                     now: () => new Date().toISOString(),
                     log: verifierLog,
                   },

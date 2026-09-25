@@ -247,8 +247,10 @@ import { ACTOR_READINESS, readinessOf } from "./actorIntelligence.ts";
 import { PRODUCTION_READINESS, routeActorReady, type ReadinessPolicy } from "./routeReadiness.ts";
 import { markProviderUnavailable, unavailableProvider, type UnavailableProvider } from "./providerAvailability.ts";
 import {
-  attemptedRoutes, verifyOpKey, type ClaimVerifier, type PendingVerifierRun, type VerifierFinding,
+  attemptedRoutes, verifyOpKey, type ClaimVerifier, type PendingVerifierRun, type VerificationTarget,
+  type VerifierFinding,
 } from "./claimVerifier.ts";
+import { atomusInput, FUNDING_STAGE_VERIFIER_KEY } from "./fundingStageVerifier.ts";
 import { candidateDecision, decisionCounts, decisionSummary, type CandidateDecision, type MissionCandidate } from "./workbenchMissionView.ts";
 import { deriveMissionCriteria } from "./missionCriteria.ts";
 import { fundingRecordEvidenceItem, fundingRecordFromDiscoveredRound } from "./fundingCorroboration.ts";
@@ -271,6 +273,9 @@ import { ACTOR_INPUT_CONTRACTS as P2_ACTOR_CONTRACTS } from "./actorInputContrac
 import { hashInput as p2HashInput } from "./hiringActorInputs.ts";
 import { toRepoKey } from "./actorIdentity.ts";
 import { tightenCeilings, type RunBudget } from "./runBudget.ts";
+import {
+  screenAdmissionOrder, type FundingScreenPlan, type ScreenVerdict,
+} from "./fundingPoolScreen.ts";
 
 /**
  * The PAID stages a new investigation slice must re-run.
@@ -1015,6 +1020,12 @@ export interface CapabilityExecutionState {
    * and so has no shortlist decision of its own, yet still buys slices.
    */
   investigation_selected: number;
+  /**
+   * THE FUNDING SCREEN's verdict per screened company (`fundingPoolScreen.ts`),
+   * kept so a continuation that re-ranks the frontier still admits passes
+   * first. Absent when no screen ran.
+   */
+  funding_screen?: { verdicts: Record<string, ScreenVerdict> };
   /** One entry per slice taken. "Why only ten?" is answerable from this. */
   investigation_slices: Array<{
     pass: number;
@@ -2218,6 +2229,21 @@ export interface CapabilityEngineOpts {
   bindings?: readonly ResolvedReferentBinding[];
   maxCandidates?: number;
   /**
+   * THE FUNDING SCREEN (`fundingPoolScreen.ts`), when run-agent priced one.
+   *
+   * `maxCandidates` is then the SCREENED POOL (short-mode search rows), and
+   * `plan.admit` the companies that go on to identity, details and the claim
+   * verifiers. `screen` is the funding verifier with its fallback off, through
+   * the same verifier spine (spec → reservation → guard → ledger) as the
+   * verification phase. Absent, discovery is exactly what it was.
+   */
+  fundingScreen?: {
+    plan: FundingScreenPlan;
+    screen: (targets: VerificationTarget[], state: CapabilityExecutionState) => Promise<VerifierFinding[]>;
+    /** LinkedIn company URLs this workspace funding-checked within `plan.recently_checked_days`. */
+    recentlyChecked?: ReadonlySet<string>;
+  };
+  /**
    * Qualified leads still owed, for sizing the ADMITTED target.
    *
    * Absent means "the whole request is still owed", which is correct for a
@@ -3046,6 +3072,87 @@ export async function runCapabilityPlan(
    */
   let missionIntelligenceApplied = false;
 
+  /**
+   * THE FUNDING SCREEN: one Atomus read over the ranked pool, before admission.
+   *
+   * Runs once the pool is ranked and before the first slice is taken, so the
+   * slice admits funding PASSES first and never a FAIL. Idempotent: a company
+   * already carrying the Atomus mark is not screened again, so a resumed slice
+   * or a re-applied triage buys nothing. See `fundingPoolScreen.ts`.
+   */
+  const applyFundingScreen = async (companies: EngineCompany[]): Promise<void> => {
+    const fs = opts.fundingScreen;
+    if (!fs) return;
+    const ATOMUS = "apify_funding_atomus";
+    const screenedOp = verifyOpKey(ATOMUS);
+    const pageOf = (c: EngineCompany) =>
+      atomusInput(c.identity?.linkedin_company_url ?? c.company.linkedin_company_url ?? null);
+    const open = (c: EngineCompany) => c.investigation_state === "pending_investigation" &&
+      !c.completed_operations.includes(screenedOp);
+    // CHECKED BY THIS WORKSPACE RECENTLY: the answer is already known and would
+    // be bought again. Closed for this run, never screened, never admitted.
+    const recent = new Set([...(fs.recentlyChecked ?? [])].map((u) => atomusInput(u)).filter((u): u is string => !!u));
+    const recentlyChecked: string[] = [];
+    for (const c of companies) {
+      const page = pageOf(c);
+      if (!open(c) || !page || !recent.has(page)) continue;
+      c.investigation_state = "excluded_permanently";
+      c.shortlist_exclusion = "recently_funding_checked";
+      c.shortlisted = false;
+      recentlyChecked.push(c.key);
+    }
+    const pool = companies.filter((c) => open(c) && pageOf(c))
+      .sort((a, b) => a.investigation_rank - b.investigation_rank)
+      .slice(0, fs.plan.pool_rows);
+    // Verdicts from an earlier invocation's screen, so their order survives a re-rank.
+    const verdicts = new Map<string, ScreenVerdict>(Object.entries(state.funding_screen?.verdicts ?? {}));
+    if (pool.length > 0) {
+      const targets: VerificationTarget[] = missionCandidatesFrom({ companies: pool },
+        { missionId: opts.identity?.task_id ?? null }).map((m) => ({
+        company_key: m.company_key, name: m.name, domain: m.domain, linkedin_url: m.linkedin_url, graph: m.graph,
+        criterion: { criterion_id: fs.plan.criterion_id, dimension: "funding", value: null, window_days: fs.plan.window_days },
+      }));
+      const findings = await fs.screen(targets, state);
+      for (const f of findings) {
+        const c = pool.find((x) => x.key === f.company_key);
+        if (!c) continue;
+        applyVerifierFinding(c, f, { key: FUNDING_STAGE_VERIFIER_KEY, route_actor: ATOMUS });
+        const v = f.detail?.verdict_after;
+        verdicts.set(c.key, v === "pass" || v === "fail" ? v : "pending");
+      }
+      // Screened but unanswered (no row, or the read was refused): still open.
+      for (const c of pool) if (!verdicts.has(c.key)) verdicts.set(c.key, "pending");
+    }
+    // A FAIL is a hard claim disproved from Atomus's complete history: closed.
+    for (const c of pool) {
+      if (verdicts.get(c.key) !== "fail") continue;
+      c.investigation_state = "excluded_permanently";
+      c.shortlist_exclusion = "funding_screen_fail";
+      c.shortlisted = false;
+    }
+    state.funding_screen = { verdicts: Object.fromEntries(verdicts) };
+    // PASSES FIRST, then the still-open, each in the free ranking's own order —
+    // every screened company still on the frontier, this invocation's or not.
+    const screened = companies.filter((c) => c.investigation_state === "pending_investigation" && verdicts.has(c.key));
+    const ordered = screenAdmissionOrder(screened.map((c) => ({
+      key: c.key, rank: c.investigation_rank, verdict: verdicts.get(c.key) ?? "pending",
+    })));
+    const front = new Set(ordered.map((o) => o.key));
+    const rest = companies.filter((c) => !front.has(c.key))
+      .sort((a, b) => a.investigation_rank - b.investigation_rank);
+    ordered.forEach((o, i) => { companies.find((c) => c.key === o.key)!.investigation_rank = i; });
+    rest.forEach((c, i) => { if (c.investigation_rank !== Number.MAX_SAFE_INTEGER) c.investigation_rank = ordered.length + i; });
+    state.investigation_ranking = [...ordered.map((o) => o.key),
+      ...state.investigation_ranking.filter((k) => !front.has(k))];
+    const count = (v: ScreenVerdict) => pool.filter((c) => (verdicts.get(c.key) ?? "pending") === v).length;
+    if (pool.length === 0 && ordered.length === 0) return;
+    log("funding_screen", {
+      pool: pool.length, pool_rows: fs.plan.pool_rows, admit: fs.plan.admit,
+      pass: count("pass"), fail: count("fail"), pending: count("pending"),
+      recently_checked: recentlyChecked.length, admission_order: ordered.map((o) => o.key),
+    });
+  };
+
   const applyMissionIntelligence = async (companies: EngineCompany[]): Promise<void> => {
     const verdicts = new Map<string, TriageVerdict>();
 
@@ -3328,6 +3435,8 @@ export async function runCapabilityPlan(
         (c) => c.investigation_state === "excluded_permanently").length,
       first_slice_preview: [...chosen].length,
     });
+    // THE FUNDING SCREEN reorders the ranking just decided, before any slice.
+    await applyFundingScreen(companies);
     missionIntelligenceApplied = true;
   };
 
@@ -3379,7 +3488,15 @@ export async function runCapabilityPlan(
       wasInvestigated(c.investigation_state) && c.identity === null &&
       !c.company.linkedin_company_url
     ).length;
-    const allowance = Math.max(0, budget.budget - carried);
+    // UNDER THE FUNDING SCREEN the run admits `plan.admit` companies to paid
+    // investigation over its whole life — the run's `max_candidates` — however
+    // wide the screened pool. Counted from the companies, so a continuation
+    // cannot admit a second pair.
+    const admitLeft = opts.fundingScreen
+      ? Math.max(0, opts.fundingScreen.plan.admit -
+        companies.filter((c) => wasInvestigated(c.investigation_state)).length)
+      : Number.MAX_SAFE_INTEGER;
+    const allowance = Math.min(Math.max(0, budget.budget - carried), admitLeft);
     const slice = selectInvestigationSlice(
       companies.map((c) => ({
         company_key: c.key,
@@ -5435,7 +5552,11 @@ export async function runCapabilityPlan(
                 maxItems: maxCandidates,
                 // `full` is required: `short` returns no declared size band at all
                 // (run 4250f181, 108 of 108 rows), so size could not even rank.
-                scraperMode: "full",
+                // EXCEPT UNDER THE FUNDING SCREEN: there the pool is ranked by
+                // funding, not size — the provider still applies the declared-size
+                // filter — and only ADMITTED companies get the company record that
+                // settles size. Half the row price is what buys the wider pool.
+                scraperMode: opts.fundingScreen ? opts.fundingScreen.plan.scraper_mode : "full",
               },
             });
             if (merged.strategy_overruled.length > 0) {
@@ -11040,8 +11161,10 @@ export function applyVerifierFinding(
     recorded = true;
   }
   if (f.answered) {
-    const op = verifyOpKey(verifier.route_actor);
-    if (!c.completed_operations.includes(op)) c.completed_operations.push(op);
+    for (const actor of [verifier.route_actor, ...(f.attempted_actors ?? [])]) {
+      const op = verifyOpKey(actor);
+      if (!c.completed_operations.includes(op)) c.completed_operations.push(op);
+    }
   }
   return recorded;
 }

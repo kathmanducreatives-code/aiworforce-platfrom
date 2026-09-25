@@ -514,7 +514,11 @@ Deno.test("run-agent runs the verifiers on canonical gaps, before the view, boun
     // The open-role verifier joins only for a HARD hiring claim (hiringClaimVerifier.ts).
     "verifiers: [fundingStageVerifier(), businessModel, ...(hiringVerifier ? [hiringVerifier] : [])],",
     "readiness: leadReadiness,",
-    "call: ledgerBoundCall({",
+    // ONE verifier spine, shared by the verification phase and the funding
+    // screen: both calls are `ledgerBoundCall` under the same spec compiler.
+    "const verifierCallFor = async (vState: CapabilityExecutionState) => ledgerBoundCall({",
+    "call: await verifierCallFor(vState),",
+    "call: await verifierCallFor(state),",
     // The verifier path is the spine: spec, guard, readiness-aware criteria, settlement.
     "spec: verifierSpecCompiler({",
     "invoke: guardedInvoker(null, (call) => capabilityInvoke(call),",

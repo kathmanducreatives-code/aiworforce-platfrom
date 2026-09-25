@@ -125,7 +125,11 @@ Deno.test("THE ROUTE: one pair route answers both funding claims, and names both
   const stage = CLAIM_REGISTRY.find((c) => c.claim === "funding_stage")!;
   const recent = CLAIM_REGISTRY.find((c) => c.claim === "recently_funded")!;
   assertEquals(stage.routes.length, 1);
-  assertEquals(recent.routes.length, 1, "recently_funded is routed, not deferred");
+  // The pair route, and for recency only the conditional Pvalyou fallback,
+  // which is locked until Atomus has answered (`after_actor`).
+  assertEquals(recent.routes.length, 2, "recently_funded is routed, not deferred");
+  assertEquals(recent.routes[1].actor, "apify_funding_pvalyou");
+  assertEquals(recent.routes[1].after_actor, "apify_funding_atomus");
   assertEquals(stage.routes[0], recent.routes[0], "the same route object: one pair, two claims");
   const r = stage.routes[0];
   assertEquals(r.actor, "apify_funding_atomus");

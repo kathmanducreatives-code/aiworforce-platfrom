@@ -101,11 +101,28 @@ interface PvalyouCarry {
 /** The records discovery already bought for this company. */
 const discoveredOf = (t: VerificationTarget): FundingRecordFact[] => (t.graph ? fundingRecordsInGraph(t.graph) : []);
 
-export function fundingStageVerifier(): ClaimVerifier {
+/** The Atomus record a company already holds — from the funding screen or an earlier slice. */
+const heldAtomusOf = (t: VerificationTarget): FundingRecordFact | null =>
+  discoveredOf(t).find((r) => r.actor === ATOMUS_FUNDING_ACTOR_KEY) ?? null;
+
+export interface FundingStageVerifierOptions {
+  /**
+   * Ask Pvalyou when Atomus leaves a recency claim open. Off for the funding
+   * SCREEN (`fundingPoolScreen.ts`): the pool is read by Atomus alone, and the
+   * fallback is spent later, only on a company that was admitted.
+   */
+  fallback?: boolean;
+}
+
+export function fundingStageVerifier(opts: FundingStageVerifierOptions = {}): ClaimVerifier {
+  const fallbackOn = opts.fallback !== false;
   return {
     key: FUNDING_STAGE_VERIFIER_KEY,
     claim: "funding_stage",
     route_actor: ATOMUS_FUNDING_ACTOR_KEY,
+    // Atomus, then — only after Atomus answered without a decisive round — the
+    // Pvalyou recency fallback (`PVALYOU_RECENCY_FALLBACK_ROUTE`).
+    route_actors: [ATOMUS_FUNDING_ACTOR_KEY, PVALYOU_FUNDING_ACTOR_KEY],
     max_targets: FUNDING_MAX_TARGETS,
     // The first purchase for a company is one atomus read, at the card's price.
     estimate_per_target_usd: () => {
@@ -218,8 +235,13 @@ export function fundingStageVerifier(): ClaimVerifier {
           const sent = carry.inputs[t.company_key];
           const pv = reads.find((r) => r.input === sent) ?? null;
           const pvRecord = pv?.record && out.status === "ok" ? stampFundingCall(pv.record, out.provider_call_id) : null;
-          findings.push(recencyFinding(t, carry.atomus[t.company_key] ?? null, carry.atomus_call_id, pvRecord,
-            out.status === "ok" ? "atomus_then_pvalyou" : "atomus_only_fallback_unavailable"));
+          findings.push({
+            ...recencyFinding(t, carry.atomus[t.company_key] ?? null, carry.atomus_call_id, pvRecord,
+              out.status === "ok" ? "atomus_then_pvalyou" : "atomus_only_fallback_unavailable"),
+            // ASKED, whatever it said: a Pvalyou answer (or refusal) for this
+            // company is never bought twice.
+            attempted_actors: [PVALYOU_FUNDING_ACTOR_KEY],
+          });
         }
       };
 
@@ -237,9 +259,25 @@ export function fundingStageVerifier(): ClaimVerifier {
       // ── 2. atomus, one batch, for every target with a LinkedIn page ──────
       const atomusRecords: Record<string, FundingRecordFact | null> = {};
       let atomusCallId: string | null = null;
-      /** Did the atomus call itself RUN? A refused or failed call is not an answer to fall back from. */
-      let atomusRan = false;
-      const byPage = fresh.map((t) => ({ t, page: atomusInput(t.linkedin_url) }));
+      /**
+       * Companies Atomus has answered for — this call, or an earlier read the
+       * graph holds. A refused or failed call is not an answer to fall back from.
+       */
+      const atomusAnswered = new Set<string>();
+      // ── AN ATOMUS RECORD ALREADY HELD IS NOT RE-BOUGHT ─────────────────
+      //
+      // The funding SCREEN reads the whole pool with Atomus before admission;
+      // an admitted company reaches this verifier holding that record, through
+      // the Pvalyou fallback route. Its Atomus reading is the one the screen
+      // bought, and the fallback decision is made from it.
+      for (const t of fresh) {
+        const held = heldAtomusOf(t);
+        if (!held) continue;
+        atomusRecords[t.company_key] = held;
+        atomusAnswered.add(t.company_key);
+      }
+      const byPage = fresh.filter((t) => !atomusAnswered.has(t.company_key))
+        .map((t) => ({ t, page: atomusInput(t.linkedin_url) }));
       const withPage = byPage.filter((x) => x.page);
       if (withPage.length > 0 && deps.ready(ATOMUS_FUNDING_ACTOR_KEY)) {
         const out = await deps.call({
@@ -249,7 +287,7 @@ export function fundingStageVerifier(): ClaimVerifier {
         });
         if (out.status === "ok") {
           atomusCallId = out.provider_call_id;
-          atomusRan = true;
+          for (const { t } of withPage) atomusAnswered.add(t.company_key);
           const reads = out.rows.map(normalizeAtomusFunding);
           for (const { t, page } of withPage) {
             const want = slugOf(page);
@@ -306,12 +344,13 @@ export function fundingStageVerifier(): ClaimVerifier {
             : !atomusComplete;
           const pvalyouAnswered = known.some((r) => r.actor === PVALYOU_FUNDING_ACTOR_KEY);
           const key = t.domain ?? t.linkedin_url;
-          if (atomusRan && openAfterAtomus && !pvalyouAnswered && key && deps.ready(PVALYOU_FUNDING_ACTOR_KEY)) {
+          if (fallbackOn && atomusAnswered.has(t.company_key) && openAfterAtomus && !pvalyouAnswered && key &&
+            deps.ready(PVALYOU_FUNDING_ACTOR_KEY)) {
             recencyFallback.push(t);
             recencyInputs[t.company_key] = key;
             continue;
           }
-          findings.push(recencyFinding(t, atomus, atomus ? atomusCallId : null, null, "atomus_recency"));
+          findings.push(recencyFinding(t, atomus, atomus ? (atomus.provider_call_id ?? atomusCallId) : null, null, "atomus_recency"));
           continue;
         }
         discovered[t.company_key] = discoveredOf(t);

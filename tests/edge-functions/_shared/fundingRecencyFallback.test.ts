@@ -219,7 +219,9 @@ async function phase(o: {
     criteriaValue: (id) => crit.find((c) => c.id === id)?.value ?? null,
     criteriaWindow: (id) => crit.find((c) => c.id === id)?.time_window?.days ?? null,
     verifiers: [fundingStageVerifier(), hiring, firecrawl], readiness: PRODUCTION_READINESS, pending: o.pending ?? [],
-    apply: (f, v) => { w.tried.get(f.company_key)!.push(v.route_actor);
+    // AS `applyVerifierFinding` DOES: the route actor and every actor the answer
+    // consumed (the Pvalyou fallback) are marked tried.
+    apply: (f, v) => { w.tried.get(f.company_key)!.push(v.route_actor, ...(f.attempted_actors ?? []));
       if (f.item) w.items.get(f.company_key)!.push(f.item, ...(f.supporting ?? [])); return !!f.item; },
     deps: { now: () => NOW.toISOString(), log: () => {}, call: (c) => {
       const list = (c.input.companies as string[] | undefined) ?? (c.input.company as string[]);
@@ -285,15 +287,20 @@ Deno.test("9. quota_met → no new Atomus or Pvalyou purchase", async () => {
   assertEquals(r.report.stopped, "quota_met");
 });
 
-Deno.test("the recorded canary really was stuck: after Atomus, both candidates' funding gaps are blocked", () => {
-  // Rebuilt from the canary's OWN observations INCLUDING its Atomus rows.
+Deno.test("the recorded canary was stuck on Atomus alone; that state now routes to the Pvalyou fallback, and is blocked once Pvalyou answered", () => {
+  // Rebuilt from the canary's OWN observations INCLUDING its Atomus rows. It was
+  // recorded before the fallback existed: Atomus answered, Pvalyou never asked.
   for (const c of FX.lead_resume_checkpoint.companies as Array<{ company_key: string; completed_operations: string[]; snapshot: { observations: Array<{ evidence: EvidenceItem[] }> } }>) {
     const graph = buildCompanyEvidenceGraph(c.company_key, c.snapshot.observations.flatMap((o) => o.evidence).map((e) => ({ ...e, company_key: c.company_key })), { now: NOW });
     const hard = evaluateEligibility(CRITERIA, graph).checks.filter((x) => x.kind === "hard");
-    const funding = evidenceGapsFor(hard, graph, CLAIM_REGISTRY, new Set(attemptedRoutes(c.completed_operations)), PRODUCTION_READINESS)
+    const tried = attemptedRoutes(c.completed_operations);
+    const funding = (t: string[]) => evidenceGapsFor(hard, graph, CLAIM_REGISTRY, new Set(t), PRODUCTION_READINESS)
       .find((g) => g.dimension === "funding")!;
-    assertEquals(funding.next, "blocked", c.company_key);
+    assertEquals(funding(tried).next, "verify", c.company_key);
+    assertEquals(funding(tried).route?.actor, PVALYOU, "the one route left is the fallback");
+    assertEquals(funding([...tried, PVALYOU]).next, "blocked", "and once Pvalyou has answered, nothing is left");
   }
+  // What the canary itself recorded, under the rules it ran with.
   assertEquals(FX.recorded.evidence_gaps, { pending: 2, with_executable_route: 0, blocked: 2 });
   void HARD_PLAN;
 });

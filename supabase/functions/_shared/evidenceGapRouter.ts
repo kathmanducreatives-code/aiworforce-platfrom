@@ -56,6 +56,11 @@ export interface ClaimRoute {
   canonical_executor: boolean;
   executor_note: string;
   /**
+   * A route that exists only as a FALLBACK: executable only once this actor has
+   * answered for the company (an operation mark, or evidence it produced).
+   */
+  after_actor?: string;
+  /**
    * Expected spend to answer ONE company through this route, from the actor
    * card(s). Among executable routes the cheapest is taken first (§23: "cheap
    * deterministic evidence before expensive routes").
@@ -131,6 +136,28 @@ const FUNDING_PAIR_ROUTE: ClaimRoute = {
   cost_hint_usd: 0.0235,
 };
 
+/**
+ * THE CONDITIONAL PVALYOU RECENCY FALLBACK, as a route the router can see.
+ *
+ * Inside one funding-verifier call Atomus and the fallback happen together, so
+ * the router never needed to know about it. The funding SCREEN reads Atomus for
+ * a whole pool before admission; an admitted company then holds an Atomus
+ * record and no Pvalyou answer, and without this route the pair route reads as
+ * tried and the claim as BLOCKED — the fallback could never be reached. It is
+ * executable only AFTER Atomus answered and while the claim is still unknown
+ * (only unknown checks are gaps), never as a primary route: a company Atomus
+ * has not read yet is routed to Atomus, the cheaper route, first.
+ */
+export const PVALYOU_RECENCY_FALLBACK_ROUTE: ClaimRoute = {
+  actor: "apify_funding_pvalyou", capability: "funding_verification",
+  purpose: "dated rounds from cited announcements, when Atomus answered without a decisive round",
+  evidence_actors: ["apify_funding_pvalyou"],
+  canonical_executor: true,
+  executor_note: "conditional Atomus fallback (fundingStageVerifier); can PASS a recency claim, never FAIL one",
+  after_actor: "apify_funding_atomus",
+  cost_hint_usd: 0.0201,
+};
+
 export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
   {
     claim: "business_model", criterion_dimensions: ["industry", "business_model"],
@@ -173,7 +200,7 @@ export const CLAIM_REGISTRY: readonly ClaimDefinition[] = [
     // stage answers "is there a recent round at all". A company whose rounds
     // discovery already bought is never bought again.
     claim: "recently_funded", criterion_dimensions: ["funding"], evidence: ["funding"],
-    freshness_days: freshness("funding"), routes: [FUNDING_PAIR_ROUTE],
+    freshness_days: freshness("funding"), routes: [FUNDING_PAIR_ROUTE, PVALYOU_RECENCY_FALLBACK_ROUTE],
   },
   { claim: "product_launch", criterion_dimensions: ["product_launch"], evidence: ["product_launch"], freshness_days: freshness("product_launch"), routes: [], deferred_to: "P7" },
   { claim: "geographic_expansion", criterion_dimensions: ["expansion"], evidence: ["expansion"], freshness_days: freshness("expansion"), routes: [], deferred_to: "P7" },
@@ -228,10 +255,13 @@ function judgeRoutes(
     // the mark the router would send the same company to the same verifier on
     // every slice (`verifyOpKey` in `claimVerifier`).
     const tried = attempted.has(r.actor) || r.evidence_actors.some((a) => answered.has(a));
-    const executable = decision.executable && !tried && r.canonical_executor;
+    // A FALLBACK waits for the route it falls back from.
+    const unlocked = !r.after_actor || attempted.has(r.after_actor) || answered.has(r.after_actor);
+    const executable = decision.executable && !tried && r.canonical_executor && unlocked;
     const why = !decision.executable ? decision.reason
       : tried ? `${r.actor} already answered for this company`
       : !r.canonical_executor ? r.executor_note
+      : !unlocked ? `only after ${r.after_actor} has answered for this company`
       : "ready";
     return { actor: r.actor, capability: r.capability, purpose: r.purpose, readiness, tried, executable, why, cost_hint_usd: r.cost_hint_usd };
   });

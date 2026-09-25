@@ -117,6 +117,12 @@ export interface VerifierFinding {
   supporting?: EvidenceItem[];
   /** True once the route has ANSWERED for this company, whatever the verdict. */
   answered: boolean;
+  /**
+   * Other route actors this answer consumed — the Pvalyou recency fallback —
+   * marked as tried beside `route_actor`, so the router never sends the same
+   * company back to a route that has already answered (or refused) it.
+   */
+  attempted_actors?: string[];
   detail: Record<string, unknown>;
 }
 
@@ -131,6 +137,12 @@ export interface ClaimVerifier {
   claim: string;
   /** The Claim Registry route this verifier executes. */
   route_actor: string;
+  /**
+   * Every registry route this verifier can execute, when it is more than one —
+   * the funding verifier runs Atomus and, after it, the conditional Pvalyou
+   * recency fallback. Absent = `[route_actor]`.
+   */
+  route_actors?: readonly string[];
   /** Companies per slice — the verifier's own bound, below every ledger ceiling. */
   max_targets: number;
   /**
@@ -172,8 +184,13 @@ export interface VerifiableCandidate {
  */
 export const CHEAP_STAGE_CAPABILITIES: ReadonlySet<string> = new Set(["company_enrichment"]);
 
+/** The registry routes a verifier executes. */
+export function verifierRouteActors(v: Pick<ClaimVerifier, "route_actor" | "route_actors">): readonly string[] {
+  return v.route_actors?.length ? v.route_actors : [v.route_actor];
+}
+
 export function verificationTargets(
-  verifier: Pick<ClaimVerifier, "route_actor" | "max_targets">,
+  verifier: Pick<ClaimVerifier, "route_actor" | "route_actors" | "max_targets">,
   candidates: readonly VerifiableCandidate[],
   criteriaValue: (criterionId: string) => unknown,
   registry: readonly ClaimDefinition[] = CLAIM_REGISTRY,
@@ -186,7 +203,8 @@ export function verificationTargets(
   for (const c of candidates) {
     if (c.eligibility !== "pending") continue;
     const gaps = evidenceGapsFor(c.hard_checks, c.graph, registry, new Set(c.attempted_routes), policy);
-    const mine = gaps.find((g) => g.next === "verify" && g.route?.actor === verifier.route_actor);
+    const routes = verifierRouteActors(verifier);
+    const mine = gaps.find((g) => g.next === "verify" && !!g.route && routes.includes(g.route.actor));
     if (!mine) continue;
     // ── ONLY A VIABLE CANDIDATE IS WORTH ANOTHER PURCHASE ─────────────────
     //
@@ -208,7 +226,7 @@ export function verificationTargets(
     // hard claim no executable route can close means nothing bought here can
     // make the candidate eligible.
     if (!canStillQualify(gaps)) continue;
-    const cheapFirst = gaps.find((g) => g !== mine && g.route?.actor !== verifier.route_actor &&
+    const cheapFirst = gaps.find((g) => g !== mine && !(g.route && routes.includes(g.route.actor)) &&
       g.considered.some((r) => CHEAP_STAGE_CAPABILITIES.has(r.capability) && !r.tried));
     if (cheapFirst) continue;
     out.push({
