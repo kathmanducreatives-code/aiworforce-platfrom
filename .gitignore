@@ -41,3 +41,4 @@ artifacts/lead-quality-benchmark/
 
 # Local MCP server wiring (points a client at the canonical project; not app code).
 .mcp.json
+AgriDrone-Guardian/
