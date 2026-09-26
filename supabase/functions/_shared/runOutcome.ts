@@ -620,7 +620,7 @@ export async function readSpendFacts(
       db.from("credit_transactions").select("actual_credits, status, task_id")
         .eq("workspace_id", workspaceId).in("task_id", taskIds),
       db.from("lead_execution_calls")
-        .select("status, actual_cost_usd, settled_usd, settlement_source, record_kind, task_id")
+        .select("status, actual_cost_usd, settled_usd, settlement_source, provider_id, record_kind, task_id")
         .eq("workspace_id", workspaceId).in("task_id", taskIds),
     ]);
     const creditRows = (Array.isArray(credits.data) ? credits.data : []) as

@@ -461,11 +461,29 @@ export interface ProviderCostColumns {
   actual_cost_usd?: number | string | null;
   settled_usd?: number | string | null;
   settlement_source?: string | null;
+  /** The row's provider — decides whether a `derived_floor` is final. */
+  provider_id?: string | null;
 }
 
 /**
+ * PROVIDERS THAT NEVER ISSUE A RECEIPT, settled once, at call time, by their
+ * published pricing rule (`settleByPublishedRule`).
+ *
+ * Firecrawl states credits, never dollars, so `actual_cost_usd` is null on
+ * every Firecrawl row by construction (`priceFirecrawlCall`, and the database
+ * CHECK behind it) and no receipt will ever arrive. For these rows the
+ * `derived_floor` settlement is not provisional — it is the final figure, the
+ * one the spend ledger, the ceilings and the Workbench already count. Reading
+ * it as unknown dropped every Firecrawl call from `run_outcome.spend`
+ * (production ComfyUI, plan 6f6be04b: $0.0298 reported of $0.049 settled).
+ */
+export const PUBLISHED_RULE_SETTLED_PROVIDERS: ReadonlySet<string> = new Set(["firecrawl"]);
+
+/**
  * THE provider cost a report shows: the receipt-settled figure, else the
- * provider-reported figure at completion, else null (not known — never zero).
+ * provider-reported figure at completion, else — for a provider that is
+ * settled by its published rule and never by a receipt — that settlement,
+ * else null (not known — never zero).
  */
 export function canonicalProviderCostUsd(row: ProviderCostColumns): number | null {
   const n = (v: unknown) => {
@@ -476,7 +494,15 @@ export function canonicalProviderCostUsd(row: ProviderCostColumns): number | nul
     const settled = n(row.settled_usd);
     if (settled !== null) return settled;
   }
-  return n(row.actual_cost_usd);
+  const actual = n(row.actual_cost_usd);
+  if (actual !== null) return actual;
+  // An Apify `derived_floor` stays unknown here: it is provisional, awaiting a
+  // receipt, and its completion floor is `actual_cost_usd` above.
+  if (row.settlement_source === "derived_floor" &&
+      PUBLISHED_RULE_SETTLED_PROVIDERS.has(String(row.provider_id ?? ""))) {
+    return n(row.settled_usd);
+  }
+  return null;
 }
 
 /**
