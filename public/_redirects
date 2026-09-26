@@ -1,0 +1,4 @@
+# Netlify: serve the single-page app for every client route (BrowserRouter).
+# A 200 rewrite applies only when no real file matches the path, so /assets/*,
+# /favicon.ico, /robots.txt, /sitemap.xml and /agents/* are still served as-is.
+/*    /index.html    200
