@@ -40,7 +40,7 @@ import { buildQuotaProgress } from '@/lib/qualifiedLead/quotaProgress';
 import { qualificationFromRow } from '@/lib/qualifiedLead/rowQualification';
 import { resolveQualification as qualificationFromRecord } from '@/lib/qualifiedLead/qualification';
 import { EMPTY_WORKBENCH_MESSAGE } from '@/lib/workbench/workbenchSession';
-import { buildRunSummary } from '@/lib/workbench/runSummary';
+import { buildRunSummary, summaryCanonicalInput } from '@/lib/workbench/runSummary';
 import {
   LEAD_TAB_EMPTY, type LeadTabId, notReachedCompanies, partitionLeads, tabsFor,
   partitionAllRows, bucketReasonFor, resultTabCounts,
@@ -313,9 +313,8 @@ export default function LeadResultsView({
     progress,
     rows: { total: items.length, qualified: 0, pending: 0 },
     // Lead V2: the canonical decision is the only answer when the run wrote one.
-    canonical: tabCounts.canonical && progress
-      ? { qualifiedCompanies: progress.qualified_companies, reviewed: progress.evaluated, pending: tabCounts.inReview }
-      : null,
+    // The canonical mission view is authoritative whenever the run wrote one.
+    canonical: summaryCanonicalInput(progress, tabCounts),
   }), [partition, items.length, runQuota, portfolio, progress, tabCounts]);
 
   // The qualification diagnostics were computed here and rendered inline above

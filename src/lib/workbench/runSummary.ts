@@ -157,6 +157,39 @@ export interface RunSummaryInput {
   canonical?: { qualifiedCompanies: number; reviewed: number; pending: number } | null;
 }
 
+/**
+ * THE CANONICAL NUMBERS FOR `buildRunSummary`, OR NULL FOR A LEGACY RUN.
+ *
+ * The canonical mission view is the authority whenever the run wrote one —
+ * `readWorkbenchProgress` carries its counts as `progress.canonical`. This used
+ * to be decided by whether any EVALUATION ROW carried a canonical decision, and
+ * a run whose every company qualified has none (a qualified company is a lead
+ * row, not an evaluation row). Production Salvo, plan ce80738e (2026-09-26):
+ * one company, qualified, one lead written, canonical qualified = 1 — and the
+ * footer said "counts disagree", because the summary fell back to reconciling
+ * the stale `workbench_portfolio` (written before the funding verifier ran:
+ * qualified 0) against the lead. With a view present, the portfolio is never
+ * consulted.
+ *
+ * The evaluation-row signal remains only as the fallback for a canonical run
+ * whose progress was not written.
+ */
+export function summaryCanonicalInput(
+  progress: WorkbenchProgress | null,
+  tab: { canonical: boolean; inReview: number },
+): RunSummaryInput["canonical"] {
+  if (progress?.canonical) {
+    return {
+      qualifiedCompanies: progress.canonical.qualified_companies,
+      reviewed: progress.canonical.reviewed,
+      pending: progress.canonical.pending,
+    };
+  }
+  return tab.canonical && progress
+    ? { qualifiedCompanies: progress.qualified_companies, reviewed: progress.evaluated, pending: tab.inReview }
+    : null;
+}
+
 export function buildRunSummary(i: RunSummaryInput): RunSummary {
   const { quota, portfolio, progress, rows } = i;
 

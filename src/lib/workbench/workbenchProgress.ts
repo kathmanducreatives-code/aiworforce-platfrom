@@ -36,6 +36,12 @@ export interface WorkbenchProgress {
   in_progress: boolean;
   /** A billed Actor run is still in flight — resumable, not running here. */
   awaiting_external_run: boolean;
+  /**
+   * LEAD V2: the counts the canonical mission view owns, present exactly when
+   * the run wrote one. Its presence is what makes the view AUTHORITATIVE for the
+   * run summary — see `summaryCanonicalInput`.
+   */
+  canonical?: { qualified_companies: number; reviewed: number; pending: number };
 }
 
 export interface ProgressLine {
@@ -76,6 +82,7 @@ export function readWorkbenchProgress(result: unknown): WorkbenchProgress | null
     evaluated: c.qualified + c.pending + c.ineligible,
     qualified_companies: c.qualified,
     identity_unresolved: view.counts.identity_unresolved,
+    canonical: { qualified_companies: c.qualified, reviewed: c.qualified + c.pending + c.ineligible, pending: c.pending },
   };
 }
 
