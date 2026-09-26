@@ -15,7 +15,11 @@ export default function EmptyState({ onPickPrompt }: Props) {
   const [round, setRound] = useState(0);
   const [selected, setSelected] = useState('');
   const brain = useMemo(() => toSavedBrainView(data?.profile).brain, [data?.profile]);
-  const industry = brain.icp.industries[0]?.trim();
+  // `CompanyBrainV2` keeps industries on `target_customer` (a legacy profile's
+  // `icp.industries` is folded in by `normalizeCompanyBrain`). It has no `icp`
+  // field, so reading one threw on every render and the chat showed "Chat hit an
+  // error" (2026-09-26).
+  const industry = brain.target_customer.industries[0]?.trim();
   const persona = brain.buyer_personas[0]?.trim();
   const audience = industry || 'our target market';
   const buyer = persona || 'our ideal buyer';
