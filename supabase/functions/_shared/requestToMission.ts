@@ -98,7 +98,10 @@ export function compileRequestMission(
     return { ok: true, result, proposal: projection.proposal };
   } catch (e) {
     if (e instanceof MissionCompilationBlockedError) {
-      const violations = (e as { violations?: unknown }).violations;
+      // The error carries `reasons`. This read `violations`, which it never
+      // has, so every block reached the log as `violations: []` and the cause
+      // was lost (local Salvo reproduction, 2026-09-26).
+      const violations = e.reasons ?? (e as { violations?: unknown }).violations;
       return {
         ok: false,
         reason: "mission_compilation_blocked",

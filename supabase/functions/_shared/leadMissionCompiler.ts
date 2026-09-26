@@ -311,10 +311,20 @@ export function scanProposalForViolations(
   const found: ProposalViolation[] = [];
   const seen = new Set<unknown>();
   const said = userText.toLowerCase();
-  const userSuppliedLinkedIn = (path: string, s: string): boolean =>
-    /^known_companies\[\d+\]$/.test(path) &&
-    /^https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/company\/[^\s/?#]+\/?$/i.test(s) &&
-    said.includes(s.toLowerCase().replace(/\/+$/, ""));
+  // THE COMPANY THE USER NAMED, BY ITS LINKEDIN SLUG. Compared by slug, not by
+  // spelling: a model that writes the user's `https://www.linkedin.com/company/x`
+  // back as `https://linkedin.com/company/x` names the same company the user
+  // gave, and refusing it blocked "Has Salvo Software (linkedin.com/company/
+  // salvosoftware) raised funding…?" (`url:known_companies[0]`, 2026-09-26). The
+  // slug must still be one the USER typed, so the model cannot add a target.
+  const saidSlugs = new Set(
+    [...said.matchAll(/linkedin\.com\/company\/([^\s/?#)"'<>]+)/g)].map((m) => m[1].replace(/\/+$/, "")),
+  );
+  const userSuppliedLinkedIn = (path: string, s: string): boolean => {
+    if (!/^known_companies\[\d+\]$/.test(path)) return false;
+    const m = /^(?:https?:\/\/)?(?:[a-z]{2,3}\.)?linkedin\.com\/company\/([^\s/?#]+)\/?$/i.exec(s);
+    return !!m && saidSlugs.has(m[1].toLowerCase());
+  };
 
   const walk = (node: unknown, path: string, depth: number): void => {
     if (depth > 12 || found.length > 40) return;

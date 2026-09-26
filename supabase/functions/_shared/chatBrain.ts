@@ -332,6 +332,15 @@ export async function understandRequest(
     log("chat_brain_understood", {
       objective: parsed.request.objective, parts: parsed.request.parts.length,
       repairs: parsed.repairs.length,
+      // THE STRUCTURE THE ROUTER DECIDES ON, and nothing the user typed: a
+      // refusal downstream (`objective_not_servable`, `mission_compilation_
+      // blocked`) was undiagnosable in production without it.
+      shape: parsed.request.parts.map((p) => ({
+        objective: p.objective, entity: p.subject.entity, output: p.output.shape, count: p.output.count,
+        references: (p.subject.references ?? []).map((r) => r.kind),
+        filters: (p.subject.filters ?? []).map((f) => f.field),
+        requirements: (p.requirements ?? []).map((q) => `${q.event}${q.recency_days ? `/${q.recency_days}d` : ""}`),
+      })),
     });
     return { ok: true, request: parsed.request, repairs: parsed.repairs, repaired: false };
   }

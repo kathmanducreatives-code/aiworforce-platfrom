@@ -240,12 +240,47 @@ function applyRequirement(p: GptMissionProposal, r: RequestRequirement): string[
   return lost;
 }
 
+/** The LinkedIn company page written inside a reference, if any — exactly as written. */
+function linkedInCompanyPageIn(text: string): string | null {
+  const m = /(?:https?:\/\/)?(?:[a-z]{2,3}\.)?linkedin\.com\/company\/[^\s/?#)"'<>]+/i.exec(text);
+  return m ? m[0].replace(/\/+$/, "") : null;
+}
+
+/** Did the user name the company this part is about — a reference or a `company_name` filter? */
+function identifiesCompany(p: RequestPart): boolean {
+  return (p.subject.references ?? []).some((r) => (r.resolved_key ?? r.value ?? "").trim()) ||
+    (p.subject.filters ?? []).some((f) => f.field === "company_name");
+}
+
+/**
+ * A QUESTION ABOUT A COMPANY THE USER NAMED IS A VERIFICATION RUN.
+ *
+ * "Has Salvo Software (linkedin.com/company/salvosoftware) raised funding in
+ * the last 3 years?" is `research` on an identified company — exactly what
+ * `known_company_resolution` and the claim verifiers exist for. But a yes/no
+ * question reads as wanting an ANSWER, and the model says so: across six
+ * reads of that sentence (production 2026-09-26 10:58 and five local
+ * replays) it returned `answer` or `events` five times and `records` once, and
+ * every non-`records` reading was refused here as `objective_not_servable` —
+ * "I understood the request, but I can't turn it into a run yet."
+ *
+ * The shape says how to PRESENT the result; the objective and the named
+ * company say what to DO. So an identified company's research is served
+ * whatever shape it asks for — `records`, `answer` or `events` — and only an
+ * `artifact` (content to write) stays out. Discovery (`source`) and an
+ * unidentified research request are untouched: those still need `records`.
+ */
+function researchOfNamedCompany(p: RequestPart): boolean {
+  return p.objective === "research" && p.subject.entity === "company" && identifiesCompany(p) &&
+    (p.output.shape === "answer" || p.output.shape === "events");
+}
+
 /** The parts this surface is able to serve. */
 function leadParts(r: RequestV1): RequestPart[] {
   return r.parts.filter((p) =>
     LEAD_ENTITIES.has(p.subject.entity) &&
     (p.objective === "source" || p.objective === "research" || p.objective === "monitor") &&
-    p.output.shape === "records");
+    (p.output.shape === "records" || researchOfNamedCompany(p)));
 }
 
 /**
@@ -291,10 +326,7 @@ export function projectToLeadMission(
   // request CAUSES, but a caller that projects directly must not be able to
   // turn a nameless research request into a discovery run.
   const researchParts = parts.filter((p) => p.objective === "research");
-  const identified = (p: RequestPart) =>
-    (p.subject.references ?? []).some((r) => (r.resolved_key ?? r.value ?? "").trim()) ||
-    (p.subject.filters ?? []).some((f) => f.field === "company_name");
-  if (researchParts.length > 0 && !researchParts.some(identified)) {
+  if (researchParts.length > 0 && !researchParts.some(identifiesCompany)) {
     return {
       proposal: emptyProposal(), requestedCount: null, unprojected,
       refusal: "research_without_identity",
@@ -354,7 +386,13 @@ export function projectToLeadMission(
         ? [bound.label, bound.identity.name].find(
           (v): v is string => typeof v === "string" && !!v.trim() && !v.includes("/"))
         : undefined;
-      const label = (boundName ?? ref.value ?? "").trim();
+      // A LINKEDIN COMPANY PAGE INSIDE THE WORDS IS THE IDENTITY. The model
+      // often echoes the user's "Salvo Software (https://www.linkedin.com/
+      // company/salvosoftware)" as ONE reference value; the page is the exact
+      // company, and the compiler admits it only as a URL of its own — the
+      // mixed string was refused as `url:known_companies[0]` (2026-09-26).
+      const page = boundName ? null : linkedInCompanyPageIn(ref.value ?? "");
+      const label = (boundName ?? page ?? ref.value ?? "").trim();
       if (label) proposal.known_companies.push(label);
     }
 
@@ -363,6 +401,17 @@ export function projectToLeadMission(
     // defaulting here would erase it.
     if (part.output.count != null) {
       requestedCount = Math.max(requestedCount ?? 0, part.output.count);
+    } else if (researchOfNamedCompany(part)) {
+      // A QUESTION ABOUT NAMED COMPANIES ASKS ABOUT EXACTLY THOSE. "Has Salvo
+      // raised funding?" is one company, not an open-ended number — so the
+      // mission is sized by the companies the user named, never left unset.
+      const named = new Set([
+        ...(part.subject.references ?? []).map((r) => (r.resolved_key ?? r.value ?? "").trim().toLowerCase()),
+        ...(part.subject.filters ?? []).filter((f) => f.field === "company_name")
+          .flatMap((f) => (Array.isArray(f.value) ? f.value : [f.value]))
+          .map((v) => String(v ?? "").trim().toLowerCase()),
+      ].filter(Boolean));
+      requestedCount = Math.max(requestedCount ?? 0, Math.max(1, named.size));
     }
   }
 

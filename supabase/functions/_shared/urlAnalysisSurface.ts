@@ -64,6 +64,11 @@ export function asAnalysableUrl(value: unknown): string | null {
   }
 }
 
+/** A LinkedIn COMPANY page — the one URL shape that is also a company identity. */
+function isLinkedInCompanyPage(url: string): boolean {
+  return /^https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/company\/[^\s/?#]+\/?$/i.test(url);
+}
+
 /** Does any reference on this part name a page rather than an entity? */
 export function partReferencesUrl(part: RequestPart): string | null {
   for (const ref of part.subject.references ?? []) {
@@ -94,6 +99,14 @@ export function planUrlAnalysis(request: RequestV1): UrlAnalysisPlan {
     // is asking what we already hold about it, and must not reach a provider.
     if (part.objective !== "research") continue;
     const url = partReferencesUrl(part);
+    // A COMPANY'S LINKEDIN PAGE PLUS A SIGNAL IS A QUESTION ABOUT THE COMPANY.
+    // "Has <linkedin.com/company/x> raised funding in the last 3 years?" names
+    // the page as the company's identity, not as something to read: the lead
+    // route verifies the signal against that exact identity (the compiler
+    // admits a LinkedIn company URL the user wrote). Reading the page would
+    // answer a funding question from a profile. Any other URL, and a LinkedIn
+    // page asked about with no signal, is still a page to analyse.
+    if (url && isLinkedInCompanyPage(url) && (part.requirements ?? []).length > 0) continue;
     if (url) return { ...base, url, part_id: part.id };
   }
   return { ...base, url: null, part_id: null };
