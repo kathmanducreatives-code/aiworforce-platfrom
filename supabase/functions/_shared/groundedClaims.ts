@@ -132,21 +132,31 @@ export const CLAIM_EVIDENCE_RULES: Readonly<Record<ClaimType, {
   /** Types that may support but can never be the ONLY evidence. */
   contextual_only: readonly EvidenceType[];
 }>> = Object.freeze({
+  // `web_page` is a page FETCHED FROM THE COMPANY'S OWN SITE — its /product,
+  // /pricing or /customers text, quoted verbatim (`leadEvidenceRegistry`: only
+  // the company's registrable domain; an off-site redirect is `blocked`). It is
+  // "its site" in the sense above, and was simply absent from this table: the
+  // first-party-pages route bought exactly the pages it exists for and every
+  // claim citing them was refused. Production ComfyUI (plan 6f6be04b,
+  // 2026-09-26): /platform + /pricing read, grounding rejected "web_page cannot
+  // support a business_model claim", B2B SaaS stayed unknown. Allowed wherever
+  // `company_website` is; never for commercial_signal or timing — a page is
+  // not a dated opening or funding event.
   business_model: {
-    allowed: ["company_description", "yc_company_record", "company_website", "company_industry"],
+    allowed: ["company_description", "yc_company_record", "company_website", "web_page", "company_industry"],
     contextual_only: ["company_industry"],
   },
   customer_type: {
-    allowed: ["company_description", "yc_company_record", "company_website", "company_industry"],
+    allowed: ["company_description", "yc_company_record", "company_website", "web_page", "company_industry"],
     contextual_only: ["company_industry"],
   },
   product_type: {
-    allowed: ["company_description", "yc_company_record", "company_website"],
+    allowed: ["company_description", "yc_company_record", "company_website", "web_page"],
     contextual_only: [],
   },
   company_fit: {
     allowed: [
-      "company_description", "yc_company_record", "company_website",
+      "company_description", "yc_company_record", "company_website", "web_page",
       "company_industry", "company_location", "company_size_band", "job_posting", "yc_job",
     ],
     contextual_only: ["company_industry"],
@@ -161,7 +171,7 @@ export const CLAIM_EVIDENCE_RULES: Readonly<Record<ClaimType, {
   },
   agentory_use_case: {
     allowed: [
-      "company_description", "yc_company_record", "company_website",
+      "company_description", "yc_company_record", "company_website", "web_page",
       "job_posting", "yc_job",
     ],
     contextual_only: [],
