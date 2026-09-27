@@ -27,7 +27,7 @@ import {
   // ONE definition of a claim, beside the parser that reads it. The batch and
   // single-company payloads must not be able to drift apart — they did, and the
   // single-company one had no schema at all.
-  CLAIM_SHAPE, parseGroundedResult, verifyGroundedResult,
+  BUSINESS_MODEL_QUOTE_GUIDANCE, CLAIM_SHAPE, parseGroundedResult, verifyGroundedResult,
   type GroundedClassifierResult, type GroundedVerification,
 } from "./groundedClaims.ts";
 import {
@@ -172,6 +172,7 @@ export const BATCH_EVALUATION_PROMPT = [
   "Return 'review' when evidence is insufficient — that is the correct answer.",
   "business_model.value MUST be exactly one of: b2b_saas, ai_saas, b2b_software,",
   "b2b_service, consumer, unknown. Use unknown when the evidence does not say.",
+  BUSINESS_MODEL_QUOTE_GUIDANCE,
   "You do not choose data providers, tools or Actors, and you never name one.",
   "Return only the requested JSON object. Do not explain your reasoning process.",
 ].join(" ");

@@ -626,6 +626,29 @@ function hardFactMismatch(c: GroundedClaim, r: EvidenceRegistry): string | null 
 
 // ───────────────────────────────────────────────────────────── the prompt ──
 
+/**
+ * WHICH WORDS TO QUOTE FOR A BUSINESS MODEL.
+ *
+ * A business-model claim is accepted only when its quotes STATE who buys and
+ * how it is delivered (`unstatedFacets`). The model was left to pick any true
+ * line, and it picked taglines: production Fuse AI (task d2d15d7e, 2026-09-26)
+ * was grounded on "Try Fuse for free to experience AI-powered sales." while
+ * the same pricing page said "Built for teams running outbound as a repeatable
+ * system" and "50/seat" — which state both. Shared by the per-company and the
+ * batch prompts. It asks for better QUOTES, never for a different verdict.
+ */
+export const BUSINESS_MODEL_QUOTE_GUIDANCE = [
+  "For a business_model claim, quote the company's own words that state WHO buys it",
+  "and HOW it is sold, not a tagline: a line naming the buyers (e.g. 'for teams',",
+  "'for sales teams', 'used by companies', 'enterprise') and a pricing or product",
+  "line naming the delivery (e.g. 'per seat', 'per user', '/seat', 'SaaS',",
+  "'per month' beside the software, app or API it names). Prefer pricing and",
+  "product page lines. Every trait your business_model.value asserts needs its own",
+  "quote: if you call the product AI, also quote the line that says it is AI.",
+  "When no single line states them all, cite several short verbatim excerpts.",
+  "If the evidence does not state a trait, say so — do not stretch a quote.",
+].join(" ");
+
 /** What the grounded classifier is told. Asserted by a test. */
 export const GROUNDED_CLASSIFIER_PROMPT = [
   "You interpret supplied company evidence. You do not add to it.",
@@ -640,6 +663,7 @@ export const GROUNDED_CLASSIFIER_PROMPT = [
   "A job title alone does not establish a business model.",
   "business_model.value MUST be exactly one of: b2b_saas, ai_saas, b2b_software,",
   "b2b_service, consumer, unknown. Use unknown when the evidence does not say.",
+  BUSINESS_MODEL_QUOTE_GUIDANCE,
   "A company description saying it helps sales teams is NOT evidence that it is hiring.",
   "Only a dated job posting or commercial event may support a current-signal claim.",
   "Name any evidence that conflicts, in conflicting_evidence_ids.",
