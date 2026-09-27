@@ -339,3 +339,26 @@ export function unstatedFacets(code: BusinessModelCode, excerpts: readonly strin
   const stated = statedFacets(excerpts);
   return FACETS_ASSERTED[code].filter((f) => !stated.has(f));
 }
+
+/**
+ * A business-model value, plus the AUDIENCE its own verified quotes state when
+ * the code names none.
+ *
+ * The code list makes "AI" and "B2B" alternatives — `ai_saas` or `b2b_saas` —
+ * though they are independent: an AI product sold to businesses is both. So an
+ * AI company whose pages say "Built for teams… 50/seat" was coded `ai_saas`,
+ * and `ai saas` can never pass a "B2B SaaS" requirement (production Fuse AI,
+ * task d2d15d7e, 2026-09-26). The quotes already state who buys; this writes
+ * that into the value the requirement is matched against.
+ *
+ * Only when exactly ONE audience is stated. Neither, or both (a mixed audience —
+ * "for creators and teams"), adds nothing: silence is not support. Whether the
+ * value may prove anything is still the claim's decision (accepted ⇒ proven).
+ */
+export function valueWithStatedAudience(value: string, stated: Iterable<BusinessModelFacet>): string {
+  if (readFacets(value).audience !== null) return value;
+  const s = new Set(stated);
+  const b2b = s.has("business_customer"), consumer = s.has("consumer_customer");
+  if (b2b === consumer) return value;
+  return `${b2b ? "b2b" : "consumer"} ${value}`;
+}

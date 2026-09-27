@@ -226,6 +226,7 @@ import {
 } from "./signalActorCoverage.ts";
 import { hiringActorCard } from "./hiringActorCatalog.ts";
 import { businessModelDecision } from "./groundedClaims.ts";
+import { valueWithStatedAudience } from "./businessModelMatch.ts";
 // ── P2: the execution spine ──────────────────────────────────────────────────
 import {
   CANDIDATE_OBSERVATION_VERSION, compactObservation, entityHintFromCompany, observationFromCompany,
@@ -11040,7 +11041,10 @@ export function groundedBusinessModelItem(
   });
   return {
     evidence_id: `grd_${c.key}_business_model`, company_key: c.key, dimension: "business_model",
-    value: bm.value.replace(/_/g, " "), status: statusForAuthority(authority.authority),
+    // The audience the verified quotes state rides on the value, when the code
+    // names none (`ai_saas` sold to teams is B2B). See `valueWithStatedAudience`.
+    value: valueWithStatedAudience(bm.value.replace(/_/g, " "), bmDecision.facets_stated),
+    status: statusForAuthority(authority.authority),
     authority: authorityRecord(authority),
     source: {
       provider: "engine", actor: "grounded_evidence_evaluation", provider_call_id: null,
