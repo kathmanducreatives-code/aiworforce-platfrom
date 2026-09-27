@@ -678,6 +678,11 @@ function hardFactMismatch(c: GroundedClaim, r: EvidenceRegistry): string | null 
  * the same pricing page said "Built for teams running outbound as a repeatable
  * system" and "50/seat" — which state both. Shared by the per-company and the
  * batch prompts. It asks for better QUOTES, never for a different verdict.
+ *
+ * The rerun on this guidance (task e8a70920, 2026-09-27) quoted the pricing
+ * page but paraphrased "monthly plans with seat-based workspaces" from a seat
+ * COUNT and a price PERIOD, neither of which states the delivery. Hence the
+ * explicit sentence on both.
  */
 export const BUSINESS_MODEL_QUOTE_GUIDANCE = [
   "For a business_model claim, quote the company's own words that state WHO buys it",
@@ -685,7 +690,10 @@ export const BUSINESS_MODEL_QUOTE_GUIDANCE = [
   "'for sales teams', 'used by companies', 'enterprise') and a pricing or product",
   "line naming the delivery (e.g. 'per seat', 'per user', '/seat', 'SaaS',",
   "'per month' beside the software, app or API it names). Prefer pricing and",
-  "product page lines. Every trait your business_model.value asserts needs its own",
+  "product page lines. A seat count ('workspace with 5 seats') or a price period",
+  "('per month') on its own does NOT say how it is sold: quote the per-seat or",
+  "per-user price itself ('50/seat') or the line naming the software, app, API or",
+  "CRM beside the price. Every trait your business_model.value asserts needs its own",
   "quote: if you call the product AI, also quote the line that says it is AI.",
   "When no single line states them all, cite several short verbatim excerpts.",
   "If the evidence does not state a trait, say so — do not stretch a quote.",
