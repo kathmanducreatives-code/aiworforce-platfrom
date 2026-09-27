@@ -110,6 +110,18 @@ export interface GroundedVerification {
   downgrade_reasons: string[];
   /** Conflicts the model failed to acknowledge. Surfaced, never suppressed. */
   unacknowledged_conflicts: string[];
+  /**
+   * Lines the CODE found, verbatim, on pages the validated business-model
+   * claims already cite, stating a facet the model's own quotes left unstated
+   * (`completeFacets`). Absent when nothing was missing or nothing was found.
+   */
+  facet_completions?: FacetCompletion[];
+}
+
+export interface FacetCompletion {
+  evidence_id: string;
+  excerpt: string;
+  facet: BusinessModelFacet;
 }
 
 // ────────────────────────────────────────────── which evidence proves what ──
@@ -466,6 +478,7 @@ export function verifyGroundedResult(i: VerifyInput): GroundedVerification {
     }
   }
 
+  const completions = completeFacets(registry, result, validated);
   return {
     version: GROUNDED_CLAIMS_VERSION,
     classifier_result: result,
@@ -475,7 +488,82 @@ export function verifyGroundedResult(i: VerifyInput): GroundedVerification {
     final_grounded_decision: decision,
     downgrade_reasons: downgrades,
     unacknowledged_conflicts: unacknowledged,
+    ...(completions.length > 0 ? { facet_completions: completions } : {}),
   };
+}
+
+// ── FACET COMPLETION: THE COMPANY'S OWN LINE, NOT THE MODEL'S CHOICE OF LINE ──
+//
+// Three production runs of one Fuse AI mission on the SAME cached pages:
+// e8a70920 plausible, d6cd2ef2 accepted, 62450e73 plausible. The pages were
+// identical; the grounder's choice of lines was not. d6cd2ef2 quoted "50/seat";
+// 62450e73 quoted "$60 per month" from the same pricing page and stopped, so
+// `quote_does_not_state_saas_delivery` decided the verdict. Which fact the
+// company's page states should not depend on which sentence a model picked.
+//
+// When the validated business-model claim is short of a facet its code asserts,
+// the code looks — only on the pages those validated claims ALREADY cite — for a
+// verbatim line stating exactly that facet, read by the same facet reader:
+//
+//   · a price period alone ("per month") still states nothing; "50/seat" does
+//   · never a line stating a consumer buyer, and no buyer line at all when the
+//     cited pages state BOTH business and consumer buyers (a mixed audience is
+//     the model's and the reader's to judge, not something to paper over)
+//   · never a line that would make the claim contradict its own code
+//   · negated lines state nothing; at most FACET_COMPLETION_MAX lines
+//
+// Nothing is asserted that the company's cited text does not say, and every
+// completion is recorded as the code's (`quotes[].source: "code_completion"`).
+
+export const FACET_COMPLETION_MAX = 3;
+const FACET_LINE_MIN = 3;
+const FACET_LINE_MAX = 240;
+
+/** A page's lines as quotable excerpts: markdown markers stripped, whitespace collapsed. */
+function quotableLines(text: string): string[] {
+  return text.split(/\n+/)
+    .map((l) => l.replace(/^[\s#>*\-+|]+/, "").replace(/[\s|]+$/, "").replace(/\s+/g, " ").trim())
+    .filter((l) => l.length >= FACET_LINE_MIN && l.length <= FACET_LINE_MAX);
+}
+
+function completeFacets(
+  registry: EvidenceRegistry, result: GroundedClassifierResult, validated: readonly GroundedClaim[],
+): FacetCompletion[] {
+  const bm = result.business_model;
+  if (!bm || bm.value === "unknown") return [];
+  if (!validated.some((c) => c.claim_type === "business_model")) return [];
+  const facetClaims = validated.filter((c) => FACET_CLAIM_TYPES.includes(c.claim_type));
+  const modelExcerpts = facetClaims.flatMap((c) => c.evidence_excerpts.map((x) => x.excerpt));
+  const missing = unstatedFacets(bm.value, modelExcerpts);
+  if (missing.length === 0) return [];
+
+  // Only what the validated claims already cite, in the order they cite it.
+  const ids = [...new Set(facetClaims.flatMap((c) => [...c.evidence_ids, ...c.evidence_excerpts.map((x) => x.evidence_id)]))];
+  const lines: Array<{ evidence_id: string; text: string; facets: Set<BusinessModelFacet> }> = [];
+  for (const id of ids) {
+    const item = findEvidence(registry, id);
+    if (!item?.source_text || item.company_key !== registry.company_key || item.verification_state === "invalid") continue;
+    for (const text of quotableLines(item.source_text)) lines.push({ evidence_id: id, text, facets: statedFacets([text]) });
+  }
+  const mixedAudience = lines.some((l) => l.facets.has("business_customer")) && lines.some((l) => l.facets.has("consumer_customer"));
+
+  const out: FacetCompletion[] = [];
+  let current = [...modelExcerpts];
+  for (const facet of missing) {
+    if (out.length >= FACET_COMPLETION_MAX) break;
+    const audienceFacet = facet === "business_customer" || facet === "consumer_customer";
+    if (audienceFacet && mixedAudience) continue;
+    for (const l of lines) {
+      if (!l.facets.has(facet)) continue;
+      if (facet !== "consumer_customer" && l.facets.has("consumer_customer")) continue;
+      const next = [...current, l.text];
+      if (excerptInconsistency(bm.value, next) && !excerptInconsistency(bm.value, current)) continue;
+      out.push({ evidence_id: l.evidence_id, excerpt: l.text, facet });
+      current = next;
+      break;
+    }
+  }
+  return out;
 }
 
 // ─────────────────────────── the business model, judged on its own (P5.2) ──
@@ -523,6 +611,8 @@ export interface QuoteDiagnostic {
   claim_type: ClaimType;
   evidence_id: string;
   excerpt: string;
+  /** Present only on a line the code completed (`completeFacets`); absent = the model quoted it. */
+  source?: "code_completion";
 }
 
 function boundedQuotes(claims: readonly GroundedClaim[]): QuoteDiagnostic[] {
@@ -569,12 +659,14 @@ export function businessModelDecision(v: GroundedVerification): BusinessModelDec
   if (bm && Number(bm.confidence) < BUSINESS_MODEL_MIN_CONFIDENCE) reasons.push("low_model_confidence");
   // THE QUOTES MUST NOT ARGUE AGAINST THE CODE (canary d7012ba5: "consumer
   // software, B2B SaaS, …" accepted as b2b_saas). See `excerptInconsistency`.
-  const excerpts = validated.flatMap((c) => c.evidence_excerpts.map((x) => x.excerpt));
+  // The model's quotes, plus any line the code completed from the same cited pages.
+  const completions = v.facet_completions ?? [];
+  const excerpts = [...validated.flatMap((c) => c.evidence_excerpts.map((x) => x.excerpt)), ...completions.map((c) => c.excerpt)];
   // The facets may be stated by the business-model claim itself or by a
   // validated claim about WHO buys (`customer_type`) or WHAT it is
   // (`product_type`) — each quoted from the company's own words and checked.
   const facetClaims = (v.validated_claims ?? []).filter((c) => FACET_CLAIM_TYPES.includes(c.claim_type));
-  const facetExcerpts = facetClaims.flatMap((c) => c.evidence_excerpts.map((x) => x.excerpt));
+  const facetExcerpts = [...facetClaims.flatMap((c) => c.evidence_excerpts.map((x) => x.excerpt)), ...completions.map((c) => c.excerpt)];
   if (bm && bm.value !== "unknown" && validated.length > 0) {
     const inconsistency = excerptInconsistency(bm.value, excerpts);
     if (inconsistency) reasons.push(`self_description_${inconsistency}`);
@@ -590,7 +682,13 @@ export function businessModelDecision(v: GroundedVerification): BusinessModelDec
   return {
     decision: reasons.length === 0 ? "accepted" : "review", reasons: [...new Set(reasons)],
     facets_stated: [...statedFacets(facetExcerpts)],
-    quotes: boundedQuotes(facetClaims),
+    quotes: [
+      ...boundedQuotes(facetClaims),
+      ...completions.map((c) => ({
+        claim_type: "business_model" as const, evidence_id: c.evidence_id,
+        excerpt: c.excerpt.slice(0, DIAGNOSTIC_QUOTE_CHARS), source: "code_completion" as const,
+      })),
+    ].slice(0, DIAGNOSTIC_QUOTES_MAX + FACET_COMPLETION_MAX),
   };
 }
 

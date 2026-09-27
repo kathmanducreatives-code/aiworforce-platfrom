@@ -336,6 +336,37 @@ Deno.test("FUSE, rerun 0553512c's map: /company is fetched (not answered by the 
   assertEquals([r.collected.pages_fetched, r.collected.pages_reused, r.collected.pages_known_missing], [1, 1, 0]);
 });
 
+// ── FUSE, 62450e73'S ANSWER: THE MODEL STOPPED AT "$60 per month" ─────────────
+//
+// Production 62450e73 read the same pages and quoted a price period and four
+// audience lines, not "50/seat" — plausible, PARTIALLY_SATISFIED. Facet
+// completion takes the seat line from the pricing page the claim already cites.
+
+const FUSE_62450E73: Subject = {
+  ...FUSE,
+  answer: (reg) => ({
+    business_model: { value: "ai_saas", confidence: 0.9, claims: [claim("business_model", pageId(reg, "https://fuseai.com/pricing"), [
+      "Try Fuse for free to experience AI-powered sales.", "$60\n\nper month", "Designed for small teams looking to accelerate outbound.",
+      "Built for teams running outbound as a repeatable system",
+    ])] },
+    company_fit: "review", agentory_use_case: "plausible",
+    mission_signal_assessment: { strongest_signal: null, signal_strength: "none", evidence_ids: [], reason: "" },
+    supporting_claims: [claim("product_type", descriptionId(reg), ["Fuse is the sales superintelligence platform for modern revenue teams."])],
+    conflicting_evidence_ids: [], missing_evidence: [], unknown_fields: [], confidence: 0.9, reason: "",
+  }),
+};
+
+for (const [name, map] of Object.entries(FUSE_MAPS)) {
+  Deno.test(`FUSE with 62450e73's answer, map ${name}: the seat line is completed from /pricing → ELIGIBLE`, async () => {
+    const r = await chain(FUSE_62450E73, map);
+    assertEquals([r.outcome.decision, r.outcome.status, r.bm!.value], ["accepted", "proven", "b2b ai saas"]);
+    const q = (r.bm!.assessment as { business_model_quotes: Array<{ excerpt: string; source?: string }> }).business_model_quotes;
+    assertEquals(q.filter((x) => x.source === "code_completion").map((x) => x.excerpt), ["1/seat"],
+      "the first seat line on the cited page, recorded as the code's");
+    assertEquals([r.industry, r.eligibility], [["pass", "pass"], "eligible"]);
+  });
+}
+
 // ── COMFYUI: THE SAME DETERMINISM, A DIFFERENT (HONEST) ANSWER ───────────────
 
 for (const [name, map] of Object.entries(COMFY_MAPS)) {
