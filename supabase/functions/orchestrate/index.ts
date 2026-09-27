@@ -44,6 +44,9 @@ import {
 } from "../_shared/leadIntelligencePolicy.ts";
 import { functionUrl } from "../_shared/functionEndpoints.ts";
 import { parseRunBudget } from "../_shared/runBudget.ts";
+import {
+  duplicateStartBody, findStartedPlan, isStartIdempotencyKey,
+} from "../_shared/startIdempotency.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -639,6 +642,10 @@ async function handleOrchestrate(req: Request): Promise<Response> {
     }
 
     const suppliedMission = (b.lead_mission ?? tool_input?.lead_mission ?? null) as unknown;
+    // ONE APPROVED CARD, ONE PLAN — see startIdempotency.ts. pilot-chat sends a
+    // key only for a Start whose card it has verified; anything that is not a
+    // well-formed Start key is ignored rather than stored.
+    const startKey = isStartIdempotencyKey(b.idempotency_key) ? b.idempotency_key : null;
     // ── THE IDENTITY SIDECAR IS TRANSPORTED, NOT INTERPRETED ───────────────
     //
     // Which real company each referent resolved to, decided by
@@ -742,6 +749,23 @@ async function handleOrchestrate(req: Request): Promise<Response> {
       .maybeSingle();
     if (!member) {
       return json({ error: "workspace_not_found", details: "User is not a member", workspace_id }, 404);
+    }
+
+    // ── THE SAME START, AGAIN ────────────────────────────────────────────
+    //
+    // After membership, so a key cannot probe another workspace's plans, and
+    // BEFORE the spend check, the planner and the enqueue, so a repeated Start
+    // costs nothing and starts nothing: it is answered with the plan the first
+    // one created. Conversation 38e904cb bought a second paid mission because
+    // this check did not exist.
+    if (startKey) {
+      const existing = await findStartedPlan(admin, workspace_id, startKey);
+      if (existing) {
+        console.log("[orchestrate][start-idempotency] repeated Start collapsed", {
+          workspace_id, plan_id: existing.plan_id, idempotency_key: startKey,
+        });
+        return json(duplicateStartBody(existing, startKey));
+      }
     }
 
     // ── LAYER 1: THE WORKSPACE USD CEILING ───────────────────────────────
@@ -1559,9 +1583,27 @@ Return ONLY valid JSON, no prose, no markdown:
         plan_summary: qlPlan?.summary ?? parsed!.plan_summary,
         steps: qlPlan?.steps ?? parsed!.steps,
         status: "executing",
+        // The database makes the collision: `task_plans_idempotency_uniq`.
+        ...(startKey ? { idempotency_key: startKey } : {}),
       })
       .select("id")
       .single();
+
+    // ── TWO STARTS THAT BOTH PASSED THE CHECK ABOVE ─────────────────────
+    //
+    // 23505 is the unique index doing its job: another request created this
+    // Start's plan between the lookup and this insert. Answer with that plan,
+    // and return before the enqueue below — the race must not become a second
+    // mission any more than the repeat could.
+    if (startKey && (planError as { code?: string } | null)?.code === "23505") {
+      const raced = await findStartedPlan(admin, workspace_id, startKey);
+      if (raced) {
+        console.log("[orchestrate][start-idempotency] racing Start collapsed", {
+          workspace_id, plan_id: raced.plan_id, idempotency_key: startKey,
+        });
+        return json(duplicateStartBody(raced, startKey));
+      }
+    }
 
     if (planError || !taskPlan) {
       console.error("[orchestrate] task_plan_insert_failed:", planError);

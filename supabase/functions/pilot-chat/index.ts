@@ -135,6 +135,9 @@ import { getLeadIntelligenceCapabilities } from "../_shared/leadIntelligencePoli
 import { compileFirstProviderCall } from "../_shared/leadCapabilityEngine.ts";
 import { functionUrl } from "../_shared/functionEndpoints.ts";
 import {
+  DUPLICATE_START_REPLY, startIdempotencyKey, verifiedStartKey, type ConfirmationRow,
+} from "../_shared/startIdempotency.ts";
+import {
   buildPaidExecutionPreflight, preflightDryRun,
 } from "../_shared/leadPaidExecutionPreflight.ts";
 
@@ -1150,6 +1153,12 @@ interface DelegateArgs {
   modelUsed: string;
   providerUsed: string;
   workflowInputs?: Record<string, any> | null;
+  /**
+   * ONE APPROVED CARD, ONE PLAN — see startIdempotency.ts. Set only for a
+   * confirmed Start whose card this handler verified; orchestrate stores it on
+   * the plan and answers a repeat with the plan it already made.
+   */
+  idempotencyKey?: string | null;
 }
 
 async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
@@ -1200,9 +1209,40 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
       tool_input: a.leadBindings?.length
         ? { ...(toolInput ?? {}), lead_referent_bindings: a.leadBindings }
         : toolInput ?? null,
+      ...(a.idempotencyKey ? { idempotency_key: a.idempotencyKey } : {}),
     }),
   });
   const orchBody = await orchResponse.json().catch(() => ({} as any));
+
+  // ── THE SAME START, ALREADY RUNNING ─────────────────────────────────────
+  //
+  // orchestrate recognised this card's Start and created nothing. Announcing
+  // "I created a plan" again would describe a second run that does not exist,
+  // so the reply says what happened and points at the plan that does.
+  if (orchResponse.ok && orchBody?.deduplicated === true) {
+    const { data: saved } = await a.admin
+      .from("messages")
+      .insert({
+        conversation_id: a.conversationId,
+        role: "assistant",
+        content: DUPLICATE_START_REPLY,
+        agent_slug: "pilot",
+        model_used: a.modelUsed,
+        metadata: {
+          type: "duplicate_start",
+          plan_id: orchBody.plan_id ?? null,
+          task_id: orchBody.task_id ?? null,
+          idempotency_key: orchBody.idempotency_key ?? a.idempotencyKey ?? null,
+          prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+        },
+      })
+      .select("*")
+      .single();
+    return json({
+      type: "reply", conversation_id: a.conversationId, message: saved,
+      deduplicated: true, plan_id: orchBody.plan_id ?? null,
+    });
+  }
 
   if (!orchResponse.ok) {
     console.error("[pilot-chat] orchestrate failed:", orchResponse.status, orchBody);
@@ -1913,6 +1953,29 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // `isLeadMissionV1` is the same guard every other reader uses; a card whose
   // mission does not validate falls through and is refused honestly rather than
   // delegating without one.
+  // ── WHICH CARD THIS START APPROVES ─────────────────────────────────────
+  //
+  // The card sends the id of the message that rendered it. That is a claim, so
+  // it becomes an idempotency key only once the card it names is found in THIS
+  // conversation. A Start without one (an older client) runs exactly as before.
+  const startKey: string | null = await (async () => {
+    if (!isPreConfirmed) return null;
+    const claimed = actionMetadata?.confirmation_message_id;
+    const candidate = startIdempotencyKey(claimed);
+    if (!candidate) return null;
+    const { data: row } = await admin
+      .from("messages")
+      .select("id, conversation_id, role, metadata")
+      .eq("id", candidate.slice("start:".length))
+      .maybeSingle();
+    const key = verifiedStartKey(claimed, conversationId, (row ?? null) as ConfirmationRow | null);
+    if (!key) {
+      console.warn("[pilot-chat][start-idempotency] confirmation id not verified; Start runs unkeyed",
+        { conversation_id: conversationId });
+    }
+    return key;
+  })();
+
   {
     const approvedOnStart = actionMetadata?.lead_mission;
     if (isPreConfirmed && isLeadMissionV1(approvedOnStart)) {
@@ -1936,6 +1999,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         missionOrigin: "approved_workflow_card",
         modelUsed: "none",
         providerUsed: "none",
+        idempotencyKey: startKey,
       });
     }
   }
@@ -3227,6 +3291,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             : "chat_brain_request_v1",
           modelUsed: "chat-brain",
           providerUsed: "openai",
+          // Only a confirmed Start carries a key; a typed request never does.
+          idempotencyKey: isPreConfirmed ? startKey : null,
         });
       }
     } else {
