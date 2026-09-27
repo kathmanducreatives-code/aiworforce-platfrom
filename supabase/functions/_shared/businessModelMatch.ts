@@ -302,8 +302,14 @@ const SOFTWARE_WORDS = new Set([
 ]);
 const SAAS_PHRASE_RE =
   /\bcloud[\s-]?(?:based|native|hosted)?\s+(?:platform|software|app|application|solution)s?\b|\bhosted\s+(?:platform|software|solution)\b|\bweb[\s-]?based\s+(?:platform|software|app|application)\b/;
-/** Seat-based pricing is software licensed as a service: SaaS on its own. */
-const SEAT_PRICING_RE = /\bper\s+(?:seat|user)\b|\/\s?(?:user|seat)\b/;
+/**
+ * Seat-based pricing is software licensed as a service: SaaS on its own.
+ *
+ * Hyphenated too — "per-user licensing", "per-seat pricing" — which is how most
+ * pricing pages write it. MintMCP's own pricing line ("Per-user licensing with
+ * scalable platform fees.") stated nothing when only "per user" matched.
+ */
+const SEAT_PRICING_RE = /\bper[\s-]+(?:seat|user)s?\b|\/\s?(?:user|seat)\b/;
 /** Subscription language proves SaaS only beside software — a subscription box is not SaaS. */
 const SUBSCRIPTION_RE =
   /\bsubscriptions?\b|\bper\s+month\b|\/\s?(?:mo|month)\b|\bfree\s+trial\b|\bself[\s-]?serve\b|\bsign\s+up\b/;
