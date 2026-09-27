@@ -24,7 +24,8 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { cachedAnswerFor, runEvidenceCollection } from "../../../supabase/functions/_shared/webEvidenceRunner.ts";
 import {
-  BUSINESS_MODEL_MAX_PAGES, BUSINESS_MODEL_PAGE_INTENTS, claimPageBudget, claimPageDebts, claimPagePlan, type PageCollection,
+  BUSINESS_MODEL_MAX_PAGES, BUSINESS_MODEL_PAGE_INTENTS, businessModelVerifier, claimPageBudget, claimPageDebts,
+  claimPagePlan, type PageCollection,
 } from "../../../supabase/functions/_shared/businessModelVerifier.ts";
 import {
   specGovernedMapper, specGovernedPageFetcher, webEvidenceCreditRate,
@@ -93,13 +94,29 @@ async function collect(o: { map: string[]; cache: Record<string, Cached> | null;
   return { run, c, fetched, logs, events: logs.map(([e]) => e), byKey: { [c.company_key]: { pages_ok: c.pages_ok, outcome: c.outcome } as PageCollection } };
 }
 
-// ── THE PRODUCTION RERUN: /company IS FETCHED ────────────────────────────────
+// ── THE PRODUCTION RERUN, REPLAYED ────────────────────────────────────────────
 
-Deno.test("FUSE RERUN 2 (A): the /about 404 no longer answers /company — it is fetched and read", async () => {
+Deno.test("FUSE RERUN 2: /company is fetched and the held /pricing counts — the claim can be re-read", async () => {
   const r = await collect({ map: RERUN_MAP, cache: PROD_CACHE });
-  assertEquals(r.fetched, ["https://fuseai.com/company"]);
-  assertEquals([r.c.pages_fetched, r.c.pages_known_missing, r.c.pages_ok, r.c.outcome], [1, 0, 1, "collected"]);
+  assertEquals(r.fetched, ["https://fuseai.com/company"], "A: the /about 404 no longer answers /company");
+  assertEquals([r.c.pages_reused, r.c.pages_fetched, r.c.pages_known_missing, r.c.pages_ok], [1, 1, 0, 2]);
+  assertEquals(r.c.outcome, "collected", "production: recorded 0, no re-grounding");
+  assert(r.events.includes("evidence-cache-held"), "B: the pricing page we already hold");
   assert(r.events.includes("evidence-cache-other-url"), "the stale /about entry is named, not silently used");
+});
+
+Deno.test("the verifier now re-grounds Fuse AI: pages_ok > 0 reaches the canonical re-read", async () => {
+  const reground: string[] = [];
+  const v = businessModelVerifier({
+    collect: async () => (await collect({ map: RERUN_MAP, cache: PROD_CACHE })).byKey,
+    reground: (key) => { reground.push(key); return Promise.resolve({ status: "proven", decision: "accepted", skipped: null }); },
+    usd_per_credit: RATE.usd_per_credit,
+  });
+  const out = await v.verify([target()], {
+    call: () => Promise.reject(new Error("not used")), ready: () => true, now: () => NOW.toISOString(), log: () => {},
+  }, { mission_id: "m", pending: [] });
+  assertEquals(reground, [KEY]);
+  assertEquals(out.findings[0].detail.pages_ok, 2);
 });
 
 // ── A: A KNOWN-MISSING PAGE ANSWERS ONLY ITS OWN URL ─────────────────────────
@@ -124,6 +141,32 @@ Deno.test("A: a USABLE page cached under the intent is still reused for free, wh
   const r = await collect({ map: RERUN_MAP, cache });
   assertEquals(r.fetched, [], "unchanged: an ok page of the intent is not re-bought");
   assertEquals([r.c.pages_reused, r.c.pages_ok], [1, 1]);
+});
+
+// ── B: WHAT WE HOLD COUNTS EVEN WHEN THE MAP MISSES IT ───────────────────────
+
+Deno.test("B: a map that answered nothing still leaves the held pages readable — nothing is bought", async () => {
+  const r = await collect({ map: [], cache: PROD_CACHE });
+  assertEquals(r.fetched, []);
+  assertEquals([r.c.pages_reused, r.c.pages_ok, r.c.outcome], [1, 1, "collected"],
+    "previously `site_unavailable` with the pricing page sitting in the cache");
+});
+
+Deno.test("B: held pages are only fresh, usable pages of the REQUESTED intents", async () => {
+  const cache: Record<string, Cached> = {
+    pricing: { ...PROD_CACHE.pricing, status: "not_found", source_text: "" },    // not usable
+    careers: { source_url: "https://fuseai.com/careers", source_text: "Join us", fetched_at: "2026-09-20T00:00:00Z", status: "ok" }, // not requested
+    homepage: PROD_CACHE.homepage,                                                // not a business-model intent
+  };
+  const r = await collect({ map: [], cache });
+  assertEquals([r.c.pages_reused, r.c.pages_ok, r.c.outcome], [0, 0, "site_unavailable"], "unchanged when nothing usable is held");
+});
+
+Deno.test("B: a held page the map ALSO selected is read once, not twice", async () => {
+  const r = await collect({ map: [...RERUN_MAP, "https://fuseai.com/pricing"], cache: PROD_CACHE });
+  assertEquals(r.fetched, ["https://fuseai.com/company"]);
+  assertEquals([r.c.pages_reused, r.c.pages_ok], [1, 2]);
+  assertEquals(r.logs.filter(([e, m]) => (e === "evidence-cache-held" || e === "evidence-cache-hit") && m.intent === "pricing").length, 1);
 });
 
 Deno.test("no cache at all: exactly the old behaviour — the selected page is bought", async () => {

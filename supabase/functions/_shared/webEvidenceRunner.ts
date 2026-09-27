@@ -21,7 +21,7 @@
 // of forty blocked candidates must not multiply into a hundred fetches.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import type { EvidenceRequestV1, WebEvidencePage } from "./evidenceRequest.ts";
+import type { EvidenceRequestV1, PageIntent, WebEvidencePage } from "./evidenceRequest.ts";
 import type { EvidenceDebt } from "./webEvidenceDebt.ts";
 import {
   buildEvidencePlannerInput,
@@ -343,7 +343,38 @@ export async function runEvidenceCollection(i: {
       // V1 / Company Brain callers: unchanged.
       targets = resolvePages(req.domain, req.page_intents, allowance);
     }
-    if (targets.length === 0) {
+    // ── WHAT WE ALREADY HAVE, BEFORE WE BUY ANYTHING ──────────────────────
+    //
+    // Read BEFORE deciding there is nothing to do: a map that selects nothing
+    // (or selects other pages) does not make a page we already hold disappear.
+    let cached = new Map<string, {
+      source_url: string; source_text: string; fetched_at: string; status: string;
+    }>();
+    if (i.deps.readCache) {
+      try {
+        cached = await i.deps.readCache(req.domain);
+      } catch (e) {
+        // A cache that cannot be read degrades to buying, never to failing.
+        log("evidence-cache-read-failed", { domain: req.domain, error: String(e) });
+      }
+    }
+
+    // ── PAGES WE HOLD FOR INTENTS THE MAP DID NOT SELECT ──────────────────
+    //
+    // Production Fuse AI (task 0553512c, 2026-09-27): this run's map (118
+    // URLs) did not surface /pricing, so the fresh /pricing page cached eleven
+    // days earlier — the page the previous run was grounded on — was never
+    // counted, `pages_ok` was 0, and the claim was never re-read. Firecrawl's
+    // map varies between calls; what we already hold should not. A held page is
+    // free: no fetch, no credit, no ledger row.
+    const selectedIntents = new Set(targets.map((t) => t.intent));
+    const held = req.page_intents
+      .filter((intent) => !selectedIntents.has(intent))
+      .map((intent) => ({ intent, hit: cached.get(intent) }))
+      .filter((h): h is { intent: PageIntent; hit: NonNullable<typeof h.hit> } =>
+        !!h.hit && h.hit.status === "ok" && h.hit.source_text.trim().length > 0);
+
+    if (targets.length === 0 && held.length === 0) {
       // The existing vocabulary already distinguishes these: a map that
       // returned nothing means the site did not answer; a map that returned
       // URLs none of which serve the intents means nothing useful is there.
@@ -358,17 +389,12 @@ export async function runEvidenceCollection(i: {
 
     const pages: WebEvidencePage[] = [];
 
-    // ── WHAT WE ALREADY HAVE, BEFORE WE BUY ANYTHING ──────────────────────
-    let cached = new Map<string, {
-      source_url: string; source_text: string; fetched_at: string; status: string;
-    }>();
-    if (i.deps.readCache) {
-      try {
-        cached = await i.deps.readCache(req.domain);
-      } catch (e) {
-        // A cache that cannot be read degrades to buying, never to failing.
-        log("evidence-cache-read-failed", { domain: req.domain, error: String(e) });
-      }
+    for (const { intent, hit } of held) {
+      outcome.pages_reused++;
+      report.pages_reused++;
+      outcome.pages_ok++;
+      pages.push({ url: hit.source_url, intent, markdown: hit.source_text, fetched_at: hit.fetched_at, status: "ok" });
+      log("evidence-cache-held", { company: debt.company_name, url: hit.source_url, intent });
     }
 
     for (const t of targets) {
