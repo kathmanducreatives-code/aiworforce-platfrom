@@ -239,6 +239,11 @@ Deno.test("REVIEW-1: the business model's OWN decision proves; the whole-company
   assertEquals(item().assessment, {
     decision: "review", grounding_score: 0.8, validated_claims: 1, business_model_decision: "accepted", business_model_reasons: [],
     business_model_facets: ["business_customer", "software_product", "saas_delivery"],
+    // The verified quote the facets were read from (task e8a70920: kept so a
+    // pending claim can say which lines it rests on).
+    business_model_quotes: [
+      { claim_type: "business_model", evidence_id: "company_description:linkedin:aa11", excerpt: "a SaaS platform for finance teams" },
+    ],
   });
   // A quote that states none of it — the canary 9b1b70a2 shape — is not proof.
   const silent = item({ validated_claims: [{ claim: "x", claim_type: "business_model", evidence_ids: [DESC], evidence_excerpts: [{ evidence_id: DESC, excerpt: "sells" }] }] });

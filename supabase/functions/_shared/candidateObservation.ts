@@ -98,6 +98,8 @@ export interface EvidenceItem {
     business_model_reasons?: string[];
     /** The business-model facets the quotes state (`statedFacets`) — the proof, itemised. */
     business_model_facets?: string[];
+    /** The verified quotes those facets were read from, bounded (`businessModelDecision.quotes`). */
+    business_model_quotes?: Array<{ claim_type: string; evidence_id: string; excerpt: string }>;
   };
 }
 

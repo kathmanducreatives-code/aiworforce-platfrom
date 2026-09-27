@@ -11060,6 +11060,7 @@ export function groundedBusinessModelItem(
       decision, grounding_score: Number(g.grounding_score ?? 0), validated_claims: claims.length,
       business_model_decision: bmDecision.decision, business_model_reasons: bmDecision.reasons,
       business_model_facets: bmDecision.facets_stated,
+      business_model_quotes: bmDecision.quotes,
     },
   };
 }

@@ -504,6 +504,46 @@ export function verifyGroundedResult(i: VerifyInput): GroundedVerification {
 // mismatched hard fact or a borrowed id IS: the model misrepresented the
 // business model, so its reading is not accepted.
 
+/** The claim types whose quotes may state a business-model facet (who buys, what it is). */
+const FACET_CLAIM_TYPES: readonly ClaimType[] = ["business_model", "customer_type", "product_type"];
+
+// ── WHAT A CLAIM QUOTED, KEPT FOR WHOEVER HAS TO EXPLAIN IT ──────────────────
+//
+// Production Fuse AI (task e8a70920, 2026-09-27) stayed PENDING on
+// `quote_does_not_state_saas_delivery`, and neither the diagnostics nor the
+// stored claim said WHICH lines were quoted — only the claim's own paraphrase
+// and its first excerpt — so the cause had to be inferred. Every verified quote
+// is now kept, bounded: excerpts are verbatim first-party text the verifier
+// already matched, never model prose or a whole page.
+
+export const DIAGNOSTIC_QUOTES_MAX = 8;
+export const DIAGNOSTIC_QUOTE_CHARS = 240;
+
+export interface QuoteDiagnostic {
+  claim_type: ClaimType;
+  evidence_id: string;
+  excerpt: string;
+}
+
+function boundedQuotes(claims: readonly GroundedClaim[]): QuoteDiagnostic[] {
+  return claims
+    .flatMap((c) => c.evidence_excerpts.map((x) => ({
+      claim_type: c.claim_type, evidence_id: x.evidence_id, excerpt: x.excerpt.slice(0, DIAGNOSTIC_QUOTE_CHARS),
+    })))
+    .slice(0, DIAGNOSTIC_QUOTES_MAX);
+}
+
+/** A validated claim as `grounded_brain_diagnostics` records it: the claim and every quote it rests on. */
+export function claimDiagnostic(c: GroundedClaim): {
+  claim_type: ClaimType; claim: string; evidence_ids: string[]; quotes: QuoteDiagnostic[];
+} {
+  return {
+    claim_type: c.claim_type, claim: c.claim,
+    evidence_ids: [...new Set(c.evidence_ids)].slice(0, DIAGNOSTIC_QUOTES_MAX),
+    quotes: boundedQuotes([c]),
+  };
+}
+
 export const BUSINESS_MODEL_MIN_CONFIDENCE = 0.6;
 
 export interface BusinessModelDecision {
@@ -511,6 +551,8 @@ export interface BusinessModelDecision {
   reasons: string[];
   /** The facets the claim's quotes state, read deterministically (`statedFacets`). */
   facets_stated: BusinessModelFacet[];
+  /** The verified quotes those facets were read from — what the decision rests on. */
+  quotes: QuoteDiagnostic[];
 }
 
 export function businessModelDecision(v: GroundedVerification): BusinessModelDecision {
@@ -531,9 +573,8 @@ export function businessModelDecision(v: GroundedVerification): BusinessModelDec
   // The facets may be stated by the business-model claim itself or by a
   // validated claim about WHO buys (`customer_type`) or WHAT it is
   // (`product_type`) — each quoted from the company's own words and checked.
-  const facetExcerpts = (v.validated_claims ?? [])
-    .filter((c) => c.claim_type === "business_model" || c.claim_type === "customer_type" || c.claim_type === "product_type")
-    .flatMap((c) => c.evidence_excerpts.map((x) => x.excerpt));
+  const facetClaims = (v.validated_claims ?? []).filter((c) => FACET_CLAIM_TYPES.includes(c.claim_type));
+  const facetExcerpts = facetClaims.flatMap((c) => c.evidence_excerpts.map((x) => x.excerpt));
   if (bm && bm.value !== "unknown" && validated.length > 0) {
     const inconsistency = excerptInconsistency(bm.value, excerpts);
     if (inconsistency) reasons.push(`self_description_${inconsistency}`);
@@ -549,6 +590,7 @@ export function businessModelDecision(v: GroundedVerification): BusinessModelDec
   return {
     decision: reasons.length === 0 ? "accepted" : "review", reasons: [...new Set(reasons)],
     facets_stated: [...statedFacets(facetExcerpts)],
+    quotes: boundedQuotes(facetClaims),
   };
 }
 

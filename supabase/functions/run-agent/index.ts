@@ -366,7 +366,7 @@ import { parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
 // and the set of companies that can be evaluated are derived from one rule
 // rather than two that may drift.
 import { resolveInvestigationBudget } from "../_shared/leadInvestigationBudget.ts";
-import { buildWorkbenchExplanation } from "../_shared/groundedClaims.ts";
+import { buildWorkbenchExplanation, claimDiagnostic } from "../_shared/groundedClaims.ts";
 import { buildPoolBinding } from "../_shared/poolEvaluationBinding.ts";
 import {
   buildMultiRoundBinding,
@@ -5524,8 +5524,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                             ? Number((c.grounded.classifier_result.confidence *
                               c.grounded.grounding_score).toFixed(4))
                             : null,
-                          validated_claims: (c.grounded?.validated_claims ?? [])
-                            .map((x) => ({ claim_type: x.claim_type, claim: x.claim })),
+                          // Every quote each claim rests on, bounded — the run that
+                          // stayed pending on an unstated facet must say which
+                          // lines were quoted (Fuse AI, task e8a70920).
+                          validated_claims: (c.grounded?.validated_claims ?? []).map(claimDiagnostic),
                           rejected_claims: (c.grounded?.rejected_claims ?? [])
                             .map((x) => ({
                               claim_type: x.claim_type, reason: x.reason, detail: x.detail,

@@ -256,3 +256,25 @@ Deno.test("an `ai_saas` value still needs a quote saying AI — the rule the gui
   assertEquals([r.applied.decision, r.eligibility], ["review", "pending"]);
   assert((r.applied.item!.assessment as { business_model_reasons: string[] }).business_model_reasons.includes("quote_does_not_state_ai"));
 });
+
+// ── THE RERUN'S QUOTES ARE NOW RECORDED ──────────────────────────────────────
+
+Deno.test("RERUN (task e8a70920): a seat count + a price period stay pending — and the claim now records every quote", () => {
+  // The rerun's likely quotes, from its own claim text ("monthly plans with
+  // seat-based workspaces") and facets [ai, business_customer]. Production
+  // kept only the first; the claim now carries them all.
+  const quotes: Array<[string, string, string]> = [
+    ["business_model", "homepage", "Try Fuse for free to experience AI-powered sales."],
+    ["business_model", "pricing", "Designed for small teams looking to accelerate outbound."],
+    ["business_model", "pricing", "Shared team workspace with 5 seats"],
+    ["business_model", "pricing", "Solo per month"],
+  ];
+  const r = ground("ai_saas", quotes);
+  assertEquals([r.applied.decision, r.eligibility], ["review", "pending"]);
+  const a = r.applied.item!.assessment as { business_model_reasons: string[]; business_model_quotes: Array<{ excerpt: string }> };
+  assertEquals(a.business_model_reasons, ["quote_does_not_state_saas_delivery"]);
+  assertEquals(a.business_model_quotes.map((q) => q.excerpt), quotes.map((q) => q[2]));
+  // …and the quotes survive the checkpoint the observation is persisted in.
+  const persisted = JSON.parse(JSON.stringify(r.applied.item));
+  assertEquals(persisted.assessment.business_model_quotes.length, 4);
+});
