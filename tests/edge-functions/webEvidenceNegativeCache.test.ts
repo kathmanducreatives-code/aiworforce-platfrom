@@ -36,7 +36,8 @@ import {
 } from "../../supabase/functions/_shared/webEvidenceRunner.ts";
 import { toStoredRows } from "../../supabase/functions/_shared/webEvidenceStore.ts";
 import type { EvidenceDebt } from "../../supabase/functions/_shared/webEvidenceDebt.ts";
-import type { WebEvidencePage } from "../../supabase/functions/_shared/evidenceRequest.ts";
+import type { PageIntent, WebEvidencePage } from "../../supabase/functions/_shared/evidenceRequest.ts";
+import { PAGE_INTENT_PATHS } from "../../supabase/functions/_shared/pageIntentResolver.ts";
 
 const debt = (key: string): EvidenceDebt => ({
   company_key: key, company_name: key, domain: `${key}.com`,
@@ -50,12 +51,16 @@ const plan = (key: string, intents: string[]) => () =>
 
 const noClaims = () => Promise.resolve({ claims: [] });
 
+// Rows as the runner stores them: the domain the cache was asked for, at the
+// URL that was requested for the intent. A 404 answers only its own URL
+// (`cachedAnswerFor`), so a row for another host would — correctly — answer
+// nothing; `readFreshPages` never returns one, since it reads by domain.
 const cache = (
   entries: Record<string, { text: string; status: string }>,
 ): CacheReader =>
-() =>
+(domain) =>
   Promise.resolve(new Map(Object.entries(entries).map(([intent, v]) => [intent, {
-    source_url: `https://x.com/${intent}`,
+    source_url: `https://${domain}${PAGE_INTENT_PATHS[intent as PageIntent]?.[0] ?? `/${intent}`}`,
     source_text: v.text,
     fetched_at: "2026-09-03T10:00:00Z",
     status: v.status,

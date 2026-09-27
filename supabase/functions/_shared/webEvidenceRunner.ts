@@ -184,6 +184,36 @@ const EMPTY_REPORT: EvidenceRunReport = {
  * inside a mission that was working before it was called and must still be
  * working after.
  */
+/**
+ * What the cache can answer for ONE selected URL.
+ *
+ * The cache is keyed by intent (`readFreshPages`: newest row per intent), so
+ * the entry for "about" may be a DIFFERENT URL from the one the map selected.
+ * A usable page of the same intent is still the company's own page and is
+ * reused for free, as before. But "we asked and it is not there" answers only
+ * the URL that was asked: production Fuse AI (task 0553512c) skipped
+ * fuseai.com/company because fuseai.com/about had 404'd, and never read it.
+ */
+export function cachedAnswerFor<T extends { source_url: string; source_text: string; status: string }>(
+  entry: T | undefined, url: string,
+): T | undefined {
+  if (!entry) return undefined;
+  if (entry.status === "ok" && entry.source_text.trim().length > 0) return entry;
+  return sameUrl(entry.source_url, url) ? entry : undefined;
+}
+
+function sameUrl(a: string, b: string): boolean {
+  const norm = (u: string) => {
+    try {
+      const x = new URL(u);
+      return `${x.hostname.toLowerCase().replace(/^www\./, "")}${x.pathname.replace(/\/+$/, "") || ""}`;
+    } catch {
+      return u.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
+    }
+  };
+  return norm(a) === norm(b);
+}
+
 export async function runEvidenceCollection(i: {
   workspace_id: string;
   debts: readonly EvidenceDebt[];
@@ -342,7 +372,13 @@ export async function runEvidenceCollection(i: {
     }
 
     for (const t of targets) {
-      const hit = cached.get(t.intent);
+      const hit = cachedAnswerFor(cached.get(t.intent), t.url);
+      if (!hit && cached.has(t.intent)) {
+        log("evidence-cache-other-url", {
+          company: debt.company_name, url: t.url, intent: t.intent,
+          cached_url: cached.get(t.intent)!.source_url, cached_status: cached.get(t.intent)!.status,
+        });
+      }
       if (hit) {
         // ── A KNOWN-ABSENT PAGE IS AN ANSWER, AND IT IS FREE ───────────────
         //
