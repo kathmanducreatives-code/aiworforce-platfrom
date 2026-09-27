@@ -147,5 +147,7 @@ Deno.test("the guard is still DEV-only and still blocks Start", () => {
   // fire in dev it must actually prevent the legacy path from running.
   assert(/routingMismatch = import\.meta\.env\.DEV && impliesQualifiedLead && !qualifiedLead/
     .test(CARD));
-  assert(/if \(blocked \|\| routingMismatch\) return;/.test(CARD));
+  // Further reasons not to start may follow it (a card already started — see
+  // startedCards.test.ts); the mismatch must still be one of them.
+  assert(/if \(blocked \|\| routingMismatch(?: \|\| \w+)*\) return;/.test(CARD));
 });

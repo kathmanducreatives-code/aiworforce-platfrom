@@ -185,6 +185,13 @@ export interface StartWorkflowPayload {
 export function buildStartWorkflowPayload(
   payload: WorkflowConfirmationPayloadLike,
   inputs: Record<string, unknown>,
+  /**
+   * The message that rendered this card. It is what makes the Start
+   * idempotent: pilot-chat verifies it and orchestrate keys the plan on it,
+   * so the same card's Start arriving twice runs once. Absent for a card with
+   * no message behind it, which then starts unkeyed as before.
+   */
+  confirmationMessageId?: string | null,
 ): StartWorkflowPayload {
   const contract = isQualifiedLeadPayload(payload) ? payload.qualified_lead_contract : null;
   const original = payload.original_instruction ?? payload.goal ?? payload.workflow_name ?? '';
@@ -201,6 +208,7 @@ export function buildStartWorkflowPayload(
     lead_intent: payload.lead_intent,
     workflow_category: (payload.lead_intent as { workflow_type?: string } | undefined)?.workflow_type,
     source_type: (payload.lead_intent as { source_type?: string } | undefined)?.source_type,
+    ...(confirmationMessageId ? { confirmation_message_id: confirmationMessageId } : {}),
   };
 
   if (!contract) {

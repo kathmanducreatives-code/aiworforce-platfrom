@@ -67,13 +67,21 @@ interface WorkflowConfirmationPayload {
 interface Props {
   payload: WorkflowConfirmationPayload;
   conversationId: string | null;
+  /** The message that rendered this card — sent with Start so the server can refuse a repeat. */
+  messageId?: string | null;
+  /**
+   * The conversation already holds a Start for this card (`startedCardIds`).
+   * Read from the messages, not from this component's state, so a remount can
+   * never offer Start again on a card that has already run.
+   */
+  alreadyStarted?: boolean;
 }
 
 // Compact, premium "workflow preview" card. It is NOT a confirmation modal — the
 // natural Pilot reply sits above it (message content) and this card is a smooth
 // handoff: title, agent team, input chips, output, calm safety note, credits,
 // and a primary Start / secondary Edit / subtle Cancel.
-export default function WorkflowConfirmationCard({ payload, conversationId }: Props) {
+export default function WorkflowConfirmationCard({ payload, conversationId, messageId, alreadyStarted }: Props) {
   const tools = useToolAvailability();
   const [isEditing, setIsEditing] = useState(false);
   const [inputs, setInputs] = useState({ ...payload.inputs });
@@ -139,7 +147,7 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
   const routingMismatch = import.meta.env.DEV && impliesQualifiedLead && !qualifiedLead;
 
   const handleStart = () => {
-    if (blocked || routingMismatch) return;
+    if (blocked || routingMismatch || submitted || alreadyStarted) return;
 
     // START SENDS THE ORIGINAL REQUEST.
     //
@@ -147,7 +155,7 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
     // request that actually reached orchestrate was a reconstruction of a title
     // that had already lost the quota, the roles and the discipline. The
     // structured contract now travels in metadata alongside the real sentence.
-    const start = buildStartWorkflowPayload(payload, inputs);
+    const start = buildStartWorkflowPayload(payload, inputs, messageId);
 
     dispatchChatAction({
       text: start.text,
@@ -173,11 +181,11 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
     );
   }
 
-  if (submitted) {
+  if (submitted || alreadyStarted) {
     return (
       <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-3.5 py-2.5 text-[13px] text-emerald-300 flex items-center gap-2 max-w-[420px]">
         <Sparkles className="h-4 w-4 text-emerald-400" />
-        Starting {payload.workflow_name}…
+        {submitted ? `Starting ${payload.workflow_name}…` : `Started ${payload.workflow_name}`}
       </div>
     );
   }

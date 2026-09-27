@@ -16,6 +16,7 @@ import SafetyChip from './bubbles/SafetyChip';
 import AgentAvatar from './agents/AgentAvatar';
 import AgentTypingIndicator from './AgentTypingIndicator';
 import { dispatchChatAction } from '@/lib/chatActions';
+import { startedCardIds } from '@/lib/chat/startedCards';
 
 /** Convert a #RRGGBB hex to an rgba() string with the given alpha. */
 function hexToRgba(hex: string, alpha: number): string {
@@ -67,6 +68,10 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
   const openedPanelsRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   
+
+  // Workflow cards a Start has already approved — from the messages, so a
+  // remounted card cannot offer Start again.
+  const startedCards = startedCardIds(messages);
 
   // Hide pending user text once it appears in real messages
   const showPending = pendingUserText && !messages.some(
@@ -267,6 +272,8 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                     <WorkflowConfirmationCard
                       payload={meta.workflow_confirmation as any}
                       conversationId={m.conversation_id}
+                      messageId={m.id}
+                      alreadyStarted={startedCards.has(m.id)}
                     />
                   </div>
                 )}
