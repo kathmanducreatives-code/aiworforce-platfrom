@@ -143,6 +143,15 @@ Deno.test("A: URL variants (www, trailing slash, query) are the same URL — ano
   assertEquals(cachedPageFor(cache, "https://fuseai.com/about"), undefined);
 });
 
+Deno.test("B: a usable page of the same intent at ANOTHER URL does not answer the selected URL — it is fetched, and the cached page is held", async () => {
+  // Identity is the URL. /about (ok, cached) is not /company (selected): the map's
+  // page is bought, and the page we hold is still read, free.
+  const cache = [{ source_url: "https://fuseai.com/about", page_intent: "about", source_text: "About Fuse: the AI sales platform for teams.", fetched_at: "2026-09-20T00:00:00Z", status: "ok" }];
+  const r = await collect({ map: RERUN_MAP, cache: cache as never });
+  assertEquals(r.fetched, ["https://fuseai.com/company"]);
+  assertEquals([r.c.pages_fetched, r.c.pages_reused, r.c.pages_ok], [1, 1, 2]);
+});
+
 Deno.test("A: the store's two rows for one intent are two pages — the 404 answers /about only", async () => {
   const cache = [
     { source_url: "https://fuseai.com/about", page_intent: "about", source_text: "", fetched_at: "2026-09-26T07:00:00Z", status: "not_found" },
@@ -177,6 +186,19 @@ Deno.test("B: a held page the map ALSO selected is read once, not twice", async 
   assertEquals(r.fetched, ["https://fuseai.com/company"]);
   assertEquals([r.c.pages_reused, r.c.pages_ok], [1, 2]);
   assertEquals(r.logs.filter(([e, m]) => (e === "evidence-cache-held" || e === "evidence-cache-hit") && m.intent === "pricing").length, 1);
+});
+
+Deno.test("B: the map picks a sibling URL (/pricing-2, a 404) — the fresh /pricing we hold is still read", async () => {
+  // Held by intent, identified by URL: a map selecting ANOTHER pricing URL no
+  // longer hides the pricing page the cache holds. Before, the selected intent
+  // excluded it and this company reached the grounder with no pricing page.
+  const cache = [{ source_url: "https://fuseai.com/pricing", page_intent: "pricing", source_text: PRICING_TEXT, fetched_at: "2026-09-16T09:42:15.839Z", status: "ok" }];
+  const r = await collect({
+    map: ["https://fuseai.com/pricing-2"], cache: cache as never,
+    page: () => ({ ok: false, markdown: "", status: "not_found", status_code: 404 }),
+  });
+  assertEquals(r.fetched, ["https://fuseai.com/pricing-2"], "the selected URL is its own page, asked once");
+  assertEquals([r.c.pages_reused, r.c.pages_ok, r.c.outcome], [1, 1, "collected"]);
 });
 
 Deno.test("B: a map selecting ANOTHER URL of an intent does not hide the fresh page held for it", () => {

@@ -379,8 +379,11 @@ export async function runEvidenceCollection(i: {
     // counted, `pages_ok` was 0, and the claim was never re-read. Firecrawl's
     // map varies between calls; what we already hold should not. A held page is
     // free: no fetch, no credit, no ledger row.
-    const selectedIntents = new Set(targets.map((t) => t.intent));
-    const held = heldPages(cached, req.page_intents.filter((i) => !selectedIntents.has(i)), targets.map((t) => t.url));
+    //
+    // Chosen by intent, identified by URL: the newest fresh usable page of each
+    // requested intent, unless the map selected that very URL (it is then read
+    // once, below). A map selecting /pricing-2 does not hide a held /pricing.
+    const held = heldPages(cached, req.page_intents, targets.map((t) => t.url));
 
     if (targets.length === 0 && held.length === 0) {
       // The existing vocabulary already distinguishes these: a map that
