@@ -37,7 +37,7 @@ import {
   looksLikeMissingPage, resolvePages, resolvePagesFromMap, sameSite,
   type ResolvedPage,
 } from "./pageIntentResolver.ts";
-import { toStoredRows, writeWebEvidence } from "./webEvidenceStore.ts";
+import { canonicalPageUrl, toStoredRows, writeWebEvidence } from "./webEvidenceStore.ts";
 
 /** Mapped URLs a `map` log line may carry, at most. */
 export const MAP_LOG_SAMPLE = 12;
@@ -92,13 +92,21 @@ export type PageFetcher = (i: {
  * the same company being re-raised; this stops the same PAGE being re-bought
  * when a different requirement, or a different mission, asks for it.
  */
-export type CacheReader = (domain: string) => Promise<Map<string, {
+export type CacheReader = (domain: string) => Promise<Map<string, CachedEntry>>;
+
+/**
+ * One cached page, KEYED BY ITS CANONICAL URL (`canonicalPageUrl`) — a page is
+ * its URL, not its intent. The intent travels with it so held pages can still
+ * be chosen for the intents a request asks for.
+ */
+export interface CachedEntry {
   source_url: string;
   source_text: string;
   fetched_at: string;
   /** ok | empty | blocked | not_found | timeout. Only `ok` may be cited. */
   status: string;
-}>>;
+  page_intent?: string;
+}
 
 export interface EvidenceRunnerDeps {
   plan: (payload: Record<string, unknown>) => Promise<unknown>;
@@ -185,33 +193,39 @@ const EMPTY_REPORT: EvidenceRunReport = {
  * working after.
  */
 /**
- * What the cache can answer for ONE selected URL.
+ * What the cache holds for ONE selected URL: its own row, looked up by
+ * canonical URL, or nothing.
  *
- * The cache is keyed by intent (`readFreshPages`: newest row per intent), so
- * the entry for "about" may be a DIFFERENT URL from the one the map selected.
- * A usable page of the same intent is still the company's own page and is
- * reused for free, as before. But "we asked and it is not there" answers only
- * the URL that was asked: production Fuse AI (task 0553512c) skipped
- * fuseai.com/company because fuseai.com/about had 404'd, and never read it.
+ * This read the row of the URL's INTENT, so the entry for "about" answered
+ * whichever URL the map selected as "about": production Fuse AI (task
+ * 0553512c) skipped fuseai.com/company because fuseai.com/about had 404'd. A
+ * different URL of the same intent is a different page: it answers nothing, and
+ * the selected URL is fetched. (A usable page of that intent is still read —
+ * as a held page, below — not as this URL's answer.)
  */
-export function cachedAnswerFor<T extends { source_url: string; source_text: string; status: string }>(
-  entry: T | undefined, url: string,
-): T | undefined {
-  if (!entry) return undefined;
-  if (entry.status === "ok" && entry.source_text.trim().length > 0) return entry;
-  return sameUrl(entry.source_url, url) ? entry : undefined;
+export function cachedPageFor<T extends CachedEntry>(cached: ReadonlyMap<string, T>, url: string): T | undefined {
+  return cached.get(canonicalPageUrl(url));
 }
 
-function sameUrl(a: string, b: string): boolean {
-  const norm = (u: string) => {
-    try {
-      const x = new URL(u);
-      return `${x.hostname.toLowerCase().replace(/^www\./, "")}${x.pathname.replace(/\/+$/, "") || ""}`;
-    } catch {
-      return u.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
+/**
+ * Fresh, usable pages held for the requested intents that the map did NOT
+ * select — the newest per intent, never one the map also selected.
+ */
+export function heldPages<T extends CachedEntry>(
+  cached: ReadonlyMap<string, T>, intents: readonly string[], selectedUrls: readonly string[],
+): Array<{ intent: string; hit: T }> {
+  const selected = new Set(selectedUrls.map(canonicalPageUrl));
+  const out: Array<{ intent: string; hit: T }> = [];
+  for (const intent of intents) {
+    let best: T | undefined;
+    for (const [key, e] of cached) {
+      if (e.page_intent !== intent || selected.has(key)) continue;
+      if (e.status !== "ok" || !e.source_text.trim()) continue;
+      if (!best || e.fetched_at > best.fetched_at) best = e;
     }
-  };
-  return norm(a) === norm(b);
+    if (best) out.push({ intent, hit: best });
+  }
+  return out;
 }
 
 export async function runEvidenceCollection(i: {
@@ -347,9 +361,7 @@ export async function runEvidenceCollection(i: {
     //
     // Read BEFORE deciding there is nothing to do: a map that selects nothing
     // (or selects other pages) does not make a page we already hold disappear.
-    let cached = new Map<string, {
-      source_url: string; source_text: string; fetched_at: string; status: string;
-    }>();
+    let cached = new Map<string, CachedEntry>();
     if (i.deps.readCache) {
       try {
         cached = await i.deps.readCache(req.domain);
@@ -368,11 +380,7 @@ export async function runEvidenceCollection(i: {
     // map varies between calls; what we already hold should not. A held page is
     // free: no fetch, no credit, no ledger row.
     const selectedIntents = new Set(targets.map((t) => t.intent));
-    const held = req.page_intents
-      .filter((intent) => !selectedIntents.has(intent))
-      .map((intent) => ({ intent, hit: cached.get(intent) }))
-      .filter((h): h is { intent: PageIntent; hit: NonNullable<typeof h.hit> } =>
-        !!h.hit && h.hit.status === "ok" && h.hit.source_text.trim().length > 0);
+    const held = heldPages(cached, req.page_intents.filter((i) => !selectedIntents.has(i)), targets.map((t) => t.url));
 
     if (targets.length === 0 && held.length === 0) {
       // The existing vocabulary already distinguishes these: a map that
@@ -393,17 +401,20 @@ export async function runEvidenceCollection(i: {
       outcome.pages_reused++;
       report.pages_reused++;
       outcome.pages_ok++;
-      pages.push({ url: hit.source_url, intent, markdown: hit.source_text, fetched_at: hit.fetched_at, status: "ok" });
+      pages.push({ url: hit.source_url, intent: intent as PageIntent, markdown: hit.source_text, fetched_at: hit.fetched_at, status: "ok" });
       log("evidence-cache-held", { company: debt.company_name, url: hit.source_url, intent });
     }
 
     for (const t of targets) {
-      const hit = cachedAnswerFor(cached.get(t.intent), t.url);
-      if (!hit && cached.has(t.intent)) {
-        log("evidence-cache-other-url", {
-          company: debt.company_name, url: t.url, intent: t.intent,
-          cached_url: cached.get(t.intent)!.source_url, cached_status: cached.get(t.intent)!.status,
-        });
+      const hit = cachedPageFor(cached, t.url);
+      if (!hit) {
+        const sameIntent = [...cached.values()].filter((e) => e.page_intent === t.intent);
+        if (sameIntent.length > 0) {
+          log("evidence-cache-other-url", {
+            company: debt.company_name, url: t.url, intent: t.intent,
+            cached: sameIntent.map((e) => `${e.source_url} (${e.status})`),
+          });
+        }
       }
       if (hit) {
         // ── A KNOWN-ABSENT PAGE IS AN ANSWER, AND IT IS FREE ───────────────

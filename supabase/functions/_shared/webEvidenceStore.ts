@@ -184,17 +184,41 @@ export interface CachedPage {
 }
 
 /**
- * Fresh pages already held for a site.
+ * A page's identity: the canonical form of its URL.
  *
- * Keyed on (domain, page_intent) — NOT on the requirement — so a mission asking
- * a different question reuses the same fetch. That is the property the whole
- * "cache pages, not answers" decision exists to buy.
+ * Scheme and host are case-folded, a leading `www.` is dropped, the query and
+ * fragment are discarded and a trailing slash is ignored (the root stays `/`).
+ * The path's case is kept — it is part of what the server serves. Unparseable
+ * input is returned trimmed and lower-cased, so it still compares with itself.
+ */
+export function canonicalPageUrl(url: string): string {
+  try {
+    const u = new URL(String(url).trim());
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    const path = u.pathname.replace(/\/+$/, "") || "/";
+    return `https://${host}${path}`;
+  } catch {
+    return String(url ?? "").trim().toLowerCase();
+  }
+}
+
+/**
+ * Fresh pages already held for a site, KEYED BY CANONICAL URL.
+ *
+ * ── A PAGE IS ITS URL, NOT ITS INTENT ─────────────────────────────────────
+ *
+ * This was keyed on page_intent, newest row per intent. So a site's /about 404
+ * and its /company page (both "about") could not both be held: the newer row
+ * hid the other, and the runner read the /about 404 as the answer for /company
+ * (production Fuse AI, task 0553512c). Two pages are two rows here, each still
+ * carrying its intent, and neither the requirement nor the mission is part of
+ * the key — a differently-worded mission still reuses the same fetch.
  *
  * ── NEGATIVE RESULTS COUNT AS ANSWERS ─────────────────────────────────────
  *
  * Every status is returned, not just `ok`. A fresh `not_found` row means WE
  * ALREADY ASKED and the page is not there — which is exactly as good a reason
- * not to buy it again as a successful fetch is.
+ * not to buy it again as a successful fetch is — for THAT URL.
  *
  * Run d3a79c32 is what filtering to `ok` cost: 44 Firecrawl calls for 21 URLs,
  * because a page that never resolves stored nothing, so the cache had nothing
@@ -218,12 +242,13 @@ export async function readFreshPages(
       .eq("workspace_id", i.workspace_id)
       .eq("domain", i.domain)
       .order("fetched_at", { ascending: false })
-      .limit(50);
+      .limit(100);
     if (error || !data) return out;
     for (const r of data as unknown as CachedPage[]) {
-      if (out.has(r.page_intent)) continue;          // newest wins
+      const key = canonicalPageUrl(r.source_url);
+      if (out.has(key)) continue;                    // newest row for this URL wins
       if (!isFresh(r.fetched_at, r.page_intent, now)) continue;
-      out.set(r.page_intent, r);
+      out.set(key, r);
     }
   } catch {
     return out;

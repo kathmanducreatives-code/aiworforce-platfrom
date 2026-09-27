@@ -31,6 +31,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import { runEvidenceCollection } from "../../supabase/functions/_shared/webEvidenceRunner.ts";
 import type { EvidenceDebt } from "../../supabase/functions/_shared/webEvidenceDebt.ts";
 import type { CacheReader } from "../../supabase/functions/_shared/webEvidenceRunner.ts";
+import { canonicalPageUrl } from "../../supabase/functions/_shared/webEvidenceStore.ts";
 
 const debt = (key: string): EvidenceDebt => ({
   company_key: key, company_name: key, domain: `${key}.com`,
@@ -63,15 +64,17 @@ function makeStore() {
     }),
   } as unknown as never;
 
-  /** The cache reader a LATER slice gets: whatever survived. */
+  /** The cache reader a LATER slice gets: whatever survived — keyed, like the
+   *  real `readFreshPages`, by each row's canonical URL, its intent riding along. */
   const readCache: CacheReader = (domain) =>
     Promise.resolve(
       new Map(
-        rows.filter((r) => r.domain === domain).map((r) => [r.page_intent, {
+        rows.filter((r) => r.domain === domain).map((r) => [canonicalPageUrl(r.source_url), {
           source_url: r.source_url,
           source_text: r.source_text,
           fetched_at: r.fetched_at,
           status: r.status,
+          page_intent: r.page_intent,
         }]),
       ),
     );

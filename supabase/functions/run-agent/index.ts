@@ -4728,17 +4728,18 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                       db: supabase,
                       // FREE REUSE. A page already held fresh for this site is
                       // served from the table: no fetch, no credit, no ledger
-                      // row. Keyed on (domain, intent) rather than the
-                      // requirement, so a differently-worded mission reuses the
-                      // same fetch and reaches its own conclusion from it.
+                      // row. Keyed on the page's canonical URL (not its intent,
+                      // not the requirement), so a differently-worded mission
+                      // reuses the same fetch and reaches its own conclusion.
                       readCache: async (domain: string) => {
                         const rows = await readFreshPages(supabase, {
                           workspace_id, domain,
                         });
-                        return new Map([...rows].map(([intent, r]) => [intent, {
+                        return new Map([...rows].map(([url, r]) => [url, {
                           source_url: r.source_url,
                           source_text: r.source_text,
                           fetched_at: r.fetched_at,
+                          page_intent: r.page_intent,
                           // Carried through so the runner can tell "we have
                           // this page" from "we asked and it is not there".
                           // Both stop a fetch; only the first is evidence.
@@ -5108,9 +5109,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                         extract: null,
                         db: supabase,
                         readCache: async (domain: string) => {
+                          // Keyed by canonical URL; the intent rides along (held pages).
                           const rows = await readFreshPages(supabase, { workspace_id, domain });
-                          return new Map([...rows].map(([intent, r]) => [intent, {
+                          return new Map([...rows].map(([url, r]) => [url, {
                             source_url: r.source_url, source_text: r.source_text, fetched_at: r.fetched_at, status: r.status,
+                            page_intent: r.page_intent,
                           }]));
                         },
                         fetchPage: webEvidencePageFetcher(),

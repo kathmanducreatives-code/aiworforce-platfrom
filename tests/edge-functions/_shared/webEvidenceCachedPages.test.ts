@@ -22,7 +22,8 @@
 // ZERO network, providers, models or database.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { cachedAnswerFor, runEvidenceCollection } from "../../../supabase/functions/_shared/webEvidenceRunner.ts";
+import { cachedPageFor, heldPages, runEvidenceCollection } from "../../../supabase/functions/_shared/webEvidenceRunner.ts";
+import { canonicalPageUrl } from "../../../supabase/functions/_shared/webEvidenceStore.ts";
 import {
   BUSINESS_MODEL_MAX_PAGES, BUSINESS_MODEL_PAGE_INTENTS, businessModelVerifier, claimPageBudget, claimPageDebts,
   claimPagePlan, type PageCollection,
@@ -58,6 +59,12 @@ const PROD_CACHE: Record<string, Cached> = {
   homepage: { source_url: "https://fuseai.com/", source_text: "The #1 AI-Native Sales Platform.", fetched_at: "2026-09-15T10:53:01.565Z", status: "ok" },
 };
 
+/** The cache as `readFreshPages` returns it: keyed by canonical URL, the intent riding along. */
+function byUrl(cache: Record<string, Cached> | Array<Cached & { page_intent: string }>) {
+  const rows = Array.isArray(cache) ? cache : Object.entries(cache).map(([page_intent, c]) => ({ ...c, page_intent }));
+  return new Map(rows.map((r) => [canonicalPageUrl(r.source_url), r]));
+}
+
 type PageResult = { ok: boolean; markdown: string; status: "ok" | "empty" | "blocked" | "not_found" | "timeout"; status_code?: number | null };
 const COMPANY_PAGE: PageResult = { ok: true, status: "ok", status_code: 200, markdown: "# Fuse\nWe build the AI sales platform for revenue teams." };
 
@@ -78,7 +85,7 @@ async function collect(o: { map: string[]; cache: Record<string, Cached> | null;
     deps: {
       plan: () => Promise.resolve(claimPagePlan(debts, BUSINESS_MODEL_PAGE_INTENTS)),
       extract: null, db: null, now: () => NOW.toISOString(),
-      readCache: o.cache ? () => Promise.resolve(new Map(Object.entries(o.cache!))) : null,
+      readCache: o.cache ? () => Promise.resolve(byUrl(o.cache!)) : null,
       fetchPage: specGovernedPageFetcher({
         state: s as never, scope: SCOPE, usd_per_credit: RATE.usd_per_credit,
         send: (spec) => { const url = String(spec.serialized_input.url); fetched.push(url); return Promise.resolve((o.page ?? (() => COMPANY_PAGE))(url)); },
@@ -128,19 +135,22 @@ Deno.test("A: the same URL cached as not_found is still an answer — never boug
   assertEquals([r.c.pages_known_missing, r.c.pages_ok], [1, 0]);
 });
 
-Deno.test("A: URL variants (www, trailing slash, query) are the same URL", () => {
-  const missing = { source_url: "https://www.fuseai.com/company/", source_text: "", status: "not_found" };
-  assert(cachedAnswerFor(missing, "https://fuseai.com/company") === missing);
-  assert(cachedAnswerFor(missing, "https://fuseai.com/company?ref=nav") === missing);
-  assertEquals(cachedAnswerFor(missing, "https://fuseai.com/about"), undefined);
-  assertEquals(cachedAnswerFor(undefined, "https://fuseai.com/about"), undefined);
+Deno.test("A: URL variants (www, trailing slash, query) are the same URL — another URL is not", () => {
+  const missing = { source_url: "https://www.fuseai.com/company/", source_text: "", fetched_at: "2026-09-20T00:00:00Z", status: "not_found", page_intent: "about" };
+  const cache = byUrl([missing]);
+  assert(cachedPageFor(cache, "https://fuseai.com/company") === missing);
+  assert(cachedPageFor(cache, "https://fuseai.com/company?ref=nav") === missing);
+  assertEquals(cachedPageFor(cache, "https://fuseai.com/about"), undefined);
 });
 
-Deno.test("A: a USABLE page cached under the intent is still reused for free, whatever URL the map chose", async () => {
-  const cache = { about: { source_url: "https://fuseai.com/about", source_text: "About Fuse: the AI sales platform for teams.", fetched_at: "2026-09-20T00:00:00Z", status: "ok" } };
-  const r = await collect({ map: RERUN_MAP, cache });
-  assertEquals(r.fetched, [], "unchanged: an ok page of the intent is not re-bought");
-  assertEquals([r.c.pages_reused, r.c.pages_ok], [1, 1]);
+Deno.test("A: the store's two rows for one intent are two pages — the 404 answers /about only", async () => {
+  const cache = [
+    { source_url: "https://fuseai.com/about", page_intent: "about", source_text: "", fetched_at: "2026-09-26T07:00:00Z", status: "not_found" },
+    { source_url: "https://fuseai.com/company", page_intent: "about", source_text: "About Fuse", fetched_at: "2026-09-20T07:00:00Z", status: "ok" },
+  ];
+  const r = await collect({ map: RERUN_MAP, cache: cache as never });
+  assertEquals(r.fetched, [], "/company is held (cache hit by URL) — nothing is bought");
+  assertEquals([r.c.pages_reused, r.c.pages_known_missing, r.c.pages_ok], [1, 0, 1]);
 });
 
 // ── B: WHAT WE HOLD COUNTS EVEN WHEN THE MAP MISSES IT ───────────────────────
@@ -167,6 +177,21 @@ Deno.test("B: a held page the map ALSO selected is read once, not twice", async 
   assertEquals(r.fetched, ["https://fuseai.com/company"]);
   assertEquals([r.c.pages_reused, r.c.pages_ok], [1, 2]);
   assertEquals(r.logs.filter(([e, m]) => (e === "evidence-cache-held" || e === "evidence-cache-hit") && m.intent === "pricing").length, 1);
+});
+
+Deno.test("B: a map selecting ANOTHER URL of an intent does not hide the fresh page held for it", () => {
+  const cache = byUrl([{ source_url: "https://fuseai.com/pricing", page_intent: "pricing", source_text: "50/seat", fetched_at: "2026-09-16T00:00:00Z", status: "ok" }]);
+  const held = heldPages(cache, ["pricing", "product"], ["https://fuseai.com/pricing-2"]);
+  assertEquals(held.map((h) => [h.intent, h.hit.source_url]), [["pricing", "https://fuseai.com/pricing"]]);
+  assertEquals(heldPages(cache, ["pricing"], ["https://www.fuseai.com/pricing/"]), [], "the map's own URL is read once, as a hit");
+});
+
+Deno.test("B: of several fresh pages for one intent, the newest is held", () => {
+  const cache = byUrl([
+    { source_url: "https://fuseai.com/pricing", page_intent: "pricing", source_text: "old", fetched_at: "2026-09-10T00:00:00Z", status: "ok" },
+    { source_url: "https://fuseai.com/plans", page_intent: "pricing", source_text: "new", fetched_at: "2026-09-16T00:00:00Z", status: "ok" },
+  ]);
+  assertEquals(heldPages(cache, ["pricing"], []).map((h) => h.hit.source_text), ["new"]);
 });
 
 Deno.test("no cache at all: exactly the old behaviour — the selected page is bought", async () => {

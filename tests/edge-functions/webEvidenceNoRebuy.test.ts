@@ -28,11 +28,12 @@ import {
   runEvidenceCollection, type CacheReader,
 } from "../../supabase/functions/_shared/webEvidenceRunner.ts";
 import {
-  isFresh, ttlHoursFor, toStoredRows,
+  canonicalPageUrl, isFresh, ttlHoursFor, toStoredRows,
 } from "../../supabase/functions/_shared/webEvidenceStore.ts";
 import {
-  looksLikeMissingPage, MISSING_PAGE_MAX_CHARS,
+  looksLikeMissingPage, MISSING_PAGE_MAX_CHARS, PAGE_INTENT_PATHS,
 } from "../../supabase/functions/_shared/pageIntentResolver.ts";
+import type { PageIntent } from "../../supabase/functions/_shared/evidenceRequest.ts";
 import type { EvidenceDebt } from "../../supabase/functions/_shared/webEvidenceDebt.ts";
 import type { MissionEvaluation } from "../../supabase/functions/_shared/missionEvaluation.ts";
 
@@ -115,18 +116,20 @@ Deno.test("a DIFFERENT requirement on the same company still raises a debt", () 
 
 // ────────────────────────── 2. the fetch layer stops it ─────────────────────
 
-const cacheWith = (intents: Record<string, string>): CacheReader => () =>
-  Promise.resolve(new Map(Object.entries(intents).map(([intent, text]) => [
-    intent,
-    {
-      source_url: `https://x.com/${intent}`, source_text: text,
+// Rows as the runner stores them — the requested domain, at the URL the resolver
+// asks for — and as `readFreshPages` returns them: keyed by canonical URL.
+const cacheWith = (intents: Record<string, string>): CacheReader => (domain) =>
+  Promise.resolve(new Map(Object.entries(intents).map(([intent, text]) => {
+    const source_url = `https://${domain}${PAGE_INTENT_PATHS[intent as PageIntent]?.[0] ?? `/${intent}`}`;
+    return [canonicalPageUrl(source_url), {
+      source_url, source_text: text, page_intent: intent,
       fetched_at: "2026-09-03T00:00:00Z",
       // A cached page is only reusable EVIDENCE when it succeeded. Absences are
       // cached too now — see webEvidenceNegativeCache.test.ts — and they stop a
       // fetch without being reused, so this helper has to say which it is.
       status: "ok",
-    },
-  ])));
+    }];
+  })));
 
 Deno.test("THE LOOP: a fresh cached page is reused, never re-fetched", async () => {
   let fetched = 0;

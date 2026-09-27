@@ -38,6 +38,7 @@ import { toStoredRows } from "../../supabase/functions/_shared/webEvidenceStore.
 import type { EvidenceDebt } from "../../supabase/functions/_shared/webEvidenceDebt.ts";
 import type { PageIntent, WebEvidencePage } from "../../supabase/functions/_shared/evidenceRequest.ts";
 import { PAGE_INTENT_PATHS } from "../../supabase/functions/_shared/pageIntentResolver.ts";
+import { canonicalPageUrl } from "../../supabase/functions/_shared/webEvidenceStore.ts";
 
 const debt = (key: string): EvidenceDebt => ({
   company_key: key, company_name: key, domain: `${key}.com`,
@@ -51,20 +52,19 @@ const plan = (key: string, intents: string[]) => () =>
 
 const noClaims = () => Promise.resolve({ claims: [] });
 
-// Rows as the runner stores them: the domain the cache was asked for, at the
-// URL that was requested for the intent. A 404 answers only its own URL
-// (`cachedAnswerFor`), so a row for another host would — correctly — answer
-// nothing; `readFreshPages` never returns one, since it reads by domain.
+// Rows as the runner stores them — the domain the cache was asked for, at the
+// URL that was requested for the intent — and as `readFreshPages` returns them:
+// keyed by canonical URL, the intent riding along. A page is its URL.
 const cache = (
   entries: Record<string, { text: string; status: string }>,
 ): CacheReader =>
 (domain) =>
-  Promise.resolve(new Map(Object.entries(entries).map(([intent, v]) => [intent, {
-    source_url: `https://${domain}${PAGE_INTENT_PATHS[intent as PageIntent]?.[0] ?? `/${intent}`}`,
-    source_text: v.text,
-    fetched_at: "2026-09-03T10:00:00Z",
-    status: v.status,
-  }])));
+  Promise.resolve(new Map(Object.entries(entries).map(([intent, v]) => {
+    const source_url = `https://${domain}${PAGE_INTENT_PATHS[intent as PageIntent]?.[0] ?? `/${intent}`}`;
+    return [canonicalPageUrl(source_url), {
+      source_url, page_intent: intent, source_text: v.text, fetched_at: "2026-09-03T10:00:00Z", status: v.status,
+    }];
+  })));
 
 // ─────────────────── the write side: nothing is forgotten ───────────────────
 
@@ -204,7 +204,9 @@ Deno.test("a cache hit is never re-written as a fresh observation", async () => 
 Deno.test("nine slices against an all-404 site buy the pages once", async () => {
   // diligencevault.com's real shape: pages that never resolve, revisited every
   // slice because P2 does not change a qualification outcome.
-  const store = new Map<string, { text: string; status: string }>();
+  // Stored as the real table is read back: by the page's canonical URL, with the
+  // URL and intent it was written with (`readFreshPages`).
+  const store = new Map<string, { source_url: string; page_intent: string; text: string; status: string }>();
   let fetched = 0;
   for (let slice = 0; slice < 9; slice++) {
     await runEvidenceCollection({
@@ -217,15 +219,15 @@ Deno.test("nine slices against an all-404 site buy the pages once", async () => 
           return Promise.resolve({ ok: true, markdown: "# 404 - Page not found", status: "ok" as const });
         },
         readCache: () =>
-          Promise.resolve(new Map([...store].map(([intent, v]) => [intent, {
-            source_url: `https://diligencevault.com/${intent}`,
+          Promise.resolve(new Map([...store].map(([url, v]) => [url, {
+            source_url: v.source_url, page_intent: v.page_intent,
             source_text: v.text, fetched_at: new Date().toISOString(), status: v.status,
           }]))),
         db: {
           from: () => ({
             upsert: (rows: unknown[]) => {
-              for (const r of rows as Array<{ page_intent: string; source_text: string; status: string }>) {
-                store.set(r.page_intent, { text: r.source_text, status: r.status });
+              for (const r of rows as Array<{ source_url: string; page_intent: string; source_text: string; status: string }>) {
+                store.set(canonicalPageUrl(r.source_url), { source_url: r.source_url, page_intent: r.page_intent, text: r.source_text, status: r.status });
               }
               return Promise.resolve({ error: null });
             },
@@ -279,9 +281,35 @@ Deno.test("readFreshPages returns absences, not only successes", async () => {
     { workspace_id: "w", domain: "x.com", now },
   );
   assertEquals(got.size, 3, "a status filter here is what caused d3a79c32");
-  assertEquals(got.get("product")?.status, "not_found");
-  assertEquals(got.get("about")?.status, "blocked");
-  assertEquals(got.get("pricing")?.status, "ok");
+  assertEquals(got.get("https://x.com/product")?.status, "not_found");
+  assertEquals(got.get("https://x.com/about")?.status, "blocked");
+  assertEquals(got.get("https://x.com/pricing")?.status, "ok");
+});
+
+Deno.test("readFreshPages: a page is its URL — a newer 404 of one URL never hides another URL of the same intent", async () => {
+  // Production Fuse AI (task 0553512c): /about had 404'd; /company is the
+  // company's real about page. Keyed by intent, one of them had to go.
+  const now = Date.parse("2026-09-27T06:00:00Z");
+  const got = await readFreshPages(
+    fakeDb([ // newest first, as the query orders them
+      { source_url: "https://fuseai.com/about", page_intent: "about", source_text: "", fetched_at: "2026-09-26T07:00:00Z", status: "not_found" },
+      { source_url: "https://fuseai.com/company", page_intent: "about", source_text: "About Fuse", fetched_at: "2026-09-20T07:00:00Z", status: "ok" },
+      { source_url: "https://www.fuseai.com/company/", page_intent: "about", source_text: "older copy", fetched_at: "2026-09-18T07:00:00Z", status: "ok" },
+    ]),
+    { workspace_id: "w", domain: "fuseai.com", now },
+  );
+  assertEquals([...got.keys()].sort(), ["https://fuseai.com/about", "https://fuseai.com/company"]);
+  assertEquals(got.get("https://fuseai.com/company")?.source_text, "About Fuse", "newest row per URL; www / slash are the same URL");
+  assertEquals(got.get("https://fuseai.com/about")?.status, "not_found");
+});
+
+Deno.test("canonicalPageUrl: scheme, host case, www, query, fragment and trailing slash do not make a new page", () => {
+  for (const u of ["https://fuseai.com/pricing", "http://FuseAI.com/pricing/", "https://www.fuseai.com/pricing?ref=nav#top"]) {
+    assertEquals(canonicalPageUrl(u), "https://fuseai.com/pricing", u);
+  }
+  assertEquals(canonicalPageUrl("https://fuseai.com"), "https://fuseai.com/");
+  assertEquals(canonicalPageUrl("https://fuseai.com/Pricing") === canonicalPageUrl("https://fuseai.com/pricing"), false,
+    "the path is the server's: its case is kept");
 });
 
 Deno.test("readFreshPages still drops stale rows whatever their status", async () => {
