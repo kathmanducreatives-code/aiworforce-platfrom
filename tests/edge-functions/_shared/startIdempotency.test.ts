@@ -366,3 +366,96 @@ Deno.test("38e904cb: the same card's Start arriving twice runs ONE mission", asy
     net.restore();
   }
 });
+
+// ── LAUNCH HARDENING: THE REST OF THE DUPLICATE-START MATRIX ───────────────
+
+/** A network that enforces `task_plans_idempotency_uniq` exactly as Postgres does. */
+function withUniqueIndex(tables: Record<string, Row[]>): () => void {
+  const inner = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (href.includes("/rest/v1/task_plans") && method === "POST") {
+      const row = JSON.parse(String(init?.body ?? "{}"));
+      if (row.idempotency_key && tables.task_plans.some((p) =>
+        p.workspace_id === row.workspace_id && p.idempotency_key === row.idempotency_key)) {
+        return new Response(JSON.stringify({
+          code: "23505", details: null, hint: null,
+          message: 'duplicate key value violates unique constraint "task_plans_idempotency_uniq"',
+        }), { status: 409, headers: { "content-type": "application/json" } });
+      }
+    }
+    return inner(input, init);
+  }) as typeof fetch;
+  return () => { globalThis.fetch = inner; };
+}
+
+Deno.test("two DIFFERENT approved cards are two legitimate missions: two plans, two kickoffs", async () => {
+  const tables = seed();
+  const mission = await missionFor(tables);
+  const net = installFakeNetwork({
+    supabaseUrl: SUPABASE_URL, tables, modelReplies: MODEL,
+    functionReplies: { "run-agent": { ok: true }, "enqueue-lead-mission": { ok: true } },
+  });
+  const restore = withUniqueIndex(tables);
+  try {
+    const other = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const a = await orchestrate({ user_instruction: SOURCING, lead_mission: mission, idempotency_key: KEY });
+    const b = await orchestrate({ user_instruction: SOURCING, lead_mission: mission, idempotency_key: `start:${other}` });
+    await settle();
+    assertEquals([a.status, b.status], [200, 200]);
+    assertFalse(a.body.deduplicated === true || b.body.deduplicated === true);
+    assertEquals(tables.task_plans.map((p) => p.idempotency_key).sort(), [KEY, `start:${other}`].sort());
+    assertEquals(net.functionCalls.length, 2);
+  } finally {
+    restore();
+    net.restore();
+  }
+});
+
+Deno.test("the real flow: a Start whose response was lost, retried, returns the plan the first one created", async () => {
+  const tables = seed();
+  const mission = await missionFor(tables);
+  const net = installFakeNetwork({
+    supabaseUrl: SUPABASE_URL, tables, modelReplies: MODEL,
+    functionReplies: { "run-agent": { ok: true }, "enqueue-lead-mission": { ok: true } },
+  });
+  const restore = withUniqueIndex(tables);
+  try {
+    const first = await orchestrate({ user_instruction: SOURCING, lead_mission: mission, idempotency_key: KEY });
+    await settle();
+    // The browser never saw `first` (timeout) and sends the identical request again.
+    const retry = await orchestrate({ user_instruction: SOURCING, lead_mission: mission, idempotency_key: KEY });
+    await settle();
+    assertEquals(retry.body.deduplicated, true);
+    assertEquals(retry.body.plan_id, first.body.plan_id ?? first.body.task_plan_id);
+    assertEquals(tables.task_plans.length, 1);
+    assertEquals(net.functionCalls.length, 1, "one mission, one kickoff, one spend");
+  } finally {
+    restore();
+    net.restore();
+  }
+});
+
+Deno.test("three concurrent Starts of one card (two tabs and a retry) become ONE plan and ONE kickoff", async () => {
+  const tables = seed();
+  const mission = await missionFor(tables);
+  const net = installFakeNetwork({
+    supabaseUrl: SUPABASE_URL, tables, modelReplies: MODEL,
+    functionReplies: { "run-agent": { ok: true }, "enqueue-lead-mission": { ok: true } },
+  });
+  const restore = withUniqueIndex(tables);
+  try {
+    const rs = await Promise.all([1, 2, 3].map(() =>
+      orchestrate({ user_instruction: SOURCING, lead_mission: mission, idempotency_key: KEY })));
+    await settle();
+    assert(rs.every((r) => r.status === 200), JSON.stringify(rs.map((r) => r.status)));
+    assertEquals(tables.task_plans.length, 1, "one plan");
+    assertEquals(new Set(rs.map((r) => r.body.plan_id ?? r.body.task_plan_id)).size, 1, "every caller is told the same plan");
+    assertEquals(rs.filter((r) => r.body.deduplicated !== true).length, 1, "exactly one caller created it");
+    assertEquals(net.functionCalls.length, 1, "one kickoff");
+  } finally {
+    restore();
+    net.restore();
+  }
+});
