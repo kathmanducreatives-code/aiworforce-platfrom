@@ -41,6 +41,8 @@ const PROVIDER_HOSTS = [
   "generativelanguage.googleapis.com",
   "api.perplexity.ai",
   "ai.gateway.lovable.dev",
+  // TypeSafe AI's Jev bills per input token (docs.typesafe.ai/models).
+  "api.typesafe.ai",
 ];
 
 /**
@@ -69,6 +71,15 @@ const ACCOUNTED: Readonly<Record<string, string>> = Object.freeze({
   // `recordModelCall`, and consults `authorizeModelSpend` before it spends.
   // That row lands in `lead_model_calls`, which is the view the ceiling itself
   // sums, so image spend both counts toward the ceiling and is stopped by it.
+  // Jev, TypeSafe AI's structured-decision model: the facet-attestation SHADOW.
+  // Emits through `JevDeps.onModelCall` — the run's ModelCallCollector — on
+  // success AND failure (a failure that reached the API is recorded unpriced,
+  // never free). Its only caller, `jevShadowBinding`, consults the run's model
+  // budget and a per-task call cap before every call, and runs only a pinned,
+  // PRICED model so it can never draw on the unpriced-call budget.
+  "_shared/jevProvider.ts":
+    "TypeSafe Jev; emits via JevDeps.onModelCall on success and failure, " +
+    "budget + call cap checked before each call in jevShadowBinding",
   "_shared/imageProvider.ts":
     "OpenAI images; emits via ImageProviderDeps.onImageCall on success and failure, " +
     "ledgered as a model_call and gated by authorizeModelSpend in generate-content-image",

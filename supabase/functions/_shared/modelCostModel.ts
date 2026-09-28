@@ -53,7 +53,7 @@ export interface ModelPrice {
    * this system pays. Recording the billing surface is what makes a price
    * checkable against an invoice instead of against a blog post.
    */
-  billed_by?: "openai" | "anthropic" | "google" | "lovable_gateway";
+  billed_by?: "openai" | "anthropic" | "google" | "lovable_gateway" | "typesafe";
   /** Where the figure came from, so a wrong one is traceable to its source. */
   price_source?: string;
   /** When it was last confirmed. A price with no date is a rumour. */
@@ -118,6 +118,21 @@ export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = Object.freeze(
   "gpt-5.6-sol": { input_per_1m: 5.00, cached_input_per_1m: 0.50, output_per_1m: 30.00 },
   "gpt-4.1": { input_per_1m: 2.00, cached_input_per_1m: 0.50, output_per_1m: 8.00 },
   "gpt-4.1-mini": { input_per_1m: 0.40, cached_input_per_1m: 0.10, output_per_1m: 1.60 },
+
+  // ── TYPESAFE AI'S JEV — THE FACET-ATTESTATION SHADOW (jevProvider.ts) ─────
+  //
+  // Billed directly by TypeSafe (api.typesafe.ai), so the published price is
+  // the billing basis: "$0.042 per million tokens", input only — "Output
+  // tokens are free" (docs.typesafe.ai/models, read 2026-09-27). There is no
+  // cached-input rate, so a cached token is priced as an input token.
+  //
+  // KEYED ON THE PINNED VERSION. The aliases `jev-latest` / `jev-preview` are
+  // deliberately absent: an alias can move to a model with another price, and
+  // an unpriced id is exactly what the shadow refuses to run on.
+  "jev-1.13.0": {
+    input_per_1m: 0.042, cached_input_per_1m: 0.042, output_per_1m: 0,
+    billed_by: "typesafe", price_source: "docs.typesafe.ai/models (jev-1.13.0)", effective: "2026-09-27",
+  },
 
   // ── THE ONE MODEL BILLED DIRECTLY BY ANTHROPIC ───────────────────────────
   //

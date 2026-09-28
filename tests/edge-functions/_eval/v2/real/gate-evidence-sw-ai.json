@@ -1,0 +1,921 @@
+{
+ "version": "facet-benchmark-v2-gate-evidence-sw-ai",
+ "companies": [
+  {
+   "key": "fuseai.com",
+   "company": "Fuse AI",
+   "software_evidence": "With powerful integrations and intelligent workflows",
+   "ai_evidence": "AI-native sales platform",
+   "evidence_ref": null,
+   "domain": "fuseai.com",
+   "texts": [
+    "FuseAI is the AI-native sales platform for modern revenue teams.\r\n\r\nBuilt for high-performance outbound, FuseAI consolidates your entire GTM stack - data, enrichment, multi-channel automation, real-time buying signals, and AI-driven execution  into one seamless system.\r\n\r\nWith powerful integrations and intelligent workflows, FuseAI doesn’t just help you run campaigns. It turns every signal into pipeline, and every rep into a top performer.",
+    "Fuse is the sales superintelligence platform for modern revenue teams.\n\nBuilt for high-performance outbound, FuseAI consolidates your entire GTM stack - data, enrichment, multi-channel automation, real-time buying signals, and AI-driven execution  into one seamless system.\n\nWith powerful integrations and intelligent workflows, FuseAI doesn’t just help you run campaigns. It turns every signal into pipeline, and every rep into a top performer."
+   ]
+  },
+  {
+   "key": "propelauth.com",
+   "company": "PropelAuth",
+   "software_evidence": "they can use our APIs and component libraries",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "propelauth.com",
+   "texts": [
+    "PropelAuth provides the right level of authentication for all stages of a company. New startups can use our hosted pre-built UIs which provide the simplest possible integration. Out of the box, our customers immediately have the same auth experience as large tech companies like Slack. As those startups grow, they can use our APIs and component libraries to pull aspects of the experience into their product.\r\n\r\nMore than just authentication, we will also provide useful functions tied to a \"user\" or \"organization\", like analytics, billing/subscriptions, referral programs, etc.",
+    "PropelAuth was founded on the idea that a good auth product gets out of your way. We believe that auth is more than just logging a user in—it’s also about managing your relationship with your users.\n\nWe provide businesses with the security, customizability, and support necessary to quickly implement state-of-the-art auth, save developer time, and refocus on their mission. We know what a best in class auth experience looks like, and we’re excited to bring that to you."
+   ]
+  },
+  {
+   "key": "safetykit.com",
+   "company": "SafetyKit",
+   "software_evidence": "rely on SafetyKit in production",
+   "ai_evidence": "We build AI agents for teams tackling fraud & abuse",
+   "evidence_ref": null,
+   "domain": "safetykit.com",
+   "texts": [
+    "SafetyKit's AI agents do the dirty work for big tech and finance companies so humans don't have to.\r\n\r\nToday companies rely on armies of low-paid outsourced humans to protect their platforms from fraud, harassment, and crime. It’s super important work, but the jobs are difficult and sometimes traumatizing, and it’s impossible to keep up. Our mission is to end this manual toil.\r\n\r\nWe learned this domain first-hand at Stripe and Airbnb, where first we built software for human reviewers, and then built models to replace them.\r\n\r\nWe’re a group of engineers from Stripe, Meta, Netflix, MIT, and Princeton that love language models and unironically love B2B SaaS. We know the economy is going to be rearranged over the next 4 years and we want to be in the driver’s seat.\r\n\r\nWe build vertical AI that works and have some of the world’s largest companies as paying customers. Patreon, Eventbrite, Upwork, Character.ai, Substack, Faire, along with a $10B+ marketplace, a $100B+ payments company, and more rely on SafetyKit in production.",
+    "SafetyKit exists to make fraud unprofitable. We build AI agents for teams tackling fraud & abuse through complex workflows like underwriting, investigations and content moderation. Trusted by the world's largest marketplaces and payments companies. \n\nJoin us April 23 for our Risk / AI Conference in San Francisco! https://safetykit.com/risk-ai-event"
+   ]
+  },
+  {
+   "key": "nango.dev",
+   "company": "Nango",
+   "software_evidence": "Leverage hundreds of pre-built integrations",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "nango.dev",
+   "texts": [
+    "Customers expect your SaaS to integrate with all the software they use.\r\n\r\nWith Nango, you ship integrations your customers love, fast.\r\n\r\nLeverage hundreds of pre-built integrations and unlimited customization."
+   ]
+  },
+  {
+   "key": "pasito.ai",
+   "company": "Pasito",
+   "software_evidence": "all from a single intelligent database",
+   "ai_evidence": "Pasito builds AI agents for insurance and benefits",
+   "evidence_ref": null,
+   "domain": "pasito.ai",
+   "texts": [
+    "Pasito builds AI agents for insurance and benefits—transforming how benefits are built, delivered, and experienced.\r\n\r\nOur Core AI ingests and understands plan documents and employee census data to build structured benefit intelligence.\r\n\r\nOur Engagement AI Agents orchestrate complex workflows—powering decision support, plan comparisons, guides, highlight sheets, microsites, communications, claims reminders, RFP management, document audits, translations, and more—all from a single intelligent database.\r\n\r\nWith Pasito, carriers, brokers, and benefits vendors eliminate manual work, accelerate growth, and deliver the personalized benefits experiences employees deserve—all powered by compliant, scalable AI systems.\r\n\r\nBacked by Y Combinator, Core Innovation Capital, and other leading investors.",
+    "Pasito builds AI agents for insurance and benefits, transforming how benefits are built, delivered, and experienced.\n\nOur Core AI ingests and understands plan documents and employee census data to build structured benefit intelligence.\n\nOur Engagement AI Agents orchestrate complex workflows, powering decision support, plan comparisons, guides, highlight sheets, microsites, communications, claims reminders, RFP management, document audits, translations, and more - all from a single intelligent database.\n\nWith Pasito, carriers, brokers, and benefits vendors eliminate manual work, accelerate growth, and deliver the personalized benefits experiences employees deserve - all powered by compliant, scalable AI systems.\n\nBacked by Y Combinator, Core Innovation Capital, and other leading investors"
+   ]
+  },
+  {
+   "key": "furtherai.com",
+   "company": "FurtherAI",
+   "software_evidence": "automates complex workflows like submission intake",
+   "ai_evidence": "FurtherAI is a domain-specific AI for the insurance industry",
+   "evidence_ref": null,
+   "domain": "furtherai.com",
+   "texts": [
+    "FurtherAI is a domain-specific AI for the insurance industry. Our AI Assistant automates complex workflows like submission intake, policy comparisons, and underwriting audits - making teams faster, smarter, and more efficient.\r\n\r\nLeading insurers, reinsurers, MGAs, and brokers rely on FurtherAI to drive better decisions at scale. Backed by top investors including Y Combinator, Nexus, South Park Commons, and Converge, FurtherAI supports customers writing over $15B in premiums across all 50 states.",
+    "FurtherAI is a domain-specific AI for the insurance industry. Our AI Workspace automates complex workflows like submission intake, policy comparisons, and underwriting audits—making teams faster, smarter, and more efficient.\n\nLeading insurers, reinsurers, MGAs, and brokers rely on FurtherAI to drive better decisions at scale. Backed by top investors including Y Combinator, Nexus, South Park Commons, and Converge, FurtherAI supports customers writing over $15B in premiums across all 50 states."
+   ]
+  },
+  {
+   "key": "poly.app",
+   "company": "Poly",
+   "software_evidence": "Browse with a lightning fast interface",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "poly.app",
+   "texts": [
+    "A personal cloud storage platform that's so good, it'll replace Finder / File Explorer on your desktop. Find anything with multi-modal, natural language search. Browse with a lightning fast interface that feels just like native. Organize, tag, view, edit, share, and more."
+   ]
+  },
+  {
+   "key": "streak.com",
+   "company": "Streak",
+   "software_evidence": "Streak is the only CRM integrated entirely within your Gmail inbox",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "streak.com",
+   "texts": [
+    "Streak is the only CRM integrated entirely within your Gmail inbox, and works alongside all your other G Suite applications. It can be used to track any business process including sales, partnerships, support, hiring, deal flow, and much more. Streak also includes a powerful set of email tools including email tracking, send later, snoozing, mail merge, and more."
+   ]
+  },
+  {
+   "key": "deepgram.com",
+   "company": "Deepgram",
+   "software_evidence": "with just an API call",
+   "ai_evidence": "most advanced speech AI transcription",
+   "evidence_ref": null,
+   "domain": "deepgram.com",
+   "texts": [
+    "Deepgram is a foundational AI company on a mission to understand human language. We give any developer access to the most advanced speech AI transcription and understanding with just an API call.\r\n\r\nOur models deliver the fastest, most accurate transcription alongside contextual features like summarization, sentiment analysis, and topic detection. Beyond that, developers can:\r\n🔊 Process live-streaming or pre-recorded audio\r\n🌎 Transcribe in dozens of languages\r\n⚙️ Train custom models for unique use cases\r\n🔑 Access deep NLU with a unified API\r\n💻 Build in any programming language with our SDKs\r\n✅ Deploy on-prem or on DG’s managed cloud\r\n📈 Get scalable GPU infra for training and inference\r\n\r\nDeepgram is a proud NVIDIA partner and Y Combinator company, and we recently completed a $72M Series B to define the future of AI Speech Understanding, making us the most-funded speech AI company at its stage."
+   ]
+  },
+  {
+   "key": "mux.com",
+   "company": "Mux",
+   "software_evidence": "Mux Video is a simple API to advanced video streaming",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "mux.com",
+   "texts": [
+    "Mux is an API-first video platform designed by experts to make world-class video streaming and analytics possible for every development team. Self-optimizing videos take the guesswork out of encodings, delivery, and renditions. Mux makes your video look beautiful on every device, every time.\r\n\r\nWe offer two products, Mux Video and Mux Data.\r\n\r\nMux Video is a simple API to advanced video streaming. Powered by data and designed by video experts, Mux Video makes beautiful video possible for every development team. Post a video or live stream with a single API call, and watch it within seconds. Mux Video handles the encoding, storage, and delivery. QoE and performance analytics provided by Mux Data is included by default for every Mux video stream.This real-time data is used to create the right renditions for every device and title, resulting in greater reliability and better viewer experiences.\r\n\r\nMux Data is a Quality of Experience analytics platform that measures the performance metrics that actually matter to viewers: rebuffering, startup time, video quality, and errors. Our intuitive dashboard quickly gives users the insight to find issues and make improvements through features li…[truncated]"
+   ]
+  },
+  {
+   "key": "bitmovin.com",
+   "company": "Bitmovin",
+   "software_evidence": "Bitmovin products are completely in-house developed, easy and fast to integrate",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "bitmovin.com",
+   "texts": [
+    "Bitmovin has been a first mover in almost every significant development in online video, from building and deploying the world’s first (and fastest) commercial adaptive streaming (MPEG-DASH/HLS) HTML5 Player, to being the first to achieve 100x realtime encoding speeds in the cloud. Bitmovin provides HEVC as well as VP9 live streaming with 60FPS and 4K resolution, and built the first containerized video encoding solution with Docker and Kubernetes.\r\n\r\nBitmovin products are completely in-house developed, easy and fast to integrate and highly customizable. In combination with our great support, documentation and SLAs, this is a true enterprise offering.\r\n\r\nTo find out more about Bitmovin’s video infrastructure solutions, or about any individual products, contact [redacted:email], or visit our website: bitmovin.com"
+   ]
+  },
+  {
+   "key": "snapmagic.com",
+   "company": "SnapMagic",
+   "software_evidence": "Our new AI-assisted design tool",
+   "ai_evidence": "Our new AI-assisted design tool",
+   "evidence_ref": null,
+   "domain": "snapmagic.com",
+   "texts": [
+    "Built by electrical engineers for electrical engineers, SnapMagic removes monotony so that engineers can do their best work. SnapMagic’s electronic component data is used by over 2 million engineers across the world’s largest organizations. Our new AI-assisted design tool is changing the way that every engineer designs electronics. Join at www.snapmagic.com.",
+    "Creators of SnapMagic Search, your source of component libraries, and SnapMagic Copilot, your AI copilot for circuit board designers.\n\nBuilt by electrical engineers for electrical engineers, SnapMagic removes monotony so that engineers can do their best work. SnapMagic’s electronic component data is used by over 1.5 million engineers across the world’s largest organizations. Its new AI Copilot, CoDesigner, will change the way that every engineer designs electronics. SnapMagic is funded by leading Silicon Valley investors in the technology, artificial intelligence, and developer tools domains. Join the waiting list at www.snapmagic.com."
+   ]
+  },
+  {
+   "key": "tara.ai",
+   "company": "Tara AI",
+   "software_evidence": "lightning-fast project management that helps teams ship product",
+   "ai_evidence": "fine-tuned, secure LLMs trained on source control and project data",
+   "evidence_ref": null,
+   "domain": "tara.ai",
+   "texts": [
+    "Tara AI helps engineering leaders measure and improve engineering efficiency, with fine-tuned, secure LLMs trained on source control and project data. \r\n\r\nOur customers include MongoDB, Clearbit and Prometric. Our platform generates all-in-one views on cycle times, benchmarks, investments and overall size and velocity of engineering activity. We're helping customers achieve 30% reduction in time to customer deployment.",
+    "Tara AI is a platform designed to help modern software teams manage and deliver across their product development lifecycle. Get instant insights into code progress with lightning-fast project management that helps teams ship product, with tasks, sprints & docs tied to code. 10,000 workspaces and 45,000+ developers trust Tara AI to git ship done.\n\nBacked by YCombinator, Aspect Ventures, Moment Ventures and Slack Fund."
+   ]
+  },
+  {
+   "key": "zentail.com",
+   "company": "Zentail",
+   "software_evidence": "automates away all of the work getting a listing formatted for different marketplaces",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "zentail.com",
+   "texts": [
+    "Zentail makes adding online sales channels  for ecommerce brands as simple as adding a friend on Facebook.  Our mission is to make ecommerce simple and we do it with our ecommerce network that automates away all of the work getting a listing formatted for different marketplaces with different requirements.",
+    "Marketplaces are complex. Zentail makes it easy with a Revenue Growth Platform designed to help ecommerce brands launch on new channels faster, optimize their presence, and grow smarter on the marketplaces that drive the greatest results. By automating the toughest parts of multichannel selling and delivering actionable insights, Zentail makes it easy to address what’s holding you back and grow smarter with less effort."
+   ]
+  },
+  {
+   "key": "joinmarble.ai",
+   "company": "Marble",
+   "software_evidence": "Marble replaces that entire stack with one system",
+   "ai_evidence": "Computer vision and voice AI capture real-time inventory levels",
+   "evidence_ref": null,
+   "domain": "joinmarble.ai",
+   "texts": [
+    "Marble is the first AI-native operating system for the restaurant back-of-house. \r\n\r\nRestaurants, cafes and bars still run on a patchwork of disconnected point solutions, spreadsheets, clipboards and tribal knowledge, which costs the industry billions each year in stockouts, food waste, and lost profit. \r\n\r\nMarble replaces that entire stack with one system. Computer vision and voice AI capture real-time inventory levels 90% faster than manual counts, ML models forecast item-level demand at 97% accuracy, and AI agents run dozens of end-to-end workflows autonomously, from procurement and invoice reconciliation to scheduling, food prep, menu engineering, and more."
+   ]
+  },
+  {
+   "key": "sembleai.com",
+   "company": "Semble",
+   "software_evidence": "It's a live platform that keeps the office and the field in sync on every project",
+   "ai_evidence": "provides AI agents to run the workflows your business depends on",
+   "evidence_ref": null,
+   "domain": "sembleai.com",
+   "texts": [
+    "Semble is the operating system for your construction business. It's a live platform that keeps the office and the field in sync on every project and provides AI agents to run the workflows your business depends on.\r\n\r\nJonathan and Ethan met studying computer science at Stanford. Jonathan worked at Convergint, one of the world's largest building system integrators.",
+    "Semble AI runs operations for contractors, manufacturers, and distributors - invoicing, purchase orders, scheduling, and call/email intake, acting on every request and keeping all your systems updated automatically, 24/7."
+   ]
+  },
+  {
+   "key": "hemut.com",
+   "company": "Hemut",
+   "software_evidence": "Next-generation truck management software",
+   "ai_evidence": "AI agents to automate inbound/outbound calls",
+   "evidence_ref": null,
+   "domain": "hemut.com",
+   "texts": [
+    "Next-generation truck management software to automate back-office operations for trucking companies. Features include AI agents to automate inbound/outbound calls, AI document upload to reduce manual data entry, load sourcing tools, automated accounting, and more."
+   ]
+  },
+  {
+   "key": "joinergo.com",
+   "company": "Ergo",
+   "software_evidence": "We connect the conversations your team is already having, across calls, email, Slack, and more",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "joinergo.com",
+   "texts": [
+    "Ergo is the revenue infrastructure for teams growing faster than their systems can keep up. We connect the conversations your team is already having, across calls, email, Slack, and more, and build a unified data layer that moves deals forward."
+   ]
+  },
+  {
+   "key": "salespatriot.com",
+   "company": "SalesPatriot",
+   "software_evidence": "SalesPatriot is a back-office operating system for distributors and OEMS",
+   "ai_evidence": "We build custom AI workflows",
+   "evidence_ref": null,
+   "domain": "salespatriot.com",
+   "texts": [
+    "SalesPatriot is a back-office operating system for distributors and OEMS. We build custom AI workflows for sales and supply chain teams to manage procurement, requests for quote and purchase orders.\r\n\r\nIn large orgs that operate as key nodes of the supply chain data is scattered across twelve systems. Quotes get lost and Executives lack visibility. Supply chain workflows are time consuming because data isn't where it needs to be in the format it needs to be.\r\n\r\nEmployees are stuck between their email, ERP, CRM, marketplaces, and spreadsheets instead of winning business and protecting margin."
+   ]
+  },
+  {
+   "key": "wozcode.com",
+   "company": "Woz",
+   "software_evidence": "Available via Claude Code Plugin",
+   "ai_evidence": "AI coding agent",
+   "evidence_ref": null,
+   "domain": "wozcode.com",
+   "texts": [
+    "WOZCODE is the highest performing, lowest cost AI coding agent. Available via Claude Code Plugin. \r\n\r\nThe WOZCODE plugin outperforms Claude Code alone on all key metrics:\r\n\r\nCost: 25-55% cheaper\r\nSpeed: 5-10x faster on database tasks, 30-40% faster on most others\r\nPerformance: beats Claude code on Terminal Bench 2.0 (68% vs 58%)\r\n\r\nInstall with one command. Access directly via Claude Code\r\n\r\nYour tools, your workflows, but Better, Faster, Cheaper."
+   ]
+  },
+  {
+   "key": "quartzy.com",
+   "company": "Quartzy",
+   "software_evidence": null,
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "quartzy.com",
+   "texts": [
+    "The world’s No. 1 lab management platform. We help scientists easily organize orders, manage inventory, and save money."
+   ]
+  },
+  {
+   "key": "moss.dev",
+   "company": "Moss",
+   "software_evidence": "optimized vector index built in Rust and WebAssembly",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "moss.dev",
+   "texts": [
+    "Moss is building the real-time semantic search runtime for conversational and multimodal AI. Our system enables voice agents, copilots, and chat interfaces to retrieve, reason, and respond in sub-10 ms, delivering the responsiveness that makes AI interactions feel truly natural.\r\n\r\nIf you’ve ever built a conversational or voice AI product, you’ve felt the lag. That moment when an agent pauses and the illusion of intelligence breaks. The bottleneck is almost always retrieval. Each query hops across networks and databases, adding delay and cost. Moss eliminates that gap by keeping retrieval close to where the agent runs.\r\n\r\nMoss runs natively across browsers, mobile devices, and servers with an optimized vector index built in Rust and WebAssembly. It enables teams to build AI products that feel instant, contextual, and adaptive. The experiences that sustain engagement and unlock new kinds of interaction. For our customers, this translates into tangible business value: stronger user retention, higher conversion, and entirely new product categories made possible by real-time understanding. Moss is already powering production pilots across voice AI and developer platforms, achieving sub…[truncated]"
+   ]
+  },
+  {
+   "key": "hyperspell.com",
+   "company": "Hyperspell",
+   "software_evidence": "Hyperspell connects your tools and synthesizes documents and conversations",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "hyperspell.com",
+   "texts": [
+    "Hyperspell is your Company Brain. AI agents are brilliant and clueless. They ace any test and still have no idea how your company works. Hyperspell connects your tools and synthesizes documents and conversations into a live, permissioned context graph. Any agent can read from it and write back to it like a filesystem, with every fact traced to source.",
+    "Hyperspell is your Company Brain. A living, permissioned model of how your organization works. \n\nHyperspell connects all your tools, and continuously synthesizes documents and conversations into a real-time context graph that any agent can query as a filesystem, with every fact traced to source."
+   ]
+  },
+  {
+   "key": "tasklet.ai",
+   "company": "Tasklet",
+   "software_evidence": "The product is deliberately simple: a chat interface",
+   "ai_evidence": "Tasklet is the AI agent that actually does the work",
+   "evidence_ref": null,
+   "domain": "tasklet.ai",
+   "texts": [
+    "AI chatbots can answer questions, but they can't do your work — they aren't connected to your tools, can't take actions, and stop running when you close the tab. Meanwhile, knowledge workers are still spending most of their day switching between dozens of SaaS apps, manually stitching together workflows that should be automated.\r\n\r\nTasklet is the AI agent that actually does the work. It connects to every tool you use — via thousands of built-in integrations, any HTTP API, or MCP servers — and takes real actions on your behalf: pulling reports, updating CRMs, triaging emails, processing data, and more. When it needs a UI, it generates one on the fly. When it needs to crunch numbers or do bulk operations, it writes and runs code in a cloud sandbox. When it needs to interact with a website that doesn't have an API, it uses a real browser. And because it runs in the cloud 24/7, you can set up triggers to have it take ongoing responsibility for workflows — not just do something once, but handle it going forward.\r\n\r\nThe product is deliberately simple: a chat interface where you talk to an extremely capable agent. But underneath that simplicity is a cloud-native agent runtime, best-in-cla…[truncated]"
+   ]
+  },
+  {
+   "key": "withnixo.com",
+   "company": "Nixo",
+   "software_evidence": "Nixo automatically captures the full history and live health of every account",
+   "ai_evidence": "Our agents use that context to find, scope, and prioritize work",
+   "evidence_ref": null,
+   "domain": "withnixo.com",
+   "texts": [
+    "Scale deployed revenue with the only data layer and agent platform built for how FDEs actually work.\r\n\r\nYour deployment capacity boils down to how many accounts your team can stay on top of. We figured out how you can create more of it with the FDE motion you already have.\r\n\r\nNixo is built on what the best FDE teams already know: when everyone has a clear view of what was promised, where every account stands, what needs attention next, and what can be reused from past work, the whole team can carry more deployments with ease. Nixo automatically captures the full history and live health of every account from pre-sales through post-go-live, no matter who worked on it last or where the information lives. Our agents use that context to find, scope, and prioritize work across the portfolio, so anyone can move any account forward.\r\n\r\nJoin the hundreds of FDE teams scaling deployment capacity with Nixo and finally unlock SaaS-level margins from your services."
+   ]
+  },
+  {
+   "key": "gojiberry.ai",
+   "company": "Gojiberry AI",
+   "software_evidence": "Gojiberry turns it into one AI team that finds buyers and books meetings",
+   "ai_evidence": "Gojiberry is building the AI GTM team for B2B companies",
+   "evidence_ref": null,
+   "domain": "gojiberry.ai",
+   "texts": [
+    "Gojiberry is building the AI GTM team for B2B companies.\r\n\r\nWe start with outbound: Gojiberry finds buyers showing intent, enriches them, reaches out, follows up, handles replies, and books qualified meetings.\r\n\r\nCompanies use Gojiberry to replace the old way of doing outbound: buying tools, hiring SDRs & agencies, testing lists, writing messages, and guessing what works. Gojiberry turns it into one AI team that finds buyers and books meetings.\r\n\r\nEvery campaign makes Gojiberry smarter. It learns which buyers convert, which signals matter, which messages get replies, and which actions create revenue. Over time, Gojiberry uses what works across similar companies and industries to help every new customer get better results from day one.\r\n\r\nLong term, Gojiberry will become the system that finds every revenue opportunity and acts on it: outbound leads, website visitors, inbound leads, old CRM leads, replies, meetings, CRM updates, new campaign ideas, and account expansion.\r\n\r\nThe goal is to make every B2B company able to run a high-performing GTM team without hiring one.\r\n\r\nWe grew from $0 to $2.5M ARR in 10 months, are growing 30% MoM, profitable, and used by 2,000+ customers.\r\n\r\nCust…[truncated]"
+   ]
+  },
+  {
+   "key": "uplane.com",
+   "company": "Uplane",
+   "software_evidence": "Uplane runs your entire marketing on one AI system",
+   "ai_evidence": "Uplane replaces marketing agencies with AI",
+   "evidence_ref": null,
+   "domain": "uplane.com",
+   "texts": [
+    "Uplane replaces marketing agencies with AI. We generate hundreds of ads with matching landing pages and steer the ad spend across channels like Meta, Google, LinkedIn and others. By connecting to CRM and ERP data, Uplane learns what drives profits and continuously improves campaigns.\r\n\r\nCompanies waste billions on bad ads, mismatched landing pages, and poor budget allocation. Uplane fixes this by replacing a patchwork of agencies, spreadsheets, and siloed tools with one self-improving system. The result: Higher ROAS for enterprises and effortless, expert-level marketing for SMBs.",
+    "Uplane runs your entire marketing on one AI system for market research, creative, campaigns and analytics."
+   ]
+  },
+  {
+   "key": "10xscience.com",
+   "company": "10x Science",
+   "software_evidence": "Our AI-native platform automates it",
+   "ai_evidence": "10x Science develops frontier AI models",
+   "evidence_ref": null,
+   "domain": "10xscience.com",
+   "texts": [
+    "10x Science develops frontier AI models with deep memory to redefine how scientists understand and engineer biology across the life sciences, starting with drug development.\r\n\r\nAI-powered drug discovery is flooding the pipeline with new candidates faster than ever. But before any of them can advance to the clinic, scientists must deeply characterize the protein therapeutic to understand whether it will work. Today, that process takes months of manual, error-prone analysis that cannot keep pace with discovery. Our AI-native platform automates it, giving drug developers the confidence to advance the right candidates and stop the wrong ones early.\r\n\r\nWe have strong commercial traction with enterprise pharma customers. Our founding team built the field of next-generation protein characterization out of Carolyn Bertozzi's Nobel laureate lab at Stanford. Collectively, we have 18+ years of collective domain expertise, 47+ scientific publications, and a 2x YC Founder. We move at the highest velocity and are positioned to lead the next generation of modern AI development in the life sciences.",
+    "10x Science develops frontier AI models with deep memory to redefine how scientists understand and engineer biology across the life sciences, starting with drug development.  \n\nAI-powered drug discovery is flooding the pipeline with new candidates faster than ever. But before any of them can advance to the clinic, scientists must deeply characterize the protein therapeutic to understand whether it will work. Today, that process takes months of manual, error-prone analysis that cannot keep pace with discovery. Our AI-native platform automates it and serves as the unlock for this bottleneck, giving drug developers the confidence to advance the right candidates and stop the wrong ones early.  \n\nBy applying modern AI to the development stage, specifically to protein characterization and quality assessment, we provide an end-to-end solution to dramatically speed up and scale up the preparation of candidates for the clinic. \n\nOur team is composed of Stanford University researchers from a Nobel Laureate's lab with 18+ years of collective domain expertise, 47+ scientific publications, and a 2x YC Founder. We move at the highest velocity and are positioned to lead the next generation of mod…[truncated]"
+   ]
+  },
+  {
+   "key": "contrario.ai",
+   "company": "Contrario",
+   "software_evidence": "Contrario is a network of expert recruiters supercharged by vertical AI agents purpose-built for hiring",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "contrario.ai",
+   "texts": [
+    "Contrario is an AI recruiting and hiring platform on a mission to help companies build generational teams.\r\n\r\nIn the age of AI, the best teams are still built by the best people. Recruiting has become a zero-sum game where speed and quality decide who wins.\r\n\r\nContrario is a network of expert recruiters supercharged by vertical AI agents purpose-built for hiring. Teams at Wispr Flow, Listen Labs, Slash, and 200+ of the fastest-growing companies use Contrario to power their hiring.\r\n\r\nIn under six months, Contrario has crossed $6M in annualized revenue, paid out $1M+ to recruiters, and placed 150+ candidates — making it one of the fastest-growing AI recruiting platforms on the market.\r\n\r\nBacked by Y Combinator, Nexus Venture Partners, Goodwater Capital, and Inventum Ventures, alongside angels including David Chen (ex-HRT), Abhijeet Dwivedi (OpenAI), Hank Couture (DoorDash), and Jerry Cain (Stanford CS). Built by Stanford dropouts. Headquartered in San Francisco."
+   ]
+  },
+  {
+   "key": "usebraintrust.com",
+   "company": "Braintrust",
+   "software_evidence": null,
+   "ai_evidence": "the world's first and only end-to-end AI recruiting platform",
+   "evidence_ref": null,
+   "domain": "usebraintrust.com",
+   "texts": [
+    "Braintrust is revolutionizing hiring with Braintrust AIR, the world's first and only end-to-end AI recruiting platform. Trained with human insights and proprietary data, Braintrust AIR reduces time to hire from months to days, instantly matching you with pre-vetted qualified candidates, and conducting the first round phone screen for you. Trusted by hundreds of Fortune 1000 enterprises including Nestlé, Porsche, Atlassian, Goldman Sachs, and Nike, Braintrust AIR is making talent acquisition professionals 100x more effective and saving companies hundreds of thousands of dollars in recruiting costs."
+   ]
+  },
+  {
+   "key": "bigr.io",
+   "company": "BigRio",
+   "software_evidence": "BigRio is a technology consulting firm",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "bigr.io",
+   "texts": [
+    "BigRio is a technology consulting firm empowering data to drive innovation and advanced analytics. We specialize in cutting-edge Big Data, Machine Learning, and Custom Software strategy, analysis, architecture, and implementation solutions. We are an elite group with MIT roots, shining when tasked with complex missions. Whether it’s assembling mounds of data from a variety of sources, surfacing intelligence with Deep Learning, or building high-volume, highly-available systems, we consistently deliver.\n \nWith extensive domain knowledge, BigRio’s scientists and engineers design and build best-in-class solutions across a variety of verticals. This diverse industry exposure and our constant run-in with cutting-edge technology equips us with invaluable tools, strategies, and techniques. Our knowledge and horsepower bring innovative, cost-conscious, and extensible results to complex business challenges."
+   ]
+  },
+  {
+   "key": "lab0.ai",
+   "company": "Lab0",
+   "software_evidence": null,
+   "ai_evidence": "Lab0 builds agentic systems",
+   "evidence_ref": null,
+   "domain": "lab0.ai",
+   "texts": [
+    "Enterprise software implementation is broken,  and it has been for decades. \r\nEvery rollout, whether it's a traditional ERP or a new AI system, requires months of manual integration, configuration, and tuning done by armies of system integrators and forward-deployed engineers. \r\nLab0 builds agentic systems that automate this layer, compressing months-long implementations into weeks."
+   ]
+  },
+  {
+   "key": "lemonlime.com",
+   "company": "LemonLime",
+   "software_evidence": null,
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "lemonlime.com",
+   "texts": [
+    "LemonLime runs fully automated sales and marketing for small businesses.\r\n\r\nEvery morning, LemonLime finds you new leads and drafts personalized outreach, prepares branded content, and identifies untapped sales & marketing opportunities.\r\n\r\nAll you have to do is click send."
+   ]
+  },
+  {
+   "key": "every.io",
+   "company": "Every",
+   "software_evidence": null,
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "every.io",
+   "texts": [
+    "Setup your entire back-office in one place.\r\n- Banking: Bank Accounts, Corporate Cards, Payments, Treasury\r\n- Bookkeeping & Tax: Keep you books in order and file income taxes at the end of the year\r\n- Payroll and Benefits: US Payroll in 50 states, US Contractors, International Contractors. Health, Vision, Dental, 401k Benefits",
+    "Every is the operating system for your back office, combining incorporation, banking, payroll, accounting, HR, taxes, and compliance—all in one place.\n\nWhether you're launching your first company or scaling after raising funds, Every provides you with the tools and expert support to manage financial operations, remain compliant, and run your business with ease.\n\nNo more juggling multiple vendors—Every streamlines everything, allowing you to focus on building and growing.\n\nWould you like to see how it works for your business? Request a personalized tour and discover how Every can support you at every stage. https://www.every.io/why-every"
+   ]
+  },
+  {
+   "key": "shipbob.com",
+   "company": "ShipBob",
+   "software_evidence": null,
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "shipbob.com",
+   "texts": [
+    "ShipBob is a leading global fulfillment and supply chain platform designed for SMB and Mid-Market ecommerce brands. ShipBob provides brands a single view of their business and customers across sales channels to manage products, inventory, orders, and shipments, leveraging real-time analytics and reporting, dedicated support, and access to hundreds of technology and retail partners. ShipBob enables brands to improve the operations in their own facilities with ShipBob WMS (ShipBob's proprietary warehouse management system), and/or outsource fulfillment to have their orders picked, packed, and shipped from any of ShipBob’s 50+ fulfillment centers across the United States, Canada, Europe, and Australia. Founded in 2014, ShipBob launched through Y Combinator by co-founders Dhruv Saxena and Divey Gulati, two ecommerce entrepreneurs who saw a need for more efficient SMB supply chain services. Learn more by visiting shipbob.com.",
+    "Founded in 2014, ShipBob offers best-in-class supply chain and fulfillment capabilities for thousands of brands. ShipBob has an international fulfillment network across the US, Canada, UK, EU, and Australia. ShipBob's proprietary technology combines order and inventory management, warehouse management, predictive data and analytics, as well as optimized shipping for ecommerce companies."
+   ]
+  },
+  {
+   "key": "bymason.com",
+   "company": "Mason",
+   "software_evidence": null,
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "bymason.com",
+   "texts": [
+    "Mason is the fastest way to take smart devices from idea to end user. Whether building a single-use device from scratch or scaling a line of smart products, with Mason it’s 20x faster and 10x less costly to build, deploy and scale. Digital transformation is a modern requirement but operating a hardware-dependent initiative is hard – thousands of hours and millions of dollars are at stake.\r\n\r\nThe Mason Smart Device Platform is the only fully managed infrastructure for developing and delivering dedicated devices. It offers flexible usage-based pricing for fleets of devices and manages the underlying complexity of all associated backend services, making software delivery on a smart product line—whether it’s a tablet, wearable or new form factor—as simple as delivering software in the cloud. This frees innovators to focus on what matters: application development, feature specification and UX. Granular access to add, remove or lock down capabilities makes it possible for highly customized products to be built as envisioned.\r\n\r\nMason offloads hardware investment risks and logistics, including inventory procurement, warehousing and supply chain management. With options like zero-touch pro…[truncated]",
+    "Helping enterprises collect mission-critical data with solutions for clinical trials (patient diary and clinician tablet), medical device companies (data gateway), retail security, and more."
+   ]
+  },
+  {
+   "key": "getauctor.com",
+   "company": "Auctor",
+   "software_evidence": null,
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "getauctor.com",
+   "texts": [
+    "Auctor brings alignment and intelligence to software implementation, enabling every project to deliver its intended value with clarity and precision."
+   ]
+  },
+  {
+   "key": "how-to-ai.guide",
+   "company": "How to AI",
+   "software_evidence": null,
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "how-to-ai.guide",
+   "texts": [
+    "Subscribe for free at https://how-to-ai.guide"
+   ]
+  },
+  {
+   "key": "gemnote.com",
+   "company": "Gemnote",
+   "software_evidence": "Gemnote creates custom merch, swag and gifts for the modern business",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "gemnote.com",
+   "texts": [
+    "Gemnote creates custom merch, swag and gifts for the modern business. Our expert team helps you curate, source, warehouse, fulfill and ship your branded merchandise and company swag, so you don't have to lift a finger. Our clients love our full-service platform and they are some of the biggest companies in the world, including Airbnb, Google, Meta, Slack, Netflix and more.",
+    "Gemnote creates custom merch, packaging, swag and gifts for the modern business. \n\nOur expert team helps you curate, source, warehouse, fulfill and ship your branded merchandise and company swag, so you don't have to lift a finger. Whether you're looking for wow-worthy direct mail kits, delightful new hire swag, affordable event giveaways or merchandise for your growing business, we want your brand to stand out.\n\nWith our proprietary technology, you can easily place/track orders, view real-time inventory, request restocks, create redemption pages for campaigns and more. Use our Salesforce integration for tracking gifts sent to customers and our Shopify integration for fulfillment with your own custom-built storefront. \n\nAs featured in Business Insider, Inc Magazine, Refinery29 and TechCrunch."
+   ]
+  },
+  {
+   "key": "mashgin.com",
+   "company": "Mashgin",
+   "software_evidence": "We’ve built a self-checkout kiosk",
+   "ai_evidence": "uses computer vision to scan multiple items without barcodes",
+   "evidence_ref": null,
+   "domain": "mashgin.com",
+   "texts": [
+    "Mashgin creates better retail experiences through visual automation. \r\n\r\nWe’ve built a self-checkout kiosk that uses computer vision to scan multiple items without barcodes, reducing checkout time by 10x. We’re completely recreating the checkout experience in an industry that’s had little innovation in decades.\r\n\r\nOur clients see dramatic reductions in lines and revenue increases of as much as 400% as a result."
+   ]
+  },
+  {
+   "key": "manicule.com",
+   "company": "Manicule",
+   "software_evidence": "We own developer documentation and technical content across social channels, end-to-end",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "manicule.com",
+   "texts": [
+    "Manicule does AgentRel. We get companies discovered and used by AI agents. Think DevRel, rebuilt for a world where agents make all the decisions. We own developer documentation and technical content across social channels, end-to-end. We've grown 100% MoM over the last three months to $53K in monthly revenue, with customers like Supermemory, Greptile, Reducto, and Mastra.\r\n  \r\nGetting discovered and used by agents is its own job now, and the market for it is broken. The SEO/GEO SaaS tools just show you data like where you rank in AI answers. The agencies are slow and lack know-how with agents. The one person who could own all of it end-to-end, a DevRel, is nearly impossible to hire: our customers have had roles open for months at $300K+ and still can't find anyone good. \r\n\r\nWe solve all these gaps. Naman has been doing fractional DevRel since he was 13, working with companies like PromptLayer, Brightdata, and Courier.com. Shreyans has been building since 14 — he built an AI app that hit App Store Productivity Trending within a month, and\r\nwas the founding engineer at Supermemory. We met in high school and have built multiple startups together since."
+   ]
+  },
+  {
+   "key": "blog.bytebytego.com",
+   "company": "ByteByteGo",
+   "software_evidence": "A popular weekly newsletter",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "blog.bytebytego.com",
+   "texts": [
+    "A popular weekly newsletter covering topics and trends in large-scale system design, from the authors of the best-selling System Design Interview series."
+   ]
+  },
+  {
+   "key": "psychologytoday.com",
+   "company": "Psychology Today",
+   "software_evidence": "Our magazine, first launched in 1967, continues to thrive",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "psychologytoday.com",
+   "texts": [
+    "Psychology Today is devoted exclusively to everybody's favorite subject: ourselves.\n\nAt PsychologyToday.com, we have gathered renowned academics, psychiatrists, psychologists and authors in our field to contribute their thoughts and ideas on what makes us tick—there are over 900 of them—creating a truly live stream of what's going on in \"psychology today.\"​\n\nOur magazine, first launched in 1967, continues to thrive.\n\nPsychology Today's Therapy Directory (powered by Sussex Directories, Inc) provides a comprehensive directory of therapists, psychiatrists and treatment facilities near you."
+   ]
+  },
+  {
+   "key": "deadline.com",
+   "company": "Deadline Hollywood",
+   "software_evidence": "the premier news source covering the business of entertainment",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "deadline.com",
+   "texts": [
+    "Deadline.com is the premier news source covering the business of entertainment, including movies, television, online, digital and related areas. Deadline was founded by veteran journalist Nikki Finke in 2006. Since then, the site has grown to feature a number of additional prominent and experienced entertainment editors from around the world."
+   ]
+  },
+  {
+   "key": "recode.net",
+   "company": "Recode",
+   "software_evidence": "Recode is a tech news, reviews and analysis site",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "recode.net",
+   "texts": [
+    "Recode is a tech news, reviews and analysis site, from the most informed and respected journalists in technology and media. Because everything in tech and media is constantly being rethought, refreshed, and renewed, Recode’s aim is to reimagine tech journalism.  Recode is the producer and host of the Code Conference events founded in 2014. \r\n\r\nRecode is part of the Vox Media family and joined by The Verge, Vox.com, SB Nation, Polygon, Eater, Racked, Curbed. Vox Media is redefining the modern media company by empowering the smartest creative voices with the technology to create and distribute premium content, and that connects with an audience of 165 million."
+   ]
+  },
+  {
+   "key": "design-milk.com",
+   "company": "Design Milk",
+   "software_evidence": "exceptional, award-winning content",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "design-milk.com",
+   "texts": [
+    "Design Milk is a leader in the modern design, digital media, interior and architectural trade, and consumer industries. We support the world’s best independent brands, emerging designers, destinations, design events, and products through exceptional, award-winning content across the worlds of art, architecture, interior design, furniture, fashion, and technology."
+   ]
+  },
+  {
+   "key": "deeplearning.ai",
+   "company": "DeepLearning.AI",
+   "software_evidence": "making a world-class AI education accessible",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "deeplearning.ai",
+   "texts": [
+    "DeepLearning.AI is making a world-class AI education accessible to people around the globe. DeepLearning.AI was founded by Andrew Ng, a global leader in AI."
+   ]
+  },
+  {
+   "key": "wallstreetoasis.com",
+   "company": "Wall Street Oasis",
+   "software_evidence": "the largest online community and career platform",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "wallstreetoasis.com",
+   "texts": [
+    "🧠 What Is Wall Street Oasis (WSO)?\n\nWall Street Oasis (WSO) is the largest online community and career platform for students and professionals pursuing careers in finance, consulting, and related industries. Founded by Patrick Curtis, a former investment banker, WSO combines expert education, mentorship, and a massive peer-driven ecosystem to help people break into elite finance roles—from investment banking and private equity to hedge funds, venture capital, and management consulting.\n\n🌐 The Community\n\nAt its core, WSO began as a forum—a place where finance professionals and aspiring candidates could share insights, discuss recruiting tips, and demystify the industry. Over time, it’s grown into a global community of over 900,000 members, including analysts, associates, VPs, partners, and students from top universities worldwide.\n\nThe forums cover topics such as:\nInterview and recruiting experiences\nResume and networking advice\nCompensation data and bonus reports\nMBA and graduate program discussions\nLateral transitions and career changes\n\n🚀 WSO Academy\n\nWSO Academy is the platform’s flagship educational program—a structured, high-touch accelerator designed to help students and career changers land top finance offers within months, not years.\n\nIt combines:\nLive office hours with senior mentors and finance professionals\nBootcamps covering financial modeling, valuation, and technical interview prep\nAccess to 2,000+ mentors across investment banking, private equity, and hedge funds\nNetworking and application strategy guidance\nFull tuition refund guarantee if students don’t land a lucrative offer within a set timeframe\n\nThe program is tailored to four key groups:\n🎓 Target school students\n🏫 Non-target students\n🔁 Career changers\n🌍 International candidates"
+   ]
+  },
+  {
+   "key": "inman.com",
+   "company": "Inman",
+   "software_evidence": "Inman is the leading source of news, events, insights, and community",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "inman.com",
+   "texts": [
+    "The smartest real estate professionals start their day with Inman.\n\nInman is the leading source of news, events, insights, and community for the residential real estate industry. Trusted by real estate agents, brokers, executives, and decision-makers across the housing landscape, Inman delivers independent journalism covering market trends, technology, business strategy, economic forces, and the people shaping the future of real estate.\n\nBuilt on a foundation of journalistic integrity and powered by a modern media platform, Inman has helped real estate professionals navigate an ever-changing industry for decades. Guided by the belief that independent reporting can thrive alongside live events, industry sponsorships, digital media, and a robust professional community, Inman has earned its reputation as one of the most trusted media brands in the country.\n\nNEWS\nInman Select is the premium subscription platform, providing exclusive access to industry-leading journalism, sharp analysis, special reports, market insights, and expert commentary. Subscribers gain the information and perspective needed to understand market shifts, identify emerging trends, and make informed business decisions.\n\nEVENTS\nInman Connect is where real estate's brightest minds gather to learn, network, and grow in person. Keynotes, panels, workshops, and curated networking opportunities put attendees in the room with the leaders defining the industry while delivering practical knowledge attendees can apply to their businesses. For thousands, Inman Connect serves as a much needed change of scenery and space to learn, grow, and connect.\n\nCOMMUNITY\nInman Community is an online platform available to Inman event attendees and members, empowering them to connect, network, share knowledge, and have niche conversations with their peers before, during, and after events. \n\nTo learn more about Inman Select, attend Inman Connect, submit a story, or explore sponsorship opportunities, visit Inman.com."
+   ]
+  },
+  {
+   "key": "v2-fixture:comfyui",
+   "company": "ComfyUI",
+   "software_evidence": "Comfy Cloud runs your ComfyUI workflows on cloud GPUs, with nothing to install.",
+   "ai_evidence": null,
+   "evidence_ref": "v2-production-fixture:comfyui",
+   "domain": null,
+   "texts": []
+  },
+  {
+   "key": "li:maticrobots",
+   "company": "Matic Robots",
+   "software_evidence": "a remarkably smart, proactive, and secure floor-cleaning robot",
+   "ai_evidence": "home robots using AI and computer vision",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Matic is reimagining the next generation of fully autonomous, helpful, and elegant home robots using AI and computer vision. Level-5 autonomy in your home.\n\nOur flagship product, Matic, is a remarkably smart, proactive, and secure floor-cleaning robot that uses photo-realistic vision with precise 3D mapping to provide a home with perpetually clean floors."
+   ]
+  },
+  {
+   "key": "li:lovable-dev",
+   "company": "Lovable",
+   "software_evidence": "a platform that lets you build apps and websites by chatting with AI",
+   "ai_evidence": "by chatting with AI",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Lovable is a platform that lets you build apps and websites by chatting with AI.\n\nWe are a small European team of serial founders, product engineers, physicists, competitive programmers and people who just care about building a great product quickly.\n\nWe're on a mission to build the last piece of software that the world will ever need."
+   ]
+  },
+  {
+   "key": "li:github",
+   "company": "GitHub",
+   "software_evidence": "the complete AI-powered developer platform to build, scale, and deliver secure software",
+   "ai_evidence": "AI-powered developer platform",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "As the global home for all developers, GitHub is the complete AI-powered developer platform to build, scale, and deliver secure software. Over 100 million people, including developers from 90 of the Fortune 100 companies, use GitHub to build amazing things together across 330+ million repositories. With all the collaborative features of GitHub, it has never been easier for individuals and teams to write faster, better code."
+   ]
+  },
+  {
+   "key": "li:getstructured-ai",
+   "company": "Structured AI",
+   "software_evidence": null,
+   "ai_evidence": "Our AI agents learn your firm's standards",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Structured AI is the most advanced AI-powered QA/QC platform for drawing packages, working across both PDF drawings and native Revit models. Architects and engineers use our platform to make every drawing set leave the office with certainty. \n\nOur AI agents learn your firm's standards, apply the relevant codes, and read every page of a set, then return a clear list of what's wrong, where it sits, and how to fix it. Run compliance reviews across thousands of pages in minutes, chat with your drawings for sourced answers, build custom checks in plain English, compare versions, overlay disciplines, and close out comments - all within a single platform, with a full audit trail on every finding.\n\nFor decades, the last line of defense on a drawing set has been a red pen at the end of a deadline week. But buildings have outgrown the red pen. A modern set runs thousands of drawings, and the errors hiding between them threaten quality and safety, not just cost. What manual review misses resurfaces as RFIs, change orders, and field rework, paid for in time, margin, and reputation.\n\nStructured AI catches those errors before they leave the office, capturing the judgment of your best reviewer on…[truncated]"
+   ]
+  },
+  {
+   "key": "fuseaiworkforce.com",
+   "company": "Fuse AI Workforce",
+   "software_evidence": "Our platform includes AI-powered voice and text assistants",
+   "ai_evidence": "24/7 AI receptionists",
+   "evidence_ref": null,
+   "domain": "fuseaiworkforce.com",
+   "texts": [
+    "Fuse AI Workforce is an enterprise AI automation platform that transforms how organizations communicate, operate, and grow. Designed to integrate seamlessly with your existing software and workflows, our platform combines conversational AI, intelligent automation, CRM technology, and advanced analytics into one powerful ecosystem—helping businesses eliminate repetitive tasks, reduce labor costs, increase efficiency, and create exceptional customer experiences.\n\nUnlike traditional AI solutions that require expensive custom development, Fuse AI Workforce is a fully customizable platform that easily adapts to the way your organization already operates. As your business evolves, your AI workforce evolves with it, allowing you to quickly configure new automations, workflows, and business processes without rebuilding your technology stack.\n\nOur platform includes AI-powered voice and text assistants, 24/7 AI receptionists, employee recruiting and onboarding automation, customer relationship management (CRM), workflow automation, scheduling, reporting, business intelligence dashboards, and intelligent communication tools that ensure every customer, patient, or employee receives immediate, …[truncated]"
+   ]
+  },
+  {
+   "key": "li:effective-ai-labs",
+   "company": "Effective AI",
+   "software_evidence": null,
+   "ai_evidence": "long-context reasoning, formal verification, multi-agent coordination",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Effective AI is the agent platform for the teams that price risk, enter markets, and grow the book. We bring code-first autonomy to a $6 trillion industry still running on PDFs and spreadsheets. Getting there required us to solve some of the hardest problems in applied AI — long-context reasoning, formal verification, multi-agent coordination — because insurance won't tolerate anything less. \n\nBuilt by insurance operators. Backed by Lightspeed and Valor."
+   ]
+  },
+  {
+   "key": "li:workday",
+   "company": "Workday",
+   "software_evidence": null,
+   "ai_evidence": "puts AI agents to work for you and your people",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "By unifying HR and Finance on an open, trusted platform powered by AI, Workday delivers high-impact outcomes our customers can count on. At the heart of our platform is Sana from Workday—the superintelligence that puts AI agents to work for you and your people. Welcome to a new work day."
+   ]
+  },
+  {
+   "key": "li:salesforce",
+   "company": "Salesforce",
+   "software_evidence": "Customer 360 apps on one platform",
+   "ai_evidence": "We're the #1 AI CRM",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "We're the #1 AI CRM—where humans with agents drive customer success together with AI, data, and Customer 360 apps on one platform.\n\nPrivacy Statement: http://www.salesforce.com/company/privacy/"
+   ]
+  },
+  {
+   "key": "li:emergentlabs",
+   "company": "Emergent",
+   "software_evidence": "an AI app builder that turns your ideas into monetizable software",
+   "ai_evidence": "We build autonomous coding agents",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Emergent is an AI app builder that turns your ideas into monetizable software.\n\nWe build autonomous coding agents that replace traditional software development by generating, testing, and deploying production applications directly from plain-language intent. Our systems run in production at global scale and are used to build millions of real applications.\n\nSince our public launch, Emergent has reached $100M ARR in 8 months making us the fastest-growing startup in the world. 6M+ users across 190+ countries have built 6M+ applications on Emergent. We've raised $100M from Khosla Ventures, SoftBank, Google, Lightspeed India, Prosus Ventures, Together Fund, and Y Combinator.\n\nWe're solving the hard part of AI-driven software creation: correctness, reliability, security, and scale in real production systems. The team is built by repeat founders, Olympiad medalists, IIT & IIM alumni, and leaders from Google, Amazon, and Dropbox. \n\nWe're hiring builders who want ownership, speed, and impact at global scale."
+   ]
+  },
+  {
+   "key": "li:barracuda-networks",
+   "company": "Barracuda",
+   "software_evidence": "Our AI-powered BarracudaONE platform secures email, data, applications and networks",
+   "ai_evidence": "AI-powered BarracudaONE platform",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Barracuda is a leading global cybersecurity company providing complete protection against complex threats for all size business. Our AI-powered BarracudaONE platform secures email, data, applications and networks with innovative solutions, managed XDR and a centralized dashboard to maximize protection and strengthen cyber resilience. Trusted by hundreds of thousands of IT professionals and managed service providers worldwide, Barracuda delivers powerful defenses that are easy to buy, deploy and use."
+   ]
+  },
+  {
+   "key": "li:mlpalresearch",
+   "company": "mlpal",
+   "software_evidence": null,
+   "ai_evidence": "helps enterprises build, deploy, and scale AI systems",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "MLpal helps enterprises build, deploy, and scale AI systems safely and reliably.\n\nOur platform brings together agents, memory, model building, secure data access, and inference optimization into one foundation for production AI.\n\nThe more it is used, the more it understands your business—turning everyday interactions into lasting intelligence.\n\nWe build AI that adapts to people, teams, and organizations."
+   ]
+  },
+  {
+   "key": "li:ruleyai",
+   "company": "Ruley, the E-Referee",
+   "software_evidence": "Our API delivers accurate, real-time answers to complex rules questions",
+   "ai_evidence": "AI-powered sports rules engine",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Ruley is the AI-powered sports rules engine built for the integration into platforms fans, spectators and players already use. Our API delivers accurate, real-time answers to complex rules questions across major sports as well as niche sports, enhancing fan engagement, powering smarter broadcasts, enlightening new players, and elevating a variety of sports apps. \nRuley is the rules intelligence layer of the tech stack the industry has until now been missing.\n\nTraditional sports like tennis, golf, soccer, American football, attract fans and players globally. For long term financial success all sports much grow, but new niche forms of these sports have emerged.  How do they grow?\n\nBeyond the financial aspects, for individuals, sports teach strategy, perseverance, discipline and other important life lessons.  Sportsmanship and proper etiquette have a huge role in how sports are played and building character in youth sports.  \n\nThis is what Ruley's API ecosystem provides.  Sport fans, spectators, player education and growth. \n\nA chance for federations and consumer brands to promote loyalty, new growth, and show they care about the social benefits of sportsmanship.\n\nTry out our propriet…[truncated]"
+   ]
+  },
+  {
+   "key": "li:datatruck",
+   "company": "Datatruck",
+   "software_evidence": "Datatruck is an all-in-one Transportation Management System (TMS)",
+   "ai_evidence": "Our AI-powered platform helps carriers and brokers streamline workflows",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Datatruck is an all-in-one Transportation Management System (TMS) built to automate back-office operations for trucking companies and freight brokers. Our AI-powered platform helps carriers and brokers streamline workflows, eliminate manual tasks, and make faster, data-driven decisions.\n\nFrom dispatching and document management to real-time financial tracking and advanced reporting, Datatruck centralizes everything your team needs to cut costs and boost productivity.\n\nEmpower your team with smarter tools. Drive profitability with automation. Manage your entire operation—from load to invoice—in one place.\n\nBuilt for Carriers | Trusted by Brokers | Powered by AI\n\nExplore how Datatruck can transform your logistics operation:\nhttps://www.datatruck.io/demo"
+   ]
+  },
+  {
+   "key": "kestra.io",
+   "company": "Kestra",
+   "software_evidence": "Kestra is the open-source orchestration platform",
+   "ai_evidence": "govern all your workflows - data, AI, infrastructure, and business",
+   "evidence_ref": null,
+   "domain": "kestra.io",
+   "texts": [
+    "Unify orchestration for all engineers. Build, run and govern all your workflows - data, AI, infrastructure, and business - Everything-as-Code, from the UI and with AI.\n\nKestra is the open-source orchestration platform built to help teams ship faster without losing control, making both scheduled and event-driven automation easy across your entire stack.\n\nOften described as the fastest-growing open-source orchestration platform, Kestra has seen 10x growth year-over-year in adoption and workflow volume.\n\nEverything-as-Code, from the UI: design workflows in the UI (including no-code forms) or in declarative YAML, both stay in sync so automation remains reviewable, auditable, and scalable.\n\nAI-native execution:\n• Production AI Copilot generates and refines flows from natural language prompts—while keeping YAML clean and reviewable.\n• Agentic orchestration with context: AI Agents combine an LLM with memory (context carried across steps/runs) and tools, so workflows can dynamically choose actions, loop until completion, and adapt to new information.\n\nBuilt for production teams: extensible integrations, strong execution primitives, and governance—plus automation via API and Terraform for C…[truncated]"
+   ]
+  },
+  {
+   "key": "li:tempusai",
+   "company": "Tempus AI",
+   "software_evidence": null,
+   "ai_evidence": "the practical application of artificial intelligence in healthcare",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Tempus is a technology company advancing precision medicine through the practical application of artificial intelligence in healthcare. With one of the world’s largest libraries of multimodal data, and an operating system to make that data accessible and useful, Tempus provides AI-enabled precision medicine solutions to physicians to deliver personalized patient care and in parallel facilitates discovery, development and delivery of optimal therapeutics. The goal is for each patient to benefit from the treatment of others who came before by providing physicians with tools that learn as the company gathers more data. \n\n\nFor more information, visit tempus.com."
+   ]
+  },
+  {
+   "key": "li:upstart-network",
+   "company": "Upstart",
+   "software_evidence": "the leading AI lending marketplace",
+   "ai_evidence": "leverage Upstart’s AI models",
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Upstart (NASDAQ: UPST) is the leading AI lending marketplace, connecting millions of consumers to more than 100 banks and credit unions that leverage Upstart’s AI models and cloud applications to deliver superior credit products. With Upstart AI, lenders can approve more borrowers at lower rates while delivering the exceptional digital-first experience customers demand. More than 90% of loans are fully automated, with no human intervention by Upstart. Founded in 2012, Upstart’s platform includes personal loans, automotive retail and refinance loans, home equity lines of credit, and small-dollar “relief” loans. Upstart is based in San Mateo, California. \n\nUpstart Network, Inc. NMLS #936133 | All mortgage lending conducted by Upstart Mortgage, LLC. NMLS #2443873\n\nnmlsconsumeraccess.org"
+   ]
+  },
+  {
+   "key": "li:dive-turbine",
+   "company": "DIVE-Turbine",
+   "software_evidence": "The DIVE-Turbine is an innovative turbine concept for hydropower plants",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "DIVE-Turbine: \nCompact - Efficient - Reliable - Fishfriendly\n\nThe DIVE-Turbine is an innovative turbine concept for hydropower plants. The concept fulfills all requirements for a modern hydropower plant with an installed capacity of up to 4.5 MW per unit.\n\nThe DIVE-Turbine is an efficient, reliable and cost-effective turbine solution. Based on a permanent magnet synchronous generator an all-round conclusive concept was developed.\n\nA customized turbine design, in combination with the latest generation of power electronics guarantees high efficiency of the complete unit, from water to wire.\n\nAccording to the individual requirements of each site, the DIVE Turbinen GmbH & Co. KG provides individual solutions, including the design, manufacturing, delivery, installation, start up, after sales service."
+   ]
+  },
+  {
+   "key": "li:plantible",
+   "company": "Plantible",
+   "software_evidence": "develop the most functional and applicable plant-based protein",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Plantible Foods is a B2B food technology company with the goal to develop the most functional and applicable plant-based protein in the world using scalable and sustainable aqua-farming and extraction technologies"
+   ]
+  },
+  {
+   "key": "li:talents-boutique-recruiting-agency",
+   "company": "TALENTS BOUTIQUE - E-commerce Recruiting agency",
+   "software_evidence": "We are an E-commerce recruitment agency",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "We are an E-commerce recruitment agency specializing in hiring top remote talent from Europe, UK, LATAM, South Africa and North America.\nFor over 8 years, we’ve been helping Amazon, TikTok Shop, Walmart, and Shopify brands — as well as other fast-growing E-commerce businesses — build strong, reliable, and scalable teams.\n\nOur mission is to connect online brands with vetted, English-speaking E-commerce professionals who bring both expertise and cultural fit.\nFrom junior specialists to C-level executives, we help companies hire talent that drives growth.\n\nWe provide end-to-end recruitment services — from the first consultation and job description creation to sourcing, interviews, and onboarding support.\nOur process combines human insight with data-driven tools to ensure quality matches and long-term retention.\n\nWhy clients choose Talents Boutique:\n✅ 8+ years of proven E-commerce recruitment experience\n✅ 20,000+ vetted candidates in our database\n✅ Specialists from Europe, UK, LATAM, South Africa and North America \n✅ Money-back guarantee if the candidate doesn’t match\n✅ Active guarantee for 3–6 months after hiring\n\nWe recruit for all key E-commerce roles, including:\n🔹 Amazon PPC & Adve…[truncated]"
+   ]
+  },
+  {
+   "key": "li:torkildson-katz",
+   "company": "Torkildson Katz, A Law Corporation",
+   "software_evidence": "the law firm of Torkildson Katz",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "More than a decade before Hawaii became a state, the law firm of Torkildson Katz began providing comprehensive advice about a range of legal matters to people, businesses, closely-held companies and multi-national corporations. \n\nFounded in 1947, our law firm has steadily grown into an established firm with a well-earned reputation in Hawaii for employing meticulous, detail-oriented attorneys who know how to handle a diverse array of legal services. Our attorneys have been recognized as Best Lawyers in America® and “Lawyers of the Year” in Honolulu, and are routinely selected to the Hawaii Super Lawyers® list. The firm is Ranked as “Tier 1” by U.S. News in the practice areas of Employment Law – Management, Labor Law – Management, Tax Litigation, Labor & Employment Litigation.\n\nOur primary practice areas include labor and employment, business litigation, corporate, tax planning and controversy, and real estate for clients and corporations in Hawaii, the U.S. Mainland, Asia, the Pacific and beyond."
+   ]
+  },
+  {
+   "key": "li:nano-nord",
+   "company": "NanoNord A/S",
+   "software_evidence": "We specialize in the development of low-field NMR analysis systems",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "NanoNord A/S is a Danish, privately owned company with unique and strong bonds to the world of science and university research. We specialize in the development of low-field NMR analysis systems for an array of industries.\n\nFrom Bluetooth™ to Tveskaeg\n\nNanoNord was founded by owner and CEO Ole Jensen. Ole previously founded the company Digianswer, who were the first in the world to introduce the revolutionary Bluetooth™ technology. NanoNord first launched the product Catguard, which was the world’s first device using the NMR technology to measure catfines in heavy fuel oil. The latest product to be introduced is Tveskaeg, which like its predecessor uses the NMR technology. And, like Bluetooth, is named after a famed Danish king.\n\nNew standards in measuring\n\nAt the heart of NanoNord is the revolutionary Nuclear Magnetic Resonance (NMR) technology, which radically changes the game for water and fuel analysis. The self-calibrating NMR sensors require minimum maintenance and offer reliable and precise measuring that is yet unparalleled."
+   ]
+  },
+  {
+   "key": "li:rapid-dx",
+   "company": "RapidDx Inc.",
+   "software_evidence": "handheld diagnostic device",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "RapidDX developed a groundbreaking, patented, single-use, non-invasive handheld diagnostic device that identifies relevant biomarkers present in saliva. This enables the rapid detection of neurodegenerative diseases like Alzheimer's and Parkinson's, and traumatic brain injuries such as concussions."
+   ]
+  },
+  {
+   "key": "li:chomps",
+   "company": "Chomps",
+   "software_evidence": "Chomps is a best-for-you meat snack brand",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Chomps is a best-for-you meat snack brand with products made from high-quality proteins. Chomps meat snacks never contain added sugar, artificial preservatives or colors, MSG and are free from the top 9 allergens. \n\nOur mission is to power every win with real food that is accessible and convenient, that never compromises on taste. \n\nFind us online at Chomps.com, Amazon & Thrive Market.  With exciting new retail launches, you can now find us in the aisles of Target, Whole Foods, Sprouts, Kroger, Walmart, Trader Joe's, Safeway, Albertson's, Costco and other retailers across the country."
+   ]
+  },
+  {
+   "key": "li:gartner",
+   "company": "Gartner",
+   "software_evidence": "We deliver actionable, objective business and technology insights",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "We deliver actionable, objective business and technology insights. Our expert guidance and tools enable faster, smarter decisions and stronger performance on an organization’s mission-critical priorities.\n\nOur unrivaled combination of business and technology insights steers clients toward the right decisions on the issues that matter most. As a $6.5 billion company, with over 20,000 associates, and a member of the S&P 500, we are an objective partner with 13,000+ client enterprises in ~90 countries and territories — across every major function, geography, industry and market sector — and boast 45+ years of experience providing insights and expert guidance to client enterprises worldwide.\n\nTo learn more about how we guide the leaders who shape the world, visit gartner.com. \n\nGartner, Inc. (NYSE: IT) \n\nCommunity guidelines: https://gtnr.it/3tceMrU\n\nHot Topics Across the C-Suite LinkedIn Newsletter: https://gtnr.it/4c56S97"
+   ]
+  },
+  {
+   "key": "li:usbrick",
+   "company": "US Brick",
+   "software_evidence": "brick manufacturer",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Born Here. Built Here. Since 1939. | US Brick is a premier building materials supplier and brick manufacturer, catering to both residential and commercial construction projects. Visit us to explore our full range of premium building materials, supplies and accessories, or connect with one of our trusted distributors by visiting our website."
+   ]
+  },
+  {
+   "key": "li:cherrybekaert",
+   "company": "Cherry Bekaert",
+   "software_evidence": "a top-ranked U.S. CPA and advisory firm",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Cherry Bekaert is a top-ranked U.S. CPA and advisory firm specializing in tax, audit, assurance, digital consulting, and M&A advisory services for middle-market companies, government contractors, nonprofits, and private equity-backed businesses. We deliver digitally driven, industry-aligned solutions that help clients transform from mid-market players into market leaders in today’s competitive landscape.\n\nRanked among the largest accounting firms in the United States, our specialized services include business valuations, outsourced accounting, transaction advisory, and strategic tax planning. For over 75 years, Cherry Bekaert has been the trusted growth advisor to global corporations, startups, government entities, and successful individuals.\n\nWe foster a professional environment that is flexible, inclusive, and entrepreneurial—empowering our people to grow personally and professionally. Our mission is clear: *Making a Difference for our people, our clients, our community, and our profession.*\n\nCherry Bekaert serves key industries including:\n- Government Services\n- Healthcare & Life Sciences\n- Hospitality & Retail\n- Industrial Manufacturing\n- Not-for-Profits\n- Private Equity\n- Prof…[truncated]"
+   ]
+  },
+  {
+   "key": "li:bluesqx",
+   "company": "Blue Square X",
+   "software_evidence": "premium digital display systems",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "The most iconic spaces demand the top digital display solutions.\n\nBlueSquare X designs and delivers premium digital display systems for global brands including Dior, Art Basel, Pagani, the New York Yankees, Waldorf Astoria, Gaylord Hotels, and the Toledo Museum of Art. We specialize in fine-pitch COB LED walls and custom display systems engineered for seamless visuals, true color, and architectural precision.\n\nBeyond the hardware, we bring each wall to life with curated, high-quality content that keeps displays dynamic and relevant.\n\nThe result is a digital centerpiece that transforms the space into an unforgettable experience."
+   ]
+  },
+  {
+   "key": "li:alpglasscomtr",
+   "company": "Alp Glass Cam Sanayi ve Ticaret Limited Şirketi",
+   "software_evidence": "the production of aluminum glass balconies, door and window systems",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Alp Glass Cam Sanayi ve Ticaret Limited Şirketi was established in 1999 at Yolağzı Mevkii No: 7, Keşap District, Giresun Province. Our company continues its growth through its operations as an authorized dealer of Şişecam and Düzce Cam, a regional sales distributor and authorized manufacturer of Rehau and Maestro (by Deceuninck) PVC profiles, as well as the production of aluminum glass balconies, door and window systems, insulated glass, and tempered glass processing.\n\nSince its establishment, our company has pursued continuous growth through strategic investments, significantly increasing its workforce with recent expansions. Today, we employ nearly 130 personnel.\n\nIn recent years, we have made significant progress toward becoming a regional and national brand, with approximately 200 million TL in investments in building construction, machinery, and equipment. Additionally, leveraging our diverse product portfolio, we serve as a wholesaler, supplying dismantled products to various small and large-scale assembly dealers in the industry.\n\nInternational Experience:\nOur company initially entered the global market by exporting PVC door and window systems to Germany, marking its first o…[truncated]"
+   ]
+  },
+  {
+   "key": "li:imidiadigital",
+   "company": "Imidia Digital Technologies",
+   "software_evidence": null,
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "We provide digital printing solutions to Latin America and the Caribbean, offering technology manufacturers the technical expertise and distribution network for fast market access with local technical support.  We offer the local distributors technology solutions to increase their digital printing business supported with our marketing and operational capabilities."
+   ]
+  },
+  {
+   "key": "li:csuiteassistants",
+   "company": "C-SUITE ASSISTANTS",
+   "software_evidence": "a specialist executive assistant recruitment agency",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "Exceptional executive support changes how leaders operate. C-Suite Assistants is a specialist executive assistant recruitment agency connecting C-level executives with elite administrative talent who help leaders scale, not just manage.\n\nFounded in 2004, we bring more than two decades of experience placing top-tier Executive Assistants, Personal Assistants, Hybrid EA/PAs, Office Managers, and Chiefs of Staff across the United States and Canada. Our recruiters are former business professionals who understand how high-performing executives operate and know how to match leaders with support that anticipates needs and elevates productivity.\n\nWe specialize in senior executive support across industries, including financial services, private equity and venture capital, law, healthcare, technology, real estate, family offices, and entrepreneurial organizations. Our approach is hyper-specialized and white-glove, built on trust, discretion, and a nationwide network of proven talent.\n\nIf you are hiring a senior support professional, we make the process fast, focused, and effective. Learn more at www.csuiteassistants.com or contact us at[redacted:phone] or [redacted:email]."
+   ]
+  },
+  {
+   "key": "everybrandapparel.com",
+   "company": "Every Brand Apparel, Inc.",
+   "software_evidence": "THE Apparel, tee prize, and insurance resource for 450+ golf tournaments",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": "everybrandapparel.com",
+   "texts": [
+    "THE Apparel, tee prize, and insurance resource for 450+ golf tournaments.\r\n\r\nIncluding:  NIKE, Adidas, Cutter & Buck, Callaway, Ashworth, Page & Tuttle, Antigua, Tehama, Izod, Greg Norman, Reebok, Ash City, Munsingwear, Columbia, Sunice, and many more!!!\r\n\r\nEvery Brand Apparel, Inc. was started by Clint Henderson in 2006.   While noticing the difficulty of locating a source to find all the apparel needs of his clientele in one place, as well as the demand from his clients to have shirts and jackets for sale online,  he decided to start an additional company that focused ONLY on apparel.  \r\n\r\nAfter spending the first few years in Seattle, WA helping over 360 golf tournaments with their tournament and apparel needs, he expanded to Austin, TX to spread the business to the state of Texas.   He is currently having expanded to Hawaii, Massachusetts, and just recently Colorado.\r\n\r\nHe has continued to utilize his relationships throughout the apparel industry to continue to be able to bring you the best in options and pricing.  Clint is a sports enthusiast, and apparel junkie. \r\n\r\nHe is constantly searching for the newest, coolest pieces of apparel to offer to his clients.  He knows the val…[truncated]"
+   ]
+  },
+  {
+   "key": "li:nordicworkflow",
+   "company": "NordicWorkflow ApS",
+   "software_evidence": "NordicWorkflow is a consultancy",
+   "ai_evidence": null,
+   "evidence_ref": null,
+   "domain": null,
+   "texts": [
+    "NordicWorkflow is a consultancy specialised in providing customised digital optimisations that streamlines your workflow. We utilise cutting-edge technology to enhance communication, improve finances, and simplify work processes across your entire organisation, freeing you from complex and redundant tasks, so you can spend your own time more efficiently.\n\nWe are basen in the city center of Aalborg in Northern Jutland, Denmark. Our team consists of 10 dedicated specialists who help our amazing clients every single day save countless of hours.\n\nIf you are curious about your business' optimisation potential please give us a call: +45 26 71 60 45 \nWe are always ready to answer your questions 😉"
+   ]
+  }
+ ]
+}

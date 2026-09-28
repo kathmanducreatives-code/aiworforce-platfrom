@@ -2053,6 +2053,21 @@ export interface CapabilityEngineDeps {
     company_key: string;
   }) => Promise<GroundedVerification | null>;
   /**
+   * AN OBSERVER OF A GROUNDING THIS ENGINE DID NOT ASK `groundCompany` FOR.
+   *
+   * Stage 2 grades companies in batches (`groundedByKey`), so a shadow that
+   * wraps `groundCompany` never sees them. This hands the same registry and
+   * the batch's verification to an observer — today the Jev facet shadow
+   * (`jevShadowBinding`). It is told, never asked: its return is ignored, it
+   * is not awaited, and a throw is swallowed. Nothing it does can change what
+   * the engine decides.
+   */
+  observeGrounding?: (i: {
+    registry: EvidenceRegistry;
+    verification: GroundedVerification | null;
+    source: "batch";
+  }) => void;
+  /**
    * `shadow` observes and records; `enforce` lets the verified verdict decide.
    *
    * Defaulting to `shadow` is deliberate: a missing or misspelled mode must not
@@ -8571,12 +8586,20 @@ export async function runCapabilityPlan(
         // STAGE 2 FIRST. When the pool phase above evaluated this company, its
         // verified result is used; the per-company grounder is the path for the
         // non-Stage-2 case and is not called twice for the same company.
-        const grounded = groundedByKey.get(c.key)
+        const batchGrounded = groundedByKey.get(c.key);
+        const grounded = batchGrounded
           ?? (deps.groundCompany
             ? await clockBound("company_grounding", () => deps.groundCompany!({
               registry, requiresCommercialSignal, company_key: c.key,
             }))
             : null);
+        // A batch grading is shown to the observer; a per-company one already
+        // was, through the wrapped `groundCompany`. Told, not asked.
+        if (batchGrounded && deps.observeGrounding) {
+          try {
+            deps.observeGrounding({ registry, verification: batchGrounded, source: "batch" });
+          } catch { /* an observer never costs a company */ }
+        }
         // WHAT A COMPANY ACTUALLY COSTS, fed back so the next admission decision
         // is made against this workspace's latency rather than a constant.
         // `observeCall` keeps a maximum, so measuring cumulative elapsed twice

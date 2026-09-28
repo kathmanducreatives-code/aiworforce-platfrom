@@ -1,0 +1,1113 @@
+{
+ "needs": [
+  0,
+  17,
+  10,
+  0
+ ],
+ "high_counted": {
+  "sw_pos": 12,
+  "sw_neg": 17,
+  "ai_pos": 10,
+  "ai_neg": 16
+ },
+ "taken": {
+  "X": 1,
+  "Y": 15,
+  "Z": 16
+ },
+ "unfilled": [
+  0,
+  0,
+  0,
+  0
+ ],
+ "candidates": [
+  {
+   "category": "X",
+   "fills": [
+    "software_product NO",
+    "ai_product YES"
+   ],
+   "company": "Matic Robots",
+   "key": "li:maticrobots",
+   "domain": null,
+   "description": "Matic is reimagining the next generation of fully autonomous, helpful, and elegant home robots using AI and computer vision. Level-5 autonomy in your home.\n\nOur flagship product, Matic, is a remarkably smart, proactive, and secure floor-cleaning robot that uses photo-realistic vision with precise 3D mapping to provide a home with perpetually clean floors.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "wY7rr27oPWMYk0vLJ",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "moss",
+    "provider_id": "18724978"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "a remarkably smart, proactive, and secure floor-cleaning robot",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "home robots using AI and computer vision",
+   "primary_offering": "physical_product_or_hardware",
+   "reason": "A robot is the product; AI and computer vision are its stated capabilities.",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Lovable",
+   "key": "li:lovable-dev",
+   "domain": null,
+   "description": "Lovable is a platform that lets you build apps and websites by chatting with AI.\n\nWe are a small European team of serial founders, product engineers, physicists, competitive programmers and people who just care about building a great product quickly.\n\nWe're on a mission to build the last piece of software that the world will ever need.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "BZc9embexL0LMwrCp",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Zentail",
+    "provider_id": "101649602"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "a platform that lets you build apps and websites by chatting with AI",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "by chatting with AI",
+   "primary_offering": "software_product",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "GitHub",
+   "key": "li:github",
+   "domain": null,
+   "description": "As the global home for all developers, GitHub is the complete AI-powered developer platform to build, scale, and deliver secure software. Over 100 million people, including developers from 90 of the Fortune 100 companies, use GitHub to build amazing things together across 330+ million repositories. With all the collaborative features of GitHub, it has never been easier for individuals and teams to write faster, better code.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "L5QHuk9MTVSggq3Cy",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "SnapMagic",
+    "provider_id": "1418841"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "the complete AI-powered developer platform to build, scale, and deliver secure software",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "AI-powered developer platform",
+   "primary_offering": "software_product",
+   "reason": "AI: only the adjective 'AI-powered' — no AI capability described (policy Q-A).",
+   "status": "ADJUDICATED_NOT_FROZEN",
+   "ai_at_selection": "YES/REVIEW",
+   "ai_resolution": "USER Q-A 2026-09-28: 'AI-powered developer platform' is explicit product-level AI wording about its own product."
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Structured AI",
+   "key": "li:getstructured-ai",
+   "domain": null,
+   "description": "Structured AI is the most advanced AI-powered QA/QC platform for drawing packages, working across both PDF drawings and native Revit models. Architects and engineers use our platform to make every drawing set leave the office with certainty. \n\nOur AI agents learn your firm's standards, apply the relevant codes, and read every page of a set, then return a clear list of what's wrong, where it sits, and how to fix it. Run compliance reviews across thousands of pages in minutes, chat with your drawings for sourced answers, build custom checks in plain English, compare versions, overlay disciplines, and close out comments - all within a single platform, with a full audit trail on every finding.\n\nFor decades, the last line of defense on a drawing set has been a red pen at the end of a deadline week. But buildings have outgrown the red pen. A modern set runs thousands of drawings, and the errors hiding between them threaten quality and safety, not just cost. What manual review misses resurfaces as RFIs, change orders, and field rework, paid for in time, margin, and reputation.\n\nStructured AI catches those errors before they leave the office, capturing the judgment of your best reviewer on…[truncated]",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "qFHlWi91GKXlYkgqr",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Uplane",
+    "provider_id": "107782177"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "Run compliance reviews across thousands of pages in minutes",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "Our AI agents learn your firm's standards",
+   "primary_offering": "software_product",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Fuse AI Workforce",
+   "key": "fuseaiworkforce.com",
+   "domain": "fuseaiworkforce.com",
+   "description": "Fuse AI Workforce is an enterprise AI automation platform that transforms how organizations communicate, operate, and grow. Designed to integrate seamlessly with your existing software and workflows, our platform combines conversational AI, intelligent automation, CRM technology, and advanced analytics into one powerful ecosystem—helping businesses eliminate repetitive tasks, reduce labor costs, increase efficiency, and create exceptional customer experiences.\n\nUnlike traditional AI solutions that require expensive custom development, Fuse AI Workforce is a fully customizable platform that easily adapts to the way your organization already operates. As your business evolves, your AI workforce evolves with it, allowing you to quickly configure new automations, workflows, and business processes without rebuilding your technology stack.\n\nOur platform includes AI-powered voice and text assistants, 24/7 AI receptionists, employee recruiting and onboarding automation, customer relationship management (CRM), workflow automation, scheduling, reporting, business intelligence dashboards, and intelligent communication tools that ensure every customer, patient, or employee receives immediate, …[truncated]",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#dataset_item.description",
+   "provenance": {
+    "apify_run": "lZsPL9SSSIE0B485e",
+    "actor": null,
+    "role": "dataset_item",
+    "provider_id": "107558960"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "Our platform includes AI-powered voice and text assistants",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "24/7 AI receptionists",
+   "primary_offering": "software_product",
+   "reason": "A different company from Fuse AI.",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Effective AI",
+   "key": "li:effective-ai-labs",
+   "domain": null,
+   "description": "Effective AI is the agent platform for the teams that price risk, enter markets, and grow the book. We bring code-first autonomy to a $6 trillion industry still running on PDFs and spreadsheets. Getting there required us to solve some of the hardest problems in applied AI — long-context reasoning, formal verification, multi-agent coordination — because insurance won't tolerate anything less. \n\nBuilt by insurance operators. Backed by Lightspeed and Valor.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "2CokWpVpjOtygHItD",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "FurtherAI",
+    "provider_id": "109203337"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "Effective AI is the agent platform for the teams that price risk",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "long-context reasoning, formal verification, multi-agent coordination",
+   "primary_offering": "software_product",
+   "reason": "Software: 'agent platform' / 'code-first autonomy' with little functionality described.",
+   "status": "ADJUDICATED_NOT_FROZEN",
+   "software_at_selection": "YES/REVIEW",
+   "software_resolution": "USER 2026-09-28: 'agent platform' plus described capabilities (long-context reasoning, formal verification, multi-agent coordination) establishes software."
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Workday",
+   "key": "li:workday",
+   "domain": null,
+   "description": "By unifying HR and Finance on an open, trusted platform powered by AI, Workday delivers high-impact outcomes our customers can count on. At the heart of our platform is Sana from Workday—the superintelligence that puts AI agents to work for you and your people. Welcome to a new work day.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "wY7rr27oPWMYk0vLJ",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Moss",
+    "provider_id": "17719"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "unifying HR and Finance on an open, trusted platform powered by AI",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "puts AI agents to work for you and your people",
+   "primary_offering": "software_product",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Salesforce",
+   "key": "li:salesforce",
+   "domain": null,
+   "description": "We're the #1 AI CRM—where humans with agents drive customer success together with AI, data, and Customer 360 apps on one platform.\n\nPrivacy Statement: http://www.salesforce.com/company/privacy/",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "WxHPLqxN3UgobVd1r",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Dataquest.io",
+    "provider_id": "3185"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "Customer 360 apps on one platform",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "We're the #1 AI CRM",
+   "primary_offering": "software_product",
+   "reason": "Agents with AI are the product's own capability (P1 rule).",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Emergent",
+   "key": "li:emergentlabs",
+   "domain": null,
+   "description": "Emergent is an AI app builder that turns your ideas into monetizable software.\n\nWe build autonomous coding agents that replace traditional software development by generating, testing, and deploying production applications directly from plain-language intent. Our systems run in production at global scale and are used to build millions of real applications.\n\nSince our public launch, Emergent has reached $100M ARR in 8 months making us the fastest-growing startup in the world. 6M+ users across 190+ countries have built 6M+ applications on Emergent. We've raised $100M from Khosla Ventures, SoftBank, Google, Lightspeed India, Prosus Ventures, Together Fund, and Y Combinator.\n\nWe're solving the hard part of AI-driven software creation: correctness, reliability, security, and scale in real production systems. The team is built by repeat founders, Olympiad medalists, IIT & IIM alumni, and leaders from Google, Amazon, and Dropbox. \n\nWe're hiring builders who want ownership, speed, and impact at global scale.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "Jqm0FIlTKVeEbvaFg",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Lab0",
+    "provider_id": "105280458"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "an AI app builder that turns your ideas into monetizable software",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "We build autonomous coding agents",
+   "primary_offering": "software_product",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Barracuda",
+   "key": "li:barracuda-networks",
+   "domain": null,
+   "description": "Barracuda is a leading global cybersecurity company providing complete protection against complex threats for all size business. Our AI-powered BarracudaONE platform secures email, data, applications and networks with innovative solutions, managed XDR and a centralized dashboard to maximize protection and strengthen cyber resilience. Trusted by hundreds of thousands of IT professionals and managed service providers worldwide, Barracuda delivers powerful defenses that are easy to buy, deploy and use.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "b6HlRFINbbGAdfYtG",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Blue Streak Lighting & Electric",
+    "provider_id": "13957"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "Our AI-powered BarracudaONE platform secures email, data, applications and networks",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "AI-powered BarracudaONE platform",
+   "primary_offering": "software_product",
+   "reason": "AI: only 'AI-powered' (policy Q-A).",
+   "status": "ADJUDICATED_NOT_FROZEN",
+   "ai_at_selection": "YES/REVIEW",
+   "ai_resolution": "USER Q-A 2026-09-28: 'AI-powered BarracudaONE platform' is explicit product-level AI wording about its own product."
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "mlpal",
+   "key": "li:mlpalresearch",
+   "domain": null,
+   "description": "MLpal helps enterprises build, deploy, and scale AI systems safely and reliably.\n\nOur platform brings together agents, memory, model building, secure data access, and inference optimization into one foundation for production AI.\n\nThe more it is used, the more it understands your business—turning everyday interactions into lasting intelligence.\n\nWe build AI that adapts to people, teams, and organizations.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "qBUV7vXsJ1QUG7u5H",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Every",
+    "provider_id": "125643953"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "Our platform brings together agents, memory, model building, secure data access, and inference optimization",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "helps enterprises build, deploy, and scale AI systems",
+   "primary_offering": "software_product",
+   "reason": "AI: a platform for building AI systems — infrastructure for AI vs AI product (policy Q-B).",
+   "status": "ADJUDICATED_NOT_FROZEN",
+   "ai_at_selection": "YES/REVIEW",
+   "ai_resolution": "USER Q-B 2026-09-28: built specifically to help customers build, deploy and scale AI systems; AI is central to its function."
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Ruley, the E-Referee",
+   "key": "li:ruleyai",
+   "domain": null,
+   "description": "Ruley is the AI-powered sports rules engine built for the integration into platforms fans, spectators and players already use. Our API delivers accurate, real-time answers to complex rules questions across major sports as well as niche sports, enhancing fan engagement, powering smarter broadcasts, enlightening new players, and elevating a variety of sports apps. \nRuley is the rules intelligence layer of the tech stack the industry has until now been missing.\n\nTraditional sports like tennis, golf, soccer, American football, attract fans and players globally. For long term financial success all sports much grow, but new niche forms of these sports have emerged.  How do they grow?\n\nBeyond the financial aspects, for individuals, sports teach strategy, perseverance, discipline and other important life lessons.  Sportsmanship and proper etiquette have a huge role in how sports are played and building character in youth sports.  \n\nThis is what Ruley's API ecosystem provides.  Sport fans, spectators, player education and growth. \n\nA chance for federations and consumer brands to promote loyalty, new growth, and show they care about the social benefits of sportsmanship.\n\nTry out our propriet…[truncated]",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "BAyaMHVOjmDBkPRn4",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "NIXO",
+    "provider_id": "104883756"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "Our API delivers accurate, real-time answers to complex rules questions",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "AI-powered sports rules engine",
+   "primary_offering": "software_product",
+   "reason": "AI: only 'AI-powered' (policy Q-A).",
+   "status": "ADJUDICATED_NOT_FROZEN",
+   "ai_at_selection": "YES/REVIEW",
+   "ai_resolution": "USER Q-A 2026-09-28: 'AI-powered sports rules engine' is explicit product-level AI wording about its own product."
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Datatruck",
+   "key": "li:datatruck",
+   "domain": null,
+   "description": "Datatruck is an all-in-one Transportation Management System (TMS) built to automate back-office operations for trucking companies and freight brokers. Our AI-powered platform helps carriers and brokers streamline workflows, eliminate manual tasks, and make faster, data-driven decisions.\n\nFrom dispatching and document management to real-time financial tracking and advanced reporting, Datatruck centralizes everything your team needs to cut costs and boost productivity.\n\nEmpower your team with smarter tools. Drive profitability with automation. Manage your entire operation—from load to invoice—in one place.\n\nBuilt for Carriers | Trusted by Brokers | Powered by AI\n\nExplore how Datatruck can transform your logistics operation:\nhttps://www.datatruck.io/demo",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "edDicoXd6ltPejHDV",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Semble",
+    "provider_id": "91549412"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "Datatruck is an all-in-one Transportation Management System (TMS)",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "Our AI-powered platform helps carriers and brokers streamline workflows",
+   "primary_offering": "software_product",
+   "reason": "AI: only 'AI-powered' (policy Q-A).",
+   "status": "ADJUDICATED_NOT_FROZEN",
+   "ai_at_selection": "YES/REVIEW",
+   "ai_resolution": "USER Q-A 2026-09-28: 'Our AI-powered platform' is explicit product-level AI wording about its own product."
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Kestra",
+   "key": "kestra.io",
+   "domain": "kestra.io",
+   "description": "Unify orchestration for all engineers. Build, run and govern all your workflows - data, AI, infrastructure, and business - Everything-as-Code, from the UI and with AI.\n\nKestra is the open-source orchestration platform built to help teams ship faster without losing control, making both scheduled and event-driven automation easy across your entire stack.\n\nOften described as the fastest-growing open-source orchestration platform, Kestra has seen 10x growth year-over-year in adoption and workflow volume.\n\nEverything-as-Code, from the UI: design workflows in the UI (including no-code forms) or in declarative YAML, both stay in sync so automation remains reviewable, auditable, and scalable.\n\nAI-native execution:\n• Production AI Copilot generates and refines flows from natural language prompts—while keeping YAML clean and reviewable.\n• Agentic orchestration with context: AI Agents combine an LLM with memory (context carried across steps/runs) and tools, so workflows can dynamically choose actions, loop until completion, and adapt to new information.\n\nBuilt for production teams: extensible integrations, strong execution primitives, and governance—plus automation via API and Terraform for C…[truncated]",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#dataset_item.description",
+   "provenance": {
+    "apify_run": "WxHPLqxN3UgobVd1r",
+    "actor": null,
+    "role": "dataset_item",
+    "provider_id": "69563743"
+   },
+   "software_product": "YES",
+   "software_status": "HIGH",
+   "software_evidence": "Kestra is the open-source orchestration platform",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": "govern all your workflows - data, AI, infrastructure, and business",
+   "primary_offering": "software_product",
+   "reason": "AI: orchestrates AI workflows; 'with AI' capability not described (policy Q-B).",
+   "status": "ADJUDICATED_NOT_FROZEN",
+   "ai_at_selection": "YES/REVIEW",
+   "ai_resolution": "USER Q-B 2026-09-28: generic orchestration that merely supports AI workloads; AI is not itself a substantive capability."
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Tempus AI",
+   "key": "li:tempusai",
+   "domain": null,
+   "description": "Tempus is a technology company advancing precision medicine through the practical application of artificial intelligence in healthcare. With one of the world’s largest libraries of multimodal data, and an operating system to make that data accessible and useful, Tempus provides AI-enabled precision medicine solutions to physicians to deliver personalized patient care and in parallel facilitates discovery, development and delivery of optimal therapeutics. The goal is for each patient to benefit from the treatment of others who came before by providing physicians with tools that learn as the company gathers more data. \n\n\nFor more information, visit tempus.com.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "WxHPLqxN3UgobVd1r",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "BioChain Institute, Inc., a CellBio Scientific Company",
+    "provider_id": "10262473"
+   },
+   "software_product": "NOT_DETERMINABLE",
+   "software_status": "NOT_DETERMINABLE",
+   "software_evidence": "an operating system to make that data accessible and useful",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "the practical application of artificial intelligence in healthcare",
+   "primary_offering": "not_determinable",
+   "reason": "Software: data library, operating system and precision-medicine solutions — primary not established.",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Y",
+   "fills": [
+    "ai_product YES",
+    "software_product YES"
+   ],
+   "company": "Upstart",
+   "key": "li:upstart-network",
+   "domain": null,
+   "description": "Upstart (NASDAQ: UPST) is the leading AI lending marketplace, connecting millions of consumers to more than 100 banks and credit unions that leverage Upstart’s AI models and cloud applications to deliver superior credit products. With Upstart AI, lenders can approve more borrowers at lower rates while delivering the exceptional digital-first experience customers demand. More than 90% of loans are fully automated, with no human intervention by Upstart. Founded in 2012, Upstart’s platform includes personal loans, automotive retail and refinance loans, home equity lines of credit, and small-dollar “relief” loans. Upstart is based in San Mateo, California. \n\nUpstart Network, Inc. NMLS #936133 | All mortgage lending conducted by Upstart Mortgage, LLC. NMLS #2443873\n\nnmlsconsumeraccess.org",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "WxHPLqxN3UgobVd1r",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Syfter",
+    "provider_id": "2688310"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "the leading AI lending marketplace",
+   "ai_product": "YES",
+   "ai_status": "HIGH",
+   "ai_evidence": "leverage Upstart’s AI models",
+   "primary_offering": "marketplace",
+   "reason": "A lending marketplace whose AI models are part of what lenders use.",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "DIVE-Turbine",
+   "key": "li:dive-turbine",
+   "domain": null,
+   "description": "DIVE-Turbine: \nCompact - Efficient - Reliable - Fishfriendly\n\nThe DIVE-Turbine is an innovative turbine concept for hydropower plants. The concept fulfills all requirements for a modern hydropower plant with an installed capacity of up to 4.5 MW per unit.\n\nThe DIVE-Turbine is an efficient, reliable and cost-effective turbine solution. Based on a permanent magnet synchronous generator an all-round conclusive concept was developed.\n\nA customized turbine design, in combination with the latest generation of power electronics guarantees high efficiency of the complete unit, from water to wire.\n\nAccording to the individual requirements of each site, the DIVE Turbinen GmbH & Co. KG provides individual solutions, including the design, manufacturing, delivery, installation, start up, after sales service.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "WxHPLqxN3UgobVd1r",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Natel Energy",
+    "provider_id": "11320904"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "The DIVE-Turbine is an innovative turbine concept for hydropower plants",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "physical_product_or_hardware",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "Plantible",
+   "key": "li:plantible",
+   "domain": null,
+   "description": "Plantible Foods is a B2B food technology company with the goal to develop the most functional and applicable plant-based protein in the world using scalable and sustainable aqua-farming and extraction technologies",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "WxHPLqxN3UgobVd1r",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "New Culture",
+    "provider_id": "18121755"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "develop the most functional and applicable plant-based protein",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "physical_product_or_hardware",
+   "reason": "A food ingredient; 'food technology' is not software.",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "TALENTS BOUTIQUE - E-commerce Recruiting agency",
+   "key": "li:talents-boutique-recruiting-agency",
+   "domain": null,
+   "description": "We are an E-commerce recruitment agency specializing in hiring top remote talent from Europe, UK, LATAM, South Africa and North America.\nFor over 8 years, we’ve been helping Amazon, TikTok Shop, Walmart, and Shopify brands — as well as other fast-growing E-commerce businesses — build strong, reliable, and scalable teams.\n\nOur mission is to connect online brands with vetted, English-speaking E-commerce professionals who bring both expertise and cultural fit.\nFrom junior specialists to C-level executives, we help companies hire talent that drives growth.\n\nWe provide end-to-end recruitment services — from the first consultation and job description creation to sourcing, interviews, and onboarding support.\nOur process combines human insight with data-driven tools to ensure quality matches and long-term retention.\n\nWhy clients choose Talents Boutique:\n✅ 8+ years of proven E-commerce recruitment experience\n✅ 20,000+ vetted candidates in our database\n✅ Specialists from Europe, UK, LATAM, South Africa and North America \n✅ Money-back guarantee if the candidate doesn’t match\n✅ Active guarantee for 3–6 months after hiring\n\nWe recruit for all key E-commerce roles, including:\n🔹 Amazon PPC & Adve…[truncated]",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "wY7rr27oPWMYk0vLJ",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "True Sea Moss",
+    "provider_id": "73204665"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "We are an E-commerce recruitment agency",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "human_delivered_service",
+   "reason": "'data-driven tools' is not AI.",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "Torkildson Katz, A Law Corporation",
+   "key": "li:torkildson-katz",
+   "domain": null,
+   "description": "More than a decade before Hawaii became a state, the law firm of Torkildson Katz began providing comprehensive advice about a range of legal matters to people, businesses, closely-held companies and multi-national corporations. \n\nFounded in 1947, our law firm has steadily grown into an established firm with a well-earned reputation in Hawaii for employing meticulous, detail-oriented attorneys who know how to handle a diverse array of legal services. Our attorneys have been recognized as Best Lawyers in America® and “Lawyers of the Year” in Honolulu, and are routinely selected to the Hawaii Super Lawyers® list. The firm is Ranked as “Tier 1” by U.S. News in the practice areas of Employment Law – Management, Labor Law – Management, Tax Litigation, Labor & Employment Litigation.\n\nOur primary practice areas include labor and employment, business litigation, corporate, tax planning and controversy, and real estate for clients and corporations in Hawaii, the U.S. Mainland, Asia, the Pacific and beyond.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "WxHPLqxN3UgobVd1r",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "10x Management",
+    "provider_id": "7932243"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "the law firm of Torkildson Katz",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "human_delivered_service",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "NanoNord A/S",
+   "key": "li:nano-nord",
+   "domain": null,
+   "description": "NanoNord A/S is a Danish, privately owned company with unique and strong bonds to the world of science and university research. We specialize in the development of low-field NMR analysis systems for an array of industries.\n\nFrom Bluetooth™ to Tveskaeg\n\nNanoNord was founded by owner and CEO Ole Jensen. Ole previously founded the company Digianswer, who were the first in the world to introduce the revolutionary Bluetooth™ technology. NanoNord first launched the product Catguard, which was the world’s first device using the NMR technology to measure catfines in heavy fuel oil. The latest product to be introduced is Tveskaeg, which like its predecessor uses the NMR technology. And, like Bluetooth, is named after a famed Danish king.\n\nNew standards in measuring\n\nAt the heart of NanoNord is the revolutionary Nuclear Magnetic Resonance (NMR) technology, which radically changes the game for water and fuel analysis. The self-calibrating NMR sensors require minimum maintenance and offer reliable and precise measuring that is yet unparalleled.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "AfKYJEMDMGfM9NdVw",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Tasklet Factory",
+    "provider_id": "10163335"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "We specialize in the development of low-field NMR analysis systems",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "physical_product_or_hardware",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "RapidDx Inc.",
+   "key": "li:rapid-dx",
+   "domain": null,
+   "description": "RapidDX developed a groundbreaking, patented, single-use, non-invasive handheld diagnostic device that identifies relevant biomarkers present in saliva. This enables the rapid detection of neurodegenerative diseases like Alzheimer's and Parkinson's, and traumatic brain injuries such as concussions.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "wY7rr27oPWMYk0vLJ",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Moss Inc.",
+    "provider_id": "35478486"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "handheld diagnostic device",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "physical_product_or_hardware",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "Chomps",
+   "key": "li:chomps",
+   "domain": null,
+   "description": "Chomps is a best-for-you meat snack brand with products made from high-quality proteins. Chomps meat snacks never contain added sugar, artificial preservatives or colors, MSG and are free from the top 9 allergens. \n\nOur mission is to power every win with real food that is accessible and convenient, that never compromises on taste. \n\nFind us online at Chomps.com, Amazon & Thrive Market.  With exciting new retail launches, you can now find us in the aisles of Target, Whole Foods, Sprouts, Kroger, Walmart, Trader Joe's, Safeway, Albertson's, Costco and other retailers across the country.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "qBUV7vXsJ1QUG7u5H",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Every Body Eat®",
+    "provider_id": "6599966"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "Chomps is a best-for-you meat snack brand",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "physical_product_or_hardware",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "Gartner",
+   "key": "li:gartner",
+   "domain": null,
+   "description": "We deliver actionable, objective business and technology insights. Our expert guidance and tools enable faster, smarter decisions and stronger performance on an organization’s mission-critical priorities.\n\nOur unrivaled combination of business and technology insights steers clients toward the right decisions on the issues that matter most. As a $6.5 billion company, with over 20,000 associates, and a member of the S&P 500, we are an objective partner with 13,000+ client enterprises in ~90 countries and territories — across every major function, geography, industry and market sector — and boast 45+ years of experience providing insights and expert guidance to client enterprises worldwide.\n\nTo learn more about how we guide the leaders who shape the world, visit gartner.com. \n\nGartner, Inc. (NYSE: IT) \n\nCommunity guidelines: https://gtnr.it/3tceMrU\n\nHot Topics Across the C-Suite LinkedIn Newsletter: https://gtnr.it/4c56S97",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "WxHPLqxN3UgobVd1r",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Indus Insights",
+    "provider_id": "2078"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "We deliver actionable, objective business and technology insights",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "media_or_content",
+   "reason": "Research and advisory (professional information); 'tools' are secondary.",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "US Brick",
+   "key": "li:usbrick",
+   "domain": null,
+   "description": "Born Here. Built Here. Since 1939. | US Brick is a premier building materials supplier and brick manufacturer, catering to both residential and commercial construction projects. Visit us to explore our full range of premium building materials, supplies and accessories, or connect with one of our trusted distributors by visiting our website.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "XVTjIYlu2cPQff3bG",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Mason Contractors Association of America (MCAA)",
+    "provider_id": "66716299"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "brick manufacturer",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "physical_product_or_hardware",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "Cherry Bekaert",
+   "key": "li:cherrybekaert",
+   "domain": null,
+   "description": "Cherry Bekaert is a top-ranked U.S. CPA and advisory firm specializing in tax, audit, assurance, digital consulting, and M&A advisory services for middle-market companies, government contractors, nonprofits, and private equity-backed businesses. We deliver digitally driven, industry-aligned solutions that help clients transform from mid-market players into market leaders in today’s competitive landscape.\n\nRanked among the largest accounting firms in the United States, our specialized services include business valuations, outsourced accounting, transaction advisory, and strategic tax planning. For over 75 years, Cherry Bekaert has been the trusted growth advisor to global corporations, startups, government entities, and successful individuals.\n\nWe foster a professional environment that is flexible, inclusive, and entrepreneurial—empowering our people to grow personally and professionally. Our mission is clear: *Making a Difference for our people, our clients, our community, and our profession.*\n\nCherry Bekaert serves key industries including:\n- Government Services\n- Healthcare & Life Sciences\n- Hospitality & Retail\n- Industrial Manufacturing\n- Not-for-Profits\n- Private Equity\n- Prof…[truncated]",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "wY7rr27oPWMYk0vLJ",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Moss Adams",
+    "provider_id": "18401"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "a top-ranked U.S. CPA and advisory firm",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "human_delivered_service",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "Blue Square X",
+   "key": "li:bluesqx",
+   "domain": null,
+   "description": "The most iconic spaces demand the top digital display solutions.\n\nBlueSquare X designs and delivers premium digital display systems for global brands including Dior, Art Basel, Pagani, the New York Yankees, Waldorf Astoria, Gaylord Hotels, and the Toledo Museum of Art. We specialize in fine-pitch COB LED walls and custom display systems engineered for seamless visuals, true color, and architectural precision.\n\nBeyond the hardware, we bring each wall to life with curated, high-quality content that keeps displays dynamic and relevant.\n\nThe result is a digital centerpiece that transforms the space into an unforgettable experience.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "XVTjIYlu2cPQff3bG",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Mason Technologies Inc.",
+    "provider_id": "103461717"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "premium digital display systems",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "physical_product_or_hardware",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "Alp Glass Cam Sanayi ve Ticaret Limited Şirketi",
+   "key": "li:alpglasscomtr",
+   "domain": null,
+   "description": "Alp Glass Cam Sanayi ve Ticaret Limited Şirketi was established in 1999 at Yolağzı Mevkii No: 7, Keşap District, Giresun Province. Our company continues its growth through its operations as an authorized dealer of Şişecam and Düzce Cam, a regional sales distributor and authorized manufacturer of Rehau and Maestro (by Deceuninck) PVC profiles, as well as the production of aluminum glass balconies, door and window systems, insulated glass, and tempered glass processing.\n\nSince its establishment, our company has pursued continuous growth through strategic investments, significantly increasing its workforce with recent expansions. Today, we employ nearly 130 personnel.\n\nIn recent years, we have made significant progress toward becoming a regional and national brand, with approximately 200 million TL in investments in building construction, machinery, and equipment. Additionally, leveraging our diverse product portfolio, we serve as a wholesaler, supplying dismantled products to various small and large-scale assembly dealers in the industry.\n\nInternational Experience:\nOur company initially entered the global market by exporting PVC door and window systems to Germany, marking its first o…[truncated]",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "wY7rr27oPWMYk0vLJ",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Moss",
+    "provider_id": "106888673"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "the production of aluminum glass balconies, door and window systems",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "physical_product_or_hardware",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "Imidia Digital Technologies",
+   "key": "li:imidiadigital",
+   "domain": null,
+   "description": "We provide digital printing solutions to Latin America and the Caribbean, offering technology manufacturers the technical expertise and distribution network for fast market access with local technical support.  We offer the local distributors technology solutions to increase their digital printing business supported with our marketing and operational capabilities.",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "wY7rr27oPWMYk0vLJ",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Moss Inc.",
+    "provider_id": "5032980"
+   },
+   "software_product": "NOT_DETERMINABLE",
+   "software_status": "NOT_DETERMINABLE",
+   "software_evidence": "We provide digital printing solutions",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "not_determinable",
+   "reason": "Two sentences: 'digital printing solutions' plus distribution — primary not established.",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "C-SUITE ASSISTANTS",
+   "key": "li:csuiteassistants",
+   "domain": null,
+   "description": "Exceptional executive support changes how leaders operate. C-Suite Assistants is a specialist executive assistant recruitment agency connecting C-level executives with elite administrative talent who help leaders scale, not just manage.\n\nFounded in 2004, we bring more than two decades of experience placing top-tier Executive Assistants, Personal Assistants, Hybrid EA/PAs, Office Managers, and Chiefs of Staff across the United States and Canada. Our recruiters are former business professionals who understand how high-performing executives operate and know how to match leaders with support that anticipates needs and elevates productivity.\n\nWe specialize in senior executive support across industries, including financial services, private equity and venture capital, law, healthcare, technology, real estate, family offices, and entrepreneurial organizations. Our approach is hyper-specialized and white-glove, built on trust, discretion, and a nationwide network of proven talent.\n\nIf you are hiring a senior support professional, we make the process fast, focused, and effective. Learn more at www.csuiteassistants.com or contact us at[redacted:phone] or [redacted:email].",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "wY7rr27oPWMYk0vLJ",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Moss Home Solutions",
+    "provider_id": "2430330"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "a specialist executive assistant recruitment agency",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "human_delivered_service",
+   "reason": "",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "Every Brand Apparel, Inc.",
+   "key": "everybrandapparel.com",
+   "domain": "everybrandapparel.com",
+   "description": "THE Apparel, tee prize, and insurance resource for 450+ golf tournaments.\r\n\r\nIncluding:  NIKE, Adidas, Cutter & Buck, Callaway, Ashworth, Page & Tuttle, Antigua, Tehama, Izod, Greg Norman, Reebok, Ash City, Munsingwear, Columbia, Sunice, and many more!!!\r\n\r\nEvery Brand Apparel, Inc. was started by Clint Henderson in 2006.   While noticing the difficulty of locating a source to find all the apparel needs of his clientele in one place, as well as the demand from his clients to have shirts and jackets for sale online,  he decided to start an additional company that focused ONLY on apparel.  \r\n\r\nAfter spending the first few years in Seattle, WA helping over 360 golf tournaments with their tournament and apparel needs, he expanded to Austin, TX to spread the business to the state of Texas.   He is currently having expanded to Hawaii, Massachusetts, and just recently Colorado.\r\n\r\nHe has continued to utilize his relationships throughout the apparel industry to continue to be able to bring you the best in options and pricing.  Clint is a sports enthusiast, and apparel junkie. \r\n\r\nHe is constantly searching for the newest, coolest pieces of apparel to offer to his clients.  He knows the val…[truncated]",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#dataset_item.description",
+   "provenance": {
+    "apify_run": "qBUV7vXsJ1QUG7u5H",
+    "actor": null,
+    "role": "dataset_item",
+    "provider_id": "964165"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "THE Apparel, tee prize, and insurance resource for 450+ golf tournaments",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "physical_product_or_hardware",
+   "reason": "Apparel supply.",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  },
+  {
+   "category": "Z",
+   "fills": [
+    "software_product NO",
+    "ai_product NO"
+   ],
+   "company": "NordicWorkflow ApS",
+   "key": "li:nordicworkflow",
+   "domain": null,
+   "description": "NordicWorkflow is a consultancy specialised in providing customised digital optimisations that streamlines your workflow. We utilise cutting-edge technology to enhance communication, improve finances, and simplify work processes across your entire organisation, freeing you from complex and redundant tasks, so you can spend your own time more efficiently.\n\nWe are basen in the city center of Aalborg in Northern Jutland, Denmark. Our team consists of 10 dedicated specialists who help our amazing clients every single day save countless of hours.\n\nIf you are curious about your business' optimisation potential please give us a call: +45 26 71 60 45 \nWe are always ready to answer your questions 😉",
+   "source": "run-1e52d43c:run-1e52d43c/apify_runs.json#similarOrganizations.description",
+   "provenance": {
+    "apify_run": "AfKYJEMDMGfM9NdVw",
+    "actor": null,
+    "role": "similar_organization_of",
+    "of": "Tasklet Factory",
+    "provider_id": "13996669"
+   },
+   "software_product": "NO",
+   "software_status": "HIGH",
+   "software_evidence": "NordicWorkflow is a consultancy",
+   "ai_product": "NO",
+   "ai_status": "HIGH",
+   "ai_evidence": null,
+   "primary_offering": "human_delivered_service",
+   "reason": "'cutting-edge technology' is not a software product or AI.",
+   "status": "ADJUDICATED_NOT_FROZEN"
+  }
+ ],
+ "vetoed_in_order": [
+  {
+   "category": "X",
+   "company": "World Labs",
+   "reason": "X: 'robotics' is an application area; the product is AI research/world models, not physical goods"
+  },
+  {
+   "category": "X",
+   "company": "Hypercubic",
+   "reason": "X: 'manufacturing' is a customer industry; mainframe modernization is software/services"
+  },
+  {
+   "category": "X",
+   "company": "3i Infotech Ltd.",
+   "reason": "X: IT services company leveraging AI — an agency using AI does not count"
+  },
+  {
+   "category": "X",
+   "company": "Fearn",
+   "reason": "X: foundation models; licensed-models vs software primary is not established"
+  },
+  {
+   "category": "X",
+   "company": "Hiro Robotics",
+   "reason": "X: e-waste processing that uses AI internally — AI is not the product sold"
+  },
+  {
+   "category": "Y",
+   "company": "SureBright",
+   "reason": "Y: primary is warranties/insurance embedded at checkout, not clearly software"
+  },
+  {
+   "category": "Y",
+   "company": "RentAHuman",
+   "reason": "Y: a marketplace where AI agents pay people; AI is the user, not the capability"
+  },
+  {
+   "category": "Y",
+   "company": "Synkka AI",
+   "reason": "Y: 'AI workforce' that builds integrations — service vs software not established"
+  },
+  {
+   "category": "Y",
+   "company": "Skill",
+   "reason": "Y: operates a full-service staffing business; its AI powers its own operations"
+  },
+  {
+   "category": "Y",
+   "company": "DiligenceSquared (YC F25)",
+   "reason": "Y: produces due-diligence reports — service vs software not established"
+  },
+  {
+   "category": "Y",
+   "company": "Clicks Health",
+   "reason": "Y: AI agents that do the work — the same question as pending decision P2"
+  },
+  {
+   "category": "Y",
+   "company": "Snowflake",
+   "reason": "Y: 'AI Data Cloud' is branding; no AI capability described"
+  },
+  {
+   "category": "Y",
+   "company": "Indeed",
+   "reason": "Y: a job marketplace; AI matching is secondary"
+  },
+  {
+   "category": "Y",
+   "company": "Benchling",
+   "reason": "Y: AI is context ('for the AI era'); no AI product capability described"
+  },
+  {
+   "category": "Y",
+   "company": "Cooper",
+   "reason": "Y: AI coworker doing the work — pending decision P2"
+  },
+  {
+   "category": "Y",
+   "company": "Pace",
+   "reason": "Y: agentic workforce replacing BPOs — pending decision P2"
+  },
+  {
+   "category": "Y",
+   "company": "Scale AI",
+   "reason": "Y: data services plus a platform — primary mixed"
+  },
+  {
+   "category": "Y",
+   "company": "Crossing Hurdles",
+   "reason": "Y: a talent network connecting professionals — not software"
+  },
+  {
+   "category": "Y",
+   "company": "Phinomics",
+   "reason": "Y: biology/data company; primary offering not established"
+  },
+  {
+   "category": "Y",
+   "company": "JLL",
+   "reason": "Y: real-estate services company"
+  },
+  {
+   "category": "Y",
+   "company": "Confident AI",
+   "reason": "Y: tooling FOR AI systems — the same question as pending decision P3"
+  },
+  {
+   "category": "Y",
+   "company": "Blueberry",
+   "reason": "Y: 'AI marketing platform' with vague functionality — platform alone"
+  },
+  {
+   "category": "Y",
+   "company": "Opus Recruitment Solutions",
+   "reason": "Y: recruitment/staffing firm"
+  },
+  {
+   "category": "Z",
+   "company": "GREENBOX Labs",
+   "reason": "Z: sells prediction models — software/AI-ish, not a clean negative"
+  }
+ ],
+ "non_commercial_skipped": [
+  {
+   "category": "X",
+   "company": "University of Toronto Robotics Institute",
+   "reason": "non-commercial (rule): dev/stress only, never gate"
+  },
+  {
+   "category": "Y",
+   "company": "Allied Cloud Solutions",
+   "reason": "non-commercial (rule): dev/stress only, never gate"
+  },
+  {
+   "category": "Z",
+   "company": "Every Child Online",
+   "reason": "non-commercial (rule): dev/stress only, never gate"
+  },
+  {
+   "category": "Z",
+   "company": "Open Arms of Minnesota",
+   "reason": "non-commercial (rule): dev/stress only, never gate"
+  },
+  {
+   "category": "Z",
+   "company": "Share Our Strength",
+   "reason": "non-commercial (rule): dev/stress only, never gate"
+  },
+  {
+   "category": "Z",
+   "company": "Science Magazine",
+   "reason": "non-commercial (rule): dev/stress only, never gate"
+  },
+  {
+   "category": "Z",
+   "company": "Every Meal",
+   "reason": "non-commercial (rule): dev/stress only, never gate"
+  },
+  {
+   "category": "Z",
+   "company": "Second Harvest Heartland",
+   "reason": "non-commercial (rule): dev/stress only, never gate"
+  },
+  {
+   "category": "Z",
+   "company": "Institute for the American Worker",
+   "reason": "non-commercial (rule): dev/stress only, never gate"
+  },
+  {
+   "category": "Z",
+   "company": "VEAP",
+   "reason": "non-commercial (rule): dev/stress only, never gate"
+  },
+  {
+   "category": "Z",
+   "company": "School of Food Science & Nutrition, University of Leeds",
+   "reason": "non-commercial (rule): dev/stress only, never gate"
+  }
+ ]
+}

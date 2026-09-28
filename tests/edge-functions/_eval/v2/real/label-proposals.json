@@ -1,0 +1,1064 @@
+[
+ {
+  "company": "Lab0",
+  "domain": "lab0.ai",
+  "extraction_key": "lab0.ai",
+  "source": [
+   "run-4250f181:run-4250f181/task.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "Enterprise software implementation is broken",
+   "ai_product": "Lab0 builds agentic systems",
+   "primary_offering": "builds agentic systems that automate this layer"
+  },
+  "reason": "Audience is enterprise implementations; 'agentic systems' read as AI capability; software vs automation service needs review.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Gojiberry AI",
+  "domain": "gojiberry.ai",
+  "extraction_key": "gojiberry.ai",
+  "source": [
+   "run-4250f181:run-4250f181/task.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "for B2B companies",
+   "ai_product": "one AI team that finds buyers and books meetings",
+   "primary_offering": "Gojiberry finds buyers showing intent, enriches them, reaches out"
+  },
+  "reason": "An 'AI GTM team' could be read as a service; proposed software because the work is done by the product.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Fuse AI",
+  "domain": "fuseai.com",
+  "extraction_key": "fuseai.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/task.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "for modern revenue teams",
+   "ai_product": "AI-native sales platform",
+   "primary_offering": "With powerful integrations and intelligent workflows"
+  },
+  "reason": "Integrations and workflows establish software; no hosting statement.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "PropelAuth",
+  "domain": "propelauth.com",
+  "extraction_key": "propelauth.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/task.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "hosted_cloud_or_web_saas",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "We provide businesses with the security",
+   "primary_offering": "they can use our APIs and component libraries",
+   "delivery_model": "New startups can use our hosted pre-built UIs"
+  },
+  "reason": "'hosted pre-built UIs' is explicit hosted delivery.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "SafetyKit",
+  "domain": "safetykit.com",
+  "extraction_key": "safetykit.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/task.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "for big tech and finance companies",
+   "ai_product": "We build AI agents",
+   "primary_offering": "We build AI agents for teams tackling fraud & abuse"
+  },
+  "reason": "Delivery: 'love B2B SaaS' describes the team's taste, not how SafetyKit is delivered — proposed not_stated, review.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Every",
+  "domain": "every.io",
+  "extraction_key": "every.io",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/task.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "run your business with ease",
+   "primary_offering": "Every is the operating system for your back office"
+  },
+  "reason": "Software plus 'expert support' for bookkeeping/tax; primary could be read as service.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Nango",
+  "domain": "nango.dev",
+  "extraction_key": "nango.dev",
+  "source": [
+   "run-4250f181:run-4250f181/task.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "Customers expect your SaaS to integrate",
+   "primary_offering": "Leverage hundreds of pre-built integrations"
+  },
+  "reason": "'your SaaS' is the customer's product, not Nango's delivery.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Pasito",
+  "domain": "pasito.ai",
+  "extraction_key": "pasito.ai",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/task.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "carriers, brokers, and benefits vendors",
+   "ai_product": "Pasito builds AI agents for insurance and benefits",
+   "primary_offering": "all from a single intelligent database"
+  },
+  "reason": "Employees benefit, but carriers/brokers/vendors are the customers.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "FurtherAI",
+  "domain": "furtherai.com",
+  "extraction_key": "furtherai.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/task.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "Leading insurers, reinsurers, MGAs, and brokers rely on FurtherAI",
+   "ai_product": "FurtherAI is a domain-specific AI for the insurance industry",
+   "primary_offering": "automates complex workflows like submission intake"
+  },
+  "reason": "",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Poly",
+  "domain": "poly.app",
+  "extraction_key": "poly.app",
+  "source": [
+   "run-4250f181:run-4250f181/task.json"
+  ],
+  "business_customer": false,
+  "consumer_customer": true,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "hosted_cloud_or_web_saas",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "consumer_customer": "A personal cloud storage platform",
+   "primary_offering": "Browse with a lightning fast interface",
+   "delivery_model": "A personal cloud storage platform"
+  },
+  "reason": "'personal' read as personal-capacity use; 'natural language search' not treated as explicit AI.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Streak",
+  "domain": "streak.com",
+  "extraction_key": "streak.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "track any business process including sales",
+   "primary_offering": "Streak is the only CRM integrated entirely within your Gmail inbox"
+  },
+  "reason": "Runs inside Gmail, but no explicit hosted/cloud/web statement — strict rule gives not_stated.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "ShipBob",
+  "domain": "shipbob.com",
+  "extraction_key": "shipbob.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "human_delivered_service",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "designed for SMB and Mid-Market ecommerce brands",
+   "primary_offering": "outsource fulfillment to have their orders picked, packed, and shipped"
+  },
+  "reason": "Outsourced fulfillment (services) plus WMS software; primary is arguable.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Mason",
+  "domain": "bymason.com",
+  "extraction_key": "bymason.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "low",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "Helping enterprises collect mission-critical data",
+   "primary_offering": "fully managed infrastructure for developing and delivering dedicated devices"
+  },
+  "reason": "Device infrastructure platform vs hardware; 'fully managed' is not an explicit hosting statement.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Deepgram",
+  "domain": "deepgram.com",
+  "extraction_key": "deepgram.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "hosted_cloud_or_web_saas",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "We give any developer access",
+   "ai_product": "most advanced speech AI transcription",
+   "primary_offering": "with just an API call",
+   "delivery_model": "on DG’s managed cloud"
+  },
+  "reason": "Offers BOTH managed cloud and on-prem ('Deploy on-prem or on DG’s managed cloud'); one-choice delivery cannot hold both — review.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Mux",
+  "domain": "mux.com",
+  "extraction_key": "mux.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "for every development team",
+   "primary_offering": "Mux is an API-first video platform"
+  },
+  "reason": "Hosted API implied ('handles the encoding, storage, and delivery') but not stated in hosting words.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Bitmovin",
+  "domain": "bitmovin.com",
+  "extraction_key": "bitmovin.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "hosted_cloud_or_web_saas",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "this is a true enterprise offering",
+   "primary_offering": "HTML5 Player",
+   "delivery_model": "realtime encoding speeds in the cloud"
+  },
+  "reason": "Also mentions a containerized (self-deployable) solution; review.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "SnapMagic",
+  "domain": "snapmagic.com",
+  "extraction_key": "snapmagic.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "across the world’s largest organizations",
+   "ai_product": "AI-assisted design tool",
+   "primary_offering": "AI-assisted design tool"
+  },
+  "reason": "",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Gemnote",
+  "domain": "gemnote.com",
+  "extraction_key": "gemnote.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "physical_product_or_hardware",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "gifts for the modern business",
+   "primary_offering": "Gemnote creates custom merch, swag and gifts"
+  },
+  "reason": "Physical merch plus full-service fulfilment and a platform; primary arguable.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Mashgin",
+  "domain": "mashgin.com",
+  "extraction_key": "mashgin.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "physical_product_or_hardware",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "Our clients see dramatic reductions in lines",
+   "ai_product": "uses computer vision to scan multiple items",
+   "primary_offering": "We’ve built a self-checkout kiosk"
+  },
+  "reason": "'computer vision' read as an explicit AI capability — review.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Tara AI",
+  "domain": "tara.ai",
+  "extraction_key": "tara.ai",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "helps engineering leaders measure and improve engineering efficiency",
+   "ai_product": "fine-tuned, secure LLMs",
+   "primary_offering": "lightning-fast project management"
+  },
+  "reason": "",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Zentail",
+  "domain": "zentail.com",
+  "extraction_key": "zentail.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "for ecommerce brands",
+   "primary_offering": "By automating the toughest parts of multichannel selling"
+  },
+  "reason": "",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Marble",
+  "domain": "joinmarble.ai",
+  "extraction_key": "joinmarble.ai",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "Restaurants, cafes and bars",
+   "ai_product": "Computer vision and voice AI",
+   "primary_offering": "Marble replaces that entire stack with one system"
+  },
+  "reason": "",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "LemonLime",
+  "domain": "lemonlime.com",
+  "extraction_key": "lemonlime.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "low",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "for small businesses",
+   "primary_offering": "LemonLime finds you new leads and drafts personalized outreach"
+  },
+  "reason": "No explicit AI word; 'fully automated' could be a service — review.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "10x Science",
+  "domain": "10xscience.com",
+  "extraction_key": "10xscience.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "giving drug developers the confidence",
+   "ai_product": "develops frontier AI models",
+   "primary_offering": "Our AI-native platform automates it"
+  },
+  "reason": "Could be licensed_models_or_data ('develops frontier AI models'); proposed software from 'platform automates it'.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Semble",
+  "domain": "sembleai.com",
+  "extraction_key": "sembleai.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "for your construction business",
+   "ai_product": "provides AI agents to run the workflows",
+   "primary_offering": "It's a live platform that keeps the office and the field in sync"
+  },
+  "reason": "",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Uplane",
+  "domain": "uplane.com",
+  "extraction_key": "uplane.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json",
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "Higher ROAS for enterprises",
+   "ai_product": "Uplane replaces marketing agencies with AI",
+   "primary_offering": "one self-improving system"
+  },
+  "reason": "",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Hemut",
+  "domain": "hemut.com",
+  "extraction_key": "hemut.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "for trucking companies",
+   "ai_product": "AI agents to automate inbound/outbound calls",
+   "primary_offering": "truck management software"
+  },
+  "reason": "",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Ergo",
+  "domain": "joinergo.com",
+  "extraction_key": "joinergo.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "for teams growing faster than their systems can keep up",
+   "primary_offering": "build a unified data layer that moves deals forward"
+  },
+  "reason": "'teams' in a clear product/customer context; software from 'unified data layer'.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "SalesPatriot",
+  "domain": "salespatriot.com",
+  "extraction_key": "salespatriot.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "for distributors and OEMS",
+   "ai_product": "We build custom AI workflows",
+   "primary_offering": "SalesPatriot is a back-office operating system"
+  },
+  "reason": "'custom AI workflows' may imply services.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Contrario",
+  "domain": "contrario.ai",
+  "extraction_key": "contrario.ai",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "human_delivered_service",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "low",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "help companies build generational teams",
+   "ai_product": "vertical AI agents purpose-built for hiring",
+   "primary_offering": "Contrario is a network of expert recruiters"
+  },
+  "reason": "Recruiter network paid per placement — human service vs marketplace; review.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Auctor",
+  "domain": "getauctor.com",
+  "extraction_key": "getauctor.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": false,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "not_determinable",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "low",
+  "needs_review": true,
+  "supporting_evidence": {},
+  "reason": "Only 'brings alignment and intelligence to software implementation' — no audience, product type or AI capability stated.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Woz",
+  "domain": "wozcode.com",
+  "extraction_key": "wozcode.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": false,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "installed_on_prem_or_perpetual",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "ai_product": "AI coding agent",
+   "primary_offering": "Available via Claude Code Plugin",
+   "delivery_model": "Install with one command"
+  },
+  "reason": "Installed plugin read as installed deployment — review; no business audience stated.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Quartzy",
+  "domain": "quartzy.com",
+  "extraction_key": "quartzy.com",
+  "source": [
+   "run-4250f181:run-4250f181/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "The world’s No. 1 lab management platform",
+   "primary_offering": "organize orders, manage inventory"
+  },
+  "reason": "Labs as organisations; functionality establishes software beyond 'platform'.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Moss",
+  "domain": "moss.dev",
+  "extraction_key": "moss.dev",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "low",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "If you’ve ever built a conversational or voice AI product",
+   "ai_product": "semantic search runtime for conversational and multimodal AI",
+   "primary_offering": "real-time semantic search runtime"
+  },
+  "reason": "Audience is builders (implied professional); runs locally ('natively across browsers, mobile devices, and servers') — not an install statement.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Hyperspell",
+  "domain": "hyperspell.com",
+  "extraction_key": "hyperspell.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "how your company works",
+   "ai_product": "synthesizes documents and conversations into a live, permissioned context graph",
+   "primary_offering": "Hyperspell connects your tools"
+  },
+  "reason": "AI capability read from 'synthesizes' for agents — review.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Manicule",
+  "domain": "manicule.com",
+  "extraction_key": "manicule.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "human_delivered_service",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "We get companies discovered and used by AI agents",
+   "primary_offering": "We own developer documentation and technical content across social channels, end-to-end"
+  },
+  "reason": "Done-for-you content work; AI is the channel, not a product capability.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Tasklet",
+  "domain": "tasklet.ai",
+  "extraction_key": "tasklet.ai",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "knowledge workers are still spending most of their day",
+   "ai_product": "Tasklet is the AI agent that actually does the work",
+   "primary_offering": "via thousands of built-in integrations"
+  },
+  "reason": "'knowledge workers' read as professionals.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Nixo",
+  "domain": "withnixo.com",
+  "extraction_key": "withnixo.com",
+  "source": [
+   "run-1e52d43c:run-1e52d43c/lineage.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "built for how FDEs actually work",
+   "primary_offering": "the only data layer and agent platform"
+  },
+  "reason": "'agent platform' not treated as explicit AI.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "ByteByteGo",
+  "domain": "blog.bytebytego.com",
+  "extraction_key": "blog.bytebytego.com",
+  "source": [
+   "size-semantics-replay-2026-09-24:size-semantics-replay-2026-09-24/canary_companies.json"
+  ],
+  "business_customer": false,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "media_or_content",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "primary_offering": "A popular weekly newsletter"
+  },
+  "reason": "Audience not stated as business or personal.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Psychology Today",
+  "domain": "psychologytoday.com",
+  "extraction_key": "psychologytoday.com",
+  "source": [
+   "size-semantics-replay-2026-09-24:size-semantics-replay-2026-09-24/canary_companies.json"
+  ],
+  "business_customer": false,
+  "consumer_customer": true,
+  "ai_product": false,
+  "primary_offering": "media_or_content",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "consumer_customer": "treatment facilities near you",
+   "primary_offering": "Our magazine, first launched in 1967, continues to thrive"
+  },
+  "reason": "General-public readers read as personal capacity; the therapist directory's paying side is not stated.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Deadline Hollywood",
+  "domain": "deadline.com",
+  "extraction_key": "deadline.com",
+  "source": [
+   "size-semantics-replay-2026-09-24:size-semantics-replay-2026-09-24/canary_companies.json"
+  ],
+  "business_customer": false,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "media_or_content",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "primary_offering": "the premier news source covering the business of entertainment"
+  },
+  "reason": "",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "How to AI",
+  "domain": "how-to-ai.guide",
+  "extraction_key": "how-to-ai.guide",
+  "source": [
+   "size-semantics-replay-2026-09-24:size-semantics-replay-2026-09-24/canary_companies.json"
+  ],
+  "business_customer": false,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "not_determinable",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {},
+  "reason": "Only 'Subscribe for free at …'; the name is not evidence.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Recode",
+  "domain": "recode.net",
+  "extraction_key": "recode.net",
+  "source": [
+   "size-semantics-replay-2026-09-24:size-semantics-replay-2026-09-24/canary_companies.json"
+  ],
+  "business_customer": false,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "media_or_content",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "primary_offering": "Recode is a tech news, reviews and analysis site"
+  },
+  "reason": "",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Design Milk",
+  "domain": "design-milk.com",
+  "extraction_key": "design-milk.com",
+  "source": [
+   "size-semantics-replay-2026-09-24:size-semantics-replay-2026-09-24/canary_companies.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "media_or_content",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "We support the world’s best independent brands",
+   "primary_offering": "exceptional, award-winning content"
+  },
+  "reason": "Brands as the commercial side is an inference from 'support'; review.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Braintrust",
+  "domain": "usebraintrust.com",
+  "extraction_key": "usebraintrust.com",
+  "source": [
+   "size-semantics-replay-2026-09-24:size-semantics-replay-2026-09-24/canary_companies.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "software_product",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "Trusted by hundreds of Fortune 1000 enterprises",
+   "ai_product": "end-to-end AI recruiting platform",
+   "primary_offering": "conducting the first round phone screen for you"
+  },
+  "reason": "Could be a marketplace (matching with pre-vetted candidates).",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "DeepLearning.AI",
+  "domain": "deeplearning.ai",
+  "extraction_key": "deeplearning.ai",
+  "source": [
+   "size-semantics-replay-2026-09-24:size-semantics-replay-2026-09-24/canary_companies.json"
+  ],
+  "business_customer": false,
+  "consumer_customer": true,
+  "ai_product": false,
+  "primary_offering": "media_or_content",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "low",
+  "needs_review": true,
+  "supporting_evidence": {
+   "consumer_customer": "accessible to people around the globe",
+   "primary_offering": "world-class AI education"
+  },
+  "reason": "Education fits no option exactly; teaching AI is not an AI product capability.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Wall Street Oasis",
+  "domain": "wallstreetoasis.com",
+  "extraction_key": "wallstreetoasis.com",
+  "source": [
+   "size-semantics-replay-2026-09-24:size-semantics-replay-2026-09-24/canary_companies.json"
+  ],
+  "business_customer": false,
+  "consumer_customer": true,
+  "ai_product": false,
+  "primary_offering": "media_or_content",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "consumer_customer": "for students and professionals pursuing careers",
+   "primary_offering": "the largest online community and career platform"
+  },
+  "reason": "Individuals pursuing their own careers read as personal capacity; a community/education site read as media — review.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "BigRio",
+  "domain": "bigr.io",
+  "extraction_key": "bigr.io",
+  "source": [
+   "size-semantics-replay-2026-09-24:size-semantics-replay-2026-09-24/canary_companies.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": true,
+  "primary_offering": "human_delivered_service",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "medium",
+  "needs_review": true,
+  "supporting_evidence": {
+   "business_customer": "across a variety of verticals",
+   "ai_product": "Machine Learning",
+   "primary_offering": "BigRio is a technology consulting firm"
+  },
+  "reason": "ML is a consulting capability; whether that is an 'AI product' needs review.",
+  "status": "PROPOSED_NOT_FROZEN"
+ },
+ {
+  "company": "Inman",
+  "domain": "inman.com",
+  "extraction_key": "inman.com",
+  "source": [
+   "size-semantics-replay-2026-09-24:size-semantics-replay-2026-09-24/canary_companies.json"
+  ],
+  "business_customer": true,
+  "consumer_customer": false,
+  "ai_product": false,
+  "primary_offering": "media_or_content",
+  "delivery_model": "not_stated",
+  "human_label_confidence": "high",
+  "needs_review": false,
+  "supporting_evidence": {
+   "business_customer": "Trusted by real estate agents, brokers, executives",
+   "primary_offering": "the leading source of news, events, insights"
+  },
+  "reason": "",
+  "status": "PROPOSED_NOT_FROZEN"
+ }
+]

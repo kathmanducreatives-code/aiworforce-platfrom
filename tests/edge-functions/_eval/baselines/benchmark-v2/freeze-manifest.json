@@ -1,0 +1,290 @@
+{
+ "benchmark": "facet-benchmark-v2",
+ "contract_version": "facet-benchmark-v2",
+ "created_at": "2026-09-28T15:03:02.565Z",
+ "git_head": "caac99d736a585d1869b7cc7fb2b98f433d0b32b",
+ "created_before_model_results": true,
+ "candidate_facets": [
+  "software_product",
+  "ai_product"
+ ],
+ "companies": {
+  "final_real_companies": 82,
+  "list": "tests/edge-functions/_eval/v2/real/gate-set-sw-ai.json"
+ },
+ "scored_cells": {
+  "total": {
+   "software_product": {
+    "YES": 37,
+    "NO": 30
+   },
+   "ai_product": {
+    "YES": 35,
+    "NO": 47
+   }
+  },
+  "heldout": {
+   "software_product": {
+    "YES": 19,
+    "NO": 16
+   },
+   "ai_product": {
+    "YES": 19,
+    "NO": 24
+   }
+  },
+  "tune": {
+   "software_product": {
+    "YES": 18,
+    "NO": 14
+   },
+   "ai_product": {
+    "YES": 16,
+    "NO": 23
+   }
+  }
+ },
+ "excluded_not_determinable": [
+  {
+   "company": "Lab0",
+   "software": "NOT_DETERMINABLE",
+   "ai": "YES"
+  },
+  {
+   "company": "LemonLime",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "Every",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "ShipBob",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "Mason",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "Auctor",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "How to AI",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "Tempus AI",
+   "software": "NOT_DETERMINABLE/NOT_DETERMINABLE",
+   "ai": "YES/HIGH"
+  },
+  {
+   "company": "Imidia Digital Technologies",
+   "software": "NOT_DETERMINABLE/NOT_DETERMINABLE",
+   "ai": "NO/HIGH"
+  }
+ ],
+ "excluded_software_contract": [
+  {
+   "company": "Quartzy",
+   "label": "YES",
+   "supporting_line_phrase": "We help scientists easily organize orders, manage inventory",
+   "reason": "platform-only guard refuses the supporting line"
+  },
+  {
+   "company": "Braintrust",
+   "label": "YES",
+   "supporting_line_phrase": "the world's first and only end-to-end AI recruiting platform",
+   "reason": "platform-only guard refuses the supporting line"
+  },
+  {
+   "company": "Structured AI",
+   "label": "YES",
+   "supporting_line_phrase": "Run compliance reviews across thousands of pages in minutes",
+   "reason": "platform-only guard refuses the supporting line"
+  },
+  {
+   "company": "Effective AI",
+   "label": "YES",
+   "supporting_line_phrase": "Effective AI is the agent platform for the teams that price risk",
+   "reason": "platform-only guard refuses the supporting line"
+  },
+  {
+   "company": "Workday",
+   "label": "YES",
+   "supporting_line_phrase": "unifying HR and Finance on an open, trusted platform powered by AI",
+   "reason": "platform-only guard refuses the supporting line"
+  },
+  {
+   "company": "mlpal",
+   "label": "YES",
+   "supporting_line_phrase": "Our platform brings together agents, memory, model building, secure data access, and inference optimization",
+   "reason": "platform-only guard refuses the supporting line"
+  }
+ ],
+ "split": {
+  "sha256": "30ab3151031ff6055232a8b7b686eb9b616a57a6b4c8e31284347084e7c07e75",
+  "rule": "stratum=(software,ai); order=sha256(key); alternate heldout,tune,…"
+ },
+ "fixtures": {
+  "total": 101,
+  "real_gate": 82,
+  "dev": 19,
+  "dev_note": "2 full-contract production fixtures + synthetic/hostile fixtures; scored on dev only, never a gate"
+ },
+ "run": {
+  "arms": [
+   "current",
+   "gpt",
+   "jev"
+  ],
+  "repeats": 5,
+  "gpt": {
+   "model": "gpt-5.6-luna",
+   "temperature": 0,
+   "reasoning_effort": "none",
+   "max_output_tokens": 2000
+  },
+  "jev": {
+   "model": "jev-1.13.0"
+  },
+  "current_grounder_model": "openai/gpt-5.6-luna",
+  "spend_ceiling_usd": 5,
+  "run_cost_bound_usd": 0.01,
+  "expected_arm_runs": 1515,
+  "max_http_requests": 2525
+ },
+ "spend_estimate_usd": {
+  "expected": 0.921,
+  "by_arm": {
+   "current_grounder": 0.4303,
+   "gpt": 0.4291,
+   "jev": 0.0616
+  },
+  "basis": "request chars ÷ V1 chars-per-token; published prices in modelCostModel; grounder at V1's measured mean per call; GPT output 300 tokens"
+ },
+ "frozen_inputs": {
+  "tests/edge-functions/_eval/facetFixtures.ts": "16d90467456e36ab5f69faf52bad2717edd62a1e475712f08d2762d94c3bfb80",
+  "tests/edge-functions/_eval/v2/analyze.ts": "6a43d0e5955a734a22c39c4e578247ef1d06e3679778b87a2f1d35aff915cdcf",
+  "tests/edge-functions/_eval/v2/benchmark.ts": "a78ebad2846a69126abd17a028f0096bd4fc956fbb106c8e85b808cc36004be7",
+  "tests/edge-functions/_eval/v2/contract.ts": "6c541d5c18e6b544a730cbe8d71b3eb3ae2df647aa330f5449975b0ee082b572",
+  "tests/edge-functions/_eval/v2/fixtures.ts": "78ac5009c0960b38662490ffe1d8e22cac4ddaca2d2680aba1d511a8dc1385ab",
+  "tests/edge-functions/_eval/v2/freeze.ts": "1356f79eefead72be49ec2ec38069367daa9eeabec0d595498be6cdb2f19ac5a",
+  "tests/edge-functions/_eval/v2/judges.ts": "0ae581414e8a469b2d3b1c1088e74f18df0db14286619a0733b51daef814df9f",
+  "tests/edge-functions/_eval/v2/real/adjudicate.py": "4b875aae207a3fb31f9e02bf34ce7e9cadc935dc5dea9e52047b4b699831ff1a",
+  "tests/edge-functions/_eval/v2/real/adjudication-sw-ai.json": "9f5e54921d22a0b59f373ba377681e5f9182d8cdb94dea4245d4327ee22af668",
+  "tests/edge-functions/_eval/v2/real/companies.json": "70ca7d3f0221185db04ab7c5c85b71e170441fca81b9bb21a03c32f8e929215d",
+  "tests/edge-functions/_eval/v2/real/extract.py": "b227bea6162df4624ce99074002fcfa125b00c62d8d17c53a159107c0640de50",
+  "tests/edge-functions/_eval/v2/real/gate-evidence-sw-ai.json": "4ddbaaa31c1acb4766bbb317c4840d72759f2a8d0af9fa2400ae0a784c565779",
+  "tests/edge-functions/_eval/v2/real/gate-set-sw-ai.json": "faa4af778611289fedbb5ed1da20009240c47e4a69a63427270a40ec8351fb9e",
+  "tests/edge-functions/_eval/v2/real/gate_set.py": "40a65b135c72ab4e4f9f48738d42423fcb6d846b336448732acdb538f2c8df5d",
+  "tests/edge-functions/_eval/v2/real/label-proposals.json": "f508b23169e49b0b03b545c751c04296119b5850122526c87dad13316efe040d",
+  "tests/edge-functions/_eval/v2/real/proposals.py": "b4f05a75d40856e57de51abc5b445ba82e0fadfad396d2986e36ee00834d2f10",
+  "tests/edge-functions/_eval/v2/real/reserve-candidates.json": "9166499e8922767bbc90bb2dfbf2d9fc9523d72abf4bfcaa73c5dc98a1a77b65",
+  "tests/edge-functions/_eval/v2/real/select_reserve.py": "09b95e0869ef5217dbc348d8e4dfbd9508a38b384fd5c5d053e2bf34ddbc715f",
+  "tests/edge-functions/_eval/v2/real/vet_reserve.py": "6d42a1882985749faa7463b75795e09c5f6ca84db727d2276f7d54061dfe2d89",
+  "tests/edge-functions/_eval/v2/realFixtures.ts": "5530e6e7501db29a185093bc36985f7d12b69f0c5cf4ad09cb7cd4fd47dd6bc8",
+  "tests/edge-functions/_eval/v2/run.ts": "6920b5dfa20d1e6be521803f32c38d84608230e098d613ee469c64737d73b5b2",
+  "tests/edge-functions/_eval/v2/runGuards.ts": "355a6a560edbe4252295fd212a0b44001c917dedce132d683ff8ff21447d4b9a"
+ },
+ "arm_dependencies": {
+  "supabase/functions/_shared/actorCapabilityRegistry.ts": "ff02e6c0c6fa0b17485a5b24e1c2bb89a2424acd44379690f45027996616f899",
+  "supabase/functions/_shared/actorEvidenceCapability.ts": "9331e2ec25ce230c9ee61c8e9bc5bed4ecaafbee7d5e5f5079eb65c70920d66b",
+  "supabase/functions/_shared/actorIdentity.ts": "717d6069532973d2c7ab8423aca7073465444e30f64e717d59fe48782d8d49f6",
+  "supabase/functions/_shared/actorInputContracts.ts": "4c18f1526cade95a5d7756198d7910d0232aab9a8a7c31266b99af9829926143",
+  "supabase/functions/_shared/actorInputStrategy.ts": "37e4af2d3dcc77ffc1fd07678e700b5f0bb1addee600641b175433cb5178dbfd",
+  "supabase/functions/_shared/actorIntelligence.ts": "3e59df7932111ad9764e805ceb11561957483a2fcc008fcb9c0985019ac52b1e",
+  "supabase/functions/_shared/adaptiveWorkflow.ts": "e9435c7434aee0b1b014952ec743d7164be0fe4b77b1ffa6e7303fe3b866535c",
+  "supabase/functions/_shared/aiProvider.ts": "537a884582d88c11bc903deeb7920fde079ff470cb20baaee1fc648e8d3b9041",
+  "supabase/functions/_shared/apifyIntelligenceRegistry.ts": "3e3ef4e75d0fd216beebb00b177952db2561bc4f86d1edac39a9697a9d6d76b0",
+  "supabase/functions/_shared/broaden.ts": "e801c1d252e542e1fccdab70f98357e1dfca02f487a8b568c9e589f54c37a78a",
+  "supabase/functions/_shared/broadeningPlan.ts": "2a826f45b0ecbc39407187ad9029ef0a576671dd794995996726e3c03e000fa9",
+  "supabase/functions/_shared/broadeningValidator.ts": "b19c6866716eee76fbc413e33f14ce849cf4e17b8a9e42aaa4d630bcd1564db3",
+  "supabase/functions/_shared/businessModelMatch.ts": "4f150c34fa447230b3bd2050ea61cbabb5e742e1099fd9afcd1fb4dfb58012fc",
+  "supabase/functions/_shared/candidateEnvelope.ts": "fa71954d3727b9ef487fe45a8f3f4b043d9e7cc6035df9688dbfec66fcdbe5e1",
+  "supabase/functions/_shared/candidateObservation.ts": "0e4d52d0746a5323686ce96394510d187c1e00bb14f4e2901e39e0d817674f0a",
+  "supabase/functions/_shared/capabilityExecutability.ts": "250615eb3dc4aabe25a96d85688249027ca462c1fc7866317ce933395a06eb3b",
+  "supabase/functions/_shared/claimPlan.ts": "d7657d38480539478142f9933af6709f95ca673f249efcb84f77e8b46703e06e",
+  "supabase/functions/_shared/companyBrainCompiler.ts": "d0d73e69e75c5a46f9cf5e45e93912dd14463ff0266060f10b6726d58340c915",
+  "supabase/functions/_shared/companyBrainCompleteness.ts": "0a22229a75aaada29356fc35e14957d133b036853a26a25db0176b8bcfad241b",
+  "supabase/functions/_shared/companyBrainIcp.ts": "1b1ef7a8b78f8aebf54503b481f0a34a1289faf75423e496a324be54fda51dd1",
+  "supabase/functions/_shared/companySize.ts": "0fc076bb9f5784fb6c618a3b02c5676baea8b26b9bcfecc745ed7ea117443c45",
+  "supabase/functions/_shared/conditionalEnrichmentPlanner.ts": "6aff10979a70d15de80fbcf7c5e6aa0d843c7134012927fadb6f6ba680b49b12",
+  "supabase/functions/_shared/criteriaExecutionPolicy.ts": "8759fc74a3418e49dec155cb4a9ba30fae2faa82c09e9af18f863fdfdf3a1554",
+  "supabase/functions/_shared/discoveryScenarioMatrix.ts": "63b7f2d1d4d11d0ab96e99a49576c4f3bc1e8f51efc106a32a3b466756aa6dad",
+  "supabase/functions/_shared/evidenceAuthority.ts": "3f6fee54529481c4b1efad63f3725cd465e30f81aeacf8a2f88bf4b3a8f69fa3",
+  "supabase/functions/_shared/evidenceContract.ts": "3ccbd6e129e2e372255f3900ab7738b4315798a984c7342e09cea4e747eb5994",
+  "supabase/functions/_shared/evidenceGapRouter.ts": "305fbd129ba175ad63e27128e2a18556356af1c7a5e0fc0f4f6cc9331bba71ce",
+  "supabase/functions/_shared/evidenceGraph.ts": "bc8302da86a793cc81b865ce04c93f3f0ad319e5a8524440eeaa5ac1a518b8f7",
+  "supabase/functions/_shared/evidenceSufficiency.ts": "d5d99dc55bd44860633cf2cdee946647e91ee143906da727cd418282aaca091c",
+  "supabase/functions/_shared/executionLedger.ts": "d3938900bf1de63a2c1e31fa7cf56e461935446f8c648fc892adf35b6372e430",
+  "supabase/functions/_shared/facetAttestation.ts": "5180e5cff1d42208461eb98334b4d886066cf14b470bf1b953c9f39ef89f9fd8",
+  "supabase/functions/_shared/getCompiledCompanyBrainForWorkspace.ts": "94d3f51abc387325ffcc698cae371d6ba8039cf971d587597b9a9470ba685b35",
+  "supabase/functions/_shared/gptModelRouter.ts": "31845d734bc64040e0398818fd82b575f476f3aad8b16a73a287754b37dbfdfd",
+  "supabase/functions/_shared/gptProvider.ts": "27c96a8ce46862d01e39f154732433d74be3a0695770a54bcad904b8d4fceb31",
+  "supabase/functions/_shared/gptStrategistModel.ts": "a5a23c4acd1d51796d0053f383cced75ea498e6611283f430f1855f4efb3dbf1",
+  "supabase/functions/_shared/groundedBrainBinding.ts": "fdfa2ad2278e67a30d7e34f1a8ec415b39f66d44ffad61bd3423330665948088",
+  "supabase/functions/_shared/groundedClaims.ts": "846aa729b2026c4f1927bc22e0f09f81c57e1fa44d67c6fe5e42646c45f4f269",
+  "supabase/functions/_shared/headcountValue.ts": "35707ba8afe137847f9a9c040ae5f79ec6baba0490dd2dd80c2600833ec017e0",
+  "supabase/functions/_shared/hiringActorCatalog.ts": "c44e9ab885ce15326b8a9db0bd4cc9b37189d72f07ae0427e73569496bd25a1f",
+  "supabase/functions/_shared/hiringActorNormalizers.ts": "dadbef255a063d9902bb2d972910f0b58f1197b339644c4f64eb159d77653a68",
+  "supabase/functions/_shared/icpDiscoveryConstraints.ts": "117fceac6dc0cd435c8479fa5a68399ce5bb43078f3ba5670f2d6120b81d4c18",
+  "supabase/functions/_shared/intelligence/capabilityRegistry.ts": "c8fb71a360adad26be3cca0ea3121fd1f957bc4e912515d098c48960e4a8dd43",
+  "supabase/functions/_shared/intelligence/mission.ts": "97867266247641cb94b50d4477f43c08940dd7fcb2069f09f6c21e84be871974",
+  "supabase/functions/_shared/intelligence/missionContext.ts": "a080affbf30ea569b86ee129d66feff8a89bb46c4c76511993ca41563e67e6d4",
+  "supabase/functions/_shared/intelligence/plannerWrapper.ts": "534b3bfa646543dbc0918ba411c28ec321bf85e58594bfe43fa0cdbebfff8e73",
+  "supabase/functions/_shared/intelligence/promptAssembly.ts": "d94eff7cae193c5b3019edde2a790cab8f8101482a528393ac413618e508fa5c",
+  "supabase/functions/_shared/jevProvider.ts": "6a0d9ad4ee3a222efbdff7bed34f023b4df0abbeb2db45658fc6141c5c9cef1c",
+  "supabase/functions/_shared/jobFamily.ts": "70c0ced9b36ab69ac20e4fac8c64e82440f70216f5e45049a4c7f6a9972dd2cf",
+  "supabase/functions/_shared/jobFamilyRegistry.ts": "9c5f611772a3d4222295f8898deda07fb738e1a2a3556262f595886ad79398e4",
+  "supabase/functions/_shared/jobIntentTaxonomy.ts": "a543837763a48155326460b9e2b679d39965146956da129242569ad1a22dae2d",
+  "supabase/functions/_shared/jobSearchSpec.ts": "0544b1161e8a6a5ce3ff11de2195f17324af82f7c99389c744c977717f7ae141",
+  "supabase/functions/_shared/leadCapabilityGraph.ts": "fdaf62b43701281a3d3c0208cd001e27382c0d36b0ff4827168df8a20c9470d2",
+  "supabase/functions/_shared/leadCompanyEvidence.ts": "2752069be293e76296ca36ff5dd611eff068a8702b8eb3f83f7e15a3ce2853cf",
+  "supabase/functions/_shared/leadDiscoveryStrategy.ts": "1aa9592a168131fc104596d94948bae5055ac78d740eb79d6a4a4ce1c5589fea",
+  "supabase/functions/_shared/leadEntityIntent.ts": "82477d82ebb9fa5b7935efe6fa9866b1950d3c810fca7d6754aae2a53edb1a95",
+  "supabase/functions/_shared/leadEvidenceRegistry.ts": "d2db71d62e9b054bf3d9fea07df4908761240160be881ec0eeaefa9f835b7ec6",
+  "supabase/functions/_shared/leadExecutionEngine.ts": "3fcd329a92106516431daa23052ce2d7bdd9fac7dc91d04d60191f34c903199d",
+  "supabase/functions/_shared/leadIntelligenceModel.ts": "0bd5d01ad5cef5fdd944ef38d8782f68b7a6b368b676486e466a8dc6ac21e8e3",
+  "supabase/functions/_shared/leadMatchTier.ts": "846790f7aca8537f4e529ce4ab696edefd53666305717d29bd88af50dc3e0765",
+  "supabase/functions/_shared/leadMission.ts": "5c4be53dd653a6dd9b6a7c2a083b91418bf86cf6d69fbb5406231704bb5ac1c3",
+  "supabase/functions/_shared/leadSearchIntent.ts": "c0dac1115d12bcd07292b316bd1222f099db6b47f66e4a637cde73f3adb8b40f",
+  "supabase/functions/_shared/leadStrategy/adapters/lovableAi.ts": "43171716d94659afa75fb7ab57debd63ffdc3eff0a21b4dcb6fe2fd7779228c0",
+  "supabase/functions/_shared/leadStrategy/adapters/openai.ts": "6691d3cb2d18c98ce4644d7acf3267eaae268800b533492de0bb1d8c27b19b36",
+  "supabase/functions/_shared/leadStrategy/adapters/shared.ts": "ceed96ac0ea58bf8a8d41602b9ff458dca1b5c680d71fbebbd53e2f578b83f67",
+  "supabase/functions/_shared/leadStrategy/config.ts": "d382c8efa41d9eeb70715a680575a323960337adf3c69664d443e4658dc8bd2d",
+  "supabase/functions/_shared/leadStrategy/factory.ts": "c700828544f6a0c0b45fc7d604be64fc40211a7c64c36593a06dac26deac4d39",
+  "supabase/functions/_shared/leadStrategy/provider.ts": "4e577fdc237a0ce8037a39907a6adfc4f5dae60f39e5a70162b2d7dabb151365",
+  "supabase/functions/_shared/leadStrategyModels.ts": "739783c27d034dd305323f1b64bab7b2b09157efbf5825e342628c0227b00303",
+  "supabase/functions/_shared/linkedinCompanyActorFixture.ts": "67f36701b529a606f1948e981a59d81aa22c0b2f8c0abf1b031b2a901a536438",
+  "supabase/functions/_shared/linkedinIndustryTaxonomy.ts": "c0a72ad064d30f6c7880ea7678da3d651cb558848ac12f7e337cd51d706c95a7",
+  "supabase/functions/_shared/locationMatch.ts": "bf95818cb483e613065b843a7bbeac16eeee2accea48a279fa51ece4f09356d9",
+  "supabase/functions/_shared/missionCriteria.ts": "fb6e820a208a3580af5ad7eb5141b9bdabf57fc0092af2cdff764723f236011e",
+  "supabase/functions/_shared/missionSignalDescriptor.ts": "b70bf573bbe0c0a5381b27f70d661d4aeae38cfb00cef98c96b2345992032a58",
+  "supabase/functions/_shared/modelCostModel.ts": "81100974ed3bc631a8639197e9c105fe81bb522bba3cc7088373f2b7f4492e76",
+  "supabase/functions/_shared/modelRequestBody.ts": "38cbd162e201e8d2b472707f319ab35de5271f6d5a8daf7ed21c19bbe758f09f",
+  "supabase/functions/_shared/monitoringMission.ts": "276970add5eab727eb3813c10ac3dcec999f79aa9c3ac9d35e66893a02f8d915",
+  "supabase/functions/_shared/normalizeCompanyBrain.ts": "5e2675d00f8d67aa9e17007c707174cb3113d95b0d30cc6ac341aad398ddfe51",
+  "supabase/functions/_shared/peopleSearchQueryBuilder.ts": "c9e866c72de2e22fc7fbe3d68e5580568a11a97759ddb8da756264ac6b577428",
+  "supabase/functions/_shared/planHash.ts": "5d0c54eb375880dbe9ba2ff64fade8cb1c40229d6b6349b3bb863c1d9e1369ab",
+  "supabase/functions/_shared/providerInputFingerprint.ts": "1799a1ca19e33da07d903b53f49e41b8c3db7085e36dca7a7d9e56717532cd25",
+  "supabase/functions/_shared/qualifiedLeadRouting.ts": "ed1e7d3192ce3af54aeb183fbcade1339ab7761682fd4e17045ed8862a19b8fc",
+  "supabase/functions/_shared/roleFamilies.ts": "e9ced7063401d69409fb8449bcd4a8f20d08059a6e635da614995a451ba81f68",
+  "supabase/functions/_shared/routeReadiness.ts": "49631b367ef67c83433e4b381eb73484dd1aa56264e7ba52c0dcb764b8e5cc75",
+  "supabase/functions/_shared/signalActorCoverage.ts": "52e5c66fc11adb34cd91dd8880e49530df8d933e7c1cbc5f66d96cd9f03a4320",
+  "supabase/functions/_shared/signalKinds.ts": "70b674bd72112d426ae07802774352464cb39304b55b6d95bda26cf20fc663ee",
+  "supabase/functions/_shared/sourcingBottleneck.ts": "92a2678f568998a5ef57952037f92f00ba98628750c39639514b5cfbc25ee7de",
+  "supabase/functions/_shared/sourcingConstraints.ts": "6d06d8d37028628720f512eeb61679541ae03a4651183a8f50d17f2709ceef48",
+  "supabase/functions/_shared/sourcingRetry.ts": "564bc319b5bbd81235615e3d1911804a5463f500538472081d2304dcf677eedc",
+  "supabase/functions/_shared/structuredCompanyEnrichment.ts": "ebf2abba4de925fe8ec821d3dc31e1179d592282079d55cb95a36f90511fd45b",
+  "supabase/functions/_shared/timingFreshnessPolicy.ts": "a330adc075feed9b17212d4947f4ca80387ba407c7ef3f7713a9fdb9b19688f2",
+  "supabase/functions/_shared/verticalQualification.ts": "11d4b8535d137496673884633257a9f52882a030d9d6b6b114761b0829113025"
+ }
+}

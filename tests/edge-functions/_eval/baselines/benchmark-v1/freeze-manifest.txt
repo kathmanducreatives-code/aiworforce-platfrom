@@ -1,0 +1,7 @@
+facet benchmark freeze — 2026-09-27T16:59:17Z — HEAD caac99d7
+16d90467456e36ab5f69faf52bad2717edd62a1e475712f08d2762d94c3bfb80  tests/edge-functions/_eval/facetFixtures.ts
+5180e5cff1d42208461eb98334b4d886066cf14b470bf1b953c9f39ef89f9fd8  supabase/functions/_shared/facetAttestation.ts
+6a0d9ad4ee3a222efbdff7bed34f023b4df0abbeb2db45658fc6141c5c9cef1c  supabase/functions/_shared/jevProvider.ts
+aa910513deddf9d59129d38c42664451d88e2e5cc55aa222993e3328229c26bf  supabase/functions/_shared/gptFacetJudge.ts
+b81eb84fa54e2d827cab43368a6a5542562b9bea230e1870bbf4aa5d796d5526  tests/edge-functions/_eval/facetBenchmark.ts
+303324be1a1fedfa8cc8b01d9bdd846af753a78559fa9c7468cac04c727c2878  tests/edge-functions/_eval/runFacetBenchmark.ts

@@ -1,0 +1,752 @@
+[
+ {
+  "company": "Fuse AI",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "With powerful integrations and intelligent workflows",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "AI-native sales platform",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "PropelAuth",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "they can use our APIs and component libraries",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "SafetyKit",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "rely on SafetyKit in production",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "We build AI agents for teams tackling fraud & abuse",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Nango",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Leverage hundreds of pre-built integrations",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Pasito",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "all from a single intelligent database",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "Pasito builds AI agents for insurance and benefits",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "FurtherAI",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "automates complex workflows like submission intake",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "FurtherAI is a domain-specific AI for the insurance industry",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Poly",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Browse with a lightning fast interface",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "USER P3 2026-09-28: natural-language/multimodal search is not explicit AI",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Streak",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Streak is the only CRM integrated entirely within your Gmail inbox",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Deepgram",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "with just an API call",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "most advanced speech AI transcription",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Mux",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Mux Video is a simple API to advanced video streaming",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Bitmovin",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Bitmovin products are completely in-house developed, easy and fast to integrate",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "SnapMagic",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Our new AI-assisted design tool",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "Our new AI-assisted design tool",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Tara AI",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "lightning-fast project management that helps teams ship product",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "fine-tuned, secure LLMs trained on source control and project data",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Zentail",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "automates away all of the work getting a listing formatted for different marketplaces",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Marble",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Marble replaces that entire stack with one system",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "Computer vision and voice AI capture real-time inventory levels",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Semble",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "It's a live platform that keeps the office and the field in sync on every project",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "provides AI agents to run the workflows your business depends on",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Hemut",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Next-generation truck management software",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "AI agents to automate inbound/outbound calls",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Ergo",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "We connect the conversations your team is already having, across calls, email, Slack, and more",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "SalesPatriot",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "SalesPatriot is a back-office operating system for distributors and OEMS",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "We build custom AI workflows",
+  "note": "'custom' could mean bespoke work; the operating-system statement is the product.",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Woz",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Available via Claude Code Plugin",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "AI coding agent",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Quartzy",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "We help scientists easily organize orders, manage inventory",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "Functionality beyond 'platform'.",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Moss",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "optimized vector index built in Rust and WebAssembly",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "USER P3 2026-09-28: serving AI products does not make Moss an AI product",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "low"
+  }
+ },
+ {
+  "company": "Hyperspell",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Hyperspell connects your tools and synthesizes documents and conversations",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "USER P1 2026-09-28: the agents are customers' agents, not Hyperspell's capability",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Tasklet",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "The product is deliberately simple: a chat interface",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "Tasklet is the AI agent that actually does the work",
+  "note": "",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Nixo",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Nixo automatically captures the full history and live health of every account",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "Our agents use that context to find, scope, and prioritize work",
+  "note": "USER P1 2026-09-28: the company's own agents are the product capability",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Gojiberry AI",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Gojiberry turns it into one AI team that finds buyers and books meetings",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "Gojiberry is building the AI GTM team for B2B companies",
+  "note": "USER P2 2026-09-28: the offering itself is an AI system doing the work",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Uplane",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Uplane runs your entire marketing on one AI system",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "Uplane replaces marketing agencies with AI",
+  "note": "USER P2 2026-09-28: the offering itself is an AI system doing the work",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "10x Science",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Our AI-native platform automates it",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "10x Science develops frontier AI models",
+  "note": "USER P4 2026-09-28: platform plus end-to-end product statement",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Contrario",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "Contrario is a network of expert recruiters supercharged by vertical AI agents purpose-built for hiring",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "USER P5 2026-09-28: recruiter network is the primary offering; AI supports it",
+  "previous": {
+   "primary_offering": "human_delivered_service",
+   "ai_product": true,
+   "confidence": "low"
+  }
+ },
+ {
+  "company": "Braintrust",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "the world's first and only end-to-end AI recruiting platform",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "the world's first and only end-to-end AI recruiting platform",
+  "note": "USER P5 2026-09-28: AI recruiting platform is a software product",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "BigRio",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "BigRio is a technology consulting firm",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "USER P6 2026-09-28: ML expertise of a consultancy is not an AI product",
+  "previous": {
+   "primary_offering": "human_delivered_service",
+   "ai_product": true,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Lab0",
+  "software_product": "NOT_DETERMINABLE",
+  "sw_group": "C",
+  "sw_evidence": "Lab0 builds agentic systems that automate this layer",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "Lab0 builds agentic systems",
+  "note": "USER P1 2026-09-28: agentic systems are the product's own capability; software stays NOT_DETERMINABLE",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": true,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "LemonLime",
+  "software_product": "NOT_DETERMINABLE",
+  "sw_group": "C",
+  "sw_evidence": "LemonLime runs fully automated sales and marketing for small businesses.",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "Vague automation: product vs done-for-you not stated; no AI word",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "low"
+  }
+ },
+ {
+  "company": "Every",
+  "software_product": "NOT_DETERMINABLE",
+  "sw_group": "C",
+  "sw_evidence": "Every provides you with the tools and expert support",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "Banking, bookkeeping/tax and tools with expert support: primary not established",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "ShipBob",
+  "software_product": "NOT_DETERMINABLE",
+  "sw_group": "C",
+  "sw_evidence": "outsource fulfillment to have their orders picked, packed, and shipped",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "WMS software AND outsourced fulfillment: primary not established",
+  "previous": {
+   "primary_offering": "human_delivered_service",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Mason",
+  "software_product": "NOT_DETERMINABLE",
+  "sw_group": "C",
+  "sw_evidence": "Mason offloads hardware investment risks and logistics",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "Device infrastructure, hardware logistics and tablets: primary not established",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "low"
+  }
+ },
+ {
+  "company": "Auctor",
+  "software_product": "NOT_DETERMINABLE",
+  "sw_group": "C",
+  "sw_evidence": "Auctor brings alignment and intelligence to software implementation",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "'intelligence' is vague language",
+  "previous": {
+   "primary_offering": "not_determinable",
+   "ai_product": false,
+   "confidence": "low"
+  }
+ },
+ {
+  "company": "How to AI",
+  "software_product": "NOT_DETERMINABLE",
+  "sw_group": "C",
+  "sw_evidence": "Subscribe for free at https://how-to-ai.guide",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "Nothing but a subscribe link; the name is not evidence",
+  "previous": {
+   "primary_offering": "not_determinable",
+   "ai_product": false,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Gemnote",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "Gemnote creates custom merch, swag and gifts for the modern business",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "Software ('proprietary technology') supports the merch service; not the product",
+  "previous": {
+   "primary_offering": "physical_product_or_hardware",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Mashgin",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "We’ve built a self-checkout kiosk",
+  "ai_product": "YES",
+  "ai_group": "A",
+  "ai_evidence": "uses computer vision to scan multiple items without barcodes",
+  "note": "Computer vision explicitly in the product",
+  "previous": {
+   "primary_offering": "physical_product_or_hardware",
+   "ai_product": true,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Manicule",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "We own developer documentation and technical content across social channels, end-to-end",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "AI is the channel it markets to, not a product capability",
+  "previous": {
+   "primary_offering": "human_delivered_service",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "ByteByteGo",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "A popular weekly newsletter",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "media_or_content",
+   "ai_product": false,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Psychology Today",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "Our magazine, first launched in 1967, continues to thrive",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "media_or_content",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Deadline Hollywood",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "the premier news source covering the business of entertainment",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "media_or_content",
+   "ai_product": false,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Recode",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "Recode is a tech news, reviews and analysis site",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "media_or_content",
+   "ai_product": false,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "Design Milk",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "exceptional, award-winning content",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "media_or_content",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "DeepLearning.AI",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "making a world-class AI education accessible",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "Teaches AI; AI is not a product capability",
+  "previous": {
+   "primary_offering": "media_or_content",
+   "ai_product": false,
+   "confidence": "low"
+  }
+ },
+ {
+  "company": "Wall Street Oasis",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "the largest online community and career platform",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "media_or_content",
+   "ai_product": false,
+   "confidence": "medium"
+  }
+ },
+ {
+  "company": "Inman",
+  "software_product": "NO",
+  "sw_group": "A",
+  "sw_evidence": "Inman is the leading source of news, events, insights, and community",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "",
+  "previous": {
+   "primary_offering": "media_or_content",
+   "ai_product": false,
+   "confidence": "high"
+  }
+ },
+ {
+  "company": "ComfyUI",
+  "software_product": "YES",
+  "sw_group": "A",
+  "sw_evidence": "Comfy Cloud runs your ComfyUI workflows on cloud GPUs, with nothing to install.",
+  "ai_product": "NO",
+  "ai_group": "A",
+  "ai_evidence": null,
+  "note": "V2 production fixture (pages); AI not explicit",
+  "previous": {
+   "primary_offering": "software_product",
+   "ai_product": false,
+   "confidence": "high"
+  }
+ }
+]

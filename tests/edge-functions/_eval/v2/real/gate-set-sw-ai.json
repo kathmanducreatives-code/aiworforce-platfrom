@@ -1,0 +1,917 @@
+{
+ "version": "facet-benchmark-v2-gate-set-sw-ai",
+ "created_before_model_results": true,
+ "rule": "stratum=(software,ai); order=sha256(key); alternate heldout,tune,…",
+ "split_sha256": "30ab3151031ff6055232a8b7b686eb9b616a57a6b4c8e31284347084e7c07e75",
+ "counts": {
+  "software_product": {
+   "total": {
+    "YES": 37,
+    "NO": 30
+   },
+   "heldout": {
+    "YES": 19,
+    "NO": 16
+   },
+   "tune": {
+    "YES": 18,
+    "NO": 14
+   }
+  },
+  "ai_product": {
+   "total": {
+    "YES": 35,
+    "NO": 47
+   },
+   "heldout": {
+    "YES": 19,
+    "NO": 24
+   },
+   "tune": {
+    "YES": 16,
+    "NO": 23
+   }
+  }
+ },
+ "negatives_by_type": {
+  "software_product_NO": {
+   "physical_product_or_hardware": 12,
+   "media_or_content": 9,
+   "human_delivered_service": 8,
+   "marketplace": 1
+  },
+  "ai_product_NO": {
+   "software_product": 13,
+   "physical_product_or_hardware": 10,
+   "media_or_content": 9,
+   "human_delivered_service": 8,
+   "not_determinable": 7
+  }
+ },
+ "positives_by_type": {
+  "software_product_YES": {
+   "software_product": 37
+  },
+  "ai_product_YES": {
+   "software_product": 30,
+   "not_determinable": 2,
+   "physical_product_or_hardware": 2,
+   "marketplace": 1
+  }
+ },
+ "excluded": [
+  {
+   "company": "Quartzy",
+   "software": "YES EXCLUDED (contract: platform-only guard; USER 2026-09-28)",
+   "ai": "NO"
+  },
+  {
+   "company": "Braintrust",
+   "software": "YES EXCLUDED (contract: platform-only guard; USER 2026-09-28)",
+   "ai": "YES"
+  },
+  {
+   "company": "Lab0",
+   "software": "NOT_DETERMINABLE",
+   "ai": "YES"
+  },
+  {
+   "company": "LemonLime",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "Every",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "ShipBob",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "Mason",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "Auctor",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "How to AI",
+   "software": "NOT_DETERMINABLE",
+   "ai": "NO"
+  },
+  {
+   "company": "Structured AI",
+   "software": "YES/HIGH EXCLUDED (contract: platform-only guard; USER 2026-09-28)",
+   "ai": "YES/HIGH"
+  },
+  {
+   "company": "Effective AI",
+   "software": "YES/HIGH EXCLUDED (contract: platform-only guard; USER 2026-09-28)",
+   "ai": "YES/HIGH"
+  },
+  {
+   "company": "Workday",
+   "software": "YES/HIGH EXCLUDED (contract: platform-only guard; USER 2026-09-28)",
+   "ai": "YES/HIGH"
+  },
+  {
+   "company": "mlpal",
+   "software": "YES/HIGH EXCLUDED (contract: platform-only guard; USER 2026-09-28)",
+   "ai": "YES/HIGH"
+  },
+  {
+   "company": "Tempus AI",
+   "software": "NOT_DETERMINABLE/NOT_DETERMINABLE",
+   "ai": "YES/HIGH"
+  },
+  {
+   "company": "Imidia Digital Technologies",
+   "software": "NOT_DETERMINABLE/NOT_DETERMINABLE",
+   "ai": "NO/HIGH"
+  }
+ ],
+ "software_contract_excluded": [
+  {
+   "company": "Quartzy",
+   "label": "YES",
+   "supporting_line_phrase": "We help scientists easily organize orders, manage inventory",
+   "reason": "platform-only guard refuses the supporting line"
+  },
+  {
+   "company": "Braintrust",
+   "label": "YES",
+   "supporting_line_phrase": "the world's first and only end-to-end AI recruiting platform",
+   "reason": "platform-only guard refuses the supporting line"
+  },
+  {
+   "company": "Structured AI",
+   "label": "YES",
+   "supporting_line_phrase": "Run compliance reviews across thousands of pages in minutes",
+   "reason": "platform-only guard refuses the supporting line"
+  },
+  {
+   "company": "Effective AI",
+   "label": "YES",
+   "supporting_line_phrase": "Effective AI is the agent platform for the teams that price risk",
+   "reason": "platform-only guard refuses the supporting line"
+  },
+  {
+   "company": "Workday",
+   "label": "YES",
+   "supporting_line_phrase": "unifying HR and Finance on an open, trusted platform powered by AI",
+   "reason": "platform-only guard refuses the supporting line"
+  },
+  {
+   "company": "mlpal",
+   "label": "YES",
+   "supporting_line_phrase": "Our platform brings together agents, memory, model building, secure data access, and inference optimization",
+   "reason": "platform-only guard refuses the supporting line"
+  }
+ ],
+ "companies": [
+  {
+   "company": "Fuse AI",
+   "key": "fuseai.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "PropelAuth",
+   "key": "propelauth.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "SafetyKit",
+   "key": "safetykit.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Nango",
+   "key": "nango.dev",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Pasito",
+   "key": "pasito.ai",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "FurtherAI",
+   "key": "furtherai.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Poly",
+   "key": "poly.app",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Streak",
+   "key": "streak.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Deepgram",
+   "key": "deepgram.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Mux",
+   "key": "mux.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Bitmovin",
+   "key": "bitmovin.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "SnapMagic",
+   "key": "snapmagic.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Tara AI",
+   "key": "tara.ai",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Zentail",
+   "key": "zentail.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Marble",
+   "key": "joinmarble.ai",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Semble",
+   "key": "sembleai.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Hemut",
+   "key": "hemut.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Ergo",
+   "key": "joinergo.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "SalesPatriot",
+   "key": "salespatriot.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Woz",
+   "key": "wozcode.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Quartzy",
+   "key": "quartzy.com",
+   "origin": "settled_50",
+   "software_product": null,
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Moss",
+   "key": "moss.dev",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Hyperspell",
+   "key": "hyperspell.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Tasklet",
+   "key": "tasklet.ai",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Nixo",
+   "key": "withnixo.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Gojiberry AI",
+   "key": "gojiberry.ai",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Uplane",
+   "key": "uplane.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "10x Science",
+   "key": "10xscience.com",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Contrario",
+   "key": "contrario.ai",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "human_delivered_service",
+   "split": "heldout"
+  },
+  {
+   "company": "Braintrust",
+   "key": "usebraintrust.com",
+   "origin": "settled_50",
+   "software_product": null,
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "BigRio",
+   "key": "bigr.io",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "human_delivered_service",
+   "split": "heldout"
+  },
+  {
+   "company": "Lab0",
+   "key": "lab0.ai",
+   "origin": "settled_50",
+   "software_product": null,
+   "ai_product": "YES",
+   "company_type": "not_determinable",
+   "split": "heldout"
+  },
+  {
+   "company": "LemonLime",
+   "key": "lemonlime.com",
+   "origin": "settled_50",
+   "software_product": null,
+   "ai_product": "NO",
+   "company_type": "not_determinable",
+   "split": "tune"
+  },
+  {
+   "company": "Every",
+   "key": "every.io",
+   "origin": "settled_50",
+   "software_product": null,
+   "ai_product": "NO",
+   "company_type": "not_determinable",
+   "split": "heldout"
+  },
+  {
+   "company": "ShipBob",
+   "key": "shipbob.com",
+   "origin": "settled_50",
+   "software_product": null,
+   "ai_product": "NO",
+   "company_type": "not_determinable",
+   "split": "tune"
+  },
+  {
+   "company": "Mason",
+   "key": "bymason.com",
+   "origin": "settled_50",
+   "software_product": null,
+   "ai_product": "NO",
+   "company_type": "not_determinable",
+   "split": "heldout"
+  },
+  {
+   "company": "Auctor",
+   "key": "getauctor.com",
+   "origin": "settled_50",
+   "software_product": null,
+   "ai_product": "NO",
+   "company_type": "not_determinable",
+   "split": "tune"
+  },
+  {
+   "company": "How to AI",
+   "key": "how-to-ai.guide",
+   "origin": "settled_50",
+   "software_product": null,
+   "ai_product": "NO",
+   "company_type": "not_determinable",
+   "split": "tune"
+  },
+  {
+   "company": "Gemnote",
+   "key": "gemnote.com",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "physical_product_or_hardware",
+   "split": "tune"
+  },
+  {
+   "company": "Mashgin",
+   "key": "mashgin.com",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "YES",
+   "company_type": "physical_product_or_hardware",
+   "split": "heldout"
+  },
+  {
+   "company": "Manicule",
+   "key": "manicule.com",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "human_delivered_service",
+   "split": "heldout"
+  },
+  {
+   "company": "ByteByteGo",
+   "key": "blog.bytebytego.com",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "media_or_content",
+   "split": "tune"
+  },
+  {
+   "company": "Psychology Today",
+   "key": "psychologytoday.com",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "media_or_content",
+   "split": "heldout"
+  },
+  {
+   "company": "Deadline Hollywood",
+   "key": "deadline.com",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "media_or_content",
+   "split": "tune"
+  },
+  {
+   "company": "Recode",
+   "key": "recode.net",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "media_or_content",
+   "split": "heldout"
+  },
+  {
+   "company": "Design Milk",
+   "key": "design-milk.com",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "media_or_content",
+   "split": "heldout"
+  },
+  {
+   "company": "DeepLearning.AI",
+   "key": "deeplearning.ai",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "media_or_content",
+   "split": "tune"
+  },
+  {
+   "company": "Wall Street Oasis",
+   "key": "wallstreetoasis.com",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "media_or_content",
+   "split": "tune"
+  },
+  {
+   "company": "Inman",
+   "key": "inman.com",
+   "origin": "settled_50",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "media_or_content",
+   "split": "tune"
+  },
+  {
+   "company": "ComfyUI",
+   "key": "v2-fixture:comfyui",
+   "origin": "settled_50",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Matic Robots",
+   "key": "li:maticrobots",
+   "origin": "reserve_X",
+   "software_product": "NO",
+   "ai_product": "YES",
+   "company_type": "physical_product_or_hardware",
+   "split": "heldout"
+  },
+  {
+   "company": "Lovable",
+   "key": "li:lovable-dev",
+   "origin": "reserve_Y",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "GitHub",
+   "key": "li:github",
+   "origin": "reserve_Y",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Structured AI",
+   "key": "li:getstructured-ai",
+   "origin": "reserve_Y",
+   "software_product": null,
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Fuse AI Workforce",
+   "key": "fuseaiworkforce.com",
+   "origin": "reserve_Y",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Effective AI",
+   "key": "li:effective-ai-labs",
+   "origin": "reserve_Y",
+   "software_product": null,
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Workday",
+   "key": "li:workday",
+   "origin": "reserve_Y",
+   "software_product": null,
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Salesforce",
+   "key": "li:salesforce",
+   "origin": "reserve_Y",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Emergent",
+   "key": "li:emergentlabs",
+   "origin": "reserve_Y",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "heldout"
+  },
+  {
+   "company": "Barracuda",
+   "key": "li:barracuda-networks",
+   "origin": "reserve_Y",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "mlpal",
+   "key": "li:mlpalresearch",
+   "origin": "reserve_Y",
+   "software_product": null,
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Ruley, the E-Referee",
+   "key": "li:ruleyai",
+   "origin": "reserve_Y",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Datatruck",
+   "key": "li:datatruck",
+   "origin": "reserve_Y",
+   "software_product": "YES",
+   "ai_product": "YES",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Kestra",
+   "key": "kestra.io",
+   "origin": "reserve_Y",
+   "software_product": "YES",
+   "ai_product": "NO",
+   "company_type": "software_product",
+   "split": "tune"
+  },
+  {
+   "company": "Tempus AI",
+   "key": "li:tempusai",
+   "origin": "reserve_Y",
+   "software_product": null,
+   "ai_product": "YES",
+   "company_type": "not_determinable",
+   "split": "heldout"
+  },
+  {
+   "company": "Upstart",
+   "key": "li:upstart-network",
+   "origin": "reserve_Y",
+   "software_product": "NO",
+   "ai_product": "YES",
+   "company_type": "marketplace",
+   "split": "tune"
+  },
+  {
+   "company": "DIVE-Turbine",
+   "key": "li:dive-turbine",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "physical_product_or_hardware",
+   "split": "tune"
+  },
+  {
+   "company": "Plantible",
+   "key": "li:plantible",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "physical_product_or_hardware",
+   "split": "heldout"
+  },
+  {
+   "company": "TALENTS BOUTIQUE - E-commerce Recruiting agency",
+   "key": "li:talents-boutique-recruiting-agency",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "human_delivered_service",
+   "split": "tune"
+  },
+  {
+   "company": "Torkildson Katz, A Law Corporation",
+   "key": "li:torkildson-katz",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "human_delivered_service",
+   "split": "heldout"
+  },
+  {
+   "company": "NanoNord A/S",
+   "key": "li:nano-nord",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "physical_product_or_hardware",
+   "split": "tune"
+  },
+  {
+   "company": "RapidDx Inc.",
+   "key": "li:rapid-dx",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "physical_product_or_hardware",
+   "split": "heldout"
+  },
+  {
+   "company": "Chomps",
+   "key": "li:chomps",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "physical_product_or_hardware",
+   "split": "heldout"
+  },
+  {
+   "company": "Gartner",
+   "key": "li:gartner",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "media_or_content",
+   "split": "tune"
+  },
+  {
+   "company": "US Brick",
+   "key": "li:usbrick",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "physical_product_or_hardware",
+   "split": "heldout"
+  },
+  {
+   "company": "Cherry Bekaert",
+   "key": "li:cherrybekaert",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "human_delivered_service",
+   "split": "tune"
+  },
+  {
+   "company": "Blue Square X",
+   "key": "li:bluesqx",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "physical_product_or_hardware",
+   "split": "heldout"
+  },
+  {
+   "company": "Alp Glass Cam Sanayi ve Ticaret Limited Şirketi",
+   "key": "li:alpglasscomtr",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "physical_product_or_hardware",
+   "split": "tune"
+  },
+  {
+   "company": "Imidia Digital Technologies",
+   "key": "li:imidiadigital",
+   "origin": "reserve_Z",
+   "software_product": null,
+   "ai_product": "NO",
+   "company_type": "not_determinable",
+   "split": "heldout"
+  },
+  {
+   "company": "C-SUITE ASSISTANTS",
+   "key": "li:csuiteassistants",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "human_delivered_service",
+   "split": "heldout"
+  },
+  {
+   "company": "Every Brand Apparel, Inc.",
+   "key": "everybrandapparel.com",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "physical_product_or_hardware",
+   "split": "tune"
+  },
+  {
+   "company": "NordicWorkflow ApS",
+   "key": "li:nordicworkflow",
+   "origin": "reserve_Z",
+   "software_product": "NO",
+   "ai_product": "NO",
+   "company_type": "human_delivered_service",
+   "split": "heldout"
+  }
+ ]
+}

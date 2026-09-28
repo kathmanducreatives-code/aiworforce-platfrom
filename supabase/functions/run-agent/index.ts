@@ -355,6 +355,7 @@ import {
 import {
   buildGroundedBrainBinding, buildShadowComparison,
 } from "../_shared/groundedBrainBinding.ts";
+import { buildJevShadow } from "../_shared/jevShadowBinding.ts";
 import {
   buildMissionEvaluationBinding, evaluationTaskDiagnostics,
 } from "../_shared/missionEvaluationBinding.ts";
@@ -2651,7 +2652,22 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // NO EXTRA BUDGET. It draws on the classification allowance rather than
         // adding one, so a grounded run cannot cost more than an ungrounded run
         // was already permitted to.
-        const groundedBinding = buildGroundedBrainBinding({
+        // ── JEV FACET SHADOW (Phase 1) — ZERO AUTHORITY ─────────────────────
+        // Off unless JEV_SHADOW_ENABLED and this workspace is on
+        // JEV_SHADOW_WORKSPACES. When on, Jev judges the same evidence the
+        // grounder reads, in parallel, and only a diagnostic is kept: the
+        // wrapped binding returns the grounder's result unchanged. See
+        // jevShadowBinding.ts.
+        const jevShadow = buildJevShadow({
+          workspaceId: workspace_id,
+          onModelCall: modelCalls.sink,
+          allowSpend: () => modelCalls.check().allowed,
+        });
+        console.log("[run-agent][jev-shadow][binding]", {
+          task_id: task.id, enabled: jevShadow.enabled, reason: jevShadow.enablement.reason,
+          model: jevShadow.enablement.model, max_calls: jevShadow.enablement.max_calls,
+        });
+        const groundedBinding = jevShadow.wrapBinding(buildGroundedBrainBinding({
           workspaceId: workspace_id,
           onModelCall: modelCalls.sink,
           originalUserQuery: persistedMission?.original_user_query ?? null,
@@ -2664,7 +2680,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             }
             : null,
           callsRemaining: classificationBinding.classificationCallsRemaining,
-        });
+        }));
         console.log("[run-agent][grounded-brain][binding]", {
           task_id: task.id, ...groundedBinding.diagnostics,
         });
@@ -3386,6 +3402,8 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   return v;
                 }
                 : undefined,
+              // Stage 2 batch gradings, shown to the Jev shadow. Told, never asked.
+              observeGrounding: jevShadow.enabled ? (i) => jevShadow.observe(i) : undefined,
               groundingMode: groundedBinding.mode,
               // ── STAGE 2 WIRING ──────────────────────────────────────────
               ...(poolBinding.evaluateBatch
@@ -5433,6 +5451,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             // invocation. Pending capabilities are a partial RESULT, not
             // activity.
             try {
+              // Bounded (JEV_SHADOW_SETTLE_MS) and never throws: outstanding
+              // shadow calls are reported as unsettled, never waited for.
+              await jevShadow.settle();
               const finalProgress = finalizedProgress(capabilityRun.state);
               if (finalProgress) {
                 const { data: cur } = await supabase
@@ -5550,6 +5571,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                             grounded: c.grounded,
                           }))
                         : [],
+                      // JEV FACET SHADOW — a comparison, not a decision.
+                      // `authority: "none"`; nothing reads it back.
+                      jev_shadow: jevShadow.report(),
                     },
                     // ── STAGE 2: RANKED WORKBENCH ROWS AND POOL METRICS ──
                     //
