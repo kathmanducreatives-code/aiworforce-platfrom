@@ -5,7 +5,7 @@ import {
 } from '@/components/ui/command';
 import {
   LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
-  Mail, Share2, BarChart3, Plus, Zap, Users, Crosshair, Loader2, Sparkles,
+  Mail, BarChart3, Plus, Zap, Users, Loader2, Sparkles,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { motion } from 'framer-motion';
@@ -29,9 +29,6 @@ const pages = [
   { label: 'Growth Signals', path: '/growth-signals', icon: TrendingUp, group: 'Navigate' },
   { label: 'Talent Intel', path: '/talent-intel', icon: Users, group: 'Navigate' },
   { label: 'Email Sequences', path: '/email-sequences', icon: Mail, group: 'Navigate' },
-  { label: 'Job Distribution', path: '/distribution', icon: Share2, group: 'Navigate' },
-  { label: 'Post Interceptor', path: '/post-interceptor', icon: Crosshair, group: 'Navigate' },
-  { label: 'Lead CRM', path: '/lead-crm', icon: Zap, group: 'Navigate' },
   { label: 'Analytics', path: '/analytics', icon: BarChart3, group: 'Navigate' },
 ];
 
@@ -164,7 +161,7 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
               id: l.id,
               label: l.contact_name,
               subtitle: l.company,
-              path: '/lead-crm',
+              path: '/leads',
               type: 'lead',
             });
           });

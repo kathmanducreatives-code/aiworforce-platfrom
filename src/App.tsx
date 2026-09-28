@@ -47,21 +47,13 @@ const ClientDetail = lazy(() => import("./pages/ClientDetail"));
 const GoogleOAuthCallback = lazy(() => import("./pages/GoogleOAuthCallback"));
 const OnboardingCompanyBrain = lazy(() => import("./pages/OnboardingCompanyBrain"));
 const CompanyBrainDashboard = lazy(() => import("./pages/CompanyBrainDashboard"));
-const ICPManager = lazy(() => import("./pages/ICPManager"));
-const ICPResultsPage = lazy(() => import("./pages/ICPResultsPage"));
-const ICPCandidateDetail = lazy(() => import("./pages/ICPCandidateDetail"));
 const Leads = lazy(() => import("./pages/Leads"));
-const LeadScraper = lazy(() => import("./pages/LeadScraper"));
-const DeepSearch = lazy(() => import("./pages/DeepSearch"));
 const Content = lazy(() => import("./pages/Content"));
 const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 const Agents = lazy(() => import("./pages/Agents"));
 const SettingsIntegrations = lazy(() => import("./pages/SettingsIntegrations"));
 const SettingsBilling = lazy(() => import("./pages/SettingsBilling"));
-const JobDistribution = lazy(() => import("./pages/JobDistribution"));
 const OutreachEngine = lazy(() => import("./pages/OutreachEngine"));
-const PostInterceptor = lazy(() => import("./pages/PostInterceptor"));
-const LeadCRM = lazy(() => import("./pages/LeadCRM"));
 const TaskPlanPage = lazy(() => import("./pages/TaskPlanPage"));
 const Workflows = lazy(() => import("./pages/Workflows"));
 
@@ -158,15 +150,9 @@ const App = () => (
                     <Route path="/leads" element={
                       <ProtectedRoute><MainLayout><Leads /></MainLayout></ProtectedRoute>
                     } />
-                    <Route path="/leads/find" element={
-                      <ProtectedRoute><MainLayout><LeadScraper /></MainLayout></ProtectedRoute>
-                    } />
-                    <Route path="/leads/icp" element={
-                      <ProtectedRoute><MainLayout><ICPManager /></MainLayout></ProtectedRoute>
-                    } />
-                    <Route path="/leads/research" element={
-                      <ProtectedRoute><MainLayout><DeepSearch /></MainLayout></ProtectedRoute>
-                    } />
+                    <Route path="/leads/find" element={<Navigate to="/leads" replace />} />
+                    <Route path="/leads/icp" element={<Navigate to="/leads" replace />} />
+                    <Route path="/leads/research" element={<Navigate to="/leads" replace />} />
                     <Route path="/competitors" element={<Navigate to="/signals" replace />} />
                     <Route path="/content" element={
                       <ProtectedRoute><MainLayout><Content /></MainLayout></ProtectedRoute>
@@ -228,17 +214,9 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-                    <Route path="/icp/results/:sessionId" element={
-                      <ProtectedRoute>
-                        <ICPResultsPage />
-                      </ProtectedRoute>
-                    } />
+                    <Route path="/icp/results/:sessionId" element={<Navigate to="/leads" replace />} />
 
-                    <Route path="/icp/results/:sessionId/candidate/:candidateId" element={
-                      <ProtectedRoute>
-                        <ICPCandidateDetail />
-                      </ProtectedRoute>
-                    } />
+                    <Route path="/icp/results/:sessionId/candidate/:candidateId" element={<Navigate to="/leads" replace />} />
 
                     <Route path="/email-sequences" element={
                       <ProtectedRoute>
@@ -248,30 +226,14 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-                    <Route path="/distribution" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <JobDistribution />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
+                    <Route path="/distribution" element={<Navigate to="/dashboard" replace />} />
 
-                    {/* Growth & Outbound Routes */}
-                    <Route path="/post-interceptor" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <PostInterceptor />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
+                    {/* RETIRED legacy pages (launch hardening): they called a personal n8n
+                        server whose webhook URLs shipped in the bundle, and URL secrecy is not
+                        authentication. Deep links now redirect; the pages are no longer bundled. */}
+                    <Route path="/post-interceptor" element={<Navigate to="/leads" replace />} />
 
-                    <Route path="/lead-crm" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <LeadCRM />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
+                    <Route path="/lead-crm" element={<Navigate to="/leads" replace />} />
 
                     <Route path="/outreach-engine" element={
                       <ProtectedRoute>

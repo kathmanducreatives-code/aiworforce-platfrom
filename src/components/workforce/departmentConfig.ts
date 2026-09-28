@@ -136,7 +136,7 @@ export const DEPT_CONFIG: Record<AgentId, DeptConfig> = {
     ],
     actions: () => [
       { label: 'Open Signal Feed', route: '/signals', primary: true },
-      { label: 'View Research', route: '/leads/research' },
+      { label: 'View Research', route: '/leads' },
     ],
   },
   scribe: {

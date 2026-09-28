@@ -120,7 +120,7 @@ export function GuidedSetup(p: GuidedSetupProps) {
       {p.error && <div className="mx-auto mb-4 max-w-[900px]"><ErrorState title={p.error.title} body={p.error.body} /></div>}
       <fieldset disabled={!!busy} className="m-0 min-w-0 border-0 p-0">
       <AnimatePresence mode="wait" initial={false}>
-      {activated ? <SceneFrame key="complete" eyebrow="Company Brain activated" title="Your AI team has context." helper="Your market, buyers, signals, and qualification rules are now available to your workforce." footer={<SceneFooter primaryLabel={p.founder.first_help_goal === 'Detect buying signals' ? 'Explore buying signals' : 'Find my first opportunity'} onPrimary={() => p.onDestination(p.founder.first_help_goal === 'Detect buying signals' ? '/signals' : '/leads/find')} />}>
+      {activated ? <SceneFrame key="complete" eyebrow="Company Brain activated" title="Your AI team has context." helper="Your market, buyers, signals, and qualification rules are now available to your workforce." footer={<SceneFooter primaryLabel={p.founder.first_help_goal === 'Detect buying signals' ? 'Explore buying signals' : 'Find my first opportunity'} onPrimary={() => p.onDestination(p.founder.first_help_goal === 'Detect buying signals' ? '/signals' : '/leads')} />}>
         <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary"><Check className="h-6 w-6" /></div>
         <p className="text-sm leading-6 text-muted-foreground">Your next step is to define a search. You can review its scope before starting any work.</p>
         <Button variant="ghost" onClick={() => p.onDestination('/company-brain')} className="mt-4 px-0">Review Company Brain <ArrowRight className="ml-2 h-4 w-4" /></Button>

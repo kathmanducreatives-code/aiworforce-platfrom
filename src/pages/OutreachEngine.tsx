@@ -377,7 +377,7 @@ const OutreachEngine = () => {
                             <CardContent className="space-y-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">n8n Base URL</label>
-                                    <Input defaultValue="https://n8n.prasidha.me" />
+                                    <Input placeholder="https://your-n8n-host.example" />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">Content Webhook</label>
