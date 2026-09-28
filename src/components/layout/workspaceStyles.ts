@@ -43,6 +43,13 @@ export const SEGMENT = "ag-seg-item";
 export const METRIC_STRIP = "ag-glass flex items-stretch overflow-hidden rounded-xl";
 export const METRIC_LABEL = "text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground";
 export const METRIC_VALUE = "text-[20px] font-semibold leading-none tabular-nums text-foreground";
+/** One cell of a metric strip; dividers come from METRIC_DIVIDER on every cell after the first. */
+export const METRIC_CELL = "flex min-w-0 flex-1 flex-col justify-center gap-1.5 px-4";
+export const METRIC_DIVIDER = "border-l border-white/[0.05]";
+/** Every full-size metric strip is this tall, so strips on different pages line up. */
+export const METRIC_STRIP_H = "h-[68px]";
+/** The compact value, for a strip that lives inside a toolbar (Content header). */
+export const METRIC_VALUE_COMPACT = "text-[15px] font-semibold leading-none tabular-nums text-foreground";
 
 /** The empty-state mark: an object in the room light. Size it at the call site. */
 export const EMPTY_MARK = "ag-empty-mark";

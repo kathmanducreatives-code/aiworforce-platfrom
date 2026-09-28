@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowUp, ChevronUp, Loader2, Plus, MessageSquare, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -12,17 +12,13 @@ import { openAgentBuilder } from '@/hooks/useAgentBuilder';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import AgentAvatar from '@/components/chat/workspace/agents/AgentAvatar';
+import { useApprovals } from '@/hooks/useApprovals';
+import { dockChips, useWorkforcePulse, type DockChip } from '@/lib/workforcePulse';
 
 // One fixed prompt. The dashboard already has one rotating line (the greeting)
 // and a rotating Live Intelligence bar; a third moving text is noise.
 const PLACEHOLDER = 'Ask your workforce anything...';
 
-const CHIPS = [
-  'Brief me on today',
-  'Show pending approvals',
-  'What\u2019s @Penn working on?',
-  'Run morning standup',
-];
 
 interface CommandDockProps {
   sidebarCollapsed?: boolean;
@@ -33,6 +29,15 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
   const { workspaceId } = useWorkspace();
   const isMobile = useIsMobile();
   const location = useLocation();
+  const navigate = useNavigate();
+  // Three chips from what is actually happening: waiting decisions, fresh
+  // signals (published by the dashboard), then the page's own context.
+  const { count: approvalCount } = useApprovals(workspaceId);
+  const pulse = useWorkforcePulse(workspaceId);
+  const chips = useMemo(
+    () => dockChips({ approvals: approvalCount, signals24h: pulse?.signals24h ?? 0, pathname: location.pathname }),
+    [approvalCount, pulse?.signals24h, location.pathname],
+  );
 
   // Department pages own their own agent rail; collapse the global composer
   // into a small "Open workforce chat" pill so it never overlaps the page.
@@ -123,7 +128,9 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
     }
   };
 
-  const handleChipClick = (text: string) => {
+  const handleChipClick = (chip: DockChip) => {
+    if (chip.route) { navigate(chip.route); return; }
+    const text = chip.prompt ?? chip.label;
     setValue(text);
     requestAnimationFrame(() => {
       const el = taRef.current;
@@ -211,16 +218,20 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
                       transition={{ duration: 0.2, ease: 'easeOut' }}
                       className="flex gap-2 overflow-x-auto flex-nowrap scrollbar-none px-0.5 justify-center"
                     >
-                      {CHIPS.map((c) => (
+                      {chips.map((c) => (
                         <motion.button
-                          key={c}
+                          key={c.label}
                           type="button"
                           onClick={() => handleChipClick(c)}
                           whileHover={{ scale: 1.015 }}
                           transition={{ duration: 0.15, ease: 'easeOut' }}
-                          className="glass shrink-0 rounded-full px-3 py-1 text-mono-label text-neutral-400 hover:text-foreground border border-white/[0.04] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.08] transition-all"
+                          className={cn(
+                            'glass shrink-0 rounded-full px-3 py-1 text-mono-label hover:text-foreground border bg-white/[0.01] hover:bg-white/[0.03] transition-all',
+                            // A chip that opens something waiting on you reads as the action.
+                            c.route ? 'text-emerald-200/85 border-emerald-400/[0.14] hover:border-emerald-400/30' : 'text-neutral-400 border-white/[0.04] hover:border-white/[0.08]',
+                          )}
                         >
-                          {c}
+                          {c.label}
                         </motion.button>
                       ))}
                     </motion.div>

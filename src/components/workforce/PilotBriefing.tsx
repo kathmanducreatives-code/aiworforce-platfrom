@@ -7,7 +7,7 @@ import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 import { listRecentRuns, type RecentRun } from '@/lib/workflows/recentRuns';
 
 interface Props {
-  totals: { signals: number; outreachDrafts: number; approvals: number; contentDrafts: number };
+  totals: { signals: number; signals24h?: number; outreachDrafts: number; approvals: number; contentDrafts: number };
   /**
    * The dashboard's panel form: the same briefing, next move and actions, sized
    * to sit beside Recent activity and the review queue instead of taking a
@@ -65,13 +65,26 @@ export default function PilotBriefing({ totals, compact = false }: Props) {
   };
 
   if (compact) {
+    // WHAT MATTERS NOW, in one line, then at most two facts behind it. Every
+    // number is a live count; nothing here is a greeting.
+    const brainIncomplete = !!brain && !brain.onboarding_completed;
+    const fresh = totals.signals24h ?? 0;
+    const attention = totals.approvals + (brainIncomplete ? 1 : 0);
+    const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
     const title = runningRun
       ? `Orchestrating ${runningRun.workflowTitle}…`
-      : brain?.onboarding_completed && founderName
-        ? `Welcome back, ${founderName}.`
-        : `${lines.length} update${lines.length === 1 ? '' : 's'} today`;
+      : attention > 0
+        ? `${plural(attention, 'thing needs', 'things need')} your attention today.`
+        : fresh > 0 ? 'Nothing needs you right now.' : 'All quiet. Nothing needs your attention.';
+    const insights: string[] = [];
+    if (totals.approvals > 0) insights.push(`${plural(totals.approvals, 'decision is', 'decisions are')} holding up work until you choose.`);
+    if (brainIncomplete) insights.push('Company Brain is incomplete, so Atlas can’t score leads yet.');
+    if (fresh > 0) insights.push(`Lyra surfaced ${plural(fresh, 'signal', 'signals')} in the last 24 hours.`);
+    if (totals.outreachDrafts > 0) insights.push(`Mira has ${plural(totals.outreachDrafts, 'outreach draft', 'outreach drafts')} ready to review.`);
+    if (totals.contentDrafts > 0) insights.push(`${plural(totals.contentDrafts, 'content draft is', 'content drafts are')} ready.`);
+    if (!insights.length) insights.push(brain?.onboarding_completed ? 'Run a workflow and Pilot will report what it finds here.' : 'Finish your Company Brain so the team knows who you sell to.');
     return (
-      <section className="team-panel flex flex-col" aria-label="Pilot briefing">
+      <section className="team-panel team-panel--pilot flex flex-col" aria-label="Pilot briefing">
         <div className="team-panel-header">
           <h2 className="flex items-center gap-2">
             <AgentAvatar id="pilot" size={22} status={runningRun ? 'working' : totals.approvals > 0 ? 'awaiting' : 'working'} active />
@@ -85,7 +98,7 @@ export default function PilotBriefing({ totals, compact = false }: Props) {
         </p>
         {!runningRun && (
           <ul className="mt-1.5 space-y-1">
-            {lines.slice(0, 3).map((l, i) => (
+            {insights.slice(0, 2).map((l, i) => (
               <li key={i} className="flex items-start gap-2 text-[12px] leading-snug text-neutral-300">
                 <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-emerald-400/80" />
                 <span className="min-w-0">{l}</span>

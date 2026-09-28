@@ -48,10 +48,13 @@ import ContentComposer, { type ComposerSubmission } from '@/components/content/C
 import ContentStudioEditor, { type StudioAsset } from '@/components/content/ContentStudioEditor';
 import ContentSourcesPanel, { type SourceNav, type CommentSource } from '@/components/content/ContentSourcesPanel';
 import ScribePanel from '@/components/content/ScribePanel';
+import { useDepartmentAgentStatus } from '@/hooks/useDepartmentAgentStatus';
 import SourcePreview from '@/components/content/SourcePreview';
 import { ACCENT, PRIMARY_BUTTON, SECONDARY_BUTTON } from '@/components/content/studioStyles';
 import { AmbientBackdrop } from '@/components/layout/AmbientBackdrop';
-import { METRIC_LABEL } from '@/components/layout/workspaceStyles';
+import { METRIC_LABEL, METRIC_STRIP, METRIC_VALUE_COMPACT } from '@/components/layout/workspaceStyles';
+import DepartmentHeader, { DEPT_ACTION } from '@/components/layout/department/DepartmentHeader';
+import DepartmentEmptyState from '@/components/layout/department/DepartmentEmptyState';
 import { classifyProviderState } from '@/components/signals/ProviderBadge';
 
 const dispatch = (text: string) =>
@@ -80,6 +83,10 @@ const readScribeCollapsed = () => { try { return localStorage.getItem(SCRIBE_COL
 
 export default function Content() {
   const { workspaceId } = useWorkspace();
+  // The content writer's live state. Content drafts run as backend agent
+  // `scribe` (generateContentDraft), which the shared legacy map attributes to
+  // the same visual identity as the dashboard card — so both say the same word.
+  const scribeStatus = useDepartmentAgentStatus(workspaceId, 'scribe');
   const { savedOutputs, drafts, signals, loading } = useSignalFeed(workspaceId);
   const {
     items: contentItems, create: createContentDraft, reload: reloadContentDrafts,
@@ -379,7 +386,7 @@ export default function Content() {
   }, [studioItem, workspaceId, refreshStudio]);
 
   const scribe = (
-    <ScribePanel
+    <ScribePanel status={scribeStatus}
       collapsed={scribeCollapsed}
       onToggle={toggleScribe}
       item={studioItem}
@@ -399,24 +406,28 @@ export default function Content() {
     <div className="relative flex h-[calc(100vh-49px)] min-h-[560px] flex-col overflow-hidden">
       <AmbientBackdrop variant="content" />
       {/* ── header: compact ─────────────────────────────────────────────── */}
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] bg-[rgba(5,7,6,0.35)] px-5 py-4 backdrop-blur-xl lg:px-7">
-        <div className="min-w-0">
-          <h1 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-foreground">Content</h1>
-          <p className="mt-0.5 truncate text-[13px] text-muted-foreground/70">Create and refine content with Scribe.</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <dl className="ag-glass hidden items-stretch overflow-hidden rounded-xl md:flex">
-            <Stat label="trends" value={stats.trends} />
-            <Stat label="drafts" value={stats.drafts} />
-            <Stat label="awaiting review" value={stats.awaiting} />
-            <Stat label="approved" value={stats.approved} />
-          </dl>
-          <button onClick={() => setCreateOpen(true)}
-            className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] transition-colors ${PRIMARY_BUTTON}`}>
-            <Plus className="h-4 w-4" /> New content
-          </button>
-        </div>
-      </header>
+      {/* The shared department header, in its compact (toolbar) form. */}
+      <div className="shrink-0 border-b border-white/[0.06] bg-[rgba(5,7,6,0.35)] px-5 py-4 backdrop-blur-xl lg:px-7">
+        <DepartmentHeader
+          compact
+          eyebrow="Growth · Content"
+          title="Content"
+          description="Create and refine content with Scribe."
+          aside={
+            <dl className={`hidden md:flex ${METRIC_STRIP}`}>
+              <Stat label="Trends" value={stats.trends} />
+              <Stat label="Drafts" value={stats.drafts} />
+              <Stat label="Awaiting review" value={stats.awaiting} />
+              <Stat label="Approved" value={stats.approved} />
+            </dl>
+          }
+          actions={
+            <button onClick={() => setCreateOpen(true)} className={`${DEPT_ACTION} px-3.5 ${PRIMARY_BUTTON}`}>
+              <Plus className="h-3.5 w-3.5" /> New content
+            </button>
+          }
+        />
+      </div>
 
       {/* ── small screens: one area at a time ──────────────────────────── */}
       <div className="flex shrink-0 gap-1 border-b border-white/[0.06] px-4 lg:hidden" role="tablist" aria-label="Content areas">
@@ -504,7 +515,7 @@ export default function Content() {
           <div className="fixed inset-0 z-40 hidden lg:block xl:hidden" onClick={() => setScribeOverlay(false)}>
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
             <div className="absolute right-0 top-0 h-full bg-[rgba(8,11,10,0.92)] shadow-[-30px_0_80px_-20px_rgba(0,0,0,0.9)] backdrop-blur-2xl" onClick={(e) => e.stopPropagation()}>
-              <ScribePanel
+              <ScribePanel status={scribeStatus}
                 collapsed={false}
                 onToggle={() => setScribeOverlay(false)}
                 item={studioItem}
@@ -521,7 +532,7 @@ export default function Content() {
         )}
         {/* small screens: its own pane */}
         <div className={`${pane === 'scribe' ? 'flex' : 'hidden'} min-h-0 w-full lg:hidden [&>aside]:w-full [&>aside]:border-l-0`}>
-          <ScribePanel
+          <ScribePanel status={scribeStatus}
             collapsed={false}
             onToggle={() => setPane('studio')}
             item={studioItem}
@@ -564,8 +575,8 @@ export default function Content() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex flex-col-reverse justify-center gap-1 px-3.5 py-1.5 [&+&]:border-l [&+&]:border-white/[0.05]">
-      <dd className="text-[15px] font-semibold leading-none tabular-nums text-foreground">{value}</dd>
+    <div className="flex flex-col-reverse justify-center gap-1.5 px-4 py-2 [&+&]:border-l [&+&]:border-white/[0.05]">
+      <dd className={METRIC_VALUE_COMPACT}>{value}</dd>
       <dt className={METRIC_LABEL}>{label}</dt>
     </div>
   );
@@ -573,23 +584,24 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 function EmptyStudio({ onNew, onSources }: { onNew: () => void; onSources: () => void }) {
   return (
-    <div className="flex min-h-[420px] flex-col items-start justify-center">
-      <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-500/25 bg-[linear-gradient(180deg,rgba(16,185,129,0.16),rgba(16,185,129,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_30px_-10px_rgba(16,185,129,0.55)]">
-        <PenLine className="h-5 w-5 text-emerald-300" />
-      </div>
-      <p className={`text-[12px] font-medium ${ACCENT.accentText}`}>Content Studio</p>
-      <h2 className="mt-3 text-[22px] font-semibold tracking-[-0.01em] text-foreground">Pick something to work on</h2>
-      <p className="mt-2 max-w-[46ch] text-[14px] leading-relaxed text-muted-foreground/70">
-        Open a draft, choose a source from For You or Trends, or start from your own idea. Scribe drafts it here for your review.
-      </p>
-      <div className="mt-6 flex gap-2">
-        <button onClick={onNew} className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-4 text-[13.5px] transition-colors ${PRIMARY_BUTTON}`}>
-          <Plus className="h-4 w-4" /> New content
-        </button>
-        <button onClick={onSources} className={`inline-flex h-9 items-center rounded-lg px-4 text-[13.5px] font-medium transition-colors ${SECONDARY_BUTTON}`}>
-          Browse sources
-        </button>
-      </div>
-    </div>
+    <DepartmentEmptyState
+      className="min-h-[420px]"
+      size="lg"
+      align="start"
+      icon={PenLine}
+      kicker="Content Studio"
+      title="Pick something to work on"
+      description="Open a draft, choose a source from For You or Trends, or start from your own idea. Scribe drafts it here for your review."
+      actions={
+        <>
+          <button onClick={onNew} className={`${DEPT_ACTION} px-3.5 ${PRIMARY_BUTTON}`}>
+            <Plus className="h-3.5 w-3.5" /> New content
+          </button>
+          <button onClick={onSources} className={`${DEPT_ACTION} ${SECONDARY_BUTTON}`}>
+            Browse sources
+          </button>
+        </>
+      }
+    />
   );
 }
