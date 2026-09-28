@@ -15,6 +15,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 import { useSignalFeed } from '@/hooks/useSignalFeed';
 import { useSignalReviews } from '@/hooks/useSignalReviews';
+import { useDepartmentAgentStatus } from '@/hooks/useDepartmentAgentStatus';
 import { deriveRadarBrief, type BriefSignal } from '@/lib/radarBrief';
 import { resolveAgent } from '@/lib/agentResolver';
 import { getDeptTheme } from '@/lib/departmentTheme';
@@ -63,6 +64,8 @@ export default function Signals() {
   const { data: brainData, refresh: refreshBrain } = useCompanyBrain();
   const { signals, clusters, relevance, loading, runRadarScan, scanning } = useSignalFeed(workspaceId);
   const { reviewsBySignal } = useSignalReviews(workspaceId);
+  // Lyra's live state — the same source as her dashboard card.
+  const lyraStatus = useDepartmentAgentStatus(workspaceId, 'lyra');
 
   const [tab, setTab] = useState<PrimaryTab>('today');
   const [secondary, setSecondary] = useState<SecondaryCategory>('all');
@@ -150,7 +153,7 @@ export default function Signals() {
         agent={{
           name: scout.name,
           role: scout.role,
-          status: 'On duty',
+          status: lyraStatus ?? undefined,
           avatar: scout.image ?? '',
           accentHex: accent,
           fallbackInitial: (scout.name?.[0] ?? 'S').toUpperCase(),
@@ -188,6 +191,7 @@ export default function Signals() {
             agentName={scout.name}
             agentRole={scout.role}
             agentAvatar={scout.image ?? ''}
+            agentStatus={lyraStatus}
             accentHex={accent}
             onRunRadarScan={handleRunScan}
             onEditRadar={() => setEditRadarOpen(true)}

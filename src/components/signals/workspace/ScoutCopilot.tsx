@@ -1,4 +1,4 @@
-import AgentPortrait from '@/components/agents/AgentPortrait';
+import AgentStatus from '@/components/layout/department/AgentStatus';
 // ScoutCopilot — persistent right-rail assistant for the Signals workspace.
 // Mirrors MiraCopilot's structure: agent header, rotating insight, mode chips,
 // prompt suggestions, and a bottom Ask input. Dispatches via sendAgentCommand
@@ -12,7 +12,8 @@ interface ScoutCopilotProps {
   agentName: string;
   agentRole: string;
   agentAvatar: string;
-  agentStatus?: string;
+  /** Live status word, or null while unknown (no pill is shown). */
+  agentStatus?: string | null;
   accentHex: string;
   onRunRadarScan?: () => void;
   onEditRadar?: () => void;
@@ -74,7 +75,7 @@ export default function ScoutCopilot({
   agentName,
   agentRole,
   agentAvatar,
-  agentStatus = 'On duty',
+  agentStatus = null,
   accentHex,
   onRunRadarScan,
   onEditRadar,
@@ -114,22 +115,7 @@ export default function ScoutCopilot({
         className="border-b border-white/[0.05] px-4 py-4"
         style={{ background: `${accentHex}05` }}
       >
-        <div className="flex items-center gap-3">
-          <AgentPortrait name={agentName} src={agentAvatar} size={44} />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h2 className="text-[15px] font-semibold text-foreground">{agentName}</h2>
-              <span
-                className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
-                style={{ background: `${accentHex}1A`, color: accentHex }}
-              >
-                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: accentHex }} aria-hidden />
-                {agentStatus}
-              </span>
-            </div>
-            <p className="text-[12px] text-muted-foreground/75">{agentRole}</p>
-          </div>
-        </div>
+        <AgentStatus name={agentName} role={agentRole} src={agentAvatar} status={agentStatus} />
       </div>
 
       {/* Insight */}

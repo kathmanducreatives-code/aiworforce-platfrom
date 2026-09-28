@@ -1,3 +1,6 @@
+import DepartmentTabs from "@/components/layout/department/DepartmentTabs";
+import { GLASS_CHIP } from "@/components/layout/workspaceStyles";
+import { cn } from "@/lib/utils";
 import { X, Search, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -86,19 +89,7 @@ export function Toolbar({ tab, onTab, rows, filters, onFilters, onSaveView, sort
     <div className="space-y-2">
       {/* Row 1: tabs + sort + save */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="ag-segmented" role="tablist" aria-label="Library views">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={tab === t.id}
-              onClick={() => onTab(t.id)}
-              className="ag-seg-item px-3 h-7 text-[12px] font-medium"
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <DepartmentTabs label="Library views" layoutId="leads-tab-underline" tabs={TABS} active={tab} onChange={onTab} className="flex-1 min-w-0" />
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-muted-foreground uppercase tracking-wider">Sort</span>
           <Select value={sort} onValueChange={(v) => onSort(v as SortKey)}>
@@ -156,7 +147,8 @@ export function Toolbar({ tab, onTab, rows, filters, onFilters, onSaveView, sort
             <button
               key={c.key}
               onClick={() => set(c.key, "any" as never)}
-              className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.08] px-2 py-0.5 text-[11px] text-primary/95 hover:bg-primary/[0.14] transition-colors"
+              aria-pressed="true"
+              className={cn(GLASS_CHIP, "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11px]")}
             >
               {c.label}
               <X className="h-3 w-3" />

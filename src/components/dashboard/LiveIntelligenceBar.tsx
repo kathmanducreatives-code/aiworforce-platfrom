@@ -37,11 +37,18 @@ const FADE: Presence = { initial: { opacity: 0 }, animate: { opacity: 1, transit
  * written while the page is open — lets it arrive with a ripple through the
  * glass. Opening an item reuses the existing SignalDetailDrawer.
  */
-export default function LiveIntelligenceBar({ workspaceId, feed }: { workspaceId: string | null; feed: SignalFeed }) {
+/** The type line for an item: a big pattern is a trend; a small one is a weekly count. */
+const typeLine = (item: LiveItem) => item.kind === 'trend' ? (item.developing ? 'Trend developing' : 'This week') : item.typeLabel;
+
+export default function LiveIntelligenceBar({ workspaceId, feed, watchlist = [] }: {
+  workspaceId: string | null;
+  feed: SignalFeed;
+  /** What the Company Brain tells Lyra to watch for — shown verbatim while nothing has been detected. */
+  watchlist?: readonly string[];
+}) {
   const navigate = useNavigate();
   const reduced = useReducedMotion() ?? false;
   const host = useRef<HTMLElement>(null);
-  const dot = useRef<HTMLSpanElement>(null);
 
   // ── data ────────────────────────────────────────────────────────────────
   const { reviewsBySignal, setReview } = useSignalReviews(workspaceId);
@@ -89,6 +96,15 @@ export default function LiveIntelligenceBar({ workspaceId, feed }: { workspaceId
   }, []);
   const paused = hovered || focused || !!selected || !visible;
 
+  const [watchIndex, setWatchIndex] = useState(0);
+  const watchCount = watchlist.length;
+  const watchRotates = !feed.loading && !feed.error && items.length === 0 && watchCount > 1 && !paused;
+  useEffect(() => {
+    if (!watchRotates) return;
+    const t = window.setInterval(() => setWatchIndex((i) => (i + 1) % watchCount), DWELL_MS);
+    return () => window.clearInterval(t);
+  }, [watchRotates, watchCount]);
+
   // The timer resumes with what was LEFT, so it stays in step with the progress
   // line, which pauses in place rather than restarting.
   const remaining = useRef(DWELL_MS);
@@ -102,7 +118,7 @@ export default function LiveIntelligenceBar({ workspaceId, feed }: { workspaceId
 
   // ── arrivals ───────────────────────────────────────────────────────────
   const pending = useRef<{ ids: Set<string>; count: number } | null>(null);
-  const [arrival, setArrival] = useState<{ nonce: number; key: string; ox: number; oy: number; rmax: number } | null>(null);
+  const [arrival, setArrival] = useState<{ nonce: number; key: string } | null>(null);
   const [freshKey, setFreshKey] = useState<string | null>(null);
   const [freshExtra, setFreshExtra] = useState(0);
   const [announcement, setAnnouncement] = useState('');
@@ -130,16 +146,8 @@ export default function LiveIntelligenceBar({ workspaceId, feed }: { workspaceId
     setFreshExtra(p.count - 1);
     remaining.current = DWELL_MS;
     if (reduced) { setActiveKey(best.key); return; }
-    const el = host.current, d = dot.current;
-    let ox = 26, oy = 30, rmax = 1200;
-    if (el && d) {
-      const box = el.getBoundingClientRect(), db = d.getBoundingClientRect();
-      ox = db.left + db.width / 2 - box.left;
-      oy = db.top + db.height / 2 - box.top;
-      rmax = Math.hypot(Math.max(ox, box.width - ox), Math.max(oy, box.height - oy)) * 0.92;
-    }
     arrivalTimers.current.forEach((t) => window.clearTimeout(t));
-    setArrival((a) => ({ nonce: (a?.nonce ?? 0) + 1, key: best.key, ox, oy, rmax }));
+    setArrival((a) => ({ nonce: (a?.nonce ?? 0) + 1, key: best.key }));
     arrivalTimers.current = [
       window.setTimeout(() => setActiveKey(best.key), ARRIVAL_SWAP_MS),
       window.setTimeout(() => setArrival(null), ARRIVAL_TOTAL_MS),
@@ -180,6 +188,9 @@ export default function LiveIntelligenceBar({ workspaceId, feed }: { workspaceId
   const state = feed.loading && !items.length ? 'loading'
     : feed.error && !items.length ? 'error'
     : !items.length ? 'empty' : 'live';
+  // Empty, but configured: rotate through what Lyra is watching for.
+  const watching = state === 'empty' && watchlist.length > 0;
+  const watchItem = watching ? watchlist[watchIndex % watchlist.length] : null;
   const slide: Presence = reduced
     ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.15 } }, exit: { opacity: 0, transition: { duration: 0.1 } } }
     : {
@@ -207,23 +218,16 @@ export default function LiveIntelligenceBar({ workspaceId, feed }: { workspaceId
         <span className="li__sheen" aria-hidden />
         <span className="li__lens" aria-hidden />
         {arrival && !reduced && (
-          <span
-            key={arrival.nonce}
-            className="li__ripple"
-            aria-hidden
-            style={{ '--ox': `${arrival.ox}px`, '--oy': `${arrival.oy}px`, '--li-rmax': `${arrival.rmax}px` } as CSSProperties}
-          >
-            <span className="li__ring" />
-            <span className="li__spark" />
+          <span key={arrival.nonce} className="li__ripple" aria-hidden>
             <span className="li__band" />
           </span>
         )}
 
         <div className="li__meta">
-          <span className="li__live"><span ref={dot} className="li__dot" />Live intelligence</span>
+          <span className="li__live"><span className="li__dot" />Live intelligence</span>
           <AnimatePresence mode="wait" initial={false}>
-            <motion.span key={item?.typeLabel ?? state} className="li__type" {...(reduced ? slide : FADE)}>
-              {state === 'live' && item ? (item.kind === 'trend' ? 'Trend developing' : item.typeLabel) : state === 'error' ? 'Unavailable' : 'Watching'}
+            <motion.span key={item ? typeLine(item) : state} className="li__type" {...(reduced ? slide : FADE)}>
+              {state === 'live' && item ? typeLine(item) : state === 'error' ? 'Unavailable' : watching ? 'Watching for' : 'Watching'}
               {state === 'live' && item?.key === freshKey && <span className="li__new">New</span>}
             </motion.span>
           </AnimatePresence>
@@ -239,7 +243,15 @@ export default function LiveIntelligenceBar({ workspaceId, feed }: { workspaceId
               <p className="li__context">Nothing was lost. Try again in a moment.</p>
             </div>
           )}
-          {state === 'empty' && (
+          {state === 'empty' && watchItem && (
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div key={watchItem} className="li__slide" {...slide}>
+                <p className="li__headline" title={watchItem}>{watchItem}</p>
+                <p className="li__context">From your Company Brain · Lyra surfaces matching companies here the moment they appear.</p>
+              </motion.div>
+            </AnimatePresence>
+          )}
+          {state === 'empty' && !watchItem && (
             <div className="li__slide">
               <p className="li__headline">Agentory is watching for meaningful changes.</p>
               <p className="li__context">Your strongest signals will appear here as they’re detected.</p>
@@ -250,7 +262,7 @@ export default function LiveIntelligenceBar({ workspaceId, feed }: { workspaceId
               <motion.div key={item.key} className="li__slide" {...slide}>
                 {/* Narrow screens only: the type and review flag move here from the side columns. */}
                 <p className="li__inline-meta" aria-hidden>
-                  {item.kind === 'trend' ? 'Trend developing' : item.typeLabel}
+                  {typeLine(item)}
                   {unverifiedOnly && <span className="li__flag"> · Needs review</span>}
                 </p>
                 <p className="li__headline" title={item.headline}>{item.headline}</p>

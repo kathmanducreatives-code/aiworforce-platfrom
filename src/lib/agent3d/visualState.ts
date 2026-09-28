@@ -74,6 +74,18 @@ export interface AgentVisualState {
   reason: string;
 }
 
+/**
+ * The status WORD for a live state — one or two words, never a count. Shared by
+ * the dashboard agent cards and the department pages (Signals, Leads, Content)
+ * so every surface says the same thing about the same agent.
+ */
+export const VISUAL_STATUS_WORD: Readonly<Record<VisualBase, string>> = {
+  working: 'Working', thinking: 'Thinking', awaiting: 'Needs you', blocked: 'Blocked', idle: 'Ready',
+};
+export function statusWordOf(state: Pick<AgentVisualState, 'base'> | null | undefined): string {
+  return VISUAL_STATUS_WORD[state?.base ?? 'idle'] ?? VISUAL_STATUS_WORD.idle;
+}
+
 export const IDLE_VISUAL: AgentVisualState = Object.freeze({ base: 'idle', event: null, source: 'none', reason: 'No live work' }) as AgentVisualState;
 
 // ── live inputs (already fetched; shapes are deliberately minimal) ─────────
