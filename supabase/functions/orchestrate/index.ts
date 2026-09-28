@@ -3,6 +3,7 @@
 // content, screening, brief) with tool + approval metadata, then deterministic
 // expansion to guarantee depth. Tool availability is annotated, never faked.
 
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   createCanonicalContentItem, type ContentDb,
@@ -1863,4 +1864,4 @@ export { handleOrchestrate };
 // in that process would fight the API's own listener for the port. An explicit
 // opt-out that the edge deployment never sets cannot fail the way
 // `import.meta.main` can if the runtime ever loads this file as a dependency.
-if (!Deno.env.get("ORCHESTRATE_IMPORT_ONLY")) Deno.serve((req) => handleOrchestrate(req));
+if (!Deno.env.get("ORCHESTRATE_IMPORT_ONLY")) Deno.serve(withBuildStamp((req) => handleOrchestrate(req)));

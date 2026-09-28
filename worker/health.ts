@@ -64,6 +64,8 @@ export interface HealthView {
   last_error: string | null;
   seconds_since_last_error: number | null;
   config: Record<string, number>;
+  /** The commit this process runs — Railway's injected SHA, or the deploy stamp. */
+  build: { sha: string; built_at: string; source: string; deployment_id: string | null };
 }
 
 /**
@@ -90,6 +92,7 @@ export function healthView(args: {
   now?: number;
   /** True while a claimed mission is executing, which suspends polling. */
   working?: boolean;
+  build?: HealthView["build"];
 }): HealthView {
   const now = args.now ?? Date.now();
   const s = args.status;
@@ -119,6 +122,7 @@ export function healthView(args: {
       ? null
       : Math.floor((now - s.lastErrorAt) / 1000),
     config: args.config,
+    build: args.build ?? { sha: "unstamped", built_at: "unknown", source: "none", deployment_id: null },
   };
 }
 

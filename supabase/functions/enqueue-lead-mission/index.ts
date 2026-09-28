@@ -11,6 +11,7 @@
 // with the canary's quota forced to 1. The worker replays it into run-agent's
 // handler, so V2 executes exactly the request the edge path would have.
 
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
 import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
@@ -72,5 +73,5 @@ export { handleEnqueueLeadMission };
 
 // Same guard as orchestrate, run-agent and pilot-chat — see run-agent/index.ts.
 if (!Deno.env.get("ENQUEUE_LEAD_MISSION_IMPORT_ONLY")) {
-  Deno.serve((req) => handleEnqueueLeadMission(req));
+  Deno.serve(withBuildStamp((req) => handleEnqueueLeadMission(req)));
 }

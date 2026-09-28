@@ -3,6 +3,7 @@
 // Input: { message, workspace_id, conversation_id? }
 // Auth:  verify_jwt = true (user identity needed for conversations.user_id)
 
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 import {
   authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend, spendRefusalMessage,
   MODEL_SPEND_REFUSED, resolveRunBudget, type SpendDb,
@@ -4444,4 +4445,4 @@ export async function servePilotChat(req: Request): Promise<Response> {
   }
 }
 
-if (!Deno.env.get("PILOT_CHAT_IMPORT_ONLY")) Deno.serve((req) => servePilotChat(req));
+if (!Deno.env.get("PILOT_CHAT_IMPORT_ONLY")) Deno.serve(withBuildStamp((req) => servePilotChat(req)));

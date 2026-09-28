@@ -13,6 +13,7 @@
 // the CORS headers a browser needs, because on Supabase the gateway added them
 // to the function's own `cors` object and here nothing would.
 
+import { BUILD_HEADER, buildHeaderValue, buildInfo } from "../../supabase/functions/_shared/buildStamp.ts";
 import { checkRequest, createJwksSource, type EnvRead, type JwksSource } from "./gateway.ts";
 import { apiPathFor } from "../../supabase/functions/_shared/functionEndpoints.ts";
 import { loadHandlers, routesToMount, type FunctionHandler } from "./routes.ts";
@@ -75,6 +76,19 @@ export function routeNameFor(pathname: string): string | null {
  * server) can answer `/health` itself without this file knowing about it.
  */
 export function createApiHandler(deps: ApiDeps): (req: Request) => Promise<Response | null> {
+  const inner = createUnstampedApiHandler(deps);
+  const build = buildHeaderValue(buildInfo((k) => deps.env(k)));
+  // Every API answer names the commit this process runs (x-agentory-build).
+  return async (req: Request): Promise<Response | null> => {
+    const res = await inner(req);
+    if (res) {
+      try { res.headers.set(BUILD_HEADER, build); } catch { /* immutable headers: leave as is */ }
+    }
+    return res;
+  };
+}
+
+function createUnstampedApiHandler(deps: ApiDeps): (req: Request) => Promise<Response | null> {
   const log = deps.log ?? (() => {});
   return async (req: Request): Promise<Response | null> => {
     const url = new URL(req.url);

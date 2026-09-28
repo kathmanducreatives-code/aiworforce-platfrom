@@ -26,6 +26,7 @@
 // `cost_units_used`, and the credit authorisation at the provider boundary.
 // `eligibleForAutoResume` reads them rather than adding any of its own.
 
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { excludeV2OwnedTasks, loadV2OwnedTaskIds } from "../_shared/leadMissionV2Request.ts";
 import {
@@ -190,7 +191,7 @@ const STOP_NOTICE: Readonly<Record<string, string>> = Object.freeze({
     "This run has nothing left to pick up, so I've closed it. What it found is saved.",
 });
 
-Deno.serve(async (req) => {
+Deno.serve(withBuildStamp(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -429,4 +430,4 @@ Deno.serve(async (req) => {
     version: "resume-stalled-leads-v1",
     scanned: rows.length, dispatched, terminated, dry_run: dryRun, considered,
   });
-});
+}));

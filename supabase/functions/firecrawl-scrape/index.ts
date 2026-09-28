@@ -22,6 +22,7 @@
 //
 // The reservation is settled after the call (charged if it was dispatched).
 
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { allowedScrapeUrl, boundedPrompt } from "../_shared/firecrawlRequestGuard.ts";
 import { authenticateUser, defaultAuthDeps, type AuthDeps } from "../_shared/requestAuth.ts";
@@ -147,4 +148,4 @@ export async function handleFirecrawlScrape(req: Request, deps: ScrapeDeps = def
   }
 }
 
-if (!Deno.env.get("FIRECRAWL_SCRAPE_IMPORT_ONLY")) Deno.serve((req) => handleFirecrawlScrape(req));
+if (!Deno.env.get("FIRECRAWL_SCRAPE_IMPORT_ONLY")) Deno.serve(withBuildStamp((req) => handleFirecrawlScrape(req)));

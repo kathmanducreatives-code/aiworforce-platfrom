@@ -4,6 +4,7 @@
 // Input:  { plan_id | task_plan_id, step_index, agent_slug | agent_id,
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
 import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
 import { hiringSearchTitles } from "../_shared/hiringSearchVocabulary.ts";
@@ -8632,4 +8633,4 @@ export { handleRunAgent };
 // An explicit opt-out that production never sets cannot fail that way. The
 // LeadMission V2 worker and the tests set RUN_AGENT_IMPORT_ONLY before import.
 // The edge path passes the request ONLY — no in-process options — so V1 is unchanged.
-if (!Deno.env.get("RUN_AGENT_IMPORT_ONLY")) Deno.serve((req) => handleRunAgent(req));
+if (!Deno.env.get("RUN_AGENT_IMPORT_ONLY")) Deno.serve(withBuildStamp((req) => handleRunAgent(req)));

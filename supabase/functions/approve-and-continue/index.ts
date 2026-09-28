@@ -1,3 +1,4 @@
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { functionUrl } from "../_shared/functionEndpoints.ts";
 import {
@@ -153,4 +154,4 @@ export async function handleApproveAndContinue(req: Request, deps: ApproveDeps =
   }
 }
 
-if (!Deno.env.get("APPROVE_AND_CONTINUE_IMPORT_ONLY")) Deno.serve((req) => handleApproveAndContinue(req));
+if (!Deno.env.get("APPROVE_AND_CONTINUE_IMPORT_ONLY")) Deno.serve(withBuildStamp((req) => handleApproveAndContinue(req)));

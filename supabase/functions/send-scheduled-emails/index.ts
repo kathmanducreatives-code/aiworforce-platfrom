@@ -1,3 +1,4 @@
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { authenticateUser, defaultAuthDeps, type AuthDeps } from "../_shared/requestAuth.ts";
 
@@ -113,4 +114,4 @@ export async function handleSendScheduledEmails(req: Request, deps: AuthDeps = d
   }
 }
 
-if (!Deno.env.get("SEND_SCHEDULED_EMAILS_IMPORT_ONLY")) Deno.serve((req) => handleSendScheduledEmails(req));
+if (!Deno.env.get("SEND_SCHEDULED_EMAILS_IMPORT_ONLY")) Deno.serve(withBuildStamp((req) => handleSendScheduledEmails(req)));

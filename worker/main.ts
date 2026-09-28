@@ -35,6 +35,7 @@ import {
 } from "../supabase/functions/_shared/leadMissionCancellation.ts";
 import { createLeadMissionRunner } from "./leadMissionRunner.ts";
 import { newStatus, healthView, startHealthServer } from "./health.ts";
+import { buildInfo } from "../supabase/functions/_shared/buildStamp.ts";
 import { mountApi } from "./api/server.ts";
 import { sealFunctionListeners } from "./api/routes.ts";
 
@@ -360,6 +361,7 @@ async function main() {
   const health = Number.isFinite(port) && port > 0
     ? startHealthServer(port, () => healthView({
       status, workerId, gated, idlePollMs: cfg.idlePollMs, working,
+      build: { ...buildInfo(), deployment_id: Deno.env.get("RAILWAY_DEPLOYMENT_ID") ?? null },
       config: {
         lease_seconds: cfg.leaseSeconds,
         heartbeat_interval_ms: cfg.heartbeatIntervalMs,

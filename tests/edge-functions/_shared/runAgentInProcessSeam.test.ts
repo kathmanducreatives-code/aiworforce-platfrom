@@ -39,7 +39,8 @@ Deno.test("the handler is exported and callable in-process", async () => {
 
 Deno.test("the edge entry point starts only when not import-only, and passes the request ONLY", () => {
   assert(
-    SRC.includes('if (!Deno.env.get("RUN_AGENT_IMPORT_ONLY")) Deno.serve((req) => handleRunAgent(req));'),
+    // The build stamp wraps the server (x-agentory-build); the handler still gets the request and nothing else.
+    SRC.includes('if (!Deno.env.get("RUN_AGENT_IMPORT_ONLY")) Deno.serve(withBuildStamp((req) => handleRunAgent(req)));'),
     "the edge server must pass no in-process options, so V1 behaviour is unchanged",
   );
   // Exactly one server start.
