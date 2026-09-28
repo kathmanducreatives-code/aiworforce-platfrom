@@ -3,6 +3,7 @@ import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { workbenchQueryKey } from '@/lib/workbench/workbenchSession';
 import { readWorkbenchProgress } from '@/lib/workbench/workbenchProgress';
+import { applyRunAuthority, resolveRunAuthority } from '@/lib/workbench/runAuthority';
 import { readEvaluationRows } from '@/lib/workbench/evaluationRows';
 import { readPortfolio, workbenchIsEmpty } from '@/lib/workbench/portfolioView';
 import ContinueVerificationBar from './ContinueVerificationBar';
@@ -51,7 +52,14 @@ export default function WorkbenchPanel() {
   // `tasks.result.workbench_progress`, so the panel fills in as the run proceeds
   // instead of staying empty until the very end.
   const taskResult = (data.task as { result?: unknown } | null)?.result ?? null;
-  const progress = readWorkbenchProgress(taskResult);
+  // THE AUTHORITY CHAIN (runAuthority.ts): a terminal task row outranks every
+  // projection, and its durable run_outcome supplies the counts. A finished
+  // mission can no longer read "still running" off a snapshot its last slice
+  // never rewrote.
+  const progress = applyRunAuthority(
+    readWorkbenchProgress(taskResult),
+    resolveRunAuthority({ taskStatus: data.task?.status ?? null, result: taskResult }),
+  );
   // Evaluated-but-unqualified companies. A SEPARATE projection from the lead
   // table: these rows have no lead_candidate_id, so nothing can act on them.
   const evaluationRows = readEvaluationRows(taskResult);
