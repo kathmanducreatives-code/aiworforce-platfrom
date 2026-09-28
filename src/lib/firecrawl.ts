@@ -54,11 +54,13 @@ class BackendFirecrawl {
    */
   async scrapeUrl(
     url: string,
-    params: { prompt?: string; extract?: { prompt?: string } } = {},
+    params: { prompt?: string; extract?: { prompt?: string }; workspaceId?: string | null } = {},
   ): Promise<FirecrawlScrapeResult> {
     const prompt = params.prompt ?? params.extract?.prompt;
+    // The workspace pays: the function checks membership and spends one of its
+    // credits, under a daily cap. Without a workspace it refuses.
     const { data, error } = await supabase.functions.invoke("firecrawl-scrape", {
-      body: { url, ...(prompt ? { prompt } : {}) },
+      body: { url, workspace_id: params.workspaceId ?? null, ...(prompt ? { prompt } : {}) },
     });
     if (error) throw new Error(`Firecrawl request failed: ${error.message}`);
     const r = data as { ok?: boolean; error?: string; data?: Record<string, unknown> } | null;

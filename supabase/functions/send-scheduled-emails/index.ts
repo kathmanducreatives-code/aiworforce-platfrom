@@ -1,113 +1,88 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { authenticateUser, defaultAuthDeps, type AuthDeps } from "../_shared/requestAuth.ts";
 
-const resendApiKey = Deno.env.get("RESEND_API_KEY");
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+// USER ENDPOINT. "Send pending emails" sends THE CALLER'S OWN due emails and
+// nothing else. It used to be callable by anyone holding the public anon key,
+// and it sent EVERY user's due emails through Agentory's Resend account —
+// together with a permissive insert policy on scheduled_emails, a relay for
+// arbitrary mail. The caller is authenticated and every read and write is
+// scoped to `user_id = caller`.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Base URL for tracking endpoints
-const TRACKING_BASE_URL = `${supabaseUrl}/functions/v1/email-tracking`;
+/** At most this many emails per call. */
+export const SEND_BATCH_LIMIT = 50;
 
-function addTrackingToEmail(emailId: string, htmlContent: string): string {
-  // Add tracking pixel for open tracking
-  const trackingPixel = `<img src="${TRACKING_BASE_URL}?type=open&id=${emailId}" width="1" height="1" style="display:none;" alt="" />`;
-  
-  // Replace links with tracked links
+export function trackingBase(supabaseUrl: string): string {
+  return `${supabaseUrl}/functions/v1/email-tracking`;
+}
+
+export function addTrackingToEmail(base: string, emailId: string, htmlContent: string): string {
+  const trackingPixel = `<img src="${base}?type=open&id=${emailId}" width="1" height="1" style="display:none;" alt="" />`;
   const trackedContent = htmlContent.replace(
     /<a\s+([^>]*href=["'])([^"']+)(["'][^>]*)>/gi,
     (match, before, url, after) => {
-      // Don't track mailto links or anchor links
-      if (url.startsWith('mailto:') || url.startsWith('#')) {
-        return match;
-      }
-      const trackedUrl = `${TRACKING_BASE_URL}?type=click&id=${emailId}&url=${encodeURIComponent(url)}`;
-      return `<a ${before}${trackedUrl}${after}>`;
-    }
+      if (url.startsWith("mailto:") || url.startsWith("#")) return match;
+      return `<a ${before}${base}?type=click&id=${emailId}&url=${encodeURIComponent(url)}${after}>`;
+    },
   );
-  
-  // Add tracking pixel before closing body tag or at the end
-  if (trackedContent.includes('</body>')) {
-    return trackedContent.replace('</body>', `${trackingPixel}</body>`);
-  }
+  if (trackedContent.includes("</body>")) return trackedContent.replace("</body>", `${trackingPixel}</body>`);
   return trackedContent + trackingPixel;
 }
 
 function textToHtml(text: string): string {
-  // Convert plain text to HTML with basic formatting
-  return text
-    .split('\n\n')
-    .map(para => `<p>${para.replace(/\n/g, '<br/>')}</p>`)
-    .join('');
+  return text.split("\n\n").map((para) => `<p>${para.replace(/\n/g, "<br/>")}</p>`).join("");
 }
 
-serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-  console.log("Starting scheduled email processing...");
+export async function handleSendScheduledEmails(req: Request, deps: AuthDeps = defaultAuthDeps): Promise<Response> {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  if (!resendApiKey) {
-    console.error("RESEND_API_KEY not configured");
-    return new Response(
-      JSON.stringify({ error: "RESEND_API_KEY not configured" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
+  const auth = await authenticateUser(req, deps);
+  if (!auth.ok) return json({ error: auth.error }, auth.status);
+  const userId = auth.userId;
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const resendApiKey = deps.env("RESEND_API_KEY");
+  const supabaseUrl = deps.env("SUPABASE_URL")!;
+  const serviceKey = deps.env("SUPABASE_SERVICE_ROLE_KEY");
+  if (!resendApiKey || !serviceKey) return json({ error: "email_sending_not_configured" }, 500);
+
+  const supabase = createClient(supabaseUrl, serviceKey, {
+    global: { fetch: deps.fetch },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   try {
-    // Get pending emails where send_time_utc has passed
     const now = new Date().toISOString();
-    console.log(`Fetching pending emails with send_time_utc <= ${now}`);
-
     const { data: pendingEmails, error: fetchError } = await supabase
       .from("scheduled_emails")
       .select("*")
+      .eq("user_id", userId)
       .eq("status", "pending")
       .lte("send_time_utc", now)
-      .limit(50); // Process in batches
-
-    if (fetchError) {
-      console.error("Error fetching emails:", fetchError);
-      throw fetchError;
-    }
-
-    console.log(`Found ${pendingEmails?.length || 0} emails to send`);
+      .limit(SEND_BATCH_LIMIT);
+    if (fetchError) throw fetchError;
 
     if (!pendingEmails || pendingEmails.length === 0) {
-      return new Response(
-        JSON.stringify({ message: "No pending emails to send", sent: 0 }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return json({ message: "No pending emails to send", sent: 0 });
     }
 
     let sentCount = 0;
     let failedCount = 0;
     const results: Array<{ id: string; success: boolean; error?: string }> = [];
+    const base = trackingBase(supabaseUrl);
 
     for (const email of pendingEmails) {
       try {
-        console.log(`Sending email to ${email.candidate_email} (ID: ${email.id})`);
-
-        // Convert content to HTML and add tracking
-        const htmlContent = textToHtml(email.content || "");
-        const trackedHtml = addTrackingToEmail(email.id, htmlContent);
-
-        // Send email via Resend (direct fetch)
-        const emailResponse = await fetch("https://api.resend.com/emails", {
+        const trackedHtml = addTrackingToEmail(base, email.id, textToHtml(email.content || ""));
+        const emailResponse = await deps.fetch("https://api.resend.com/emails", {
           method: "POST",
-          headers: {
-            "Authorization": `Bearer ${resendApiKey}`,
-            "Content-Type": "application/json",
-          },
+          headers: { "Authorization": `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             from: `${email.sender_name || "Recruiter"} <onboarding@resend.dev>`,
             to: [email.candidate_email],
@@ -115,60 +90,27 @@ serve(async (req) => {
             html: trackedHtml,
           }),
         });
+        if (!emailResponse.ok) throw new Error(`Resend API error: ${emailResponse.status}`);
 
-        if (!emailResponse.ok) {
-          const errText = await emailResponse.text();
-          throw new Error(`Resend API error: ${errText}`);
-        }
-
-        console.log(`Email sent successfully to ${email.candidate_email}`);
-
-        // Update status to sent
-        const { error: updateError } = await supabase
-          .from("scheduled_emails")
-          .update({ 
-            status: "sent",
-            scheduled_send_time: now 
-          })
-          .eq("id", email.id);
-
-        if (updateError) {
-          console.error(`Error updating email status for ${email.id}:`, updateError);
-        }
-
+        await supabase.from("scheduled_emails")
+          .update({ status: "sent", scheduled_send_time: now })
+          .eq("id", email.id).eq("user_id", userId);
         sentCount++;
         results.push({ id: email.id, success: true });
-
-      } catch (sendError: any) {
-        console.error(`Failed to send email ${email.id}:`, sendError);
+      } catch (sendError) {
+        console.error(`[send-scheduled-emails] failed ${email.id}:`, String(sendError));
         failedCount++;
-        results.push({ id: email.id, success: false, error: sendError.message });
-
-        // Update status to failed
-        await supabase
-          .from("scheduled_emails")
-          .update({ status: "failed" })
-          .eq("id", email.id);
+        results.push({ id: email.id, success: false, error: "send_failed" });
+        await supabase.from("scheduled_emails").update({ status: "failed" })
+          .eq("id", email.id).eq("user_id", userId);
       }
     }
 
-    console.log(`Completed: ${sentCount} sent, ${failedCount} failed`);
-
-    return new Response(
-      JSON.stringify({
-        message: "Email processing completed",
-        sent: sentCount,
-        failed: failedCount,
-        results,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-
-  } catch (error: any) {
-    console.error("Error in send-scheduled-emails:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ message: "Email processing completed", sent: sentCount, failed: failedCount, results });
+  } catch (error) {
+    console.error("[send-scheduled-emails] error:", String(error));
+    return json({ error: "email_processing_failed" }, 500);
   }
-});
+}
+
+if (!Deno.env.get("SEND_SCHEDULED_EMAILS_IMPORT_ONLY")) Deno.serve((req) => handleSendScheduledEmails(req));

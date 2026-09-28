@@ -1,5 +1,10 @@
 // tool-availability — read-only probe of which Agentory tools/providers are
-// configured for this workspace's runtime. No DB writes, no external calls.
+// configured for this workspace's runtime. No DB writes, no provider calls.
+//
+// USER ENDPOINT: it describes Agentory's provider configuration, which is not
+// for anonymous callers, so the caller must be a signed-in user.
+
+import { authenticateUser, defaultAuthDeps, type AuthDeps } from "../_shared/requestAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,9 +24,15 @@ function present(envKey: string): boolean {
   return !!v && v.length > 0;
 }
 
-Deno.serve((req) => {
+export async function handleToolAvailability(req: Request, deps: AuthDeps = defaultAuthDeps): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+  const auth = await authenticateUser(req, deps);
+  if (!auth.ok) {
+    return new Response(JSON.stringify({ error: auth.error }), {
+      status: auth.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   const apifyToken = present("APIFY_API_TOKEN");
@@ -95,4 +106,6 @@ Deno.serve((req) => {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}
+
+if (!Deno.env.get("TOOL_AVAILABILITY_IMPORT_ONLY")) Deno.serve((req) => handleToolAvailability(req));

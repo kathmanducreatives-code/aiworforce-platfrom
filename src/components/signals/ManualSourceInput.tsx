@@ -1,5 +1,6 @@
 // Manual source analyzer. Honest about provider availability: no fake output.
 import { useState } from "react";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { Link2, Loader2, ExternalLink, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ export interface ManualSourceInputProps {
 }
 
 export default function ManualSourceInput({ firecrawlState }: ManualSourceInputProps) {
+  const { workspaceId } = useWorkspace();
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
   const [type, setType] = useState<SourceType>("website");
@@ -40,10 +42,10 @@ export default function ManualSourceInput({ firecrawlState }: ManualSourceInputP
     try {
       if (needsFirecrawl) {
         const { data, error } = await supabase.functions.invoke("firecrawl-scrape", {
-          body: { url: url.trim(), formats: ["markdown", "summary"] },
+          body: { url: url.trim(), workspace_id: workspaceId },
         });
         if (error) throw error;
-        const summary = (data as any)?.summary ?? (data as any)?.data?.summary ?? (data as any)?.markdown?.slice?.(0, 600) ?? null;
+        const summary = (data as any)?.summary ?? (data as any)?.data?.summary ?? (data as any)?.data?.markdown?.slice?.(0, 600) ?? (data as any)?.markdown?.slice?.(0, 600) ?? null;
         setResult(summary ?? "No content returned. This page may block scraping.");
       } else {
         setResult(text.trim().slice(0, 800));

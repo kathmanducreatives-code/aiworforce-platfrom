@@ -65,8 +65,12 @@ Deno.test("the function keeps the credential server side and refuses anonymous c
   const src = await Deno.readTextFile(
     new URL("../../../supabase/functions/firecrawl-scrape/index.ts", import.meta.url),
   );
-  assert(src.includes('Deno.env.get("FIRECRAWL_API_KEY")'), "the key is read server side");
-  assert(/authHeader\?\.startsWith\("Bearer "\)/.test(src), "an unauthenticated caller is refused");
+  // The key comes from the server environment (injected as `deps.env` so the
+  // handler is testable); the browser never supplies it.
+  assert(src.includes('env("FIRECRAWL_API_KEY")'), "the key is read server side");
+  // Refusal of anonymous callers is proven by behaviour in
+  // endpointSecuritySweep.test.ts; here, that the handler authenticates first.
+  assert(/const auth = await authenticateUser\(req, deps\);\s*if \(!auth\.ok\)/.test(src), "an unauthenticated caller is refused");
   assert(src.includes("firecrawl_not_configured"), "a missing key is reported, not guessed around");
   // v2, like the rest of the backend.
   assert(src.includes("api.firecrawl.dev/v2"), "the function speaks Firecrawl v2");

@@ -1,118 +1,64 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { authenticateUser, defaultAuthDeps, type AuthDeps } from "../_shared/requestAuth.ts";
+
+// USER ENDPOINT. Exchanging or refreshing a Google token uses Agentory's OAuth
+// CLIENT SECRET; that proxy was open to anyone with the anon key. The caller
+// must now be a signed-in user. (The refresh branch also read the request body
+// twice, which always threw — it reads it once.)
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CALENDAR_ID');
-const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CALENDAR_CLIENT_SECRET');
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+export async function handleGoogleCalendarAuth(req: Request, deps: AuthDeps = defaultAuthDeps): Promise<Response> {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const auth = await authenticateUser(req, deps);
+  if (!auth.ok) return json({ error: auth.error }, auth.status);
+
+  const clientId = deps.env("GOOGLE_CALENDAR_ID");
+  const clientSecret = deps.env("GOOGLE_CALENDAR_CLIENT_SECRET");
 
   try {
-    const { action, code, redirectUri } = await req.json();
-    
-    console.log('Google Calendar Auth - Action:', action);
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+    const action = body.action;
+    const redirectUri = typeof body.redirectUri === "string" ? body.redirectUri : "";
 
-    if (action === 'get-auth-url') {
-      // Generate OAuth URL for user authorization
-      const scopes = [
-        'https://www.googleapis.com/auth/calendar',
-        'https://www.googleapis.com/auth/calendar.events'
-      ];
-      
-      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-      authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID!);
-      authUrl.searchParams.set('redirect_uri', redirectUri);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('scope', scopes.join(' '));
-      authUrl.searchParams.set('access_type', 'offline');
-      authUrl.searchParams.set('prompt', 'consent');
-      
-      console.log('Generated auth URL for redirect:', redirectUri);
-      
-      return new Response(JSON.stringify({ authUrl: authUrl.toString() }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (action === "get-auth-url") {
+      const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      authUrl.searchParams.set("client_id", clientId ?? "");
+      authUrl.searchParams.set("redirect_uri", redirectUri);
+      authUrl.searchParams.set("response_type", "code");
+      authUrl.searchParams.set("scope", ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.events"].join(" "));
+      authUrl.searchParams.set("access_type", "offline");
+      authUrl.searchParams.set("prompt", "consent");
+      return json({ authUrl: authUrl.toString() });
     }
 
-    if (action === 'exchange-code') {
-      // Exchange authorization code for tokens
-      console.log('Exchanging code for tokens with redirect:', redirectUri);
-      
-      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: GOOGLE_CLIENT_ID!,
-          client_secret: GOOGLE_CLIENT_SECRET!,
-          code,
-          grant_type: 'authorization_code',
-          redirect_uri: redirectUri,
-        }),
+    if (action === "exchange-code" || action === "refresh-token") {
+      const params = action === "exchange-code"
+        ? { client_id: clientId ?? "", client_secret: clientSecret ?? "", code: String(body.code ?? ""), grant_type: "authorization_code", redirect_uri: redirectUri }
+        : { client_id: clientId ?? "", client_secret: clientSecret ?? "", refresh_token: String(body.refresh_token ?? ""), grant_type: "refresh_token" };
+      const tokenResponse = await deps.fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(params),
       });
-
       const tokenData = await tokenResponse.json();
-      
-      if (tokenData.error) {
-        console.error('Token exchange error:', tokenData);
-        throw new Error(tokenData.error_description || tokenData.error);
-      }
-
-      console.log('Token exchange successful');
-      
-      return new Response(JSON.stringify({
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
-        expires_in: tokenData.expires_in,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      if (tokenData.error) return json({ error: "google_token_error" }, 400);
+      return json(action === "exchange-code"
+        ? { access_token: tokenData.access_token, refresh_token: tokenData.refresh_token, expires_in: tokenData.expires_in }
+        : { access_token: tokenData.access_token, expires_in: tokenData.expires_in });
     }
 
-    if (action === 'refresh-token') {
-      const { refresh_token } = await req.json();
-      
-      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: GOOGLE_CLIENT_ID!,
-          client_secret: GOOGLE_CLIENT_SECRET!,
-          refresh_token,
-          grant_type: 'refresh_token',
-        }),
-      });
-
-      const tokenData = await tokenResponse.json();
-      
-      if (tokenData.error) {
-        console.error('Token refresh error:', tokenData);
-        throw new Error(tokenData.error_description || tokenData.error);
-      }
-
-      return new Response(JSON.stringify({
-        access_token: tokenData.access_token,
-        expires_in: tokenData.expires_in,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    return new Response(JSON.stringify({ error: 'Invalid action' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-
-  } catch (error: unknown) {
-    console.error('Google Calendar Auth error:', error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return json({ error: "Invalid action" }, 400);
+  } catch (error) {
+    console.error("[google-calendar-auth] error:", String(error));
+    return json({ error: "calendar_auth_failed" }, 500);
   }
-});
+}
+
+if (!Deno.env.get("GOOGLE_CALENDAR_AUTH_IMPORT_ONLY")) Deno.serve((req) => handleGoogleCalendarAuth(req));
