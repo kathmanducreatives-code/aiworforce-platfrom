@@ -1,0 +1,61 @@
+# OPS HEALTH — the beta's alarm.
+#
+# Every 15 minutes: fail when something is broken for someone NOW (critical).
+# Once a day (08:00 UTC): fail on warnings too — a daily digest.
+# A failed scheduled run is emailed by GitHub; that is the alert channel.
+#
+# Needs three repository secrets (Settings → Secrets and variables → Actions):
+#   OPS_HEALTH_URL     https://<project-ref>.supabase.co/functions/v1/ops-health
+#   OPS_HEALTH_TOKEN   the same 32+ character value set on the ops-health function
+#   WORKER_HEALTH_URL  https://<railway domain>/health  (optional)
+# Until they exist the job SKIPS with a notice rather than failing every 15 min.
+# The token reads aggregates only (supabase/functions/_shared/opsHealth.ts).
+name: Ops health
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+    inputs:
+      fail_on:
+        description: "Fail on: critical, or warn (critical + warnings)"
+        default: warn
+        type: choice
+        options: [critical, warn]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-health
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      OPS_HEALTH_URL: ${{ secrets.OPS_HEALTH_URL }}
+      OPS_HEALTH_TOKEN: ${{ secrets.OPS_HEALTH_TOKEN }}
+      WORKER_HEALTH_URL: ${{ secrets.WORKER_HEALTH_URL }}
+    steps:
+      - name: Not configured yet
+        if: env.OPS_HEALTH_URL == '' || env.OPS_HEALTH_TOKEN == ''
+        run: echo "::notice::ops-health is not configured (OPS_HEALTH_URL / OPS_HEALTH_TOKEN secrets). Skipping."
+
+      - uses: actions/checkout@v4
+        if: env.OPS_HEALTH_URL != '' && env.OPS_HEALTH_TOKEN != ''
+
+      - uses: denoland/setup-deno@v2
+        if: env.OPS_HEALTH_URL != '' && env.OPS_HEALTH_TOKEN != ''
+        with:
+          deno-version: v2.8.2
+
+      - name: Check
+        if: env.OPS_HEALTH_URL != '' && env.OPS_HEALTH_TOKEN != ''
+        run: |
+          FAIL_ON=critical
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then FAIL_ON="${{ inputs.fail_on }}"; fi
+          if [ "${{ github.event.schedule }}" = "0 8 * * *" ]; then FAIL_ON=warn; fi
+          deno run --allow-net --allow-env scripts/ops/check-health.ts --fail-on "$FAIL_ON"

@@ -8,6 +8,7 @@ Classes:
 - **USER** — a signed-in user; workspace derived server-side or checked by membership.
 - **INTERNAL** — service-role bearer only; unusable with the public anon key.
 - **PUBLIC** — no private data, no privileged mutation, no paid spend (or verified against stored state).
+- **OPS** — a shared ops token for the scheduled health check; returns aggregates only.
 - **RETIRED** — answers 410, touches nothing.
 
 | Function | Class | Protection | Change | Tested by |
@@ -25,6 +26,7 @@ Classes:
 | integration-readiness | USER | JWT; writes only for members | — | — |
 | job-feed | RETIRED | 410 | **FIXED** (was: any user's jobs to anyone) | endpointSecuritySweep |
 | mcp | USER (OAuth) | user JWT through the publishable key; RLS scopes every read | — | isolation suite (RLS) |
+| ops-health | OPS | `x-ops-token` = `OPS_HEALTH_TOKEN` (≥32 chars, constant-time); **503 and reads nothing when unset**; GET only; aggregates only — no workspace, user or query in any response | **NEW** (launch monitoring) | opsHealth |
 | orchestrate | USER | JWT + membership + Start idempotency + workspace USD ceiling | — | existing |
 | pilot-chat | USER | JWT + membership | — | existing |
 | resume-stalled-leads | INTERNAL | service key (cron) | — | existing |

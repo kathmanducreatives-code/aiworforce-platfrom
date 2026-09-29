@@ -8,7 +8,7 @@
 # x-agentory-build header on an unauthenticated OPTIONS preflight — no auth, no
 # side effect, no spend.
 set -uo pipefail
-FUNCTIONS="pilot-chat orchestrate run-agent enqueue-lead-mission approve-and-continue firecrawl-scrape send-scheduled-emails continue-workflow resume-stalled-leads"
+FUNCTIONS="pilot-chat orchestrate run-agent enqueue-lead-mission approve-and-continue firecrawl-scrape send-scheduled-emails continue-workflow resume-stalled-leads ops-health"
 row() { printf '%-26s %s\n' "$1" "$2"; }
 if [ -n "${AGENTORY_SITE_URL:-}" ]; then
   row "netlify" "$(curl -fsS "${AGENTORY_SITE_URL%/}/version.json" 2>/dev/null | tr -d '\n ' || echo 'unreachable / no version.json (built before stamping)')"
