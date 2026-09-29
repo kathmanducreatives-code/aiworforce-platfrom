@@ -72,12 +72,29 @@ case "${1:-up}" in
       prepare
       (cd "$DIR" && supabase start)
     fi
+    # ── A STALE STACK MUST NOT PASS ─────────────────────────────────────────
+    # `supabase start` reuses running containers without applying anything, so
+    # a stack started earlier (another checkout, another TMPDIR) keeps its OLD
+    # schema — and the suite then passes without ever seeing a new table
+    # (2026-09-29: beta_access_requests was "covered" by a 15-hour-old stack).
+    # The newest migration this repo has must be the newest the stack applied.
+    want="$(ls "$REPO"/supabase/migrations/*.sql | xargs -n1 basename | sort | tail -1 | cut -d_ -f1)"
+    have="$(docker exec "supabase_db_${PROJECT}" psql -U postgres -tA \
+      -c "select max(version) from supabase_migrations.schema_migrations" 2>/dev/null | tr -d '[:space:]')"
+    if [ "$want" != "$have" ]; then
+      echo "STALE ISOLATION STACK: newest applied migration '${have:-none}', this repo's newest '$want'." >&2
+      echo "Run: $0 down   (then up again)" >&2
+      exit 3
+    fi
     (cd "$DIR" && supabase status -o env)
     ;;
   env)
     (cd "$DIR" && supabase status -o env)
     ;;
   down)
+    # By PROJECT, not by directory: a stack started from another checkout or
+    # another TMPDIR is still this project, and must still go.
+    supabase stop --project-id "$PROJECT" --no-backup >/dev/null 2>&1 || true
     (cd "$DIR" 2>/dev/null && supabase stop --no-backup) || true
     rm -rf "$DIR"
     ;;

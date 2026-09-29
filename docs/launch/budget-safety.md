@@ -48,6 +48,7 @@ next invocation; the Railway worker needs `railway redeploy`).
 ## Still open
 
 - Beta access is a grant, not a signup gate: anyone can create an account and use the free parts.
+  Requests and their review: `beta-access.md`.
 - No per-workspace daily cap (not chosen). A granted workspace is bounded by its credits and by the
   per-mission ceilings.
 - The Pilot preview card still shows its credit estimate to a no-credit workspace; the refusal comes on Start.

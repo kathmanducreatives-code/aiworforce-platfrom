@@ -99,10 +99,15 @@ Deno.test("GRANT SCRIPT: validates before any network call; a same-day re-run re
   assertEquals(parseGrantArgs(["--workspace", WS, "--credits", "5", "--reason", "abc", "--key", "k1", "--dry-run"], "d").args!.key, "k1");
 });
 
-Deno.test("GRANT SCRIPT never prints the service key", () => {
-  const src = Deno.readTextFileSync(new URL("../../../scripts/beta/grant-credits.ts", import.meta.url));
-  const logs = src.split("\n").filter((l) => /console\.(log|error)/.test(l));
-  // The key lives in `key` and in `headers`; no output line may interpolate either.
-  assertFalse(logs.some((l) => /\$\{key\}|\$\{headers|Bearer/.test(l)), logs.join("\n"));
-  assert(src.includes('const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";'), "read from the environment only");
+Deno.test("OPERATOR SCRIPTS never print the service key, and read it in exactly one place", () => {
+  const files = ["grant-credits.ts", "review-requests.ts", "betaAdmin.ts"];
+  for (const f of files) {
+    const src = Deno.readTextFileSync(new URL(`../../../scripts/beta/${f}`, import.meta.url));
+    const logs = src.split("\n").filter((l) => /console\.(log|error)/.test(l));
+    // The key lives in `env.key` / `e.key` and in the request headers.
+    // (`args.key` is the idempotency key, printed on purpose.)
+    assertFalse(logs.some((l) => /\b(env|e)\.key\b|\$\{key\}|headers|Bearer|SERVICE_ROLE_KEY=/.test(l)), `${f}:\n${logs.join("\n")}`);
+    const reads = (src.match(/SUPABASE_SERVICE_ROLE_KEY"\)/g) ?? []).length;
+    assertEquals(reads, f === "betaAdmin.ts" ? 1 : 0, `${f} reads the key ${reads} time(s)`);
+  }
 });

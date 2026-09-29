@@ -11,6 +11,7 @@ import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSo
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
 import WorkflowConfirmationCard from './bubbles/WorkflowConfirmationCard';
 import ResumeRunCard from './bubbles/ResumeRunCard';
+import BetaAccessCard from './bubbles/BetaAccessCard';
 import InterpretationPill from './bubbles/InterpretationPill';
 import SafetyChip from './bubbles/SafetyChip';
 import AgentAvatar from './agents/AgentAvatar';
@@ -267,6 +268,9 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                       ? meta.checkpoint_summary : null}
                   />
                 )}
+                {/* Pilot's "no credits yet" reply to a paid Start (private beta): file the
+                    request here, then show where it stands. */}
+                {meta && meta.credits_required === true && <BetaAccessCard />}
                 {meta && meta.type === 'workflow_confirmation' && meta.workflow_confirmation && (
                   <div className="mt-2">
                     <WorkflowConfirmationCard

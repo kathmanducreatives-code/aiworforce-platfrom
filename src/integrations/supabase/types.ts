@@ -562,6 +562,53 @@ export type Database = {
         }
         Relationships: []
       }
+      beta_access_requests: {
+        Row: {
+          created_at: string
+          credits_granted: number | null
+          decided_at: string | null
+          decision_note: string | null
+          id: string
+          note: string | null
+          requested_by: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_granted?: number | null
+          decided_at?: string | null
+          decision_note?: string | null
+          id?: string
+          note?: string | null
+          requested_by: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_granted?: number | null
+          decided_at?: string | null
+          decision_note?: string | null
+          id?: string
+          note?: string | null
+          requested_by?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beta_access_requests_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       call_attempts: {
         Row: {
           actual_cost: number | null
