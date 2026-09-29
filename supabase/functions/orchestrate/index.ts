@@ -45,6 +45,10 @@ import {
 } from "../_shared/leadIntelligencePolicy.ts";
 import { functionUrl } from "../_shared/functionEndpoints.ts";
 import { parseRunBudget } from "../_shared/runBudget.ts";
+import { resolveCreditEnforcement } from "../_shared/creditAuthorization.ts";
+import {
+  BETA_ACCESS_MESSAGE, CREDITS_REQUIRED, creditStartGate, startBuysProviderData,
+} from "../_shared/creditStartGate.ts";
 import {
   duplicateStartBody, findStartedPlan, isStartIdempotencyKey,
 } from "../_shared/startIdempotency.ts";
@@ -794,6 +798,32 @@ async function handleOrchestrate(req: Request): Promise<Response> {
           reason: spend.reason,
           details: spendRefusalMessage(spend),
         }, 429);
+      }
+    }
+
+    // ── LAYER 2: NO CREDITS, NO PAID MISSION ─────────────────────────────
+    //
+    // Credit enforcement fails closed and credits go only to approved beta
+    // workspaces. A mission that buys provider data is refused HERE, before
+    // the plan, the task and the queue row exist — not mid-run, where the
+    // per-call reservation would stop it and the user would read a failure.
+    // Model-only plans are not gated: chat and drafting stay free.
+    if (startBuysProviderData(body as Record<string, unknown>)) {
+      const creditMode = resolveCreditEnforcement();
+      let balance: number | null = null;
+      let readFailed = false;
+      if (creditMode === "enforce") {
+        const { data: balRow, error: balErr } = await admin
+          .from("workspace_credit_balances")
+          .select("balance_credits").eq("workspace_id", workspace_id).maybeSingle();
+        readFailed = !!balErr;
+        balance = typeof (balRow as { balance_credits?: unknown } | null)?.balance_credits === "number"
+          ? (balRow as { balance_credits: number }).balance_credits : null;
+      }
+      const gate = creditStartGate({ mode: creditMode, balance, readFailed });
+      if (!gate.allowed) {
+        console.log("[orchestrate][credit-start-gate]", { workspace_id, ...gate });
+        return json({ error: CREDITS_REQUIRED, reason: gate.reason, details: BETA_ACCESS_MESSAGE }, 402);
       }
     }
 

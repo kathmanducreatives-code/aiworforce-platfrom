@@ -57,10 +57,16 @@ export const CREDIT_ENFORCEMENT_ENV = "LEAD_CREDIT_ENFORCEMENT";
  * the real path with the last step disarmed, so what is proved in observe mode
  * is the thing that will run in enforce mode.
  *
- * DEFAULT IS `observe`, deliberately. `workspace_credit_balances` is empty, so
- * flipping this on without a grant first would refuse every provider call in
- * the system. The mode is recorded on every decision, so "why did this spend?"
- * is answerable without reading the environment.
+ * DEFAULT IS `enforce` — FAIL CLOSED (launch hardening, 2026-09-28).
+ *
+ * It was `observe`, because `workspace_credit_balances` was empty and flipping
+ * it on would have refused every provider call. With open signup that default
+ * meant any new account could spend without limit whenever the variable was
+ * unset. Credits are now granted to approved beta workspaces
+ * (`scripts/beta/grant-credits.ts`), so the safe default is to refuse: only the
+ * exact word `observe` disarms it, and a typo cannot. The mode is recorded on
+ * every decision, so "why did this spend?" is answerable without reading the
+ * environment.
  */
 export type CreditEnforcementMode = "observe" | "enforce";
 
@@ -70,9 +76,9 @@ export function resolveCreditEnforcement(read?: EnvReader): CreditEnforcementMod
   const get: EnvReader = read ?? ((k) => {
     try { return Deno.env.get(k); } catch { return undefined; }
   });
-  return (get(CREDIT_ENFORCEMENT_ENV) ?? "").trim().toLowerCase() === "enforce"
-    ? "enforce"
-    : "observe";
+  return (get(CREDIT_ENFORCEMENT_ENV) ?? "").trim().toLowerCase() === "observe"
+    ? "observe"
+    : "enforce";
 }
 
 /** What one paid provider call costs in internal credits. */

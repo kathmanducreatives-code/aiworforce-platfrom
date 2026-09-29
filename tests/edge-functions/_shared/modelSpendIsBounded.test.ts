@@ -228,20 +228,27 @@ Deno.test("THE GAP THIS MAKES LOUD: selectable models that cannot be priced", ()
 
 // ══════════ configuration ═════════════════════════════════════════════════
 
-Deno.test("enforcement is OFF unless explicitly turned on", async () => {
-  assertEquals(resolveSpendEnforcement(() => undefined), "observe");
+// FAIL CLOSED since launch hardening (2026-09-28).
+Deno.test("enforcement is ON unless explicitly turned off", async () => {
+  assertEquals(resolveSpendEnforcement(() => undefined), "enforce");
   assertEquals(resolveSpendEnforcement(() => "ENFORCE"), "enforce");
-  assertEquals(resolveSpendEnforcement(() => "enforce"), "enforce");
-  assertEquals(resolveSpendEnforcement(() => "yes"), "observe", "only the exact word arms it");
+  assertEquals(resolveSpendEnforcement(() => "no"), "enforce", "only the exact word disarms it");
+  assertEquals(resolveSpendEnforcement(() => "OBSERVE"), "observe");
   assertEquals(
-    resolveSpendEnforcement((k) => k === MODEL_SPEND_ENFORCEMENT_ENV ? "enforce" : undefined),
-    "enforce",
+    resolveSpendEnforcement((k) => k === MODEL_SPEND_ENFORCEMENT_ENV ? "observe" : undefined),
+    "observe",
   );
   // And observe cannot refuse, whatever the numbers say.
   const v = await authorizeModelSpend({
-    db: dbOf([priced(1e6)]), workspace_id: "w", mode: resolveSpendEnforcement(() => undefined),
+    db: dbOf([priced(1e6)]), workspace_id: "w", mode: resolveSpendEnforcement(() => "observe"),
   });
   assertEquals(v.allowed, true);
+  // Unset everything: enforced, and an unconfigured ceiling refuses rather than
+  // becoming a $25 bound nobody chose — so a deploy must set both variables.
+  const unset = await authorizeModelSpend({
+    db: dbOf([]), workspace_id: "w", mode: resolveSpendEnforcement(() => undefined), ...resolveCeiling(() => undefined),
+  });
+  assertEquals([unset.allowed, unset.reason], [false, "ceiling_misconfigured"]);
 });
 
 Deno.test("the ceiling is configurable; a bad value falls back AND is reported", () => {

@@ -109,13 +109,18 @@ const AUTH = {
 
 // ═══ 1. THE MODE, AND WHY THE DEFAULT IS WHAT IT IS ════════════════════════
 
-Deno.test("1. enforcement is OFF by default, and only one word turns it on", () => {
-  assertEquals(resolveCreditEnforcement(() => undefined), "observe");
-  assertEquals(resolveCreditEnforcement(() => ""), "observe");
-  assertEquals(resolveCreditEnforcement(() => "true"), "observe",
-    "a truthy-looking value is not the word; guessing here spends money");
+// FAIL CLOSED since launch hardening (2026-09-28): with open signup, an unset
+// variable meant any new account spent without limit. Credits now go to
+// approved beta workspaces, so the guard is on unless deliberately disarmed.
+Deno.test("1. enforcement is ON by default, and only one word turns it off", () => {
+  assertEquals(resolveCreditEnforcement(() => undefined), "enforce");
+  assertEquals(resolveCreditEnforcement(() => ""), "enforce");
+  assertEquals(resolveCreditEnforcement(() => "false"), "enforce",
+    "a falsy-looking value is not the word; guessing here spends money");
+  assertEquals(resolveCreditEnforcement(() => "obsrve"), "enforce", "a typo cannot disarm it");
+  assertEquals(resolveCreditEnforcement(() => "observe"), "observe");
+  assertEquals(resolveCreditEnforcement(() => " OBSERVE "), "observe");
   assertEquals(resolveCreditEnforcement(() => "enforce"), "enforce");
-  assertEquals(resolveCreditEnforcement(() => " ENFORCE "), "enforce");
   assertEquals(CREDIT_ENFORCEMENT_ENV, "LEAD_CREDIT_ENFORCEMENT");
 });
 

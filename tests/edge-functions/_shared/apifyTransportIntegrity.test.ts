@@ -23,6 +23,13 @@ import { compileFirstProviderCall } from "../../../supabase/functions/_shared/le
 import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
 import { parseLeadMissionDeterministic } from "../../../supabase/functions/_shared/leadMission.ts";
 
+// BUDGET IS NOT WHAT THIS FILE TESTS. Spend enforcement fails closed since
+// 2026-09-28 (budgetFailClosed.test.ts); these drive real handlers against
+// fakes with no credit ledger and no model-spend meter, and relied on the old
+// `observe` default without saying so. Now they say so.
+Deno.env.set("LEAD_CREDIT_ENFORCEMENT", "observe");
+Deno.env.set("MODEL_SPEND_ENFORCEMENT", "observe");
+
 // `runTool` reads the token INSIDE the call, so setting it here is enough and
 // keeps these tests runnable under the suite's own flags. The value is a stub —
 // every request is intercepted by the fetch mock and never leaves the process.

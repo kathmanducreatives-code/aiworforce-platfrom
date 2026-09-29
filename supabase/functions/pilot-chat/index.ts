@@ -134,6 +134,7 @@ import {
 } from "../_shared/executionLedger.ts";
 import { getLeadIntelligenceCapabilities } from "../_shared/leadIntelligencePolicy.ts";
 import { compileFirstProviderCall } from "../_shared/leadCapabilityEngine.ts";
+import { BETA_ACCESS_MESSAGE, CREDITS_REQUIRED } from "../_shared/creditStartGate.ts";
 import { functionUrl } from "../_shared/functionEndpoints.ts";
 import {
   DUPLICATE_START_REPLY, startIdempotencyKey, verifiedStartKey, type ConfirmationRow,
@@ -1243,6 +1244,27 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
       type: "reply", conversation_id: a.conversationId, message: saved,
       deduplicated: true, plan_id: orchBody.plan_id ?? null,
     });
+  }
+
+  // ── NO CREDITS IS AN ANSWER, NOT A FAILURE ─────────────────────────────
+  //
+  // Orchestrate refuses a paid mission for a workspace without credits (private
+  // beta). Reported through the branch below it read "the orchestrator failed",
+  // which is a crash to the user; it is a known state with a next step.
+  if (!orchResponse.ok && orchBody?.error === CREDITS_REQUIRED) {
+    const { data: saved } = await a.admin
+      .from("messages")
+      .insert({
+        conversation_id: a.conversationId,
+        role: "assistant",
+        content: typeof orchBody?.details === "string" ? orchBody.details : BETA_ACCESS_MESSAGE,
+        agent_slug: "pilot",
+        model_used: a.modelUsed,
+        metadata: { credits_required: true, credit_gate_reason: orchBody?.reason ?? null },
+      })
+      .select("*")
+      .single();
+    return json({ type: "reply", conversation_id: a.conversationId, message: saved, credits_required: true });
   }
 
   if (!orchResponse.ok) {

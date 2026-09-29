@@ -55,9 +55,13 @@ export type EnvReader = (key: string) => string | undefined;
 export function resolveSpendEnforcement(read?: EnvReader): SpendEnforcementMode {
   const r = read ?? ((k: string) => (globalThis as { Deno?: { env: { get(k: string): string | undefined } } })
     .Deno?.env.get(k));
-  return String(r(MODEL_SPEND_ENFORCEMENT_ENV) ?? "").trim().toLowerCase() === "enforce"
-    ? "enforce"
-    : "observe";
+  // FAIL CLOSED (launch hardening, 2026-09-28): only the exact word `observe`
+  // disarms the ceiling. Unset, or a typo, enforces it — and an enforced
+  // ceiling that was never configured refuses (`ceiling_misconfigured`), so a
+  // deploy must set MODEL_SPEND_CEILING_USD and MODEL_SPEND_PERIOD_DAYS.
+  return String(r(MODEL_SPEND_ENFORCEMENT_ENV) ?? "").trim().toLowerCase() === "observe"
+    ? "observe"
+    : "enforce";
 }
 
 /**

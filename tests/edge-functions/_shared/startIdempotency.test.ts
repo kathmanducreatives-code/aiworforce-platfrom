@@ -24,6 +24,13 @@ import {
   DUPLICATE_START_REPLY, isStartIdempotencyKey, startIdempotencyKey, verifiedStartKey,
 } from "../../../supabase/functions/_shared/startIdempotency.ts";
 
+// BUDGET IS NOT WHAT THIS FILE TESTS. Spend enforcement fails closed since
+// 2026-09-28 (budgetFailClosed.test.ts); these drive real handlers against
+// fakes with no credit ledger and no model-spend meter, and relied on the old
+// `observe` default without saying so. Now they say so.
+Deno.env.set("LEAD_CREDIT_ENFORCEMENT", "observe");
+Deno.env.set("MODEL_SPEND_ENFORCEMENT", "observe");
+
 Deno.env.set("ORCHESTRATE_IMPORT_ONLY", "1");
 const { handleOrchestrate } = await import("../../../supabase/functions/orchestrate/index.ts");
 
@@ -457,5 +464,46 @@ Deno.test("three concurrent Starts of one card (two tabs and a retry) become ONE
   } finally {
     restore();
     net.restore();
+  }
+});
+
+// ── THE CREDIT START GATE, END TO END (launch hardening, 2026-09-28) ──────
+//
+// Spend fails closed and credits are a beta grant. The real handler, with
+// enforcement on: a workspace nobody granted is refused before anything
+// exists; one credit lets the same Start through.
+
+Deno.test("orchestrate: enforced credits — no grant is refused at the door with the beta message; one credit starts", async () => {
+  Deno.env.set("LEAD_CREDIT_ENFORCEMENT", "enforce");
+  try {
+    const tables = seed();
+    const mission = await missionFor(tables);
+    // The table exists; this workspace was simply never granted anything.
+    tables.workspace_credit_balances = [];
+    const net = installFakeNetwork({
+      supabaseUrl: SUPABASE_URL, tables, modelReplies: MODEL,
+      functionReplies: { "run-agent": { ok: true }, "enqueue-lead-mission": { ok: true } },
+    });
+    try {
+      const refused = await orchestrate({ user_instruction: SOURCING, lead_mission: mission, idempotency_key: KEY });
+      await settle();
+      assertEquals(refused.status, 402);
+      assertEquals([refused.body.error, refused.body.reason], ["credits_required", "no_credits"]);
+      assert(String(refused.body.details).includes("private beta"));
+      assertEquals(tables.task_plans, [], "no plan row");
+      assertEquals(tables.tasks, [], "no task row");
+      assertEquals(net.functionCalls, [], "nothing enqueued, nothing bought");
+
+      tables.workspace_credit_balances = [{ workspace_id: WORKSPACE, balance_credits: 1 }];
+      const started = await orchestrate({ user_instruction: SOURCING, lead_mission: mission, idempotency_key: KEY });
+      await settle();
+      assertEquals(started.status, 200, JSON.stringify(started.body).slice(0, 300));
+      assertEquals(tables.task_plans.length, 1);
+      assertEquals(net.functionCalls.length, 1, "one kickoff");
+    } finally {
+      net.restore();
+    }
+  } finally {
+    Deno.env.set("LEAD_CREDIT_ENFORCEMENT", "observe");
   }
 });

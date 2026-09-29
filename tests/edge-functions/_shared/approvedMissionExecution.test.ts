@@ -39,6 +39,13 @@ import {
   buildPaidExecutionPreflight,
 } from "../../../supabase/functions/_shared/leadPaidExecutionPreflight.ts";
 
+// BUDGET IS NOT WHAT THIS FILE TESTS. Spend enforcement fails closed since
+// 2026-09-28 (budgetFailClosed.test.ts); these drive real handlers against
+// fakes with no credit ledger and no model-spend meter, and relied on the old
+// `observe` default without saying so. Now they say so.
+Deno.env.set("LEAD_CREDIT_ENFORCEMENT", "observe");
+Deno.env.set("MODEL_SPEND_ENFORCEMENT", "observe");
+
 const SOURCING =
   "Find 3 recruiting or staffing companies that fit my ICP and are actively hiring sales roles.";
 
