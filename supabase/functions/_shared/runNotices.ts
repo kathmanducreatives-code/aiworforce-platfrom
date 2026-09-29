@@ -328,9 +328,27 @@ export async function resolvePlanNoticesForQueueEnd(db: NoticeDb, i: {
   return { checkpoints_resolved: openCheckpoints.length, results: outcome };
 }
 
-/** The Supabase implementation. Plan messages are keyed on `metadata->>plan_id`. */
-// deno-lint-ignore no-explicit-any
-export function supabaseNoticeDb(client: any): NoticeDb {
+type QueryResult = { data: unknown; error: { message: string } | null };
+/** The slice of the Supabase client this module uses — nothing wider. */
+interface MessagesClient {
+  from(table: "messages"): {
+    select(columns: string): {
+      filter(column: string, op: string, value: string): {
+        order(column: string, opts: { ascending: boolean }): PromiseLike<QueryResult>;
+      };
+    };
+    insert(row: unknown): PromiseLike<QueryResult>;
+    update(patch: unknown): { eq(column: string, value: string): PromiseLike<QueryResult> };
+  };
+}
+
+/**
+ * The Supabase implementation. Plan messages are keyed on `metadata->>plan_id`.
+ * Takes `unknown` so both the typed and the untyped clients the callers hold
+ * can pass; it is used only through `MessagesClient`.
+ */
+export function supabaseNoticeDb(supabase: unknown): NoticeDb {
+  const client = supabase as MessagesClient;
   return {
     listPlanMessages: async (planId) => {
       const { data, error } = await client.from("messages")

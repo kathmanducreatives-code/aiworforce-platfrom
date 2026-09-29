@@ -39,7 +39,8 @@ export async function handleGoogleCalendarAuth(req: Request, deps: AuthDeps = de
     }
 
     if (action === "exchange-code" || action === "refresh-token") {
-      const params = action === "exchange-code"
+      // Typed as the form it becomes: every value a string, no optional keys.
+      const params: Record<string, string> = action === "exchange-code"
         ? { client_id: clientId ?? "", client_secret: clientSecret ?? "", code: String(body.code ?? ""), grant_type: "authorization_code", redirect_uri: redirectUri }
         : { client_id: clientId ?? "", client_secret: clientSecret ?? "", refresh_token: String(body.refresh_token ?? ""), grant_type: "refresh_token" };
       const tokenResponse = await deps.fetch("https://oauth2.googleapis.com/token", {

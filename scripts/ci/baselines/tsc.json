@@ -1,0 +1,16 @@
+{
+ "src/lib/scrapers/competitors/executiveChanges.ts|TS2339": 1,
+ "src/lib/scrapers/competitors/pricingMonitor.ts|TS2339": 1,
+ "src/lib/scrapers/competitors/pricingMonitor.ts|TS2353": 1,
+ "src/lib/scrapers/competitors/productIntel.ts|TS2339": 3,
+ "src/lib/scrapers/competitors/productIntel.ts|TS2353": 2,
+ "src/lib/scrapers/competitors/reviewSentiment.ts|TS2339": 4,
+ "src/lib/scrapers/competitors/reviewSentiment.ts|TS2353": 2,
+ "src/lib/scrapers/talent/companyAcquired.ts|TS2339": 2,
+ "src/lib/scrapers/talent/companyAcquired.ts|TS2353": 1,
+ "src/lib/scrapers/talent/layoffVictims.ts|TS2339": 2,
+ "src/lib/scrapers/talent/layoffVictims.ts|TS2353": 1,
+ "src/lib/scrapers/talent/openToWork.ts|TS2339": 1,
+ "src/lib/scrapers/talent/publishedContent.ts|TS2339": 1,
+ "src/lib/scrapers/talent/spokeAtEvent.ts|TS2339": 1
+}

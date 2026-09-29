@@ -203,13 +203,19 @@ Deno.test("the pure layer stays pure: no app aliases, no network, no React", () 
   }
 });
 
-Deno.test("the dashboard hands cards the live visual state, and the card keeps its exact portrait as fallback", () => {
+// The home card became a PORTRAIT STAGE in 873f7edd ("input-driven depth, with
+// no idle animation or render loop"): it no longer mounts <AgentVisual>, so this
+// test's old `surface="home"` / portrait-fallback assertions described a card
+// that no longer exists. What still holds, and is pinned: the dashboard hands
+// every card the live visual state, and the card shows the agent's exact
+// portrait. The state drives the attention dot and status (next test).
+Deno.test("the dashboard hands cards the live visual state, and the card shows the agent's exact portrait", () => {
   const dash = read("src/pages/Dashboard.tsx");
   assert(/useAgentVisualStates\(workspaceId\)/.test(dash));
   assert(/visual=\{visualStates\[visualAgentKey\(id\)!\]\}/.test(dash));
   const card = read("src/components/dashboard/WorkforceAgentCard.tsx");
-  assert(/<AgentVisual[^>]*surface="home"/.test(card));
-  assert(/fallback=\{<img className="team-agent__portrait" src=\{profile\?\.avatar\}/.test(card));
+  assert(/<AgentCardPortrait stage id=\{profile\?\.id \?\? agent\.id\}[^>]*src=\{profile\?\.avatar\}/.test(card),
+    "the card renders the public profile's portrait");
 });
 
 Deno.test("the card's attention dot and announced status rest on the visual state, not on counts", () => {
