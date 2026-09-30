@@ -169,8 +169,15 @@ Deno.test("10. a run refused at the provider boundary does not report a funnel",
   const branch = src.slice(i, i + 1800);
   assert(branch.includes("I couldn't run the search"),
     "it must say the search did not run, not report findings");
-  assert(branch.includes("Nothing was charged."),
-    "and say plainly that it cost nothing");
+  assert(branch.includes("Nothing was charged for that step."),
+    "and say plainly that the refused step cost nothing — never the whole run, which may have spent");
+  // Canary 1 (2026-09-30): a resumed step is not a refusal, and a continuing
+  // lineage has not ended — a final "failed" notice there can never be corrected.
+  const around = src.slice(Math.max(0, i - 1200), i + 1800);
+  assert(around.includes('o.status !== "skipped_resumed"'),
+    "a step skipped because an earlier slice completed it must not read as refused");
+  assert(around.includes("&& !lineageContinuing"),
+    "a lineage that is still continuing must not be told it failed");
   assert(branch.includes('category: "provider_failure"'),
     "the outcome category must name the boundary that refused");
 
