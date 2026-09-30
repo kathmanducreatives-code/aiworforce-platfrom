@@ -1,6 +1,6 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-09-30 15:40 UTC (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-09-30 16:00 UTC (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
@@ -106,6 +106,13 @@ Seed 2024-11-21 is inside 730 d until 2026-11-21.
 - Ops health after the canary: OK, no alerts (run 36737835889).
 - Still open (cosmetic / not blocking): the card title reads "Find 1 companies in …" for a qualify mission; fit shows "Not scored" with bucket low_priority; the stage-label phrase glitch with an em dash.
 - The LinkedIn redirect fix is proven by tests only; Wordware can prove it live if wanted.
+
+## FRONTEND PUBLISHING (plan: docs/launch/frontend-publishing-plan.md)
+- Step 2 PR #5 (`fix/frontend-default-key`, 8c61ad0a) is OPEN into launch/hardening.
+  - It matches the default Supabase key to the production URL, and refuses a mixed pair at startup and in production builds.
+  - Tests: frontend deno 590/0, node 5/0. The build is OK, and the ratchets are at baseline.
+- Build side effect: `vite build` regenerates supabase/functions/mcp/index.ts (the Lovable MCP plugin). Never commit that; set VITE_SUPABASE_PROJECT_ID on Netlify.
+- Waiting on the user: the old-accounts decision (wqnig users), then Netlify / Auth / DNS clicks.
 
 ## NEXT EXACT STEP
 1. The user decides the next rung (C2, product path, default screen budget ≤ $0.14) or the agentory.space publishing plan.
