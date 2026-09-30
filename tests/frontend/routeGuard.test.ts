@@ -10,7 +10,7 @@
 // function so this exercises exactly what ProtectedRoute.tsx renders from.
 
 import { assert, assertEquals, assertStrictEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { decideRouteGuard, safeReturnPath, withReturnPath, type RouteGuardState } from "../../src/lib/routeGuard.ts";
+import { decideRouteGuard, isSameOriginRelativePath, safeReturnPath, withReturnPath, type RouteGuardState } from "../../src/lib/routeGuard.ts";
 
 const baseState: RouteGuardState = {
   authLoading: false,
@@ -142,4 +142,37 @@ Deno.test("a malformed attempted path never reaches decideRouteGuard's redirect 
   const d = decideRouteGuard({ ...baseState, user: null, pathname: "/onboarding/company-brain", search: "" });
   // The attempted path itself resolves to a blocked prefix, so no ?next= is added.
   assertEquals(d, { type: "redirect", to: "/auth" });
+});
+
+// ── OPEN REDIRECT (launch audit, 2026-09-30) ────────────────────────────────
+// Browsers read "\" as "/", so "/\evil.com" — what `searchParams.get` returns
+// for `?next=/%5Cevil.com` — resolved to https://evil.com/ after sign-in.
+
+Deno.test("safeReturnPath refuses backslash forms that browsers resolve off-origin", () => {
+  for (const p of ["/\\evil.com", "/\\/evil.com", "/\\\\evil.com", "/%5C".replace("%5C", "\\") + "evil.com"]) {
+    assertStrictEquals(safeReturnPath(p), null, JSON.stringify(p));
+  }
+});
+
+Deno.test("safeReturnPath refuses whitespace and control characters", () => {
+  for (const p of ["/\tevil", "/\nevil", "/ /evil.com", "/\u0000x"]) {
+    assertStrictEquals(safeReturnPath(p), null, JSON.stringify(p));
+  }
+});
+
+Deno.test("isSameOriginRelativePath: every accepted path resolves on the same origin", () => {
+  const base = "https://agentory.space";
+  for (const p of ["/dashboard", "/leads?tab=icp", "/plans/abc#x", "/%5Cencoded-stays-a-path"]) {
+    assert(isSameOriginRelativePath(p), p);
+    assertEquals(new URL(p, base).origin, base, p);
+  }
+  for (const p of ["//evil.com", "/\\evil.com", "https://evil.com", "evil.com", "", null, undefined]) {
+    assert(!isSameOriginRelativePath(p as string | null | undefined), String(p));
+  }
+});
+
+Deno.test("Auth.tsx uses the shared same-origin check for ?next=", async () => {
+  const src = await Deno.readTextFile(new URL("../../src/pages/Auth.tsx", import.meta.url));
+  assert(src.includes("isSameOriginRelativePath(nextParam)"), "Auth must not keep its own weaker check");
+  assert(!src.includes("nextParam.startsWith('/') && !nextParam.startsWith('//')"), "the old inline check must be gone");
 });
