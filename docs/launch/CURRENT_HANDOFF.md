@@ -46,6 +46,17 @@ Workspace e8af257d. Pilot sentence: "Qualify https://www.linkedin.com/company/wo
 Route: company details → Atomus → Pvalyou, ≈ $0.0278 provider. Stop > $0.04. Watcher: 601151e0…/scratchpad/salvo, WATCH_PROFILE=salvo (5/5 test suites pass).
 Seed 2024-11-21 is inside 730 d until 2026-11-21.
 
+### Canary 1 attempt 1 — 2026-09-30 13:57 UTC: REFUSED at compile, $0, nothing started
+- Conversation 7ead031d. Pilot reply: "couldn't turn it into a run I can safely execute", `mission_compilation_blocked`, `url:known_companies[0]`.
+- No plan, task, queue row, provider call or credit movement. Balance 614.
+- RELEASE DEFECT (reproduced offline on a08ac0e4): `scanProposalForViolations` (leadMissionCompiler.ts) takes the user's slug with trailing punctuation.
+  - "…/company/wordware. It must…" yields the slug `wordware.`, so the normalized page URL `…/company/wordware` is refused.
+  - Any sentence with a period or comma right after a LinkedIn company URL fails the same way.
+- The same sentence with "—" after the URL passes the scanner offline.
+- Benign, pre-existing: the resume-stalled-leads tick reports `terminated: 1` every 3 min.
+  - It's task a7a9371d (complete + continuation_required). The guarded update no-ops (`not_ready_anymore`) but is counted as terminated.
+  - No writes. It leaves the 30-day window at about 2026-09-30 16:38 UTC.
+
 ## NEXT EXACT STEP
 User approves Canary 1 → start local release frontend → arm watcher → run → audit. Separately: decide agentory.space publishing path.
 
