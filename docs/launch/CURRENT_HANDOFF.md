@@ -1,6 +1,6 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-09-30 14:50 UTC (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-09-30 15:05 UTC (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
@@ -72,8 +72,21 @@ Seed 2024-11-21 is inside 730 d until 2026-11-21.
 - Minor: the stage label quotes "e — it must have raised Seed", and the card title reads "Find 1 companies in b2b saas…".
 - Duplicate Start: server OK (1 plan per key). After a reload the UI shows "Started" and no Start button.
 
+## HOTFIX RELEASE (in progress, 2026-09-30 ~15:05 UTC)
+- Branch `hotfix/canary1-defects`, PR #4 → launch/hardening. Release commit `e1014c94`; workflow re-pin `bc528d61`.
+- It fixes all four Canary 1 defects: slug punctuation, redirected LinkedIn page matching, answered enrichment counted as tried, and the refusal notice.
+- Tests: canary1Regressions 7/7; edge suite 8118/0; infra 90/0; deno check clean.
+- Affected surfaces (measured with deno info): run-agent and pilot-chat (edge, via the gated workflow), and the Railway worker (auto-deploys on merge). Everything else stays a08ac0e4.
+
 ## NEXT EXACT STEP
-Canary 1 FAILED on 3 release defects (above). Decide: fix release (slug punctuation, LinkedIn redirect matching, barren continuation gate, chat terminal truthfulness) before re-running Canary 1 on a company whose LinkedIn slug does not redirect. Local release app still running on :8083 (temporary launch.json entry in agentory-main-local, to revert). Separately: agentory.space publishing path.
+1. PR #4 CI green → merge. Railway then redeploys the worker at the merge commit (same app code as e1014c94).
+2. `gh workflow run deploy-held-back-functions.yml --repo kathmanducreatives-code/aiworforce-platfrom --ref launch/hardening -f confirm_sha=e1014c94`
+   - The user approves the production gate.
+   - The run deploys run-agent → verify → pilot-chat → verify → SHA report → ops-health.
+   - On failure: STOP and do not rerun.
+3. Verify production, then re-run Canary 1 on a company whose LinkedIn slug does not redirect.
+   - Wordware can also serve as the redirect regression, but only with approval.
+4. Revert the temporary `agentory-release-canary` entry in agentory-main-local/.claude/launch.json when canaries are done.
 
 ## ACTIONS REQUIRING APPROVAL
 Canary 1; any frontend publish/DNS/Netlify branch change; closing PR #3.
