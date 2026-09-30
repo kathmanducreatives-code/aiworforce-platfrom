@@ -1,6 +1,6 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-09-30 17:00 UTC (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-09-30 17:00 UTC (PR #6 merged 16:58) (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
@@ -24,7 +24,7 @@ AUTH URL STATUS
   - No custom SMTP (the built-in mailer allows 2 emails/hour).
   - Sign-up requires email confirmation.
   - The live sign-up/reset email test has not been done.
-- OPEN REDIRECT found: /auth?next=/%5Cevil.com → https://evil.com after sign-in. Fix PR #6 (3e6e2d6e) is open, not merged or deployed.
+- OPEN REDIRECT found: /auth?next=/%5Cevil.com → https://evil.com after sign-in. Fix PR #6 MERGED as 75e589d7 (2026-09-30 16:58 UTC). It is live only once that Netlify deploy is PUBLISHED; agentory.space still serves Lovable.
 
 DNS STATUS
 - Hostinger DNS.
@@ -44,7 +44,7 @@ OPS HEALTH
 - Queue empty, 0 open or unsettled calls, credits 610.
 
 NEXT ACTION (blockers, in order)
-1. Merge and publish PR #6 (open redirect).
+1. Publish the Netlify deploy of 75e589d7 (PR #6, open-redirect fix), and verify /version.json = 75e589d7.
 2. Configure custom SMTP in Supabase Auth, then do the live sign-up and reset email test.
 3. In Netlify:
    - Add the agentory.space and www custom domains.
