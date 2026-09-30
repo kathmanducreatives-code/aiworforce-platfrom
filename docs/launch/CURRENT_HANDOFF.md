@@ -1,12 +1,12 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-09-30 15:05 UTC (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-09-30 15:27 UTC (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
 
 ## CURRENT BRANCH / HEAD
-- `launch/hardening` @ `c8e77333` (local checkout /Users/prasidha/agentory-launch-hardening = origin, clean).
+- `launch/hardening` @ `c6038c67` (was c8e77333) (local checkout /Users/prasidha/agentory-launch-hardening = origin, clean).
 - Frozen application release `a08ac0e4edea6f3aa54314db4efe0073e371b82f`; `a08ac0e4..c8e77333` = workflow file only.
 
 ## PRODUCTION SHAs (verified 2026-09-30 13:39 UTC)
@@ -72,21 +72,31 @@ Seed 2024-11-21 is inside 730 d until 2026-11-21.
 - Minor: the stage label quotes "e — it must have raised Seed", and the card title reads "Find 1 companies in b2b saas…".
 - Duplicate Start: server OK (1 plan per key). After a reload the UI shows "Started" and no Start button.
 
-## HOTFIX RELEASE (in progress, 2026-09-30 ~15:05 UTC)
-- Branch `hotfix/canary1-defects`, PR #4 → launch/hardening. Release commit `e1014c94`; workflow re-pin `bc528d61`.
-- It fixes all four Canary 1 defects: slug punctuation, redirected LinkedIn page matching, answered enrichment counted as tried, and the refusal notice.
-- Tests: canary1Regressions 7/7; edge suite 8118/0; infra 90/0; deno check clean.
-- Affected surfaces (measured with deno info): run-agent and pilot-chat (edge, via the gated workflow), and the Railway worker (auto-deploys on merge). Everything else stays a08ac0e4.
+## HOTFIX RELEASE e1014c94 — DEPLOYED 2026-09-30 15:24 UTC
+- PR #4 merged as c6038c67 at 15:07. Railway worker deploy b0d1348e = c6038c67 (same app code as e1014c94), SUCCESS, polling.
+- Gated run 36734756701: approved by kathmanducreatives-code, all steps succeeded.
+  - Rollback artifact: pre-deploy-functions-36734756701 (holds run-agent v264 and pilot-chat v197; expires 2026-10-30).
+
+| Surface | Expected | Actual | Status |
+|---|---|---|---|
+| Railway worker | e1014c94 code | c6038c67 (b0d1348e) | OK, polling, 0 errors |
+| run-agent | e1014c94 | e1014c94 @15:24:01Z (v265) | OK, JWT enforced (401 without auth) |
+| pilot-chat | e1014c94 | e1014c94 @15:24:01Z (v198) | OK, JWT enforced |
+| orchestrate | a08ac0e4 (unchanged code) | a08ac0e4 (v113) | OK, JWT enforced |
+| enqueue-lead-mission, resume-stalled-leads, continue-workflow, ops-health | a08ac0e4 | a08ac0e4 | OK |
+
+- Verified 15:25 UTC:
+  - Queue: 0 open (20 complete / 11 failed / 9 cancelled). 0 running tasks, 0 open calls.
+  - No provider calls or credit tx since the canary. Credits 613/0.
+  - Security: RLS off on 0 tables. Anon cannot run dev_table_counts or insert into beta_access_requests. 0 beta rows.
+  - Ops health (warn level): OK, no alerts.
 
 ## NEXT EXACT STEP
-1. PR #4 CI green → merge. Railway then redeploys the worker at the merge commit (same app code as e1014c94).
-2. `gh workflow run deploy-held-back-functions.yml --repo kathmanducreatives-code/aiworforce-platfrom --ref launch/hardening -f confirm_sha=e1014c94`
-   - The user approves the production gate.
-   - The run deploys run-agent → verify → pilot-chat → verify → SHA report → ops-health.
-   - On failure: STOP and do not rerun.
-3. Verify production, then re-run Canary 1 on a company whose LinkedIn slug does not redirect.
-   - Wordware can also serve as the redirect regression, but only with approval.
-4. Revert the temporary `agentory-release-canary` entry in agentory-main-local/.claude/launch.json when canaries are done.
+1. Pick a Canary 1 company whose LinkedIn slug does NOT redirect; get user approval.
+   - Re-arm the watcher: it exited by design on the deploy change.
+   - Local release app (:8083) must be restarted from launch/hardening @ c6038c67 so the frontend matches.
+2. Revert the temporary `agentory-release-canary` entry in agentory-main-local/.claude/launch.json when canaries are done.
+3. Open, not in this hotfix: Workbench says "still being checked" after terminal; stage-label phrase glitch ("e — it must…"); card title "Find 1 companies…"; agentory.space still on the old Lovable backend (wqnig).
 
 ## ACTIONS REQUIRING APPROVAL
 Canary 1; any frontend publish/DNS/Netlify branch change; closing PR #3.
