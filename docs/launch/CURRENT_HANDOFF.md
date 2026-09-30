@@ -1,68 +1,53 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-09-29 23:20 UTC (local session).
+Keep this short. No secrets. Last updated: 2026-09-30 13:55 UTC (LOCAL session — local is the active workspace; cloud paused).
 
-This file lives on branch `launch/handoff`, NOT on `launch/hardening`: Railway
-auto-deploys the worker on every push to `launch/hardening`, so a doc-only
-commit there would redeploy production.
+Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
+push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
 
-## CURRENT BRANCH
-- Release branch: `launch/hardening` @ `ccd454c9` (merge of PR #1, the deploy workflow).
-- Frozen application release: `a08ac0e4edea6f3aa54314db4efe0073e371b82f`.
-  `a08ac0e4..ccd454c9` changes only `.github/workflows/deploy-held-back-functions.yml`.
-- Handoff branch: `launch/handoff` (based on `ccd454c9`, only this file added).
+## CURRENT BRANCH / HEAD
+- `launch/hardening` @ `c8e77333` (local checkout /Users/prasidha/agentory-launch-hardening = origin, clean).
+- Frozen application release `a08ac0e4edea6f3aa54314db4efe0073e371b82f`; `a08ac0e4..c8e77333` = workflow file only.
 
-## CURRENT HEAD
-- `origin/launch/hardening` = `ccd454c9`. PR #1 was MERGED 2026-09-29 16:49 UTC (CI green).
-- The merged workflow checks out `a08ac0e4edea6f3aa54314db4efe0073e371b82f` (verified).
+## PRODUCTION SHAs (verified 2026-09-30 13:39 UTC)
+| Surface | Expected | Actual | Status |
+|---|---|---|---|
+| Railway worker (deploy d9184736) | a08ac0e4 code | `c8e77333` (app code identical) | OK, polling, 0 claims |
+| enqueue-lead-mission / resume-stalled-leads / continue-workflow / ops-health | a08ac0e4 | a08ac0e4 @ 09-29 13:09Z | OK |
+| run-agent / orchestrate / pilot-chat | a08ac0e4 | a08ac0e4 @ 09-30 11:20Z | OK |
 
-## PRODUCTION SHAs (verified 2026-09-29 23:15 UTC)
-| Surface | Actual |
-|---|---|
-| Railway worker (deploy 24fe425c) | `ccd454c9` (the same app code as a08ac0e4), polling |
-| enqueue-lead-mission, resume-stalled-leads, continue-workflow, ops-health | `a08ac0e4` |
-| run-agent, orchestrate, pilot-chat | OLD (pre-release, no build header) |
+Deploy run 36707764429 succeeded; rollback artifact `pre-deploy-functions-36707764429` (encrypted, expires 2026-10-30).
 
-## MIGRATIONS APPLIED
-lock_down_definer_rpcs, revoke_anon_writes_on_workspace_tables, beta_access_requests (2026-09-29).
+## SECURITY
+RLS on 127/127 public tables. Anon write privileges exist on 77 legacy tables, but every anon-reachable write
+policy requires `auth.uid()` → no effective anon write. provision_workspace_for_user guards `auth.uid()`;
+dev_table_counts/cancel_lead_mission not executable by anon/authenticated. beta_access_requests: RLS, 0 rows.
+Credits: LEAD_CREDIT_ENFORCEMENT=enforce; e8af257d = 614, reserved 0. Allowlist LEAD_V2_WORKER_WORKSPACES = e8af257d only.
 
-## SECURITY STATUS
-verify-rls 7/7 (2026-09-29). Anon is denied the definer RPCs, and 0/48 workspace tables are anon-writable.
+## FIRECRAWL
+FIRECRAWL_USD_PER_CREDIT present on Supabase and Railway (Railway value parses as a positive number). FIRECRAWL_PRICE_TIER unset (optional).
 
-## DEPLOYMENT STATUS
-The workflow "Deploy held-back functions (production)" has NEVER run. It is BLOCKED; see BLOCKERS.
+## MONITORING
+Ops health green (dispatch 36708445429). DB quiet since 2026-09-27 14:13 UTC: no new tasks/plans/queue rows/
+provider calls/model calls/credit tx/messages. 0 open provider calls; queue 19 complete / 11 failed / 9 cancelled.
 
-GitHub environment `production`: created 2026-09-29 23:1x UTC via the API.
-- Required reviewer: kathmanducreatives-code. prevent_self_review is off; admin bypass is off.
-- The only allowed branch is `launch/hardening`.
-- It has NO SECRETS YET.
+## FRONTEND (read-only, 2026-09-30)
+- agentory.space: Lovable (185.158.133.1, Cloudflare edge = Lovable's CDN; DNS at Hostinger dns-parking).
+  Its bundle talks to Supabase **wqnigjhcwjxtmordrwno** — the OLD Lovable-Cloud backend, NOT production
+  `ohsdatpvfdjdemstoiuj`, not in the user's Supabase account. No /version.json. LAUNCH BLOCKER for public beta.
+- Netlify teal-chimera-be7c79 (team-protected; builds feat/lead-mission-v2-worker ≈ b2c6fc1f incl. dashboard/Jev WIP)
+  lacks a08's beta-request UI, Workbench terminal and continuation-truth fixes.
+- Repo bug: `src/integrations/supabase/client.ts` default publishable key is wqnig's while the default URL is ohsdat —
+  any build without VITE_SUPABASE_PUBLISHABLE_KEY cannot authenticate. Fix before any publish.
+- Canary 1 does NOT need a publish: run the release frontend locally (launch/hardening checkout + gitignored .env.local → ohsdat).
 
-The user's earlier secrets and protections were put on the Railway-created environment
-`resplendent-embrace / production`. The workflow does NOT use that environment.
-
-## FRONTEND STATUS
-agentory.space is served by Lovable (a publish from about 2026-08-02) behind Cloudflare. It isn't built from any current branch. Not re-investigated yet.
-
-## MONITORING STATUS
-The scheduled Ops health runs are green (latest 36622401629).
-DB: 157 tasks, and the last task and the last provider call were on 2026-09-27. No calls in the last 24h. The queue has nothing open (19 complete / 11 failed / 9 cancelled), and 0 beta requests.
-
-## LAST COMPLETED STEP
-Reverified the state, created and protected the GitHub `production` environment, and checked Firecrawl pricing (it is missing).
+## CANARY 1 (prepared, NOT run — needs explicit approval)
+Workspace e8af257d. Pilot sentence: "Qualify https://www.linkedin.com/company/wordware. It must have raised Seed funding within the last 2 years."
+Route: company details → Atomus → Pvalyou, ≈ $0.0278 provider. Stop > $0.04. Watcher: 601151e0…/scratchpad/salvo, WATCH_PROFILE=salvo (5/5 test suites pass).
+Seed 2024-11-21 is inside 730 d until 2026-11-21.
 
 ## NEXT EXACT STEP
-Once both blockers are cleared, dispatch:
-`gh workflow run deploy-held-back-functions.yml --repo kathmanducreatives-code/aiworforce-platfrom --ref launch/hardening -f confirm_sha=a08ac0e4`
-The user then approves the gate, and the session watches the run. It must not rerun on failure.
+User approves Canary 1 → start local release frontend → arm watcher → run → audit. Separately: decide agentory.space publishing path.
 
-## BLOCKERS
-1. The `production` environment has no secrets. The user must add `SUPABASE_ACCESS_TOKEN` and `ROLLBACK_ARCHIVE_KEY` (Settings → Environments → production).
-2. `FIRECRAWL_USD_PER_CREDIT` is unset on Supabase and on Railway. The workflow precondition fails without it.
-   - The Firecrawl API shows planCredits=1000 per month, remainingCredits=7068, and a period starting 09-19.
-   - No invoice was found, so the rate is not proven.
-   - The user must read the amount paid and the credits received from the Firecrawl invoice.
-
-## ACTIONS REQUIRING MY APPROVAL
-- Setting the Firecrawl rate (the value comes from the user's invoice).
-- The production gate approval on the deploy run.
-- Canary 1 (not prepared yet; do not run it).
+## ACTIONS REQUIRING APPROVAL
+Canary 1; any frontend publish/DNS/Netlify branch change; closing PR #3.
