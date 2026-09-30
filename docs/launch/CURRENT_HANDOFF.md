@@ -1,12 +1,12 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-09-30 16:00 UTC (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-09-30 16:05 UTC (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
 
 ## CURRENT BRANCH / HEAD
-- `launch/hardening` @ `c6038c67` (was c8e77333) (local checkout /Users/prasidha/agentory-launch-hardening = origin, clean).
+- `launch/hardening` @ `42bf1b63` (PR #5; the app backend code is still e1014c94) (local checkout /Users/prasidha/agentory-launch-hardening = origin, clean).
 - Frozen application release `a08ac0e4edea6f3aa54314db4efe0073e371b82f`; `a08ac0e4..c8e77333` = workflow file only.
 
 ## PRODUCTION SHAs (verified 2026-09-30 13:39 UTC)
@@ -108,7 +108,7 @@ Seed 2024-11-21 is inside 730 d until 2026-11-21.
 - The LinkedIn redirect fix is proven by tests only; Wordware can prove it live if wanted.
 
 ## FRONTEND PUBLISHING (plan: docs/launch/frontend-publishing-plan.md)
-- Step 2 PR #5 (`fix/frontend-default-key`, 8c61ad0a) is OPEN into launch/hardening.
+- Step 2 DONE: PR #5 merged as 42bf1b63 (2026-09-30 16:01 UTC); the Railway worker redeployed on 42bf1b63 (b65efc85) with the same worker code.
   - It matches the default Supabase key to the production URL, and refuses a mixed pair at startup and in production builds.
   - Tests: frontend deno 590/0, node 5/0. The build is OK, and the ratchets are at baseline.
 - Build side effect: `vite build` regenerates supabase/functions/mcp/index.ts (the Lovable MCP plugin). Never commit that; set VITE_SUPABASE_PROJECT_ID on Netlify.
