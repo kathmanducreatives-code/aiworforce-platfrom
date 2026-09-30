@@ -1,9 +1,59 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-09-30 16:05 UTC (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-09-30 17:00 UTC (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
+
+## LAUNCH GATE SNAPSHOT (2026-09-30 17:00 UTC) — BETA VERDICT: NOT BETA READY
+
+CURRENT PROD FRONTEND SHA
+- agentory.space: the OLD Lovable build (deployment f249a448, no /version.json), talking to the old backend wqnig.
+- Netlify teal-chimera-be7c79: built from launch/hardening at 42bf1b63 per the user. It is still behind Netlify team protection (401), so it can't be verified from here.
+
+CURRENT BACKEND SHAs
+- run-agent and pilot-chat: e1014c94.
+- orchestrate, enqueue-lead-mission, resume-stalled-leads, continue-workflow, ops-health: a08ac0e4.
+- Railway worker: 42bf1b63 (the same worker code as e1014c94).
+
+AUTH URL STATUS
+- Changed 2026-09-30 ~16:50 via the Management API.
+  - site_url: http://localhost:3000 → https://agentory.space.
+  - uri_allow_list: (empty) → exact paths /onboarding/company-brain and /reset-password on agentory.space and on teal-chimera-be7c79.netlify.app. No wildcards, no localhost, no www.
+- Still open:
+  - No custom SMTP (the built-in mailer allows 2 emails/hour).
+  - Sign-up requires email confirmation.
+  - The live sign-up/reset email test has not been done.
+- OPEN REDIRECT found: /auth?next=/%5Cevil.com → https://evil.com after sign-in. Fix PR #6 (3e6e2d6e) is open, not merged or deployed.
+
+DNS STATUS
+- Hostinger DNS.
+- The apex A record is 185.158.133.1 (Lovable edge). TLS is valid for the apex only (expires 2026-11-01).
+- www: CNAME to the apex; HTTPS handshake fails and HTTP returns 409 (broken).
+- No MX/TXT records.
+- Netlify has no custom domain yet. The cutover is NOT done.
+
+CANARY 1 RESULT
+- PASS, 2026-09-30 15:29–15:33 UTC. Salvo Software, release e1014c94, run through the LOCAL release frontend (:8083).
+- IDs: plan 94360450, task 2ec15881, queue 96b7662a.
+- $0.0278 settled from receipts; SATISFIED; 1 lead written.
+- Not repeated on 2026-09-30 17:00: the Phase 2 domain check failed, and a second paid canary was not allowed.
+
+OPS HEALTH
+- OK, no alerts (run 36747750754).
+- Queue empty, 0 open or unsettled calls, credits 610.
+
+NEXT ACTION (blockers, in order)
+1. Merge and publish PR #6 (open redirect).
+2. Configure custom SMTP in Supabase Auth, then do the live sign-up and reset email test.
+3. In Netlify:
+   - Add the agentory.space and www custom domains.
+   - Publish the release deploy.
+   - Turn off team protection.
+   - Verify /version.json on the netlify.app URL.
+4. DNS cutover at Hostinger (plan: docs/launch/frontend-publishing-plan.md), then verify the domains.
+5. Production-domain smoke: sign-in → Pilot card, $0. Then decide whether Canary 1 must be repeated through agentory.space.
+6. Decide what happens to old wqnig accounts.
 
 ## CURRENT BRANCH / HEAD
 - `launch/hardening` @ `42bf1b63` (PR #5; the app backend code is still e1014c94) (local checkout /Users/prasidha/agentory-launch-hardening = origin, clean).
