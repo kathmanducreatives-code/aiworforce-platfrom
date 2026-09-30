@@ -129,7 +129,7 @@ jobs:
           done
           tar -czf - -C "$RUNNER_TEMP/rollback" . \
             | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:ROLLBACK_ARCHIVE_KEY -out "$RUNNER_TEMP/pre-deploy-functions.tgz.enc"
-          rm -rf "$RUNNER_TEMP/rollback"
+          sudo rm -rf "$RUNNER_TEMP/rollback"
 
       - uses: actions/upload-artifact@v4
         with:
