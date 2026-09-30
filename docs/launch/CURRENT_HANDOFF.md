@@ -1,6 +1,6 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-09-30 15:27 UTC (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-09-30 15:40 UTC (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
@@ -91,12 +91,26 @@ Seed 2024-11-21 is inside 730 d until 2026-11-21.
   - Security: RLS off on 0 tables. Anon cannot run dev_table_counts or insert into beta_access_requests. 0 beta rows.
   - Ops health (warn level): OK, no alerts.
 
+## CANARY 1 — PASSED (Salvo Software, 2026-09-30 15:29–15:33 UTC, release e1014c94)
+- Sentence: "Qualify https://www.linkedin.com/company/salvosoftware. It must have raised funding within the last 3 years."
+  - The trailing period compiled, so the punctuation fix is proven live.
+- IDs: conv 7fe9b7c7, plan 94360450 (key start:f62523cc…), queue 96b7662a, task 2ec15881. One slice.
+- Route: details $0.0041 → Atomus $0.0036 → Pvalyou $0.0201 = $0.0278, all settled from provider receipts. No reuse.
+  - Model ≈ $0.0027. 3 credits (613 → 610). No stop fired. Writes only in e8af257d.
+- Result: SATISFIED, 1/1 qualified, 1 lead written.
+  - Funding PASS: Debt Financing 2024-06-06, cited, pc_0ce01c9c from this run.
+  - Size PASS (LinkedIn 11–50). Enrichment attached.
+- Chat: one truthful final message ("1 of 1 qualified company … Nothing was sent."); checkpoint resolved "completed"; plan pill Complete.
+- Workbench: "1 qualified lead", Salvo Software.
+- Duplicate Start: 1 plan per key and 1 queue row. After a reload the card shows "Started" and there is no Start button.
+- Ops health after the canary: OK, no alerts (run 36737835889).
+- Still open (cosmetic / not blocking): the card title reads "Find 1 companies in …" for a qualify mission; fit shows "Not scored" with bucket low_priority; the stage-label phrase glitch with an em dash.
+- The LinkedIn redirect fix is proven by tests only; Wordware can prove it live if wanted.
+
 ## NEXT EXACT STEP
-1. Pick a Canary 1 company whose LinkedIn slug does NOT redirect; get user approval.
-   - Re-arm the watcher: it exited by design on the deploy change.
-   - Local release app (:8083) must be restarted from launch/hardening @ c6038c67 so the frontend matches.
-2. Revert the temporary `agentory-release-canary` entry in agentory-main-local/.claude/launch.json when canaries are done.
-3. Open, not in this hotfix: Workbench says "still being checked" after terminal; stage-label phrase glitch ("e — it must…"); card title "Find 1 companies…"; agentory.space still on the old Lovable backend (wqnig).
+1. The user decides the next rung (C2, product path, default screen budget ≤ $0.14) or the agentory.space publishing plan.
+   - agentory.space is still on the old Lovable backend wqnig, which is a beta blocker.
+2. Revert the temporary `agentory-release-canary` entry in agentory-main-local/.claude/launch.json and stop the :8083 dev server when canaries are done.
 
 ## ACTIONS REQUIRING APPROVAL
 Canary 1; any frontend publish/DNS/Netlify branch change; closing PR #3.
