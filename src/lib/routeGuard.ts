@@ -15,6 +15,32 @@
 const BLOCKED_RETURN_PREFIXES = ['/auth', '/onboarding/company-brain'];
 
 /**
+ * A path that can only ever resolve on THIS origin.
+ *
+ * `startsWith('/') && !startsWith('//')` was not enough: browsers read a
+ * backslash as a slash, so `/\\evil.com` (or `?next=/%5Cevil.com`, which
+ * `searchParams.get` decodes to it) resolved to `https://evil.com/` — an open
+ * redirect after sign-in (launch audit, 2026-09-30). Backslashes, whitespace
+ * and control characters are refused outright, and the result must parse back
+ * to the same origin it started on.
+ */
+export function isSameOriginRelativePath(path: string | null | undefined): path is string {
+  if (!path) return false;
+  if (!path.startsWith('/') || path.startsWith('//')) return false;
+  for (let i = 0; i < path.length; i++) {
+    const c = path.charCodeAt(i);
+    // backslash, any control character (C0 or DEL), or whitespace
+    if (c === 0x5c || c <= 0x20 || c === 0x7f || /\s/.test(path[i])) return false;
+  }
+  try {
+    const base = 'https://return-path.invalid';
+    return new URL(path, base).origin === base;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Validates a same-origin, relative return path before it's ever used as a
  * redirect target. Mirrors the inline `safeNext` guard already in
  * src/pages/Auth.tsx: must be relative (no scheme, no protocol-relative
@@ -22,8 +48,7 @@ const BLOCKED_RETURN_PREFIXES = ['/auth', '/onboarding/company-brain'];
  * (which would otherwise be able to produce a redirect loop).
  */
 export function safeReturnPath(path: string | null | undefined): string | null {
-  if (!path) return null;
-  if (!path.startsWith('/') || path.startsWith('//')) return null;
+  if (!isSameOriginRelativePath(path)) return null;
   if (BLOCKED_RETURN_PREFIXES.some((prefix) => path.startsWith(prefix))) return null;
   return path;
 }

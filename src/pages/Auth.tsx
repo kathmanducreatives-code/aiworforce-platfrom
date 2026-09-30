@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { isSameOriginRelativePath } from '@/lib/routeGuard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,7 +39,8 @@ const Auth = () => {
 
   // Same-origin relative next target (e.g. from /.lovable/oauth/consent).
   const nextParam = searchParams.get('next');
-  const safeNext = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : null;
+  // The shared same-origin check (a backslash made `/\\evil.com` an open redirect).
+  const safeNext = isSameOriginRelativePath(nextParam) ? nextParam : null;
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
