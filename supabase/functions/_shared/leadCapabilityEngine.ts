@@ -97,7 +97,7 @@ import {
   type ParsedMissionEvaluation, type DecisionSource,
 } from "./missionEvaluation.ts";
 import {
-  asEnrichmentOutcome, enrichmentIsEvidence, enrichmentIsTerminal,
+  asEnrichmentOutcome, enrichmentIsEvidence, enrichmentIsTerminal, enrichmentWasAnswered,
   summariseEnrichmentOutcomes, type EnrichmentOutcome,
 } from "./leadEnrichmentState.ts";
 import {
@@ -7182,10 +7182,34 @@ export async function runCapabilityPlan(
           // MAPPED BACK BY URL. A batched response arrives in the Actor's order,
           // not ours, so pairing by index would attach one company's evidence to
           // another — a silent, unfalsifiable corruption.
+          //
+          // ── A REDIRECTED PAGE IS STILL THE PAGE WE ASKED FOR ────────────────
+          //
+          // Canary 1, production 2026-09-30 (task 9982ca62): the mission gave
+          // /company/wordware; LinkedIn now redirects it to the rebranded
+          // /company/saunabywordware, and the Actor returned THAT url. Matching
+          // on the returned url alone attached the record to nobody, the company
+          // stayed `empty`, qualification never reached it, and no claim
+          // verifier ran. The Actor echoes the url it was asked for as
+          // `originalQuery.search` — exact provenance, not a guess — so a row
+          // whose own url matches nothing is attached by what it was asked for,
+          // and only ever to a url in THIS batch.
+          const batchByCanonical = new Map<string, string>();
+          for (const u of batch) batchByCanonical.set(normalizeCompanyLinkedInUrl(u) ?? u, u);
           for (const row of rows) {
             const normalized = normalizeLinkedInCompanyEnriched(row);
             const url = normalized.linkedin_company_url;
-            const matches = url ? byUrl.get(url) ?? [] : [];
+            let matches = url ? byUrl.get(url) ?? batchKeyMatches(byUrl, batchByCanonical, url) : [];
+            if (matches.length === 0) {
+              const asked = requestedCompanyUrlOf(row);
+              const key = asked ? batchByCanonical.get(asked) : undefined;
+              if (key) {
+                matches = byUrl.get(key) ?? [];
+                if (matches.length > 0 && url && url !== asked) {
+                  log("company_enrichment_redirect_adopted", { requested: asked, returned: url });
+                }
+              }
+            }
             // ── THE MEMBER-COUNT READING, KEPT ──────────────────────────
             //
             // This actor returns `employeeCount` — LinkedIn associated members,
@@ -10456,6 +10480,29 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
+/** The company-details row's own url, matched against this batch in canonical form. */
+function batchKeyMatches(
+  byUrl: Map<string, EngineCompany[]>,
+  batchByCanonical: Map<string, string>,
+  url: string,
+): EngineCompany[] {
+  const key = batchByCanonical.get(normalizeCompanyLinkedInUrl(url) ?? url);
+  return key ? byUrl.get(key) ?? [] : [];
+}
+
+/**
+ * The LinkedIn company url a company-details row was ASKED for, canonical.
+ * harvestapi/linkedin-company echoes it as `originalQuery.search`; a bare
+ * string is accepted for older runs. Anything else is null — never inferred.
+ */
+export function requestedCompanyUrlOf(row: Record<string, unknown>): string | null {
+  const q = row.originalQuery;
+  const asked = typeof q === "string"
+    ? q
+    : q && typeof q === "object" ? (q as Record<string, unknown>).search : null;
+  return typeof asked === "string" ? normalizeCompanyLinkedInUrl(asked) : null;
+}
+
 /**
  * Run `worker` over `items` with at most `limit` in flight.
  *
@@ -11180,10 +11227,33 @@ export function missionCandidatesFrom(
         c.brain !== null || c.hiring_assessment !== null,
       graph,
       next_action: null,
-      attempted_routes: attemptedRoutes(c.completed_operations),
+      attempted_routes: attemptedRoutesOf(c),
     };
   });
 }
+
+/**
+ * ENRICHMENT THAT ANSWERED IS A TRIED ROUTE.
+ *
+ * `attemptedRoutes` reads only the claim verifiers' `verify:` marks, so the
+ * company-details route that answers country and size was never "tried" —
+ * even after it had been asked and had answered. Canary 1 (production
+ * 2026-09-30, task 9982ca62): the details record came back `empty`, the size
+ * gap stayed "cheap, not yet tried", `verificationTargets` held the funding
+ * verifier back waiting for it, while the continuation gate counted the same
+ * company as verifiable — three barren slices to `search_exhausted`. An
+ * answered enrichment (`success` or `empty`) has been tried; `provider_error`
+ * and `deferred` have not, and stay retryable.
+ */
+function attemptedRoutesOf(c: EngineCompany): string[] {
+  const routes = attemptedRoutes(c.completed_operations);
+  if (enrichmentWasAnswered(asEnrichmentOutcome(c.enrichment_outcome)) &&
+      !routes.includes(ENRICHMENT_ROUTE_ACTOR)) {
+    routes.push(ENRICHMENT_ROUTE_ACTOR);
+  }
+  return routes;
+}
+const ENRICHMENT_ROUTE_ACTOR = "apify_linkedin_company_details";
 
 /**
  * Every company's canonical P5 decision, keyed by company key. The qualified

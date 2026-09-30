@@ -318,7 +318,13 @@ export function scanProposalForViolations(
   // salvosoftware) raised funding…?" (`url:known_companies[0]`, 2026-09-26). The
   // slug must still be one the USER typed, so the model cannot add a target.
   const saidSlugs = new Set(
-    [...said.matchAll(/linkedin\.com\/company\/([^\s/?#)"'<>]+)/g)].map((m) => m[1].replace(/\/+$/, "")),
+    // A SLUG ENDS WHERE THE SENTENCE DOES. "Qualify linkedin.com/company/
+    // wordware. It must…" captured `wordware.`, so the model's correct
+    // `…/company/wordware` was refused as `url:known_companies[0]` (Canary 1,
+    // production 2026-09-30). LinkedIn slugs never end in sentence punctuation.
+    [...said.matchAll(/linkedin\.com\/company\/([^\s/?#)"'<>]+)/g)].map((m) =>
+      m[1].replace(/\/+$/, "").replace(/[.,;:!?]+$/, "")
+    ),
   );
   const userSuppliedLinkedIn = (path: string, s: string): boolean => {
     if (!/^known_companies\[\d+\]$/.test(path)) return false;

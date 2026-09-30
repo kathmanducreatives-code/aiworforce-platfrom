@@ -661,19 +661,33 @@ async function persistLeadResultsPanel(
     // When the first capability was refused before its provider, all of them
     // are zero for a reason that has nothing to do with the user's data, and
     // reporting them as findings is a claim with no proof path behind it.
+    //
+    // ── A SKIPPED STEP IS NOT A REFUSED ONE, AND A CONTINUING RUN HAS NOT ENDED ─
+    //
+    // Canary 1 (production 2026-09-30, plan 24269c8a): a resumed slice reported
+    // `skipped_resumed / "completed in an earlier run"` for two steps it did not
+    // need to redo, and this branch read that as a refusal. It published a FINAL
+    // "I couldn't run the search … Nothing was charged" while the lineage was
+    // still continuing and a paid call had already settled — and because a final
+    // notice is never reopened, the slice that actually ended could not say so.
+    // Only a step that was genuinely refused counts, and only a lineage that has
+    // ended may be told it failed.
     const outcomes = summary.capabilityOutcomes ?? [];
+    const refusedStep = (o: (typeof outcomes)[number]) =>
+      o.status !== "complete" && o.status !== "skipped_resumed" && !!o.reason;
     const refusedEarly = outcomes.length > 0
+      && !lineageContinuing
       && outcomes.every((o) => (o.rows ?? 0) === 0)
-      && outcomes.some((o) => o.status !== "complete" && !!o.reason);
+      && outcomes.some(refusedStep);
     if (refusedEarly) {
-      const blocking = outcomes.find((o) => o.status !== "complete" && !!o.reason)!;
+      const blocking = outcomes.find(refusedStep)!;
       const provider = (blocking.providers_used ?? [])[0] ?? "the provider";
       await publishResultsNotice(noticeDb, {
         planId, conversationId, nowIso, lifecycle: "final", ending: "failed",
         content:
           `I couldn't run the search, so I have nothing to report about your market. ` +
           `The ${blocking.capability.replace(/_/g, " ")} step was refused before ${provider} was called: ` +
-          `${blocking.reason}. Nothing was charged.`,
+          `${blocking.reason}. Nothing was charged for that step.`,
         metadata: {
           ui_panel: uiPanel,
           plan_id: planId,
@@ -685,7 +699,7 @@ async function persistLeadResultsPanel(
             category: "provider_failure",
             reason: "provider_input_validation_failed",
             gaps: outcomes
-              .filter((o) => o.status !== "complete" && !!o.reason)
+              .filter(refusedStep)
               .map((o) => ({ code: o.capability, detail: o.reason! })),
           },
           capability_outcomes: outcomes,

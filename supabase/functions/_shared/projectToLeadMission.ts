@@ -243,7 +243,9 @@ function applyRequirement(p: GptMissionProposal, r: RequestRequirement): string[
 /** The LinkedIn company page written inside a reference, if any — exactly as written. */
 function linkedInCompanyPageIn(text: string): string | null {
   const m = /(?:https?:\/\/)?(?:[a-z]{2,3}\.)?linkedin\.com\/company\/[^\s/?#)"'<>]+/i.exec(text);
-  return m ? m[0].replace(/\/+$/, "") : null;
+  // Sentence punctuation after the url is not part of the slug (see the
+  // compiler's `saidSlugs`, Canary 1 2026-09-30).
+  return m ? m[0].replace(/[.,;:!?]+$/, "").replace(/\/+$/, "") : null;
 }
 
 /** Did the user name the company this part is about — a reference or a `company_name` filter? */
