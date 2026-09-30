@@ -1,6 +1,6 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-09-30 13:55 UTC (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-09-30 14:50 UTC (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
@@ -57,8 +57,23 @@ Seed 2024-11-21 is inside 730 d until 2026-11-21.
   - It's task a7a9371d (complete + continuation_required). The guarded update no-ops (`not_ready_anymore`) but is counted as terminated.
   - No writes. It leaves the 30-day window at about 2026-09-30 16:38 UTC.
 
+### Canary 1 attempt 2 — 2026-09-30 14:37–14:45 UTC: FAILED (search_exhausted / PARTIALLY_SATISFIED), $0.0041
+- Sentence with "—" after the URL. conv c8a9aee0, plan 24269c8a (key start:c1feae90…), queue c62a38f1, task 9982ca62.
+- Spend: 1 paid call (company details $0.0041, settled from the receipt) plus 2 replays at $0. Model ≈ $0.0021. 1 credit (614 → 613).
+- No stop rule fired. Writes stayed in e8af257d only. Exactly 1 plan and 1 queue row.
+- ROOT CAUSE: LinkedIn now redirects /company/wordware to "Sauna by Wordware" (/company/saunabywordware/, id 99950244, 54 staff).
+  - The details record carries originalQuery=/wordware but linkedinUrl=/saunabywordware, so it never attached to the company key.
+  - Enrichment stayed `empty`, the company was never evaluated, and the claim verifier never ran (Atomus READY, tried:false).
+- DEFECT 2: auto-continuation `verification_required` re-dispatched 3 barren slices until search_exhausted. This is the same gate bug seen on 2026-09-24.
+- DEFECT 3 (Chat truthfulness):
+  - At 14:39:53, mid-run, Chat said "I couldn't run the search … Nothing was charged". False: 1 credit was charged and the run continued.
+  - No chat message followed the real terminal at 14:45. The checkpoint notice was resolved "failed" while the run was still going.
+  - Workbench says "1 still being checked" after terminal.
+- Minor: the stage label quotes "e — it must have raised Seed", and the card title reads "Find 1 companies in b2b saas…".
+- Duplicate Start: server OK (1 plan per key). After a reload the UI shows "Started" and no Start button.
+
 ## NEXT EXACT STEP
-User approves Canary 1 → start local release frontend → arm watcher → run → audit. Separately: decide agentory.space publishing path.
+Canary 1 FAILED on 3 release defects (above). Decide: fix release (slug punctuation, LinkedIn redirect matching, barren continuation gate, chat terminal truthfulness) before re-running Canary 1 on a company whose LinkedIn slug does not redirect. Local release app still running on :8083 (temporary launch.json entry in agentory-main-local, to revert). Separately: agentory.space publishing path.
 
 ## ACTIONS REQUIRING APPROVAL
 Canary 1; any frontend publish/DNS/Netlify branch change; closing PR #3.
