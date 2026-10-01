@@ -10,7 +10,8 @@ push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — 
 - LATEST LAUNCH/HARDENING: e5dd77e3 (PR #8 merge, 2026-10-01 08:43 UTC; tree identical to the tested 86bf6644).
   - PR #8 makes each locked Workbench cell use its own resting text (Outreach "No draft yet" instead of "Not researched").
   - It builds on 69496c34 (PR #7, lead_enrichments columns). Frontend only; worker/function code is unchanged since e1014c94.
-- RAILWAY (08:44 UTC): deployment 6b460df5 for e5dd77e3 is WAITING (it starts after the post-merge CI). The worker is still healthy on 69496c34 (b9dabc44), and the worker code is identical either way.
+- RAILWAY (08:45 UTC): deployment 6b460df5 is on e5dd77e3, healthy (polling, 0 claims, no errors). The worker code is unchanged.
+- POST-MERGE CI on e5dd77e3: both jobs succeeded.
 - NETLIFY STATUS: the production deploy of 69496c34 was SKIPPED, because the account has exhausted its production deployment credits.
   - e5dd77e3 is expected to be skipped the same way (not verified from here; Netlify is not readable without the user's session). Nothing was published; no bypass was attempted.
 - PR #7 STATUS: merged and LOCALLY VERIFIED (local app :8083 on 69496c34):
