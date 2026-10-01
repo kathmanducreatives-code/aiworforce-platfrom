@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { workbenchQueryKey, type WorkbenchOwnership } from '@/lib/workbench/workbenchSession';
 import { readCompanySizeFacts, type DeclaredBand } from '@/lib/workbench/companySize';
+import {
+  LEAD_ENRICHMENT_COLUMNS, enrichmentForLead, enrichmentLookupFilter, indexLeadEnrichments,
+  personalizationAnglesOf, type EnrichmentIndex, type LeadEnrichmentRow,
+} from '@/lib/leads/leadEnrichments';
 
 export type ContactStatus = 'needs_contact' | 'profile_found' | 'email_found' | 'verified';
 export type EnrichmentStatus = 'locked' | 'not_started' | 'enrichable' | 'enriched' | 'failed';
@@ -180,19 +184,18 @@ export function useLeadResults(ownership: WorkbenchOwnership) {
       const accountIds = rows.map((r) => r.account_id).filter(Boolean);
 
       // Best-effort enrichment + draft joins. Either may fail silently.
-      let enrichByLead = new Map<string, any>();
-      let enrichByAccount = new Map<string, any>();
+      let enrichments: EnrichmentIndex = indexLeadEnrichments([]);
       let draftByLead = new Map<string, any>();
       try {
         if (ids.length) {
+          // Production columns only (`leadEnrichments.ts`): asking for the
+          // nonexistent `status`/`personalization_angles` answered 400 and hid
+          // every research row.
           const { data: enr } = await supabase
             .from('lead_enrichments' as any)
-            .select('id, lead_candidate_id, account_id, status, summary, personalization_angles')
-            .or(`lead_candidate_id.in.(${ids.join(',')})${accountIds.length ? `,account_id.in.(${accountIds.join(',')})` : ''}`);
-          for (const e of (enr ?? []) as any[]) {
-            if (e.lead_candidate_id) enrichByLead.set(e.lead_candidate_id, e);
-            if (e.account_id) enrichByAccount.set(e.account_id, e);
-          }
+            .select(LEAD_ENRICHMENT_COLUMNS)
+            .or(enrichmentLookupFilter(ids, accountIds)!);
+          enrichments = indexLeadEnrichments((enr ?? []) as unknown as LeadEnrichmentRow[]);
         }
       } catch { /* table may not exist or be denied */ }
       try {
@@ -226,7 +229,7 @@ export function useLeadResults(ownership: WorkbenchOwnership) {
           contactEmail ? 'email_found'
           : contactLinkedin || r.contact_id ? 'profile_found'
           : 'needs_contact';
-        const enr = enrichByLead.get(r.id) ?? (r.account_id ? enrichByAccount.get(r.account_id) : null);
+        const enr = enrichmentForLead(enrichments, { id: r.id, account_id: r.account_id });
         const enrichment_status: EnrichmentStatus =
           enr ? 'enriched' : (website ? 'enrichable' : 'not_started');
         const draft = draftByLead.get(r.id);
@@ -324,7 +327,7 @@ export function useLeadResults(ownership: WorkbenchOwnership) {
           outreach_angle: s(rawMeta.outreach_angle),
           enrichment_status,
           enrichment_summary: enr?.summary ?? null,
-          personalization_angles: Array.isArray(enr?.personalization_angles) ? enr.personalization_angles : [],
+          personalization_angles: personalizationAnglesOf(enr),
           draft_status,
           personalized_message: draft?.body ?? null,
           draft_id: draft?.id ?? null,
