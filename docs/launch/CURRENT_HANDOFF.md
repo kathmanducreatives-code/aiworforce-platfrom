@@ -1,9 +1,26 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-10-01 08:20 UTC (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-10-01 08:35 UTC (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
+
+## FRONTEND STATUS (2026-10-01 08:35 UTC)
+- CURRENT PRODUCTION FRONTEND: 75e589d7 (Netlify deploy 6abd40f86cf8213b37602285; /version.json read via the signed-in pane).
+- LATEST LAUNCH/HARDENING: 69496c34 (PR #7 merge; tree identical to the tested 3389288c). The Railway worker (b9dabc44) is on 69496c34 with unchanged code.
+- NETLIFY STATUS: the production deploy of 69496c34 was SKIPPED, because the account has exhausted its production deployment credits. Nothing was published; no bypass was attempted.
+- PR #7 STATUS: merged and LOCALLY VERIFIED (local app :8083 on 69496c34):
+  - The dashboard checklist went from 2/5 to 3/5; "Enrich companies" is now completed.
+  - The app's own lead_enrichments request returns 200 with 173 rows (166 with summaries), selecting only real columns.
+  - 106 Supabase requests across 6 pages: 0 errors, no 42703.
+  - The Workbench "enriched" chip and summary drawer were not visually confirmed (UI automation was blocked by the drawer); this is on the manual checklist.
+- BUILD STATUS: npm run build OK. dist/version.json = 69496c34. Only ohsdat (6 refs), 0 wqnig, anon key only, 0 service_role.
+- TEST STATUS:
+  - leadEnrichmentsSchema 7/0; frontend deno 601/0; node 5/0.
+  - tsc 23 = baseline; eslint 1281 = baseline.
+- NEXT ACTION: when Netlify credits are available, publish the latest approved launch/hardening (69496c34, unless newer approved fixes are merged first).
+  - Build: npm run build. Publish dir: dist.
+  - Verify /version.json afterwards.
 
 ## LEAD ENRICHMENTS UI FIX (2026-10-01)
 - PR #7 MERGED as 69496c34 at 08:15 UTC (parents 75e589d7 + 3389288c; tree identical to the tested PR head).
