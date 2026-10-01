@@ -13,7 +13,11 @@ push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — 
   - The dashboard checklist went from 2/5 to 3/5; "Enrich companies" is now completed.
   - The app's own lead_enrichments request returns 200 with 173 rows (166 with summaries), selecting only real columns.
   - 106 Supabase requests across 6 pages: 0 errors, no 42703.
-  - The Workbench "enriched" chip and summary drawer were not visually confirmed (UI automation was blocked by the drawer); this is on the manual checklist.
+  - Workbench research VISUALLY VERIFIED (2026-10-01).
+    - Feathery (conv 3a1f55cf), Qualified tab: the Company research cell reads "The webpage promotes a comprehensive data intake…".
+    - That is the newest lead_enrichments row (09-18 14:31). The text is in no lead_candidates field, so only the fix could surface it (via bestSummary → row.enrichment_summary).
+  - Fuse AI is NOT a valid example: it is pending (In review cards, no lead table), so no research cell renders.
+  - Known cosmetic issue, pre-existing: UnlockCell's resting text is always "Not researched", so the locked Outreach cell is mislabelled.
 - BUILD STATUS: npm run build OK. dist/version.json = 69496c34. Only ohsdat (6 refs), 0 wqnig, anon key only, 0 service_role.
 - TEST STATUS:
   - leadEnrichmentsSchema 7/0; frontend deno 601/0; node 5/0.
