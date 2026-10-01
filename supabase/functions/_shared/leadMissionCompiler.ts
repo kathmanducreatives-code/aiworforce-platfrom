@@ -856,6 +856,24 @@ export class MissionCompilationBlockedError extends Error {
   }
 }
 
+/**
+ * THE EXPLANATION THE USER ASKED TO RECEIVE, in their own words.
+ *
+ * "…and explain why each could be relevant to Agentory" compiled to a mission
+ * with empty `evaluation_instructions`: the model did not carry it, nothing
+ * else did, and the request vanished without a gap (phased evaluation,
+ * 2026-10-01). It is not a qualification criterion — it never becomes a claim —
+ * so it rides in `evaluation_instructions`, where the evaluator reads what to
+ * explain for each company. Only explicit explanation verbs count; a bare
+ * "show me 5 companies…" is a request for companies, not an explanation.
+ */
+const EXPLANATION_REQUEST_RE =
+  /\b((?:explain|justify)\b[^.?!]*|tell me why\b[^.?!]*|show(?: me)? (?:the )?(?:evidence|reasoning|why)\b[^.?!]*)/i;
+export function requestedExplanationOf(query: string | null | undefined): string {
+  const m = String(query ?? "").match(EXPLANATION_REQUEST_RE);
+  return m ? m[1].trim().replace(/\s+/g, " ").slice(0, 2000) : "";
+}
+
 export function compileLeadMission(i: CompileMissionInput): CompiledMissionResult {
   const query = String(i.originalUserQuery ?? "");
   const changes: string[] = [];
@@ -1042,7 +1060,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
       employee_range: { min: null, max: null },
     },
     disallowed_broadening: p?.disallowed_broadening ?? [],
-    evaluation_instructions: p?.evaluation_instructions ?? "",
+    evaluation_instructions: (p?.evaluation_instructions ?? "").trim() || requestedExplanationOf(i.originalUserQuery),
     source_strategy: p?.preferred_source_strategy ?? [],
     requested_contact_ready_count: p?.requested_contact_ready_count ?? null,
     founder_unlock_recommended: p?.founder_unlock_recommended ?? true,

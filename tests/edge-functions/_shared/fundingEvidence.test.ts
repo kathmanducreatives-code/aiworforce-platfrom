@@ -288,8 +288,11 @@ Deno.test("12. datahyena is DISCOVERY-only; known-company verification is atomus
 
   // A funding mission that discovered its pool some OTHER way must be told so,
   // or an uncollected requirement looks like a served one.
+  // Compiler correctness (2026-10-01): an UNHEDGED "recently raised" is now a hard
+  // claim the post-eligibility funding pair owns, so the no-owner case is a
+  // hedged funding preference.
   const m = parseLeadMissionDeterministic(
-    "Find B2B SaaS companies hiring SDRs that recently raised");
+    "Find B2B SaaS companies hiring SDRs that may have recently raised");
   const plan = buildCapabilityGraph({ ...m, strategies: ["hiring"] } as never);
   assertFalse(plan.steps.some((s) => s.capability === "funding_signal_discovery"));
   assert(plan.routing_advisories.some((a) => /DISCOVERY-ONLY/.test(a)),

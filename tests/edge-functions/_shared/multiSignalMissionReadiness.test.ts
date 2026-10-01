@@ -17,7 +17,7 @@
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { parseLeadMissionDeterministic } from "../../../supabase/functions/_shared/leadMission.ts";
-import { compileMissionSemantics, deriveMissionCriteria } from "../../../supabase/functions/_shared/missionCriteria.ts";
+import { compileMissionSemantics, deriveMissionCriteria, requirementElevation } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import { canonicalWindowDays, explicitWindowDays, sameWindow } from "../../../supabase/functions/_shared/signalKinds.ts";
 import { PRODUCTION_READINESS } from "../../../supabase/functions/_shared/routeReadiness.ts";
 import { buildQualificationContext } from "../../../supabase/functions/_shared/missionQualificationContext.ts";
@@ -71,18 +71,31 @@ Deno.test("WINDOW: '12 months', 'a year' and '365 days' are ONE hard funding req
   assertEquals(canonicalWindowDays(183), 180, "months keep the 30-day convention");
 });
 
-Deno.test("WINDOW: plain 'recently funded' keeps its soft default target", () => {
-  assertEquals(kindOf("Find 1 US SaaS company that was recently funded.", "funding"), ["target/180"]);
+Deno.test("WINDOW: plain 'recently funded' is HARD on the canonical 180-day default", () => {
+  // Compiler correctness (2026-10-01): a stated recency is a requirement; the
+  // product's canonical "recently funded" window supplies the days.
+  assertEquals(kindOf("Find 1 US SaaS company that was recently funded.", "funding"), ["hard/180"]);
+  assertEquals(kindOf("Find 1 US SaaS company that may have been recently funded.", "funding"), ["target/180"],
+    "hedged recency stays a preference");
 });
 
 Deno.test("ELEVATION: 'must currently be hiring a growth role' is a HARD hiring requirement", () => {
   assertEquals(kindOf("Find 1 US SaaS company that must currently be hiring a growth role.", "hiring"), ["hard/30"]);
-  assertEquals(kindOf("Find 1 US SaaS company that is currently hiring a growth role.", "hiring"), ["target/30"],
-    "generic hiring language stays soft");
+  // Compiler correctness (2026-10-01): a present-tense statement is as much a
+  // requirement as a modal one; only hedged hiring language stays soft.
+  assertEquals(kindOf("Find 1 US SaaS company that is currently hiring a growth role.", "hiring"), ["hard/30"],
+    "a stated present fact is a requirement");
+  assertEquals(kindOf("Find 1 US SaaS company that appears to be hiring a growth role.", "hiring"), ["target/30"],
+    "hedged hiring language stays soft");
 });
 
 Deno.test("ELEVATION is clause-local: a modal on geography does not harden funding", () => {
-  assertEquals(kindOf("Find companies that must be in the US and recently raised.", "funding"), ["target/180"]);
+  // The modal on geography is not what hardens funding: a hedged funding clause
+  // beside it stays a target, and an unhedged one is hard by its own recency
+  // rule (canonical default), not by the geography's "must".
+  assertEquals(kindOf("Find companies that must be in the US and may have recently raised.", "funding"), ["target/180"]);
+  assertEquals(requirementElevation("funding", "", "Find companies that must be in the US and recently raised."), null);
+  assertEquals(kindOf("Find companies that must be in the US and recently raised.", "funding"), ["hard/180"]);
 });
 
 Deno.test("A STATED WINDOW BELONGS TO ITS OWN CLAUSE: hiring keeps 30 days beside a 12-month funding window", () => {

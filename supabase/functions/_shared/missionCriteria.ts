@@ -582,22 +582,62 @@ function signalDetail(k: CanonicalSignalKind, s: Partial<MissionSignal>, subkind
  * no cue map keeps the previous reading.
  */
 const SIGNAL_CUE: Partial<Record<CanonicalSignalKind, RegExp>> = {
-  hiring: /\b(?:hiring|recruit(?:ing|s)?|open roles?|job openings?|to hire)\b/,
+  hiring: /\b(?:hiring|recruit(?:ing|s)?|open\s+(?:\w+\s+){0,2}(?:roles?|positions?|jobs?|openings?)|job openings?|to hire)\b/,
   funding: /\b(?:fund(?:ed|ing|raise|raising)?|rais(?:ed|e|es|ing)|round|series [a-e]\b|seed)\b/,
 };
 const REQUIREMENT_MODAL =
   /\b(must(?:\s+(?:currently|already|actively|still))?(?:\s+(?:be|have))?|required to|requires?|needs? to|has to|have to|only|strictly)\b/;
 const CLAUSE_BREAK = /[,;.:]|\s+(?:and|but|or|which|that|who|whose|while|with)\s+/;
 
+/** The LAST clause of `text` that names the signal's cue, or null. */
+function signalClause(kind: CanonicalSignalKind, text: string): string | null {
+  const cue = SIGNAL_CUE[kind];
+  if (!cue) return null;
+  const clauses = text.toLowerCase().split(CLAUSE_BREAK).map((c) => c.trim()).filter(Boolean);
+  return [...clauses].reverse().find((c) => cue.test(c)) ?? null;
+}
+
+// ── A STATED FACT IS A REQUIREMENT; A HEDGED ONE IS NOT (phased evaluation, 2026-10-01) ──
+//
+// Only a modal ("must", "only", "required to") used to make a signal hard, so
+// "…and are actively hiring salespeople" and "…and at least one currently open
+// sales role" compiled as targets — ranked, never verified, never rejecting —
+// although the user listed them beside size and funding as what a company must
+// be. The rule now: a signal stated as a present fact in its own clause is a
+// requirement; one wrapped in hedging language ("appears to be hiring", "signs
+// they are hiring", "funding is not required") stays a preference. Words about
+// the EVIDENCE ("funding is still uncertain — keep them pending") do not hedge
+// the requirement: an unresolved hard claim is what makes a company PENDING.
+const SIGNAL_HEDGE_RE =
+  /\b(?:appears?\s+to|appearing\s+to|seems?\s+to|signs?\s+(?:of|that|they)|likely|(?:may|might)\s+(?:have|be|still|already)|possibly|perhaps|potentially|not\s+(?:strictly\s+)?required)\b/;
+const ASSERTED_HIRING_RE =
+  /\b((?:is|are)\s+(?:actively\s+|currently\s+)?hiring|(?:actively|currently)\s+hiring|(?:at least one|one or more|an?|any|some)\s+(?:currently\s+)?open\s+(?:\w+\s+){0,2}(?:roles?|positions?|jobs?|openings?))\b|^((?:currently\s+)?open\s+(?:\w+\s+){0,2}(?:roles?|positions?|jobs?|openings?))\b/;
+/** A funding clause that asks about RECENCY (as opposed to a round or stage). */
+const FUNDING_RECENCY_RE = /\b(?:recent(?:ly)?|recency|newly|lately|latest)\b/;
+/** A "stage" value that is really a funding-recency phrase ("funded within the last 2 years"). */
+const FUNDING_RECENCY_AS_STAGE_RE =
+  /\b(?:funded|raised|funding)\b.*\b(?:within|last|past|recent(?:ly)?|ago|\d+\s*(?:days?|weeks?|months?|years?))\b/i;
+
+/** Is the signal's own clause hedged? */
+export function signalHedged(kind: CanonicalSignalKind, query: string): boolean {
+  const clause = signalClause(kind, query);
+  return !!clause && (SIGNAL_HEDGE_RE.test(clause) || HEDGE_RE.test(clause));
+}
+
+/** A hiring signal stated as a present fact in its own, unhedged clause. */
+export function requirementAssertion(kind: CanonicalSignalKind, query: string): RegExpMatchArray | null {
+  if (kind !== "hiring" || signalHedged(kind, query)) return null;
+  const clause = signalClause(kind, query);
+  return clause ? clause.match(ASSERTED_HIRING_RE) : null;
+}
+
 export function requirementElevation(kind: CanonicalSignalKind, phrase: string, query: string):
   RegExpMatchArray | null {
   const cue = SIGNAL_CUE[kind];
   if (cue) {
-    const text = (phrase || query).toLowerCase();
-    const clauses = text.split(CLAUSE_BREAK).map((c) => c.trim()).filter(Boolean);
     // The LAST clause naming the signal: a phrase can carry earlier clauses
     // that belong to other requirements ("…must be based in the US, …").
-    const own = [...clauses].reverse().find((c) => cue.test(c));
+    const own = signalClause(kind, phrase || query);
     if (own) {
       const at = own.search(cue);
       const m = own.slice(0, at).match(REQUIREMENT_MODAL);
@@ -861,6 +901,11 @@ export function deriveMissionCriteria(
     const c = (raw ?? {}) as { value?: unknown };
     const value = c.value ?? raw;
     const values = Array.isArray(value) ? value.map(String) : [String(value ?? "")];
+    // RECENCY IS NOT A STAGE. "funded within the last 2 years" arrives as a
+    // stage value when the model files it under `stage`; the funding signal
+    // already carries that window as its own claim, so a second "stage"
+    // preference would only blur the two.
+    if (field === "stage" && fundingRequested && values.every((v) => FUNDING_RECENCY_AS_STAGE_RE.test(v))) continue;
     push({
       kind: "target", dimension: field === "stage" ? "company_stage" : "constraint",
       value: { field, value }, label: `${field.replace(/[._]/g, " ")}: ${values.join(", ")} (preference)`,
@@ -885,11 +930,16 @@ export function deriveMissionCriteria(
     const reading = readings.find((r) => r.kind === k);
     const phrase = String(rec?.phrase ?? reading?.phrase ?? s.phrase ?? s.type);
     const elevated = requirementElevation(k, phrase, q);
-    const source: CriterionSource = userKinds.has(k) ? "user_explicit" : "user_inferred";
+    // THE USER'S WORDS, NOT ONLY THE READER'S. "at least one currently open
+    // sales role" names hiring although the reader did not label it, so it was
+    // tagged `user_inferred` — the request's own cue says otherwise.
+    const cueStated = SIGNAL_CUE[k]?.test(q) ?? false;
+    const source: CriterionSource = userKinds.has(k) || cueStated ? "user_explicit" : "user_inferred";
+    const asserted = !elevated && source === "user_explicit" ? requirementAssertion(k, query) : null;
     const def = DEFAULT_SIGNAL_WINDOWS[k];
     const ws = sem?.window_sources?.[k];
     const carried = s.timeframe_days != null;
-    const time_window: CriterionTimeWindow | undefined = carried
+    let time_window: CriterionTimeWindow | undefined = carried
       ? {
         days: s.timeframe_days!, basis: def?.basis ?? "observed",
         source: ws?.source ?? (lang?.window_days_by_kind?.[k] != null ? "user_explicit" : "system_default"),
@@ -917,12 +967,36 @@ export function deriveMissionCriteria(
     // said: the deterministic parser labels "in the last 2 years" user-stated
     // while carrying the 180-day default, and a hard requirement on the wrong
     // window would reject a company the user asked for.
-    const fundingWindow = !elevated && k === "funding" && source === "user_explicit" &&
+    const fundingCandidate = !elevated && k === "funding" && source === "user_explicit" &&
+      !signalHedged("funding", query) && fundingVerifierReady(readiness);
+    const fundingWindow = fundingCandidate &&
       time_window?.source === "user_explicit" &&
-      sameWindow(time_window.days, lang?.window_days_by_kind?.funding ?? explicitWindowDays(query)) &&
-      fundingVerifierReady(readiness);
+      sameWindow(time_window.days, lang?.window_days_by_kind?.funding ?? explicitWindowDays(query));
+    // ── "RECENT FUNDING" IS A REQUIREMENT TOO, ON THE CANONICAL DEFAULT ─────
+    //
+    // "…with 11–50 employees, recent funding, and…" lists funding as something
+    // the company must have, but names no window, so it compiled as a target:
+    // never verified, and request feasibility then reported funding as
+    // "unsupported" — or, when it was the only signal ("verify funding
+    // recency"), refused the whole mission. The product DOES define "recently
+    // funded": `DEFAULT_SIGNAL_WINDOWS.funding` (180 days, "recently funded /
+    // raised"), from the plan's time-window table. So a stated, unhedged
+    // recency requirement is hard on that window, and the window stays labelled
+    // `system_default` — the card says it is a default, never that the user
+    // said it. A bare round or stage ("seed-funded") names no recency and is
+    // untouched: recency and stage are separate claims. Only when the user
+    // named NO window: a stated window that disagrees with the carried one
+    // stays a target (above), and a window the model guessed for "recently"
+    // is not the user's either — the hard claim runs on the canonical default.
+    const fundingClause = k === "funding" ? signalClause("funding", query) : null;
+    const fundingRecency = fundingCandidate && !fundingWindow && !!def && !!fundingClause &&
+      FUNDING_RECENCY_RE.test(fundingClause) &&
+      lang?.window_days_by_kind?.funding == null && explicitWindowDays(fundingClause) == null;
+    if (fundingRecency) {
+      time_window = { days: def!.days, basis: def!.basis, source: "system_default", rule: def!.rule, enforced: false };
+    }
     push({
-      kind: elevated || fundingWindow ? "hard" : "target",
+      kind: elevated || fundingWindow || fundingRecency || asserted ? "hard" : "target",
       dimension: k, value: { event: eventOf(s), subject: s.subject ?? "company", qualifier: s.qualifier ?? {} },
       label: signalDetail(k, s, rec?.subkind ?? reading?.subkind),
       source, ...(time_window ? { time_window } : {}),
@@ -930,6 +1004,10 @@ export function deriveMissionCriteria(
       user_phrase: source === "user_explicit" ? phrase : "",
       rationale: fundingWindow
         ? "a funding window the request states, which the funding pair can verify"
+        : fundingRecency
+        ? `a funding recency the request requires; no window was stated, so the canonical "${def!.rule}" default (${def!.days} days) applies`
+        : asserted
+        ? "a signal the request states as a present fact the company must have"
         : source === "user_explicit"
         ? "an observable signal the request asks for"
         : "added by the model's reading; the request's words do not state it",

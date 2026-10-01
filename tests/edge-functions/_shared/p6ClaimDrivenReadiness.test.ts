@@ -129,8 +129,10 @@ Deno.test("RETRIEVAL PLAN validation reads the policy: a route through a carded 
 // ── the claim plan ──────────────────────────────────────────────────────────
 
 Deno.test("CLAIM PLAN: hard claims carry their READY routes cheapest first; targets buy nothing; no fixed pipeline", () => {
+  // Hedged funding/hiring stay targets (compiler correctness, 2026-10-01: an
+  // unhedged "recently raised" / "is hiring" is a hard claim).
   const combined = parseLeadMissionDeterministic(
-    "Find 1 B2B SaaS fintech company that must be seed-stage, recently raised Seed and is hiring growth marketers.");
+    "Find 1 B2B SaaS fintech company that must be seed-stage, may have recently raised Seed and appears to be hiring growth marketers.");
   const criteria = deriveMissionCriteria(combined, PRE_PROMOTION);
   const prod = buildClaimPlan(criteria, "funding_signal_discovery", PRE_PROMOTION);
   const bm = prod.hard.find((h) => h.claim === "business_model")!;

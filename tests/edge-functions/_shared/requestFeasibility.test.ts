@@ -122,8 +122,11 @@ Deno.test("decision makers is requires_unlock, NOT a refusal", () => {
 // ── the generalisation: population coverage, for every signal ──────────────
 
 Deno.test("cohort-scoped evidence does not satisfy an unrestricted population", () => {
+  // Compiler correctness (2026-10-01): "are actively hiring" is now a hard claim
+  // the post-eligibility hiring verifier proves over the WHOLE pool, so the
+  // cohort-scope check runs on a hedged (preference) hiring signal.
   const m = parseLeadMissionDeterministic(
-    "Find companies matching my ICP that are actively hiring sales roles.", {});
+    "Find companies matching my ICP that appear to be hiring sales roles.", {});
   const plan = buildCapabilityGraph(m);
   assertEquals(missionCohortOf(plan), null, "this mission is not YC-restricted");
 
