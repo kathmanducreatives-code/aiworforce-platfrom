@@ -6,6 +6,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 import { listRecentRuns } from '@/lib/workflows/recentRuns';
 import { useSignalFeed } from '@/hooks/useSignalFeed';
+import { LEAD_ENRICHMENT_COLUMNS, countEnrichedLeads, enrichmentLookupFilter, type LeadEnrichmentRow } from '@/lib/leads/leadEnrichments';
 
 interface TaskItem {
   id: number;
@@ -64,7 +65,7 @@ export default function DashboardChecklist() {
 
         const { data: leads } = await supabase
           .from('lead_candidates' as any)
-          .select('id, contact_id, status')
+          .select('id, contact_id, status, account_id')
           .in('plan_id', planIds);
 
         const leadsList = (leads || []) as any[];
@@ -72,12 +73,15 @@ export default function DashboardChecklist() {
 
         let enrichedCount = 0;
         if (leadIds.length > 0) {
+          // A row IS the enrichment (there is no `status` column — filtering on
+          // one answered 400 and pinned this step at 0). Leads with research,
+          // matched by lead or by account, exactly as the Workbench matches.
+          const accountIds = [...new Set(leadsList.map((l) => l.account_id).filter(Boolean))] as string[];
           const { data: enrichments } = await supabase
             .from('lead_enrichments' as any)
-            .select('id')
-            .eq('status', 'enriched')
-            .in('lead_candidate_id', leadIds);
-          enrichedCount = enrichments?.length || 0;
+            .select(LEAD_ENRICHMENT_COLUMNS)
+            .or(enrichmentLookupFilter(leadIds, accountIds)!);
+          enrichedCount = countEnrichedLeads(leadsList, (enrichments ?? []) as unknown as LeadEnrichmentRow[]);
         }
 
         const contactsCount = leadsList.filter((l) => l.contact_id !== null).length;
