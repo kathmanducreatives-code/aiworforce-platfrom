@@ -1,9 +1,18 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-09-30 17:00 UTC (PR #6 merged 16:58) (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-10-01 08:20 UTC (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
+
+## LEAD ENRICHMENTS UI FIX (2026-10-01)
+- PR #7 MERGED as 69496c34 at 08:15 UTC (parents 75e589d7 + 3389288c; tree identical to the tested PR head).
+  - Frontend only: useLeadResults/DashboardChecklist read real lead_enrichments columns; there is a new helper and test; the eslint baseline is now 1281.
+- Railway worker deploy b9dabc44 is on 69496c34, polling. No worker or function code changed.
+- Functions are unchanged (e1014c94 / a08ac0e4). The DB schema is unchanged (last migration 20260929130722).
+- Netlify: deploy preview https://deploy-preview-7--teal-chimera-be7c79.netlify.app (built from 3389288c, the same code).
+  - The production-branch build of 69496c34 must NOT be published until the user has tested the preview.
+  - The published production deploy should still be 75e589d7 (not re-verified: the pane's Netlify navigation was denied).
 
 ## LAUNCH GATE SNAPSHOT (2026-09-30 17:00 UTC) — BETA VERDICT: NOT BETA READY
 
