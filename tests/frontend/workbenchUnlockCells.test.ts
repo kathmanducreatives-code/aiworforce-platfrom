@@ -187,3 +187,30 @@ Deno.test("16. evidence is a link, not a paragraph in every row", () => {
   assert(SHEET.includes("truncate"), "row content is clipped, not wrapped");
   assert(SHEET.includes("onOpen(r)"), "and the drawer holds the full reasoning");
 });
+
+// ═══ THE RESTING TEXT BELONGS TO THE COLUMN ═════════════════════════════════
+//
+// Local readiness audit, 2026-10-01: the cell's resting text was a hard-coded
+// "Not researched", so a locked Outreach cell (and Contact details, and
+// Decision maker) claimed a research gap it is not about.
+
+Deno.test("10. the cell has no hard-coded resting text — each column says its own", () => {
+  assert(!CELL.includes("Not researched"), "UnlockCell must not hard-code one column's words");
+  assert(/notYet: string;/.test(CELL), "notYet is a REQUIRED prop, so a new column cannot inherit the wrong text");
+  assert(CELL.includes("{notYet}"), "the resting state renders the column's own text");
+});
+
+Deno.test("11. every column names what it does not know yet, and only research says 'Not researched'", () => {
+  const usages = [...SHEET.matchAll(/<UnlockCell\b[\s\S]*?\/>/g)].map((m) => m[0]);
+  const byLabel = Object.fromEntries(usages.map((u) => [
+    (u.match(/label="([^"]+)"/) ?? [])[1],
+    (u.match(/notYet="([^"]+)"/) ?? [])[1],
+  ]));
+  assertEquals(byLabel, {
+    "Find contact": "No decision-maker yet",
+    "Find contact details": "No contact details yet",
+    "Research company": "Not researched",
+    "Draft outreach": "No draft yet",
+  });
+  assertEquals(new Set(Object.values(byLabel)).size, 4, "no two columns share resting text");
+});
