@@ -45,6 +45,13 @@ interface Props {
   state: UnlockState;
   /** The verb, e.g. "Find contact". Shown on the button. */
   label: string;
+  /**
+   * What this column does not know yet, in its own words — "Not researched",
+   * "No draft yet". REQUIRED: the resting text used to be a hard-coded "Not
+   * researched", so the Outreach, Contact and Decision-maker cells all claimed a
+   * research gap they are not about (local readiness audit, 2026-10-01).
+   */
+  notYet: string;
   onUnlock: () => void;
   /**
    * The price from `creditPricing`, which is the table the reserve uses.
@@ -62,7 +69,7 @@ interface Props {
 }
 
 export default function UnlockCell({
-  state, label, onUnlock, cost = null, blockedReason, failureReason,
+  state, label, notYet, onUnlock, cost = null, blockedReason, failureReason,
 }: Props) {
   if (state === 'processing') {
     return (
@@ -135,7 +142,7 @@ export default function UnlockCell({
     );
   }
 
-  // NOT RESEARCHED — an offer.
+  // NOT YET — an offer, in the column's own words (`notYet`).
   //
   // The label sits quiet until the row is hovered, so a screen of these reads
   // as blank space to be filled rather than a wall of buttons demanding to be
@@ -152,7 +159,7 @@ export default function UnlockCell({
       // carry something not otherwise on screen.
     >
       <span className="block truncate text-[12px] text-[#6e7681] group-hover/cell:text-[#8b949e] transition-colors">
-        Not researched
+        {notYet}
       </span>
       <span className="mt-0.5 flex items-center gap-1 truncate text-[12px] text-emerald-300/70 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
         <Lock className="h-2.5 w-2.5" />

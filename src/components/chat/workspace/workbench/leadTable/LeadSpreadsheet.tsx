@@ -320,6 +320,7 @@ export default function LeadSpreadsheet({
                     <UnlockCell
                       state={dmState}
                       label="Find contact"
+                      notYet="No decision-maker yet"
                       // The price the reserve will take. Same table, both sides.
                       cost={priceFor('find_decision_makers')}
                       onUnlock={() => onUnlock('find_contacts', r.id)}
@@ -361,6 +362,7 @@ export default function LeadSpreadsheet({
                     <UnlockCell
                       state={contactState}
                       label="Find contact details"
+                      notYet="No contact details yet"
                       // The price the reserve will take. Same table, both sides.
                       cost={priceFor('find_contact_details')}
                       onUnlock={() => onUnlock('find_contact_details', r.id)}
@@ -379,6 +381,7 @@ export default function LeadSpreadsheet({
                     <UnlockCell
                       state={researchState}
                       label="Research company"
+                      notYet="Not researched"
                       // The price the reserve will take. Same table, both sides.
                       cost={priceFor('research_company')}
                       onUnlock={() => onUnlock('research_company', r.id)}
@@ -403,6 +406,7 @@ export default function LeadSpreadsheet({
                     <UnlockCell
                       state={outreachState}
                       label="Draft outreach"
+                      notYet="No draft yet"
                       // The price the reserve will take. Same table, both sides.
                       cost={priceFor('generate_outreach')}
                       onUnlock={() => onUnlock('draft_outreach', r.id)}
