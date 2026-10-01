@@ -9,7 +9,10 @@ push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — 
 
 CURRENT PROD FRONTEND SHA
 - agentory.space: the OLD Lovable build (deployment f249a448, no /version.json), talking to the old backend wqnig.
-- Netlify teal-chimera-be7c79: built from launch/hardening at 42bf1b63 per the user. It is still behind Netlify team protection (401), so it can't be verified from here.
+- Netlify teal-chimera-be7c79: VERIFIED 2026-10-01 via the signed-in pane. /version.json sha 75e589d7, context production, deploy 6abd40f86cf8213b37602285.
+  - The bundle names only ohsdatpvfdjdemstoiuj (URL and anon key) and has 0 wqnig references.
+  - It contains the new isSameOriginRelativePath; the old inline guard is gone.
+  - Still behind team protection.
 
 CURRENT BACKEND SHAs
 - run-agent and pilot-chat: e1014c94.
@@ -44,7 +47,7 @@ OPS HEALTH
 - Queue empty, 0 open or unsettled calls, credits 610.
 
 NEXT ACTION (blockers, in order)
-1. Publish the Netlify deploy of 75e589d7 (PR #6, open-redirect fix), and verify /version.json = 75e589d7.
+1. DONE: the Netlify production deploy is at 75e589d7 (open-redirect fix live on teal-chimera; agentory.space is still Lovable).
 2. Configure custom SMTP in Supabase Auth, then do the live sign-up and reset email test.
 3. In Netlify:
    - Add the agentory.space and www custom domains.
