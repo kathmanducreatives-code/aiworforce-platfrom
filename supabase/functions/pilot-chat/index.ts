@@ -49,8 +49,12 @@ import {
 } from "../_shared/signalSourcingSurface.ts";
 import { shouldGateObjective } from "../_shared/companyBrainGate.ts";
 import {
-  failureMetadata, OUTCOME_CONTRACT_VERSION,
+  failureMetadata, OUTCOME_CONTRACT_VERSION, satisfied, partiallySatisfied,
 } from "../_shared/outcomeContract.ts";
+import {
+  classifyWorkspaceQuestion, loadWorkspaceSnapshot, answerWorkspaceQuestion, sourcesFor,
+  safeTimeZone, WORKSPACE_QUESTIONS_VERSION, type WorkspaceDb,
+} from "../_shared/workspaceQuestions.ts";
 import { buildMissionPreview } from "../_shared/missionPreview.ts";
 import { buildMissionConfirmation } from "../_shared/missionConfirmationCard.ts";
 import { isLeadMissionV1 } from "../_shared/leadMission.ts";
@@ -1801,6 +1805,66 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // deployment directly.
   //
   // A message is understood once.
+
+  // ══ A QUESTION ABOUT THE WORKSPACE IS ANSWERED FROM ITS CANONICAL STATE ══
+  //
+  // "What's pending for me?", "show me my latest qualified leads", "why was
+  // MintMCP rejected?" — questions about what this workspace already holds.
+  // They used to reach Chat Brain, whose read surface knows four tables and
+  // one filter: every one of them got the same unfiltered "N leads saved" list,
+  // so every saved lead read as qualified and "today" meant nothing — and a
+  // question shaped like a search could be routed to a sourcing Start card.
+  //
+  // Answered here, BEFORE understanding, because nothing about the answer is a
+  // judgement call: the qualification, claim results, research, drafts and
+  // workflows are read from canonical stored state (`workspaceQuestions.ts`)
+  // and rendered deterministically. The recogniser is narrow — anything it
+  // does not take reaches Chat Brain exactly as before — and it never takes a
+  // request to DO something. No provider is reachable from that module, so
+  // these answers cannot spend and cannot produce a Start card.
+  //
+  // Typed messages only: a card action carries its own structured intent.
+  const workspaceQuestion = !actionSource && !isPreConfirmed ? classifyWorkspaceQuestion(message) : null;
+  if (workspaceQuestion) {
+    // "TODAY" IS THE USER'S DAY when the client says which zone it is in; the
+    // answer names UTC when it does not.
+    const timeZone = safeTimeZone(body?.client_timezone);
+    const snapshot = await loadWorkspaceSnapshot(
+      admin as unknown as WorkspaceDb, workspaceId, sourcesFor(workspaceQuestion));
+    const answer = answerWorkspaceQuestion(workspaceQuestion, snapshot, new Date(), timeZone);
+    const { data: saved } = await admin.from("messages").insert({
+      conversation_id: conversationId, role: "assistant",
+      content: answer.text, agent_slug: "pilot",
+      metadata: {
+        classifier_source: "workspace_question",
+        workspace_question: {
+          version: WORKSPACE_QUESTIONS_VERSION, kind: workspaceQuestion.kind, time_zone: timeZone,
+        },
+        chat_brain: {
+          route: "read", target: `workspace:${workspaceQuestion.kind}`,
+          served_from: "canonical_state", spent: false, counts: answer.counts,
+        },
+        outcome: answer.degraded
+          ? partiallySatisfied(`read:workspace:${workspaceQuestion.kind}`, [{
+            code: "read_failed", detail: `couldn't read ${snapshot.failed.join(", ")}`,
+          }])
+          : satisfied(`read:workspace:${workspaceQuestion.kind}`),
+        // THE NAMED COMPANIES STAY POINTABLE, so "tell me more about the
+        // second one" resolves against what this answer listed.
+        ...(answer.companies.length > 0
+          ? {
+            [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(
+              answer.companies.map((c) => ({
+                label: c.name, name: c.name, domain: c.domain, linkedin_url: c.linkedin_url,
+              })),
+              "lead_results",
+            ),
+          }
+          : {}),
+      },
+    }).select("*").single();
+    return json({ type: "reply", conversation_id: conversationId, route: "read", message: saved });
+  }
 
   // ══ CHAT BRAIN — THE AUTHORITATIVE UNDERSTANDING PATH ══════════════════
   //

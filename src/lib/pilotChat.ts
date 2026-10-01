@@ -23,6 +23,21 @@ export interface PilotChatInput {
    * it instead of refusing it as a card that lost its thread. Absent = card.
    */
   entry?: 'page' | 'card';
+  /**
+   * The browser's IANA time zone. Pilot answers "what happened today?" from
+   * real timestamps, and "today" is the user's day, not the server's. Filled in
+   * by `pilotChat` when the caller leaves it out.
+   */
+  client_timezone?: string;
+}
+
+/** The browser's IANA zone, or undefined where the runtime cannot say. */
+export function browserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export interface ChatMessageRow {
@@ -57,7 +72,10 @@ export type PilotChatResult =
     };
 
 export async function pilotChat(input: PilotChatInput): Promise<PilotChatResult> {
-  const { data, error } = await invokeFunction('pilot-chat', input);
+  const { data, error } = await invokeFunction('pilot-chat', {
+    ...input,
+    client_timezone: input.client_timezone ?? browserTimeZone(),
+  });
   if (error) {
     const context = typeof error.context === 'object' && error.context !== null ? error.context as { json?: () => Promise<unknown>; text?: () => Promise<string> } : null;
     try {
