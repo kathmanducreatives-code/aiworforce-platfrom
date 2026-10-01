@@ -1,14 +1,18 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-10-01 08:35 UTC (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-10-01 08:45 UTC (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
 
-## FRONTEND STATUS (2026-10-01 08:35 UTC)
+## FRONTEND STATUS (2026-10-01 08:45 UTC)
 - CURRENT PRODUCTION FRONTEND: 75e589d7 (Netlify deploy 6abd40f86cf8213b37602285; /version.json read via the signed-in pane).
-- LATEST LAUNCH/HARDENING: 69496c34 (PR #7 merge; tree identical to the tested 3389288c). The Railway worker (b9dabc44) is on 69496c34 with unchanged code.
-- NETLIFY STATUS: the production deploy of 69496c34 was SKIPPED, because the account has exhausted its production deployment credits. Nothing was published; no bypass was attempted.
+- LATEST LAUNCH/HARDENING: e5dd77e3 (PR #8 merge, 2026-10-01 08:43 UTC; tree identical to the tested 86bf6644).
+  - PR #8 makes each locked Workbench cell use its own resting text (Outreach "No draft yet" instead of "Not researched").
+  - It builds on 69496c34 (PR #7, lead_enrichments columns). Frontend only; worker/function code is unchanged since e1014c94.
+- RAILWAY (08:44 UTC): deployment 6b460df5 for e5dd77e3 is WAITING (it starts after the post-merge CI). The worker is still healthy on 69496c34 (b9dabc44), and the worker code is identical either way.
+- NETLIFY STATUS: the production deploy of 69496c34 was SKIPPED, because the account has exhausted its production deployment credits.
+  - e5dd77e3 is expected to be skipped the same way (not verified from here; Netlify is not readable without the user's session). Nothing was published; no bypass was attempted.
 - PR #7 STATUS: merged and LOCALLY VERIFIED (local app :8083 on 69496c34):
   - The dashboard checklist went from 2/5 to 3/5; "Enrich companies" is now completed.
   - The app's own lead_enrichments request returns 200 with 173 rows (166 with summaries), selecting only real columns.
@@ -22,7 +26,9 @@ push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — 
 - TEST STATUS:
   - leadEnrichmentsSchema 7/0; frontend deno 601/0; node 5/0.
   - tsc 23 = baseline; eslint 1281 = baseline.
-- NEXT ACTION: when Netlify credits are available, publish the latest approved launch/hardening (69496c34, unless newer approved fixes are merged first).
+- FUTURE NETLIFY DEPLOY TARGET: branch launch/hardening @ e5dd77e3 (= the latest approved head; supersedes 69496c34).
+  - If more approved fixes merge first, use the newest launch/hardening head instead.
+- NEXT ACTION: when Netlify credits are available, publish launch/hardening @ e5dd77e3.
   - Build: npm run build. Publish dir: dist.
   - Verify /version.json afterwards.
 
