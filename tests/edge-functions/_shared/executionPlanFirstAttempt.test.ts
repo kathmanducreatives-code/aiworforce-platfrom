@@ -59,8 +59,11 @@ Deno.test("PAYLOAD: the owned-claims list is explained — never a reason for an
 });
 
 Deno.test("PAYLOAD: funding with NO post-eligibility owner still gets the advisory", () => {
-  // Unwindowed funding on a hiring-shaped mission is not a hard verifiable claim.
-  const m = parseLeadMissionDeterministic("Find B2B SaaS companies hiring SDRs that recently raised");
+  // A hedged funding preference on a hiring-shaped mission is not a hard verifiable claim.
+  // Compiler correctness (2026-10-01): an UNHEDGED "recently raised" is now a hard
+  // claim the post-eligibility funding pair owns, so the no-owner case is a
+  // hedged funding preference.
+  const m = parseLeadMissionDeterministic("Find B2B SaaS companies hiring SDRs that may have recently raised");
   const graph = buildCapabilityGraph({ ...m, strategies: ["hiring"] } as never);
   assert(graph.routing_advisories.some((a) => STALE.test(a)));
   const p = buildExecutionPlannerPayload({ ...m, strategies: ["hiring"] } as never, graph) as Record<string, unknown>;

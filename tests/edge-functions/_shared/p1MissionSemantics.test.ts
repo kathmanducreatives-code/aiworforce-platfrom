@@ -124,11 +124,21 @@ Deno.test('"recently raised funding" → funding with an explicit, visible windo
   assertEquals(f.time_window?.source, "system_default");
   assert(criteriaSections(m).time_windows.some((l) => l.startsWith("Funding: last 180 days")));
 
-  const inferred = compile("Find US B2B SaaS companies that recently raised funding.", {
+  // Compiler correctness (2026-10-01): a window the MODEL guessed for an
+  // unhedged "recently" is not the user's — the hard requirement runs on the
+  // canonical default, labelled as such, never on an invented 90 days.
+  const guessed = compile("Find US B2B SaaS companies that recently raised funding.", {
     preferred_signals: ["recent funding"], signal_recency_days: 90, confidence: 0.7,
   }).final_mission;
-  assertEquals(one(inferred, "funding").time_window?.source, "user_inferred");
-  assertEquals(inferred.mission_semantics?.window_sources.funding?.confidence, 0.7);
+  const g = one(guessed, "funding");
+  assertEquals([g.kind, g.time_window?.days, g.time_window?.source], ["hard", 180, "system_default"]);
+  assertEquals(guessed.mission_semantics?.window_sources.funding?.confidence, 0.7);
+
+  // A hedged preference keeps the model's inferred window, visibly inferred.
+  const inferred = compile("Find US B2B SaaS companies that may have recently raised funding.", {
+    preferred_signals: ["recent funding"], signal_recency_days: 90, confidence: 0.7,
+  }).final_mission;
+  assertEquals([one(inferred, "funding").kind, one(inferred, "funding").time_window?.source], ["target", "user_inferred"]);
 
   const stated = compile("Find companies that raised funding in the last 60 days.", {
     preferred_signals: ["funding"], signal_recency_days: 90,

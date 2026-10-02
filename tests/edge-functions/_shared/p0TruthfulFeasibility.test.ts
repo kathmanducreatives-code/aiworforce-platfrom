@@ -92,15 +92,25 @@ Deno.test("PRODUCTION: a profile mission runs on the READY company search; a fun
     JSON.stringify(canary.f.requirements));
   assertFalse(canary.plan.allowed_providers.includes("apify_funding_rounds_datahyena"), "funding DISCOVERY is still unproven");
 
-  // q4 names funding only as a TARGET (no user-explicit provenance). A target
-  // never buys verification, and funding DISCOVERY is still carded, so nothing
-  // may establish it — refused truthfully, before the first paid call.
+  // q4 ("…that recently raised funding.") states recency without a window.
+  // Compiler correctness (2026-10-01): that is a HARD claim on the canonical
+  // 180-day default, so feasibility sees the funding pair that verifies it
+  // after eligibility — the same verifier execution selects.
   const q4 = enforce(mission("q4"), prod);
   assert(q4.plan.entry_selection!.runnable, "the entry itself is READY now");
-  assertFalse(q4.f.ok);
-  assert(q4.f.refusals.some((r) => r.code === "no_requirement_provable" && /funding_signal_discovery/.test(r.message)),
-    JSON.stringify(q4.f.refusals));
-  assert(q4.preflightBlocks.includes("request_not_feasible"), "blocked before the first paid call");
+  assert(q4.f.ok, JSON.stringify(q4.f.refusals));
+  assert(q4.f.requirements.some((r) => r.status === "satisfied" && r.by_capability === "funding_verification"),
+    JSON.stringify(q4.f.requirements));
+
+  // A HEDGED funding preference is still only a target. A target never buys
+  // verification, and funding DISCOVERY is still carded, so nothing may
+  // establish it — refused truthfully, before the first paid call.
+  const hedged = enforce({ ...mission("q4"),
+    original_user_query: "Find US B2B SaaS companies that may have recently raised funding." } as LeadMissionV1, prod);
+  assertFalse(hedged.f.ok);
+  assert(hedged.f.refusals.some((r) => r.code === "no_requirement_provable" && /funding_signal_discovery/.test(r.message)),
+    JSON.stringify(hedged.f.refusals));
+  assert(hedged.preflightBlocks.includes("request_not_feasible"), "blocked before the first paid call");
 
   // And an entry whose only actor is still carded is refused outright: demote
   // the promoted route and the profile mission is blocked again.

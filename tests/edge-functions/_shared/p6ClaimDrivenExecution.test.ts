@@ -339,7 +339,11 @@ Deno.test("KNOWN COMPANIES + ONE CLAIM: zero discovery; only that claim's verifi
 
 // ── 5. combined ─────────────────────────────────────────────────────────────
 
-const COMBINED = "Find 1 B2B SaaS fintech company that must be seed-stage, recently raised Seed and is hiring growth marketers.";
+// Funding and hiring are HEDGED here on purpose: this suite pins verifier
+// economics around two hard claims (business model + stage). Since compiler
+// correctness (2026-10-01) an unhedged "recently raised" / "is hiring" would be
+// hard claims of their own.
+const COMBINED = "Find 1 B2B SaaS fintech company that must be seed-stage, may have recently raised Seed and appears to be hiring growth marketers.";
 
 Deno.test("COMBINED: one entry, discovery evidence reused, only needed verifiers, stop at the request, nothing re-bought", async () => {
   const mission = parseLeadMissionDeterministic(COMBINED);
