@@ -210,6 +210,8 @@ export interface HardCheck {
 
 export interface CompanyState {
   name: string;
+  /** True when no stored record named it and `name` was derived from its LinkedIn slug or domain. */
+  name_inferred: boolean;
   domain: string | null;
   linkedin_url: string | null;
   status: CompanyStatus;
@@ -230,6 +232,14 @@ export interface CompanyState {
   /** A run investigated it (collected evidence and decided, or is deciding). */
   investigated: boolean;
   has_draft: boolean;
+  /**
+   * WHAT A PENDING COMPANY IS WAITING ON. Two different things were both called
+   * "in review": a Lead V2 company with an unresolved hard claim (evidence),
+   * and an older saved lead whose company passed but no decision-maker was
+   * returned for it (`pending_reason: no_decision_maker_returned`). Null when
+   * the company is not pending.
+   */
+  waiting_on: "evidence" | "decision_maker" | null;
 }
 
 export interface RunState {
@@ -312,6 +322,26 @@ function identityKeys(i: { domain?: unknown; linkedin_url?: unknown; key?: unkno
   return [...new Set(out)];
 }
 
+/**
+ * A readable name from an identity when no record carries one: the LinkedIn
+ * slug or the domain stem, title-cased ("wordware" → "Wordware"). Never the raw
+ * URL, which is what an unnamed company used to be called in an answer.
+ */
+export function displayNameFromIdentity(i: { linkedin_url?: unknown; domain?: unknown; key?: unknown }): string {
+  for (const v of [i.linkedin_url, i.key]) {
+    const m = typeof v === "string" ? v.match(/linkedin\.com\/company\/([^/?#]+)/i) : null;
+    if (m) return titleCase(decodeURIComponent(m[1]));
+  }
+  for (const v of [i.domain, i.key]) {
+    if (typeof v !== "string" || /linkedin\.com/i.test(v)) continue;
+    const stem = v.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[./]/)[0];
+    if (stem) return titleCase(stem);
+  }
+  return "an unnamed company";
+}
+const titleCase = (slug: string) =>
+  slug.replace(/[-_]+/g, " ").trim().replace(/\b([a-z])/g, (c) => c.toUpperCase());
+
 const tsOf = (...v: unknown[]): string | null => {
   for (const x of v) if (typeof x === "string" && x) return x;
   return null;
@@ -370,6 +400,7 @@ export async function loadWorkspaceSnapshot(
       ? read("lead_candidates", ws("lead_candidates",
         "id, account_id, status, created_at, updated_at, canonical_decision:raw->canonical_decision, " +
           "quota_eligible:raw->quota_eligible, verdict:raw->>verdict, company_name:raw->>company_name, " +
+          "pending_reason:raw->>pending_reason, " +
           "company_domain:raw->>company_domain, company_linkedin_url:raw->>company_linkedin_url, " +
           "accounts(name, domain, linkedin_url)")
         .order("created_at", { ascending: false }).limit(200))
@@ -438,7 +469,8 @@ export async function loadWorkspaceSnapshot(
       const status = statusOfBucket(l.bucket);
       if (!status) continue;
       const c: CompanyState = {
-        name: str(co.name) || str(co.domain) || str(co.key),
+        name: str(co.name) || displayNameFromIdentity(co),
+        name_inferred: !str(co.name),
         domain: co.domain ?? null, linkedin_url: co.linkedin_url ?? null,
         status, bucket: str(l.bucket) || null, label: l.label ?? null,
         hard_checks: hardChecksOf(l),
@@ -450,6 +482,7 @@ export async function loadWorkspaceSnapshot(
         // Screened out by the free first pass means nothing was investigated.
         investigated: l.bucket !== "screened_out",
         has_draft: false,
+        waiting_on: status === "pending" ? "evidence" : null,
       };
       companies.push(c);
       attach(c, keys);
@@ -474,6 +507,11 @@ export async function loadWorkspaceSnapshot(
     const hasDraft = draftLeads.has(str(r.id)) || (!!r.account_id && draftAccounts.has(str(r.account_id)));
     const existing = keys.length > 0 ? find(keys) : null;
     if (existing) {
+      // A saved lead's real name replaces one derived from a slug.
+      if (existing.name_inferred) {
+        existing.name = name;
+        existing.name_inferred = false;
+      }
       existing.saved = true;
       existing.lead_id ??= str(r.id) || null;
       existing.account_id ??= r.account_id ?? null;
@@ -492,7 +530,7 @@ export async function loadWorkspaceSnapshot(
       ? "pending"
       : "not_evaluated";
     const c: CompanyState = {
-      name, domain, linkedin_url: linkedin, status,
+      name, name_inferred: false, domain, linkedin_url: linkedin, status,
       bucket: canonical ? str(canonical.bucket) || null : null,
       label: canonical ? canonical.label ?? null : null,
       hard_checks: canonical ? hardChecksOf(canonical) : [],
@@ -500,6 +538,12 @@ export async function loadWorkspaceSnapshot(
       decided_at: tsOf(r.updated_at, r.created_at), task_id: null,
       lead_id: str(r.id) || null, account_id: r.account_id ?? null,
       saved: true, researched, investigated: !!canonical, has_draft: hasDraft,
+      // A legacy company row pending a PERSON, not company evidence.
+      waiting_on: status !== "pending"
+        ? null
+        : !canonical && /decision_maker|contact/i.test(str(r.pending_reason))
+        ? "decision_maker"
+        : "evidence",
     };
     companies.push(c);
     attach(c, keys);
@@ -632,7 +676,10 @@ function describeChecks(c: CompanyState, result: "pass" | "fail" | "unknown"): s
 function statusPhrase(c: CompanyState): string {
   switch (c.status) {
     case "qualified": return `qualified${c.bucket && BUCKET_LABEL[c.bucket] ? ` (${BUCKET_LABEL[c.bucket]})` : ""}`;
-    case "pending": return "pending — a required claim is not yet established";
+    case "pending":
+      return c.waiting_on === "decision_maker"
+        ? "in review — waiting on a decision-maker, not on company evidence"
+        : "pending — a required claim is not yet established";
     case "rejected": return c.bucket === "screened_out" ? "screened out by the free first pass" : "ruled out";
     case "not_reached": return "not reached yet — a continuation would investigate it";
     default: return "saved but not evaluated — no qualification decision was recorded";
@@ -686,6 +733,9 @@ function whyNotBody(c: CompanyState): string {
     return fails.length > 0
       ? `\n\nThe required claim${fails.length === 1 ? "" : "s"} that failed:\n${fails.join("\n")}`
       : "\n\nNo per-claim detail was recorded for the rejection.";
+  }
+  if (c.status === "pending" && c.waiting_on === "decision_maker") {
+    return "\n\nThe company itself is not in question: no decision-maker was returned for it yet, so it stays in review until one is found.";
   }
   if (c.status === "pending") {
     const unknown = describeChecks(c, "unknown");
@@ -741,10 +791,22 @@ export function answerWorkspaceQuestion(
         ? "Nothing is waiting on you right now — 0 pending approvals."
         : `${plural(s.approvals.length, "item")} waiting for your approval:\n${s.approvals.slice(0, LIST_LIMIT)
           .map((a) => `• ${AGENT_NAME[publicAgentOf(a.agent_slug) ?? "pilot"]}: ${a.title}`).join("\n")}\n\nOpen the Workbench to approve or edit each one.`;
+      // WHAT EACH IS WAITING ON, counted separately: evidence and a missing
+      // decision-maker are different waits, and neither is the user.
+      const onEvidence = inReview.filter((c) => c.waiting_on !== "decision_maker").length;
+      const onPerson = inReview.length - onEvidence;
+      const waits = [
+        onEvidence ? `${onEvidence} waiting on evidence` : "",
+        onPerson ? `${onPerson} waiting on a decision-maker` : "",
+      ].filter(Boolean).join(", ");
       const note = inReview.length > 0
-        ? `\n\nSeparately, ${plural(inReview.length, "company is", "companies are")} in review waiting on evidence, not on you.`
+        ? `\n\nSeparately, ${plural(inReview.length, "company is", "companies are")} in review, not waiting on you: ${waits}.`
         : "";
-      return { text: head + note + failedNote(s), counts: { approvals: s.approvals.length, in_review: inReview.length }, companies: [], degraded };
+      return {
+        text: head + note + failedNote(s),
+        counts: { approvals: s.approvals.length, in_review: inReview.length, waiting_on_evidence: onEvidence, waiting_on_decision_maker: onPerson },
+        companies: [], degraded,
+      };
     }
 
     case "agent_activity_today":
@@ -821,15 +883,20 @@ export function answerWorkspaceQuestion(
 
     case "qualified_leads": {
       const qualified = by("qualified");
+      // COUNTED AS COMPANIES. Two lead rows for one company are one company,
+      // so "48 saved leads" beside 49 rows was a count of neither.
       const saved = s.companies.filter((c) => c.saved).length;
+      const savedNotQualified = s.companies.filter((c) => c.saved && c.status !== "qualified").length;
       if (qualified.length === 0) {
-        return { text: `None of your companies have qualified yet${saved ? ` — you have ${plural(saved, "saved lead")}, and none carries a qualifying decision` : ""}.${failedNote(s)}`,
+        return { text: `None of your companies have qualified yet${saved ? ` — you have ${plural(saved, "saved company", "saved companies")}, and none carries a qualifying decision` : ""}.${failedNote(s)}`,
           counts: { qualified: 0, saved }, companies: [], degraded };
       }
       return {
         text: `${plural(qualified.length, "qualified lead")}, newest first:\n${nameList(qualified, (c) =>
           `${c.name}${c.bucket && BUCKET_LABEL[c.bucket] ? ` — ${BUCKET_LABEL[c.bucket]}` : ""}${c.decided_at ? `, ${whenText(c.decided_at, now, tz)}` : ""}`)}` +
-          (saved > qualified.length ? `\n\nThe rest of your ${plural(saved, "saved lead")} have not qualified.` : "") + failedNote(s),
+          (savedNotQualified > 0
+            ? `\n\nOf your ${plural(saved, "saved company", "saved companies")}, ${savedNotQualified} ${savedNotQualified === 1 ? "has" : "have"} not qualified.`
+            : "") + failedNote(s),
         counts: { qualified: qualified.length, saved }, companies: refs(qualified), degraded,
       };
     }
@@ -840,7 +907,7 @@ export function answerWorkspaceQuestion(
         text: pending.length === 0
           ? `No leads are in review right now.${failedNote(s)}`
           : `${plural(pending.length, "lead is", "leads are")} in review:\n${nameList(pending, (c) =>
-            `${c.name} — waiting on ${c.hard_checks.filter((h) => h.result === "unknown").map((h) => dimLabel(h.dimension)).join(", ") || c.missing_evidence[0] || "evidence"}`)}${failedNote(s)}`,
+            `${c.name} — waiting on ${c.waiting_on === "decision_maker" ? "a decision-maker" : c.hard_checks.filter((h) => h.result === "unknown").map((h) => dimLabel(h.dimension)).join(", ") || c.missing_evidence[0] || "evidence"}`)}${failedNote(s)}`,
         counts: { in_review: pending.length }, companies: refs(pending), degraded,
       };
     }
@@ -865,8 +932,8 @@ export function answerWorkspaceQuestion(
         text: saved.length === 0
           ? `You don't have any saved leads yet.${failedNote(s)}`
           : missing.length === 0
-          ? `Every one of your ${plural(saved.length, "saved lead")} has company research.${failedNote(s)}`
-          : `${plural(missing.length, "saved lead has", "saved leads have")} no company research yet:\n${nameList(missing, (c) => `${c.name} — ${statusPhrase(c)}`)}${failedNote(s)}`,
+          ? `Every one of your ${plural(saved.length, "saved company", "saved companies")} has company research.${failedNote(s)}`
+          : `${plural(missing.length, "saved company has", "saved companies have")} no company research yet:\n${nameList(missing, (c) => `${c.name} — ${statusPhrase(c)}`)}${failedNote(s)}`,
         counts: { saved: saved.length, missing_research: missing.length }, companies: refs(missing), degraded,
       };
     }

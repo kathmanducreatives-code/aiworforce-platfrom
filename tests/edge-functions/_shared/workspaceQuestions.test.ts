@@ -196,7 +196,7 @@ Deno.test("NOT TAKEN: a request to DO something, or a question this module canno
 Deno.test("1. pending for me: 0 pending approvals, said directly — evidence-waiting companies are not 'on you'", async () => {
   const { a, asked } = await ask("What's pending for me right now?");
   assertStringIncludes(a.text, "0 pending approvals");
-  assertStringIncludes(a.text, "1 company is in review waiting on evidence, not on you");
+  assertStringIncludes(a.text, "1 company is in review, not waiting on you: 1 waiting on evidence.");
   assertEquals(a.counts.approvals, 0);
   assert(asked.includes("approvals") && asked.includes("tasks"), "legacy awaiting_approval tasks are checked too");
   const withOne = await ask("What's pending for me right now?", { tables: { ...BASE,
@@ -226,7 +226,7 @@ Deno.test("3. latest qualified leads: only explicit acceptances — never every 
   assertStringIncludes(a.text, "Salvo Software — low priority");
   assertStringIncludes(a.text, "Northwind Labs");
   for (const not of ["Acme Robotics", "MintMCP", "Wordware"]) assertFalse(a.text.includes(not), not);
-  assertStringIncludes(a.text, "The rest of your 3 saved leads have not qualified.");
+  assertStringIncludes(a.text, "Of your 3 saved companies, 1 has not qualified.");
   assertEquals(a.companies.map((c) => c.name), ["Salvo Software", "Northwind Labs"], "newest first");
 });
 
@@ -274,7 +274,7 @@ Deno.test("7. researched but not qualified: investigated or researched, still op
 
 Deno.test("8. missing company research: saved leads with no lead_enrichments row — the Outreach 'researched' fact", async () => {
   const { a } = await ask("Which leads are missing company research?");
-  assertStringIncludes(a.text, "1 saved lead has no company research yet");
+  assertStringIncludes(a.text, "1 saved company has no company research yet");
   assertStringIncludes(a.text, "Acme Robotics — saved but not evaluated");
   assertFalse(a.text.includes("Salvo Software") || a.text.includes("Northwind"));
 });
@@ -339,6 +339,58 @@ Deno.test("A LEGACY SAVED LEAD WITHOUT A DECISION is 'not evaluated', never qual
   assertEquals(snap.companies.find((c) => c.name === "Acme Robotics")?.status, "not_evaluated");
   assertEquals(snap.companies.find((c) => c.name === "Salvo Software")?.saved, true, "the run's decision and the saved lead are one company");
   assertEquals(snap.companies.filter((c) => c.name === "Salvo Software").length, 1);
+});
+
+// ══ 3b. POST-DEPLOY WORDING DEFECTS (production check, 2026-10-02) ══════════
+
+Deno.test("DEFECT 1: a lead waiting on a DECISION-MAKER is not 'waiting on evidence'", async () => {
+  // Production: 37 of the 69 "in review" were legacy company rows with
+  // quota_eligible=false and pending_reason no_decision_maker_returned.
+  const tables = { ...BASE, lead_candidates: [...LEADS,
+    { id: "l-pipe", workspace_id: WS, account_id: "a-pipe", status: "new", created_at: "2026-09-10T10:00:00Z", updated_at: "2026-09-10T10:00:00Z",
+      canonical_decision: null, quota_eligible: false, verdict: "NEEDS_REVIEW", pending_reason: "no_decision_maker_returned",
+      accounts: { name: "Pipedream", domain: "pipedream.com", linkedin_url: null } },
+  ] };
+  const pending = await ask("What's pending for me right now?", { tables });
+  assertStringIncludes(pending.a.text, "0 pending approvals");
+  assertStringIncludes(pending.a.text, "2 companies are in review, not waiting on you: 1 waiting on evidence, 1 waiting on a decision-maker.");
+  assertFalse(pending.a.text.includes("2 companies are in review waiting on evidence"));
+  assertEquals([pending.a.counts.waiting_on_evidence, pending.a.counts.waiting_on_decision_maker], [1, 1]);
+
+  const review = await ask("How many leads are currently in review?", { tables });
+  assertStringIncludes(review.a.text, "Pipedream — waiting on a decision-maker");
+  assertStringIncludes(review.a.text, "Wordware — waiting on funding");
+
+  const why = await ask("Why is Pipedream still pending?", { tables });
+  assertStringIncludes(why.a.text, "Pipedream is in review — waiting on a decision-maker, not on company evidence");
+  assertStringIncludes(why.a.text, "no decision-maker was returned for it yet");
+  assertFalse(why.a.text.includes("It stays pending, not rejected"), "no evidence is outstanding");
+});
+
+Deno.test("DEFECT 2: a company with no stored name is named from its identity, never by its URL", async () => {
+  // Production: Wordware's mission view stored `company.name: null`, and the
+  // answer opened with "https://www.linkedin.com/company/wordware is pending".
+  const unnamed = { ...WORD_LEAD, company: { ...WORD_LEAD.company, name: null } };
+  const tables = { ...BASE, tasks: TASKS.map((t) => t.id === "t-word" ? { ...t, mission_view: view([unnamed]) } : t) };
+  const { a } = await ask("Why is Wordware still pending?", { tables });
+  assertMatch(a.text, /^Wordware is pending/);
+  assertFalse(a.text.startsWith("https://"), a.text.slice(0, 60));
+  // A saved lead's real name replaces the derived one.
+  const saved = { ...tables, lead_candidates: [...LEADS,
+    { id: "l-word", workspace_id: WS, account_id: "a-word", status: "new", created_at: "2026-09-01T10:00:00Z", updated_at: "2026-09-01T10:00:00Z",
+      canonical_decision: null, quota_eligible: null, verdict: null,
+      accounts: { name: "Wordware AI", domain: null, linkedin_url: "https://www.linkedin.com/company/wordware" } }] };
+  assertMatch((await ask("Why is Wordware still pending?", { tables: saved })).a.text, /^Wordware AI is pending/);
+});
+
+Deno.test("DEFECT 3: saved leads are counted as COMPANIES — two rows for one company are one", async () => {
+  // Production: 49 lead rows, two of them the same company; the answer said
+  // "The rest of your 48 saved leads", a count of neither rows nor leads.
+  const dup = { ...LEADS[2], id: "l-acme-2", created_at: "2026-09-16T10:00:00Z" };
+  const { a } = await ask("Show me my latest qualified leads.", { tables: { ...BASE, lead_candidates: [...LEADS, dup] } });
+  assertStringIncludes(a.text, "2 qualified leads");
+  assertStringIncludes(a.text, "Of your 3 saved companies, 1 has not qualified.");
+  assertFalse(/saved leads? ha(?:ve|s) not qualified/.test(a.text));
 });
 
 // ══ 4. "TODAY" IS THE USER'S DAY ═══════════════════════════════════════════
