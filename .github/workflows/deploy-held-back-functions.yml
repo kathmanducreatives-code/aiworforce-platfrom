@@ -1,11 +1,26 @@
 # DEPLOY A PINNED RELEASE OF THE LEAD V2 EDGE FUNCTIONS — manual, production.
 #
-# Release e1014c94 (hotfix/canary1-defects): the Canary 1 fixes. Only the two
-# functions that bundle the changed code are deployed — run-agent
-# (leadCapabilityEngine, run-agent/index) and pilot-chat (leadCapabilityEngine,
-# leadMissionCompiler, projectToLeadMission), measured with `deno info`. Every
-# other function is byte-identical to a08ac0e4 and stays there. The Railway
-# worker redeploys itself from launch/hardening.
+# Release 228deeac (PR #9 compiler requirement correctness + PR #10 Pilot
+# workspace questions). Measured with `deno info` against each function's LIVE
+# build, the only functions whose behaviour changes are:
+#   orchestrate  a08ac0e4 (v113) → missionCriteria.ts only (funding-screen default budget)
+#   run-agent    e1014c94 (v265) → missionCriteria.ts only (v1_edge executor + paid preflight)
+#   pilot-chat   e1014c94 (v198) → leadMissionCompiler.ts, missionCriteria.ts,
+#                                  workspaceQuestions.ts, pilot-chat/index.ts
+# Deployed in that order, pilot-chat LAST, so Pilot never issues a card under
+# the new rules to downstream code still running the old ones. Every other
+# function stays on its current build (checked before and after). The Railway
+# worker already runs 228deeac (it redeploys itself from launch/hardening).
+#
+# ROLLBACK: the step "Back up the currently deployed three" downloads the LIVE
+# source of orchestrate, run-agent and pilot-chat before anything changes,
+# encrypts it with ROLLBACK_ARCHIVE_KEY and uploads it as the artifact
+# `pre-deploy-functions-<run_id>` (30 days). To roll back any of the three:
+# download the artifact, `openssl enc -d -aes-256-cbc -pbkdf2 -pass
+# env:ROLLBACK_ARCHIVE_KEY` it, untar, and `supabase --workdir <dir> functions
+# deploy <fn> --project-ref ohsdatpvfdjdemstoiuj --use-docker` per function.
+# Nothing here rolls back automatically: a failed step stops the job and prints
+# which functions are on which build.
 #
 # run-agent is too large for Supabase's server-side bundler (HTTP 413), so this
 # bundles on the runner with Docker (`--use-docker`).
@@ -23,7 +38,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_sha:
-        description: "Type the release SHA to deploy: e1014c94"
+        description: "Type the release SHA to deploy: 228deeac"
         required: true
         type: string
 
@@ -35,10 +50,22 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_SHA: e1014c947648a40e86c4b321bc8d92d88a4bc4db
+  RELEASE_SHA: 228deeac73b49ee0b908da9daf248459b9653abd
   # The release every function NOT in this deploy still runs; the preflight
   # proves the build check works by reading one of them back.
   PREVIOUS_RELEASE_SHA: a08ac0e4edea6f3aa54314db4efe0073e371b82f
+  # What the three deployed functions run BEFORE this deploy. The preflight
+  # refuses if any of them has moved, so this never overwrites a build nobody
+  # backed up on purpose.
+  LIVE_ORCHESTRATE_SHA: a08ac0e4edea6f3aa54314db4efe0073e371b82f
+  LIVE_ORCHESTRATE_VERSION: "113"
+  LIVE_RUN_AGENT_SHA: e1014c947648a40e86c4b321bc8d92d88a4bc4db
+  LIVE_RUN_AGENT_VERSION: "265"
+  LIVE_PILOT_CHAT_SHA: e1014c947648a40e86c4b321bc8d92d88a4bc4db
+  LIVE_PILOT_CHAT_VERSION: "198"
+  DEPLOYED_FUNCTIONS: "orchestrate run-agent pilot-chat"
+  # Lead-path functions this deploy must NOT touch, with the build each runs.
+  UNTOUCHED_ON_PREVIOUS: "enqueue-lead-mission continue-workflow resume-stalled-leads ops-health approve-and-continue send-scheduled-emails"
   PROJECT_REF: ohsdatpvfdjdemstoiuj
   SUPABASE_URL: https://ohsdatpvfdjdemstoiuj.supabase.co
 
@@ -56,18 +83,27 @@ jobs:
         env:
           CONFIRM: ${{ inputs.confirm_sha }}
         run: |
-          if [ "$CONFIRM" != "e1014c94" ]; then echo "::error::confirm_sha must be e1014c94"; exit 1; fi
+          if [ "$CONFIRM" != "228deeac" ]; then echo "::error::confirm_sha must be 228deeac"; exit 1; fi
 
       - uses: actions/checkout@v4
         with:
-          ref: e1014c947648a40e86c4b321bc8d92d88a4bc4db
+          ref: 228deeac73b49ee0b908da9daf248459b9653abd
+          # Full history, so the ancestry check below is never defeated by a
+          # shallow clone.
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify the checkout is exactly the release commit
+      - name: Verify the checkout is exactly the release commit, and it is on launch/hardening
         run: |
           test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
           test -z "$(git status --porcelain)"
-          echo "checked out $RELEASE_SHA, clean"
+          git cat-file -e "$RELEASE_SHA^{commit}"
+          # The release must be the merged, CI-tested launch/hardening history,
+          # never a commit that only exists on some other branch.
+          git fetch --no-tags --quiet origin launch/hardening
+          git merge-base --is-ancestor "$RELEASE_SHA" FETCH_HEAD \
+            || { echo "::error::$RELEASE_SHA is not on launch/hardening"; exit 1; }
+          echo "checked out $RELEASE_SHA, clean, on launch/hardening"
 
       - uses: supabase/setup-cli@v1
         with:
@@ -95,20 +131,30 @@ jobs:
           EOF
           chmod +x "$RUNNER_TEMP/expect-build.sh"
 
-      - name: Preflight — verification works and JWT is on, before anything changes
+      - name: Preflight — verification works, the live builds are the expected ones, JWT is on
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           # A function this deploy does not touch must read back as the previous
           # release, or the post-deploy checks below could not prove anything.
           "$RUNNER_TEMP/expect-build.sh" enqueue-lead-mission "$PREVIOUS_RELEASE_SHA"
-          for fn in run-agent pilot-chat; do
-            curl -fsS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-              "https://api.supabase.com/v1/projects/$PROJECT_REF/functions/$fn" \
-              | jq -e '.verify_jwt == true' > /dev/null \
+          # The three about to be replaced must be EXACTLY what was measured and
+          # is about to be backed up: build stamp, version number, JWT on.
+          # Only `.version` and `.verify_jwt` are read from the Management API.
+          check_live() {
+            fn="$1"; sha="$2"; version="$3"
+            "$RUNNER_TEMP/expect-build.sh" "$fn" "$sha"
+            meta="$(curl -fsS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$PROJECT_REF/functions/$fn" | jq -c '{version, verify_jwt}')"
+            echo "$meta" | jq -e '.verify_jwt == true' > /dev/null \
               || { echo "::error::$fn does not currently have verify_jwt=true"; exit 1; }
-            echo "$fn: verify_jwt=true (before)"
-          done
+            echo "$meta" | jq -e --arg v "$version" '(.version | tostring) == $v' > /dev/null \
+              || { echo "::error::$fn is not on the expected version v$version: $meta"; exit 1; }
+            echo "$fn: v$version, verify_jwt=true (before)"
+          }
+          check_live orchestrate "$LIVE_ORCHESTRATE_SHA" "$LIVE_ORCHESTRATE_VERSION"
+          check_live run-agent "$LIVE_RUN_AGENT_SHA" "$LIVE_RUN_AGENT_VERSION"
+          check_live pilot-chat "$LIVE_PILOT_CHAT_SHA" "$LIVE_PILOT_CHAT_VERSION"
 
       - name: Precondition — FIRECRAWL_USD_PER_CREDIT exists (name only)
         env:
@@ -123,7 +169,7 @@ jobs:
             exit 1
           fi
 
-      - name: Back up the currently deployed two (encrypted)
+      - name: Back up the currently deployed three (encrypted)
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           ROLLBACK_ARCHIVE_KEY: ${{ secrets.ROLLBACK_ARCHIVE_KEY }}
@@ -133,10 +179,13 @@ jobs:
           # which must never land on the release checkout.
           mkdir -p "$RUNNER_TEMP/rollback/supabase"
           cp supabase/config.toml "$RUNNER_TEMP/rollback/supabase/config.toml"
-          for fn in run-agent pilot-chat; do
-            supabase --workdir "$RUNNER_TEMP/rollback" functions download "$fn" --project-ref "$PROJECT_REF"
+          # Downloaded quietly: the source is encrypted, never echoed to the
+          # (public) log.
+          for fn in $DEPLOYED_FUNCTIONS; do
+            supabase --workdir "$RUNNER_TEMP/rollback" functions download "$fn" --project-ref "$PROJECT_REF" > /dev/null
             find "$RUNNER_TEMP/rollback" -path "*$fn*" -name index.ts | grep -q . \
               || { echo "::error::backup of $fn has no index.ts"; exit 1; }
+            echo "$fn: backed up"
           done
           tar -czf - -C "$RUNNER_TEMP/rollback" . \
             | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:ROLLBACK_ARCHIVE_KEY -out "$RUNNER_TEMP/pre-deploy-functions.tgz.enc"
@@ -152,7 +201,22 @@ jobs:
       - name: Stamp the build with the release SHA
         run: scripts/deploy/stamp-build.sh stamp
 
-      - name: Deploy run-agent
+      - name: Deploy orchestrate (1 of 3)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_TARGET: production
+        run: node scripts/supabase-target.mjs production -- functions deploy orchestrate --use-docker
+
+      - name: Verify orchestrate
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          "$RUNNER_TEMP/expect-build.sh" orchestrate
+          curl -fsS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$PROJECT_REF/functions/orchestrate" | jq -e '.verify_jwt == true' > /dev/null
+          echo "orchestrate: verify_jwt=true (after)"
+
+      - name: Deploy run-agent (2 of 3)
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_TARGET: production
@@ -167,7 +231,8 @@ jobs:
             "https://api.supabase.com/v1/projects/$PROJECT_REF/functions/run-agent" | jq -e '.verify_jwt == true' > /dev/null
           echo "run-agent: verify_jwt=true (after)"
 
-      - name: Deploy pilot-chat
+      # LAST: the entry point. Everything it hands work to is already on the release.
+      - name: Deploy pilot-chat (3 of 3)
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_TARGET: production
@@ -182,6 +247,12 @@ jobs:
             "https://api.supabase.com/v1/projects/$PROJECT_REF/functions/pilot-chat" | jq -e '.verify_jwt == true' > /dev/null
           echo "pilot-chat: verify_jwt=true (after)"
 
+      - name: Untouched functions are still on their existing build
+        run: |
+          for fn in $UNTOUCHED_ON_PREVIOUS; do
+            "$RUNNER_TEMP/expect-build.sh" "$fn" "$PREVIOUS_RELEASE_SHA"
+          done
+
       - name: Production SHA report
         env:
           WORKER_HEALTH_URL: ${{ secrets.WORKER_HEALTH_URL }}
@@ -192,9 +263,30 @@ jobs:
         with:
           deno-version: v2.8.2
 
-      - name: Ops health (fails on warnings too)
+      - name: Queue state (Lead V2) — nothing stuck, nothing unclaimed
+        env:
+          OPS_HEALTH_URL: ${{ secrets.OPS_HEALTH_URL }}
+          OPS_HEALTH_TOKEN: ${{ secrets.OPS_HEALTH_TOKEN }}
+        run: |
+          # Only the queue counters are printed; the token is sent as a header
+          # and never echoed.
+          queue="$(curl -fsS -H "x-ops-token: $OPS_HEALTH_TOKEN" "$OPS_HEALTH_URL" | jq -c '.snapshot.queue')"
+          echo "queue: $queue"
+          echo "$queue" | jq -e '.stuck_running == 0 and .unclaimed_waiting == 0' > /dev/null \
+            || { echo "::error::the Lead V2 queue has stuck or unclaimed missions"; exit 1; }
+
+      - name: Ops health and Railway worker health (fails on warnings too)
         env:
           OPS_HEALTH_URL: ${{ secrets.OPS_HEALTH_URL }}
           OPS_HEALTH_TOKEN: ${{ secrets.OPS_HEALTH_TOKEN }}
           WORKER_HEALTH_URL: ${{ secrets.WORKER_HEALTH_URL }}
         run: deno run --allow-net --allow-env scripts/ops/check-health.ts --fail-on warn
+
+      - name: On failure — where every function stands (no automatic rollback)
+        if: failure()
+        env:
+          WORKER_HEALTH_URL: ${{ secrets.WORKER_HEALTH_URL }}
+        run: |
+          AGENTORY_API_URL="${WORKER_HEALTH_URL%/health}" scripts/deploy/production-shas.sh || true
+          echo "::warning::Deploy stopped. Functions above that report $RELEASE_SHA were deployed; the rest were not."
+          echo "::warning::Roll back from artifact pre-deploy-functions-${{ github.run_id }} (see the header of this workflow)."
