@@ -1,9 +1,31 @@
 # CURRENT HANDOFF — Agentory launch hardening
 
-Keep this short. No secrets. Last updated: 2026-10-01 08:45 UTC (LOCAL session — local is the active workspace; cloud paused).
+Keep this short. No secrets. Last updated: 2026-10-02 06:50 UTC (LOCAL session — local is the active workspace; cloud paused).
 
 Lives on branch `launch/handoff`, never on `launch/hardening`: Railway auto-deploys the worker on every
 push to `launch/hardening`. (PR #3 carries an older cloud copy of this file — merging it would redeploy the worker.)
+
+## CORRECTNESS RELEASE 228deeac — MERGED, WORKER LIVE, EDGE NOT DEPLOYED (2026-10-02 06:50 UTC)
+- PR #10 (Pilot workspace questions from canonical state) merged as 04ab7f60. PR #9 (compiler requirement correctness) merged as 228deeac.
+  - Combined tree tested locally before PR #9 merged: deno check OK, edge suite 8150/0. Post-merge CI on 228deeac is green.
+- RAILWAY: deployment 75d3c499 = 228deeac, SUCCESS, healthy (user-confirmed). 04ab7f60 was SKIPPED (superseded; its CI was cancelled by the next push).
+  - The worker process has role "both". Its API mounts /api/pilot-chat, /api/run-agent, /api/orchestrate and /api/enqueue-lead-mission at 228deeac.
+  - NO client uses that API: the frontend transport vars (VITE_AGENTORY_API_*) are unset in the release env, and there is no AGENTORY_* Supabase secret, so server hops stay on Supabase.
+- EDGE FUNCTIONS: still pilot-chat/run-agent e1014c94 (v198/v265) and orchestrate a08ac0e4 (v113).
+  - Live call chain: browser → Supabase pilot-chat → orchestrate → enqueue-lead-mission → queue → Railway worker. Workspaces outside LEAD_V2_WORKER_WORKSPACES go orchestrate → Supabase run-agent instead.
+  - KNOWN TRANSIENT MISMATCH until the edge deploy: the worker already derives criteria with PR #9 rules, while the Pilot card (old pilot-chat) still shows the old ones.
+    - Example: "recently funded" is a target on the card but a hard claim (funding pair verified, pending if unresolved) at execution.
+    - PR #10's workspace answers are not live.
+- Edge deploy analysis (deno info against 228deeac; the delta from each function's live SHA):
+  - pilot-chat: PR #9 + #10 (4 files). REQUIRED.
+  - run-agent: missionCriteria.ts only. Recommended (the v1_edge executor + its paid preflight).
+  - orchestrate: missionCriteria.ts only. Recommended (the funding-screen default budget reads hard recency-funding criteria).
+  - enqueue-lead-mission: shape validation only, no behaviour change. Not needed.
+  - continue-workflow / resume-stalled-leads: dispatch only. Not needed.
+  - unlock-founders / run-monitoring-scan: unstamped Sept builds, off the Pilot lead path. EXCLUDED.
+- The deploy workflow (.github/workflows/deploy-held-back-functions.yml) is still pinned to e1014c94 (run-agent + pilot-chat).
+  - A workflow PR is needed to pin 228deeac and add orchestrate.
+- No paid mission or canary was run. Netlify was not published.
 
 ## FRONTEND STATUS (2026-10-01 08:45 UTC)
 - CURRENT PRODUCTION FRONTEND: 75e589d7 (Netlify deploy 6abd40f86cf8213b37602285; /version.json read via the signed-in pane).
@@ -96,7 +118,8 @@ NEXT ACTION (blockers, in order)
 6. Decide what happens to old wqnig accounts.
 
 ## CURRENT BRANCH / HEAD
-- `launch/hardening` @ `42bf1b63` (PR #5; the app backend code is still e1014c94) (local checkout /Users/prasidha/agentory-launch-hardening = origin, clean).
+- `launch/hardening` @ `228deeac` (PR #9 merge; it includes PR #10 04ab7f60). Edge functions lag: see CORRECTNESS RELEASE above.
+- The local checkout /Users/prasidha/agentory-launch-hardening has not been pulled to 228deeac yet.
 - Frozen application release `a08ac0e4edea6f3aa54314db4efe0073e371b82f`; `a08ac0e4..c8e77333` = workflow file only.
 
 ## PRODUCTION SHAs (verified 2026-09-30 13:39 UTC)
@@ -205,9 +228,12 @@ Seed 2024-11-21 is inside 730 d until 2026-11-21.
 - Waiting on the user: the old-accounts decision (wqnig users), then Netlify / Auth / DNS clicks.
 
 ## NEXT EXACT STEP
+0. Edge deploy of 228deeac (orchestrate → run-agent → pilot-chat) via a re-pinned workflow, once approved. Then a $0 Pilot check (workspace questions + a card for phrasing C, no Start).
+   - Only after that, an approved paid canary on phrasing B or C.
+   - The future Netlify target is now launch/hardening @ 228deeac (frontend: pilotChat sends client_timezone).
 1. The user decides the next rung (C2, product path, default screen budget ≤ $0.14) or the agentory.space publishing plan.
    - agentory.space is still on the old Lovable backend wqnig, which is a beta blocker.
 2. Revert the temporary `agentory-release-canary` entry in agentory-main-local/.claude/launch.json and stop the :8083 dev server when canaries are done.
 
 ## ACTIONS REQUIRING APPROVAL
-Canary 1; any frontend publish/DNS/Netlify branch change; closing PR #3.
+Edge deploy of 228deeac (workflow PR + dispatch); any paid canary; Canary 1; any frontend publish/DNS/Netlify branch change; closing PR #3.
