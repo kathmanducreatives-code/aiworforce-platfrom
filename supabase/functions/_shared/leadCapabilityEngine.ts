@@ -252,7 +252,9 @@ import {
   type VerifierFinding,
 } from "./claimVerifier.ts";
 import { atomusInput, FUNDING_STAGE_VERIFIER_KEY } from "./fundingStageVerifier.ts";
-import { candidateDecision, decisionCounts, decisionSummary, type CandidateDecision, type MissionCandidate } from "./workbenchMissionView.ts";
+import { bucketOf, candidateDecision, decisionCounts, decisionSummary, type CandidateDecision, type MissionCandidate } from "./workbenchMissionView.ts";
+import { evaluateEligibility } from "./candidateEligibility.ts";
+import { canStillQualify, evidenceGapsFor } from "./evidenceGapRouter.ts";
 import { deriveMissionCriteria } from "./missionCriteria.ts";
 import { fundingRecordEvidenceItem, fundingRecordFromDiscoveredRound } from "./fundingCorroboration.ts";
 import {
@@ -5187,6 +5189,27 @@ export async function runCapabilityPlan(
           scored.companies.filter((p) => isAdmitted(p, { size_enforceable: admissionEnforceable }))
             .map((p) => p.company_key),
         );
+        // ── LEAD V2: "STILL OWES A STAGE" IS NOT "CAN STILL QUALIFY" ─────────
+        //
+        // Production canary 98ce374b (2026-10-03). Ten companies investigated;
+        // the canonical view held one ineligible and nine PENDING, each with a
+        // hard claim no route could close (funding answered by both providers
+        // with nothing decisive, or first-party pages already read). The
+        // verifier phase rightly bought nothing more for them, and the
+        // continuation rightly asked for `replenishment_required`. But every
+        // one still read `hiring: evidence_unavailable` — the job stage defers
+        // a HARD hiring claim to the post-eligibility verifier — so
+        // `nextStageFor` said each still owed a stage, this count said 10 of 8,
+        // the page-2 search was proposed and never bought, and two barren
+        // slices ended the lineage `no_progress` → `search_exhausted` with
+        // discovery open and $1.75 of budget unspent.
+        //
+        // Under Lead V2 the canonical decision is the authority, so it decides
+        // here too: a company counts only while it is undecided (not yet
+        // investigated / identity open) or PENDING with every unknown hard
+        // claim still routable — `canStillQualify`, the ONE viability rule the
+        // verifier phase and `with_executable_route` already read.
+        const workable = specOn ? canonicallyWorkableKeys(companies, opts) : null;
         let n = 0;
         for (const c of companies) {
           // The prequalifier's own key, never a lookalike — the invariant
@@ -5194,6 +5217,7 @@ export async function runCapabilityPlan(
           if (!admittedKeys.has(genericPrequalificationKey(c.company))) continue;
           if (c.investigation_state === "excluded_permanently") continue;
           if (nextStageFor(toResumeRecord(c)) === null) continue;
+          if (workable && !workable.has(c.key)) continue;
           if (skip?.(c)) continue;
           n++;
         }
@@ -11274,6 +11298,39 @@ export function canonicalDecisions(
   const out = new Map<string, CandidateDecision>();
   for (const candidate of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
     out.set(candidate.company_key, candidateDecision({ criteria, candidate, anchor }));
+  }
+  return out;
+}
+
+/**
+ * Companies the canonical P5 view still holds WORK for, on Lead V2.
+ *
+ * Undecided companies (`investigating`, `identity_unresolved`) are work. A
+ * PENDING company is work only while `canStillQualify` holds for its evidence
+ * gaps — the same rule `verificationTargets` buys by and
+ * `summarizeGaps.with_executable_route` counts. Decided companies (a label,
+ * `ineligible`, `screened_out`) are not: nothing bought for them can change
+ * the outcome. Discovery's "enough candidates" reads this, so a pool of
+ * companies that can never qualify does not stop the search from widening.
+ */
+export function canonicallyWorkableKeys(
+  companies: readonly EngineCompany[], opts: Parameters<typeof canonicalDecisions>[1],
+): Set<string> {
+  const readiness = opts.readiness ?? PRODUCTION_READINESS;
+  const criteria = deriveMissionCriteria(opts.mission, readiness);
+  const out = new Set<string>();
+  for (const c of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
+    const eligibility = evaluateEligibility(criteria, c.graph);
+    const bucket = bucketOf(c, eligibility, null);
+    if (bucket === "investigating" || bucket === "identity_unresolved") {
+      out.add(c.company_key);
+      continue;
+    }
+    if (bucket !== "pending") continue;
+    const gaps = evidenceGapsFor(
+      eligibility.checks.filter((x) => x.kind === "hard"), c.graph, undefined,
+      new Set(c.attempted_routes ?? []), readiness);
+    if (canStillQualify(gaps)) out.add(c.company_key);
   }
   return out;
 }
