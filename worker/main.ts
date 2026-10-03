@@ -27,7 +27,7 @@ import {
 import { createExecutionDeadline } from "../supabase/functions/_shared/leadExecutionFinalizer.ts";
 import { terminalStatusOf } from "../supabase/functions/_shared/leadMissionV2Request.ts";
 import {
-  finalQueueStatus, isTerminalQueueStatus, terminalReasonFor,
+  isTerminalQueueStatus, releaseQueuedMission,
 } from "../supabase/functions/_shared/leadMissionTerminal.ts";
 import {
   CANCEL_SWEEP_LIMIT, CANCELLED_REASON, reconcileTerminalRows, sweepCancelledMissions,
@@ -93,6 +93,13 @@ const TASK_TERMINAL_COLUMNS =
   "r_cf_status:result->company_first->status," +
   "r_cfs_terminal:result->company_first_state->terminal_status";
 
+/**
+ * What the runner reads after a run: the terminal columns plus the lineage's
+ * own slice counter, which tells the release whether a slice actually ran.
+ */
+const TASK_OUTCOME_COLUMNS =
+  TASK_TERMINAL_COLUMNS + ",r_lineage_slices:result->lead_lineage_progress->continuations_used";
+
 interface TaskTerminalRow {
   status?: string | null;
   r_terminal_status?: unknown;
@@ -142,10 +149,15 @@ async function main() {
       return firstRow(data)?.bound === true;
     },
     readTaskOutcome: async (taskId) => {
-      const { data } = await db.from("tasks").select(TASK_TERMINAL_COLUMNS).eq("id", taskId).maybeSingle();
+      const { data } = await db.from("tasks").select(TASK_OUTCOME_COLUMNS).eq("id", taskId).maybeSingle();
       if (!data) return null;
-      const row = data as TaskTerminalRow;
-      return { status: row.status ?? null, terminal_status: terminalStatusOf(terminalResultOf(row)) };
+      const row = data as TaskTerminalRow & { r_lineage_slices?: unknown };
+      const slices = Number(row.r_lineage_slices);
+      return {
+        status: row.status ?? null,
+        terminal_status: terminalStatusOf(terminalResultOf(row)),
+        lineage_slices: row.r_lineage_slices != null && Number.isInteger(slices) ? slices : null,
+      };
     },
     log,
   });
@@ -303,22 +315,28 @@ async function main() {
   rowsDb.resolveNotices = resolveNotices;
 
   const release = async (mission: ClaimedMission, outcome: ReleaseOutcome) => {
-    const stated = finalQueueStatus(outcome, mission.attempts);
-    const { data: released, error } = await db.rpc("release_lead_mission", {
-      p_queue_id: mission.queueId, p_worker_id: workerId,
-      p_status: stated,
-      p_outcome: {
+    // A CONTINUATION IS NOT A RETRY. The stated status, the lineage slice count
+    // a clean continuation carries, and the 4-argument fallback all live in
+    // `releaseQueuedMission`, which the canary replay drives against real SQL.
+    const r = await releaseQueuedMission((fn, args) => db.rpc(fn, args), {
+      queueId: mission.queueId, workerId, attempts: mission.attempts, outcome,
+      outcomeDoc: {
         status: outcome.status, terminal: outcome.terminal, error: outcome.error ?? null,
         aborted: outcome.aborted, abort_reason: outcome.abortReason, worker_id: workerId,
-        ceiling_ms: cfg.missionCeilingMs,
+        ceiling_ms: cfg.missionCeilingMs, lineage_slices: outcome.lineageSlices ?? null,
       },
     });
-    if (error) { log("[worker] release error", error.message); return; }
-    const finalStatus = String(firstRow(released)?.final_status ?? stated);
+    if (r.fallback) log("[worker] release: 4-argument fallback", { queue: mission.queueId });
+    if (r.error) { log("[worker] release error", r.error); return; }
+    log("[worker] queue counters", {
+      queue: mission.queueId, final_status: r.finalStatus, released: r.released,
+      lineage_slices: r.lineageSlices, attempts: r.attempts, continuations: r.continuations,
+    });
+    const finalStatus = r.finalStatus;
     if (isTerminalQueueStatus(finalStatus)) {
       const taskId = outcome.taskId ?? mission.taskId;
       const planId = typeof mission.request.plan_id === "string" ? mission.request.plan_id : null;
-      const reason = terminalReasonFor(outcome, mission.attempts);
+      const reason = r.terminalReason ?? finalStatus;
       try {
         await reconcileTerminal(finalStatus, reason, {
           taskId,

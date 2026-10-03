@@ -50,6 +50,12 @@ export interface MissionOutcome {
   error?: string;
   /** The task the handler ran, when one exists — what a terminal release reconciles. */
   taskId?: string | null;
+  /**
+   * `lead_lineage_progress.continuations_used` as the run left the task: the
+   * lineage's own slice counter. A clean continuation hands it to the release,
+   * which refunds the claim only when it moved (see leadMissionTerminal.ts).
+   */
+  lineageSlices?: number | null;
 }
 
 export interface ReleaseOutcome extends MissionOutcome {

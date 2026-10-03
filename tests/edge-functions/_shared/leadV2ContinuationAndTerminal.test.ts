@@ -178,7 +178,11 @@ Deno.test("a cancelled mission cancels its lineage", () => {
 
 Deno.test("the worker reconciles on every terminal release", () => {
   const main = Deno.readTextFileSync(new URL("../../../worker/main.ts", import.meta.url));
-  assert(main.includes("const stated = finalQueueStatus(outcome, mission.attempts);"));
+  // The stated status moved into `releaseQueuedMission` (20261003120000) so a
+  // test can drive it against real SQL; the worker calls it.
+  assert(main.includes("await releaseQueuedMission("));
+  const terminal = Deno.readTextFileSync(new URL("../../../supabase/functions/_shared/leadMissionTerminal.ts", import.meta.url));
+  assert(terminal.includes("const stated = finalQueueStatus(r.outcome, r.attempts);"));
   assert(main.includes("if (isTerminalQueueStatus(finalStatus))"));
   assert(main.includes("await reconcileTerminal(finalStatus"));
 });

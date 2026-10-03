@@ -92,12 +92,17 @@ export function createLeadMissionRunner(d: LeadMissionRunnerDeps): LeadMissionRu
       // Refused before any task existed: nothing ran, nothing was bought.
       if (!taskId) return { ...mapRefusal(res.status), error: `handler_status_${res.status}`, taskId: null };
 
-      const outcome = mapTaskOutcome(await d.readTaskOutcome(taskId));
+      const row = await d.readTaskOutcome(taskId);
+      const outcome = mapTaskOutcome(row);
+      // The lineage's own slice counter, so the release can tell a slice that
+      // ran from a run that only re-read a checkpoint (a 409, a refusal).
+      const lineageSlices = typeof row?.lineage_slices === "number" ? row.lineage_slices : null;
       d.log?.("[worker][runner] run ended", {
         queue: mission.queueId, task: taskId, http: res.status, ...outcome,
+        lineage_slices: lineageSlices,
         revoked: deadline.revokedReason,
       });
-      return { ...outcome, taskId };
+      return { ...outcome, taskId, ...(lineageSlices !== null ? { lineageSlices } : {}) };
     },
   };
 }

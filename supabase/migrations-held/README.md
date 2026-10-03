@@ -59,6 +59,24 @@ Apply only after that one, deliberately. Until then the live sweeper is
 unchanged; the V2 heartbeat keeps `tasks.updated_at` fresh, which is what keeps
 a live V2 run out of the sweeper today.
 
+## `20261003120000_lead_mission_v2_continuations_not_retries.sql`
+
+Lead V2: a clean continuation slice no longer spends a queue retry. Adds
+`lead_mission_queue.continuations` (default 0; no row rewritten), gives
+`release_lead_mission` a defaulted `p_lineage_slices` argument that refunds the
+claim when the lineage's own slice counter moved, and adds a 25-slice backstop
+to claim and release. Retries stay capped at 5 and keep counting errors,
+aborts, crashes, lease expiries and runs that complete no slice. Canary
+53784493 was stopped before page 3 by five clean slices spending the 5 retries.
+
+**Depends on `20260910140000_lead_mission_v2_claim.sql`.** Either deploy order
+works: an old worker against the new function gets the old behaviour (no slice
+count, no refund); a new worker against the old function falls back to the
+4-argument call. Rollback, verbatim to the original functions:
+`rollback/20261003120000_lead_mission_v2_continuations_not_retries.down.sql`.
+Replayed against real Postgres (PGlite) in
+`tests/infra/leadMissionV2ContinuationsNotRetries.test.ts`.
+
 ## Tests
 
 `tests/infra/` still reads these files — the baseline's structure, the V2

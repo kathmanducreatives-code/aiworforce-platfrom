@@ -121,7 +121,12 @@ export function terminalStatusOf(result: unknown): string | null {
   return typeof v === "string" && v ? v : null;
 }
 
-export interface TaskOutcomeRow { status: string | null; terminal_status: string | null }
+export interface TaskOutcomeRow {
+  status: string | null;
+  terminal_status: string | null;
+  /** `result.lead_lineage_progress.continuations_used`, when the run folded one. */
+  lineage_slices?: number | null;
+}
 export interface MappedOutcome { status: string; terminal: boolean }
 
 /** How the run the handler executed actually ended, read from its task row. */
