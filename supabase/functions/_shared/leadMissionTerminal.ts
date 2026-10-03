@@ -24,11 +24,28 @@
 import { queueStatusFor, type QueueReleaseStatus } from "./leadMissionV2Request.ts";
 
 /**
- * Attempts the queue grants a mission. MIRRORS the literal in
+ * RETRIES the queue grants a mission. MIRRORS the literal in
  * `claim_next_lead_mission` (`attempts < 5`) and `release_lead_mission`
- * (`attempts >= 5`); a test reads the migration and fails if they drift.
+ * (`attempts >= 5`); a test reads the migrations and fails if they drift.
+ *
+ * A retry, not a slice. Every claim takes an attempt, and a CLEAN continuation
+ * — a run that folded a new slice into the lineage and asked to continue —
+ * refunds it at release (20261003120000). What stays counted is what the
+ * budget is for: errors, aborts, crashes, lease expiries, and runs that ended
+ * without completing a slice. Canary 53784493 was stopped before page 3 by
+ * five clean slices spending this as if they were five failures.
  */
 export const V2_MAX_ATTEMPTS = 5;
+
+/**
+ * The queue's BACKSTOP on clean slices — never the budget that normally ends a
+ * mission. The lineage stops itself first, at `resolveMaxContinuations()`
+ * (default 10, configurable up to `MAX_CONTINUATIONS_CAP`), its cost ceiling or
+ * its barren-slice rule, and returns a terminal status. This only fires if a
+ * handler keeps asking to continue past every ceiling it has. Equal to
+ * `MAX_CONTINUATIONS_CAP` and to the `25` in both RPCs; a test pins all three.
+ */
+export const V2_MAX_CONTINUATION_SLICES = 25;
 
 /**
  * The terminal reason for a mission whose attempts were spent by a real,
@@ -36,38 +53,102 @@ export const V2_MAX_ATTEMPTS = 5;
  */
 export const RETRY_BUDGET_EXHAUSTED = "retry_budget_exhausted";
 /**
- * The terminal reason for a mission whose last attempt ended CLEANLY and still
- * asked to continue: every slice ran, nothing failed, and the queue's attempt
- * allowance was spent on real work. Not a reliability failure, and not to be
- * reported as one. (An evidence-exhausted mission never reaches this: it ends
- * `search_exhausted` through continuation — `canStillQualify`.)
+ * The terminal reason for a mission whose retries ran out although its last
+ * attempt ended without an error: the allowance went on runs that completed no
+ * new slice (a 409 on a still-held resume claim, a crash, a lease expiry), not
+ * on failures the run itself reported. A clean slice no longer spends it.
+ * (An evidence-exhausted mission never reaches this: it ends `search_exhausted`
+ * through continuation — `canStillQualify`.)
  */
 export const CONTINUATION_ATTEMPTS_EXHAUSTED = "continuation_attempts_exhausted";
+/**
+ * The terminal reason for a mission stopped by the queue's slice BACKSTOP
+ * (`V2_MAX_CONTINUATION_SLICES`): the handler kept asking to continue past
+ * every ceiling it has. Should never be seen; if it is, the lineage's own
+ * stopping rules are what broke.
+ */
+export const CONTINUATION_SLICES_EXHAUSTED = "continuation_slices_exhausted";
 
 export type QueueTerminalStatus = "complete" | "failed" | "cancelled";
 
+/** What the worker knows about a finished run, for the release decision. */
+export interface ReleaseFacts {
+  status: string;
+  terminal: boolean;
+  error?: unknown;
+  aborted?: boolean;
+  /**
+   * `lead_lineage_progress.continuations_used` as the run left the task — the
+   * lineage's own per-slice counter. Null when there is no task or no counter.
+   */
+  lineageSlices?: number | null;
+}
+
 /**
- * The status the worker releases with — stated, never left for the SQL to
- * convert. A non-terminal outcome on the last attempt is a failure the worker
- * knows about now, and must reconcile now.
+ * The lineage slice count to hand `release_lead_mission`, or null.
+ *
+ * Non-null ONLY for a clean continuation: the run asked to continue, reported
+ * no error, and was not aborted. The database refunds the claim only if this
+ * count is ahead of the one it has already seen, so a run that folded nothing
+ * cannot earn a refund by repeating an old number.
+ */
+export function cleanContinuationSlices(o: ReleaseFacts): number | null {
+  if (o.terminal || o.status !== "continuation_required") return null;
+  if (o.error || o.aborted === true) return null;
+  const n = o.lineageSlices;
+  return typeof n === "number" && Number.isInteger(n) && n >= 1 ? n : null;
+}
+
+/**
+ * The status the worker releases with.
+ *
+ * A clean continuation is stated `resumable` whatever the attempt count: the
+ * database decides — it refunds the claim when the slice is new, and fails the
+ * mission only on the retry cap or the slice backstop, saying which. Anything
+ * else non-terminal on the last attempt is a failure the worker knows about
+ * now, and states now.
  */
 export function finalQueueStatus(
-  outcome: { status: string; terminal: boolean },
+  outcome: ReleaseFacts,
   attempts: number,
 ): QueueReleaseStatus {
   if (outcome.terminal) return queueStatusFor(outcome);
+  if (cleanContinuationSlices(outcome) !== null) return "resumable";
   return attempts >= V2_MAX_ATTEMPTS ? "failed" : "resumable";
 }
 
+/**
+ * Why a released mission ended.
+ *
+ * `queueReason` is what `release_lead_mission` returned when IT failed a
+ * resumable release: `slices_exhausted` or `attempts_exhausted`. Absent (an
+ * older database, or a release the database did not override), the worker's
+ * own attempt count decides, exactly as before.
+ */
 export function terminalReasonFor(
-  outcome: { status: string; terminal: boolean; error?: unknown; aborted?: boolean },
+  outcome: ReleaseFacts,
   attempts: number,
+  queueReason?: string | null,
 ): string {
-  if (!outcome.terminal && attempts >= V2_MAX_ATTEMPTS) {
+  if (!outcome.terminal && queueReason === "slices_exhausted") return CONTINUATION_SLICES_EXHAUSTED;
+  if (!outcome.terminal && (queueReason === "attempts_exhausted" || attempts >= V2_MAX_ATTEMPTS)) {
     const failedRun = !!outcome.error || outcome.aborted === true;
     return failedRun ? RETRY_BUDGET_EXHAUSTED : CONTINUATION_ATTEMPTS_EXHAUSTED;
   }
   return outcome.status;
+}
+
+/**
+ * True for the PostgREST error a call with an argument the database's function
+ * does not have produces (`PGRST202`, "could not find the function"). The
+ * worker uses it to fall back to the 4-argument release on a database the
+ * 20261003120000 migration has not reached, so deploy order cannot strand a
+ * mission in `running`.
+ */
+export function isMissingRpcSignature(error: { code?: unknown; message?: unknown } | null | undefined): boolean {
+  if (!error) return false;
+  if (error.code === "PGRST202") return true;
+  return typeof error.message === "string" && /could not find the function/i.test(error.message);
 }
 
 export function isTerminalQueueStatus(s: string | null | undefined): s is QueueTerminalStatus {
@@ -213,5 +294,82 @@ export function applyTerminalPatch(rows: TerminalRows, patch: TerminalPatch): Te
       : null,
     lineage: rows.lineage ? (patch.lineage ? { status: patch.lineage.status } : rows.lineage) : null,
     plan: rows.plan ? (patch.plan ? { status: patch.plan.status } : rows.plan) : null,
+  };
+}
+
+// ── THE RELEASE CALL ────────────────────────────────────────────────────────
+//
+// The worker's half of the release, with the database injected — so the canary
+// replay drives exactly this against the real SQL. `worker/main.ts` cannot be
+// imported by a test (it starts the worker), which is why this lives here.
+
+export type QueueRpc = (
+  fn: string,
+  args: Record<string, unknown>,
+) => PromiseLike<{ data: unknown; error: { code?: unknown; message?: unknown } | null }>;
+
+export interface QueueReleaseResult {
+  /** False when the database refused (ownership lost) or the call errored. */
+  released: boolean;
+  finalStatus: string;
+  /** Why the mission ended, when this release ended it; null otherwise. */
+  terminalReason: string | null;
+  /** Counters as the database left them; null on a database without them. */
+  attempts: number | null;
+  continuations: number | null;
+  /** The slice count this release claimed a refund for, or null. */
+  lineageSlices: number | null;
+  /** True when the 4-argument call was used because the database predates it. */
+  fallback: boolean;
+  error: string | null;
+}
+
+export async function releaseQueuedMission(
+  rpc: QueueRpc,
+  r: {
+    queueId: string;
+    workerId: string;
+    /** The count the claim returned — this run's attempt included. */
+    attempts: number;
+    outcome: ReleaseFacts;
+    /** Stored verbatim as `last_outcome`. */
+    outcomeDoc: Record<string, unknown>;
+  },
+): Promise<QueueReleaseResult> {
+  const stated = finalQueueStatus(r.outcome, r.attempts);
+  const slices = cleanContinuationSlices(r.outcome);
+  const args: Record<string, unknown> = {
+    p_queue_id: r.queueId, p_worker_id: r.workerId, p_status: stated, p_outcome: r.outcomeDoc,
+  };
+  if (slices !== null) args.p_lineage_slices = slices;
+
+  let fallback = false;
+  let res = await rpc("release_lead_mission", args);
+  if (res.error && slices !== null && isMissingRpcSignature(res.error)) {
+    fallback = true;
+    delete args.p_lineage_slices;
+    res = await rpc("release_lead_mission", args);
+  }
+  const base = { attempts: null, continuations: null, lineageSlices: slices, fallback };
+  if (res.error) {
+    return { ...base, released: false, finalStatus: stated, terminalReason: null,
+      error: String(res.error.message ?? "release_error") };
+  }
+  const row = (Array.isArray(res.data) ? res.data[0] : res.data) as Record<string, unknown> | null;
+  // UNCHANGED FROM BEFORE: a refused release (ownership lost) still reports the
+  // status the worker stated, and a terminal one is still reconciled.
+  const finalStatus = String(row?.final_status ?? stated);
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const queueReason = typeof row?.reason === "string" ? row.reason : null;
+  return {
+    ...base,
+    released: row?.released === true,
+    finalStatus,
+    terminalReason: isTerminalQueueStatus(finalStatus)
+      ? terminalReasonFor(r.outcome, r.attempts, queueReason)
+      : null,
+    attempts: num(row?.attempts),
+    continuations: num(row?.continuations),
+    error: null,
   };
 }
