@@ -5191,6 +5191,8 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                               audit_reason: "discover_pages_for_claim",
                               actor_id: "firecrawl_map",
                               ...auditOwnership(),
+                              // Keyed like a page fetch, not `no-hash` (canary 4).
+                              compiled_input_hash: spec.idempotency_key,
                             }, baseCtx);
                             const d = (r.data ?? {}) as Record<string, unknown>;
                             const raw = Array.isArray(d.links) ? d.links
