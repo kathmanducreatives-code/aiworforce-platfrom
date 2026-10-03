@@ -10,6 +10,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hashInput } from "./hiringActorInputs.ts";
+import { paidCallInputHash } from "./paidCallInputHash.ts";
 import {
   PERSISTENCE_AUTHORITIES, type PersistenceAuthority,
 } from "./capabilityExecution.ts";
@@ -1785,7 +1786,10 @@ export async function runTool(
           (auditInput.capability_key ?? auditInput.selected_actor_key) as string | null,
           auditInput.source_type as string | null,
         ),
-        input_hash: (auditInput.compiled_input_hash as string | undefined) ?? null,
+        // NEVER "no-hash" FOR TWO DIFFERENT FIRECRAWL CALLS. This key is the
+        // credit reservation's idempotency key; canary 4's maps shared one, and
+        // every map after the first was replayed rather than charged.
+        input_hash: paidCallInputHash(tool.name, auditInput),
       }),
       // Supplied by the caller when it knows it is retrying. Attempt 1 otherwise,
       // and the unique index means a genuine second attempt that forgets to say so
