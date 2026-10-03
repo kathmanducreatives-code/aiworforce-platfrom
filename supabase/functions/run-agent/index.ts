@@ -170,7 +170,7 @@ import {
 import { emptyEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
 import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
 import { applyVerifierFinding } from "../_shared/leadCapabilityEngine.ts";
-import { ledgerBoundCall } from "../_shared/claimVerifier.ts";
+import { attemptedRoutes, ledgerBoundCall } from "../_shared/claimVerifier.ts";
 import { verifierSpecCompiler } from "../_shared/verifierCallSpec.ts";
 import { runClaimVerificationPhase } from "../_shared/claimVerificationPhase.ts";
 import { buildClaimPlan } from "../_shared/claimPlan.ts";
@@ -429,7 +429,7 @@ import {
 } from "../_shared/lineageLease.ts";
 import {
   decideAutoContinuation, settleV2Outcome, foldSlice, readLineageProgress, lineageIsFinished,
-  resolveMaxContinuations, resolveMaxLineageCostUnits,
+  claimProgressCount, resolveMaxContinuations, resolveMaxLineageCostUnits,
   AUTO_CONTINUATION_VERSION, LINEAGE_PROGRESS_KEY, type LineageProgress,
 } from "../_shared/leadAutoContinuation.ts";
 import {
@@ -6540,6 +6540,23 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             : capabilityRun
             ? capabilityRun.companies.filter((c) => c.brain !== null).length
             : 0,
+          // ── LEAD V2: A VERIFIER THAT ANSWERED IS PROGRESS ──────────────
+          //
+          // Canary 9230df70: two slices verifying page 2's companies (Atomus,
+          // Pvalyou, Firecrawl, adopted Pvalyou runs) read as barren, because a
+          // company verified from pending to ineligible is still "decided".
+          // The lineage stopped `no_progress` before page 3. Resolved hard
+          // checks plus answered verifier routes count instead
+          // (`claimProgressCount`). Absent on V1: exactly the old behaviour.
+          ...(p5View && capabilityRun
+            ? {
+              claimProgressInPool: claimProgressCount({
+                leads: p5View.leads,
+                attemptedRoutesPerCompany: capabilityRun.companies.map((c) =>
+                  attemptedRoutes(c.completed_operations).length),
+              }),
+            }
+            : {}),
         });
         const autoDecision = decideAutoContinuation({
           // THE HIGH-WATER MARK, not this slice's count. A slice that evaluated
