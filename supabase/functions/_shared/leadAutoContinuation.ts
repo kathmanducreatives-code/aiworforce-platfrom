@@ -193,6 +193,17 @@ export interface AutoContinuationInput {
    * Absent or 0 keeps the previous behaviour exactly.
    */
   verificationRoutesRemain?: number;
+  /**
+   * THE MISSION'S HARD CAP IS SPENT (`budgetPolicy.missionBudgetState`, set
+   * only when an operator cap is in force — `missionSpendCap.ts`). The detail
+   * the stop reports. Absent or null keeps the previous behaviour exactly.
+   *
+   * Canary 4 (382de52c): nothing on the server knew the operator's $0.80 rule,
+   * and the lineage dispatched four more slices past it. A spent cap ends the
+   * lineage with `cost_ceiling` instead of dispatching slices whose every
+   * purchase would be refused.
+   */
+  missionBudgetExhausted?: string | null;
 }
 
 export interface AutoContinuationDecision {
@@ -265,6 +276,17 @@ export function decideAutoContinuation(
   }
 
   const awaiting = (i.pendingRuns ?? 0) > 0;
+
+  // ── A SPENT MISSION CAP ENDS THE LINEAGE — ONCE NOTHING PAID IS IN FLIGHT ─
+  //
+  // Ahead of verification and replenishment, because both are PURCHASES the
+  // ledger would refuse. While a run already paid for is still executing this
+  // falls through to `awaiting_provider_run`: adopting it is free (the ledger
+  // commits nothing for an adoption and the credit ledger replays), and
+  // abandoning it would discard results the mission has already paid for.
+  if (i.missionBudgetExhausted && !awaiting) {
+    return stop("cost_ceiling", i.missionBudgetExhausted);
+  }
 
   // ── THE THREE FINDINGS, EACH UNSAYABLE WHILE A PAID RUN IS IN FLIGHT ─────
   //
