@@ -440,10 +440,52 @@ export function sliceWasBarren(
     investigatedDelta: number;
     /** Optional so an older caller keeps its exact previous behaviour. */
     brainDecidedDelta?: number;
+    /**
+     * Growth in canonical claim progress — hard checks resolved plus verifier
+     * routes answered (`claimProgressCount`). Optional: absent keeps the
+     * previous behaviour exactly.
+     */
+    claimProgressDelta?: number;
   },
 ): boolean {
   return i.qualifiedDelta <= 0 && i.investigatedDelta <= 0 &&
-    (i.brainDecidedDelta ?? 0) <= 0;
+    (i.brainDecidedDelta ?? 0) <= 0 && (i.claimProgressDelta ?? 0) <= 0;
+}
+
+/**
+ * HOW FAR THE POOL'S CLAIMS HAVE BEEN CARRIED — cumulative, for `foldSlice`.
+ *
+ * Production canary 9230df70 (2026-10-03). The run widened to page 2 as it
+ * should, then spent two slices verifying the nine new companies — Atomus,
+ * Pvalyou, Firecrawl, and adopting the Pvalyou runs those slices had started —
+ * and both were counted BARREN. A company the verifiers carried from pending
+ * to ineligible is still "decided" (`brain_decided` counts qualified + pending
+ * + ineligible), a claim that went unknown → pass changes no bucket, and an
+ * answered route that settles nothing changes no count. So `barren_slices`
+ * reached 2 and the lineage stopped `no_progress` before page 3, with 18 pages
+ * of discovery still open.
+ *
+ * A verifier that answered IS progress: it either resolved a hard check or
+ * closed a route, and either one changes what the next slice can do — the
+ * second is exactly what makes a pool unworkable and the search widen. So:
+ *
+ *   resolved hard checks (pass or fail) across the canonical view
+ *   + verifier routes answered (`verify:` marks) across the working set
+ *
+ * Both only grow as work is done, and both are bounded — a route is answered
+ * once per company — so a lineage that is genuinely stuck still reads barren.
+ */
+export function claimProgressCount(i: {
+  leads: ReadonlyArray<{ hard_check_details?: ReadonlyArray<{ result: string }> | null }>;
+  /** Verifier routes answered, per company in the working set. */
+  attemptedRoutesPerCompany: ReadonlyArray<number>;
+}): number {
+  let n = 0;
+  for (const l of i.leads) {
+    for (const h of l.hard_check_details ?? []) if (h.result === "pass" || h.result === "fail") n++;
+  }
+  for (const a of i.attemptedRoutesPerCompany) n += Math.max(0, Math.trunc(a));
+  return n;
 }
 
 type EnvReader = (key: string) => string | undefined;
@@ -529,6 +571,12 @@ export interface LineageProgress {
    * PREVENTS a premature stop.
    */
   brain_decided?: number;
+  /**
+   * Canonical claim progress (`claimProgressCount`), cumulative. Optional on
+   * read, like `brain_decided`: an older checkpoint narrows to 0, so the first
+   * slice after the upgrade reads as progress — the safe direction.
+   */
+  claim_progress?: number;
   /** Highest qualified count observed. Never allowed to fall — see below. */
   qualified_high_water: number;
   /**
@@ -603,6 +651,8 @@ export function foldSlice(
      * gets exactly the previous behaviour.
      */
     brainDecidedInPool?: number;
+    /** `claimProgressCount` over the pool as this slice left it. Optional, cumulative. */
+    claimProgressInPool?: number;
   },
 ): LineageProgress {
   // DELTAS ARE DERIVED HERE, from cumulative in and cumulative held. They are
@@ -622,8 +672,12 @@ export function foldSlice(
   const brainDecidedDelta = slice.brainDecidedInPool === undefined
     ? 0
     : slice.brainDecidedInPool - (prior.brain_decided ?? 0);
+  // A VERIFIER THAT ANSWERED IS PROGRESS. See `claimProgressCount`.
+  const claimProgressDelta = slice.claimProgressInPool === undefined
+    ? 0
+    : slice.claimProgressInPool - (prior.claim_progress ?? 0);
   const barren = sliceWasBarren({
-    qualifiedDelta, investigatedDelta, brainDecidedDelta,
+    qualifiedDelta, investigatedDelta, brainDecidedDelta, claimProgressDelta,
   });
   const keepHigher = (was: number, now: number) => Math.max(was, Math.max(0, now));
   return {
@@ -633,6 +687,7 @@ export function foldSlice(
     cost_units_used: keepHigher(prior.cost_units_used, slice.costUnitsInLineage),
     brain_decided: keepHigher(
       prior.brain_decided ?? 0, slice.brainDecidedInPool ?? 0),
+    claim_progress: keepHigher(prior.claim_progress ?? 0, slice.claimProgressInPool ?? 0),
     barren_slices: barren ? prior.barren_slices + 1 : 0,
     qualified_high_water: keepHigher(prior.qualified_high_water, slice.qualifiedInPool),
     unique_companies_investigated: keepHigher(
@@ -656,6 +711,7 @@ export function readLineageProgress(raw: unknown): LineageProgress {
     // Written, declared AND read back — a field that skips the third never
     // survives a resume, which this file's neighbours have each learned once.
     brain_decided: n(o.brain_decided),
+    claim_progress: n(o.claim_progress),
     qualified_high_water: n(o.qualified_high_water),
     // THE OLD FIELD IS DELIBERATELY NOT READ. A pre-split checkpoint holds
     // `investigated_total`, and its value is a sum of cumulative snapshots —
