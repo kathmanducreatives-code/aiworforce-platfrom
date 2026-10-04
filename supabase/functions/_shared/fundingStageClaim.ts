@@ -60,7 +60,7 @@ export const FUNDING_STAGE_LADDER: Readonly<Record<string, number>> = Object.fre
 /** Funding that carries no rung. Never proof of a stage, never a contradiction. */
 export const NON_ORDINAL_ROUND_TYPES: readonly string[] = Object.freeze([
   "extension", "bridge", "convertible", "debt", "grant", "safe",
-  "secondary", "pipe", "other", "unknown",
+  "secondary", "pipe", "other", "unknown", "non-equity-assistance",
 ]);
 
 /** One round, as a provider reported it. Nothing here is inferred. */
@@ -193,6 +193,7 @@ export function normalizeRoundType(raw: string | null | undefined): string | nul
     "angel-round": "angel", "series-a-round": "series-a",
     "secondary-market": "secondary", "post-ipo-debt": "debt", "post-ipo-equity": "pipe",
     "private-equity": "growth", "corporate-round": "other", "venture-round": "unknown",
+    "non-equity": "non-equity-assistance",
   };
   const n = alias[t] ?? t;
   if (n in FUNDING_STAGE_LADDER) return n;
@@ -231,7 +232,8 @@ export function isVerifiedRound(r: FundingRoundFact): boolean {
  *
  * Trustworthy means a provider field (never a model extraction) with an
  * announced date. Not a funding EVENT: a secondary sale, which moves shares
- * between holders and raises nothing for the company.
+ * between holders and raises nothing for the company; and non-equity
+ * assistance (see `NON_RAISING_ROUND_TYPES`).
  */
 export function isVerifiedFundingEvent(r: FundingRoundFact): boolean {
   if (r.method === "model_extraction") return false;
@@ -239,8 +241,16 @@ export function isVerifiedFundingEvent(r: FundingRoundFact): boolean {
   return !NON_RAISING_ROUND_TYPES.includes(normalizeRoundType(r.round_type) ?? "");
 }
 
-/** Funding rounds that raise nothing for the company: never a recency event. */
-export const NON_RAISING_ROUND_TYPES: readonly string[] = Object.freeze(["secondary"]);
+/**
+ * Round types that are NOT funding for the funding claim: never a recency event.
+ *
+ * `secondary` raises nothing for the company. `non-equity-assistance`
+ * (Atomus/Crunchbase `NON_EQUITY_ASSISTANCE`: accelerator or programme support,
+ * no equity sold) is not funding by decision of the product owner (2026-10-04):
+ * canary 5 qualified LlamaIndex on one dated 2025-10-08, and the mission asked
+ * for funding.
+ */
+export const NON_RAISING_ROUND_TYPES: readonly string[] = Object.freeze(["secondary", "non-equity-assistance"]);
 
 function label(rank: number): string {
   for (const [k, v] of Object.entries(FUNDING_STAGE_LADDER)) if (v === rank && k !== "angel") return k;
@@ -603,7 +613,9 @@ export type RecentFundingReason =
   | "no_round_inside_window"
   | "unverified_round_inside_window"
   | "history_incomplete"
-  | "no_window_requested";
+  | "no_window_requested"
+  /** Every dated event is a type that is not funding (`NON_RAISING_ROUND_TYPES`). */
+  | "only_non_funding_events";
 
 export interface RecentFundingDecision {
   version: typeof FUNDING_STAGE_CLAIM_VERSION;
@@ -655,8 +667,27 @@ export function decideRecentlyFunded(i: {
   }
   // Every dated funding EVENT (a secondary sale is none), trusted or not: an
   // untrusted one inside the window still blocks a FAIL.
-  const dated = records.flatMap((r) => r.rounds.map((round) => ({ round, at: Date.parse(round.announced_date ?? "") })))
-    .filter((x) => Number.isFinite(x.at) && !NON_RAISING_ROUND_TYPES.includes(normalizeRoundType(x.round.round_type) ?? ""));
+  const datedAll = records.flatMap((r) => r.rounds.map((round) => ({ round, at: Date.parse(round.announced_date ?? "") })))
+    .filter((x) => Number.isFinite(x.at));
+  const dated = datedAll.filter((x) => !NON_RAISING_ROUND_TYPES.includes(normalizeRoundType(x.round.round_type) ?? ""));
+  if (dated.length === 0 && datedAll.length > 0) {
+    // DATED EVENTS, NONE OF THEM FUNDING (a secondary sale, non-equity
+    // assistance). Said as such — not "no announced date" — and, like any
+    // other absence, a FAIL only when the provider states the history is whole.
+    const types = [...new Set(datedAll.map((x) => x.round.round_type ?? "unlabelled"))].join(", ");
+    const completeRecord = records.find(historyIsComplete) ?? null;
+    if (completeRecord) {
+      return {
+        ...base, verdict: "fail", reasons: ["only_non_funding_events"],
+        provenance: prov("fail", [], completeRecord),
+        explanation: `the complete history holds no funding round — only ${types}, which do not count as funding`,
+      };
+    }
+    return {
+      ...base, reasons: ["only_non_funding_events"],
+      explanation: `only ${types} reported, which do not count as funding, and no provider states this is the full history`,
+    };
+  }
   if (dated.length === 0) {
     return { ...base, reasons: ["no_dated_rounds"],
       explanation: "funding is reported, but no funding event carries an announced date" };
