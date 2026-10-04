@@ -5,6 +5,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured, runTool } from "../_shared/toolRegistry.ts";
+import { readSetupWebsites } from "../_shared/brainSetupWebsiteRead.ts";
 import { mergeProfile, type StructuredBrainPatch } from "../_shared/companyBrainSchema.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
 import {
@@ -196,28 +197,14 @@ Deno.serve(async (req) => {
       const phases: { agent: string; label: string; status: "ok" | "skipped" | "failed" }[] = [];
 
       if (scrapeReady && sources.length) {
-        const targets = sources.slice(0, 3); // limit
-        let anyOk = false;
-        let anyFail = false;
-        for (const s of targets) {
-          try {
-            const r = await runTool("scrape_url", { url: s.url }, {
-              admin, workspace_id, agent_slug: "system", agent_id: null, user_id: userId,
-            } as any);
-            if (r.ok && r.data) {
-              const txt = typeof r.data === "string" ? r.data : JSON.stringify(r.data).slice(0, 2000);
-              enrichments.push({ url: s.url, summary: txt.slice(0, 2000) });
-              anyOk = true;
-            } else {
-              anyFail = true;
-            }
-          } catch (_) { anyFail = true; }
-        }
-        phases.push({
-          agent: "hawk",
-          label: "Reading your website",
-          status: anyOk ? "ok" : anyFail ? "failed" : "skipped",
+        // As Hawk, one credit per page, keyed to this run (brainSetupWebsiteRead.ts).
+        const read = await readSetupWebsites({
+          runTool, admin, workspace_id, user_id: userId ?? null,
+          run_id: crypto.randomUUID(), sources,
         });
+        enrichments.push(...read.enrichments);
+        warnings.push(...read.warnings);
+        phases.push({ agent: "hawk", label: "Reading your website", status: read.status });
       } else if (sources.length) {
         warnings.push("Live website analysis isn't configured yet. Continuing with manual inputs.");
         phases.push({ agent: "hawk", label: "Reading your website", status: "skipped" });
