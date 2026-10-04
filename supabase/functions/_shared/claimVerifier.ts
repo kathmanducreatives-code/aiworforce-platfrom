@@ -46,27 +46,6 @@ export function attemptedRoutes(completedOperations: readonly string[] | null | 
     .map((o) => o.slice(VERIFY_OP_PREFIX.length));
 }
 
-/**
- * A route this company's per-company evidence budget can no longer pay for.
- *
- * Spend against a company only grows, so once the `candidate` ceiling
- * (`budgetPolicy.per_candidate_evidence_usd`) cannot cover a verifier's
- * purchase it never will this mission. Canary 7 (production 2026-10-04, task
- * 1303e533): LlamaIndex had $0.06 of evidence bought, the router still read
- * its hiring gap as `verify`, continuation asked for a verification slice
- * twice, and the ledger refused the job search both times (`budget_candidate:
- * 0.0714 > 0.06`) until two barren slices ended the run `no_progress`. The
- * mark makes the router say what the ledger will do.
- */
-export const UNAFFORDABLE_OP_PREFIX = "unaffordable:";
-export const unaffordableOpKey = (routeActor: string): string => `${UNAFFORDABLE_OP_PREFIX}${routeActor}`;
-
-/** Route actors a company's evidence budget can no longer pay for, from its operation marks. */
-export function unaffordableRoutes(completedOperations: readonly string[] | null | undefined): string[] {
-  return (completedOperations ?? []).filter((o) => o.startsWith(UNAFFORDABLE_OP_PREFIX))
-    .map((o) => o.slice(UNAFFORDABLE_OP_PREFIX.length));
-}
-
 export interface VerificationTarget {
   company_key: string;
   name: string | null;
@@ -174,16 +153,6 @@ export interface ClaimVerifier {
    * refused anyway. Absent = the Claim Registry's static hint.
    */
   estimate_per_target_usd?: () => number | null;
-  /**
-   * The verifier buys ONE call per batch and asks nothing for a company unless
-   * that call runs — so a company whose evidence budget cannot cover
-   * `estimate_per_target_usd` can never be answered by it, and (the ledger
-   * checks every company in a batch) would get the whole batch refused.
-   * The phase leaves such a company out and marks the route `unaffordable` for
-   * it. Absent: the verifier's purchases are partial or priced per route
-   * (business-model pages, the funding pair), and the phase does not pre-judge.
-   */
-  all_or_nothing_per_target?: boolean;
   verify(targets: VerificationTarget[], deps: VerifierDeps, ctx: {
     mission_id: string | null;
     /** This verifier's runs from earlier slices, to adopt first. */
@@ -201,8 +170,6 @@ export interface VerifiableCandidate {
   eligibility: "eligible" | "ineligible" | "pending";
   hard_checks: ReadonlyArray<{ criterion_id: string; dimension: string; result: string; reason: string; value?: unknown }>;
   attempted_routes: readonly string[];
-  /** Routes this company's evidence budget can no longer pay for (`unaffordableRoutes`). */
-  unaffordable_routes?: readonly string[];
   /** Set when triage withheld paid verification (`missionTriage.paidVerificationBlockedBy`). */
   paid_verification_blocked?: string | null;
 }
@@ -240,8 +207,7 @@ export function verificationTargets(
     // TRIAGE CALLED IT IRRELEVANT, CONFIDENTLY: no further purchase. Its verdict
     // is untouched — it stays PENDING on the evidence it has (`missionTriage`).
     if (c.paid_verification_blocked) continue;
-    const gaps = evidenceGapsFor(c.hard_checks, c.graph, registry, new Set(c.attempted_routes), policy,
-      new Set(c.unaffordable_routes ?? []));
+    const gaps = evidenceGapsFor(c.hard_checks, c.graph, registry, new Set(c.attempted_routes), policy);
     const routes = verifierRouteActors(verifier);
     const mine = gaps.find((g) => g.next === "verify" && !!g.route && routes.includes(g.route.actor));
     if (!mine) continue;

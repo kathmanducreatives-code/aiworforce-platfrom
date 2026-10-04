@@ -60,8 +60,6 @@ export interface MissionCandidate {
   next_action?: string | null;
   /** Route actors a claim verifier has already answered through (`claimVerifier`). */
   attempted_routes?: readonly string[];
-  /** Route actors this company's evidence budget can no longer pay for (`unaffordableRoutes`). */
-  unaffordable_routes?: readonly string[];
   /**
    * Why no further PAID verification is bought for it, or null
    * (`missionTriage.paidVerificationBlockedBy`). Never a verdict: the bucket is
@@ -350,8 +348,7 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
       signal_strength: ceiling.signal_strength,
       next_action: c.next_action ?? null,
       evidence_gaps: bucket === "pending"
-        ? evidenceGapsFor(hardChecks, c.graph, undefined, new Set(c.attempted_routes ?? []), i.readiness,
-          new Set(c.unaffordable_routes ?? []))
+        ? evidenceGapsFor(hardChecks, c.graph, undefined, new Set(c.attempted_routes ?? []), i.readiness)
         : [],
     });
   }
