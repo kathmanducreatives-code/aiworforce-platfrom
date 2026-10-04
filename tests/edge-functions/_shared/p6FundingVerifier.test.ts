@@ -516,11 +516,14 @@ Deno.test("run-agent runs the verifiers on canonical gaps, before the view, boun
     "readiness: leadReadiness,",
     // ONE verifier spine, shared by the verification phase and the funding
     // screen: both calls are `ledgerBoundCall` under the same spec compiler.
-    "const verifierCallFor = async (vState: CapabilityExecutionState) => ledgerBoundCall({",
-    "call: await verifierCallFor(vState),",
+    // The phase builds that compiler once and hands it to the purchase and
+    // to its affordability gate (`hiringAffordabilityCompiledEstimate.test.ts`).
+    ") => ledgerBoundCall({",
+    "spec: spec ?? await verifierSpecFor(vState),",
+    "call: await verifierCallFor(vState, vSpec),",
     "call: await verifierCallFor(state),",
     // The verifier path is the spine: spec, guard, readiness-aware criteria, settlement.
-    "spec: verifierSpecCompiler({",
+    "const verifierSpecFor = async (vState: CapabilityExecutionState) => verifierSpecCompiler({",
     "invoke: guardedInvoker(null, (call) => capabilityInvoke(call),",
     "const vCriteria = deriveMissionCriteria(vMission, leadReadiness);",
     `console.log("[run-agent][p2-spine][claim-verifier]"`,

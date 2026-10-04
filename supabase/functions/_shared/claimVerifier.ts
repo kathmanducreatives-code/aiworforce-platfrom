@@ -25,7 +25,7 @@
 // Pure except for the injected `call`; no clock beyond what deps provide.
 
 import {
-  attachProviderRun, markExecuted, release, reserve, type CallPurpose, type SpendLedger,
+  attachProviderRun, candidateCeilingRefusal, markExecuted, release, reserve, type CallPurpose, type SpendLedger,
 } from "./budgetPolicy.ts";
 import type { ProviderCallSpec } from "./providerCallSpec.ts";
 import type { EvidenceItem } from "./candidateObservation.ts";
@@ -44,6 +44,27 @@ export const VERIFY_OP_PREFIX = "verify:";
 export function attemptedRoutes(completedOperations: readonly string[] | null | undefined): string[] {
   return (completedOperations ?? []).filter((o) => o.startsWith(VERIFY_OP_PREFIX))
     .map((o) => o.slice(VERIFY_OP_PREFIX.length));
+}
+
+/**
+ * A route this company's per-company evidence budget can no longer pay for.
+ *
+ * Spend against a company only grows, so once the `candidate` ceiling
+ * (`budgetPolicy.per_candidate_evidence_usd`) cannot cover a verifier's
+ * purchase it never will this mission. Canary 7 (production 2026-10-04, task
+ * 1303e533): LlamaIndex had $0.06 of evidence bought, the router still read
+ * its hiring gap as `verify`, continuation asked for a verification slice
+ * twice, and the ledger refused the job search both times (`budget_candidate:
+ * 0.0714 > 0.06`) until two barren slices ended the run `no_progress`. The
+ * mark makes the router say what the ledger will do.
+ */
+export const UNAFFORDABLE_OP_PREFIX = "unaffordable:";
+export const unaffordableOpKey = (routeActor: string): string => `${UNAFFORDABLE_OP_PREFIX}${routeActor}`;
+
+/** Route actors a company's evidence budget can no longer pay for, from its operation marks. */
+export function unaffordableRoutes(completedOperations: readonly string[] | null | undefined): string[] {
+  return (completedOperations ?? []).filter((o) => o.startsWith(UNAFFORDABLE_OP_PREFIX))
+    .map((o) => o.slice(UNAFFORDABLE_OP_PREFIX.length));
 }
 
 export interface VerificationTarget {
@@ -153,6 +174,29 @@ export interface ClaimVerifier {
    * refused anyway. Absent = the Claim Registry's static hint.
    */
   estimate_per_target_usd?: () => number | null;
+  /**
+   * The verifier buys ONE call per batch and asks nothing for a company unless
+   * that call runs — so a company whose evidence budget cannot cover asking
+   * about it alone can never be answered by it, and (the ledger checks every
+   * company in a batch) would get the whole batch refused.
+   * The phase leaves such a company out and marks the route `unaffordable` for
+   * it. Absent: the verifier's purchases are partial or priced per route
+   * (business-model pages, the funding pair), and the phase does not pre-judge.
+   *
+   * The price is the COMPILED call's (`call_for` → spec → `ledgerAffordability`),
+   * never `estimate_per_target_usd`: the spec compiler clamps the row count to
+   * the call ceiling, so the raw input can price far above what the ledger will
+   * reserve. Canary 8 (c01d28d8): 12 titles priced $0.121 raw against a $0.049
+   * compiled reservation, and LlamaIndex ($0.0098 spent) was refused a job
+   * search the ledger would have allowed.
+   */
+  all_or_nothing_per_target?: boolean;
+  /**
+   * The exact call `verify` would send for these targets — built by the same
+   * input builder — or null when it would send none. The phase compiles it to
+   * price the purchase (`all_or_nothing_per_target`).
+   */
+  call_for?(targets: readonly VerificationTarget[]): VerifierCall | null;
   verify(targets: VerificationTarget[], deps: VerifierDeps, ctx: {
     mission_id: string | null;
     /** This verifier's runs from earlier slices, to adopt first. */
@@ -170,6 +214,8 @@ export interface VerifiableCandidate {
   eligibility: "eligible" | "ineligible" | "pending";
   hard_checks: ReadonlyArray<{ criterion_id: string; dimension: string; result: string; reason: string; value?: unknown }>;
   attempted_routes: readonly string[];
+  /** Routes this company's evidence budget can no longer pay for (`unaffordableRoutes`). */
+  unaffordable_routes?: readonly string[];
   /** Set when triage withheld paid verification (`missionTriage.paidVerificationBlockedBy`). */
   paid_verification_blocked?: string | null;
 }
@@ -207,7 +253,8 @@ export function verificationTargets(
     // TRIAGE CALLED IT IRRELEVANT, CONFIDENTLY: no further purchase. Its verdict
     // is untouched — it stays PENDING on the evidence it has (`missionTriage`).
     if (c.paid_verification_blocked) continue;
-    const gaps = evidenceGapsFor(c.hard_checks, c.graph, registry, new Set(c.attempted_routes), policy);
+    const gaps = evidenceGapsFor(c.hard_checks, c.graph, registry, new Set(c.attempted_routes), policy,
+      new Set(c.unaffordable_routes ?? []));
     const routes = verifierRouteActors(verifier);
     const mine = gaps.find((g) => g.next === "verify" && !!g.route && routes.includes(g.route.actor));
     if (!mine) continue;
@@ -407,5 +454,40 @@ export function ledgerBoundCall(d: LedgerCallDeps): (c: VerifierCall) => Promise
       trace("call_failed", { run_id: runId, paid: !!runId, detail: message.slice(0, 160) });
       return { status: "failed", reason: message.slice(0, 160) };
     }
+  };
+}
+
+// ── CAN THE LEDGER PAY FOR IT? ASKED OF THE SAME COMPILED CALL ──────────────
+//
+// The affordability question the verification phase asks before a purchase
+// (`all_or_nothing_per_target`) must be the question `reserve` will answer.
+// So it compiles the call with the SAME `spec` compiler `ledgerBoundCall` is
+// given and asks the ledger's own candidate check of `spec.cost.estimate_usd`
+// — the figure `reserve` is handed. There is no second price: when the card,
+// the call ceiling or the count clamp changes, both read the change.
+//
+// PR #22 priced the RAW input instead (12 titles × 10 rows = $0.121), while the
+// spec clamps the rows to the $0.05 call ceiling and the ledger reserves $0.049
+// (Canary 8, c01d28d8). Every company read as unaffordable; none was.
+
+export type AffordabilityDecision =
+  | { ok: true; estimate_usd: number }
+  | { ok: false; company_key: string; spent_usd: number; estimate_usd: number; limit_usd: number; would_commit_usd: number };
+
+/**
+ * Would `reserve` accept this call at the `candidate` ceiling? Null when the
+ * spec itself is refused (readiness, call ceiling): not an affordability
+ * question — `ledgerBoundCall` refuses it at the spec, and nothing is marked.
+ */
+export function ledgerAffordability(d: Pick<LedgerCallDeps, "ledger" | "spec">):
+  (c: VerifierCall) => AffordabilityDecision | null {
+  return (c) => {
+    const spec = d.spec(c);
+    if (spec.status !== "intended") return null;
+    const estimate_usd = spec.cost.estimate_usd;
+    const over = candidateCeilingRefusal(d.ledger, {
+      purpose: spec.purpose, candidate_keys: spec.candidate_keys, estimate_usd,
+    });
+    return over ? { ok: false, estimate_usd, ...over } : { ok: true, estimate_usd };
   };
 }

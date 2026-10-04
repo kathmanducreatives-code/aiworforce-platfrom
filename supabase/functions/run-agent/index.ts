@@ -169,8 +169,8 @@ import {
 } from "../_shared/missionEvaluation.ts";
 import { emptyEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
 import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
-import { applyVerifierFinding } from "../_shared/leadCapabilityEngine.ts";
-import { attemptedRoutes, ledgerBoundCall } from "../_shared/claimVerifier.ts";
+import { applyVerifierFinding, markRouteUnaffordable } from "../_shared/leadCapabilityEngine.ts";
+import { attemptedRoutes, ledgerAffordability, ledgerBoundCall } from "../_shared/claimVerifier.ts";
 import { verifierSpecCompiler } from "../_shared/verifierCallSpec.ts";
 import { runClaimVerificationPhase } from "../_shared/claimVerificationPhase.ts";
 import { buildClaimPlan } from "../_shared/claimPlan.ts";
@@ -2344,19 +2344,24 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           apify_funding_atomus: "funding_verification", apify_funding_pvalyou: "funding_verification",
           apify_linkedin_job_search: "hiring_verification",
         };
-        const verifierCallFor = async (vState: CapabilityExecutionState) => ledgerBoundCall({
+        const verifierSpecFor = async (vState: CapabilityExecutionState) => verifierSpecCompiler({
+          scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
+          mission_hash: await missionHash(persistedMission!),
+          policy: criteriaExecutionPolicy(persistedMission!),
+          ceilings: () => vState.spend_ledger!.ceilings,
+          readiness: leadReadiness,
+          plan: (() => {
+            const rp = vState.retrieval_plans?.[vState.retrieval_plans.length - 1];
+            return rp ? { plan_id: rp.plan_id, version: rp.version } : null;
+          })(),
+        });
+        // `spec`: pass the compiler the verification phase also prices
+        // affordability with, so the gate and the reservation read one estimate.
+        const verifierCallFor = async (
+          vState: CapabilityExecutionState, spec?: Awaited<ReturnType<typeof verifierSpecFor>>,
+        ) => ledgerBoundCall({
           ledger: vState.spend_ledger!,
-          spec: verifierSpecCompiler({
-            scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
-            mission_hash: await missionHash(persistedMission!),
-            policy: criteriaExecutionPolicy(persistedMission!),
-            ceilings: () => vState.spend_ledger!.ceilings,
-            readiness: leadReadiness,
-            plan: (() => {
-              const rp = vState.retrieval_plans?.[vState.retrieval_plans.length - 1];
-              return rp ? { plan_id: rp.plan_id, version: rp.version } : null;
-            })(),
-          }),
+          spec: spec ?? await verifierSpecFor(vState),
           actorIdFor: (actorKey) => hiringActorCard(actorKey)?.actor_id ?? null,
           invoke: guardedInvoker(null, (call) => capabilityInvoke(call), (actorKey, error) => {
             console.error("[run-agent][claim-verifier][guard_refused]", {
@@ -5148,6 +5153,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     graph: cand.graph, eligibility: e.eligibility,
                     hard_checks: e.checks.filter((x) => x.kind === "hard"),
                     attempted_routes: cand.attempted_routes ?? [],
+                    unaffordable_routes: cand.unaffordable_routes ?? [],
                     // Triage withheld paid verification: `verificationTargets` skips it.
                     paid_verification_blocked: cand.paid_verification_blocked ?? null,
                   };
@@ -5326,6 +5332,8 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   hard: claimPlan.hard.map((h) => ({ claim: h.claim, dimension: h.dimension, status: h.status, routes: h.routes.map((r) => r.actor) })),
                   targets: claimPlan.targets.map((t) => t.dimension), unprovable: claimPlan.unprovable.map((u) => u.label),
                 });
+                // ONE compiler for the purchase AND the affordability gate.
+                const vSpec = await verifierSpecFor(vState);
                 const phase = await runClaimVerificationPhase({
                   mission_id: String(task.id),
                   claim_plan: claimPlan,
@@ -5350,13 +5358,22 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     // at the moment of spending, and the spec in the envelope
                     // so the ledger row carries `provider_call_id` and settles.
                     // THE ONE VERIFIER SPINE (`verifierCallFor`), shared with the funding screen.
-                    call: await verifierCallFor(vState),
+                    call: await verifierCallFor(vState, vSpec),
                     now: () => new Date().toISOString(),
                     log: verifierLog,
                   },
                   apply: (f, verifier) => {
                     const company = engineRun.companies.find((c) => c.key === f.company_key);
                     return company ? applyVerifierFinding(company, f, verifier) : false;
+                  },
+                  // THE LEDGER'S OWN QUESTION, OF THE COMPILED CALL: the spec
+                  // `deps.call` reserves, against the same `candidate` ceiling,
+                  // so a route the ledger would refuse is never routed to — and
+                  // one it would allow is never refused here (Canary 8).
+                  affordability: ledgerAffordability({ ledger: vState.spend_ledger!, spec: vSpec }),
+                  markUnaffordable: (key, verifier) => {
+                    const company = engineRun.companies.find((c) => c.key === key);
+                    if (company) markRouteUnaffordable(company, verifier);
                   },
                   log: verifierLog,
                 });
