@@ -322,6 +322,14 @@ const row = (i: number) => ({ id: `co${i}`, name: `Co ${i}`, linkedinUrl: `https
   locations: [{ parsed: { text: "SF, CA, United States", countryFull: "United States" }, country: "US", headquarter: true }] });
 const ROWS = Array.from({ length: 10 }, (_, i) => row(i));
 
+/** The provider call the engine hands `invoke`, as far as this replay reads it. */
+interface ReplayCall {
+  actorKey: string;
+  input: { searchQuery?: string; companies?: string[] };
+  onProviderRun?: (r: { run_id: string; dataset_id: null }) => void;
+}
+interface TraceEvent { type: string; detail?: { ceiling?: string } }
+
 /** Canary 4's slice 7 through `runCapabilityPlan`: page search ($0.041) then a 10-company details read ($0.0401). */
 async function engineSlice(cap: MissionSpendCap | null, floor: Parameters<typeof applySpendFloor>[1]) {
   const sent: string[] = [];
@@ -338,8 +346,7 @@ async function engineSlice(cap: MissionSpendCap | null, floor: Parameters<typeof
       { capability: "persistence", actor_key: null, purpose: "p", input: {}, depends_on: [4] },
     ] }),
     controlRoutes: () => Promise.resolve({ action: "continue" }),
-    // deno-lint-ignore no-explicit-any
-    invoke: (call: any) => {
+    invoke: (call: ReplayCall) => {
       sent.push(call.actorKey);
       call.onProviderRun?.({ run_id: `run-${sent.length}`, dataset_id: null });
       if (call.actorKey === "apify_linkedin_company_search") return Promise.resolve(call.input.searchQuery ? [] : ROWS);
@@ -358,9 +365,10 @@ async function engineSlice(cap: MissionSpendCap | null, floor: Parameters<typeof
     specMode: "enforce", specScope: { workspace_id: "e8af257d", lineage_id: "382de52c" },
     missionCap: cap, spendFloor: floor,
   };
-  // deno-lint-ignore no-explicit-any
-  const r = await runCapabilityPlan(deps as never, opts as never) as unknown as { state: Record<string, any> };
-  return { sent, ledger: r.state.spend_ledger as SpendLedger, trace: r.state.mission_trace, logs };
+  const r = await runCapabilityPlan(deps as never, opts as never) as unknown as {
+    state: { spend_ledger: SpendLedger; mission_trace: { events: TraceEvent[] } };
+  };
+  return { sent, ledger: r.state.spend_ledger, trace: r.state.mission_trace, logs };
 }
 const SLICE6_FLOOR = { committed_usd: 0.7527, paid_calls: 34, source: "lead_execution_calls" as const };
 
@@ -381,8 +389,7 @@ Deno.test("ENGINE, FIXED: $0.80 cap at canary 4's slice-6 spend — the search g
   assertEquals(refused.map((r) => [r.purpose, r.refused_ceiling]), [["enrichment", "mission"]]);
   assert(missionCommitted(e.ledger).usd <= 0.8);
   // The refusal is in the trace, and the mission is spent.
-  // deno-lint-ignore no-explicit-any
-  assert((e.trace.events as any[]).some((t) => t.type === "call_refused_budget" && t.detail?.ceiling === "mission"));
+  assert(e.trace.events.some((t) => t.type === "call_refused_budget" && t.detail?.ceiling === "mission"));
   assert(missionBudgetState(e.ledger).exhausted);
   assert(e.logs.some(([ev]) => ev === "mission_cap_applied"));
 });
