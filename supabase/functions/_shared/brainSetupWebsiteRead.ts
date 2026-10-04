@@ -21,15 +21,15 @@
 //   setup screen reports "LinkedIn company lookup" as not wired.
 
 import { CREDIT_REFUSED_ERROR } from "./creditAuthorization.ts";
+import type { ToolContext, ToolResult } from "./toolRegistry.ts";
 
 export const SETUP_READ_AGENT = "hawk" as const;
 export const SETUP_READ_MAX_PAGES = 3;
 
 export interface SetupSource { source_type?: string | null; url?: string | null }
 
-// deno-lint-ignore no-explicit-any
-export type SetupRunTool = (name: string, input: unknown, ctx: any) =>
-  Promise<{ ok: boolean; data?: unknown; error?: string; unavailable?: boolean }>;
+/** `runTool`'s own signature, injected so tests can stand in for it. */
+export type SetupRunTool = (name: string, input: unknown, ctx: ToolContext) => Promise<ToolResult>;
 
 export interface SetupReadResult {
   enrichments: { url: string; summary: string }[];
@@ -69,8 +69,8 @@ export async function readSetupWebsites(i: {
   const warnings: string[] = [];
   if (targets.length === 0) return { enrichments, status: "skipped", warnings, read: [] };
 
-  const ctx = {
-    admin: i.admin, workspace_id: i.workspace_id, agent_slug: SETUP_READ_AGENT, agent_id: null,
+  const ctx: ToolContext = {
+    admin: i.admin as ToolContext["admin"], workspace_id: i.workspace_id, agent_slug: SETUP_READ_AGENT, agent_id: null,
     agent_name: "Hawk", user_id: i.user_id, lineage_root: `brain-setup:${i.run_id}`,
   };
   let anyOk = false, anyFail = false, creditRefused = false;

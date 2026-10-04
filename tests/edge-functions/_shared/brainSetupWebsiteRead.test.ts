@@ -9,7 +9,7 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   readSetupWebsites, SETUP_READ_AGENT, setupReadTargets, type SetupRunTool,
 } from "../../../supabase/functions/_shared/brainSetupWebsiteRead.ts";
-import { runTool } from "../../../supabase/functions/_shared/toolRegistry.ts";
+import { runTool, type ToolContext } from "../../../supabase/functions/_shared/toolRegistry.ts";
 import { CREDIT_REFUSED_ERROR } from "../../../supabase/functions/_shared/creditAuthorization.ts";
 
 globalThis.fetch = () => { throw new Error("setup-read tests must not reach the network"); };
@@ -117,7 +117,7 @@ Deno.test("FIXED: no credits — the read is refused, nothing is sent, and setup
 });
 
 Deno.test("a successful read becomes an enrichment excerpt the analysis prompt receives", async () => {
-  const seen: Array<{ input: unknown; ctx: Record<string, unknown> }> = [];
+  const seen: Array<{ input: unknown; ctx: ToolContext }> = [];
   const fake: SetupRunTool = (_n, input, ctx) => {
     seen.push({ input, ctx });
     const url = (input as { url: string }).url;
