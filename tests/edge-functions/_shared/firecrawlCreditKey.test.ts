@@ -6,13 +6,14 @@
 // charged, and simera.me, talentify.us.com and every later map were REPLAYED.
 // The lineage made 44 paid calls and was charged 34 credits.
 //
-// Scope: spec-governed Firecrawl calls only. Unspecced `scrape_url` callers
-// (Company Brain setup, Workbench research unlocks, the V1 scrape) also send no
-// hash and are replayed the same way; changing that changes what workspaces are
-// charged, so it is left for a pricing decision and pinned as unchanged below.
+//
+// The unspecced callers had the same defect: the V1 page scrape and Company
+// Brain setup now key per call (one credit per distinct Firecrawl call), and the
+// Workbench research unlock keys per COMPANY — its quoted unit — so one click on
+// N companies is N credits, not one (old) and not one per page (per-URL).
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { paidCallInputHash } from "../../../supabase/functions/_shared/paidCallInputHash.ts";
+import { paidCallInputHash, researchUnlockHash } from "../../../supabase/functions/_shared/paidCallInputHash.ts";
 import { logicalCallKey } from "../../../supabase/functions/_shared/executionLedger.ts";
 import { runTool, type ToolContext } from "../../../supabase/functions/_shared/toolRegistry.ts";
 import { compileWebEvidenceSpec } from "../../../supabase/functions/_shared/webEvidenceSpec.ts";
@@ -74,10 +75,23 @@ Deno.test("a RETRY of the same map keeps its key — a genuine replay still char
   assertEquals(paidCallInputHash("scrape_url", mapSend("crewai.com")), paidCallInputHash("scrape_url", mapSend("crewai.com")));
 });
 
-Deno.test("UNCHANGED (pending a pricing decision): unspecced scrape_url calls keep no hash", () => {
-  // setup-company-brain, leadActionExecutor's research unlock, run-agent's V1 scrape.
-  assertEquals(paidCallInputHash("scrape_url", { url: "https://a.com/pricing", extraction_goal: "x", max_pages: 1 }), null);
-  assertEquals(paidCallInputHash("scrape_url", { url: "https://a.com" }), null);
+Deno.test("V1 scrape / Company Brain (no hash, no spec): one key per distinct call; a retry repeats; audit fields do not matter", () => {
+  const v1 = (url: string, extra: Record<string, unknown> = {}) =>
+    paidCallInputHash("scrape_url", { url, extraction_goal: "find pricing", max_pages: 1, ...extra });
+  assert(v1("https://a.com/pricing") !== v1("https://b.com/pricing"));
+  assertEquals(v1("https://a.com/pricing"), v1("https://a.com/pricing", { audit_reason: "x", execution_owner: "y" }));
+  assert(v1("https://a.com") !== paidCallInputHash("scrape_url", { url: "https://a.com", mode: "map", max_pages: 120 }),
+    "a map and a page of the same URL are different calls");
+  // Company Brain setup sends only { url }.
+  assert(paidCallInputHash("scrape_url", { url: "https://a.com" }) !== paidCallInputHash("scrape_url", { url: "https://b.com" }));
+});
+
+Deno.test("research unlock: the key is the LEAD, so every page of one company shares it and two companies differ", () => {
+  assertEquals(researchUnlockHash("lead-a"), researchUnlockHash("lead-a"));
+  assert(researchUnlockHash("lead-a") !== researchUnlockHash("lead-b"));
+  const src = Deno.readTextFileSync(new URL("../../../supabase/functions/_shared/leadActionExecutor.ts", import.meta.url));
+  assert(src.includes("compiled_input_hash: researchUnlockHash(String(lead.lead_candidate_id))"),
+    "the research unlock must name its billing unit");
 });
 
 Deno.test("run-agent's map send passes the spec's key as its hash, as page fetches do", () => {
@@ -143,4 +157,49 @@ Deno.test("THROUGH runTool: slice 1's three maps reserve three DISTINCT credit k
   } finally {
     if (prior !== undefined) Deno.env.set("FIRECRAWL_API_KEY", prior);
   }
+});
+
+/** Drive `runTool` for a sequence of scrape inputs; returns reserve keys and how many were charged (not replayed). */
+async function reserveKeys(inputs: Record<string, unknown>[], taskId = LINEAGE, agent = "scout") {
+  const prior = Deno.env.get("FIRECRAWL_API_KEY");
+  Deno.env.delete("FIRECRAWL_API_KEY");
+  try {
+    const f = fakeAdmin();
+    const ctx = { admin: f.admin, workspace_id: WS, agent_slug: agent, agent_id: null, task_id: taskId, lineage_root: taskId } as unknown as ToolContext;
+    const results = [];
+    for (const i of inputs) results.push(await runTool("scrape_url", i, ctx));
+    const reserves = f.rpcs.filter((r) => r.fn === "credits_reserve");
+    return { keys: reserves.map((r) => String(r.args.p_idempotency_key)), amounts: reserves.map((r) => Number(r.args.p_amount)), charged: f.charged.size, results };
+  } finally {
+    if (prior !== undefined) Deno.env.set("FIRECRAWL_API_KEY", prior);
+  }
+}
+
+Deno.test("THROUGH runTool: the V1 scrape's three URLs are three charges (old: one)", async () => {
+  const r = await reserveKeys(["https://a.com", "https://b.com", "https://c.com"].map((url) =>
+    ({ url, extraction_goal: "summarise", max_pages: 1 })));
+  assertEquals(r.keys.length, 3);
+  assertEquals(r.charged, 3);
+});
+
+Deno.test("THROUGH runTool: research unlock on 2 companies × 6 pages reserves exactly 2 credits — the quoted price per company", async () => {
+  const TASK = "aaaaaaaa-0000-4000-8000-000000000001";
+  const pages = (lead: string, company: string) => Array.from({ length: 6 }, (_, n) => ({
+    url: `https://${company}.com/p${n}`, extraction_goal: `Company research for ${company}`, max_pages: 1,
+    unlock_capability: "research_company", compiled_input_hash: researchUnlockHash(lead),
+  }));
+  const r = await reserveKeys([...pages("lead-a", "acme"), ...pages("lead-b", "globex")], TASK);
+  assertEquals(r.keys.length, 12, "every page asks");
+  assertEquals(r.charged, 2, "one credit per company");
+  assertEquals(new Set(r.keys).size, 2);
+  assert(r.amounts.every((a) => a === 1), "at the quoted research_company price");
+  // A later action (a new task) researching the same company is a new charge.
+  const again = await reserveKeys(pages("lead-a", "acme"), "aaaaaaaa-0000-4000-8000-000000000002");
+  assert(!r.keys.includes(again.keys[0]));
+});
+
+Deno.test("Company Brain setup's scrape runs as agent 'system', which scrape_url does not allow: refused before any credit (unchanged, pre-existing)", async () => {
+  const r = await reserveKeys([{ url: "https://a.com" }], LINEAGE, "system");
+  assertEquals(r.keys.length, 0);
+  assertEquals(r.results[0].error, "tool_forbidden");
 });

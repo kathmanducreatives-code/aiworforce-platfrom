@@ -12,6 +12,7 @@ import {
   runCompanyEnrichment, runGenerateOutreach,
   type LeadRecord, type FirecrawlFn, type PeopleSearchInput,
 } from "./leadActionRunner.ts";
+import { researchUnlockHash } from "./paidCallInputHash.ts";
 import type { PeopleSearchContact } from "./decisionMakers.ts";
 import {
   runContactEnrichment, type ResolvedPerson,
@@ -218,6 +219,9 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         // `creditPricing` and reserves exactly that, so the quote and the
         // charge cannot drift apart.
         unlock_capability: "research_company",
+        // ONE COMPANY, ONE CHARGE: every page of this lead's crawl shares this
+        // key, so the quoted credit is reserved once and the rest replay it.
+        ...(lead.lead_candidate_id ? { compiled_input_hash: researchUnlockHash(String(lead.lead_candidate_id)) } : {}),
       }, ctx.toolCtx));
       const res = await runCompanyEnrichment(lead, firecrawl);
       if (res.status !== "blocked") {
