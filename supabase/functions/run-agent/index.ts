@@ -169,7 +169,7 @@ import {
 } from "../_shared/missionEvaluation.ts";
 import { emptyEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
 import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
-import { applyVerifierFinding, markRouteUnaffordable } from "../_shared/leadCapabilityEngine.ts";
+import { applyVerifierFinding } from "../_shared/leadCapabilityEngine.ts";
 import { attemptedRoutes, ledgerBoundCall } from "../_shared/claimVerifier.ts";
 import { verifierSpecCompiler } from "../_shared/verifierCallSpec.ts";
 import { runClaimVerificationPhase } from "../_shared/claimVerificationPhase.ts";
@@ -457,7 +457,7 @@ import type { TimingAssessment } from "../_shared/timingAssessment.ts";
 import { functionUrl, functionsBaseUrl } from "../_shared/functionEndpoints.ts";
 import { candidatePool, parseRunBudget } from "../_shared/runBudget.ts";
 import { type FloorDb, readLineageSpendFloor, resolveMissionSpendCap } from "../_shared/missionSpendCap.ts";
-import { missionBudgetState, spendTotals } from "../_shared/budgetPolicy.ts";
+import { missionBudgetState } from "../_shared/budgetPolicy.ts";
 import { appendTrace } from "../_shared/missionTrace.ts";
 
 
@@ -5148,7 +5148,6 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     graph: cand.graph, eligibility: e.eligibility,
                     hard_checks: e.checks.filter((x) => x.kind === "hard"),
                     attempted_routes: cand.attempted_routes ?? [],
-                    unaffordable_routes: cand.unaffordable_routes ?? [],
                     // Triage withheld paid verification: `verificationTargets` skips it.
                     paid_verification_blocked: cand.paid_verification_blocked ?? null,
                   };
@@ -5358,16 +5357,6 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   apply: (f, verifier) => {
                     const company = engineRun.companies.find((c) => c.key === f.company_key);
                     return company ? applyVerifierFinding(company, f, verifier) : false;
-                  },
-                  // THE LEDGER'S OWN PER-COMPANY FIGURES, so a route the
-                  // `candidate` ceiling would refuse is never routed to.
-                  evidenceBudget: (key) => ({
-                    spent_usd: spendTotals(vState.spend_ledger!).by_candidate[key] ?? 0,
-                    limit_usd: vState.spend_ledger!.ceilings.per_candidate_evidence_usd,
-                  }),
-                  markUnaffordable: (key, verifier) => {
-                    const company = engineRun.companies.find((c) => c.key === key);
-                    if (company) markRouteUnaffordable(company, verifier);
                   },
                   log: verifierLog,
                 });

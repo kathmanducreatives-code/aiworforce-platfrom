@@ -132,10 +132,6 @@ export function hiringClaimVerifier(io: HiringVerifierIO): ClaimVerifier & { est
     route_actor: HIRING_ROUTE_ACTOR,
     max_targets: HIRING_MAX_TARGETS,
     estimate_per_target_usd: () => hiringEstimatePerTargetUsd(io),
-    // One job search per batch, and a company is answered only if it runs: a
-    // company its evidence budget cannot cover is left out, not allowed to get
-    // the whole batch refused (`claimVerificationPhase`).
-    all_or_nothing_per_target: true,
     async verify(targets, deps: VerifierDeps, ctx) {
       const findings: VerifierFinding[] = [];
       if (targets.length === 0 || io.titles.length === 0 || !deps.ready(HIRING_ROUTE_ACTOR)) {

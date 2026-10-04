@@ -238,7 +238,7 @@ export interface EvidenceGap {
 /** The routes for a claim, judged for one company. */
 function judgeRoutes(
   def: ClaimDefinition | null, graph: CompanyEvidenceGraph, attempted: ReadonlySet<string>,
-  policy: ReadinessPolicy, unaffordable: ReadonlySet<string>,
+  policy: ReadinessPolicy,
 ): GapRoute[] {
   if (!def) return [];
   // TRIED means the actor has already answered for this company on ANY
@@ -257,17 +257,11 @@ function judgeRoutes(
     const tried = attempted.has(r.actor) || r.evidence_actors.some((a) => answered.has(a));
     // A FALLBACK waits for the route it falls back from.
     const unlocked = !r.after_actor || attempted.has(r.after_actor) || answered.has(r.after_actor);
-    // …or this company's per-company evidence budget can no longer pay for the
-    // route (`claimVerificationPhase`, the `candidate` ceiling in `budgetPolicy`).
-    // The ledger would refuse every purchase, so the route is not one a slice
-    // could take — exactly as if it were not READY.
-    const closed = unaffordable.has(r.actor);
-    const executable = decision.executable && !tried && r.canonical_executor && unlocked && !closed;
+    const executable = decision.executable && !tried && r.canonical_executor && unlocked;
     const why = !decision.executable ? decision.reason
       : tried ? `${r.actor} already answered for this company`
       : !r.canonical_executor ? r.executor_note
       : !unlocked ? `only after ${r.after_actor} has answered for this company`
-      : closed ? `this company's evidence budget cannot pay for ${r.actor}`
       : "ready";
     return { actor: r.actor, capability: r.capability, purpose: r.purpose, readiness, tried, executable, why, cost_hint_usd: r.cost_hint_usd };
   });
@@ -282,12 +276,10 @@ export function evidenceGapsFor(
   attempted: ReadonlySet<string> = new Set(),
   /** Who may run (`routeReadiness.ts`). Production unless a probe says otherwise. */
   policy: ReadinessPolicy = PRODUCTION_READINESS,
-  /** Route actors this company's evidence budget can no longer pay for (`unaffordableRoutes`). */
-  unaffordable: ReadonlySet<string> = new Set(),
 ): EvidenceGap[] {
   return checks.filter((c) => c.result === "unknown").map((c) => {
     const def = claimFor(c.dimension, registry);
-    const considered = judgeRoutes(def, graph, attempted, policy, unaffordable);
+    const considered = judgeRoutes(def, graph, attempted, policy);
     // CHEAPEST FIRST among the routes that can actually answer it.
     const route = [...considered].filter((r) => r.executable)
       .sort((a, b) => a.cost_hint_usd - b.cost_hint_usd)[0] ?? null;

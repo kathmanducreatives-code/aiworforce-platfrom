@@ -32,12 +32,6 @@
 //     cheapest-first only means something if the cheap answer arrives first.
 //     Canary 4a0611b0: Pvalyou outlived the call's wait, the phase moved on,
 //     and both companies got a job search while their funding was still open.
-//   * A company whose PER-COMPANY evidence budget cannot cover an
-//     all-or-nothing verifier's estimate is left out of its batch and the route
-//     is marked unaffordable for it, so the gap router — and through it
-//     continuation — stops calling it verifiable. Canary 7 (1303e533): the
-//     ledger refused LlamaIndex's job search on two slices running while
-//     continuation kept asking for exactly that verification.
 //
 // Pure orchestration; every effect is an injected function.
 
@@ -74,14 +68,6 @@ export interface VerificationPhaseInput {
   pending: readonly PendingVerifierRun[];
   /** The engine writes a finding onto its company. */
   apply: (finding: VerifierFinding, verifier: ClaimVerifier) => boolean;
-  /**
-   * A company's evidence spend and its per-company ceiling, from the mission
-   * ledger (`spendTotals(...).by_candidate`, `per_candidate_evidence_usd`).
-   * Absent or null: not judged here — the ledger still refuses at purchase.
-   */
-  evidenceBudget?: (companyKey: string) => { spent_usd: number; limit_usd: number } | null;
-  /** Record on the company that this verifier's route is unaffordable for it (`unaffordableOpKey`). */
-  markUnaffordable?: (companyKey: string, verifier: ClaimVerifier) => void;
   registry?: readonly ClaimDefinition[];
   /**
    * The mission's claim plan. A verifier whose route answers no HARD claim of
@@ -104,8 +90,6 @@ export interface VerificationPhaseReport {
   held: string[];
   /** Verifiers the claim plan made irrelevant: no hard claim they answer. */
   irrelevant: string[];
-  /** Companies left out of a verifier because their evidence budget cannot cover its estimate. */
-  unaffordable?: Array<{ verifier: string; company_key: string; spent_usd: number; estimate_usd: number; limit_usd: number }>;
   pending: PendingVerifierRun[];
   changed: number;
 }
@@ -134,27 +118,11 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
     return routeOf(v, registry)?.cost_hint_usd ?? Infinity;
   };
   const ordered = [...i.verifiers].sort((a, b) => costOf(a) - costOf(b));
-  const unaffordable: NonNullable<VerificationPhaseReport["unaffordable"]> = [];
   const report: VerificationPhaseReport = {
     version: CLAIM_VERIFICATION_PHASE_VERSION, order: ordered.map((v) => v.key),
     order_estimates: Object.fromEntries(ordered.map((v) => [v.key, Number.isFinite(costOf(v)) ? costOf(v) : null])),
     ran: [], stopped: null, held: [],
-    irrelevant: [], unaffordable, pending: [], changed: 0,
-  };
-  // CAN THIS COMPANY'S EVIDENCE BUDGET STILL PAY FOR ONE OF THIS VERIFIER'S
-  // PURCHASES? Only asked of an all-or-nothing verifier with a real estimate;
-  // an unpriced one is refused at its spec anyway and is never pre-judged.
-  const affordable = (v: ClaimVerifier, companyKey: string): boolean => {
-    if (!v.all_or_nothing_per_target || !i.evidenceBudget) return true;
-    const estimate = costOf(v);
-    if (!Number.isFinite(estimate)) return true;
-    const b = i.evidenceBudget(companyKey);
-    if (!b || b.spent_usd + estimate <= b.limit_usd + 1e-9) return true;
-    unaffordable.push({
-      verifier: v.key, company_key: companyKey, spent_usd: b.spent_usd, estimate_usd: estimate, limit_usd: b.limit_usd,
-    });
-    i.markUnaffordable?.(companyKey, v);
-    return false;
+    irrelevant: [], pending: [], changed: 0,
   };
   // IN FLIGHT: runs earlier slices started whose verifier has not adopted them
   // yet this slice, plus every run still pending after this slice's verifiers.
@@ -178,13 +146,7 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
     // `mine`), but only another verifier's run counts as a hold in the report.
     const held = inFlight();
     const own = new Set(mine.flatMap((r) => r.candidate_keys));
-    // Unaffordable companies are dropped BEFORE the verifier's own bound, so
-    // they never take a slot an affordable company could have used.
-    const targets = need <= 0 ? [] : verificationTargets(
-      { ...verifier, max_targets: Number.MAX_SAFE_INTEGER }, i.candidates(), i.criteriaValue, registry, policy, i.criteriaWindow,
-    )
-      .filter((t) => affordable(verifier, t.company_key))
-      .slice(0, Math.max(0, verifier.max_targets))
+    const targets = need <= 0 ? [] : verificationTargets(verifier, i.candidates(), i.criteriaValue, registry, policy, i.criteriaWindow)
       .filter((t) => {
         if (!held.has(t.company_key)) return true;
         if (!own.has(t.company_key) && !report.held.includes(t.company_key)) report.held.push(t.company_key);
@@ -225,7 +187,6 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
     });
   }
   if (report.held.length > 0) log("verification_held_in_flight", { companies: report.held, pending_runs: report.pending.length });
-  if (unaffordable.length > 0) log("verification_unaffordable", { companies: unaffordable });
   if (report.stopped) log("verification_stopped", { reason: report.stopped, qualified: i.qualified(), requested: i.requested_count });
   return report;
 }
