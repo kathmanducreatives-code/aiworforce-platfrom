@@ -318,20 +318,31 @@ export interface GapSummary {
    * claim has an executable route (`canStillQualify`). What continuation reads.
    */
   with_executable_route: number;
-  /** Pending candidates with at least one hard claim no executable route can close. */
+  /**
+   * Pending candidates nothing will be bought for: a hard claim no executable
+   * route can close, or paid verification withheld by triage.
+   */
   blocked: number;
+  /** Of `blocked`, those whose paid verification triage withheld (`missionTriage`). */
+  triage_deprioritized?: number;
   /** Unknown hard checks across pending candidates, by criterion dimension. */
   unresolved_hard_checks: Record<string, number>;
   /** Why the blocked gaps are blocked, by claim — the capabilities the mission lacks. */
   capability_gaps: Array<{ claim: string | null; dimension: string; routes: Array<{ actor: string; why: string }>; deferred_to: string | null; candidates: number }>;
 }
 
-export function summarizeGaps(pending: ReadonlyArray<{ gaps: readonly EvidenceGap[] }>): GapSummary {
+export function summarizeGaps(
+  pending: ReadonlyArray<{ gaps: readonly EvidenceGap[]; paid_verification_blocked?: boolean }>,
+): GapSummary {
   const unresolved: Record<string, number> = {};
   const capability = new Map<string, GapSummary["capability_gaps"][number]>();
   let executable = 0;
+  let deprioritized = 0;
   for (const p of pending) {
-    if (canStillQualify(p.gaps)) executable++;
+    // THE SAME RULE `verificationTargets` BUYS BY: a candidate triage withheld
+    // is not a route a verification slice could take.
+    if (p.paid_verification_blocked) deprioritized++;
+    else if (canStillQualify(p.gaps)) executable++;
     for (const g of p.gaps) {
       unresolved[g.dimension] = (unresolved[g.dimension] ?? 0) + 1;
       if (g.next !== "blocked") continue;
@@ -351,6 +362,7 @@ export function summarizeGaps(pending: ReadonlyArray<{ gaps: readonly EvidenceGa
     pending: pending.length,
     with_executable_route: executable,
     blocked: pending.length - executable,
+    triage_deprioritized: deprioritized,
     unresolved_hard_checks: unresolved,
     capability_gaps: [...capability.values()],
   };
