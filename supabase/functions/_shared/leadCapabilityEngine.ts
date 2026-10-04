@@ -268,9 +268,10 @@ import {
 import { compileProviderCallSpec, specSummary, type ProviderCallSpec } from "./providerCallSpec.ts";
 import { criteriaExecutionPolicy } from "./criteriaExecutionPolicy.ts";
 import {
-  attachProviderRun, derivedFloorUsd, estimateCallUsd, markExecuted, newSpendLedger, release, reserve, resolveCeilings,
-  type Ceilings, type SpendLedger,
+  applySpendFloor, attachProviderRun, derivedFloorUsd, estimateCallUsd, markExecuted, newSpendLedger, release, reserve,
+  resolveCeilings, type Ceilings, type SpendFloor, type SpendLedger,
 } from "./budgetPolicy.ts";
+import { capCeilings, type MissionSpendCap } from "./missionSpendCap.ts";
 import { appendTrace, newMissionTrace, type MissionTrace } from "./missionTrace.ts";
 import { ACTOR_INPUT_CONTRACTS as P2_ACTOR_CONTRACTS } from "./actorInputContracts.ts";
 import { hashInput as p2HashInput } from "./hiringActorInputs.ts";
@@ -2188,6 +2189,18 @@ export interface CapabilityEngineOpts {
    * raise one. Absent for an ordinary mission.
    */
   runBudget?: RunBudget | null;
+  /**
+   * An operator's hard mission cap (`missionSpendCap.ts`). TIGHTEN-ONLY, and
+   * re-applied to the ledger on EVERY slice — a restored ledger keeps the
+   * ceilings it was created with, so without this a lineage started before the
+   * cap was lowered would never see it. Absent: nothing changes.
+   */
+  missionCap?: MissionSpendCap | null;
+  /**
+   * What the database says this lineage already committed, read this slice
+   * (`readLineageSpendFloor`). Only meaningful with `missionCap`.
+   */
+  spendFloor?: SpendFloor | null;
   /** Resume state. Ignored unless its mission_hash matches. */
   state?: CapabilityExecutionState | null;
   brain?: {
@@ -2741,6 +2754,24 @@ export async function runCapabilityPlan(
   if (specOn) {
     state.spend_ledger ??= newSpendLedger(
       tightenCeilings(resolveCeilings(opts.ceilings ?? null, opts.canary === true), opts.runBudget ?? null));
+    // ── THE OPERATOR'S HARD CAP, EVERY SLICE ─────────────────────────────────
+    // Tighten-only, so re-applying it to a restored ledger can only lower its
+    // ceilings. The floor is re-read every slice and replaces the last one.
+    if (opts.missionCap) {
+      state.spend_ledger.ceilings = capCeilings(state.spend_ledger.ceilings, opts.missionCap);
+      applySpendFloor(state.spend_ledger, opts.spendFloor ?? null);
+      log("mission_cap_applied", {
+        mission_provider_usd: state.spend_ledger.ceilings.mission_provider_usd,
+        mission_credits: state.spend_ledger.ceilings.mission_credits ?? null,
+        floor_usd: state.spend_ledger.floor?.committed_usd ?? null,
+        floor_calls: state.spend_ledger.floor?.paid_calls ?? null,
+        floor_source: state.spend_ledger.floor?.source ?? null,
+        invalid_env: opts.missionCap.invalid,
+      });
+    } else if (state.spend_ledger.floor) {
+      // A floor carried in from a capped slice means nothing without the cap.
+      state.spend_ledger.floor = null;
+    }
     state.mission_trace ??= newMissionTrace();
     state.provider_call_specs ??= [];
     state.retrieval_plans ??= [];

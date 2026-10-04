@@ -456,6 +456,8 @@ import { emptySignalEnrichmentObservability, type SignalEnrichmentObservability 
 import type { TimingAssessment } from "../_shared/timingAssessment.ts";
 import { functionUrl, functionsBaseUrl } from "../_shared/functionEndpoints.ts";
 import { candidatePool, parseRunBudget } from "../_shared/runBudget.ts";
+import { type FloorDb, readLineageSpendFloor, resolveMissionSpendCap } from "../_shared/missionSpendCap.ts";
+import { missionBudgetState } from "../_shared/budgetPolicy.ts";
 import { appendTrace } from "../_shared/missionTrace.ts";
 
 
@@ -2301,6 +2303,27 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // (Lead V2). LEAD_V2_SPECS=off is the rollback.
         const p2Specs = leadExecutabilityGate === "enforce" &&
           String(readEnvSafe("LEAD_V2_SPECS") ?? "").trim().toLowerCase() !== "off";
+        // ── THE OPERATOR'S HARD MISSION CAP (missionSpendCap.ts) ──────────────
+        //
+        // Read from the server's environment, never the request. Enforced by the
+        // spend ledger, which only exists under the spec spine. The database
+        // floor is read once per slice, before anything can be bought, so a
+        // checkpoint lost by an earlier slice cannot hide its spend. Unset:
+        // null, no read, no change.
+        const missionCap = p2Specs ? resolveMissionSpendCap(readEnvSafe, workspace_id) : null;
+        const missionSpendFloor = missionCap
+          ? await readLineageSpendFloor(supabase as unknown as FloorDb, String(lineageRootId))
+          : null;
+        if (missionCap) {
+          console.log("[run-agent][mission-cap]", {
+            task_id: task.id, lineage_id: lineageRootId,
+            provider_usd: missionCap.provider_usd, credits: missionCap.credits,
+            invalid_env: missionCap.invalid,
+            floor_usd: missionSpendFloor?.committed_usd ?? null,
+            floor_calls: missionSpendFloor?.paid_calls ?? null,
+            floor_source: missionSpendFloor?.source ?? null,
+          });
+        }
         // ONE READINESS AUTHORITY for the whole run: the graph, feasibility,
         // the engine's spec compiler, the gap router and the claim verifiers
         // all read this. Production unless this workspace is a named probe.
@@ -4150,6 +4173,8 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 },
               } : {}),
               runBudget,
+              missionCap,
+              spendFloor: missionSpendFloor,
               remainingLeads: quota.requestedLeadCount,
               discoveryReplenishment,
             });
@@ -6580,6 +6605,15 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           maxCostUnits: resolveMaxLineageCostUnits(),
           barrenSlices: progress.barren_slices,
           providerFailed: cf.status === "provider_failure",
+          // THE OPERATOR'S CAP IS SPENT: stop with `cost_ceiling` rather than
+          // dispatch a slice whose every purchase the ledger would refuse.
+          // Only under a cap — absent, the decision is exactly as before.
+          missionBudgetExhausted: (() => {
+            const ledger = capabilityRun?.state.spend_ledger;
+            if (!missionCap || !ledger) return null;
+            const b = missionBudgetState(ledger);
+            return b.exhausted ? b.detail : null;
+          })(),
           // THE SAME LIST THE FINALIZER RANKS ABOVE EVERY OTHER OUTCOME.
           // Read from the engine state rather than re-derived, so the two
           // cannot describe one moment differently — which is what let run

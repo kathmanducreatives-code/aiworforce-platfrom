@@ -29,6 +29,13 @@ export interface Ceilings {
   per_call_usd: Partial<Record<CallPurpose, number>>;
   per_candidate_evidence_usd: number;
   adaptive_reserve_usd: number;
+  /**
+   * The most PAID PROVIDER CALLS this mission may reserve — its credit ceiling
+   * (`CREDITS_PER_PROVIDER_CALL` is one credit per call). Absent / null: no
+   * per-mission credit ceiling, which is every ordinary mission. Set only by an
+   * operator's mission cap (`missionSpendCap.ts`), and only ever lowered.
+   */
+  mission_credits?: number | null;
 }
 
 /** Plan defaults. Canary missions use `canaryCeilings`. */
@@ -96,12 +103,44 @@ export interface SpendReservation {
    */
   settlement_stable?: boolean;
   receipt_reads?: number;
+  /** Which ceiling refused this reservation (`refused_budget` only). */
+  refused_ceiling?: RefusalCeiling;
+}
+
+export type RefusalCeiling = "call" | "candidate" | "route" | "mission" | "mission_credits";
+
+/**
+ * WHAT THE DATABASE SAYS THIS LINEAGE HAS ALREADY COMMITTED, read at the start
+ * of a slice (`lineageSpendFloor`). The ledger travels in the checkpoint, so a
+ * slice whose checkpoint write was lost — a crash after a paid call — would
+ * resume with a ledger that never saw that spend. The mission ceilings add
+ * whatever the floor shows the ledger missed (`missionCommitted`), so a lost
+ * write can only make the run stop sooner.
+ */
+export interface SpendFloor {
+  committed_usd: number;
+  paid_calls: number;
+  /** Where the figure came from, for the log. */
+  source: "lead_execution_calls" | "unreadable";
+  /**
+   * The ledger's own totals WHEN THE FLOOR WAS APPLIED (`applySpendFloor`). The
+   * floor only adds what the ledger had not seen by then — spend this slice
+   * reserves afterwards is the ledger's, and is counted exactly once.
+   */
+  ledger_usd_at_read?: number;
+  ledger_calls_at_read?: number;
 }
 
 export interface SpendLedger {
   version: typeof BUDGET_POLICY_VERSION;
   ceilings: Ceilings;
   reservations: SpendReservation[];
+  /**
+   * Set per slice when a mission cap is in force. It rides along in the
+   * checkpoint, but is replaced by a fresh database reading every slice and
+   * cleared when no cap applies.
+   */
+  floor?: SpendFloor | null;
 }
 
 export function newSpendLedger(ceilings: Ceilings): SpendLedger {
@@ -150,8 +189,54 @@ export interface ReserveRequest {
 
 export type ReserveDecision =
   | { ok: true; reservation: SpendReservation }
-  | { ok: false; ceiling: "call" | "candidate" | "route" | "mission"; limit_usd: number;
+  | { ok: false; ceiling: RefusalCeiling; limit_usd: number;
       would_commit_usd: number; reservation: SpendReservation };
+
+/** A reservation that is, or may still become, a charged provider call. */
+const isPaidCall = (r: SpendReservation) =>
+  r.status === "reserved" || r.status === "executed" || r.status === "settled";
+
+/** Paid provider calls this ledger has committed (adopted / released / refused excluded). */
+export function paidCallCount(l: SpendLedger): number {
+  return l.reservations.filter(isPaidCall).length;
+}
+
+/**
+ * The mission totals the MISSION ceilings are checked against: the ledger's own,
+ * plus whatever this slice's database floor shows the ledger had missed.
+ */
+export function missionCommitted(l: SpendLedger): { usd: number; paid_calls: number } {
+  const own = spendTotals(l).mission_committed_usd;
+  const calls = paidCallCount(l);
+  const f = l.floor;
+  if (!f) return { usd: own, paid_calls: calls };
+  // What the database knew and the ledger did not, at the moment of reading.
+  const missedUsd = Math.max(0, f.committed_usd - (f.ledger_usd_at_read ?? 0));
+  const missedCalls = Math.max(0, f.paid_calls - (f.ledger_calls_at_read ?? 0));
+  return { usd: round4(own + missedUsd), paid_calls: calls + missedCalls };
+}
+
+/**
+ * Attach this slice's database floor. Records the ledger's totals at this
+ * instant, so only spend the ledger MISSED is added on top of it.
+ */
+export function applySpendFloor(l: SpendLedger, floor: SpendFloor | null): void {
+  if (!floor) { l.floor = null; return; }
+  // THE SAME READING, APPLIED AGAIN (a second engine round in one slice): keep
+  // the baseline taken the first time. Re-baselining against a ledger that now
+  // holds this slice's own purchases would subtract them from the missed spend
+  // and under-count. A new reading always differs — every paid call writes a row.
+  const cur = l.floor;
+  if (cur && cur.source === floor.source && cur.committed_usd === floor.committed_usd &&
+      cur.paid_calls === floor.paid_calls && cur.ledger_usd_at_read !== undefined) {
+    return;
+  }
+  l.floor = {
+    ...floor,
+    ledger_usd_at_read: spendTotals(l).mission_committed_usd,
+    ledger_calls_at_read: paidCallCount(l),
+  };
+}
 
 /** The per-call ceiling for a purpose; discovery calls are bounded by their route. */
 export function callCeilingFor(c: Ceilings, purpose: CallPurpose, routeAnchor?: string | null): number {
@@ -178,8 +263,8 @@ export function reserve(l: SpendLedger, q: ReserveRequest): ReserveDecision {
     route_id: q.route_id, candidate_keys: candidates, estimate_usd: round4(q.estimate_usd),
     status: "reserved", provisional_usd: null, settled_usd: null, settlement_source: null, variance_usd: null,
   };
-  const refuse = (ceiling: "call" | "candidate" | "route" | "mission", limit: number, would: number): ReserveDecision => {
-    const r = { ...reservation, status: "refused_budget" as const };
+  const refuse = (ceiling: RefusalCeiling, limit: number, would: number): ReserveDecision => {
+    const r = { ...reservation, status: "refused_budget" as const, refused_ceiling: ceiling };
     l.reservations.push(r);
     return { ok: false, ceiling, limit_usd: limit, would_commit_usd: round4(would), reservation: r };
   };
@@ -203,12 +288,63 @@ export function reserve(l: SpendLedger, q: ReserveRequest): ReserveDecision {
     const would = (totals.by_route[q.route_id] ?? 0) + est;
     if (would > limit + 1e-9) return refuse("route", limit, would);
   }
-  const wouldMission = totals.mission_committed_usd + est;
+  // THE MISSION CEILINGS READ THE LEDGER PLUS ANY SPEND IT MISSED (the floor).
+  // Without a floor (every ordinary mission) this is exactly the ledger total.
+  const mission = missionCommitted(l);
+  const wouldMission = mission.usd + est;
   if (wouldMission > l.ceilings.mission_provider_usd + 1e-9) {
     return refuse("mission", l.ceilings.mission_provider_usd, wouldMission);
   }
+  // THE CREDIT CEILING: one credit per paid call. Counted on the ledger, which
+  // can only OVER-count credits (a call that never started is refunded by the
+  // credit ledger but still counted here), so it errs towards stopping sooner.
+  const creditLimit = l.ceilings.mission_credits;
+  if (creditLimit != null && mission.paid_calls + 1 > creditLimit) {
+    return refuse("mission_credits", creditLimit, mission.paid_calls + 1);
+  }
+  // SYNCHRONOUS FROM THE CHECK TO THE PUSH. No `await` separates reading the
+  // totals from committing this reservation, so concurrent callers in one
+  // process are serialised by the event loop and cannot both pass a check that
+  // only one of them fits under.
   l.reservations.push(reservation);
   return { ok: true, reservation };
+}
+
+/**
+ * IS THIS MISSION'S BUDGET SPENT? Read by the continuation decision so a run
+ * whose next purchase cannot be afforded stops with `cost_ceiling` instead of
+ * dispatching slices that can only be refused.
+ *
+ * Spent when a MISSION-level ceiling (dollars or credits) has refused a call,
+ * or when the committed total already sits at the ceiling. A call / candidate /
+ * route refusal does not spend the mission: other work may still fit.
+ */
+export function missionBudgetState(l: SpendLedger): {
+  exhausted: boolean;
+  committed_usd: number;
+  limit_usd: number;
+  paid_calls: number;
+  credit_limit: number | null;
+  detail: string;
+} {
+  const m = missionCommitted(l);
+  const limit = l.ceilings.mission_provider_usd;
+  const creditLimit = l.ceilings.mission_credits ?? null;
+  const refusal = [...l.reservations].reverse().find((r) =>
+    r.status === "refused_budget" &&
+    (r.refused_ceiling === "mission" || r.refused_ceiling === "mission_credits"));
+  const atUsd = m.usd >= limit - 1e-9;
+  const atCredits = creditLimit != null && m.paid_calls >= creditLimit;
+  const exhausted = Boolean(refusal) || atUsd || atCredits;
+  const detail = !exhausted
+    ? `$${m.usd} of $${limit} provider spend committed`
+    : refusal
+    ? `the mission ${refusal.refused_ceiling === "mission_credits" ? `credit ceiling (${creditLimit} paid calls)` : `provider ceiling ($${limit})`} ` +
+      `refused the next paid call ($${refusal.estimate_usd} estimated); $${m.usd} committed over ${m.paid_calls} paid call(s)`
+    : atCredits
+    ? `${m.paid_calls} of ${creditLimit} paid calls committed — the mission credit ceiling is reached`
+    : `$${m.usd} of $${limit} provider spend committed — the mission ceiling is reached`;
+  return { exhausted, committed_usd: m.usd, limit_usd: limit, paid_calls: m.paid_calls, credit_limit: creditLimit, detail };
 }
 
 function find(l: SpendLedger, key: string): SpendReservation | undefined {
