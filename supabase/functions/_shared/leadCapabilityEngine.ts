@@ -149,7 +149,7 @@ import {
   capabilityStillOwed, CAPABILITY_STAGE, nextStageFor,
 } from "./leadResumeState.ts";
 import {
-  buildMissionTriageInput, parseMissionTriageStrict, summariseTriage, TRIAGE_BATCH_SIZE,
+  buildMissionTriageInput, paidVerificationBlockedBy, parseMissionTriageStrict, summariseTriage, TRIAGE_BATCH_SIZE,
   triageBatches, uncertainVerdict,
   type MissionTriageInput, type TriageCompanyInput, type TriageVerdict,
 } from "./missionTriage.ts";
@@ -11283,6 +11283,10 @@ export function missionCandidatesFrom(
       graph,
       next_action: null,
       attempted_routes: attemptedRoutesOf(c),
+      // A confident triage `irrelevant` AND a declared media/publishing industry
+      // withhold further PAID verification — never a verdict
+      // (`missionTriage.paidVerificationBlockedBy`).
+      paid_verification_blocked: paidVerificationBlockedBy(c.triage, (c.enriched ?? c.company).provider_industry),
     };
   });
 }
@@ -11358,6 +11362,9 @@ export function canonicallyWorkableKeys(
       continue;
     }
     if (bucket !== "pending") continue;
+    // Nothing more will be bought for it (`verificationTargets` skips it), so
+    // it is not work that should stop discovery from widening.
+    if (c.paid_verification_blocked) continue;
     const gaps = evidenceGapsFor(
       eligibility.checks.filter((x) => x.kind === "hard"), c.graph, undefined,
       new Set(c.attempted_routes ?? []), readiness);

@@ -170,6 +170,8 @@ export interface VerifiableCandidate {
   eligibility: "eligible" | "ineligible" | "pending";
   hard_checks: ReadonlyArray<{ criterion_id: string; dimension: string; result: string; reason: string; value?: unknown }>;
   attempted_routes: readonly string[];
+  /** Set when triage withheld paid verification (`missionTriage.paidVerificationBlockedBy`). */
+  paid_verification_blocked?: string | null;
 }
 
 /**
@@ -202,6 +204,9 @@ export function verificationTargets(
   const out: Array<VerificationTarget & { open: number }> = [];
   for (const c of candidates) {
     if (c.eligibility !== "pending") continue;
+    // TRIAGE CALLED IT IRRELEVANT, CONFIDENTLY: no further purchase. Its verdict
+    // is untouched — it stays PENDING on the evidence it has (`missionTriage`).
+    if (c.paid_verification_blocked) continue;
     const gaps = evidenceGapsFor(c.hard_checks, c.graph, registry, new Set(c.attempted_routes), policy);
     const routes = verifierRouteActors(verifier);
     const mine = gaps.find((g) => g.next === "verify" && !!g.route && routes.includes(g.route.actor));

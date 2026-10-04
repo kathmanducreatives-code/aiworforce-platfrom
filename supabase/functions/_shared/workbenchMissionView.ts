@@ -60,6 +60,12 @@ export interface MissionCandidate {
   next_action?: string | null;
   /** Route actors a claim verifier has already answered through (`claimVerifier`). */
   attempted_routes?: readonly string[];
+  /**
+   * Why no further PAID verification is bought for it, or null
+   * (`missionTriage.paidVerificationBlockedBy`). Never a verdict: the bucket is
+   * computed from evidence exactly as before.
+   */
+  paid_verification_blocked?: string | null;
 }
 
 export interface WorkbenchLead {
@@ -304,6 +310,7 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
     pending: 0, exact_match: 0, strong_opportunity: 0, worth_considering: 0, low_priority: 0, ineligible: 0,
   };
   const leads: WorkbenchLead[] = [];
+  const blockedKeys = new Set(i.candidates.filter((c) => c.paid_verification_blocked).map((c) => c.company_key));
 
   for (const c of i.candidates) {
     const eligibility = evaluateEligibility(i.criteria, c.graph);
@@ -333,7 +340,10 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
       why_surfaced: why,
       key_evidence: keyEvidence(c.graph),
       missing_evidence: reasoned.missing_evidence,
-      caveats: caveatsFor(c.graph, reasoned, eligibility),
+      caveats: bucket === "pending" && c.paid_verification_blocked
+        ? [...caveatsFor(c.graph, reasoned, eligibility),
+          "Not verified further: triage judged it unlikely to fit this mission and its LinkedIn industry is media or publishing, so no more provider spend was made on it."]
+        : caveatsFor(c.graph, reasoned, eligibility),
       evidence_coverage: ceiling.evidence_coverage,
       signal_strength: ceiling.signal_strength,
       next_action: c.next_action ?? null,
@@ -381,7 +391,12 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
     stage: i.stage,
     counts,
     leads,
-    evidence_gaps: summarizeGaps(leads.filter((l) => l.bucket === "pending").map((l) => ({ gaps: l.evidence_gaps }))),
+    // A pending lead whose paid verification triage withheld is not a route a
+    // verification slice could take — the verifiers would refuse to buy for it.
+    evidence_gaps: summarizeGaps(leads.filter((l) => l.bucket === "pending").map((l) => ({
+      gaps: l.evidence_gaps,
+      paid_verification_blocked: blockedKeys.has(l.company.key),
+    }))),
     routes,
     cost: (() => {
       // A caller holding the ledgers passes `missionCostFromLedgers`; the wave

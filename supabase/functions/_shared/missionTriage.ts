@@ -83,6 +83,73 @@ export interface TriageVerdict {
   matched_roles: string[];
 }
 
+// ── PAID VERIFICATION, WITHHELD ONLY WHEN TWO INDEPENDENT SIGNALS AGREE ─────
+//
+// Triage only RANKS (`buildSmartShortlist`; commit a6031b20, canary 2978a5ba):
+// a model verdict alone must never stop a company that is viable on proven
+// evidence — 2978a5ba triaged two companies irrelevant at 0.99 on a misread
+// headcount, on evidence nobody had bought yet and on a soft Brain preference.
+//
+// But with pools of ~10 and an allowance of 10, ranking changed nothing, and the
+// claim verifiers bought Atomus, Pvalyou, job search and Firecrawl for companies
+// that were plainly publications: canaries 3–6 (2026-10-03/04) spent $0.6488 of
+// $1.3688 of verification on 39 companies triage called irrelevant at ≥ 0.9.
+//
+// So paid verification is withheld only when the model AND the company's own
+// LinkedIn industry agree: triage says `irrelevant` at ≥ 0.9, and the industry
+// the company DECLARES is a media, publishing or games category — not software
+// under any reading. Neither signal alone is enough. In those canaries this
+// covers $0.2763 (The Onion, Deadline, Design Milk, Psychology Today, ERE, Digital
+// Trends, Inman, …); consultancies and communities that label themselves
+// "Software Development" are still verified, by design.
+//
+// It decides nothing about the company: the candidate stays exactly where its
+// evidence put it (PENDING stays PENDING, nothing fails), it is still
+// investigated, and it is simply not worth another purchase. `uncertain` never
+// blocks, and neither does a missing or malformed verdict or industry.
+
+/** The confidence at or above which an `irrelevant` verdict may withhold paid verification. */
+export const PAID_VERIFICATION_TRIAGE_CONFIDENCE = 0.9;
+
+/** Prefix of the reason a blocked candidate carries. */
+export const TRIAGE_DEPRIORITIZED = "triage_irrelevant" as const;
+
+/**
+ * LinkedIn industries a company declares that are not software under any
+ * reading: media, publishing, news, content, broadcasting and games. Labels
+ * from the v2 taxonomy (`linkedinIndustryTaxonomy.ts`), plus "Online Media",
+ * which the company-details provider still returns although the v2 CSV dropped
+ * it (The Onion, ERE Media). Lower-case, compared exactly.
+ *
+ * Deliberately NOT here: "Information Services", "Internet Marketplace
+ * Platforms", "Staffing and Recruiting" — each also labels genuine software
+ * companies often enough that it is not a safe corroboration.
+ */
+export const NON_SOFTWARE_INDUSTRIES: ReadonlySet<string> = new Set([
+  "internet publishing", "online media", "online audio and video media", "internet news",
+  "business content", "blogs", "newspaper publishing", "book and periodical publishing",
+  "periodical publishing", "book publishing", "broadcast media production and distribution",
+  "radio and television broadcasting", "media production", "entertainment providers",
+  "computer games",
+]);
+
+/**
+ * Why paid verification is withheld for this company, or null when it is not.
+ * Fail-open: null unless BOTH a confident, well-formed `irrelevant` verdict AND
+ * a declared non-software industry are present.
+ */
+export function paidVerificationBlockedBy(
+  t: Pick<TriageVerdict, "relevance" | "confidence"> | null | undefined,
+  providerIndustry: string | null | undefined,
+): string | null {
+  if (!t || t.relevance !== "irrelevant") return null;
+  const c = t.confidence;
+  if (typeof c !== "number" || !Number.isFinite(c) || c < PAID_VERIFICATION_TRIAGE_CONFIDENCE) return null;
+  const industry = typeof providerIndustry === "string" ? providerIndustry.trim().toLowerCase() : "";
+  if (!NON_SOFTWARE_INDUSTRIES.has(industry)) return null;
+  return `${TRIAGE_DEPRIORITIZED}@${c}+industry:${industry}`;
+}
+
 export interface TriageCompanyInput {
   company_key: string;
   name: string | null;

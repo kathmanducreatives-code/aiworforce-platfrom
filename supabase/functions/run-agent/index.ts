@@ -5148,10 +5148,20 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     graph: cand.graph, eligibility: e.eligibility,
                     hard_checks: e.checks.filter((x) => x.kind === "hard"),
                     attempted_routes: cand.attempted_routes ?? [],
+                    // Triage withheld paid verification: `verificationTargets` skips it.
+                    paid_verification_blocked: cand.paid_verification_blocked ?? null,
                   };
                 });
                 const verifierLog = (event: string, meta?: Record<string, unknown>) =>
                   console.log(`[run-agent][claim-verifier][${event}]`, { task_id: task.id, ...(meta ?? {}) });
+                {
+                  const withheld = vCandidates().filter((c) => c.eligibility === "pending" && c.paid_verification_blocked);
+                  if (withheld.length > 0) {
+                    verifierLog("triage_withheld_paid_verification", {
+                      companies: withheld.map((c) => ({ company_key: c.company_key, reason: c.paid_verification_blocked })),
+                    });
+                  }
+                }
                 const unavailable = (actorKey: string) => unavailableProvider(vState.unavailable_providers, actorKey,
                   leadReadiness.decide(actorKey, "funding_verification").readiness, readEnvSafe) !== null;
                 const businessModel = businessModelVerifier({
