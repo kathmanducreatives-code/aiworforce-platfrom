@@ -1,0 +1,33 @@
+{
+  "fixture": "canary9230df70.verifier-progress",
+  "schema": "lead-v2-replay-fixture-v1",
+  "provenance": {
+    "environment": "production",
+    "task_id": "9230df70",
+    "sources": [
+      "Railway worker logs (auto-continuation decisions, barren_slices, claim_progress) for task 9230df70, 2026-10-03, as recorded in tests/edge-functions/_shared/verifierProgressNotBarren.test.ts (PR #15)",
+      "the task row is no longer in the production database; the counters are the logged ones"
+    ],
+    "sanitization": ["counters only — no company data"]
+  },
+  "mission": {},
+  "ceilings": {"per_call_usd": {}, "per_route_usd": {}, "mission_model_usd": 0.4, "adaptive_reserve_usd": 0.3, "mission_provider_usd": 2, "per_candidate_evidence_usd": 0.06},
+  "ledger_reservations": [],
+  "checkpoints": {},
+  "provider_responses": [],
+  "anchors": {
+    "as_it_ran": {"decisions": ["awaiting_provider_run", "replenishment_required", "awaiting_provider_run", "awaiting_provider_run", "no_progress"], "barren": [0, 1, 0, 1, 2]}
+  },
+  "slices": [
+    {"label": "1: page 1",             "investigated": 10, "decided": 10, "costUnits": 2, "claimProgress": 22, "pendingRuns": 2, "verifiable": 0, "page": 1},
+    {"label": "2: verify page 1",      "investigated": 10, "decided": 10, "costUnits": 2, "claimProgress": 34, "pendingRuns": 0, "verifiable": 0, "page": null},
+    {"label": "3: page 2",             "investigated": 19, "decided": 19, "costUnits": 4, "claimProgress": 58, "pendingRuns": 3, "verifiable": 0, "page": 2},
+    {"label": "4: verify page 2",      "investigated": 19, "decided": 19, "costUnits": 4, "claimProgress": 69, "pendingRuns": 1, "verifiable": 0, "page": null},
+    {"label": "5: adopt last Pvalyou", "investigated": 19, "decided": 19, "costUnits": 4, "claimProgress": 71, "pendingRuns": 0, "verifiable": 0, "page": null}
+  ],
+  "expected": {
+    "decisions": ["awaiting_provider_run", "replenishment_required", "awaiting_provider_run", "awaiting_provider_run", "replenishment_required"],
+    "barren": [0, 0, 0, 0, 0],
+    "final": "replenishment_required — slice 6 widens to page 3"
+  }
+}
