@@ -247,6 +247,32 @@ export function callCeilingFor(c: Ceilings, purpose: CallPurpose, routeAnchor?: 
 }
 
 /**
+ * The `candidate` ceiling's verdict on a call: the first company whose evidence
+ * spend plus its share of this call's estimate would pass
+ * `per_candidate_evidence_usd`, or null when every company fits.
+ *
+ * `reserve` refuses with exactly this. It is exported so a caller can ask the
+ * ledger's own question before buying (`claimVerifier.ledgerAffordability`):
+ * same rounding, same share, same tolerance — equality fits.
+ */
+export function candidateCeilingRefusal(
+  l: SpendLedger,
+  q: Pick<ReserveRequest, "purpose" | "candidate_keys" | "estimate_usd">,
+  totals: ReturnType<typeof spendTotals> = spendTotals(l),
+): { company_key: string; spent_usd: number; limit_usd: number; would_commit_usd: number } | null {
+  const candidates = q.candidate_keys ?? [];
+  if (!CANDIDATE_EVIDENCE.has(q.purpose) || !candidates.length) return null;
+  const share = round4(q.estimate_usd) / candidates.length;
+  const limit = l.ceilings.per_candidate_evidence_usd;
+  for (const k of candidates) {
+    const spent = totals.by_candidate[k] ?? 0;
+    const would = spent + share;
+    if (would > limit + 1e-9) return { company_key: k, spent_usd: spent, limit_usd: limit, would_commit_usd: would };
+  }
+  return null;
+}
+
+/**
  * Reserve a call against every ceiling, or refuse it.
  *
  * Idempotent: a key already reserved, executed or settled is returned as-is
@@ -274,15 +300,8 @@ export function reserve(l: SpendLedger, q: ReserveRequest): ReserveDecision {
   if (est > callLimit + 1e-9) return refuse("call", callLimit, est);
 
   const totals = spendTotals(l);
-  if (CANDIDATE_EVIDENCE.has(q.purpose) && candidates.length) {
-    const share = est / candidates.length;
-    for (const k of candidates) {
-      const would = (totals.by_candidate[k] ?? 0) + share;
-      if (would > l.ceilings.per_candidate_evidence_usd + 1e-9) {
-        return refuse("candidate", l.ceilings.per_candidate_evidence_usd, would);
-      }
-    }
-  }
+  const overCandidate = candidateCeilingRefusal(l, { purpose: q.purpose, candidate_keys: candidates, estimate_usd: est }, totals);
+  if (overCandidate) return refuse("candidate", overCandidate.limit_usd, overCandidate.would_commit_usd);
   if (q.route_id && q.route_anchor && l.ceilings.per_route_usd[q.route_anchor] != null) {
     const limit = l.ceilings.per_route_usd[q.route_anchor];
     const would = (totals.by_route[q.route_id] ?? 0) + est;

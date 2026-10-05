@@ -248,7 +248,7 @@ import { ACTOR_READINESS, readinessOf } from "./actorIntelligence.ts";
 import { PRODUCTION_READINESS, routeActorReady, type ReadinessPolicy } from "./routeReadiness.ts";
 import { markProviderUnavailable, unavailableProvider, type UnavailableProvider } from "./providerAvailability.ts";
 import {
-  attemptedRoutes, verifyOpKey, type ClaimVerifier, type PendingVerifierRun, type VerificationTarget,
+  attemptedRoutes, unaffordableOpKey, unaffordableRoutes, verifyOpKey, type ClaimVerifier, type PendingVerifierRun, type VerificationTarget,
   type VerifierFinding,
 } from "./claimVerifier.ts";
 import { atomusInput, FUNDING_STAGE_VERIFIER_KEY } from "./fundingStageVerifier.ts";
@@ -11283,6 +11283,7 @@ export function missionCandidatesFrom(
       graph,
       next_action: null,
       attempted_routes: attemptedRoutesOf(c),
+      unaffordable_routes: unaffordableRoutes(c.completed_operations),
       // A confident triage `irrelevant` AND a declared media/publishing industry
       // withhold further PAID verification — never a verdict
       // (`missionTriage.paidVerificationBlockedBy`).
@@ -11367,7 +11368,7 @@ export function canonicallyWorkableKeys(
     if (c.paid_verification_blocked) continue;
     const gaps = evidenceGapsFor(
       eligibility.checks.filter((x) => x.kind === "hard"), c.graph, undefined,
-      new Set(c.attempted_routes ?? []), readiness);
+      new Set(c.attempted_routes ?? []), readiness, new Set(c.unaffordable_routes ?? []));
     if (canStillQualify(gaps)) out.add(c.company_key);
   }
   return out;
@@ -11541,6 +11542,17 @@ export function applyVerifierFinding(
     }
   }
   return recorded;
+}
+
+/**
+ * This company's evidence budget can no longer pay for a verifier's route
+ * (`claimVerificationPhase`). Marked on the company like an answered route, so
+ * the gap router, `canonicallyWorkableKeys` and continuation all stop counting
+ * the route as one a slice could take.
+ */
+export function markRouteUnaffordable(c: EngineCompany, verifier: Pick<ClaimVerifier, "route_actor">): void {
+  const op = unaffordableOpKey(verifier.route_actor);
+  if (!c.completed_operations.includes(op)) c.completed_operations.push(op);
 }
 
 /**

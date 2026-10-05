@@ -32,12 +32,22 @@
 //     cheapest-first only means something if the cheap answer arrives first.
 //     Canary 4a0611b0: Pvalyou outlived the call's wait, the phase moved on,
 //     and both companies got a job search while their funding was still open.
+//   * A company whose PER-COMPANY evidence budget cannot cover an
+//     all-or-nothing verifier's call for it is left out of its batch and the
+//     route is marked unaffordable for it, so the gap router — and through it
+//     continuation — stops calling it verifiable. Canary 7 (1303e533): the
+//     ledger refused LlamaIndex's job search on two slices running while
+//     continuation kept asking for exactly that verification.
+//     The call is priced by COMPILING it and asking the ledger's own candidate
+//     check (`ledgerAffordability`) — the estimate `reserve` will be handed,
+//     never the verifier's raw ordering estimate. Canary 8 (c01d28d8): the raw
+//     $0.121 blocked LlamaIndex ($0.0098 spent) from a $0.049 job search.
 //
 // Pure orchestration; every effect is an injected function.
 
 import {
-  verificationTargets, type ClaimVerifier, type PendingVerifierRun, type VerifiableCandidate,
-  type VerifierDeps, type VerifierFinding,
+  verificationTargets, type AffordabilityDecision, type ClaimVerifier, type PendingVerifierRun,
+  type VerifiableCandidate, type VerificationTarget, type VerifierCall, type VerifierDeps, type VerifierFinding,
 } from "./claimVerifier.ts";
 import { CLAIM_REGISTRY, type ClaimDefinition } from "./evidenceGapRouter.ts";
 import { PRODUCTION_READINESS, type ReadinessPolicy, routeActorReady } from "./routeReadiness.ts";
@@ -68,6 +78,15 @@ export interface VerificationPhaseInput {
   pending: readonly PendingVerifierRun[];
   /** The engine writes a finding onto its company. */
   apply: (finding: VerifierFinding, verifier: ClaimVerifier) => boolean;
+  /**
+   * Would the ledger reserve this call? `ledgerAffordability` over the SAME
+   * spec compiler and ledger `deps.call` uses, so the answer is the one
+   * `reserve` will give. Absent or null: not judged here — the ledger still
+   * refuses at purchase.
+   */
+  affordability?: (call: VerifierCall) => AffordabilityDecision | null;
+  /** Record on the company that this verifier's route is unaffordable for it (`unaffordableOpKey`). */
+  markUnaffordable?: (companyKey: string, verifier: ClaimVerifier) => void;
   registry?: readonly ClaimDefinition[];
   /**
    * The mission's claim plan. A verifier whose route answers no HARD claim of
@@ -90,6 +109,8 @@ export interface VerificationPhaseReport {
   held: string[];
   /** Verifiers the claim plan made irrelevant: no hard claim they answer. */
   irrelevant: string[];
+  /** Companies left out of a verifier because their evidence budget cannot cover its compiled call. */
+  unaffordable?: Array<{ verifier: string; company_key: string; spent_usd: number; estimate_usd: number; limit_usd: number }>;
   pending: PendingVerifierRun[];
   changed: number;
 }
@@ -118,11 +139,29 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
     return routeOf(v, registry)?.cost_hint_usd ?? Infinity;
   };
   const ordered = [...i.verifiers].sort((a, b) => costOf(a) - costOf(b));
+  const unaffordable: NonNullable<VerificationPhaseReport["unaffordable"]> = [];
   const report: VerificationPhaseReport = {
     version: CLAIM_VERIFICATION_PHASE_VERSION, order: ordered.map((v) => v.key),
     order_estimates: Object.fromEntries(ordered.map((v) => [v.key, Number.isFinite(costOf(v)) ? costOf(v) : null])),
     ran: [], stopped: null, held: [],
-    irrelevant: [], pending: [], changed: 0,
+    irrelevant: [], unaffordable, pending: [], changed: 0,
+  };
+  // CAN THIS COMPANY'S EVIDENCE BUDGET STILL PAY FOR ASKING ABOUT IT ALONE?
+  // Only asked of an all-or-nothing verifier, of the call it would send for
+  // this one company, compiled and checked exactly as `reserve` will. A batch
+  // only lowers each company's share, so a company that fits alone fits in any
+  // batch. A spec refused for readiness or its call ceiling is not judged here
+  // (null): the call path refuses it, and nothing is marked.
+  const affordable = (v: ClaimVerifier, t: VerificationTarget): boolean => {
+    if (!v.all_or_nothing_per_target || !v.call_for || !i.affordability) return true;
+    const call = v.call_for([t]);
+    const d = call ? i.affordability(call) : null;
+    if (!d || d.ok) return true;
+    unaffordable.push({
+      verifier: v.key, company_key: t.company_key, spent_usd: d.spent_usd, estimate_usd: d.estimate_usd, limit_usd: d.limit_usd,
+    });
+    i.markUnaffordable?.(t.company_key, v);
+    return false;
   };
   // IN FLIGHT: runs earlier slices started whose verifier has not adopted them
   // yet this slice, plus every run still pending after this slice's verifiers.
@@ -146,7 +185,13 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
     // `mine`), but only another verifier's run counts as a hold in the report.
     const held = inFlight();
     const own = new Set(mine.flatMap((r) => r.candidate_keys));
-    const targets = need <= 0 ? [] : verificationTargets(verifier, i.candidates(), i.criteriaValue, registry, policy, i.criteriaWindow)
+    // Unaffordable companies are dropped BEFORE the verifier's own bound, so
+    // they never take a slot an affordable company could have used.
+    const targets = need <= 0 ? [] : verificationTargets(
+      { ...verifier, max_targets: Number.MAX_SAFE_INTEGER }, i.candidates(), i.criteriaValue, registry, policy, i.criteriaWindow,
+    )
+      .filter((t) => affordable(verifier, t))
+      .slice(0, Math.max(0, verifier.max_targets))
       .filter((t) => {
         if (!held.has(t.company_key)) return true;
         if (!own.has(t.company_key) && !report.held.includes(t.company_key)) report.held.push(t.company_key);
@@ -187,6 +232,7 @@ export async function runClaimVerificationPhase(i: VerificationPhaseInput): Prom
     });
   }
   if (report.held.length > 0) log("verification_held_in_flight", { companies: report.held, pending_runs: report.pending.length });
+  if (unaffordable.length > 0) log("verification_unaffordable", { companies: unaffordable });
   if (report.stopped) log("verification_stopped", { reason: report.stopped, qualified: i.qualified(), requested: i.requested_count });
   return report;
 }

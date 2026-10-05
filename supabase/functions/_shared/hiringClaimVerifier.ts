@@ -28,7 +28,7 @@
 //
 // Pure apart from `deps.call`.
 
-import type { ClaimVerifier, VerificationTarget, VerifierDeps, VerifierFinding } from "./claimVerifier.ts";
+import type { ClaimVerifier, VerificationTarget, VerifierCall, VerifierDeps, VerifierFinding } from "./claimVerifier.ts";
 import type { EvidenceItem } from "./candidateObservation.ts";
 import { EVIDENCE_VALIDITY_DAYS } from "./candidateObservation.ts";
 import { authorityForEvidence, authorityRecord } from "./evidenceAuthority.ts";
@@ -78,7 +78,13 @@ export function hiringVerifierInput(io: Pick<HiringVerifierIO, "titles" | "windo
   return r.ok === false || !r.input ? null : r.input;
 }
 
-/** The card's price for asking about ONE company with these titles — the ordering estimate. */
+/**
+ * The card's price for asking about ONE company with these titles — the
+ * ordering estimate, from the RAW input. Not what the ledger reserves: the spec
+ * compiler clamps the rows to the call ceiling, so this can be several times
+ * the compiled estimate ($0.121 vs $0.049 for 12 titles). Affordability never
+ * reads it (`claimVerifier.ledgerAffordability`).
+ */
 export function hiringEstimatePerTargetUsd(io: Pick<HiringVerifierIO, "titles" | "window_days">): number | null {
   const input = hiringVerifierInput(io, ["https://www.linkedin.com/company/estimate"]);
   const card = hiringActorCard(HIRING_ROUTE_ACTOR);
@@ -125,6 +131,25 @@ function openRoleItem(t: VerificationTarget, jobs: NormalizedHiringJob[], io: Hi
   } as EvidenceItem;
 }
 
+/** The targets a job search can ask about: a company is asked by its LinkedIn page; one without it cannot be. */
+function askable(targets: readonly VerificationTarget[]): Array<{ t: VerificationTarget; url: string }> {
+  return targets
+    .map((t) => ({ t, url: normalizeCompanyLinkedInUrl(t.linkedin_url) }))
+    .filter((x): x is { t: VerificationTarget; url: string } => !!x.url);
+}
+
+/** The one job search for these companies — what `verify` sends and what the phase prices. */
+function hiringCall(io: Pick<HiringVerifierIO, "titles" | "window_days">,
+  asked: ReadonlyArray<{ t: VerificationTarget; url: string }>): VerifierCall | null {
+  if (asked.length === 0 || io.titles.length === 0) return null;
+  const input = hiringVerifierInput(io, asked.map((x) => x.url));
+  if (!input) return null;
+  return {
+    actor_key: HIRING_ROUTE_ACTOR, capability: "hiring_verification", input,
+    candidate_keys: asked.map((x) => x.t.company_key), purpose: "hiring_evidence",
+  };
+}
+
 export function hiringClaimVerifier(io: HiringVerifierIO): ClaimVerifier & { estimate_per_target_usd: () => number | null } {
   return {
     key: HIRING_CLAIM_VERIFIER_KEY,
@@ -132,25 +157,25 @@ export function hiringClaimVerifier(io: HiringVerifierIO): ClaimVerifier & { est
     route_actor: HIRING_ROUTE_ACTOR,
     max_targets: HIRING_MAX_TARGETS,
     estimate_per_target_usd: () => hiringEstimatePerTargetUsd(io),
+    // One job search per batch, and a company is answered only if it runs: a
+    // company its evidence budget cannot cover is left out, not allowed to get
+    // the whole batch refused (`claimVerificationPhase`). Priced from the
+    // compiled `call_for`, never from `estimate_per_target_usd`.
+    all_or_nothing_per_target: true,
+    call_for: (targets) => hiringCall(io, askable(targets)),
     async verify(targets, deps: VerifierDeps, ctx) {
       const findings: VerifierFinding[] = [];
       if (targets.length === 0 || io.titles.length === 0 || !deps.ready(HIRING_ROUTE_ACTOR)) {
         return { findings, pending: [] };
       }
-      // A company is asked about by its LinkedIn page; one without it cannot be.
-      const asked = targets
-        .map((t) => ({ t, url: normalizeCompanyLinkedInUrl(t.linkedin_url) }))
-        .filter((x): x is { t: VerificationTarget; url: string } => !!x.url);
+      const asked = askable(targets);
       if (asked.length === 0) return { findings, pending: [] };
-      const input = hiringVerifierInput(io, asked.map((x) => x.url));
-      if (!input) {
+      const call = hiringCall(io, asked);
+      if (!call) {
         deps.log("hiring_verifier_input_refused", { companies: asked.length });
         return { findings, pending: [] };
       }
-      const out = await deps.call({
-        actor_key: HIRING_ROUTE_ACTOR, capability: "hiring_verification", input,
-        candidate_keys: asked.map((x) => x.t.company_key), purpose: "hiring_evidence",
-      });
+      const out = await deps.call(call);
       if (out.status !== "ok") {
         // Refused (budget, readiness), failed, or still running: nothing is
         // marked answered, so the gap stays open for a later slice.
