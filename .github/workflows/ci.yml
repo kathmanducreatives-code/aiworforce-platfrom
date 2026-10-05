@@ -64,6 +64,15 @@ jobs:
       - name: Deploy-safety tests
         run: deno test --allow-read --allow-env --allow-run tests/infra/
 
+      - name: Lead V2 readiness (offline Replay Lab)
+        # Production canaries replayed from sanitized fixtures, the golden
+        # missions, and the claim / provider-spec / budget / continuation
+        # invariants — with no network permission. Fails unless every category
+        # passes: "SAFE FOR PRODUCTION SMOKE: YES".
+        run: |
+          deno check tests/replay/lib/*.ts
+          npm run -s test:lead-v2-readiness
+
       - name: QA harness tests
         run: |
           deno test --allow-read --allow-env scripts/lead-quality-benchmark/

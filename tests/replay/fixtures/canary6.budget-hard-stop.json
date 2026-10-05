@@ -1,0 +1,42 @@
+{
+  "fixture": "canary6.budget-hard-stop",
+  "schema": "lead-v2-replay-fixture-v1",
+  "provenance": {
+    "environment": "production",
+    "task_id": "3f945ff4-c3e2-4081-9404-b4bd89ac9930",
+    "sources": [
+      "tasks.result.capability_execution_state.spend_ledger (ceilings, floor, reservations in order, refused included)",
+      "lead_mission_events call_refused_budget (6) for the lineage, 2026-10-04 08:04:36–37Z",
+      "Railway variables at the time: LEAD_V2_MISSION_PROVIDER_USD_CAP=0.10, LEAD_V2_MISSION_CREDIT_CAP=40, cap workspace = the canary workspace"
+    ],
+    "sanitization": ["workspace id replaced", "idempotency keys truncated to 16 chars", "no credentials"]
+  },
+  "mission": {},
+  "env": {"LEAD_V2_MISSION_PROVIDER_USD_CAP": "0.10", "LEAD_V2_MISSION_CREDIT_CAP": "40", "LEAD_V2_MISSION_CAP_WORKSPACES": "<workspace>"},
+  "ceilings": {"per_call_usd":{"people":0.1,"identity":0.03,"enrichment":0.05,"web_evidence":0.01,"news_evidence":0.05,"hiring_evidence":0.05,"funding_evidence":0.05,"team_composition":0.03,"technology_evidence":0.05},"per_route_usd":{"hiring":0.1,"funding":0.1,"company_profile":0.1},"mission_credits":40,"mission_model_usd":0.4,"adaptive_reserve_usd":0.3,"mission_provider_usd":0.1,"per_candidate_evidence_usd":0.06},
+  "ledger_reservations": [],
+  "checkpoints": {},
+  "provider_responses": [],
+  "requests": [
+    {"key":"aa9b2472896ebdf1","purpose":"discovery","route_id":"general_company_discovery:apify_linkedin_company_search","route_anchor":"company_profile","estimate_usd":0.041,"candidate_keys":[],"settled_usd":0.041,"actor":"apify_linkedin_company_search"},
+    {"key":"4eb24ba49e9b86a1","purpose":"enrichment","route_id":null,"estimate_usd":0.0361,"candidate_keys":[],"settled_usd":0.0361,"actor":"apify_linkedin_company_details"},
+    {"key":"b1b8ca7a3d57f269","purpose":"funding_evidence","route_id":null,"estimate_usd":0.0211,"candidate_keys":["https://www.linkedin.com/company/bytebytego","https://www.linkedin.com/company/crewai-inc","https://www.linkedin.com/company/design-milk","https://www.linkedin.com/company/front-office-sports","https://www.linkedin.com/company/how-to-ai-guide","https://www.linkedin.com/company/inman-news"],"settled_usd":0.0211,"actor":"apify_funding_atomus"},
+    {"key":"392ba58b9cc4591f","purpose":"funding_evidence","route_id":null,"estimate_usd":0.0401,"candidate_keys":["https://www.linkedin.com/company/bytebytego","https://www.linkedin.com/company/design-milk"],"actor":"apify_funding_pvalyou"},
+    {"key":"864d6ee66758354b","purpose":"funding_evidence","route_id":null,"estimate_usd":0.0401,"candidate_keys":["https://www.linkedin.com/company/how-to-ai-guide","https://www.linkedin.com/company/inman-news"],"actor":"apify_funding_pvalyou"},
+    {"key":"ff165e9dbf2ffc30","purpose":"web_evidence","route_id":null,"estimate_usd":0.0063,"candidate_keys":["https://www.linkedin.com/company/crewai-inc"],"actor":"firecrawl_map"},
+    {"key":"1e08ef1d9d13b19e","purpose":"web_evidence","route_id":null,"estimate_usd":0.0063,"candidate_keys":["https://www.linkedin.com/company/jobright-ai"],"actor":"firecrawl_map"},
+    {"key":"a14c75357d9a22a0","purpose":"web_evidence","route_id":null,"estimate_usd":0.0063,"candidate_keys":["https://www.linkedin.com/company/nielsen-norman-group"],"actor":"firecrawl_map"},
+    {"key":"f05dfd1cce200959","purpose":"web_evidence","route_id":null,"estimate_usd":0.0063,"candidate_keys":["https://www.linkedin.com/company/venturebeat"],"actor":"firecrawl_map"}
+  ],
+  "anchors": {
+    "statuses": ["settled","settled","settled","refused_budget","refused_budget","refused_budget","refused_budget","refused_budget","refused_budget"],
+    "refusals_would_commit_usd": [0.1383, 0.1383, 0.1045, 0.1045, 0.1045, 0.1045],
+    "committed_usd": 0.0982,
+    "terminal": "budget_exhausted"
+  },
+  "expected": {
+    "first_refused_index": 3,
+    "committed_never_exceeds_usd": 0.1,
+    "continuation": "cost_ceiling"
+  }
+}

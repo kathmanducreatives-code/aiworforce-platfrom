@@ -1,0 +1,1321 @@
+{
+ "fixture": "canary98ce374b.replenishment",
+ "schema": "lead-v2-replay-fixture-v1",
+ "provenance": {
+  "environment": "production",
+  "task_id": "98ce374b",
+  "sources": [
+   "the canary's compiled mission (tests/fixtures/lead-v2/canary-98ce374b-mission.json, stored from the card)",
+   "Railway worker logs 2026-10-03: page 1 = 10 LinkedIn company-search rows, US, 11\u201350, industry 'Software Development'; funding pair answered every company with nothing decisive; page 2 proposed and `not_taken` (admitted_target_met), two barren slices \u2192 no_progress \u2192 search_exhausted",
+   "company rows are reconstructed in the canary's shape (names anonymised first-N / second-N); the task row is no longer in the production database"
+  ],
+  "sanitization": [
+   "company names anonymised",
+   "no credentials"
+  ]
+ },
+ "mission": {},
+ "mission_ref": "tests/fixtures/lead-v2/canary-98ce374b-mission.json",
+ "ceilings": {
+  "per_call_usd": {},
+  "per_route_usd": {},
+  "mission_model_usd": 0.4,
+  "adaptive_reserve_usd": 0.3,
+  "mission_provider_usd": 2,
+  "per_candidate_evidence_usd": 0.06
+ },
+ "ledger_reservations": [],
+ "checkpoints": {},
+ "engine": {
+  "readiness": "production",
+  "max_candidates": 40,
+  "remaining_leads": 1,
+  "model_responses": {
+   "plan_execution": {
+    "reasoning": "replay 98ce374b",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "actor_key": "apify_linkedin_company_search",
+      "purpose": "profile discovery",
+      "input": {
+       "scraperMode": "full",
+       "maxItems": 10,
+       "locations": [
+        "United States"
+       ],
+       "industryIds": [
+        "4",
+        "6"
+       ],
+       "companySize": [
+        "11-50"
+       ],
+       "startPage": 1,
+       "takePages": 5
+      },
+      "depends_on": []
+     },
+     {
+      "capability": "company_identity_resolution",
+      "actor_key": "apify_linkedin_company_search",
+      "purpose": "only without a page",
+      "input": {
+       "searchQuery": "{{name}}",
+       "maxItems": 5
+      },
+      "depends_on": [
+       1
+      ]
+     },
+     {
+      "capability": "company_enrichment",
+      "actor_key": "apify_linkedin_company_details",
+      "purpose": "details",
+      "input": {
+       "companies": [
+        "{{url}}"
+       ]
+      },
+      "depends_on": [
+       2
+      ]
+     },
+     {
+      "capability": "company_brain_qualification",
+      "actor_key": null,
+      "purpose": "qualify",
+      "input": {},
+      "depends_on": [
+       3
+      ]
+     },
+     {
+      "capability": "hiring_verification",
+      "actor_key": "apify_linkedin_job_search",
+      "purpose": "open roles",
+      "input": {
+       "company": [
+        "{{url}}"
+       ],
+       "jobTitles": [
+        "sales"
+       ]
+      },
+      "depends_on": [
+       3
+      ]
+     },
+     {
+      "capability": "persistence",
+      "actor_key": null,
+      "purpose": "save",
+      "input": {},
+      "depends_on": [
+       4
+      ]
+     }
+    ]
+   },
+   "plan_discovery": [
+    {
+     "actor_key": "apify_linkedin_company_search",
+     "role": "primary",
+     "input": {
+      "scraperMode": "full",
+      "maxItems": 10,
+      "locations": [
+       "United States"
+      ],
+      "industryIds": [
+       "4",
+       "6"
+      ],
+      "companySize": [
+       "11-50"
+      ],
+      "startPage": 1,
+      "takePages": 5
+     }
+    }
+   ],
+   "evaluate_mission": {
+    "mission_fit": "pass"
+   }
+  }
+ },
+ "provider_responses": [
+  {
+   "actor": "apify_linkedin_company_search",
+   "input_match": {
+    "startPage": 1,
+    "searchQuery": null
+   },
+   "rows": [
+    {
+     "id": "first-0",
+     "name": "first-0",
+     "linkedinUrl": "https://www.linkedin.com/company/first-0/",
+     "website": "https://first-0.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "first-1",
+     "name": "first-1",
+     "linkedinUrl": "https://www.linkedin.com/company/first-1/",
+     "website": "https://first-1.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "first-2",
+     "name": "first-2",
+     "linkedinUrl": "https://www.linkedin.com/company/first-2/",
+     "website": "https://first-2.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "first-3",
+     "name": "first-3",
+     "linkedinUrl": "https://www.linkedin.com/company/first-3/",
+     "website": "https://first-3.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "first-4",
+     "name": "first-4",
+     "linkedinUrl": "https://www.linkedin.com/company/first-4/",
+     "website": "https://first-4.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "first-5",
+     "name": "first-5",
+     "linkedinUrl": "https://www.linkedin.com/company/first-5/",
+     "website": "https://first-5.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "first-6",
+     "name": "first-6",
+     "linkedinUrl": "https://www.linkedin.com/company/first-6/",
+     "website": "https://first-6.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "first-7",
+     "name": "first-7",
+     "linkedinUrl": "https://www.linkedin.com/company/first-7/",
+     "website": "https://first-7.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "first-8",
+     "name": "first-8",
+     "linkedinUrl": "https://www.linkedin.com/company/first-8/",
+     "website": "https://first-8.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "first-9",
+     "name": "first-9",
+     "linkedinUrl": "https://www.linkedin.com/company/first-9/",
+     "website": "https://first-9.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    }
+   ],
+   "provenance": "page 1: the canary's ten (shape as logged)"
+  },
+  {
+   "actor": "apify_linkedin_company_search",
+   "input_match": {
+    "startPage": 2,
+    "searchQuery": null
+   },
+   "rows": [
+    {
+     "id": "second-0",
+     "name": "second-0",
+     "linkedinUrl": "https://www.linkedin.com/company/second-0/",
+     "website": "https://second-0.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "second-1",
+     "name": "second-1",
+     "linkedinUrl": "https://www.linkedin.com/company/second-1/",
+     "website": "https://second-1.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "second-2",
+     "name": "second-2",
+     "linkedinUrl": "https://www.linkedin.com/company/second-2/",
+     "website": "https://second-2.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "second-3",
+     "name": "second-3",
+     "linkedinUrl": "https://www.linkedin.com/company/second-3/",
+     "website": "https://second-3.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "second-4",
+     "name": "second-4",
+     "linkedinUrl": "https://www.linkedin.com/company/second-4/",
+     "website": "https://second-4.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "second-5",
+     "name": "second-5",
+     "linkedinUrl": "https://www.linkedin.com/company/second-5/",
+     "website": "https://second-5.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "second-6",
+     "name": "second-6",
+     "linkedinUrl": "https://www.linkedin.com/company/second-6/",
+     "website": "https://second-6.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "second-7",
+     "name": "second-7",
+     "linkedinUrl": "https://www.linkedin.com/company/second-7/",
+     "website": "https://second-7.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "second-8",
+     "name": "second-8",
+     "linkedinUrl": "https://www.linkedin.com/company/second-8/",
+     "website": "https://second-8.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    },
+    {
+     "id": "second-9",
+     "name": "second-9",
+     "linkedinUrl": "https://www.linkedin.com/company/second-9/",
+     "website": "https://second-9.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ]
+    }
+   ],
+   "provenance": "page 2: ten companies the lineage never saw"
+  },
+  {
+   "actor": "apify_linkedin_company_search",
+   "input_match": {
+    "startPage": null
+   },
+   "rows": [],
+   "provenance": "identity search by name: never needed \u2014 every row carries its LinkedIn page"
+  },
+  {
+   "actor": "apify_linkedin_company_details",
+   "select": {
+    "input_field": "companies",
+    "row_field": "linkedinUrl"
+   },
+   "rows": [
+    {
+     "id": "first-0",
+     "name": "first-0",
+     "linkedinUrl": "https://www.linkedin.com/company/first-0",
+     "website": "https://first-0.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "first-1",
+     "name": "first-1",
+     "linkedinUrl": "https://www.linkedin.com/company/first-1",
+     "website": "https://first-1.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "first-2",
+     "name": "first-2",
+     "linkedinUrl": "https://www.linkedin.com/company/first-2",
+     "website": "https://first-2.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "first-3",
+     "name": "first-3",
+     "linkedinUrl": "https://www.linkedin.com/company/first-3",
+     "website": "https://first-3.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "first-4",
+     "name": "first-4",
+     "linkedinUrl": "https://www.linkedin.com/company/first-4",
+     "website": "https://first-4.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "first-5",
+     "name": "first-5",
+     "linkedinUrl": "https://www.linkedin.com/company/first-5",
+     "website": "https://first-5.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "first-6",
+     "name": "first-6",
+     "linkedinUrl": "https://www.linkedin.com/company/first-6",
+     "website": "https://first-6.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "first-7",
+     "name": "first-7",
+     "linkedinUrl": "https://www.linkedin.com/company/first-7",
+     "website": "https://first-7.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "first-8",
+     "name": "first-8",
+     "linkedinUrl": "https://www.linkedin.com/company/first-8",
+     "website": "https://first-8.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "first-9",
+     "name": "first-9",
+     "linkedinUrl": "https://www.linkedin.com/company/first-9",
+     "website": "https://first-9.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "second-0",
+     "name": "second-0",
+     "linkedinUrl": "https://www.linkedin.com/company/second-0",
+     "website": "https://second-0.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "second-1",
+     "name": "second-1",
+     "linkedinUrl": "https://www.linkedin.com/company/second-1",
+     "website": "https://second-1.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "second-2",
+     "name": "second-2",
+     "linkedinUrl": "https://www.linkedin.com/company/second-2",
+     "website": "https://second-2.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "second-3",
+     "name": "second-3",
+     "linkedinUrl": "https://www.linkedin.com/company/second-3",
+     "website": "https://second-3.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "second-4",
+     "name": "second-4",
+     "linkedinUrl": "https://www.linkedin.com/company/second-4",
+     "website": "https://second-4.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "second-5",
+     "name": "second-5",
+     "linkedinUrl": "https://www.linkedin.com/company/second-5",
+     "website": "https://second-5.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "second-6",
+     "name": "second-6",
+     "linkedinUrl": "https://www.linkedin.com/company/second-6",
+     "website": "https://second-6.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "second-7",
+     "name": "second-7",
+     "linkedinUrl": "https://www.linkedin.com/company/second-7",
+     "website": "https://second-7.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "second-8",
+     "name": "second-8",
+     "linkedinUrl": "https://www.linkedin.com/company/second-8",
+     "website": "https://second-8.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    },
+    {
+     "id": "second-9",
+     "name": "second-9",
+     "linkedinUrl": "https://www.linkedin.com/company/second-9",
+     "website": "https://second-9.com",
+     "employeeCountRange": {
+      "start": 11,
+      "end": 50
+     },
+     "employeeCount": 30,
+     "industries": [
+      {
+       "id": 4,
+       "name": "Software Development"
+      }
+     ],
+     "locations": [
+      {
+       "parsed": {
+        "text": "Austin, TX, United States",
+        "countryFull": "United States"
+       },
+       "country": "US",
+       "headquarter": true
+      }
+     ],
+     "description": "We build software."
+    }
+   ],
+   "provenance": "company records inside the band and the country; an industry that neither shows nor rules out SaaS"
+  },
+  {
+   "actor": "apify_linkedin_job_search",
+   "rows": [],
+   "provenance": "must never be called by the engine for a HARD hiring claim (the verifier owns it)"
+  }
+ ],
+ "anchors": {
+  "as_it_ran": {
+   "page_2_taken": false,
+   "stop": "no_progress",
+   "terminal": "search_exhausted"
+  }
+ },
+ "verify_marks_after_slice_2": [
+  "verify:apify_funding_atomus",
+  "verify:apify_funding_pvalyou"
+ ],
+ "expected": {
+  "slice1": {
+   "searches": 1,
+   "companies": 10,
+   "job_searches": 0
+  },
+  "after_funding_answered_nothing": {
+   "with_executable_route": 0,
+   "pending": 10,
+   "workable": 0,
+   "continuation": "replenishment_required"
+  },
+  "replenishment_slice": {
+   "searches": 1,
+   "startPage": 2,
+   "companies": 20
+  }
+ }
+}
