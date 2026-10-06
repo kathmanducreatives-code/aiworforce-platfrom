@@ -37,7 +37,8 @@ import {
   normalizeAtomusFunding, normalizePvalyouFunding, PVALYOU_FUNDING_ACTOR_KEY, stampFundingCall,
 } from "./fundingCorroboration.ts";
 import {
-  decideRecentlyFunded, fundingStageEvidenceItem, recordCompleteness, stageRequirement, type FundingRecordFact,
+  decideHasRaised, decideRecentlyFunded, fundingPresenceOf, fundingStageEvidenceItem, recordCompleteness, stageRequirement,
+  type FundingRecordFact,
   type FundingStageDecision,
 } from "./fundingStageClaim.ts";
 
@@ -335,14 +336,13 @@ export function fundingStageVerifier(opts: FundingStageVerifierOptions = {}): Cl
           // Design Milk and returned zero rounds, so recency stayed PENDING and
           // every later verifier was (correctly) never bought.
           const known = [...discoveredOf(t), ...(atomus ? [atomus] : [])];
-          // DECISIVE = a verdict under the claim's window. Without a window (a
-          // caller that passed none), a COMPLETE Atomus history is decisive —
-          // it is the whole answer — and only an incomplete or empty one is open.
+          // DECISIVE = a verdict under the claim's window. Without a window the
+          // claim is PRESENCE (RC05): decided once a cited qualifying round is
+          // held or a complete history rules one out (`decideHasRaised`).
           const window = t.criterion.window_days ?? null;
-          const atomusComplete = atomus ? recordCompleteness(atomus)?.complete === true : false;
           const openAfterAtomus = window != null
             ? decideRecentlyFunded({ window_days: window, records: known, now: at }).verdict === "pending"
-            : !atomusComplete;
+            : decideHasRaised({ records: known, ...fundingPresenceOf(t.criterion.value) }).verdict === "pending";
           const pvalyouAnswered = known.some((r) => r.actor === PVALYOU_FUNDING_ACTOR_KEY);
           const key = t.domain ?? t.linkedin_url;
           if (fallbackOn && atomusAnswered.has(t.company_key) && openAfterAtomus && !pvalyouAnswered && key &&

@@ -47,7 +47,9 @@ import type { EvidenceDimension, EvidenceItem } from "./candidateObservation.ts"
 import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts";
 import { geographyContradicts } from "./leadEligiblePool.ts";
 import { matchBusinessModel } from "./businessModelMatch.ts";
-import { decideRecentlyFunded, normalizeRoundType, requiredStagesOf, stageRequirement } from "./fundingStageClaim.ts";
+import {
+  decideHasRaised, decideRecentlyFunded, fundingPresenceOf, normalizeRoundType, requiredStagesOf, stageRequirement,
+} from "./fundingStageClaim.ts";
 import type { FundingStageVerdict } from "./fundingStageClaim.ts";
 import { fundingRecordsInGraph } from "./fundingCorroboration.ts";
 import { bandSatisfies, isSizeBand } from "./companySize.ts";
@@ -253,16 +255,25 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
       // corroborated record). Nothing is bought here: a company we hold no
       // rounds for stays PENDING and reaches the verifier through its gap.
       //
-      // Without a window the old presence rule stands, so a bare "funded"
-      // criterion behaves exactly as it did.
+      // ── WITHOUT A WINDOW IT IS PRESENCE — DECIDED, NOT ASSUMED (RC05) ──
+      //
+      // "Has raised (venture) funding" / "raised funding before 2024" is decided
+      // by `decideHasRaised` over the same records: a cited qualifying round
+      // passes, a COMPLETE history without one fails, and non-equity
+      // assistance never counts. A windowless criterion used to pass on any
+      // proven funding item, which let a grant-only history through.
       const window = c.time_window?.days ?? null;
-      const records = window ? fundingRecordsInGraph(graph) : [];
+      const records = fundingRecordsInGraph(graph);
       if (window && records.length > 0) {
         const d = decideRecentlyFunded({ window_days: window, records, now: new Date() });
         if (d.verdict !== "pending") {
           return { ...base, result: d.verdict === "pass" ? "pass" : "fail", reason: d.explanation, evidence_ids: ids, provenance };
         }
         return { ...base, result: "unknown", reason: d.explanation, evidence_ids: ids, provenance };
+      }
+      if (!window && records.length > 0) {
+        const d = decideHasRaised({ records, ...fundingPresenceOf(c.value) });
+        return { ...base, result: d.verdict === "pending" ? "unknown" : d.verdict, reason: d.explanation, evidence_ids: ids, provenance };
       }
       if (!proven) return { ...base, result: "unknown", reason: `${dim} is reported, not proven`, evidence_ids: ids, provenance };
       if (item.value === false) return { ...base, result: "fail", reason: `${dim} is false`, evidence_ids: ids, provenance };

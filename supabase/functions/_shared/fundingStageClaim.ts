@@ -790,3 +790,109 @@ export function decideRecentlyFunded(i: {
       `and no provider states this is the full history`,
   };
 }
+
+// ── HAS IT RAISED AT ALL? (RC05) ─────────────────────────────────────────────
+//
+// PRESENCE is its own claim, separate from recency and from stage:
+//
+//   presence  "has raised venture funding" — a qualifying round, at any time
+//   recency   "raised funding recently"    — a qualifying event inside a window
+//   stage     "a Seed-stage company"       — the latest verified rung
+//
+// Presence used to have no decision of its own: a windowless funding claim
+// passed on ANY proven funding item, so a history holding only non-equity
+// assistance satisfied "has raised funding". It is decided here instead, over
+// the same records and with the same guards as recency:
+//
+//   PASS     a trustworthy qualifying round (cited by a source or a date;
+//            never a model extraction) — dated before `before` when one is set
+//   FAIL     a COMPLETE history with no such round — absence is never disproof
+//   PENDING  everything else
+//
+// Non-equity assistance and secondary sales are never funding
+// (`NON_RAISING_ROUND_TYPES`). "venture" narrows further to equity rounds:
+// a grant or debt is funding, but not venture funding.
+
+/** Which rounds a presence claim counts: any funding, or venture (equity) funding only. */
+export type FundingPresenceKind = "any" | "venture";
+
+/** Round types that are venture (equity) funding — the ladder plus equity-style instruments. */
+const VENTURE_INSTRUMENTS: readonly string[] = Object.freeze(["extension", "bridge", "convertible", "safe"]);
+
+/** Is this round venture funding? Read from the normalized type, and from the raw label ("Venture Round"). */
+export function isVentureRound(r: FundingRoundFact): boolean {
+  const t = normalizeRoundType(r.round_type);
+  if (!t || NON_RAISING_ROUND_TYPES.includes(t)) return false;
+  if (stageRank(t) !== null || VENTURE_INSTRUMENTS.includes(t)) return true;
+  return /\bventure\b/i.test(String(r.round_type ?? ""));
+}
+
+export type FundingPresenceReason =
+  | "no_funding_record"
+  | "qualifying_round_found"
+  | "no_qualifying_round_in_complete_history"
+  | "qualifying_round_unverified"
+  | "history_incomplete";
+
+export interface FundingPresenceDecision {
+  version: typeof FUNDING_STAGE_CLAIM_VERSION;
+  verdict: FundingStageVerdict;
+  kind: FundingPresenceKind;
+  /** ISO date the qualifying round must precede, when the request set one ("before 2024"). */
+  before: string | null;
+  reasons: FundingPresenceReason[];
+  explanation: string;
+  carrier_rounds: FundingRoundFact[];
+}
+
+export function decideHasRaised(i: {
+  records: readonly FundingRecordFact[];
+  kind: FundingPresenceKind;
+  before?: string | null;
+}): FundingPresenceDecision {
+  const before = i.before && Number.isFinite(Date.parse(i.before)) ? i.before : null;
+  const cutoff = before ? Date.parse(before) : null;
+  const what = `${i.kind === "venture" ? "venture funding round" : "funding round"}${before ? ` before ${before.slice(0, 10)}` : ""}`;
+  const base: FundingPresenceDecision = {
+    version: FUNDING_STAGE_CLAIM_VERSION, verdict: "pending", kind: i.kind, before,
+    reasons: [], explanation: "", carrier_rounds: [],
+  };
+  const records = i.records.filter((r) => (r.rounds?.length ?? 0) > 0);
+  if (records.length === 0) {
+    return { ...base, reasons: ["no_funding_record"], explanation: "no funding record was retrieved" };
+  }
+  const qualifies = (r: FundingRoundFact) =>
+    !NON_RAISING_ROUND_TYPES.includes(normalizeRoundType(r.round_type) ?? "") &&
+    (i.kind === "any" || isVentureRound(r));
+  const dated = (r: FundingRoundFact) => Number.isFinite(Date.parse(r.announced_date ?? ""));
+  const inBound = (r: FundingRoundFact) => cutoff === null || (dated(r) && Date.parse(r.announced_date!) < cutoff);
+  const cited = (r: FundingRoundFact) => r.method !== "model_extraction" && (dated(r) || (r.source_urls?.length ?? 0) > 0);
+  const all = records.flatMap((r) => r.rounds);
+
+  const found = all.filter((r) => qualifies(r) && cited(r) && inBound(r));
+  if (found.length > 0) {
+    return { ...base, verdict: "pass", reasons: ["qualifying_round_found"], carrier_rounds: found,
+      explanation: `a ${found[0].round_type ?? "funding"} round${found[0].announced_date ? ` announced ${String(found[0].announced_date).slice(0, 10)}` : ""} is a ${what}` };
+  }
+  // A qualifying round that could still count — uncited, or undated against a date bound — blocks a FAIL.
+  const open = all.filter((r) => qualifies(r) && (cutoff === null || !dated(r) || Date.parse(r.announced_date!) < cutoff));
+  if (open.length > 0) {
+    return { ...base, reasons: ["qualifying_round_unverified"], carrier_rounds: open,
+      explanation: `a possible ${what} is reported, but nothing verifies it` };
+  }
+  if (records.some(historyIsComplete)) {
+    return { ...base, verdict: "fail", reasons: ["no_qualifying_round_in_complete_history"],
+      explanation: `the complete funding history holds no ${what}` };
+  }
+  return { ...base, reasons: ["history_incomplete"],
+    explanation: `no ${what} found, and no provider states this is the full history` };
+}
+
+/** The presence claim a windowless funding criterion's value carries ({ presence, before }), or the plain "any" claim. */
+export function fundingPresenceOf(value: unknown): { kind: FundingPresenceKind; before: string | null } {
+  const v = (value ?? {}) as { presence?: unknown; before?: unknown };
+  return {
+    kind: v.presence === "venture" ? "venture" : "any",
+    before: typeof v.before === "string" && Number.isFinite(Date.parse(v.before)) ? v.before : null,
+  };
+}
