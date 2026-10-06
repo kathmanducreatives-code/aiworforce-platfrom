@@ -209,17 +209,31 @@ export function effectiveRequestedCount(
   return supplied > 0 ? supplied : DEFAULT_REQUESTED_COUNT;
 }
 
-/** One key per company a person would call the same name: case, spaces and punctuation ignored ("Llama Index" = "LlamaIndex"). */
+/**
+ * One key per company a person would call the same name: case, spaces,
+ * punctuation and symbols ignored ("Llama Index" = "LlamaIndex").
+ *
+ * Every Unicode letter, number and combining mark is kept — never transliterated,
+ * never stripped of accents. An ASCII-only key emptied "Яндекс" and
+ * "株式会社メルカリ" (the company was dropped and a direct check became paid
+ * discovery) and folded "Ödeon" into "Deon" (PR #34 review).
+ */
 export function suppliedCompanyKey(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return name.normalize("NFC").toLowerCase().replace(/[^\p{L}\p{N}\p{M}]+/gu, "");
 }
 
-/** Supplied company names with spelling variants of one name removed; the first spelling is kept (RC08). */
+/**
+ * Supplied company names with spelling variants of one name removed; the first
+ * spelling is kept (RC08). A name with no letters or numbers to key on is never
+ * dropped: it stays, as its own company, matched only by its exact spelling.
+ */
 export function dedupeSuppliedCompanies(names: readonly string[]): string[] {
   const seen = new Set<string>();
   return names.filter((n) => {
-    const k = suppliedCompanyKey(n);
-    if (!k || seen.has(k)) return false;
+    const raw = n.normalize("NFC").trim();
+    if (!raw) return false;
+    const k = suppliedCompanyKey(raw) || `\u0000${raw}`;
+    if (seen.has(k)) return false;
     seen.add(k);
     return true;
   });
