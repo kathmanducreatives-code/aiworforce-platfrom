@@ -138,7 +138,9 @@ const strs = (v: unknown): string[] =>
   Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean)
   : typeof v === "string" && v.trim() ? [v.trim()] : [];
 
+/** A number, or null when there is none. `Number(null)` and `Number("")` are 0 — an absent bound must stay absent (RC03). */
 const num = (v: unknown): number | null => {
+  if (v === null || v === undefined || typeof v === "boolean" || (typeof v === "string" && !v.trim())) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };

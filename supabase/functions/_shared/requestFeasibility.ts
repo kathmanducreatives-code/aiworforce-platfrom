@@ -59,6 +59,8 @@ import {
 } from "./capabilityExecutability.ts";
 import { capabilityRunnable, PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import { verifiedAfterEligibility, type VerifiedAfterEligibility } from "./claimPlan.ts";
+import { deriveMissionCriteria } from "./missionCriteria.ts";
+import { sizeRangeProvable } from "./companySize.ts";
 
 export const FEASIBILITY_VERSION = "request-feasibility-v1" as const;
 
@@ -116,7 +118,13 @@ export type FeasibilityRefusalCode =
   /** B/H — the promised output has no production path anywhere. */
   | "output_unproducible"
   /** P0 — the plan's entry capability cannot be executed by the engine. */
-  | "entry_not_executable";
+  | "entry_not_executable"
+  /**
+   * RC03 — the user required a company size no declared LinkedIn band can
+   * prove ("exactly 17", "20–100"). Every candidate would stay pending; running
+   * it would either buy nothing or, if the size were dropped, widen the request.
+   */
+  | "size_range_unprovable";
 
 export interface FeasibilityRefusal {
   code: FeasibilityRefusalCode;
@@ -540,6 +548,25 @@ export function assessRequestFeasibility(
         `This plan cannot establish ${signalReqs.length === 1 ? "the requirement" : "any requirement"} ` +
         `the request depends on: ${signalReqs.map((r) => r.message).join(" ")}`,
       detail: { requirements: signalReqs.map((r) => ({ r: r.requirement, s: r.status })) },
+    });
+  }
+  // RC03: A STATED SIZE NO BAND CAN PROVE IS ASKED ABOUT, NOT RUN. The criterion
+  // is already disclosed as unprovable (`deriveMissionCriteria`); eligibility
+  // skips a non-ok criterion, so running anyway would quietly drop the size.
+  for (const c of deriveMissionCriteria(mission, policy)) {
+    if (c.dimension !== "company_size" || c.kind !== "hard" || c.status !== "unprovable_today" || c.source !== "user_explicit") continue;
+    const v = c.value as { min?: number | null; max?: number | null } | null;
+    const overlapping = sizeRangeProvable(v).overlapping;
+    const asked = v?.min != null && v.min === v.max ? `exactly ${v.min} employees` : `${v?.min ?? 0}–${v?.max ?? "∞"} employees`;
+    report.refusals.push({
+      code: "size_range_unprovable", requirement: `company_size:${asked}`,
+      message:
+        `Company size can only be checked against the bands companies declare on LinkedIn ` +
+        `(1–10, 11–50, 51–200, 201–500 and up). No band lies inside "${asked}", so no company could be confirmed to match` +
+        (overlapping.length === 1 ? `. The ${overlapping[0]} band covers it — should I use that?`
+          : overlapping.length > 1 ? `. It spans the ${overlapping.slice(0, -1).join(", ")} and ${overlapping.at(-1)} bands — which should I use?`
+          : "."),
+      detail: { requested: v, overlapping_bands: overlapping },
     });
   }
   // P3: job discovery is executable as the ROUTE to a company. Job postings as

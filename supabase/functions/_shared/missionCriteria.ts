@@ -46,6 +46,7 @@ import {
   type FieldProvenance, type LeadMissionV1, type MissionSignal,
 } from "./leadMission.ts";
 import { isControlledPhrase } from "./businessModelMatch.ts";
+import { sizeRangeProvable } from "./companySize.ts";
 import { readSignalPhrase, type SignalQualifier } from "./missionSignalDescriptor.ts";
 import {
   CANONICAL_SIGNAL_KINDS, DEFAULT_SIGNAL_WINDOWS, EXEC_TITLE_RE, aliasKindFor,
@@ -855,23 +856,35 @@ export function deriveMissionCriteria(
   if (er && (er.min != null || er.max != null)) {
     const source = sourceFromProvenance(prov["company_profile.employee_range"],
       /\b\d{1,5}\s*(?:-|to|–)\s*\d{1,5}\b|\bemployees?\b/.test(q));
-    // AN EXACT STAFF COUNT IS NOT A BAND. It stays a live criterion (so a
-    // candidate is PENDING on it, never quietly eligible without it), and says
-    // plainly that nothing can settle it: a declared band is a range, and the
-    // LinkedIn member count is not staff (companySize.ts).
+    // A SIZE IS PROVEN BY A DECLARED BAND, AND ONLY BY ONE THAT LIES INSIDE IT.
+    // An exact count ("exactly 17") or a range that cuts across bands ("20–100",
+    // "25–75") can never be passed by any company: every candidate would stay
+    // pending forever while the card looked feasible (quality run RC03). A HARD
+    // range the user stated is therefore disclosed as unprovable here, and
+    // `assessRequestFeasibility` refuses the card with the bands that would work —
+    // it is never widened to them silently. A Brain policy range keeps its old
+    // behaviour (out of RC03's scope), and a target only ranks.
     const exact = er.min != null && er.max != null && er.min === er.max;
+    const kind = source === "user_explicit" || source === "company_brain_policy" ? "hard" : "target";
+    const value = { min: er.min ?? null, max: er.max ?? null };
+    const range = sizeRangeProvable(value);
+    const unprovable = kind === "hard" && source === "user_explicit" && !range.provable;
     push({
-      kind: source === "user_explicit" || source === "company_brain_policy" ? "hard" : "target", dimension: "company_size",
-      value: { min: er.min ?? null, max: er.max ?? null },
+      kind, dimension: "company_size", value,
       label: exact ? `Company size: exactly ${er.min} employees`
         : `Company size: ${er.min ?? 0}–${er.max ?? "∞"} employees`, source, user_phrase: "",
       rationale: exact
         ? "an exact staff count is not provable today: LinkedIn gives a declared size band and an associated-member " +
-          "count, and neither is a staff headcount — candidates stay pending on it"
+          "count, and neither is a staff headcount" +
+          (unprovable ? `; the request asks which band to use (${range.overlapping.join(", ")})` : " — candidates stay pending on it")
+        : unprovable
+        ? `this range is not provable today: no LinkedIn declared size band lies inside ${er.min ?? 0}–${er.max ?? "∞"}` +
+          (range.overlapping.length ? `; the request asks which band to use (${range.overlapping.join(", ")})` : "")
         : source === "company_brain_policy"
         ? "your Company Brain's size rule, enforced on every mission"
         : source === "company_brain_preference"
         ? "your Company Brain's size band; you did not state one" : "stated in the request",
+      ...(unprovable ? { status: "unprovable_today" as const } : {}),
     });
   }
 
