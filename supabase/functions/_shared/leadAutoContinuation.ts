@@ -288,6 +288,18 @@ export function decideAutoContinuation(
     return stop("cost_ceiling", i.missionBudgetExhausted);
   }
 
+  // A PROVIDER FAILURE STOPS THE LINEAGE BEFORE ANY "KEEP GOING" BRANCH (RC16).
+  // It used to be checked after the verify / replenish branches, so a slice
+  // that ended on a provider failure with discovery routes still open went on
+  // to `replenishment_required` and bought slices against the failing provider
+  // until two came back barren (quality run 2026-10-06, probe W09). The
+  // frontier is preserved, so a later run resumes where this one stopped. A
+  // paid run still executing is the exception: it is adopted first.
+  if (!awaiting && i.providerFailed) {
+    return stop("provider_failure",
+      "the last slice ended on a provider failure; the frontier is preserved");
+  }
+
   // ── THE THREE FINDINGS, EACH UNSAYABLE WHILE A PAID RUN IS IN FLIGHT ─────
   //
   // Every one of these tells the user something about the candidates. None of
@@ -366,11 +378,6 @@ export function decideAutoContinuation(
           `need ${need} more, so I'm widening the search.`,
       };
     }
-  }
-
-  if (!awaiting && i.providerFailed) {
-    return stop("provider_failure",
-      "the last slice ended on a provider failure; the frontier is preserved");
   }
 
   // NOTHING TWICE RUNNING IS EVIDENCE. See `MAX_BARREN_SLICES`.
