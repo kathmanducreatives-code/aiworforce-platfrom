@@ -173,8 +173,9 @@ Deno.test("hedged language stays a preference; a stated window always wins over 
   assertEquals(kind("Find US SaaS companies that appear to be hiring.", "hiring"), "target");
   assertEquals(kind("Find US SaaS companies that may have recently raised funding.", "funding"), "target");
   assertEquals(kind("Find US SaaS companies that are actively hiring.", "hiring"), "hard");
-  // A bare round names no recency: unchanged.
-  assertEquals(kind("Find US SaaS companies that raised funding.", "funding"), "target");
+  // A bare raise names no recency — it is PRESENCE, a hard claim with no window
+  // (RC05, 2026-10-06: "has raised funding" is decided by `decideHasRaised`).
+  assertEquals(kind("Find US SaaS companies that raised funding.", "funding"), "hard");
   // Recency AND a stated window: the stated window, never the 180-day default.
   const windowed = deriveMissionCriteria(parseLeadMissionDeterministic(
     "Find US SaaS companies that raised funding in the last 3 years.")).find((c) => c.dimension === "funding");

@@ -98,16 +98,21 @@ export const DEFAULT_SIGNAL_WINDOWS: Readonly<Partial<Record<CanonicalSignalKind
  * "1 year" and "365 days" are the same number.
  */
 export function explicitWindowDays(text: string): number | null {
-  const m = String(text ?? "").toLowerCase().match(
-    /\b(?:in|within|over|during)?\s*the\s+(?:last|past)\s+(?:(\d{1,3}|a|one)\s*)?(day|week|month|year)s?\b/);
+  return explicitWindowMatch(text)?.days ?? null;
+}
+
+/** The first stated window, with WHERE it sits in the text — so it can be given to the signal it belongs to (RC06). */
+export function explicitWindowMatch(text: string): { days: number; index: number; end: number } | null {
+  const m = /\b(?:in|within|over|during)?\s*the\s+(?:last|past)\s+(?:(\d{1,3}|a|one)\s*)?(day|week|month|year)s?\b/
+    .exec(String(text ?? "").toLowerCase());
   if (!m) return null;
   const n = m[1] === undefined || m[1] === "a" || m[1] === "one" ? 1 : Number(m[1]);
   const per: Record<string, number> = { day: 1, week: 7, month: 30, year: 365 };
   const unit = m[2];
   // Whole years are years however they were said ("12 months", "24 months").
-  if (unit === "month" && n > 0 && n % 12 === 0) return (n / 12) * 365;
-  const days = n * (per[unit] ?? 1);
-  return days > 0 ? canonicalWindowDays(days) : null;
+  const raw = unit === "month" && n > 0 && n % 12 === 0 ? (n / 12) * 365 : n * (per[unit] ?? 1);
+  if (!(raw > 0)) return null;
+  return { days: unit === "month" && n % 12 === 0 ? raw : canonicalWindowDays(raw), index: m.index, end: m.index + m[0].length };
 }
 
 /**

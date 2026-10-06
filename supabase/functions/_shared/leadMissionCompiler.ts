@@ -807,6 +807,14 @@ export interface CompileMissionInput {
   proposal?: unknown;
   companyBrain?: BrainMergeInput | null;
   requestedCount?: number | null;
+  /**
+   * EACH SIGNAL'S OWN WINDOW, by event, from a reader that knew which
+   * requirement a window belongs to (`projectToLeadMission`, RC06). Present ⇒ a
+   * signal carries only its own entry, and one with none carries no window;
+   * absent ⇒ the proposal's single `signal_recency_days` applies to every
+   * signal, as before.
+   */
+  signalRecencyByEvent?: Record<string, number> | null;
 }
 
 /**
@@ -930,7 +938,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
       const internal = toInternalCapabilities(approvedCaps);
 
       const validated = validateLeadMission(
-        proposalToMissionCandidate(parsed.proposal, internal, deterministic()),
+        proposalToMissionCandidate(parsed.proposal, internal, deterministic(), i.signalRecencyByEvent ?? null),
         { originalUserQuery: query, isCapabilityId, requestedCount: i.requestedCount },
       );
       for (const r of validated.repairs) changes.push(r);
@@ -1359,6 +1367,7 @@ function qualifierAbsorbs(
 
 function proposalToMissionCandidate(
   p: GptMissionProposal, internal: CapabilityId[], base: LeadMissionV1,
+  recencyByEvent: Record<string, number> | null = null,
 ): Record<string, unknown> {
   return {
     // ── WHAT THE USER ASKED TO RECEIVE: THE MODEL'S ANSWER, WHEN IT GAVE ONE ──
@@ -1435,7 +1444,14 @@ function proposalToMissionCandidate(
     // to the nearest event.
     required_signals: readSignalPhrases(p.preferred_signals, p.required_signal_terms).map((d) => ({
       ...d,
-      ...(p.signal_recency_days != null ? { timeframe_days: p.signal_recency_days } : {}),
+      // ONE WINDOW PER SIGNAL (RC06): with per-event windows a signal carries only
+      // its own — funding's 730 days never becomes "currently hiring"'s window.
+      ...(() => {
+        const own = recencyByEvent
+          ? Math.min(MAX_SIGNAL_RECENCY_DAYS, recencyByEvent[String(d.event ?? d.type)] ?? 0) || null
+          : p.signal_recency_days;
+        return own != null ? { timeframe_days: own } : {};
+      })(),
     })),
     decision_makers: {
       roles: p.decision_maker_roles,

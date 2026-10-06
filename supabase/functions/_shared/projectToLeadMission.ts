@@ -56,6 +56,12 @@ export interface LeadProjection {
   proposal: GptMissionProposal;
   /** Passed alongside; the compiler keeps the honest null. */
   requestedCount: number | null;
+  /**
+   * EACH REQUIREMENT'S OWN WINDOW, by event ("funding" → 730). Passed alongside
+   * the proposal, whose single `signal_recency_days` cannot say which signal a
+   * window belongs to, so the compiler stamps each signal with its own (RC06).
+   */
+  signalRecencyByEvent?: Record<string, number>;
   /** Filters and requirements this surface has no vocabulary for. */
   unprojected: string[];
   /** Why the Lead surface cannot serve this request at all. Null when it can. */
@@ -338,6 +344,7 @@ export function projectToLeadMission(
   }
 
   let requestedCount: number | null = null;
+  const signalRecencyByEvent: Record<string, number> = {};
   let wantsPeople = false;
 
   for (const part of parts) {
@@ -350,6 +357,10 @@ export function projectToLeadMission(
     }
     for (const req of part.requirements ?? []) {
       unprojected.push(...applyRequirement(proposal, req));
+      const days = req.recency_days;
+      if (typeof days === "number" && Number.isFinite(days) && days > 0 && signalRecencyByEvent[req.event] == null) {
+        signalRecencyByEvent[req.event] = days;
+      }
     }
 
     // WHICH COMPANY THIS PART WAS BOUND TO, if the resolver bound one.
@@ -447,5 +458,5 @@ export function projectToLeadMission(
   proposal.known_companies = dedupe(proposal.known_companies);
   proposal.decision_maker_roles = dedupe(proposal.decision_maker_roles);
 
-  return { proposal, requestedCount, unprojected: dedupe(unprojected), refusal: null };
+  return { proposal, requestedCount, signalRecencyByEvent, unprojected: dedupe(unprojected), refusal: null };
 }
