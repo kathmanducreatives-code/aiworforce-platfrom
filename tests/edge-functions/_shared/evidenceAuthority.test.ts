@@ -94,14 +94,31 @@ Deno.test("3. the proven band grounds the size claim (11-50 → 11–50 PASS, 51
 
 // ══════════════════════════════════════════════════════ country vs HQ ══
 
-Deno.test("4. unambiguous structured locations PROVE country — as presence", () => {
+// A HARD LOCATION MEANS HEADQUARTERS (quality run T07, 2026-10-06 — product
+// decision). When the record flags exactly one HQ, the geography item IS that
+// HQ; an office elsewhere ranks but never satisfies the requirement. A record
+// with no single HQ flag keeps the presence reading below.
+
+Deno.test("4. a single HQ flag PROVES the geography — the HQ, not every office", () => {
   const geo = dim(itemsFor(TARA), "geography");
-  assertEquals([geo.status, geo.authority?.rule], ["proven", "li_record_structured_country"]);
+  assertEquals([geo.value, geo.status, geo.authority?.rule],
+    ["San Jose, CA, United States", "proven", "li_record_flagged_headquarters"]);
   const g = graphOf("tara", itemsFor(TARA));
   assertEquals(checkCriterion(criterion("geography", "United States"), g).result, "pass");
-  assertEquals(checkCriterion(criterion("geography", "Germany"), g).result, "fail", "no office there, stated structurally");
-  // Uplane's Berlin office is real presence in Germany, though it is not the HQ.
-  assertEquals(checkCriterion(criterion("geography", "Germany"), graphOf("uplane", itemsFor(UPLANE))).result, "pass");
+  assertEquals(checkCriterion(criterion("geography", "Germany"), g).result, "fail", "headquartered elsewhere, stated structurally");
+  // Uplane's Berlin office is real presence in Germany, but its HQ is San Francisco:
+  // a hard "Germany" requirement FAILS, and "United States" passes.
+  const uplane = graphOf("uplane", itemsFor(UPLANE));
+  assertEquals(checkCriterion(criterion("geography", "Germany"), uplane).result, "fail");
+  assertEquals(checkCriterion(criterion("geography", "United States"), uplane).result, "pass");
+});
+
+Deno.test("4b. with no single HQ flag, structured locations still PROVE country — as presence", () => {
+  const offices = { ...UPLANE, locations: (UPLANE.locations as Record<string, unknown>[]).map((l) => ({ ...l, headquarter: false })) };
+  const geo = dim(itemsFor(offices), "geography");
+  assertEquals([geo.status, geo.authority?.rule], ["proven", "li_record_structured_country"]);
+  assert(geo.authority?.reason.includes("not headquarters"), "the presence item says it is not an HQ");
+  assertEquals(checkCriterion(criterion("geography", "Germany"), graphOf("uplane", itemsFor(offices))).result, "pass");
   // Free-text locations with no structured country do not prove.
   const loose = { ...TARA, locations: [{ parsed: { text: "Somewhere, Planet" } }] };
   assertEquals(dim(itemsFor(loose), "geography").status, "plausible");
@@ -117,8 +134,10 @@ Deno.test("5. multiple company locations do NOT prove headquarters", () => {
   const flagged = authorityForEvidence({ claim: "headquarters", source: DETAILS, field: "headquarters_flag",
     observed_at: NOW.toISOString(), quality: { single_headquarters_flag: true }, now: NOW });
   assertEquals(flagged.authority, "proven", "only the provider's own single HQ flag");
-  // The geography item is presence and says so; it is never read as an HQ.
-  assert(dim(itemsFor(UPLANE), "geography").authority?.reason.includes("not headquarters"));
+  // The office list is never read as an HQ: Uplane's geography item is the single
+  // flagged HQ, proven by the flag rule — not its Berlin office.
+  const geo = dim(itemsFor(UPLANE), "geography");
+  assertEquals([geo.value, geo.authority?.rule], ["San Francisco, CA, United States", "li_record_flagged_headquarters"]);
 });
 
 // ═══════════════════════════════════════════════ industry, business model ══
