@@ -107,3 +107,39 @@ export function bandSatisfies(
     reason: `declared size band ${label} only partly overlaps ${want}; the band cannot settle it`,
   };
 }
+
+/**
+ * EVERY SIZE BAND A COMPANY CAN DECLARE ON LINKEDIN — the only size evidence any
+ * catalogued source returns (`employeeCountRange`). LinkedIn's codes B–I; some
+ * actors report the smallest band as 1–10 and others as 2–10, so both appear.
+ */
+export const DECLARED_SIZE_BANDS: ReadonlyArray<Pick<CompanySizeBand, "min" | "max">> = Object.freeze([
+  { min: 1, max: 10 }, { min: 2, max: 10 }, { min: 11, max: 50 }, { min: 51, max: 200 },
+  { min: 201, max: 500 }, { min: 501, max: 1000 }, { min: 1001, max: 5000 },
+  { min: 5001, max: 10000 }, { min: 10001, max: null },
+]);
+
+/**
+ * CAN ANY DECLARED BAND PROVE THIS RANGE?
+ *
+ * A requested range is provable when at least one band lies inside it, because
+ * only then can a company's declared band PASS it. "20–100", "25–75", "11–15"
+ * and an exact count ("exactly 17") cut across bands: a company inside them
+ * declares a band that only partly overlaps, so every candidate stays unknown
+ * forever. `overlapping` names the bands the user could choose instead — never
+ * applied silently.
+ */
+export function sizeRangeProvable(
+  required: { min?: number | null; max?: number | null } | null | undefined,
+): { provable: boolean; overlapping: string[] } {
+  const min = required?.min ?? null, max = required?.max ?? null;
+  // Overlap is geometric: an exact count's verdict is "unknown" for EVERY band.
+  const overlaps = (b: Pick<CompanySizeBand, "min" | "max">) =>
+    (max === null || b.min <= max) && (min === null || (b.max ?? Infinity) >= min);
+  const overlapping = DECLARED_SIZE_BANDS.filter(overlaps).map(sizeBandLabel);
+  return {
+    provable: DECLARED_SIZE_BANDS.some((b) => bandSatisfies(required, b).verdict === "pass"),
+    // 1–10 and 2–10 are the same LinkedIn band under two spellings; name it once.
+    overlapping: overlapping.filter((l) => !(l === "2-10" && overlapping.includes("1-10"))),
+  };
+}

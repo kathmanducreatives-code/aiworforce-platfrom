@@ -1066,11 +1066,19 @@ export function validateLeadMission(
 
   const cp = (c.company_profile ?? {}) as Record<string, any>;
   const er = (cp.employee_range ?? {}) as Record<string, any>;
-  const minE = Number(er.min), maxE = Number(er.max);
-  const employee_range = (Number.isFinite(minE) || Number.isFinite(maxE))
+  // AN ABSENT BOUND IS ABSENT. `Number(null)` and `Number("")` are 0, which is
+  // finite, so "more than 100" ({min: 100, max: null}) compiled to a range
+  // capped at 0 employees and failed every declared band (quality run RC03).
+  const bound = (v: unknown): number | null => {
+    if (v === null || v === undefined || (typeof v === "string" && !v.trim())) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : null;
+  };
+  const minE = bound(er.min), maxE = bound(er.max);
+  const employee_range = (minE !== null || maxE !== null)
     ? {
-      ...(Number.isFinite(minE) ? { min: Math.max(0, Math.trunc(minE)) } : {}),
-      ...(Number.isFinite(maxE) ? { max: Math.max(0, Math.trunc(maxE)) } : {}),
+      ...(minE !== null ? { min: minE } : {}),
+      ...(maxE !== null ? { max: maxE } : {}),
     }
     : base.company_profile.employee_range;
 
