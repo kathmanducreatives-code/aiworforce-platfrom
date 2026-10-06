@@ -192,11 +192,37 @@ export function isMissionStrategy(s: string): s is MissionStrategy {
  */
 export const DEFAULT_REQUESTED_COUNT = 5;
 
-/** The number execution should use. Applies the default only when none was asked for. */
+/**
+ * The number execution should use. Applies a default only when none was asked for.
+ *
+ * SUPPLIED COMPANIES ARE THE COUNT (RC08). "Check whether LlamaIndex has an open
+ * sales role" names one company and states no number; the default of 5 made a
+ * YES end `search_exhausted` "1 of 5" (quality run 2026-10-06). When the
+ * mission names its companies, the request is exactly those companies. The
+ * mission still records the honest null.
+ */
 export function effectiveRequestedCount(
-  m: Pick<LeadMissionV1, "requested_count">,
+  m: Pick<LeadMissionV1, "requested_count"> & { company_profile?: { known_companies?: readonly string[] } | null },
 ): number {
-  return m.requested_count ?? DEFAULT_REQUESTED_COUNT;
+  if (m.requested_count != null) return m.requested_count;
+  const supplied = m.company_profile?.known_companies?.length ?? 0;
+  return supplied > 0 ? supplied : DEFAULT_REQUESTED_COUNT;
+}
+
+/** One key per company a person would call the same name: case, spaces and punctuation ignored ("Llama Index" = "LlamaIndex"). */
+export function suppliedCompanyKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/** Supplied company names with spelling variants of one name removed; the first spelling is kept (RC08). */
+export function dedupeSuppliedCompanies(names: readonly string[]): string[] {
+  const seen = new Set<string>();
+  return names.filter((n) => {
+    const k = suppliedCompanyKey(n);
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 export interface MissionSignal {
@@ -1153,9 +1179,10 @@ export function validateLeadMission(
       locations: base.company_profile.locations.length
         ? base.company_profile.locations : strArray(cp.locations),
       ...(employee_range ? { employee_range } : {}),
+      // One entry per company: "LlamaIndex and Llama Index" is one company (RC08).
       ...(base.company_profile.known_companies?.length
-        ? { known_companies: base.company_profile.known_companies }
-        : (strArray(cp.known_companies).length ? { known_companies: strArray(cp.known_companies) } : {})),
+        ? { known_companies: dedupeSuppliedCompanies(base.company_profile.known_companies) }
+        : (strArray(cp.known_companies).length ? { known_companies: dedupeSuppliedCompanies(strArray(cp.known_companies)) } : {})),
     },
     required_signals: signals,
     // Carried from whichever reading produced it — the model-compiled path

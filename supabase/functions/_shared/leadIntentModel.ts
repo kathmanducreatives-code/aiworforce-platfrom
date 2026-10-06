@@ -209,6 +209,7 @@ export function separatedIntentFromMission(
     decision_maker_strategy,
     result_limit: Math.max(1, Math.min(50, effectiveRequestedCount({
       requested_count: mission.requested_count ?? null,
+      company_profile: mission.company_profile,
     }))),
     relaxation_policy: {
       geography: (noBroadening || geoHard) ? "never" : "last_resort",
