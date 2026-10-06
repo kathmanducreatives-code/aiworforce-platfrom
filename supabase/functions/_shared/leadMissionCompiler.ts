@@ -1081,7 +1081,17 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   // The user's own words outrank the model's constraint list on geography: if the
   // deterministic pass read a location out of the sentence, it is hard whatever
   // the model said about it.
-  if (mission.company_profile.locations.length > 0) {
+  //
+  // ONLY THE REQUEST'S OWN LOCATIONS (RC07). The Company Brain merge runs before
+  // this, so a location the user never stated — the Brain's ICP filling an open
+  // field — was stamped "stated explicitly in the user's query" while
+  // `field_provenance` said `company_brain`, and reached the mission evaluator
+  // and the identity search as a hard requirement (quality run 2026-10-06:
+  // 111 of 192 cards). A Brain location stays what its provenance says it is:
+  // a preference (`deriveMissionCriteria` makes it a target).
+  const locationProvenance = mission.field_provenance?.["company_profile.locations"];
+  const brainLocations = locationProvenance === "company_brain" || locationProvenance === "company_brain_policy";
+  if (mission.company_profile.locations.length > 0 && !brainLocations) {
     hard["company_profile.locations"] = {
       operator: "in",
       value: [...mission.company_profile.locations],
