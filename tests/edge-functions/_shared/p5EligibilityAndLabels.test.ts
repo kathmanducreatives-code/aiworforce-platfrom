@@ -39,7 +39,11 @@ import { emptyDiscoverySelector } from "./discoverySelectorFixture.ts";
 globalThis.fetch = () => { throw new Error("P5 tests must not reach the network"); };
 
 const NOW = new Date("2026-09-18T12:00:00.000Z");
-const CANONICAL = "Find 1 seed-stage B2B SaaS startup in the US hiring its first growth marketer.";
+// HEDGED ON PURPOSE: these tests exercise hiring as the soft ranking ANCHOR. Since
+// RC04 (2026-10-06) a stated, unhedged hiring requirement compiles HARD; "appears to
+// be hiring" is the phrasing that keeps it a target. The hard-anchor case is the
+// "a hard anchor gates the label" test below.
+const CANONICAL = "Find 1 seed-stage B2B SaaS startup in the US that appears to be hiring its first growth marketer.";
 const proposal = {
   requested_opportunity_count: 1, requested_contact_ready_count: null, company_types: ["B2B SaaS"],
   geographies: ["United States"], geography_is_hard: true, employee_range: { min: null, max: null },
@@ -63,7 +67,7 @@ const CRITERIA_PREF = deriveMissionCriteria(
 
 /** "…bonus if they recently raised" — a second observable signal beside the anchor. */
 const CRITERIA_BONUS = deriveMissionCriteria(compileLeadMission({
-  originalUserQuery: "Find 1 B2B SaaS startup in the US hiring its first growth marketer; bonus if they recently raised.",
+  originalUserQuery: "Find 1 B2B SaaS startup in the US that appears to be hiring its first growth marketer; bonus if they recently raised.",
   proposal: { ...proposal, adjacent_signals: ["recently raised"], preferred_signals: ["hiring growth marketer", "recently raised"] },
 }).final_mission);
 
@@ -159,10 +163,10 @@ Deno.test("SEM-1: expired evidence proves nothing — the candidate goes back to
 });
 
 Deno.test("a hard anchor gates the label: unproven ⇒ no label, and an empty target list is never an Exact Match", () => {
-  // Built here rather than compiled: today P1 compiles every hiring signal as a
-  // `target` (see the P5 report), and this is P5's rule, not P1's — the ceiling
-  // must depend on the ANCHOR being proven, not merely on there being no
-  // unproven targets.
+  // Built here rather than compiled: CRITERIA hedges its hiring clause so it stays a
+  // `target` (an unhedged one compiles hard since RC04), and this is P5's rule, not
+  // P1's — the ceiling must depend on the ANCHOR being proven, not merely on there
+  // being no unproven targets.
   const hardHiring: MissionCriterion[] = [
     ...CRITERIA.filter((c) => c.kind === "hard"),
     { ...CRITERIA.find((c) => c.dimension === "hiring")!, kind: "hard" },

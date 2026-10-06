@@ -608,10 +608,20 @@ function signalClause(kind: CanonicalSignalKind, text: string): string | null {
 // they are hiring", "funding is not required") stays a preference. Words about
 // the EVIDENCE ("funding is still uncertain — keep them pending") do not hedge
 // the requirement: an unresolved hard claim is what makes a company PENDING.
+//
+// ── A STATED HIRING REQUIREMENT IS HARD, HOWEVER IT IS PHRASED (RC04) ──────
+//
+// Hard used to depend on the sentence matching one phrasing ("is hiring",
+// "an open … role"), so "Is Anthropic hiring account executives?", "Does
+// OpenAI have open sales roles?" and "Find 5 companies hiring salespeople"
+// compiled hiring as a TARGET: the job search the question asks for never ran,
+// and the sourcing cards had no hard claim at all — although Chat Brain had
+// read hiring as a requirement (quality run 2026-10-06). The rule is now
+// structural: hiring the USER stated (the reader's user-explicit kind, or a
+// hiring cue in the request's own words) is a requirement unless its own
+// clause is hedged. Hiring only the model inferred stays a target.
 const SIGNAL_HEDGE_RE =
   /\b(?:appears?\s+to|appearing\s+to|seems?\s+to|signs?\s+(?:of|that|they)|likely|(?:may|might)\s+(?:have|be|still|already)|possibly|perhaps|potentially|not\s+(?:strictly\s+)?required)\b/;
-const ASSERTED_HIRING_RE =
-  /\b((?:is|are)\s+(?:actively\s+|currently\s+)?hiring|(?:actively|currently)\s+hiring|(?:at least one|one or more|an?|any|some)\s+(?:currently\s+)?open\s+(?:\w+\s+){0,2}(?:roles?|positions?|jobs?|openings?))\b|^((?:currently\s+)?open\s+(?:\w+\s+){0,2}(?:roles?|positions?|jobs?|openings?))\b/;
 /** A funding clause that asks about RECENCY (as opposed to a round or stage). */
 const FUNDING_RECENCY_RE = /\b(?:recent(?:ly)?|recency|newly|lately|latest)\b/;
 /** A "stage" value that is really a funding-recency phrase ("funded within the last 2 years"). */
@@ -624,11 +634,11 @@ export function signalHedged(kind: CanonicalSignalKind, query: string): boolean 
   return !!clause && (SIGNAL_HEDGE_RE.test(clause) || HEDGE_RE.test(clause));
 }
 
-/** A hiring signal stated as a present fact in its own, unhedged clause. */
-export function requirementAssertion(kind: CanonicalSignalKind, query: string): RegExpMatchArray | null {
-  if (kind !== "hiring" || signalHedged(kind, query)) return null;
-  const clause = signalClause(kind, query);
-  return clause ? clause.match(ASSERTED_HIRING_RE) : null;
+/** A hiring requirement the user stated, in an unhedged clause (RC04). */
+export function statedHiringRequirement(
+  kind: CanonicalSignalKind, source: CriterionSource, query: string,
+): boolean {
+  return kind === "hiring" && source === "user_explicit" && !signalHedged(kind, query);
 }
 
 export function requirementElevation(kind: CanonicalSignalKind, phrase: string, query: string):
@@ -935,7 +945,7 @@ export function deriveMissionCriteria(
     // tagged `user_inferred` — the request's own cue says otherwise.
     const cueStated = SIGNAL_CUE[k]?.test(q) ?? false;
     const source: CriterionSource = userKinds.has(k) || cueStated ? "user_explicit" : "user_inferred";
-    const asserted = !elevated && source === "user_explicit" ? requirementAssertion(k, query) : null;
+    const asserted = !elevated && statedHiringRequirement(k, source, query);
     const def = DEFAULT_SIGNAL_WINDOWS[k];
     const ws = sem?.window_sources?.[k];
     const carried = s.timeframe_days != null;

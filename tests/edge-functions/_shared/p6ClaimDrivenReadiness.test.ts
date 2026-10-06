@@ -145,9 +145,13 @@ Deno.test("CLAIM PLAN: hard claims carry their READY routes cheapest first; targ
   assertEquals(probe.hard.find((h) => h.claim === "funding_stage")!.routes.map((r) => r.actor), ["apify_funding_atomus"]);
   assert(relevantVerifierActors(probe).has("apify_funding_atomus"));
   assertFalse(relevantVerifierActors(prod).has("apify_funding_atomus"));
-  // A hiring-only mission has no hard claim at all: nothing is relevant to verify.
+  // A hiring-only mission's stated hiring is HARD (RC04, 2026-10-06). Job discovery
+  // carries it — a posting found by discovery is proven open-role evidence — and
+  // the job search stays the route for any company that arrives without one.
   const hiring = buildClaimPlan(deriveMissionCriteria(parseLeadMissionDeterministic("Find companies hiring growth marketers")), "job_discovery");
-  assertEquals([hiring.hard.length, relevantVerifierActors(hiring).size], [0, 0]);
+  assertEquals(hiring.hard.map((h) => [h.dimension, h.carried_by_entry, h.routes.map((r) => r.actor)]),
+    [["hiring", true, ["apify_linkedin_job_search"]]]);
+  assertEquals([...relevantVerifierActors(hiring)], ["apify_linkedin_job_search"]);
 });
 
 // ── the phase's own rules ───────────────────────────────────────────────────

@@ -143,8 +143,16 @@ Deno.test("BRAIN-1: the approved canary 62c8b188 mission, verbatim, now derives 
   assertEquals([pref.value, pref.status], ["founder-led or small teams", "unprovable_today"]);
   assertFalse(pref.source === "user_explicit", "words the request does not say are never user-explicit");
 
-  // And the candidate the canary could never surface now can.
-  const e = evaluateEligibility(cs, graphOf([US(), SMALL(), grounded("b2b saas", "accepted")]));
+  // "…hiring its first growth marketer" is a stated, unhedged hiring requirement:
+  // HARD since RC04 (2026-10-06), so the open role must be proven too.
+  assertEquals(hard(cs).filter((c) => c.dimension === "hiring").length, 1, "the stated hiring clause is a requirement");
+  const proven = [US(), SMALL(), grounded("b2b saas", "accepted")];
+  assertEquals(evaluateEligibility(cs, graphOf(proven)).eligibility, "pending", "no open role proven yet");
+
+  // And the candidate the canary could never surface now can, once its open role is proven.
+  const role = ev("hiring", { open_role: true, role_families: ["marketing_growth"], titles: ["Growth Marketer"] },
+    { source: { provider: "apify", actor: "apify_linkedin_job_search", provider_call_id: "pc_2", url: null, excerpt: "Growth Marketer" } });
+  const e = evaluateEligibility(cs, graphOf([...proven, role]));
   assertEquals(e.eligibility, "eligible", JSON.stringify(e.checks.filter((c) => c.kind === "hard")));
 });
 
