@@ -506,6 +506,13 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
         : { source: "system_default", rule: "carried from the compiled mission" };
       return s;
     }
+    // "funded this year": the user's calendar window, computed now and carried (RC05).
+    const calendar = k === "funding" ? calendarWindow(signalClause("funding", query) ?? "") : null;
+    if (calendar) {
+      windowSources[k] = { source: "user_explicit", rule: calendar.rule };
+      changes.push(`window_from_calendar:${k}:${calendar.days}d`);
+      return { ...s, timeframe_days: calendar.days };
+    }
     const d = DEFAULT_SIGNAL_WINDOWS[k];
     if (!d) return s;
     if (!TEMPORAL_CUE_RE.test(query)) return s; // no temporal word: nothing to default
@@ -745,6 +752,60 @@ const SIGNAL_HEDGE_RE =
   /\b(?:appears?\s+to|appearing\s+to|seems?\s+to|signs?\s+(?:of|that|they)|likely|(?:may|might)\s+(?:have|be|still|already)|possibly|perhaps|potentially|not\s+(?:strictly\s+)?required)\b/;
 /** A funding clause that asks about RECENCY (as opposed to a round or stage). */
 const FUNDING_RECENCY_RE = /\b(?:recent(?:ly)?|recency|newly|lately|latest)\b/;
+
+// ── FUNDING PRESENCE, CALENDAR WINDOWS AND DATE BOUNDS (RC05) ────────────────
+//
+// "Has raised venture funding" (presence), "funded this year" (a calendar
+// window) and "raised funding before 2024" (a date bound) are stated
+// requirements the funding pair can answer. They compiled as targets — never
+// verified, never rejecting — and a known-company question with presence as
+// its only requirement was refused as unprovable (quality run 2026-10-06:
+// A05, E01, S01, S06). Presence and recency stay separate claims: presence has
+// no window and is decided by `decideHasRaised`; a calendar window is recency.
+/** A past raise, stated as a fact about the company. */
+const FUNDING_PRESENCE_RE =
+  /\b(?:raised|funded|backed|has\s+(?:\w+\s+)?funding|received\s+(?:\w+\s+){0,2}(?:funding|investment|capital))\b/;
+/** A raise that has not happened (yet): never a presence requirement. */
+const FUNDING_FUTURE_RE =
+  /\b(?:raising|seeking|looking\s+(?:to|for)|plan(?:s|ning)?\s+to\s+raise|about\s+to\s+raise|will\s+raise|going\s+to\s+raise)\b/;
+/**
+ * Words that state a window, parsed or not ("in the last two years"): a clause
+ * carrying one asks about recency, never presence.
+ */
+const FUNDING_WINDOW_WORDS_RE = /\b(?:the\s+(?:last|past)|since|ago)\b/;
+/** Venture (equity) funding, as opposed to any funding. */
+const VENTURE_FUNDING_RE = /\b(?:venture|vc[- ]?backed|equity)\b/;
+/** "before 2024", "prior to March 2023": the date a qualifying round must precede. */
+const FUNDING_BEFORE_RE =
+  /\b(?:before|prior\s+to)\s+(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+)?((?:19|20)\d{2})\b/;
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/** The ISO date a funding clause bounds its rounds by ("before 2024" → 2024-01-01), or null. */
+function fundingBeforeDate(clause: string): string | null {
+  const m = FUNDING_BEFORE_RE.exec(clause);
+  if (!m) return null;
+  const month = m[1] ? MONTHS.indexOf(m[1].slice(0, 3)) + 1 : 1;
+  return `${m[2]}-${String(month).padStart(2, "0")}-01`;
+}
+
+/**
+ * A CALENDAR WINDOW ("this year", "this month", "this quarter", "this week",
+ * "year to date"): days from the start of that period to `now`, inclusive. It is
+ * computed when the mission is compiled and carried from then on, so a lineage
+ * that runs for days keeps the window the user meant.
+ */
+export function calendarWindow(clause: string, now: Date = new Date()): { days: number; rule: string } | null {
+  const m = /\b(this\s+(?:year|month|quarter|week)|year[- ]to[- ]date|ytd)\b/.exec(clause.toLowerCase());
+  if (!m) return null;
+  const rule = m[1].replace(/\s+/g, " ");
+  const y = now.getUTCFullYear(), mo = now.getUTCMonth();
+  const start = rule === "this month" ? Date.UTC(y, mo, 1)
+    : rule === "this quarter" ? Date.UTC(y, mo - (mo % 3), 1)
+    : rule === "this week" ? Date.UTC(y, mo, now.getUTCDate() - ((now.getUTCDay() + 6) % 7))
+    : Date.UTC(y, 0, 1);
+  const today = Date.UTC(y, mo, now.getUTCDate());
+  return { days: Math.floor((today - start) / 86_400_000) + 1, rule };
+}
 /** A "stage" value that is really a funding-recency phrase ("funded within the last 2 years"). */
 const FUNDING_RECENCY_AS_STAGE_RE =
   /\b(?:funded|raised|funding)\b.*\b(?:within|last|past|recent(?:ly)?|ago|\d+\s*(?:days?|weeks?|months?|years?))\b/i;
@@ -1149,15 +1210,48 @@ export function deriveMissionCriteria(
     if (fundingRecency) {
       time_window = { days: def!.days, basis: def!.basis, source: "system_default", rule: def!.rule, enforced: false };
     }
+    // RC05 — a calendar window is a stated recency window; a stated past raise
+    // with no window is PRESENCE ("has raised venture funding", "before 2024").
+    const calendar = fundingCandidate && !fundingWindow && !fundingRecency && !!fundingClause
+      ? calendarWindow(fundingClause) : null;
+    if (calendar) {
+      time_window = { days: s.timeframe_days ?? calendar.days, basis: def?.basis ?? "observed", source: "user_explicit",
+        rule: calendar.rule, enforced: false };
+    }
+    // Presence only when NOTHING stated a window: no window words in the clause,
+    // and no window the user or the model carried (a default the compiler added
+    // for a temporal word elsewhere — "…and currently hiring" — is not one).
+    const statedWindow = !!time_window && time_window.source !== "system_default";
+    // The clause states a past raise with no window: presence, whatever makes it hard.
+    const windowlessRaise = k === "funding" && !fundingRecency && !calendar && !!fundingClause && !statedWindow &&
+      !FUNDING_WINDOW_WORDS_RE.test(fundingClause) && !FUNDING_FUTURE_RE.test(fundingClause) &&
+      (!!fundingClause && (FUNDING_BEFORE_RE.test(fundingClause) || FUNDING_PRESENCE_RE.test(fundingClause)));
+    const presenceBefore = windowlessRaise ? fundingBeforeDate(fundingClause!) : null;
+    // Hard by the presence rule (stated, unhedged, verifier ready) — or already
+    // hard by a modal ("must have raised venture funding"), which must still
+    // carry WHAT kind of raise it requires.
+    const fundingPresence = fundingCandidate && !fundingWindow && windowlessRaise;
+    const presenceClaim = fundingPresence || (!!elevated && windowlessRaise);
+    const presenceKind = presenceClaim && VENTURE_FUNDING_RE.test(fundingClause!) ? "venture" : "any";
+    if (presenceClaim) time_window = undefined; // presence has no window; a bound is `before`
     push({
-      kind: elevated || fundingWindow || fundingRecency || asserted ? "hard" : "target",
-      dimension: k, value: { event: eventOf(s), subject: s.subject ?? "company", qualifier: s.qualifier ?? {} },
-      label: signalDetail(k, s, rec?.subkind ?? reading?.subkind),
+      kind: elevated || fundingWindow || fundingRecency || calendar || fundingPresence || asserted ? "hard" : "target",
+      dimension: k, value: {
+        event: eventOf(s), subject: s.subject ?? "company", qualifier: s.qualifier ?? {},
+        ...(presenceClaim ? { presence: presenceKind, ...(presenceBefore ? { before: presenceBefore } : {}) } : {}),
+      },
+      label: presenceClaim
+        ? `Funding: has raised ${presenceKind === "venture" ? "venture funding" : "funding"}${presenceBefore ? ` before ${presenceBefore.slice(0, 7)}` : ""}`
+        : signalDetail(k, s, rec?.subkind ?? reading?.subkind),
       source, ...(time_window ? { time_window } : {}),
       ...(elevated ? { elevated_by: /^(?:only|strictly)$/.test(elevated[1]) ? elevated[1] as MissionCriterion["elevated_by"] : "must" } : {}),
       user_phrase: source === "user_explicit" ? phrase : "",
       rationale: fundingWindow
         ? "a funding window the request states, which the funding pair can verify"
+        : calendar
+        ? `a funding window the request states ("${calendar.rule}"), which the funding pair can verify`
+        : fundingPresence
+        ? `a raise the request states the company must have made${presenceBefore ? ` before ${presenceBefore.slice(0, 10)}` : ""} — presence, not recency`
         : fundingRecency
         ? `a funding recency the request requires; no window was stated, so the canonical "${def!.rule}" default (${def!.days} days) applies`
         : asserted
