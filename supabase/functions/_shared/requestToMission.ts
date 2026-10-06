@@ -109,6 +109,8 @@ export function compileRequestMission(
       companyBrain: opts.companyBrain ?? null,
       // The count the model read, or null. No regex supplies this.
       requestedCount: projection.requestedCount,
+      // Each requirement's own window (RC06).
+      signalRecencyByEvent: projection.signalRecencyByEvent ?? null,
     });
     return { ok: true, result, proposal: projection.proposal };
   } catch (e) {

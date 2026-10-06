@@ -50,7 +50,7 @@ import { sizeRangeProvable } from "./companySize.ts";
 import { readSignalPhrase, type SignalQualifier } from "./missionSignalDescriptor.ts";
 import {
   CANONICAL_SIGNAL_KINDS, DEFAULT_SIGNAL_WINDOWS, EXEC_TITLE_RE, aliasKindFor,
-  descriptorForReading, explicitWindowDays, kindForEvent, readCanonicalSignals, sameWindow,
+  descriptorForReading, explicitWindowDays, explicitWindowMatch, kindForEvent, readCanonicalSignals, sameWindow,
   readHypotheses, unmappedSignalLanguage,
   type CanonicalSignalKind, type CanonicalSignalReading, type HypothesisReading, type WindowBasis,
 } from "./signalKinds.ts";
@@ -329,9 +329,19 @@ export function readMissionLanguage(query: string) {
  * hiring a growth role" states ONE window, and it is funding's. Applying it to
  * every temporal signal made "currently hiring" accept a posting eleven months
  * old. A window now goes to the signal whose own clause states it (the clause
- * carrying that signal's cue, as `requirementElevation` reads it). When no
- * clause claims it — or only one temporal signal was named — it applies to all,
- * which is exactly the previous reading for a single-signal request.
+ * carrying that signal's cue, as `requirementElevation` reads it) — even when
+ * only one temporal signal was named: "founded in the last 5 years that are
+ * hiring sales in the last 30 days" names one signal and two windows, and
+ * hiring's is 30, not the sentence's first (PR #36 review).
+ *
+ * ONE WINDOW HAS ONE OWNER (RC06). "…funded in the last 24 months hiring sales"
+ * has no clause break, so funding's and hiring's clauses were the same text and
+ * both took 730 days; and a window no clause claimed used to go to EVERY
+ * signal. Either way "currently hiring" accepted a two-year-old posting
+ * (quality run 2026-10-06). A window several signals could claim now goes to
+ * the signal it is written after (the verb it completes: "funded in the last
+ * 24 months"), else the one it is written before; the others keep their own
+ * defaults.
  */
 function windowDaysByKind(query: string, readings: readonly CanonicalSignalReading[]):
   Partial<Record<CanonicalSignalKind, number>> {
@@ -339,7 +349,7 @@ function windowDaysByKind(query: string, readings: readonly CanonicalSignalReadi
   const out: Partial<Record<CanonicalSignalKind, number>> = {};
   if (stated == null) return out;
   const kinds = [...new Set(readings.map((r) => r.kind))].filter((k) => k !== "technology");
-  let claimed = false;
+  const byClause = new Map<string, CanonicalSignalKind[]>();
   for (const k of kinds) {
     const cue = SIGNAL_CUE[k];
     if (!cue) continue;
@@ -347,10 +357,50 @@ function windowDaysByKind(query: string, readings: readonly CanonicalSignalReadi
     const own = [...(phrase || query).toLowerCase().split(CLAUSE_BREAK)].reverse()
       .map((c) => c.trim()).find((c) => cue.test(c));
     const days = own ? explicitWindowDays(own) : null;
-    if (days != null) { out[k] = days; claimed = true; }
+    if (days == null) continue;
+    out[k] = days;
+    byClause.set(own!, [...(byClause.get(own!) ?? []), k]);
   }
-  if (!claimed) for (const k of kinds) out[k] = stated;
+  // One clause, one window: when several signals share the clause, only its owner keeps it.
+  for (const [clause, ks] of byClause) {
+    if (ks.length < 2) continue;
+    const owner = windowOwner(clause, ks, readings);
+    if (owner) for (const k of ks) if (k !== owner) delete out[k];
+  }
+  if (Object.keys(out).length === 0) {
+    const owner = windowOwner(query, kinds, readings);
+    if (owner) out[owner] = stated;
+    else for (const k of kinds) out[k] = stated;
+  }
   return out;
+}
+
+/**
+ * The signal a stated window belongs to: the one whose words come nearest BEFORE
+ * the window ("funded in the last 2 years"), else nearest after ("in the last
+ * 30 days, hiring…"). A signal is located by its cue word, or by its phrase when
+ * it has no cue. Null when none of them can be located.
+ */
+function windowOwner(
+  text: string, kinds: readonly CanonicalSignalKind[], readings: readonly CanonicalSignalReading[],
+): CanonicalSignalKind | null {
+  const t = text.toLowerCase();
+  const w = explicitWindowMatch(t);
+  if (!w) return null;
+  let before: { k: CanonicalSignalKind; d: number } | null = null;
+  let after: { k: CanonicalSignalKind; d: number } | null = null;
+  for (const k of kinds) {
+    const cue = SIGNAL_CUE[k];
+    const phrase = (readings.find((r) => r.kind === k)?.phrase ?? "").toLowerCase();
+    const at: Array<{ index: number; end: number }> = cue
+      ? [...t.matchAll(new RegExp(cue.source, "g"))].map((m) => ({ index: m.index!, end: m.index! + m[0].length }))
+      : phrase && t.includes(phrase) ? [{ index: t.indexOf(phrase), end: t.indexOf(phrase) + phrase.length }] : [];
+    for (const m of at) {
+      if (m.end <= w.index && (!before || w.index - m.end < before.d)) before = { k, d: w.index - m.end };
+      if (m.index >= w.end && (!after || m.index - w.end < after.d)) after = { k, d: m.index - w.end };
+    }
+  }
+  return before?.k ?? after?.k ?? null;
 }
 
 const eventOf = (s: Partial<MissionSignal>): string =>
