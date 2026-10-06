@@ -8,7 +8,7 @@
 // window in each sentence shape, through the real projection → compiler →
 // criteria. Pure.
 
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals, assertNotEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { projectToLeadMission } from "../../../supabase/functions/_shared/projectToLeadMission.ts";
 import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 import { deriveMissionCriteria } from "../../../supabase/functions/_shared/missionCriteria.ts";
@@ -61,4 +61,13 @@ Deno.test("RC06: a proposal with only the single window (no per-event map) is un
   const m = compileLeadMission({ originalUserQuery: "Find companies hiring sales recently.",
     proposal: p.proposal as never, requestedCount: 5 }).final_mission;
   assertEquals(m.required_signals.map((s) => [s.type, s.timeframe_days]), [["hiring", 90]]);
+});
+
+Deno.test("RC06: a window owned by a non-signal phrase is not the signal's — hiring keeps its own 30 days (A1)", () => {
+  // PR #36 review (2158b23f): with one signal kind the sentence's FIRST window
+  // was handed to it, so "founded in the last 5 years" gave hiring 1825 days.
+  const w = windows("Find companies founded in the last 5 years that are hiring sales in the last 30 days",
+    [req("hiring", "hiring sales in the last 30 days", 30)]);
+  assertEquals(w.hiring, 30);
+  assertNotEquals(w.hiring, 1825);
 });

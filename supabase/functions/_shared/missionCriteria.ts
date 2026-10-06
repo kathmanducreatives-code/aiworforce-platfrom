@@ -329,8 +329,10 @@ export function readMissionLanguage(query: string) {
  * hiring a growth role" states ONE window, and it is funding's. Applying it to
  * every temporal signal made "currently hiring" accept a posting eleven months
  * old. A window now goes to the signal whose own clause states it (the clause
- * carrying that signal's cue, as `requirementElevation` reads it). When only
- * one temporal signal was named, it applies to that one.
+ * carrying that signal's cue, as `requirementElevation` reads it) — even when
+ * only one temporal signal was named: "founded in the last 5 years that are
+ * hiring sales in the last 30 days" names one signal and two windows, and
+ * hiring's is 30, not the sentence's first (PR #36 review).
  *
  * ONE WINDOW HAS ONE OWNER (RC06). "…funded in the last 24 months hiring sales"
  * has no clause break, so funding's and hiring's clauses were the same text and
@@ -347,7 +349,6 @@ function windowDaysByKind(query: string, readings: readonly CanonicalSignalReadi
   const out: Partial<Record<CanonicalSignalKind, number>> = {};
   if (stated == null) return out;
   const kinds = [...new Set(readings.map((r) => r.kind))].filter((k) => k !== "technology");
-  if (kinds.length === 1) { out[kinds[0]] = stated; return out; }
   const byClause = new Map<string, CanonicalSignalKind[]>();
   for (const k of kinds) {
     const cue = SIGNAL_CUE[k];
