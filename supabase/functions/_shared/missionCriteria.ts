@@ -50,7 +50,7 @@ import { sizeRangeProvable } from "./companySize.ts";
 import { readSignalPhrase, type SignalQualifier } from "./missionSignalDescriptor.ts";
 import {
   CANONICAL_SIGNAL_KINDS, DEFAULT_SIGNAL_WINDOWS, EXEC_TITLE_RE, aliasKindFor,
-  descriptorForReading, explicitWindowDays, kindForEvent, readCanonicalSignals, sameWindow,
+  descriptorForReading, explicitWindowDays, explicitWindowMatch, kindForEvent, readCanonicalSignals, sameWindow,
   readHypotheses, unmappedSignalLanguage,
   type CanonicalSignalKind, type CanonicalSignalReading, type HypothesisReading, type WindowBasis,
 } from "./signalKinds.ts";
@@ -329,9 +329,19 @@ export function readMissionLanguage(query: string) {
  * hiring a growth role" states ONE window, and it is funding's. Applying it to
  * every temporal signal made "currently hiring" accept a posting eleven months
  * old. A window now goes to the signal whose own clause states it (the clause
- * carrying that signal's cue, as `requirementElevation` reads it). When no
- * clause claims it — or only one temporal signal was named — it applies to all,
- * which is exactly the previous reading for a single-signal request.
+ * carrying that signal's cue, as `requirementElevation` reads it) — even when
+ * only one temporal signal was named: "founded in the last 5 years that are
+ * hiring sales in the last 30 days" names one signal and two windows, and
+ * hiring's is 30, not the sentence's first (PR #36 review).
+ *
+ * ONE WINDOW HAS ONE OWNER (RC06). "…funded in the last 24 months hiring sales"
+ * has no clause break, so funding's and hiring's clauses were the same text and
+ * both took 730 days; and a window no clause claimed used to go to EVERY
+ * signal. Either way "currently hiring" accepted a two-year-old posting
+ * (quality run 2026-10-06). A window several signals could claim now goes to
+ * the signal it is written after (the verb it completes: "funded in the last
+ * 24 months"), else the one it is written before; the others keep their own
+ * defaults.
  */
 function windowDaysByKind(query: string, readings: readonly CanonicalSignalReading[]):
   Partial<Record<CanonicalSignalKind, number>> {
@@ -339,7 +349,7 @@ function windowDaysByKind(query: string, readings: readonly CanonicalSignalReadi
   const out: Partial<Record<CanonicalSignalKind, number>> = {};
   if (stated == null) return out;
   const kinds = [...new Set(readings.map((r) => r.kind))].filter((k) => k !== "technology");
-  let claimed = false;
+  const byClause = new Map<string, CanonicalSignalKind[]>();
   for (const k of kinds) {
     const cue = SIGNAL_CUE[k];
     if (!cue) continue;
@@ -347,10 +357,50 @@ function windowDaysByKind(query: string, readings: readonly CanonicalSignalReadi
     const own = [...(phrase || query).toLowerCase().split(CLAUSE_BREAK)].reverse()
       .map((c) => c.trim()).find((c) => cue.test(c));
     const days = own ? explicitWindowDays(own) : null;
-    if (days != null) { out[k] = days; claimed = true; }
+    if (days == null) continue;
+    out[k] = days;
+    byClause.set(own!, [...(byClause.get(own!) ?? []), k]);
   }
-  if (!claimed) for (const k of kinds) out[k] = stated;
+  // One clause, one window: when several signals share the clause, only its owner keeps it.
+  for (const [clause, ks] of byClause) {
+    if (ks.length < 2) continue;
+    const owner = windowOwner(clause, ks, readings);
+    if (owner) for (const k of ks) if (k !== owner) delete out[k];
+  }
+  if (Object.keys(out).length === 0) {
+    const owner = windowOwner(query, kinds, readings);
+    if (owner) out[owner] = stated;
+    else for (const k of kinds) out[k] = stated;
+  }
   return out;
+}
+
+/**
+ * The signal a stated window belongs to: the one whose words come nearest BEFORE
+ * the window ("funded in the last 2 years"), else nearest after ("in the last
+ * 30 days, hiring…"). A signal is located by its cue word, or by its phrase when
+ * it has no cue. Null when none of them can be located.
+ */
+function windowOwner(
+  text: string, kinds: readonly CanonicalSignalKind[], readings: readonly CanonicalSignalReading[],
+): CanonicalSignalKind | null {
+  const t = text.toLowerCase();
+  const w = explicitWindowMatch(t);
+  if (!w) return null;
+  let before: { k: CanonicalSignalKind; d: number } | null = null;
+  let after: { k: CanonicalSignalKind; d: number } | null = null;
+  for (const k of kinds) {
+    const cue = SIGNAL_CUE[k];
+    const phrase = (readings.find((r) => r.kind === k)?.phrase ?? "").toLowerCase();
+    const at: Array<{ index: number; end: number }> = cue
+      ? [...t.matchAll(new RegExp(cue.source, "g"))].map((m) => ({ index: m.index!, end: m.index! + m[0].length }))
+      : phrase && t.includes(phrase) ? [{ index: t.indexOf(phrase), end: t.indexOf(phrase) + phrase.length }] : [];
+    for (const m of at) {
+      if (m.end <= w.index && (!before || w.index - m.end < before.d)) before = { k, d: w.index - m.end };
+      if (m.index >= w.end && (!after || m.index - w.end < after.d)) after = { k, d: m.index - w.end };
+    }
+  }
+  return before?.k ?? after?.k ?? null;
 }
 
 const eventOf = (s: Partial<MissionSignal>): string =>
@@ -455,6 +505,13 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
         ? { source: "user_inferred", confidence: i.proposal.confidence }
         : { source: "system_default", rule: "carried from the compiled mission" };
       return s;
+    }
+    // "funded this year": the user's calendar window, computed now and carried (RC05).
+    const calendar = k === "funding" ? calendarWindow(signalClause("funding", query) ?? "") : null;
+    if (calendar) {
+      windowSources[k] = { source: "user_explicit", rule: calendar.rule };
+      changes.push(`window_from_calendar:${k}:${calendar.days}d`);
+      return { ...s, timeframe_days: calendar.days };
     }
     const d = DEFAULT_SIGNAL_WINDOWS[k];
     if (!d) return s;
@@ -695,6 +752,60 @@ const SIGNAL_HEDGE_RE =
   /\b(?:appears?\s+to|appearing\s+to|seems?\s+to|signs?\s+(?:of|that|they)|likely|(?:may|might)\s+(?:have|be|still|already)|possibly|perhaps|potentially|not\s+(?:strictly\s+)?required)\b/;
 /** A funding clause that asks about RECENCY (as opposed to a round or stage). */
 const FUNDING_RECENCY_RE = /\b(?:recent(?:ly)?|recency|newly|lately|latest)\b/;
+
+// ── FUNDING PRESENCE, CALENDAR WINDOWS AND DATE BOUNDS (RC05) ────────────────
+//
+// "Has raised venture funding" (presence), "funded this year" (a calendar
+// window) and "raised funding before 2024" (a date bound) are stated
+// requirements the funding pair can answer. They compiled as targets — never
+// verified, never rejecting — and a known-company question with presence as
+// its only requirement was refused as unprovable (quality run 2026-10-06:
+// A05, E01, S01, S06). Presence and recency stay separate claims: presence has
+// no window and is decided by `decideHasRaised`; a calendar window is recency.
+/** A past raise, stated as a fact about the company. */
+const FUNDING_PRESENCE_RE =
+  /\b(?:raised|funded|backed|has\s+(?:\w+\s+)?funding|received\s+(?:\w+\s+){0,2}(?:funding|investment|capital))\b/;
+/** A raise that has not happened (yet): never a presence requirement. */
+const FUNDING_FUTURE_RE =
+  /\b(?:raising|seeking|looking\s+(?:to|for)|plan(?:s|ning)?\s+to\s+raise|about\s+to\s+raise|will\s+raise|going\s+to\s+raise)\b/;
+/**
+ * Words that state a window, parsed or not ("in the last two years"): a clause
+ * carrying one asks about recency, never presence.
+ */
+const FUNDING_WINDOW_WORDS_RE = /\b(?:the\s+(?:last|past)|since|ago)\b/;
+/** Venture (equity) funding, as opposed to any funding. */
+const VENTURE_FUNDING_RE = /\b(?:venture|vc[- ]?backed|equity)\b/;
+/** "before 2024", "prior to March 2023": the date a qualifying round must precede. */
+const FUNDING_BEFORE_RE =
+  /\b(?:before|prior\s+to)\s+(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+)?((?:19|20)\d{2})\b/;
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/** The ISO date a funding clause bounds its rounds by ("before 2024" → 2024-01-01), or null. */
+function fundingBeforeDate(clause: string): string | null {
+  const m = FUNDING_BEFORE_RE.exec(clause);
+  if (!m) return null;
+  const month = m[1] ? MONTHS.indexOf(m[1].slice(0, 3)) + 1 : 1;
+  return `${m[2]}-${String(month).padStart(2, "0")}-01`;
+}
+
+/**
+ * A CALENDAR WINDOW ("this year", "this month", "this quarter", "this week",
+ * "year to date"): days from the start of that period to `now`, inclusive. It is
+ * computed when the mission is compiled and carried from then on, so a lineage
+ * that runs for days keeps the window the user meant.
+ */
+export function calendarWindow(clause: string, now: Date = new Date()): { days: number; rule: string } | null {
+  const m = /\b(this\s+(?:year|month|quarter|week)|year[- ]to[- ]date|ytd)\b/.exec(clause.toLowerCase());
+  if (!m) return null;
+  const rule = m[1].replace(/\s+/g, " ");
+  const y = now.getUTCFullYear(), mo = now.getUTCMonth();
+  const start = rule === "this month" ? Date.UTC(y, mo, 1)
+    : rule === "this quarter" ? Date.UTC(y, mo - (mo % 3), 1)
+    : rule === "this week" ? Date.UTC(y, mo, now.getUTCDate() - ((now.getUTCDay() + 6) % 7))
+    : Date.UTC(y, 0, 1);
+  const today = Date.UTC(y, mo, now.getUTCDate());
+  return { days: Math.floor((today - start) / 86_400_000) + 1, rule };
+}
 /** A "stage" value that is really a funding-recency phrase ("funded within the last 2 years"). */
 const FUNDING_RECENCY_AS_STAGE_RE =
   /\b(?:funded|raised|funding)\b.*\b(?:within|last|past|recent(?:ly)?|ago|\d+\s*(?:days?|weeks?|months?|years?))\b/i;
@@ -1099,15 +1210,48 @@ export function deriveMissionCriteria(
     if (fundingRecency) {
       time_window = { days: def!.days, basis: def!.basis, source: "system_default", rule: def!.rule, enforced: false };
     }
+    // RC05 — a calendar window is a stated recency window; a stated past raise
+    // with no window is PRESENCE ("has raised venture funding", "before 2024").
+    const calendar = fundingCandidate && !fundingWindow && !fundingRecency && !!fundingClause
+      ? calendarWindow(fundingClause) : null;
+    if (calendar) {
+      time_window = { days: s.timeframe_days ?? calendar.days, basis: def?.basis ?? "observed", source: "user_explicit",
+        rule: calendar.rule, enforced: false };
+    }
+    // Presence only when NOTHING stated a window: no window words in the clause,
+    // and no window the user or the model carried (a default the compiler added
+    // for a temporal word elsewhere — "…and currently hiring" — is not one).
+    const statedWindow = !!time_window && time_window.source !== "system_default";
+    // The clause states a past raise with no window: presence, whatever makes it hard.
+    const windowlessRaise = k === "funding" && !fundingRecency && !calendar && !!fundingClause && !statedWindow &&
+      !FUNDING_WINDOW_WORDS_RE.test(fundingClause) && !FUNDING_FUTURE_RE.test(fundingClause) &&
+      (!!fundingClause && (FUNDING_BEFORE_RE.test(fundingClause) || FUNDING_PRESENCE_RE.test(fundingClause)));
+    const presenceBefore = windowlessRaise ? fundingBeforeDate(fundingClause!) : null;
+    // Hard by the presence rule (stated, unhedged, verifier ready) — or already
+    // hard by a modal ("must have raised venture funding"), which must still
+    // carry WHAT kind of raise it requires.
+    const fundingPresence = fundingCandidate && !fundingWindow && windowlessRaise;
+    const presenceClaim = fundingPresence || (!!elevated && windowlessRaise);
+    const presenceKind = presenceClaim && VENTURE_FUNDING_RE.test(fundingClause!) ? "venture" : "any";
+    if (presenceClaim) time_window = undefined; // presence has no window; a bound is `before`
     push({
-      kind: elevated || fundingWindow || fundingRecency || asserted ? "hard" : "target",
-      dimension: k, value: { event: eventOf(s), subject: s.subject ?? "company", qualifier: s.qualifier ?? {} },
-      label: signalDetail(k, s, rec?.subkind ?? reading?.subkind),
+      kind: elevated || fundingWindow || fundingRecency || calendar || fundingPresence || asserted ? "hard" : "target",
+      dimension: k, value: {
+        event: eventOf(s), subject: s.subject ?? "company", qualifier: s.qualifier ?? {},
+        ...(presenceClaim ? { presence: presenceKind, ...(presenceBefore ? { before: presenceBefore } : {}) } : {}),
+      },
+      label: presenceClaim
+        ? `Funding: has raised ${presenceKind === "venture" ? "venture funding" : "funding"}${presenceBefore ? ` before ${presenceBefore.slice(0, 7)}` : ""}`
+        : signalDetail(k, s, rec?.subkind ?? reading?.subkind),
       source, ...(time_window ? { time_window } : {}),
       ...(elevated ? { elevated_by: /^(?:only|strictly)$/.test(elevated[1]) ? elevated[1] as MissionCriterion["elevated_by"] : "must" } : {}),
       user_phrase: source === "user_explicit" ? phrase : "",
       rationale: fundingWindow
         ? "a funding window the request states, which the funding pair can verify"
+        : calendar
+        ? `a funding window the request states ("${calendar.rule}"), which the funding pair can verify`
+        : fundingPresence
+        ? `a raise the request states the company must have made${presenceBefore ? ` before ${presenceBefore.slice(0, 10)}` : ""} — presence, not recency`
         : fundingRecency
         ? `a funding recency the request requires; no window was stated, so the canonical "${def!.rule}" default (${def!.days} days) applies`
         : asserted

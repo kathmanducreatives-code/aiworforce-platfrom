@@ -35,15 +35,17 @@ Deno.test("a user-stated funding window the READY pair can verify is HARD, and v
     "feasibility's established-after-eligibility path now sees it");
 });
 
-Deno.test("'recently raised' is HARD on the canonical default window; a bare 'raised' stays a target", () => {
+Deno.test("'recently raised' is HARD on the canonical default window; a bare 'raised' is HARD presence with no window", () => {
   // Compiler correctness (2026-10-01): "recently raised" is a requirement the
   // user stated. It names no window, so it runs on the product's canonical
   // "recently funded" default (DEFAULT_SIGNAL_WINDOWS.funding, 180 days),
   // labelled system_default — never presented as the user's own window.
   const f = funding(parseLeadMissionDeterministic("Find software companies in Germany that recently raised funding"));
   assertEquals([f.kind, f.time_window?.days, f.time_window?.source], ["hard", 180, "system_default"]);
-  // A bare round with no recency asks for no window at all.
-  assertEquals(funding(parseLeadMissionDeterministic("Find software companies in Germany that raised funding")).kind, "target");
+  // A bare raise asks for no window at all: it is PRESENCE (RC05, 2026-10-06) —
+  // hard, windowless, decided by `decideHasRaised` — never recency.
+  const bare = funding(parseLeadMissionDeterministic("Find software companies in Germany that raised funding"));
+  assertEquals([bare.kind, bare.time_window, (bare.value as { presence?: string }).presence], ["hard", undefined, "any"]);
   // Hedged recency is a preference, not a requirement.
   assertEquals(funding(parseLeadMissionDeterministic("Find software companies in Germany that may have recently raised funding")).kind, "target");
 });
