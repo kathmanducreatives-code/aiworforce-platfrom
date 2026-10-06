@@ -241,16 +241,31 @@ export function observationFromCompany(
   const weigh = (claim: AuthorityClaim, field: AuthorityField, quality: AuthorityQuality = {}) =>
     authorityForEvidence({ claim, source: ctx.actor_key, field, observed_at: ctx.observed_at, quality });
   if (c.geography) {
-    // PRESENCE, NOT HEADQUARTERS: the rendered list of every office. Proving
-    // needs each entry's structured country, so nothing is read from text.
     const entries = c.location_entries ?? [];
-    const a = weigh("country", "location_entries", {
-      structured_country: entries.length > 0 && entries.every((e) => !!e.country),
-    });
-    ev.push(item(ctx, "geography", c.geography, {
-      ...base, status: statusForAuthority(a.authority), authority: authorityRecord(a),
-      confidence: a.authority === "proven" ? "high" : trust.geography === "direct" ? "high" : "medium",
-    }));
+    // A COMPANY IS WHERE IT IS HEADQUARTERED. When the provider flags exactly one
+    // location as headquarters, that location is the geography the hard claim
+    // reads. The office list used to be the value, so a Toronto-headquartered
+    // company with an Austin office passed a hard US requirement (quality run
+    // T07): the joined text "Toronto…; Austin, TX, United States" mentions the US.
+    const hq = entries.filter((e) => e.is_headquarters);
+    if (hq.length === 1) {
+      const a = weigh("headquarters", "headquarters_flag", { single_headquarters_flag: true });
+      ev.push(item(ctx, "geography", hq[0].text, {
+        ...base, status: statusForAuthority(a.authority), authority: authorityRecord(a),
+        confidence: a.authority === "proven" ? "high" : "medium",
+      }));
+    } else {
+      // NO SINGLE HEADQUARTERS FLAG: PRESENCE, as before — the rendered list of
+      // every office. Proving needs each entry's structured country, so nothing
+      // is read from text.
+      const a = weigh("country", "location_entries", {
+        structured_country: entries.length > 0 && entries.every((e) => !!e.country),
+      });
+      ev.push(item(ctx, "geography", c.geography, {
+        ...base, status: statusForAuthority(a.authority), authority: authorityRecord(a),
+        confidence: a.authority === "proven" ? "high" : trust.geography === "direct" ? "high" : "medium",
+      }));
+    }
   }
   // ── SIZE: THE DECLARED BAND, AND ONLY THE BAND ──────────────────────────
   //
