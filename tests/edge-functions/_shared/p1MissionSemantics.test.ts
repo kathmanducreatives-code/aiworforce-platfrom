@@ -60,13 +60,15 @@ Deno.test("every compiled mission carries goal, count, criteria and canonical si
   assertEquals(r.final_mission.mission_semantics?.version, "mission-semantics-v1");
 });
 
-Deno.test('"hiring growth marketers" → hiring target, role kept, default window shown but not claimed as enforced', () => {
+// A stated, unhedged hiring requirement is HARD (RC04, 2026-10-06); only a hedged
+// one ("appears to be hiring") stays a target.
+Deno.test('"hiring growth marketers" → hiring HARD, role kept, default window shown but not claimed as enforced', () => {
   const m = compile("Find US B2B SaaS companies hiring growth marketers.", {
     company_types: ["B2B SaaS"], geographies: ["United States"], preferred_signals: ["hiring growth marketers"],
   }).final_mission;
   assertEquals(events(m), ["hiring"]);
   const h = one(m, "hiring");
-  assertEquals(h.kind, "target");
+  assertEquals(h.kind, "hard");
   assertEquals(h.source, "user_explicit");
   assert(h.label.includes("growth marketer"), h.label);
   assertEquals(h.time_window?.days, 30);
