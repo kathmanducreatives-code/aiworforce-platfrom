@@ -37,7 +37,8 @@ import {
   normalizeAtomusFunding, normalizePvalyouFunding, PVALYOU_FUNDING_ACTOR_KEY, stampFundingCall,
 } from "./fundingCorroboration.ts";
 import {
-  decideRecentlyFunded, fundingStageEvidenceItem, recordCompleteness, type FundingRecordFact, type FundingStageDecision,
+  decideRecentlyFunded, fundingStageEvidenceItem, recordCompleteness, stageRequirement, type FundingRecordFact,
+  type FundingStageDecision,
 } from "./fundingStageClaim.ts";
 
 export const FUNDING_STAGE_VERIFIER_KEY = "funding_stage_corroboration" as const;
@@ -146,7 +147,7 @@ export function fundingStageVerifier(opts: FundingStageVerifierOptions = {}): Cl
           const pvRecord = pv?.record ? stampFundingCall(pv.record, callId) : null;
           const atomus = carry.atomus[t.company_key] ?? null;
           const { decision, corroboration } = decideCorroboratedFundingStage({
-            required_stage: String(t.criterion.value ?? ""), atomus, pvalyou: pvRecord,
+            required_stage: stageRequirement(t.criterion), atomus, pvalyou: pvRecord,
             discovered: carry.discovered?.[t.company_key] ?? [],
           });
           findings.push(finding(t, decision, corroboration.record, {
@@ -354,7 +355,7 @@ export function fundingStageVerifier(opts: FundingStageVerifierOptions = {}): Cl
           continue;
         }
         discovered[t.company_key] = discoveredOf(t);
-        const failed = atomusSettles(String(t.criterion.value ?? ""), atomus);
+        const failed = atomusSettles(stageRequirement(t.criterion), atomus);
         if (failed) {
           findings.push(finding(t, failed, atomus, {
             mission_id: ctx.mission_id, provider_call_id: atomusCallId, at, stage: "atomus_later_round",
@@ -365,7 +366,7 @@ export function fundingStageVerifier(opts: FundingStageVerifierOptions = {}): Cl
         // or cites a later one — decides the claim without pvalyou.
         if (atomus && discovered[t.company_key].length > 0) {
           const { decision, corroboration } = decideCorroboratedFundingStage({
-            required_stage: String(t.criterion.value ?? ""), atomus, pvalyou: null, discovered: discovered[t.company_key],
+            required_stage: stageRequirement(t.criterion), atomus, pvalyou: null, discovered: discovered[t.company_key],
           });
           if (decision.verdict !== "pending") {
             findings.push(finding(t, decision, corroboration.record, {

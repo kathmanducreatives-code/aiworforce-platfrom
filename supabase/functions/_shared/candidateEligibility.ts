@@ -47,7 +47,7 @@ import type { EvidenceDimension, EvidenceItem } from "./candidateObservation.ts"
 import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts";
 import { geographyContradicts } from "./leadEligiblePool.ts";
 import { matchBusinessModel } from "./businessModelMatch.ts";
-import { decideRecentlyFunded, normalizeRoundType } from "./fundingStageClaim.ts";
+import { decideRecentlyFunded, normalizeRoundType, requiredStagesOf, stageRequirement } from "./fundingStageClaim.ts";
 import type { FundingStageVerdict } from "./fundingStageClaim.ts";
 import { fundingRecordsInGraph } from "./fundingCorroboration.ts";
 import { bandSatisfies, isSizeBand } from "./companySize.ts";
@@ -176,7 +176,7 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
   // `fundingStageClaim.ts` already ordered the verified rounds; re-reading its
   // verdict as a string would only reintroduce the substring test it replaces.
   if (c.dimension === "company_stage") {
-    const fs = fundingStageClaimValue(item, c.value);
+    const fs = fundingStageClaimValue(item, stageRequirement(c));
     if (fs) {
       // A DECIDED CLAIM IS NEVER RE-READ AS TEXT. Falling through to the label
       // path would let the explanation's own words ("later than seed") match a
@@ -311,17 +311,20 @@ type FundingStageClaimRead =
   | { answers: false; required_stage: string }
   | { answers: true; verdict: FundingStageVerdict; explanation: string };
 
-function fundingStageClaimValue(item: EvidenceItem, wanted: unknown): FundingStageClaimRead | null {
+function fundingStageClaimValue(item: EvidenceItem, wanted: string): FundingStageClaimRead | null {
   const v = item.value as
     | { claim?: string; verdict?: string; required_stage?: string | null; explanation?: string }
     | null
     | undefined;
   if (!v || typeof v !== "object" || v.claim !== "funding_stage") return null;
   if (v.verdict !== "pass" && v.verdict !== "fail") return null;
-  const decided = normalizeRoundType(v.required_stage ?? null);
-  const want = normalizeRoundType(typeof wanted === "string" ? wanted : null);
-  if (!decided || !want || decided !== want) {
-    return { answers: false, required_stage: decided ?? String(v.required_stage ?? "") };
+  // One rung, or an any-of set joined by "|" (RC02): the claim answers this
+  // criterion only when it decided exactly the set the criterion asks for.
+  const rungs = (s: string | null) => requiredStagesOf(s).map((x) => normalizeRoundType(x)).filter((x): x is string => !!x).sort();
+  const decided = rungs(v.required_stage ?? null);
+  const want = rungs(wanted);
+  if (!decided.length || !want.length || decided.join("|") !== want.join("|")) {
+    return { answers: false, required_stage: decided.join("|") || String(v.required_stage ?? "") };
   }
   return { answers: true, verdict: v.verdict, explanation: String(v.explanation ?? `funding stage ${v.verdict}`) };
 }
@@ -446,6 +449,44 @@ function checkKnownCompanies(
 }
 
 /**
+ * ANY-OF GROUPS (RC02). Hard criteria that carry the same `any_of` alternatives
+ * ("AI or developer-tools", "Series A or Series B") are ONE requirement:
+ *
+ *   an alternative passes   → the group passes; its siblings are answered by it
+ *   every alternative fails → each fails, as before
+ *   otherwise               → open: failed alternatives are dropped, so they can
+ *                             neither reject the company nor route a purchase;
+ *                             the open ones stay unknown
+ *
+ * Criteria without `any_of` are untouched, so "worst result wins" still holds
+ * for genuine ANDs ("B2B SaaS" → b2b saas + saas).
+ */
+function anyOfResolved(criteria: readonly MissionCriterion[], checks: CriterionCheck[]): CriterionCheck[] {
+  const groupOf = (i: number) => {
+    const c = criteria[i];
+    return c.kind === "hard" && (c.any_of?.length ?? 0) > 1 ? `${c.dimension}|${[...c.any_of!].sort().join("|")}` : null;
+  };
+  const groups = new Map<string, number[]>();
+  checks.forEach((_, i) => { const g = groupOf(i); if (g) groups.set(g, [...(groups.get(g) ?? []), i]); });
+  if (groups.size === 0) return checks;
+  const out: Array<CriterionCheck | null> = [...checks];
+  for (const members of groups.values()) {
+    const passing = members.find((i) => checks[i].result === "pass");
+    if (passing !== undefined) {
+      const p = checks[passing];
+      for (const i of members) {
+        if (checks[i].result === "pass") continue;
+        out[i] = { ...checks[i], result: "pass", evidence_ids: p.evidence_ids, provenance: p.provenance,
+          reason: `answered by the alternative ${String(criteria[passing].value)}: ${p.reason}` };
+      }
+    } else if (!members.every((i) => checks[i].result === "fail")) {
+      for (const i of members) if (checks[i].result === "fail") out[i] = null;
+    }
+  }
+  return out.filter((c): c is CriterionCheck => c !== null);
+}
+
+/**
  * The candidate's eligibility. Hard criteria decide it; everything else is
  * checked for the record and cannot change the outcome.
  */
@@ -453,7 +494,7 @@ export function evaluateEligibility(
   criteria: readonly MissionCriterion[], graph: CompanyEvidenceGraph,
 ): EligibilityResult {
   const usable = criteria.filter((c) => c.status === "ok");
-  const checks = usable.map((c) => checkCriterion(c, graph));
+  const checks = anyOfResolved(usable, usable.map((c) => checkCriterion(c, graph)));
   const hard = checks.filter((c) => c.kind === "hard");
   const hard_checks: Record<string, CheckResult> = {};
   for (const h of hard) {

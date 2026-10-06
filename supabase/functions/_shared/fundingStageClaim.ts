@@ -257,10 +257,48 @@ function label(rank: number): string {
   return "unknown";
 }
 
+// ── ANY OF SEVERAL STAGES (RC02) ────────────────────────────────────────────
+//
+// "Raised Series A or Series B" is ONE requirement with two acceptable rungs.
+// It travels as a single `required_stage` string joining the rungs with "|"
+// ("series_a|series_b"), so every caller that already passes a string —
+// corroboration, `atomusSettles`, discovery — decides the whole set. Each rung
+// is decided exactly as before and the answers combine: any PASS passes, FAIL
+// only when every rung fails (a verified round later than all of them), and
+// anything else stays PENDING.
+
+/** The rungs a `required_stage` asks for: one, or several joined by "|". */
+export function requiredStagesOf(required_stage: string | null): string[] {
+  return String(required_stage ?? "").split("|").map((s) => s.trim()).filter(Boolean);
+}
+
+/** A stage criterion's `required_stage`: its value, or every alternative when it is one of an any-of group. */
+export function stageRequirement(c: { value: unknown; any_of?: readonly string[] | null }): string {
+  return (c.any_of?.length ? c.any_of : [String(c.value ?? "")]).join("|");
+}
+
+function decideAnyOfStages(stages: readonly string[], i: Parameters<typeof decideFundingStage>[0]): FundingStageDecision {
+  const ds = stages.map((s) => decideFundingStage({ ...i, required_stage: s }));
+  const set = ds.map((d, k) => d.required_stage ?? stages[k]).join("|");
+  const asked = stages.map((s) => normalizeRoundType(s) ?? s).join(" or ");
+  const pass = ds.find((d) => d.verdict === "pass");
+  if (pass) return { ...pass, required_stage: set, explanation: `${pass.explanation} (one of ${asked})` };
+  if (ds.every((d) => d.verdict === "fail")) {
+    // The fail against the HIGHEST rung names a round later than every rung asked for.
+    const top = ds.reduce((a, b) => (stageRank(b.required_stage) ?? -1) > (stageRank(a.required_stage) ?? -1) ? b : a);
+    return { ...top, required_stage: set, explanation: `${top.explanation}, and so later than every stage asked for (${asked})` };
+  }
+  // Still open: report the most informative open rung — one with evidence at it, before "earlier than".
+  const open = ds.filter((d) => d.verdict === "pending");
+  const best = open.find((d) => !d.reasons.includes("required_stage_not_verified")) ?? open[0] ?? ds[0];
+  return { ...best, verdict: "pending", required_stage: set };
+}
+
 /**
  * SEED-1 and its generalization to any rung of the ladder.
  *
- * @param required_stage the stage the mission asked for ("seed", "pre-seed", …).
+ * @param required_stage the stage the mission asked for ("seed", "pre-seed", …),
+ *   or several acceptable stages joined by "|" ("series_a|series_b").
  * @param record the funding record, or null when no provider produced one.
  */
 export function decideFundingStage(i: {
@@ -277,6 +315,8 @@ export function decideFundingStage(i: {
    */
   pass_requires_source_url?: boolean;
 }): FundingStageDecision {
+  const alternatives = requiredStagesOf(i.required_stage);
+  if (alternatives.length > 1) return decideAnyOfStages(alternatives, i);
   const required = normalizeRoundType(i.required_stage);
   const requiredRank = stageRank(required);
   const base: FundingStageDecision = {
