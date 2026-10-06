@@ -98,6 +98,14 @@ export interface MissionCriterion {
   user_phrase: string;
   rationale: string;
   status: CriterionStatus;
+  /**
+   * ANY OF THESE (RC02). Set when the request joins this value with others by
+   * "or" ("AI or developer-tools", "Series A or Series B"): every alternative,
+   * this one included. Hard criteria sharing it are ONE requirement that any
+   * alternative satisfies (`evaluateEligibility`); a stage set is decided as one
+   * claim (`fundingStageClaim.stageRequirement`). Absent: an ordinary criterion.
+   */
+  any_of?: string[];
 }
 
 export interface CanonicalSignalRecord {
@@ -118,6 +126,8 @@ export interface StageIntent {
   kind: "hard" | "target";
   elevated_by: MissionCriterion["elevated_by"];
   hedged: boolean;
+  /** Every stage the request joins to this one by "or" ("Seed or Series A"), this one included. RC02. */
+  alternatives?: string[];
 }
 
 export interface MissionSemanticsRecord {
@@ -157,6 +167,62 @@ const STAGE_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
 /** Funding rounds, which no current discovery source proves per company. */
 const ROUND_STAGES = new Set(["pre-seed", "seed", "series_a", "series_b", "series_c", "series_d", "series_e"]);
 
+// ── "OR" JOINS ALTERNATIVES (RC02) ──────────────────────────────────────────
+//
+// Two values the request joins by "or" — or a comma / slash in such a list —
+// are alternatives of ONE requirement. "and", or any other words between them,
+// is not: "B2B AI" and "Seed and Series A" stay separate requirements.
+const OR_JOIN_RE = /^\s*(?:,\s*(?:or\s+)?|or\s+|\/\s*)(?:an?\s+)?$/i;
+
+/** Every stage word in the text, in reading order (a word inside a longer one counts once). */
+function stageMentions(text: string): Array<{ index: number; end: number; value: string }> {
+  const all: Array<{ index: number; end: number; value: string }> = [];
+  for (const [re, value] of STAGE_PATTERNS) {
+    for (const m of text.matchAll(new RegExp(re.source, "gi"))) {
+      all.push({ index: m.index!, end: m.index! + m[0].length,
+        value: value === "series_" ? `series_${m[1].toLowerCase()}` : value });
+    }
+  }
+  all.sort((a, b) => a.index - b.index || b.end - a.end);
+  return all.filter((x, i) => !all.some((y, j) => j !== i && y.index <= x.index && y.end >= x.end && (y.end - y.index) > (x.end - x.index)));
+}
+
+/** The stages joined by "or" to the one at `index`, itself included — undefined when it stands alone. */
+function stageAlternativesAt(text: string, index: number, keep: (v: string) => boolean = () => true): string[] | undefined {
+  const ms = stageMentions(text);
+  const at = ms.findIndex((m) => m.index === index);
+  if (at < 0) return undefined;
+  let lo = at, hi = at;
+  while (lo > 0 && OR_JOIN_RE.test(text.slice(ms[lo - 1].end, ms[lo].index))) lo--;
+  while (hi < ms.length - 1 && OR_JOIN_RE.test(text.slice(ms[hi].end, ms[hi + 1].index))) hi++;
+  const values = [...new Set(ms.slice(lo, hi + 1).map((m) => m.value).filter(keep))];
+  return values.length > 1 ? values : undefined;
+}
+
+/** Values the request joins by "or", each mapped to its whole group (itself included). Values standing alone are absent. */
+function orAlternatives(values: readonly string[], query: string): Map<string, string[]> {
+  const q = query.toLowerCase();
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const found = values
+    .map((v) => ({ v, m: new RegExp(`(?<![\\w-])${esc(v.toLowerCase())}(?![\\w-])`).exec(q) }))
+    .filter((x): x is { v: string; m: RegExpExecArray } => !!x.m && x.v.trim().length > 1)
+    .map((x) => ({ v: x.v, index: x.m.index, end: x.m.index + x.m[0].length }))
+    .sort((a, b) => a.index - b.index);
+  const out = new Map<string, string[]>();
+  let run: typeof found = [];
+  const flush = () => {
+    if (run.length > 1) for (const x of run) out.set(x.v, run.map((y) => y.v));
+    run = [];
+  };
+  for (const x of found) {
+    const prev = run[run.length - 1];
+    if (prev && !OR_JOIN_RE.test(q.slice(prev.end, x.index))) flush();
+    run.push(x);
+  }
+  flush();
+  return out;
+}
+
 /**
  * A company-stage requirement the user stated, and how strongly.
  *
@@ -179,12 +245,14 @@ export function readStageIntent(query: string): StageIntent | null {
       ? (elevated[1].toLowerCase().startsWith("must") ? "must" : elevated[1].toLowerCase()) as StageIntent["elevated_by"]
       : null;
     const phraseStart = elevated ? Math.max(0, m.index - 40) + (elevated.index ?? 0) : m.index;
+    const alternatives = stageAlternativesAt(text, m.index);
     return {
       value: v,
       phrase: text.slice(phraseStart, m.index + m[0].length).trim(),
       kind: elevatedBy && !hedged ? "hard" : "target",
       elevated_by: elevatedBy && !hedged ? elevatedBy : null,
       hedged,
+      ...(alternatives ? { alternatives } : {}),
     };
   }
   return null;
@@ -227,12 +295,14 @@ export function readFundedStageIntent(query: string): StageIntent | null {
     if (!ROUND_STAGES.has(v)) continue;
     const clause = text.slice(Math.max(0, m.index - 60), Math.min(text.length, m.index + m[0].length + 60));
     if (HEDGE_RE.test(clause)) return null;
+    const alternatives = stageAlternativesAt(text, m.index, (s) => ROUND_STAGES.has(s));
     return {
       value: v,
       phrase: text.slice(Math.max(0, m.index - 24), m.index + m[0].length).trim(),
       kind: "hard",
       elevated_by: null,
       hedged: false,
+      ...(alternatives ? { alternatives } : {}),
     };
   }
   return null;
@@ -745,6 +815,9 @@ export function deriveMissionCriteria(
   const profileList = (
     dimension: CriterionDimension, field: string, values: readonly string[], label: string,
   ) => {
+    // "AI or developer-tools", "New York or California": alternatives of ONE
+    // requirement (RC02). Only values the request itself joins by "or".
+    const ors = orAlternatives(values, query);
     for (const v of values) {
       const source = sourceFromProvenance(prov[field], inQuery(v));
       const split = source === "user_explicit" && !inQuery(v) ? QUALIFIED.exec(v.trim()) : null;
@@ -759,15 +832,17 @@ export function deriveMissionCriteria(
           "not in the request's words (an earlier Company Brain merge added it); can rank, never reject");
         continue;
       }
+      const anyOf = source === "user_explicit" ? ors.get(v) : undefined;
       push({
         kind: source === "user_explicit" ? "hard" : "target",
-        dimension, value: v, label: `${label}: ${v}`, source,
+        dimension, value: v, label: `${label}: ${anyOf ? anyOf.join(" or ") : v}`, source,
         user_phrase: inQuery(v) ? v : "",
         rationale: source === "user_explicit"
-          ? "stated in the request"
+          ? anyOf ? "stated in the request, as one of alternatives joined by \"or\"" : "stated in the request"
           : source === "company_brain_preference"
           ? "your Company Brain's ICP; you did not state it in this request"
           : "inferred from the request; never a hard requirement",
+        ...(anyOf ? { any_of: anyOf } : {}),
       });
     }
   };
@@ -848,10 +923,15 @@ export function deriveMissionCriteria(
     // P6: a round stage is provable for a company ALREADY in the pool once a
     // known-company funding verifier is READY (Actor Intelligence) — not before,
     // so an unproven route can never make a criterion look answerable.
-    const unprovable = ROUND_STAGES.has(stageIntent.value) && !funded && !fundingVerifierReady(readiness);
+    // "Seed or Series A": ONE requirement with every stage kept (RC02). Its value
+    // is the set joined by "|" ("seed|series_a"), which is exactly the
+    // `required_stage` the funding-stage claim decides as one — so every
+    // verifier and discovery path that passes the value on decides the set.
+    const stages = stageIntent.alternatives?.length ? stageIntent.alternatives : [stageIntent.value];
+    const unprovable = stages.every((s) => ROUND_STAGES.has(s)) && !funded && !fundingVerifierReady(readiness);
     push({
-      kind: stageIntent.kind, dimension: "company_stage", value: stageIntent.value,
-      label: `Stage: ${stageIntent.value.replace(/_/g, " ")}` +
+      kind: stageIntent.kind, dimension: "company_stage", value: stages.join("|"),
+      label: `Stage: ${stages.map((s) => s.replace(/_/g, " ")).join(" or ")}` +
         (stageIntent.kind === "hard" ? ` ("${stageIntent.phrase}")` : ""),
       source: "user_explicit", elevated_by: stageIntent.elevated_by,
       user_phrase: stageIntent.phrase,
@@ -859,6 +939,7 @@ export function deriveMissionCriteria(
         ? `"${stageIntent.phrase}" makes it a requirement`
         : stageIntent.hedged ? "stated as a preference" : "stated without only/must, so a target",
       status: unprovable ? "unprovable_today" : "ok",
+      ...(stages.length > 1 ? { any_of: [...stages] } : {}),
     });
   }
 

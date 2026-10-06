@@ -258,7 +258,7 @@ import { canStillQualify, evidenceGapsFor } from "./evidenceGapRouter.ts";
 import { deriveMissionCriteria } from "./missionCriteria.ts";
 import { fundingRecordEvidenceItem, fundingRecordFromDiscoveredRound } from "./fundingCorroboration.ts";
 import {
-  decideFundingStage, fundingStageEvidenceItem, normalizeRoundType, stageRank,
+  decideFundingStage, fundingStageEvidenceItem, normalizeRoundType, requiredStagesOf, stageRank,
   type FundingRecordFact, type FundingStageDecision,
 } from "./fundingStageClaim.ts";
 import {
@@ -2735,10 +2735,14 @@ export async function runCapabilityPlan(
   // ── P2: THE EXECUTION SPINE ─────────────────────────────────────────────────
   const specOn = opts.specMode === "enforce";
   const routePolicy: ReadinessPolicy = guardPolicy;
-  /** The funding rung the mission asks for, when it asks for one — what a discovered round is judged against. */
+  /**
+   * The funding rung the mission asks for, when it asks for one — what a discovered round is judged against.
+   * Several acceptable rungs travel joined by "|" ("series_a|series_b", RC02) and are decided as one set.
+   */
   const requiredRoundStage: string | null = (() => {
     const c = deriveMissionCriteria(opts.mission, guardPolicy).find((x) => x.dimension === "company_stage" &&
-      typeof x.value === "string" && stageRank(normalizeRoundType(x.value)) !== null);
+      typeof x.value === "string" && requiredStagesOf(x.value).length > 0 &&
+      requiredStagesOf(x.value).every((s) => stageRank(normalizeRoundType(s)) !== null));
     return c ? String(c.value) : null;
   })();
   const criteriaPolicy = specOn ? criteriaExecutionPolicy(opts.mission) : null;
