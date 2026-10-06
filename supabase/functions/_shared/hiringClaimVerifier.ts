@@ -92,10 +92,19 @@ export function hiringEstimatePerTargetUsd(io: Pick<HiringVerifierIO, "titles" |
   return estimateCallUsd(HIRING_ROUTE_ACTOR, card.cost_model, input);
 }
 
+/**
+ * Is this posting inside the claim's window?
+ *
+ * AN UNDATED POSTING PROVES NO WINDOW. With no window every posting counts; with
+ * one, a posting whose date is missing or unreadable cannot show it is recent, so
+ * it does not prove "currently hiring" (quality run T02: an undated Account
+ * Executive posting qualified a company on a 30-day window). Live job-search rows
+ * carry an ISO `postedDate`, so this only ever drops malformed rows.
+ */
 function withinWindow(job: NormalizedHiringJob, days: number | null, now: Date): boolean {
-  if (days == null || !job.posted_date) return true;
-  const t = Date.parse(job.posted_date);
-  return !Number.isFinite(t) || now.getTime() - t <= days * 86_400_000;
+  if (days == null) return true;
+  const t = job.posted_date ? Date.parse(job.posted_date) : NaN;
+  return Number.isFinite(t) && now.getTime() - t <= days * 86_400_000;
 }
 
 function openRoleItem(t: VerificationTarget, jobs: NormalizedHiringJob[], io: HiringVerifierIO,
@@ -195,6 +204,9 @@ export function hiringClaimVerifier(io: HiringVerifierIO): ClaimVerifier & { est
           detail: {
             postings_returned: mine.length,
             postings_matching_role: matching.length,
+            // Postings with no readable date: never proof inside a window (T02).
+            postings_undated: io.window_days == null ? 0
+              : mine.filter((j) => !(j.posted_date && Number.isFinite(Date.parse(j.posted_date)))).length,
             rejected_titles: mine.filter((j) => !matching.includes(j)).map((j) => j.title).slice(0, 5),
             verdict: matching.length > 0 ? "open_role_proven" : "no_matching_posting_on_linkedin_pending",
           },
