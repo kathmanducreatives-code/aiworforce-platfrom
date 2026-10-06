@@ -39,6 +39,7 @@ import {
 import type { LeadProjection } from "./projectToLeadMission.ts";
 import type { RequestV1 } from "./requestV1.ts";
 import type { BrainMergeInput } from "./leadMission.ts";
+import { negatedRequirements, negationQuestion } from "./requestNegation.ts";
 
 export const REQUEST_TO_MISSION_VERSION = "request-to-mission-v1" as const;
 
@@ -83,6 +84,20 @@ export function compileRequestMission(
         ? "Which company should I look into? I can check a specific one, but I won't go searching without knowing who you mean."
         : "I understood the request, but it isn't something the lead pipeline can serve.",
       violations: [],
+    };
+  }
+
+  // A NEGATED REQUIREMENT IS ASKED ABOUT, NEVER COMPILED AS ITS OPPOSITE (RC01).
+  // "outside the US" used to become a hard US requirement and "not hiring
+  // sales" a hard hiring one; an exclusion cannot be checked yet, so the user
+  // is asked what to do instead (`requestNegation.ts`).
+  const negated = negatedRequirements({ utterance: opts.originalUserQuery, parts: request.parts });
+  if (negated.length > 0) {
+    return {
+      ok: false,
+      reason: `negated_requirement:${negated.map((n) => n.kind).join(",")}`,
+      message: negationQuestion(negated),
+      violations: negated.map((n) => `${n.kind}: ${n.phrase}`),
     };
   }
 
