@@ -101,18 +101,60 @@ export function explicitWindowDays(text: string): number | null {
   return explicitWindowMatch(text)?.days ?? null;
 }
 
+// A COUNT WRITTEN IN WORDS IS THE SAME COUNT (Wave 3). "in the last two years"
+// read as no window at all, so a stated funding window compiled as a soft
+// target and an unfunded company qualified, while "in the last 2 years" was a
+// hard requirement. Cardinals only: "few", "several" and "couple" name no number
+// and stay windowless.
+const UNITS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+const TEENS = ["ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const TENS = ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+const NUMBER_WORDS: Readonly<Record<string, number>> = Object.freeze(Object.fromEntries([
+  ["a", 1], ...UNITS.map((w, i) => [w, i + 1]), ...TEENS.map((w, i) => [w, i + 10]), ...TENS.map((w, i) => [w, (i + 2) * 10]),
+]));
+const COUNT_SRC = `\\d{1,3}|(?:${TENS.join("|")})[-\\s](?:${UNITS.join("|")})|${[...TEENS, ...TENS, ...UNITS, "a"].join("|")}`;
+const WINDOW_RE = new RegExp(`\\b(?:in|within|over|during)?\\s*the\\s+(?:last|past)\\s+(?:(${COUNT_SRC})\\s*)?(day|week|month|year)s?\\b`, "g");
+
+function countOf(word: string | undefined): number {
+  if (word === undefined) return 1;
+  if (/^\d+$/.test(word)) return Number(word);
+  const [tens, unit] = word.split(/[-\s]/);
+  return (NUMBER_WORDS[tens] ?? 0) + (unit ? NUMBER_WORDS[unit] ?? 0 : 0);
+}
+
+// A WINDOW ON THE COMPANY'S AGE IS NOT A SIGNAL'S. "founded in the last 3
+// years that raised funding" dates the company; handed to the nearest signal it
+// became a hard 1,095-day funding window (A2), and "founded in the last 5 years
+// that are hiring sales" let a five-year-old posting prove "hiring".
+const COMPANY_AGE_RE = /\b(?:founded|established|incorporated|formed)\s*$/;
+
+/** Every stated window in the text, in order, and whether it dates the company itself. */
+function* statedWindows(text: string): Generator<{ days: number; index: number; end: number; company_age: boolean }> {
+  const t = String(text ?? "").toLowerCase();
+  for (const m of t.matchAll(WINDOW_RE)) {
+    const n = countOf(m[1]);
+    const per: Record<string, number> = { day: 1, week: 7, month: 30, year: 365 };
+    const unit = m[2];
+    // Whole years are years however they were said ("12 months", "24 months").
+    const raw = unit === "month" && n > 0 && n % 12 === 0 ? (n / 12) * 365 : n * (per[unit] ?? 1);
+    if (!(raw > 0)) continue;
+    yield {
+      days: unit === "month" && n % 12 === 0 ? raw : canonicalWindowDays(raw), index: m.index!, end: m.index! + m[0].length,
+      company_age: COMPANY_AGE_RE.test(t.slice(0, m.index)),
+    };
+  }
+}
+
 /** The first stated window, with WHERE it sits in the text — so it can be given to the signal it belongs to (RC06). */
 export function explicitWindowMatch(text: string): { days: number; index: number; end: number } | null {
-  const m = /\b(?:in|within|over|during)?\s*the\s+(?:last|past)\s+(?:(\d{1,3}|a|one)\s*)?(day|week|month|year)s?\b/
-    .exec(String(text ?? "").toLowerCase());
-  if (!m) return null;
-  const n = m[1] === undefined || m[1] === "a" || m[1] === "one" ? 1 : Number(m[1]);
-  const per: Record<string, number> = { day: 1, week: 7, month: 30, year: 365 };
-  const unit = m[2];
-  // Whole years are years however they were said ("12 months", "24 months").
-  const raw = unit === "month" && n > 0 && n % 12 === 0 ? (n / 12) * 365 : n * (per[unit] ?? 1);
-  if (!(raw > 0)) return null;
-  return { days: unit === "month" && n % 12 === 0 ? raw : canonicalWindowDays(raw), index: m.index, end: m.index + m[0].length };
+  for (const w of statedWindows(text)) if (!w.company_age) return { days: w.days, index: w.index, end: w.end };
+  return null;
+}
+
+/** The window the text states for the company's own age ("founded in the last 3 years"), or null. */
+export function companyAgeWindowDays(text: string): number | null {
+  for (const w of statedWindows(text)) if (w.company_age) return w.days;
+  return null;
 }
 
 /**

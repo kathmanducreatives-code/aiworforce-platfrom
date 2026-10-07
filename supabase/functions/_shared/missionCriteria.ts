@@ -50,7 +50,8 @@ import { sizeRangeProvable } from "./companySize.ts";
 import { readSignalPhrase, type SignalQualifier } from "./missionSignalDescriptor.ts";
 import {
   CANONICAL_SIGNAL_KINDS, DEFAULT_SIGNAL_WINDOWS, EXEC_TITLE_RE, aliasKindFor,
-  descriptorForReading, explicitWindowDays, explicitWindowMatch, kindForEvent, readCanonicalSignals, sameWindow,
+  companyAgeWindowDays, descriptorForReading, explicitWindowDays, explicitWindowMatch, kindForEvent, readCanonicalSignals,
+  sameWindow,
   readHypotheses, unmappedSignalLanguage,
   type CanonicalSignalKind, type CanonicalSignalReading, type HypothesisReading, type WindowBasis,
 } from "./signalKinds.ts";
@@ -319,6 +320,7 @@ export function readMissionLanguage(query: string) {
     stage: readStageIntent(query),
     explicit_window_days: explicitWindowDays(query),
     window_days_by_kind: windowDaysByKind(query, readings),
+    company_age_window_days: companyAgeWindowDays(query),
   };
 }
 
@@ -497,6 +499,15 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
         sameWindow(s.timeframe_days, lang.explicit_window_days) && DEFAULT_SIGNAL_WINDOWS[k]) {
       windowSources[k] = { source: "system_default", rule: DEFAULT_SIGNAL_WINDOWS[k]!.rule };
       changes.push(`window_belongs_to_another_signal:${k}:${DEFAULT_SIGNAL_WINDOWS[k]!.days}d`);
+      return { ...s, timeframe_days: DEFAULT_SIGNAL_WINDOWS[k]!.days };
+    }
+    // The sentence dates the COMPANY ("founded in the last 3 years") and this
+    // signal's own clause names no window: a carried one is the model filing
+    // the company's age under the signal, not a window the user gave it.
+    if (lang.company_age_window_days != null && s.timeframe_days != null && DEFAULT_SIGNAL_WINDOWS[k] &&
+        !FUNDING_WINDOW_WORDS_RE.test(signalClause(k, query) ?? "")) {
+      windowSources[k] = { source: "system_default", rule: DEFAULT_SIGNAL_WINDOWS[k]!.rule };
+      changes.push(`window_belongs_to_company_age:${k}:${DEFAULT_SIGNAL_WINDOWS[k]!.days}d`);
       return { ...s, timeframe_days: DEFAULT_SIGNAL_WINDOWS[k]!.days };
     }
     if (s.timeframe_days != null) {
@@ -1165,6 +1176,15 @@ export function deriveMissionCriteria(
       : def && k !== "technology" && (TEMPORAL_CUE_RE.test(query) || k === "hiring")
       ? { days: def.days, basis: def.basis, source: "system_default", rule: def.rule, enforced: false }
       : undefined;
+    // A mission compiled before company-age windows were recognised carries the
+    // company's age as this signal's window ("founded in the last 3 years that
+    // raised funding" → funding@1095). Read it the way a fresh compile does: the
+    // age is no signal's window, so the signal keeps its own default.
+    const ageDays = time_window && def ? companyAgeWindowDays(query) : null;
+    if (ageDays != null && sameWindow(time_window!.days, ageDays) &&
+        (lang ?? readMissionLanguage(query)).window_days_by_kind[k] == null) {
+      time_window = { days: def!.days, basis: def!.basis, source: "system_default", rule: def!.rule, enforced: false };
+    }
     // ── A STATED FUNDING WINDOW IS A REQUIREMENT, WHEN IT CAN BE PROVEN ────
     //
     // "…that has raised funding in the last 2 years" names a window the user
@@ -1184,9 +1204,14 @@ export function deriveMissionCriteria(
     // window would reject a company the user asked for.
     const fundingCandidate = !elevated && k === "funding" && source === "user_explicit" &&
       !signalHedged("funding", query) && fundingVerifierReady(readiness);
+    // Funding's OWN stated window (RC06), never the sentence's first: "hiring
+    // sales in the last 2 weeks and raised funding in the last 2 years" compared
+    // 730 against 14 and left a stated funding window soft. A compiled mission
+    // carries no language record, so it is read again from the same words.
     const fundingWindow = fundingCandidate &&
       time_window?.source === "user_explicit" &&
-      sameWindow(time_window.days, lang?.window_days_by_kind?.funding ?? explicitWindowDays(query));
+      sameWindow(time_window.days,
+        (lang ?? readMissionLanguage(query)).window_days_by_kind.funding ?? explicitWindowDays(query));
     // ── "RECENT FUNDING" IS A REQUIREMENT TOO, ON THE CANONICAL DEFAULT ─────
     //
     // "…with 11–50 employees, recent funding, and…" lists funding as something
