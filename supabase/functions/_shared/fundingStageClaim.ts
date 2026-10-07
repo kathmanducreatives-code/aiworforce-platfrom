@@ -864,14 +864,16 @@ export type FundingPresenceKind = "any" | "venture";
 //                SERIES_UNKNOWN (Crunchbase: "Venture - Series Unknown")
 //   NOT_VENTURE  grant, non-equity assistance, debt (incl. venture debt and
 //                post-IPO debt), private equity, post-IPO equity and
-//                secondary, product or equity crowdfunding, ICO, secondary sales
-//   UNKNOWN      everything else — corporate round, undisclosed, angel,
+//                secondary, product or equity crowdfunding, ICO, secondary
+//                sales, and an explicitly labelled Angel round — a distinct
+//                financing category that never satisfies "venture" by itself
+//   UNKNOWN      everything else — corporate round, undisclosed,
 //                convertible note, SAFE, bridge, accelerator, unlabelled. It
 //                cannot pass a venture claim and cannot rule one out: absence of
 //                a known kind is never disproof.
 
 const NOT_VENTURE_LABEL_RE =
-  /\b(?:grant|non equity|debt|loan|private equity|post ipo|crowdfunding|initial coin offering|ico|secondary)\b/;
+  /\b(?:grant|non equity|debt|loan|private equity|post ipo|crowdfunding|initial coin offering|ico|secondary|angel)\b/;
 const VENTURE_LABEL_RE = /\b(?:pre seed|seed|series [a-z]|series unknown|venture)\b/;
 
 export function ventureKindOf(r: FundingRoundFact): "venture" | "not_venture" | "unknown" {

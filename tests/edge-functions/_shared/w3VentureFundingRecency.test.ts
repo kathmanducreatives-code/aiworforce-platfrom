@@ -109,10 +109,10 @@ const ROUND_KINDS: Record<string, "venture" | "not_venture" | "unknown"> = {
   GRANT: "not_venture", "Grant": "not_venture", NON_EQUITY_ASSISTANCE: "not_venture",
   EQUITY_CROWDFUNDING: "not_venture", PRODUCT_CROWDFUNDING: "not_venture", INITIAL_COIN_OFFERING: "not_venture",
   POST_IPO_EQUITY: "not_venture", POST_IPO_DEBT: "not_venture", POST_IPO_SECONDARY: "not_venture",
-  SECONDARY_MARKET: "not_venture", "Secondary": "not_venture",
+  SECONDARY_MARKET: "not_venture", "Secondary": "not_venture", ANGEL: "not_venture", "Angel Round": "not_venture",
   // UNKNOWN
   CORPORATE_ROUND: "unknown", UNDISCLOSED: "unknown", CONVERTIBLE_NOTE: "unknown", SAFE: "unknown",
-  "Bridge": "unknown", "Extension": "unknown", ANGEL: "unknown", "Accelerator": "unknown", "Other": "unknown",
+  "Bridge": "unknown", "Extension": "unknown", "Accelerator": "unknown", "Other": "unknown",
   "Pre-IPO": "unknown", "Growth Equity": "unknown",
 };
 
@@ -144,6 +144,17 @@ Deno.test("G1 guards 1–7: the mandated classifications", () => {
   // Inside the window an unknown kind holds the claim open; outside it, it cannot.
   assertEquals(recency([["SERIES_A", ago(900)], ["CORPORATE_ROUND", ago(100)]], "venture"), "pending");
   assertEquals(recency([["SERIES_A", ago(900)], ["CORPORATE_ROUND", ago(1000)]], "venture"), "fail");
+});
+
+Deno.test("G1 angel: an explicitly labelled Angel round never satisfies venture funding by itself", () => {
+  const complete = decideRecentlyFunded({ window_days: 730, records: [record([["ANGEL", ago(100)]])], now: NOW, kind: "venture" });
+  assertEquals([complete.verdict, complete.reasons], ["fail", ["only_non_venture_events"]], "1. complete ANGEL-only history fails");
+  assertEquals(decideHasRaised({ records: [record([["ANGEL", ago(100)]])], kind: "venture" }).verdict, "fail", "1. presence too");
+  assertEquals(recency([["ANGEL", ago(100)]], "venture", false), "pending", "2. incomplete: unseen venture rounds may exist");
+  assertEquals(decideHasRaised({ records: [record([["ANGEL", ago(100)]], false)], kind: "venture" }).verdict, "pending", "2. presence too");
+  assertEquals(recency([["ANGEL", ago(100)]], "any"), "pass", "3. plain funding still counts an angel round");
+  assertEquals(decideHasRaised({ records: [record([["ANGEL", ago(100)]])], kind: "any" }).verdict, "pass", "3. plain presence too");
+  assertEquals(recency([["ANGEL", ago(1500)], ["SEED", ago(100)]], "venture"), "pass", "a later seed round still passes");
 });
 
 Deno.test("G1 kinds: plain funding is unchanged — every raising round counts, whatever its kind", () => {
