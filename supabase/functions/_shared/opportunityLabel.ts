@@ -12,6 +12,9 @@
 //   LOW PRIORITY       eligible · no fresh anchor or opportunity signal
 //   (none)             pending or ineligible — never surfaced as a match
 //
+// "Anchor proven" is also met when every hard requirement is enforceable and
+// proven and the anchor is not a target the mission asked for (RC14).
+//
 // `missing_evidence` is generated HERE, from the criteria the evidence does not
 // answer, so a model cannot quietly leave a gap out of its story.
 //
@@ -102,6 +105,24 @@ export function computeCeiling(i: CeilingInput): CeilingResult {
   const anchorClaim = anchorDim ? i.graph.claims.find((c) => c.dimension === anchorDim) : undefined;
   const anchor_proven = !!anchorClaim?.current && anchorClaim.current.status === "proven";
 
+  // RC14 — EVERY HARD REQUIREMENT PROVEN MEETS THE ANCHOR RUNG.
+  //
+  // Company discovery anchors a mission on `company_profile`, which no evidence
+  // dimension answers, and hard criteria never count as signals below — so a
+  // company proving US, 11–50, a Series A in window and a sales role in window
+  // fell to Low Priority. The anchor is a stand-in for "something fresh is
+  // proven"; a candidate that proved every hard requirement the user stated has
+  // that. Not when any hard criterion is unenforceable (disclosed, never proven),
+  // and not when the anchor is itself a target or signal the mission asked for —
+  // that one still has to be proven.
+  const hardStated = i.criteria.filter((c) => c.kind === "hard");
+  const anchorAskedFor = usable.some((c) => c.kind !== "hard" &&
+    (c.dimension === i.anchor || (!!anchorDim && CRITERION_EVIDENCE_DIMENSION[c.dimension] === anchorDim)));
+  const every_hard_proven = i.eligibility.eligibility === "eligible" &&
+    hardStated.length > 0 && hardStated.every((c) => c.status === "ok") &&
+    i.eligibility.checks.filter((x) => x.kind === "hard").every((x) => x.result === "pass");
+  const anchor_met = anchor_proven || (every_hard_proven && !anchorAskedFor);
+
   const signalDims = signals
     .map((s) => CRITERION_EVIDENCE_DIMENSION[s.dimension])
     .filter((d): d is NonNullable<typeof d> => !!d);
@@ -121,9 +142,9 @@ export function computeCeiling(i: CeilingInput): CeilingResult {
 
   let ceiling: Label | null = null;
   if (i.eligibility.eligibility === "eligible") {
-    if (anchor_proven && targets.length > 0 && targets_unproven.length === 0) ceiling = "exact_match";
-    else if (anchor_proven && targets_unproven.length <= 1) ceiling = "strong_opportunity";
-    else if (anchor_proven || provenSignals.length > 0) ceiling = "worth_considering";
+    if (anchor_met && targets.length > 0 && targets_unproven.length === 0) ceiling = "exact_match";
+    else if (anchor_met && targets_unproven.length <= 1) ceiling = "strong_opportunity";
+    else if (anchor_met || provenSignals.length > 0) ceiling = "worth_considering";
     else ceiling = "low_priority";
   }
 
