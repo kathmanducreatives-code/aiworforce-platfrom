@@ -17,7 +17,7 @@
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  decideHasRaised, decideRecentlyFunded, type FundingRecordFact, fundingKindOf,
+  decideHasRaised, decideRecentlyFunded, type FundingRecordFact, fundingKindOf, ventureKindOf,
 } from "../../../supabase/functions/_shared/fundingStageClaim.ts";
 import { checkCriterion } from "../../../supabase/functions/_shared/candidateEligibility.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
@@ -93,21 +93,63 @@ Deno.test("G1 case 10: no complete history yet → pending, never a false fail",
   assertEquals(recency([["GRANT", ago(100)], ["SERIES_A", null]], "venture"), "pending");
 });
 
-Deno.test("G1 kinds: a venture label passes; a label that does not say stays open — never a false fail", () => {
-  for (const t of ["SERIES_UNKNOWN", "Venture - Series Unknown", "CONVERTIBLE_NOTE", "VENTURE_ROUND", "ANGEL", "PRE_SEED"]) {
-    assertEquals(recency([[t, ago(100)]], "venture"), "pass", t);
+// ── ROUND KIND: THE PROVIDER'S TAXONOMY, NEVER THE STAGE RUNG ───────────────
+
+/** Every supported label → its kind. A rung or an instrument never makes a round venture. */
+const ROUND_KINDS: Record<string, "venture" | "not_venture" | "unknown"> = {
+  // VENTURE
+  PRE_SEED: "venture", PRE_SEED_ROUND: "venture", SEED: "venture", SEED_ROUND: "venture", "Seed": "venture",
+  SERIES_A: "venture", "Series A": "venture", SERIES_B: "venture", SERIES_C: "venture", SERIES_D: "venture",
+  SERIES_E: "venture", SERIES_F: "venture", SERIES_G: "venture", SERIES_H: "venture", "Series H": "venture",
+  SERIES_I: "venture", SERIES_J: "venture", "Series A Extension": "venture",
+  VENTURE_ROUND: "venture", "Venture Round": "venture", VENTURE: "venture",
+  SERIES_UNKNOWN: "venture", "Series Unknown": "venture", "Venture - Series Unknown": "venture",
+  // NOT_VENTURE
+  PRIVATE_EQUITY: "not_venture", DEBT_FINANCING: "not_venture", "Debt Financing": "not_venture", "Venture Debt": "not_venture",
+  GRANT: "not_venture", "Grant": "not_venture", NON_EQUITY_ASSISTANCE: "not_venture",
+  EQUITY_CROWDFUNDING: "not_venture", PRODUCT_CROWDFUNDING: "not_venture", INITIAL_COIN_OFFERING: "not_venture",
+  POST_IPO_EQUITY: "not_venture", POST_IPO_DEBT: "not_venture", POST_IPO_SECONDARY: "not_venture",
+  SECONDARY_MARKET: "not_venture", "Secondary": "not_venture",
+  // UNKNOWN
+  CORPORATE_ROUND: "unknown", UNDISCLOSED: "unknown", CONVERTIBLE_NOTE: "unknown", SAFE: "unknown",
+  "Bridge": "unknown", "Extension": "unknown", ANGEL: "unknown", "Accelerator": "unknown", "Other": "unknown",
+  "Pre-IPO": "unknown", "Growth Equity": "unknown",
+};
+
+Deno.test("G1 kinds: every supported label has the kind its taxonomy states", () => {
+  for (const [t, kind] of Object.entries(ROUND_KINDS)) {
+    assertEquals(ventureKindOf({ round_type: t } as never), kind, t);
   }
-  for (const t of ["CORPORATE_ROUND", "UNDISCLOSED", "EQUITY_CROWDFUNDING"]) {
-    const d = decideRecentlyFunded({ window_days: 730, records: [record([[t, ago(100)]])], now: NOW, kind: "venture" });
-    assertEquals([d.verdict, d.reasons], ["pending", ["round_kind_unknown"]], t);
-    assertEquals(decideHasRaised({ records: [record([[t, ago(100)]])], kind: "venture" }).verdict, "pending", `${t}, presence`);
-    assertEquals(recency([[t, ago(100)]], "any"), "pass", `${t} is still funding`);
+  assertEquals(ventureKindOf({ round_type: null } as never), "unknown", "unlabelled");
+});
+
+Deno.test("G1 kinds: venture → pass, not venture → fail (complete), unknown → pending — never by stage", () => {
+  for (const [t, kind] of Object.entries(ROUND_KINDS)) {
+    const v = recency([[t, ago(100)]], "venture");
+    assertEquals(v, kind === "venture" ? "pass" : kind === "not_venture" ? "fail" : "pending", `${t}, venture @730`);
+    const p = decideHasRaised({ records: [record([[t, ago(100)]])], kind: "venture" }).verdict;
+    assertEquals(p, v, `${t}, venture presence agrees`);
   }
-  // Inside the window it holds the claim open; outside it, it cannot.
+});
+
+Deno.test("G1 guards 1–7: the mandated classifications", () => {
+  assertEquals(recency([["PRIVATE_EQUITY", ago(100)]], "venture"), "fail", "1. Private Equity only fails a venture claim");
+  const cn = decideRecentlyFunded({ window_days: 730, records: [record([["CONVERTIBLE_NOTE", ago(100)]])], now: NOW, kind: "venture" });
+  assertEquals([cn.verdict, cn.reasons], ["pending", ["round_kind_unknown"]], "2. Convertible Note only is unknown, not a pass");
+  assertEquals(recency([["SERIES_A", ago(100)]], "venture"), "pass", "3. Series A");
+  assertEquals(recency([["Venture - Series Unknown", ago(100)]], "venture"), "pass", "4. Venture - Series Unknown");
+  assertEquals(recency([["CORPORATE_ROUND", ago(100)]], "venture"), "pending", "5. Corporate Round");
+  assertEquals(recency([["POST_IPO_EQUITY", ago(100)]], "venture"), "fail", "6. Post-IPO Equity");
+  assertEquals(recency([["EQUITY_CROWDFUNDING", ago(100)]], "venture"), "fail", "7. Equity Crowdfunding");
+  // Inside the window an unknown kind holds the claim open; outside it, it cannot.
   assertEquals(recency([["SERIES_A", ago(900)], ["CORPORATE_ROUND", ago(100)]], "venture"), "pending");
   assertEquals(recency([["SERIES_A", ago(900)], ["CORPORATE_ROUND", ago(1000)]], "venture"), "fail");
-  for (const t of ["PRODUCT_CROWDFUNDING", "INITIAL_COIN_OFFERING", "POST_IPO_DEBT"]) {
-    assertEquals(recency([[t, ago(100)]], "venture"), "fail", t);
+});
+
+Deno.test("G1 kinds: plain funding is unchanged — every raising round counts, whatever its kind", () => {
+  for (const t of Object.keys(ROUND_KINDS)) {
+    const expected = ["NON_EQUITY_ASSISTANCE", "SECONDARY_MARKET", "Secondary"].includes(t) ? "fail" : "pass";
+    assertEquals(recency([[t, ago(100)]], "any"), expected, `${t}, plain funding`);
   }
 });
 

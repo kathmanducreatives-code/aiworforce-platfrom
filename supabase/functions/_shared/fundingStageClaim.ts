@@ -851,34 +851,41 @@ export function decideRecentlyFunded(i: {
 /** Which rounds a presence claim counts: any funding, or venture (equity) funding only. */
 export type FundingPresenceKind = "any" | "venture";
 
-/** Round types that are venture (equity) funding — the ladder plus equity-style instruments. */
-const VENTURE_INSTRUMENTS: readonly string[] = Object.freeze(["extension", "bridge", "convertible", "safe"]);
+// ── WHAT KIND OF ROUND, FOR A VENTURE CLAIM (Wave 3) ────────────────────────
+//
+// KIND IS NOT STAGE. A rung on the stage ladder says how far along a company
+// is, not who funded it: Private Equity normalizes to the "growth" rung and is
+// not venture funding; Angel and Pre-IPO are rungs too. And an instrument
+// (convertible note, SAFE, bridge, extension) says how money was raised, not
+// that it was venture capital. So the kind is read from the provider's own
+// taxonomy, never inferred from a rung or an instrument:
+//
+//   VENTURE      pre-seed, seed, a lettered series, "Venture Round", and
+//                SERIES_UNKNOWN (Crunchbase: "Venture - Series Unknown")
+//   NOT_VENTURE  grant, non-equity assistance, debt (incl. venture debt and
+//                post-IPO debt), private equity, post-IPO equity and
+//                secondary, product or equity crowdfunding, ICO, secondary sales
+//   UNKNOWN      everything else — corporate round, undisclosed, angel,
+//                convertible note, SAFE, bridge, accelerator, unlabelled. It
+//                cannot pass a venture claim and cannot rule one out: absence of
+//                a known kind is never disproof.
 
-/** Is this round venture funding? Read from the normalized type, and from the raw label ("Venture Round"). */
-export function isVentureRound(r: FundingRoundFact): boolean {
+const NOT_VENTURE_LABEL_RE =
+  /\b(?:grant|non equity|debt|loan|private equity|post ipo|crowdfunding|initial coin offering|ico|secondary)\b/;
+const VENTURE_LABEL_RE = /\b(?:pre seed|seed|series [a-z]|series unknown|venture)\b/;
+
+export function ventureKindOf(r: FundingRoundFact): "venture" | "not_venture" | "unknown" {
   const t = normalizeRoundType(r.round_type);
-  if (!t || NON_RAISING_ROUND_TYPES.includes(t)) return false;
-  if (stageRank(t) !== null || VENTURE_INSTRUMENTS.includes(t)) return true;
-  // Crunchbase's SERIES_UNKNOWN is "Venture - Series Unknown"; CONVERTIBLE_NOTE is
-  // the convertible instrument — neither normalizes to a rung, both are venture.
-  return /\bventure\b|\bseries[\s-]*unknown\b|\bconvertible\b/i.test(String(r.round_type ?? "").replace(/_/g, " "));
+  if (t && NON_RAISING_ROUND_TYPES.includes(t)) return "not_venture";
+  const label = String(r.round_type ?? "").toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  // Debt first: "Venture Debt" is debt.
+  if (NOT_VENTURE_LABEL_RE.test(label)) return "not_venture";
+  return VENTURE_LABEL_RE.test(label) ? "venture" : "unknown";
 }
 
-/** Funding that is never venture (equity) funding — beyond non-raising events. */
-const NON_VENTURE_FUNDING_TYPES: readonly string[] = Object.freeze(["grant", "debt", "pipe"]);
-const NON_VENTURE_LABEL_RE = /\b(?:grant|debt|loan|product[\s_-]*crowdfunding|initial[\s_-]*coin[\s_-]*offering|ico)\b/i;
-
-/**
- * WHAT KIND OF ROUND, FOR A VENTURE CLAIM (Wave 3). A label that names neither
- * venture nor a known non-venture kind ("Corporate Round", "Undisclosed",
- * unlabelled) is UNKNOWN: it cannot pass a venture claim, and it cannot rule
- * one out either — absence of a known kind is never disproof.
- */
-export function ventureKindOf(r: FundingRoundFact): "venture" | "not_venture" | "unknown" {
-  if (isVentureRound(r)) return "venture";
-  const t = normalizeRoundType(r.round_type);
-  if (t && (NON_RAISING_ROUND_TYPES.includes(t) || NON_VENTURE_FUNDING_TYPES.includes(t))) return "not_venture";
-  return NON_VENTURE_LABEL_RE.test(String(r.round_type ?? "").replace(/_/g, " ")) ? "not_venture" : "unknown";
+/** Is this round venture funding, by the provider's own taxonomy (never by stage)? */
+export function isVentureRound(r: FundingRoundFact): boolean {
+  return ventureKindOf(r) === "venture";
 }
 
 export type FundingPresenceReason =
