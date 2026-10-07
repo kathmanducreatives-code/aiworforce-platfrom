@@ -39,6 +39,7 @@
 // PURE. No network, provider, model or database access.
 
 import type { MissionCriterion } from "./missionCriteria.ts";
+import { fundingKindOf } from "./fundingStageClaim.ts";
 import { candidatePool, type RunBudget } from "./runBudget.ts";
 import { estimateCallUsd } from "./budgetPolicy.ts";
 import { hiringActorCard } from "./hiringActorCatalog.ts";
@@ -61,6 +62,8 @@ export interface FundingScreenPlan {
   version: typeof FUNDING_SCREEN_VERSION;
   criterion_id: string;
   window_days: number;
+  /** "venture" when the claim counts venture rounds only (Wave 3); absent = any funding. */
+  funding_kind?: "venture";
   /**
    * Search rows discovery may buy over the whole screen: the first page plus
    * the conditional top-up. The run's discovery-row allowance.
@@ -193,6 +196,7 @@ export function fundingScreenPlan(i: {
   return {
     plan: {
       version: FUNDING_SCREEN_VERSION, criterion_id: crit.id, window_days: crit.time_window!.days,
+      ...(fundingKindOf(crit.value) === "venture" ? { funding_kind: "venture" as const } : {}),
       pool_rows: best.first_rows + best.topup_rows, first_rows: best.first_rows, topup_rows: best.topup_rows,
       fresh_target: admit + 1, screen_max: best.screen_max,
       admit, scraper_mode: SCREEN_SCRAPER_MODE,

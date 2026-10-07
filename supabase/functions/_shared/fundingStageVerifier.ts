@@ -37,7 +37,7 @@ import {
   normalizeAtomusFunding, normalizePvalyouFunding, PVALYOU_FUNDING_ACTOR_KEY, stampFundingCall,
 } from "./fundingCorroboration.ts";
 import {
-  decideHasRaised, decideRecentlyFunded, fundingPresenceOf, fundingStageEvidenceItem, recordCompleteness, stageRequirement,
+  decideHasRaised, decideRecentlyFunded, fundingKindOf, fundingPresenceOf, fundingStageEvidenceItem, recordCompleteness, stageRequirement,
   type FundingRecordFact,
   type FundingStageDecision,
 } from "./fundingStageClaim.ts";
@@ -202,7 +202,8 @@ export function fundingStageVerifier(opts: FundingStageVerifierOptions = {}): Cl
           : null;
         const item = atomusItem ?? pvItem;
         const window = t.criterion.window_days ?? null;
-        const after = decideRecentlyFunded({ window_days: window, records: [...discoveredOf(t), ...(atomus ? [atomus] : []), ...(pv ? [pv] : [])], now: at2 });
+        const after = decideRecentlyFunded({ window_days: window, records: [...discoveredOf(t), ...(atomus ? [atomus] : []), ...(pv ? [pv] : [])], now: at2,
+          kind: fundingKindOf(t.criterion.value) });
         return {
           company_key: t.company_key, answered: true, item,
           ...(atomusItem && pvItem ? { supporting: [pvItem] } : {}),
@@ -341,7 +342,7 @@ export function fundingStageVerifier(opts: FundingStageVerifierOptions = {}): Cl
           // held or a complete history rules one out (`decideHasRaised`).
           const window = t.criterion.window_days ?? null;
           const openAfterAtomus = window != null
-            ? decideRecentlyFunded({ window_days: window, records: known, now: at }).verdict === "pending"
+            ? decideRecentlyFunded({ window_days: window, records: known, now: at, kind: fundingKindOf(t.criterion.value) }).verdict === "pending"
             : decideHasRaised({ records: known, ...fundingPresenceOf(t.criterion.value) }).verdict === "pending";
           const pvalyouAnswered = known.some((r) => r.actor === PVALYOU_FUNDING_ACTOR_KEY);
           const key = t.domain ?? t.linkedin_url;

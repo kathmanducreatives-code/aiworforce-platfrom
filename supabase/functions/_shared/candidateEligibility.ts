@@ -48,7 +48,7 @@ import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts"
 import { geographyContradicts } from "./leadEligiblePool.ts";
 import { matchBusinessModel } from "./businessModelMatch.ts";
 import {
-  decideHasRaised, decideRecentlyFunded, fundingPresenceOf, normalizeRoundType, requiredStagesOf, stageRequirement,
+  decideHasRaised, decideRecentlyFunded, fundingKindOf, fundingPresenceOf, normalizeRoundType, requiredStagesOf, stageRequirement,
 } from "./fundingStageClaim.ts";
 import type { FundingStageVerdict } from "./fundingStageClaim.ts";
 import { fundingRecordsInGraph } from "./fundingCorroboration.ts";
@@ -264,8 +264,9 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
       // proven funding item, which let a grant-only history through.
       const window = c.time_window?.days ?? null;
       const records = fundingRecordsInGraph(graph);
+      const kind = fundingKindOf(c.value);
       if (window && records.length > 0) {
-        const d = decideRecentlyFunded({ window_days: window, records, now: new Date() });
+        const d = decideRecentlyFunded({ window_days: window, records, now: new Date(), kind });
         if (d.verdict !== "pending") {
           return { ...base, result: d.verdict === "pass" ? "pass" : "fail", reason: d.explanation, evidence_ids: ids, provenance };
         }
@@ -277,6 +278,10 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
       }
       if (!proven) return { ...base, result: "unknown", reason: `${dim} is reported, not proven`, evidence_ids: ids, provenance };
       if (item.value === false) return { ...base, result: "fail", reason: `${dim} is false`, evidence_ids: ids, provenance };
+      // Venture is a kind of round: an item that names no round cannot show it.
+      if (kind === "venture") {
+        return { ...base, result: "unknown", reason: "no funding round record shows the round is venture funding", evidence_ids: ids, provenance };
+      }
       return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}`, evidence_ids: ids, provenance };
     }
     case "hiring": {
