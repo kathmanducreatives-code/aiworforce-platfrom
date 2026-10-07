@@ -20,7 +20,7 @@
 // and every Supabase write — see tests/replay/README.md "Gaps".
 
 import { businessModelVerifier } from "../../../supabase/functions/_shared/businessModelVerifier.ts";
-import { missionBudgetState, spendTotals, type SpendLedger } from "../../../supabase/functions/_shared/budgetPolicy.ts";
+import { type Ceilings, missionBudgetState, spendTotals, type SpendLedger } from "../../../supabase/functions/_shared/budgetPolicy.ts";
 import { buildClaimPlan } from "../../../supabase/functions/_shared/claimPlan.ts";
 import {
   attemptedRoutes, ledgerBoundCall, type LedgerCallDeps, type PendingVerifierRun,
@@ -66,6 +66,8 @@ export interface GoldenMission {
   responses: FixtureProviderResponse[];
   maxSlices: number;
   maxCandidates?: number;
+  /** Ceiling overrides, as the engine receives them (`resolveCeilings`). */
+  ceilings?: Partial<Ceilings>;
 }
 
 export interface GoldenSlice {
@@ -134,6 +136,7 @@ export async function runGoldenMission(g: GoldenMission): Promise<GoldenRun> {
       identity: { workspace_id: "<workspace>", task_id: missionId },
       specMode: "enforce", specScope: { workspace_id: "<workspace>", lineage_id: missionId }, readiness,
       ...(g.missionCap ? { missionCap: g.missionCap } : {}),
+      ...(g.ceilings ? { ceilings: g.ceilings } : {}),
       ...(replenish ? { discoveryReplenishment: replenish } : {}),
       ...(state && records ? { state, resume: { workspace_id: "<workspace>", lineage_root_task_id: missionId, records } } : {}),
     } as never) as unknown as { companies: EngineCompany[]; state: Record<string, unknown> & { spend_ledger: SpendLedger; verifier_pending_runs?: PendingVerifierRun[]; pending_runs?: unknown[] } };
@@ -196,6 +199,7 @@ export async function runGoldenMission(g: GoldenMission): Promise<GoldenRun> {
     const pendingRuns = (vState.pending_runs?.length ?? 0) + (vState.verifier_pending_runs?.length ?? 0);
     const d = decideAutoContinuation({
       qualified: p5.qualified, verificationRoutesRemain: view.evidence_gaps.with_executable_route,
+      candidateBudgetBlocked: view.evidence_gaps.budget_blocked ?? 0,
       requestedCount: requested, frontierRemaining: frontier,
       continuationsUsed: progress.continuations_used, maxContinuations: resolveMaxContinuations(),
       costUnitsUsed: progress.cost_units_used, maxCostUnits: resolveMaxLineageCostUnits(),

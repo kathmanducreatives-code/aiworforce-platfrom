@@ -65,6 +65,13 @@ export type StopReason =
   | "frontier_exhausted"
   | "continuation_ceiling"
   | "cost_ceiling"
+  /**
+   * The run ran out of PER-COMPANY evidence budget, not of companies: a pending
+   * candidate's only blocker is the route its evidence ceiling cannot pay for
+   * (`GapSummary.budget_blocked`). A budget stop — never sealed — so a re-run
+   * with more room can finish the job (Wave 3).
+   */
+  | "candidate_evidence_ceiling"
   | "no_progress"
   | "provider_failure"
   | "cancelled"
@@ -204,6 +211,13 @@ export interface AutoContinuationInput {
    * purchase would be refused.
    */
   missionBudgetExhausted?: string | null;
+  /**
+   * Pending candidates held back by nothing but their per-company evidence
+   * ceiling (`GapSummary.budget_blocked`). A run that would end as search
+   * exhaustion with one of these ends as `candidate_evidence_ceiling` — a
+   * budget stop — instead. Absent or 0 keeps the previous behaviour exactly.
+   */
+  candidateBudgetBlocked?: number;
 }
 
 export interface AutoContinuationDecision {
@@ -236,6 +250,22 @@ export interface AutoContinuationDecision {
 const stop = (
   reason: StopReason, detail: string,
 ): AutoContinuationDecision => ({ continue: false, reason, detail, user_message: null });
+
+/**
+ * A SEARCH-EXHAUSTION STOP THAT IS REALLY A BUDGET STOP. When a pending
+ * candidate could still be verified but for its per-company evidence ceiling,
+ * "nobody else to find" is not the reason the request is short (Wave 3).
+ */
+function searchExhausted(i: AutoContinuationInput, reason: "no_progress" | "frontier_exhausted", detail: string): AutoContinuationDecision {
+  const blocked = Math.max(0, Math.trunc(i.candidateBudgetBlocked ?? 0));
+  if (blocked > 0) {
+    return stop("candidate_evidence_ceiling",
+      `${blocked} pending candidate${blocked === 1 ? "" : "s"} could still be verified, but ` +
+      `${blocked === 1 ? "its" : "their"} per-company evidence budget cannot pay for the remaining check; ` +
+      `${i.qualified} of ${i.requestedCount} qualified`);
+  }
+  return stop(reason, detail);
+}
 
 /**
  * Should another slice run automatically?
@@ -347,12 +377,12 @@ export function decideAutoContinuation(
     // continuation ceiling. Consecutive barren slices end replenishment here
     // exactly as they end any other run.
     if (i.discoveryRoutesRemain && i.barrenSlices >= MAX_BARREN_SLICES) {
-      return stop("no_progress",
+      return searchExhausted(i, "no_progress",
         `${i.barrenSlices} consecutive slices qualified and investigated nobody; the discovery ` +
         `routes still read as open but widened nothing — ${i.qualified} of ${i.requestedCount} qualified`);
     }
     if (!i.discoveryRoutesRemain) {
-      return stop("frontier_exhausted",
+      return searchExhausted(i, "frontier_exhausted",
         `every discovered candidate has been investigated; ` +
         `${i.qualified} of ${i.requestedCount} qualified`);
     }
@@ -382,7 +412,7 @@ export function decideAutoContinuation(
 
   // NOTHING TWICE RUNNING IS EVIDENCE. See `MAX_BARREN_SLICES`.
   if (!awaiting && i.barrenSlices >= MAX_BARREN_SLICES) {
-    return stop("no_progress",
+    return searchExhausted(i, "no_progress",
       `${i.barrenSlices} consecutive slices qualified and investigated nobody; ` +
       `${i.frontierRemaining} candidates remain unexamined`);
   }
@@ -788,7 +818,8 @@ export function settleV2Terminal<T extends string>(
     case "frontier_exhausted":
     case "no_progress": return "search_exhausted";
     case "continuation_ceiling":
-    case "cost_ceiling": return "budget_exhausted";
+    case "cost_ceiling":
+    case "candidate_evidence_ceiling": return "budget_exhausted";
     case "provider_failure": return "provider_failure";
     // `cancelled` and anything unforeseen: the cancellation path reconciles
     // the records itself, and an unknown reason is not guessed at.

@@ -6624,6 +6624,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           // LEAD V2: pending candidates a READY, executable route can verify —
           // verified before discovery is widened (`evidenceGapRouter`).
           verificationRoutesRemain: p5View?.evidence_gaps.with_executable_route ?? 0,
+          // A pending candidate held back only by its per-company evidence ceiling
+          // makes a search-exhaustion stop a budget stop (Wave 3).
+          candidateBudgetBlocked: p5View?.evidence_gaps.budget_blocked ?? 0,
           requestedCount: quota.requestedLeadCount,
           frontierRemaining: sliceFrontier,
           continuationsUsed: progress.continuations_used,

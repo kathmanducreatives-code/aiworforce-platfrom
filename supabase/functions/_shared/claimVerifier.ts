@@ -25,7 +25,8 @@
 // Pure except for the injected `call`; no clock beyond what deps provide.
 
 import {
-  attachProviderRun, candidateCeilingRefusal, markExecuted, release, reserve, type CallPurpose, type SpendLedger,
+  attachProviderRun, type CandidateAllowance, candidateCeilingRefusal, markExecuted, release, reserve, type CallPurpose,
+  type SpendLedger,
 } from "./budgetPolicy.ts";
 import type { ProviderCallSpec } from "./providerCallSpec.ts";
 import type { EvidenceItem } from "./candidateObservation.ts";
@@ -90,6 +91,8 @@ export interface VerifierCall {
   purpose: CallPurpose;
   /** A provider run already started for this exact call — adopted, never re-bought. */
   resume_run_id?: string | null;
+  /** The funding fallback: its spend widens its companies' evidence ceiling (`candidateAllowanceUsd`). */
+  ceiling_allowance?: CandidateAllowance;
 }
 
 export type VerifierCallOutcome =
@@ -404,6 +407,7 @@ export function ledgerBoundCall(d: LedgerCallDeps): (c: VerifierCall) => Promise
       const decision = reserve(d.ledger, {
         idempotency_key: key, provider_call_id, purpose: spec.purpose, route_id: spec.route_id, route_anchor: "funding",
         candidate_keys: spec.candidate_keys, estimate_usd: spec.cost.estimate_usd,
+        ...(c.ceiling_allowance ? { candidate_allowance: c.ceiling_allowance } : {}),
       });
       if (!decision.ok) {
         trace("call_refused_budget", {

@@ -222,6 +222,9 @@ export function fundingStageVerifier(opts: FundingStageVerifierOptions = {}): Cl
         const out = await deps.call({
           actor_key: PVALYOU_FUNDING_ACTOR_KEY, capability: FUNDING_VERIFICATION_CAPABILITY, input, purpose: "funding_evidence",
           candidate_keys: carry.targets.map((t) => t.company_key), resume_run_id: resume?.run_id ?? null,
+          // Bought only because Atomus was inconclusive: it must not crowd the
+          // company's other hard checks out of its evidence budget (Wave 3).
+          ceiling_allowance: "funding_fallback",
         });
         if (out.status === "running") {
           pending.push({
