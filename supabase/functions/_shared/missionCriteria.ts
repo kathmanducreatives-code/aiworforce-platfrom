@@ -1258,16 +1258,22 @@ export function deriveMissionCriteria(
     const fundingPresence = fundingCandidate && !fundingWindow && windowlessRaise;
     const presenceClaim = fundingPresence || (!!elevated && windowlessRaise);
     const presenceKind = presenceClaim && VENTURE_FUNDING_RE.test(fundingClause!) ? "venture" : "any";
+    // KIND IS ITS OWN DIMENSION (Wave 3): "raised venture funding in the last 24
+    // months" is recency over VENTURE rounds. Only presence carried the kind, so
+    // a window erased it and a grant inside the window passed.
+    const recencyKind = !presenceClaim && k === "funding" && !!fundingClause && VENTURE_FUNDING_RE.test(fundingClause)
+      ? "venture" : null;
     if (presenceClaim) time_window = undefined; // presence has no window; a bound is `before`
     push({
       kind: elevated || fundingWindow || fundingRecency || calendar || fundingPresence || asserted ? "hard" : "target",
       dimension: k, value: {
         event: eventOf(s), subject: s.subject ?? "company", qualifier: s.qualifier ?? {},
         ...(presenceClaim ? { presence: presenceKind, ...(presenceBefore ? { before: presenceBefore } : {}) } : {}),
+        ...(recencyKind ? { funding_kind: recencyKind } : {}),
       },
       label: presenceClaim
         ? `Funding: has raised ${presenceKind === "venture" ? "venture funding" : "funding"}${presenceBefore ? ` before ${presenceBefore.slice(0, 7)}` : ""}`
-        : signalDetail(k, s, rec?.subkind ?? reading?.subkind),
+        : `${signalDetail(k, s, rec?.subkind ?? reading?.subkind)}${recencyKind ? " (venture funding only)" : ""}`,
       source, ...(time_window ? { time_window } : {}),
       ...(elevated ? { elevated_by: /^(?:only|strictly)$/.test(elevated[1]) ? elevated[1] as MissionCriterion["elevated_by"] : "must" } : {}),
       user_phrase: source === "user_explicit" ? phrase : "",

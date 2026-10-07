@@ -3212,7 +3212,9 @@ export async function runCapabilityPlan(
       const targets: VerificationTarget[] = missionCandidatesFrom({ companies: pool },
         { missionId: opts.identity?.task_id ?? null }).map((m) => ({
         company_key: m.company_key, name: m.name, domain: m.domain, linkedin_url: m.linkedin_url, graph: m.graph,
-        criterion: { criterion_id: fs.plan.criterion_id, dimension: "funding", value: null, window_days: fs.plan.window_days },
+        criterion: { criterion_id: fs.plan.criterion_id, dimension: "funding",
+          // The screen judges the claim's own kind of round (Wave 3): a grant is not venture funding.
+          value: fs.plan.funding_kind ? { funding_kind: fs.plan.funding_kind } : null, window_days: fs.plan.window_days },
       }));
       const findings = await fs.screen(targets, state);
       // THE ONE PRICED READ IS SPENT: discovery is over for this mission. Recorded

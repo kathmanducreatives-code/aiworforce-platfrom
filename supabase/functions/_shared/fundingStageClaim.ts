@@ -655,7 +655,11 @@ export type RecentFundingReason =
   | "history_incomplete"
   | "no_window_requested"
   /** Every dated event is a type that is not funding (`NON_RAISING_ROUND_TYPES`). */
-  | "only_non_funding_events";
+  | "only_non_funding_events"
+  /** A venture claim: every dated event is funding of another kind (a grant, debt). */
+  | "only_non_venture_events"
+  /** A venture claim: a round inside the window whose label does not say whether it is venture. */
+  | "round_kind_unknown";
 
 export interface RecentFundingDecision {
   version: typeof FUNDING_STAGE_CLAIM_VERSION;
@@ -679,7 +683,15 @@ export function decideRecentlyFunded(i: {
   /** Every funding record the company already carries. Nothing is bought here. */
   records: readonly FundingRecordFact[];
   now: Date | string;
+  /**
+   * WHICH rounds count, independent of WHEN (Wave 3). "Raised venture funding
+   * in the last 24 months" is recency over venture rounds only: a grant or debt
+   * inside the window is funding, not venture funding. Default "any".
+   */
+  kind?: FundingPresenceKind;
 }): RecentFundingDecision {
+  const venture = i.kind === "venture";
+  const event = venture ? "venture funding event" : "funding event";
   const base: RecentFundingDecision = {
     version: FUNDING_STAGE_CLAIM_VERSION, verdict: "pending", window_days: i.window_days,
     latest_announced_date: null, reasons: [], explanation: "", carrier_rounds: [],
@@ -709,28 +721,50 @@ export function decideRecentlyFunded(i: {
   // untrusted one inside the window still blocks a FAIL.
   const datedAll = records.flatMap((r) => r.rounds.map((round) => ({ round, at: Date.parse(round.announced_date ?? "") })))
     .filter((x) => Number.isFinite(x.at));
-  const dated = datedAll.filter((x) => !NON_RAISING_ROUND_TYPES.includes(normalizeRoundType(x.round.round_type) ?? ""));
+  const counts = (round: FundingRoundFact) =>
+    !NON_RAISING_ROUND_TYPES.includes(normalizeRoundType(round.round_type) ?? "") && (!venture || isVentureRound(round));
+  const dated = datedAll.filter((x) => counts(x.round));
+  // A VENTURE CLAIM STAYS OPEN while a round could still be the venture one
+  // inside the window: a venture round with no date, or a round dated inside
+  // the window (or undated) whose label does not say whether it is venture.
+  const kindOpen = venture ? records.flatMap((r) => r.rounds).filter((round) => {
+    const at = Date.parse(round.announced_date ?? "");
+    if (Number.isFinite(at) && Math.floor((now - at) / 86_400_000) > i.window_days!) return false;
+    return ventureKindOf(round) === "unknown" || (counts(round) && !Number.isFinite(at));
+  }) : [];
+  const stillOpen = (): RecentFundingDecision => ({
+    ...base, reasons: ["round_kind_unknown"], carrier_rounds: [kindOpen[0]],
+    explanation: `a ${kindOpen[0].round_type ?? "unlabelled"} round ` +
+      `${kindOpen[0].announced_date ? `announced ${String(kindOpen[0].announced_date).slice(0, 10)}` : "with no announced date"} ` +
+      `could be venture funding inside the ${i.window_days}-day window, so venture funding is neither proven nor ruled out`,
+  });
   if (dated.length === 0 && datedAll.length > 0) {
     // DATED EVENTS, NONE OF THEM FUNDING (a secondary sale, non-equity
-    // assistance). Said as such — not "no announced date" — and, like any
-    // other absence, a FAIL only when the provider states the history is whole.
+    // assistance) — or, for a venture claim, none of them venture (a grant,
+    // debt). Said as such — not "no announced date" — and, like any other
+    // absence, a FAIL only when the provider states the history is whole.
     const types = [...new Set(datedAll.map((x) => x.round.round_type ?? "unlabelled"))].join(", ");
+    const reason: RecentFundingReason = venture && datedAll.some((x) =>
+        !NON_RAISING_ROUND_TYPES.includes(normalizeRoundType(x.round.round_type) ?? ""))
+      ? "only_non_venture_events" : "only_non_funding_events";
+    const what = venture ? "venture funding" : "funding";
     const completeRecord = records.find(historyIsComplete) ?? null;
+    if (completeRecord && kindOpen.length > 0) return stillOpen();
     if (completeRecord) {
       return {
-        ...base, verdict: "fail", reasons: ["only_non_funding_events"],
+        ...base, verdict: "fail", reasons: [reason],
         provenance: prov("fail", [], completeRecord),
-        explanation: `the complete history holds no funding round — only ${types}, which do not count as funding`,
+        explanation: `the complete history holds no ${what} round — only ${types}, which do not count as ${what}`,
       };
     }
     return {
-      ...base, reasons: ["only_non_funding_events"],
-      explanation: `only ${types} reported, which do not count as funding, and no provider states this is the full history`,
+      ...base, reasons: [reason],
+      explanation: `only ${types} reported, which do not count as ${what}, and no provider states this is the full history`,
     };
   }
   if (dated.length === 0) {
     return { ...base, reasons: ["no_dated_rounds"],
-      explanation: "funding is reported, but no funding event carries an announced date" };
+      explanation: `${venture ? "venture funding" : "funding"} is reported, but no ${event} carries an announced date` };
   }
   const trusted = dated.filter((x) => isVerifiedFundingEvent(x.round));
   const latestOf = (xs: typeof dated) => xs.reduce((a, b) => (b.at > a.at ? b : a));
@@ -750,7 +784,7 @@ export function decideRecentlyFunded(i: {
       ...base, verdict: "pass", reasons: ["round_inside_window"],
       carrier_rounds: inside.map((x) => x.round),
       provenance: prov("pass", inside.map((x) => x.round), null),
-      explanation: `a verified funding event ${describe(last)}, inside the ${i.window_days}-day window`,
+      explanation: `a verified ${event} ${describe(last)}, inside the ${i.window_days}-day window`,
     };
   }
 
@@ -763,7 +797,7 @@ export function decideRecentlyFunded(i: {
     return {
       ...base, reasons: ["unverified_round_inside_window"], carrier_rounds: [last.round],
       provenance: prov("pending", [last.round], null),
-      explanation: `a funding event ${describe(last)}, inside the ${i.window_days}-day window, ` +
+      explanation: `a ${event} ${describe(last)}, inside the ${i.window_days}-day window, ` +
         `but no provider field states it (model extraction only)`,
     };
   }
@@ -775,18 +809,19 @@ export function decideRecentlyFunded(i: {
   // FAIL needs the whole record: "nothing recent" is a claim about rounds we
   // have not seen unless the provider says there are none.
   const completeRecord = records.find(historyIsComplete) ?? null;
+  if (completeRecord && kindOpen.length > 0) return stillOpen();
   if (completeRecord) {
     return {
       ...base, verdict: "fail", reasons: ["no_round_inside_window"], carrier_rounds: [latest.round],
       provenance: prov("fail", [latest.round], completeRecord),
-      explanation: `the most recent funding event in a complete history ${describe(latest)}, ` +
+      explanation: `the most recent ${event} in a complete history ${describe(latest)}, ` +
         `outside the ${i.window_days}-day window`,
     };
   }
   return {
     ...base, reasons: ["history_incomplete"], carrier_rounds: [latest.round],
     provenance: prov("pending", [latest.round], null),
-    explanation: `the latest funding event we hold ${describe(latest)}, outside the ${i.window_days}-day window, ` +
+    explanation: `the latest ${event} we hold ${describe(latest)}, outside the ${i.window_days}-day window, ` +
       `and no provider states this is the full history`,
   };
 }
@@ -824,7 +859,26 @@ export function isVentureRound(r: FundingRoundFact): boolean {
   const t = normalizeRoundType(r.round_type);
   if (!t || NON_RAISING_ROUND_TYPES.includes(t)) return false;
   if (stageRank(t) !== null || VENTURE_INSTRUMENTS.includes(t)) return true;
-  return /\bventure\b/i.test(String(r.round_type ?? ""));
+  // Crunchbase's SERIES_UNKNOWN is "Venture - Series Unknown"; CONVERTIBLE_NOTE is
+  // the convertible instrument — neither normalizes to a rung, both are venture.
+  return /\bventure\b|\bseries[\s-]*unknown\b|\bconvertible\b/i.test(String(r.round_type ?? "").replace(/_/g, " "));
+}
+
+/** Funding that is never venture (equity) funding — beyond non-raising events. */
+const NON_VENTURE_FUNDING_TYPES: readonly string[] = Object.freeze(["grant", "debt", "pipe"]);
+const NON_VENTURE_LABEL_RE = /\b(?:grant|debt|loan|product[\s_-]*crowdfunding|initial[\s_-]*coin[\s_-]*offering|ico)\b/i;
+
+/**
+ * WHAT KIND OF ROUND, FOR A VENTURE CLAIM (Wave 3). A label that names neither
+ * venture nor a known non-venture kind ("Corporate Round", "Undisclosed",
+ * unlabelled) is UNKNOWN: it cannot pass a venture claim, and it cannot rule
+ * one out either — absence of a known kind is never disproof.
+ */
+export function ventureKindOf(r: FundingRoundFact): "venture" | "not_venture" | "unknown" {
+  if (isVentureRound(r)) return "venture";
+  const t = normalizeRoundType(r.round_type);
+  if (t && (NON_RAISING_ROUND_TYPES.includes(t) || NON_VENTURE_FUNDING_TYPES.includes(t))) return "not_venture";
+  return NON_VENTURE_LABEL_RE.test(String(r.round_type ?? "").replace(/_/g, " ")) ? "not_venture" : "unknown";
 }
 
 export type FundingPresenceReason =
@@ -832,7 +886,9 @@ export type FundingPresenceReason =
   | "qualifying_round_found"
   | "no_qualifying_round_in_complete_history"
   | "qualifying_round_unverified"
-  | "history_incomplete";
+  | "history_incomplete"
+  /** A venture claim: a round whose label does not say whether it is venture (Wave 3). */
+  | "round_kind_unknown";
 
 export interface FundingPresenceDecision {
   version: typeof FUNDING_STAGE_CLAIM_VERSION;
@@ -880,6 +936,14 @@ export function decideHasRaised(i: {
     return { ...base, reasons: ["qualifying_round_unverified"], carrier_rounds: open,
       explanation: `a possible ${what} is reported, but nothing verifies it` };
   }
+  // A round whose label does not say whether it is venture cannot rule venture funding out.
+  const kindOpen = i.kind === "venture"
+    ? all.filter((r) => ventureKindOf(r) === "unknown" && (cutoff === null || !dated(r) || Date.parse(r.announced_date!) < cutoff))
+    : [];
+  if (kindOpen.length > 0) {
+    return { ...base, reasons: ["round_kind_unknown"], carrier_rounds: kindOpen,
+      explanation: `a ${kindOpen[0].round_type ?? "unlabelled"} round could be venture funding, so it is neither proven nor ruled out` };
+  }
   if (records.some(historyIsComplete)) {
     return { ...base, verdict: "fail", reasons: ["no_qualifying_round_in_complete_history"],
       explanation: `the complete funding history holds no ${what}` };
@@ -890,9 +954,20 @@ export function decideHasRaised(i: {
 
 /** The presence claim a windowless funding criterion's value carries ({ presence, before }), or the plain "any" claim. */
 export function fundingPresenceOf(value: unknown): { kind: FundingPresenceKind; before: string | null } {
-  const v = (value ?? {}) as { presence?: unknown; before?: unknown };
+  const v = (value ?? {}) as { before?: unknown };
   return {
-    kind: v.presence === "venture" ? "venture" : "any",
+    kind: fundingKindOf(value),
     before: typeof v.before === "string" && Number.isFinite(Date.parse(v.before)) ? v.before : null,
   };
+}
+
+/**
+ * WHICH rounds a funding criterion counts, whatever else it asks (Wave 3).
+ * Presence carries it as `presence`; a windowed (recency) claim as
+ * `funding_kind` — kind, presence and recency are separate dimensions, and a
+ * window must not erase the kind.
+ */
+export function fundingKindOf(value: unknown): FundingPresenceKind {
+  const v = (value ?? {}) as { presence?: unknown; funding_kind?: unknown };
+  return v.presence === "venture" || v.funding_kind === "venture" ? "venture" : "any";
 }
