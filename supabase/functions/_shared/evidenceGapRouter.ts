@@ -220,6 +220,8 @@ export interface GapRoute {
   actor: string; capability: string; purpose: string; readiness: RouteReadinessDecision["readiness"];
   tried: boolean; executable: boolean; why: string;
   cost_hint_usd: number;
+  /** The route would be executable but for this company's evidence budget (set only then). */
+  budget_closed?: true;
 }
 
 export interface EvidenceGap {
@@ -269,7 +271,12 @@ function judgeRoutes(
       : !unlocked ? `only after ${r.after_actor} has answered for this company`
       : closed ? `this company's evidence budget cannot pay for ${r.actor}`
       : "ready";
-    return { actor: r.actor, capability: r.capability, purpose: r.purpose, readiness, tried, executable, why, cost_hint_usd: r.cost_hint_usd };
+    // Closed by NOTHING but the company's evidence budget: the one blocker money could lift.
+    const budgetClosed = closed && decision.executable && !tried && r.canonical_executor && unlocked;
+    return {
+      actor: r.actor, capability: r.capability, purpose: r.purpose, readiness, tried, executable, why,
+      cost_hint_usd: r.cost_hint_usd, ...(budgetClosed ? { budget_closed: true as const } : {}),
+    };
   });
 }
 
@@ -333,6 +340,13 @@ export interface GapSummary {
   blocked: number;
   /** Of `blocked`, those whose paid verification triage withheld (`missionTriage`). */
   triage_deprioritized?: number;
+  /**
+   * Of `blocked`, those held back by NOTHING but their per-company evidence
+   * ceiling: every unknown hard claim either has an executable route or a route
+   * only that ceiling closes. A run that ends with one of these did not run out
+   * of companies — it ran out of budget for one (Wave 3).
+   */
+  budget_blocked?: number;
   /** Unknown hard checks across pending candidates, by criterion dimension. */
   unresolved_hard_checks: Record<string, number>;
   /** Why the blocked gaps are blocked, by claim — the capabilities the mission lacks. */
@@ -346,11 +360,15 @@ export function summarizeGaps(
   const capability = new Map<string, GapSummary["capability_gaps"][number]>();
   let executable = 0;
   let deprioritized = 0;
+  let budgetBlocked = 0;
   for (const p of pending) {
     // THE SAME RULE `verificationTargets` BUYS BY: a candidate triage withheld
     // is not a route a verification slice could take.
     if (p.paid_verification_blocked) deprioritized++;
     else if (canStillQualify(p.gaps)) executable++;
+    else if (p.gaps.length > 0 && p.gaps.every((g) => g.next === "verify" || g.considered.some((r) => r.budget_closed))) {
+      budgetBlocked++;
+    }
     for (const g of p.gaps) {
       unresolved[g.dimension] = (unresolved[g.dimension] ?? 0) + 1;
       if (g.next !== "blocked") continue;
@@ -371,6 +389,7 @@ export function summarizeGaps(
     with_executable_route: executable,
     blocked: pending.length - executable,
     triage_deprioritized: deprioritized,
+    budget_blocked: budgetBlocked,
     unresolved_hard_checks: unresolved,
     capability_gaps: [...capability.values()],
   };

@@ -81,6 +81,13 @@ const CANDIDATE_EVIDENCE: ReadonlySet<CallPurpose> = new Set([
 export type ReservationStatus =
   | "reserved" | "executed" | "settled" | "refused_budget" | "adopted" | "released";
 
+/**
+ * A purchase that WIDENS its companies' evidence ceiling by what it commits
+ * (Wave 3). Only the funding verifier's Pvalyou recency fallback — bought
+ * because Atomus, the primary source, was inconclusive — carries it.
+ */
+export type CandidateAllowance = "funding_fallback";
+
 export interface SpendReservation {
   idempotency_key: string;
   provider_call_id: string;
@@ -105,6 +112,8 @@ export interface SpendReservation {
   receipt_reads?: number;
   /** Which ceiling refused this reservation (`refused_budget` only). */
   refused_ceiling?: RefusalCeiling;
+  /** Set on the funding fallback: its committed spend widens its companies' ceiling (`candidateAllowanceUsd`). */
+  candidate_allowance?: CandidateAllowance;
 }
 
 export type RefusalCeiling = "call" | "candidate" | "route" | "mission" | "mission_credits";
@@ -159,12 +168,16 @@ export function spendTotals(l: SpendLedger) {
   const live = l.reservations.filter((r) => committed(r) > 0);
   const byRoute: Record<string, number> = {};
   const byCandidate: Record<string, number> = {};
+  const allowanceByCandidate: Record<string, number> = {};
   for (const r of live) {
     const c = committed(r);
     if (r.route_id) byRoute[r.route_id] = round4((byRoute[r.route_id] ?? 0) + c);
     if (CANDIDATE_EVIDENCE.has(r.purpose) && r.candidate_keys.length) {
       const share = c / r.candidate_keys.length;
       for (const k of r.candidate_keys) byCandidate[k] = round4((byCandidate[k] ?? 0) + share);
+      if (r.candidate_allowance) {
+        for (const k of r.candidate_keys) allowanceByCandidate[k] = round4((allowanceByCandidate[k] ?? 0) + share);
+      }
     }
   }
   return {
@@ -173,13 +186,51 @@ export function spendTotals(l: SpendLedger) {
     provisional_usd: round4(l.reservations.reduce((n, r) => n + (r.provisional_usd ?? 0), 0)),
     by_route: byRoute,
     by_candidate: byCandidate,
+    /** Committed spend on allowance-bearing purchases (the funding fallback), per company. */
+    allowance_by_candidate: allowanceByCandidate,
   };
+}
+
+/**
+ * THE FUNDING-FALLBACK ALLOWANCE (Wave 3): how far a company's evidence
+ * ceiling widens because the Pvalyou fallback was bought for it.
+ *
+ * Atomus ($0.0036) + the fallback ($0.0201) + the job search ($0.049) is
+ * $0.0727, over the $0.06 per-company ceiling — so a company whose funding the
+ * fallback PROVED could never be checked for hiring, and stayed pending. The
+ * fallback is not allowed to crowd out the company's ordinary verification.
+ *
+ * Read from the ledger, never priced: the committed share (settled, else
+ * provisional, else the reservation's estimate — the figure `reserve` itself
+ * counts) of every reservation marked `candidate_allowance` for this company.
+ * A refused, released or adopted reservation commits nothing and widens
+ * nothing; an idempotent re-reservation is one reservation, so a slice
+ * re-entering never counts it twice. Capped at the funding per-call ceiling.
+ * It widens ONLY the candidate ceiling: the call, route, mission and credit
+ * ceilings are unchanged.
+ *
+ * Like every ceiling here, the candidate ceiling is an ADMISSION ceiling: a
+ * purchase is admitted when committed spend plus its estimate fits, and a
+ * provider receipt above the estimate is recorded as the truth (quality V15).
+ * A company left over its ceiling that way is refused every further purchase.
+ * The allowance moves with the fallback's own committed spend, so a cheaper or
+ * dearer fallback settlement (up to the cap) leaves the company's headroom
+ * exactly where it was when the next purchase was admitted.
+ */
+export function candidateAllowanceUsd(
+  l: SpendLedger, companyKey: string, totals: ReturnType<typeof spendTotals> = spendTotals(l),
+): number {
+  const raw = totals.allowance_by_candidate[companyKey] ?? 0;
+  const cap = l.ceilings.per_call_usd.funding_evidence ?? 0;
+  return round4(Math.max(0, Math.min(raw, cap)));
 }
 
 export interface ReserveRequest {
   idempotency_key: string;
   provider_call_id: string;
   purpose: CallPurpose;
+  /** The funding fallback: its spend widens its companies' ceiling (`candidateAllowanceUsd`). */
+  candidate_allowance?: CandidateAllowance | null;
   route_id: string | null;
   /** The route's anchor kind, which selects its ceiling. */
   route_anchor?: string | null;
@@ -263,8 +314,9 @@ export function candidateCeilingRefusal(
   const candidates = q.candidate_keys ?? [];
   if (!CANDIDATE_EVIDENCE.has(q.purpose) || !candidates.length) return null;
   const share = round4(q.estimate_usd) / candidates.length;
-  const limit = l.ceilings.per_candidate_evidence_usd;
   for (const k of candidates) {
+    // The base ceiling, widened by this company's own funding-fallback spend.
+    const limit = round4(l.ceilings.per_candidate_evidence_usd + candidateAllowanceUsd(l, k, totals));
     const spent = totals.by_candidate[k] ?? 0;
     const would = spent + share;
     if (would > limit + 1e-9) return { company_key: k, spent_usd: spent, limit_usd: limit, would_commit_usd: would };
@@ -288,6 +340,7 @@ export function reserve(l: SpendLedger, q: ReserveRequest): ReserveDecision {
     idempotency_key: q.idempotency_key, provider_call_id: q.provider_call_id, purpose: q.purpose,
     route_id: q.route_id, candidate_keys: candidates, estimate_usd: round4(q.estimate_usd),
     status: "reserved", provisional_usd: null, settled_usd: null, settlement_source: null, variance_usd: null,
+    ...(q.candidate_allowance ? { candidate_allowance: q.candidate_allowance } : {}),
   };
   const refuse = (ceiling: RefusalCeiling, limit: number, would: number): ReserveDecision => {
     const r = { ...reservation, status: "refused_budget" as const, refused_ceiling: ceiling };
