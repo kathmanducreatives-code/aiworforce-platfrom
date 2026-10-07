@@ -208,6 +208,14 @@ export function spendTotals(l: SpendLedger) {
  * re-entering never counts it twice. Capped at the funding per-call ceiling.
  * It widens ONLY the candidate ceiling: the call, route, mission and credit
  * ceilings are unchanged.
+ *
+ * Like every ceiling here, the candidate ceiling is an ADMISSION ceiling: a
+ * purchase is admitted when committed spend plus its estimate fits, and a
+ * provider receipt above the estimate is recorded as the truth (quality V15).
+ * A company left over its ceiling that way is refused every further purchase.
+ * The allowance moves with the fallback's own committed spend, so a cheaper or
+ * dearer fallback settlement (up to the cap) leaves the company's headroom
+ * exactly where it was when the next purchase was admitted.
  */
 export function candidateAllowanceUsd(
   l: SpendLedger, companyKey: string, totals: ReturnType<typeof spendTotals> = spendTotals(l),

@@ -11,7 +11,9 @@
 // as the funding fallback widens ITS companies' evidence ceiling by its own
 // committed spend (settled → provisional → the reservation's estimate), capped
 // at the funding per-call ceiling. Nothing else widens: call, route, mission
-// and credit ceilings are untouched. And a run that ends with a candidate held
+// and credit ceilings are untouched. Every one of them is an ADMISSION ceiling
+// — checked when a purchase is reserved, against committed spend plus its
+// estimate; a dearer receipt is recorded as it is and stops further purchases. And a run that ends with a candidate held
 // back by nothing but its evidence ceiling ends as a BUDGET stop
 // (`candidate_evidence_ceiling` → `budget_exhausted`), never as search exhaustion.
 
@@ -151,6 +153,29 @@ Deno.test("allowance: not hiring-specific — any later evidence purchase for th
   }
 });
 
+Deno.test("allowance: admission semantics — fallback settlement never invalidates an admitted purchase", () => {
+  const headroomAfter = (pvSettle: number | null, jobSettle: number | null) => {
+    const l = ledger();
+    buy(l, { estimate_usd: 0.0036 });
+    fallback(l, 0.0201, { idempotency_key: "pv" });
+    assert(buy(l, { idempotency_key: "jobs", purpose: "hiring_evidence", estimate_usd: 0.049 }).ok, "admitted at $0.0801");
+    if (pvSettle !== null) settle(l, "pv", pvSettle);
+    if (jobSettle !== null) settle(l, "jobs", jobSettle);
+    const eff = DEFAULT_CEILINGS.per_candidate_evidence_usd + candidateAllowanceUsd(l, A);
+    return Math.round((eff - (spendTotals(l).by_candidate[A] ?? 0)) * 10000) / 10000;
+  };
+  // A cheaper or dearer fallback receipt (up to the cap) moves spend and allowance together.
+  assertEquals([headroomAfter(null, null), headroomAfter(0.01, null), headroomAfter(0.03, null)], [0.0074, 0.0074, 0.0074]);
+  // A receipt above an estimate is recorded as the truth — exactly as without any fallback.
+  assertEquals(headroomAfter(null, 0.07), -0.0136);
+  const plain = ledger();
+  buy(plain, { estimate_usd: 0.0036 });
+  buy(plain, { idempotency_key: "jobs", purpose: "hiring_evidence", estimate_usd: 0.049 });
+  settle(plain, "jobs", 0.07);
+  assertEquals(Math.round((0.06 - spendTotals(plain).by_candidate[A]) * 10000) / 10000, -0.0136, "the same overshoot, no fallback");
+  assert(candidateCeilingRefusal(plain, { purpose: "web_evidence", candidate_keys: [A], estimate_usd: 0.005 }), "and it refuses what comes next");
+});
+
 // ── HONEST TERMINAL REPORTING ───────────────────────────────────────────────
 
 const gap = (next: "verify" | "blocked", routes: Partial<EvidenceGap["considered"][number]>[]): EvidenceGap => ({
@@ -283,7 +308,7 @@ Deno.test("E2E 5: an ineligible company — no hiring verification is bought", a
   assertFalse(o.r.qualifiedKeys.includes(ACME));
 });
 
-Deno.test("E2E 6: a mission cap stays authoritative — the allowance never lets spend pass it", async () => {
+Deno.test("E2E 6: a mission cap stays authoritative — the allowance never admits a purchase past it", async () => {
   const o = await run("cap", (rs) => [...atomus(rs, [], false), pvalyou([["Series A", daysAgo(60)]])],
     { missionCap: { provider_usd: 0.05, credits: null, invalid: [] } });
   assertFalse(o.bought(JOBS));
