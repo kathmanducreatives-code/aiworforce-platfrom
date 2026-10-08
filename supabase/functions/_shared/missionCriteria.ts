@@ -32,11 +32,16 @@
 //   - unrepresented_requirements: unrecognised signal language is recorded.
 // Every rewrite is returned as a named change for `validator_changes`.
 //
-// HIRING'S DEFAULT WINDOW IS SHOWN, NOT CARRIED. A 30-day posting window on the
-// hiring signal would reach evaluator prompts as "within 30 days" while no
-// hiring source in the V2 route reads a posting date (YC `openJobs` carry
-// none). Stating it as applied would be the silent mismatch this phase removes,
-// so the card says it is a default not yet enforced; P3's job route enforces it.
+// HIRING'S DEFAULT WINDOW LIVES ON THE CRITERION, NOT THE CARRIER. When P1
+// landed no V2 hiring source read a posting date (YC `openJobs` carry none), so
+// the window was kept off `timeframe_days` — evaluator prompts would have read
+// "within 30 days" with nothing checking it — and the card called it "not yet
+// enforced". It still stays off the carrier. But the criterion's
+// `time_window.days` is now what the open-role verifier is given
+// (`criteriaWindow` in run-agent): it asks the provider for recent postings and
+// keeps only those dated inside the window, and an undated posting proves
+// nothing (`hiringClaimVerifier.withinWindow`). So the card states it like any
+// other default window, with no caveat.
 //
 // Pure. No network, no model, no database. Not part of `missionHash`.
 
@@ -528,7 +533,7 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
     if (!d) return s;
     if (!TEMPORAL_CUE_RE.test(query)) return s; // no temporal word: nothing to default
     windowSources[k] = { source: "system_default", rule: d.rule };
-    if (k === "hiring") return s; // shown, not carried — see the header
+    if (k === "hiring") return s; // on the criterion, not the carrier — see the header
     changes.push(`window_defaulted:${k}:${d.days}d`);
     return { ...s, timeframe_days: d.days };
   });
@@ -1407,8 +1412,7 @@ export function criteriaSections(
       const how = w.source === "system_default" ? `default for "${w.rule ?? "recent"}"`
         : w.source === "user_explicit" ? "you said this" : "inferred";
       add(sections.time_windows,
-        `${SIGNAL_LABEL[c.dimension as CanonicalSignalKind] ?? c.label}: last ${w.days} days · ${how}` +
-        (c.dimension === "hiring" && w.source === "system_default" ? " · shown, not yet enforced" : ""));
+        `${SIGNAL_LABEL[c.dimension as CanonicalSignalKind] ?? c.label}: last ${w.days} days · ${how}`);
     }
   }
   for (const g of extraUnsupported) add(sections.unsupported, String(g));

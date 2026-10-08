@@ -62,7 +62,7 @@ Deno.test("every compiled mission carries goal, count, criteria and canonical si
 
 // A stated, unhedged hiring requirement is HARD (RC04, 2026-10-06); only a hedged
 // one ("appears to be hiring") stays a target.
-Deno.test('"hiring growth marketers" → hiring HARD, role kept, default window shown but not claimed as enforced', () => {
+Deno.test('"hiring growth marketers" → hiring HARD, role kept, default window on the criterion, not the carrier', () => {
   const m = compile("Find US B2B SaaS companies hiring growth marketers.", {
     company_types: ["B2B SaaS"], geographies: ["United States"], preferred_signals: ["hiring growth marketers"],
   }).final_mission;
@@ -73,8 +73,38 @@ Deno.test('"hiring growth marketers" → hiring HARD, role kept, default window 
   assert(h.label.includes("growth marketer"), h.label);
   assertEquals(h.time_window?.days, 30);
   assertEquals(h.time_window?.source, "system_default");
-  assertEquals(m.required_signals[0].timeframe_days, undefined, "hiring window is shown, not carried");
-  assert(criteriaSections(m).time_windows.some((l) => l.includes("not yet enforced")));
+  assertEquals(m.required_signals[0].timeframe_days, undefined, "hiring window stays off the carrier");
+  // The open-role verifier is handed `time_window.days` and drops postings dated
+  // outside it, so the card no longer calls the window "not yet enforced".
+  const line = criteriaSections(m).time_windows.find((l) => l.startsWith("Hiring:"));
+  assert(line, JSON.stringify(criteriaSections(m).time_windows));
+  assert(line!.startsWith("Hiring: last 30 days · default for"), line);
+  assertFalse(/not yet enforced|shown/.test(line!), line);
+});
+
+// The production smoke of 2026-10-08 (task ea562324) showed "Hiring: last 30
+// days · default for "currently / actively hiring" · shown, not yet enforced"
+// while run-agent passed those same 30 days to the hiring verifier
+// (`criteriaWindow: (id) => vCriteria.find(...)?.time_window?.days`).
+Deno.test("the card's hiring window is the verifier's window, stated without a caveat", () => {
+  const q = "Find 1 US company with 11–50 employees that raised funding in the last 24 months and is currently hiring sales.";
+  const m = compile(q, {
+    requested_opportunity_count: 1, geographies: ["United States"], geography_is_hard: true,
+    employee_range: { min: 11, max: 50 },
+    preferred_signals: ["raised funding in the last 24 months", "currently hiring sales"],
+  }).final_mission;
+  const h = one(m, "hiring");
+  assertEquals(h.kind, "hard");
+  assertEquals(h.time_window?.days, 30);
+  assertEquals(h.time_window?.source, "system_default");
+  // What run-agent's `criteriaWindow` returns for this criterion.
+  const verifierWindow = deriveMissionCriteria(m).find((c) => c.id === h.id)?.time_window?.days ?? null;
+  assertEquals(verifierWindow, 30);
+  const windows = criteriaSections(m).time_windows;
+  const hiring = windows.find((l) => l.startsWith("Hiring:"));
+  assertEquals(hiring, `Hiring: last ${verifierWindow} days · default for "${h.time_window?.rule}"`, JSON.stringify(windows));
+  assert(windows.some((l) => l.startsWith("Funding: last 730 days · you said this")), JSON.stringify(windows));
+  assertFalse(windows.some((l) => l.includes("not yet enforced")), JSON.stringify(windows));
 });
 
 // ── the leadership misread ───────────────────────────────────────────────────
