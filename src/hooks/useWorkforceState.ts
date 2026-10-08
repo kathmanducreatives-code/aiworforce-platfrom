@@ -18,6 +18,8 @@ export interface AgentState {
 export interface TimelineItem {
   id: string;
   time: string;
+  /** When it happened (ISO), for relative time and ordering. Null when the row had none. */
+  at: string | null;
   agentId: AgentId;
   text: string;
 }
@@ -45,6 +47,9 @@ export function useWorkforceState(workspaceId: string | null) {
     const contentDrafts = savedOutputs.filter((o) => (o.type ?? '').match(/content|post/i)).length;
     const outreachDrafts = drafts.length;
     const approvalsCount = approvals.length;
+    // "New" means the last 24 hours — not every row the feed happened to load.
+    const dayAgo = Date.now() - 86_400_000;
+    const signals24h = signals.filter((s) => (Date.parse(s.created_at ?? '') || 0) >= dayAgo).length;
 
     const agents: Record<AgentId, AgentState> = {
       pilot: {
@@ -125,22 +130,28 @@ export function useWorkforceState(workspaceId: string | null) {
       ...signals.slice(0, 3).map((s, i) => ({
         id: `sig-${(s as any).id ?? i}`,
         time: fmt((s as any).created_at),
+        at: s.created_at ?? null,
         agentId: 'scout' as AgentId,
         text: `Lyra found "${(s as any).title ?? 'a new signal'}"`,
       })),
       ...drafts.slice(0, 2).map((d, i) => ({
         id: `draft-${(d as any).id ?? i}`,
         time: fmt((d as any).created_at),
+        at: d.created_at ?? null,
         agentId: 'penn' as AgentId,
         text: `Mira prepared a ${(d as any).channel ?? 'outreach'} draft`,
       })),
       ...approvals.slice(0, 2).map((a) => ({
         id: `apr-${a.id}`,
         time: fmt(a.created_at),
+        at: a.created_at ?? null,
         agentId: 'pilot' as AgentId,
         text: `Pilot queued "${a.title}" for your approval`,
       })),
-    ].slice(0, 6);
+    ]
+      // Newest first across every source, so the timeline reads as one story.
+      .sort((x, y) => (Date.parse(y.at ?? '') || 0) - (Date.parse(x.at ?? '') || 0))
+      .slice(0, 6);
 
     const decisions: DecisionItem[] = approvals.slice(0, 6).map((a) => {
       // Best-effort agent attribution from title
@@ -165,7 +176,7 @@ export function useWorkforceState(workspaceId: string | null) {
       agents,
       timeline,
       decisions,
-      totals: { signals: signals.length, outreachDrafts, contentDrafts, approvals: approvalsCount, hotSignals, competitorSignals },
+      totals: { signals: signals.length, signals24h, outreachDrafts, contentDrafts, approvals: approvalsCount, hotSignals, competitorSignals },
       signalFeed: { signals, clusters, relevance, coverage, loading, error: signalError, refresh: refreshSignals },
     };
   }, [signals, clusters, relevance, coverage, signalError, refreshSignals, drafts, savedOutputs, approvals, brain, loading]);

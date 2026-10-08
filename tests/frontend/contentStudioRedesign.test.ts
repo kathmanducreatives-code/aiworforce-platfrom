@@ -133,7 +133,8 @@ Deno.test("the Content page presents ONE Content employee: Scribe, Content Strat
     assert(!/\bMira\b/.test(code(await read(f))), `${f}: Mira is the outreach persona, not Content's`);
   }
   const panel = await read("src/components/content/ScribePanel.tsx");
-  assert(panel.includes(">Scribe</p>") && panel.includes(">Content Strategist</p>"));
+  // The identity renders through the shared department AgentStatus.
+  assert(panel.includes('name="Scribe"') && panel.includes('role="Content Strategist"'));
 });
 
 Deno.test("no provider, model or key reaches the Content UI — every generation goes through the service", async () => {

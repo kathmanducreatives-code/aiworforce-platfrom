@@ -26,6 +26,11 @@ export const LIVE_MAX_ITEMS = 12;
 export const LIVE_MIN_VERIFIED = 3;
 export const TREND_MIN_COMPANIES = 5;
 /**
+ * A known signal family can be summarised from two companies ("2 companies
+ * showing hiring intent") — below a trend, it is a count, and says only that.
+ */
+export const DIGEST_MIN_COMPANIES = 2;
+/**
  * ICP fit is shown only when it argues FOR the signal. Measured on the live
  * workspace (Sept 2026) fit ran 35–53; printing "ICP fit 40" would advertise a
  * weak match as a reason to look.
@@ -70,6 +75,8 @@ export interface LiveTrendItem {
   typeLabel: string;
   headline: string;
   companies: number;
+  /** True from TREND_MIN_COMPANIES up: a pattern, not just a count. */
+  developing: boolean;
   /** Week-over-week change in %, only when both weeks are fully covered. */
   changePct: number | null;
   score: number;
@@ -195,37 +202,64 @@ function spreadTypes<T extends { typeLabel: string }>(items: T[]): T[] {
 }
 
 /**
+ * Signal families the bar can summarise in plain words. Matched on the stored
+ * `signal_type` (radar types vary: sales_hiring, growth_hiring, revops_hiring…).
+ * `n` counts distinct subjects over the last 7 days — companies, or people for
+ * role changes — so each phrase states exactly what was counted.
+ */
+const FAMILIES: ReadonlyArray<{ key: string; label: string; test: RegExp; phrase: (n: number) => string }> = [
+  { key: "hiring", label: "Hiring", test: /hiring|job_posting/, phrase: (n) => `${n} companies showing hiring intent` },
+  { key: "funding", label: "Funding", test: /funding/, phrase: (n) => `${n} companies with new funding signals` },
+  { key: "role", label: "Role changes", test: /role_change|job_change/, phrase: (n) => `${n} people changed roles` },
+  { key: "leadership", label: "Leadership", test: /leadership|executive/, phrase: (n) => `${n} companies with leadership changes` },
+  { key: "expansion", label: "Expansion", test: /expansion/, phrase: (n) => `${n} companies expanding` },
+  { key: "launch", label: "Product launches", test: /product_launch/, phrase: (n) => `${n} companies launched products` },
+  { key: "intent", label: "Buying intent", test: /intent|linkedin_engagement/, phrase: (n) => `${n} companies showing buying intent` },
+];
+
+export function familyOf(signalType: string | null | undefined) {
+  const t = (signalType ?? "").toLowerCase();
+  return FAMILIES.find((f) => f.test.test(t)) ?? null;
+}
+
+/**
  * A pattern across companies, stated only as far as the data reaches.
  *
- * Distinct companies per type over the last 7 days. The week-over-week number
- * appears only when the loaded rows are the complete active set — otherwise the
- * "previous week" might simply be the part of the history we did not load.
+ * Distinct subjects per signal family (or per type label, for types without a
+ * family) over the last 7 days. A known family is summarised from
+ * DIGEST_MIN_COMPANIES; anything else needs TREND_MIN_COMPANIES. The
+ * week-over-week number appears only when the loaded rows are the complete
+ * active set — otherwise the "previous week" might simply be the part of the
+ * history we did not load.
  */
 export function detectTrends(candidates: readonly FeedSignal[], complete: boolean, now: number): LiveTrendItem[] {
-  const groups = new Map<string, { label: string; thisWeek: Set<string>; lastWeek: Set<string> }>();
+  const groups = new Map<string, { label: string; phrase: ((n: number) => string) | null; thisWeek: Set<string>; lastWeek: Set<string> }>();
   for (const s of candidates) {
     const t = eventTimeOf(s);
     const company = companyKeyOf(s);
     if (t === null || !company) continue;
-    const label = signalTypeLabel(s.signal_type);
-    const g = groups.get(label) ?? { label, thisWeek: new Set(), lastWeek: new Set() };
+    const family = familyOf(s.signal_type);
+    const label = family?.label ?? signalTypeLabel(s.signal_type);
+    const key = family ? `family:${family.key}` : `type:${label}`;
+    const g = groups.get(key) ?? { label, phrase: family?.phrase ?? null, thisWeek: new Set(), lastWeek: new Set() };
     const age = now - t;
     if (age >= 0 && age < 7 * DAY_MS) g.thisWeek.add(company);
     else if (age >= 7 * DAY_MS && age < 14 * DAY_MS) g.lastWeek.add(company);
-    groups.set(label, g);
+    groups.set(key, g);
   }
   const trends: LiveTrendItem[] = [];
   for (const g of groups.values()) {
     const n = g.thisWeek.size;
-    if (n < TREND_MIN_COMPANIES) continue;
+    if (n < (g.phrase ? DIGEST_MIN_COMPANIES : TREND_MIN_COMPANIES)) continue;
     const prev = g.lastWeek.size;
     const changePct = complete && prev >= 3 ? Math.round(((n - prev) / prev) * 100) : null;
     trends.push({
       kind: "trend",
       key: `trend:${g.label}`,
       typeLabel: g.label,
-      headline: `${n} companies showed ${g.label.toLowerCase()} signals this week`,
+      headline: g.phrase ? g.phrase(n) : `${n} companies showed ${g.label.toLowerCase()} signals this week`,
       companies: n,
+      developing: n >= TREND_MIN_COMPANIES,
       changePct: changePct !== null && Math.abs(changePct) >= 15 ? changePct : null,
       score: 0,
     });
@@ -277,9 +311,9 @@ export function rankLiveItems(input: RankInput): LiveItem[] {
 
   const signals = spreadTypes(items).slice(0, LIVE_MAX_ITEMS);
   const trends = detectTrends(candidates.filter((s) => s.show_by_default), input.complete, input.now);
-  // A trend earns roughly every fifth slot, never the first.
+  // A summary earns roughly every fourth slot, never the first.
   const out: LiveItem[] = [...signals];
-  trends.forEach((t, i) => out.splice(Math.min(out.length, 3 + i * 5), 0, t));
+  trends.forEach((t, i) => out.splice(Math.min(out.length, 2 + i * 4), 0, t));
   return out.slice(0, LIVE_MAX_ITEMS);
 }
 
@@ -308,7 +342,7 @@ export function contextOf(item: LiveItem, now: number, opts: { markUnverified?: 
   if (item.kind === "trend") {
     return item.changePct !== null
       ? `${item.changePct > 0 ? "↑" : "↓"}${Math.abs(item.changePct)}% vs last week`
-      : "Across your monitored market";
+      : item.developing ? "Across your monitored market" : "In the last 7 days";
   }
   const parts: string[] = [];
   if (item.fit !== null && item.fit >= FIT_SHOW_MIN) parts.push(`ICP fit ${Math.round(clamp(item.fit, 0, 100))}`);
@@ -357,4 +391,25 @@ export function mergeArrivals(current: readonly FeedSignal[], arrivals: readonly
   const seen = new Set(current.map((s) => s.id));
   const fresh = arrivals.filter((s) => s.id && !seen.has(s.id));
   return fresh.length ? [...fresh, ...current] : [...current];
+}
+
+/**
+ * What the bar may say while nothing has been detected: the buying signals the
+ * Company Brain tells Lyra to watch for, verbatim. Configuration, not a claim
+ * that anything happened — the bar labels it "Watching for".
+ */
+export function watchlistOf(brain: { triggers?: readonly string[]; jobs_to_watch?: readonly string[] } | null | undefined, max = 6): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (v: unknown, prefix = "") => {
+    const s = typeof v === "string" ? v.trim().replace(/\.$/, "") : "";
+    if (!s || s.length > 90) return;
+    const k = s.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(prefix ? `${prefix}${s}` : s);
+  };
+  (brain?.triggers ?? []).forEach((v) => add(v));
+  (brain?.jobs_to_watch ?? []).forEach((v) => add(v, "Companies hiring: "));
+  return out.slice(0, max);
 }

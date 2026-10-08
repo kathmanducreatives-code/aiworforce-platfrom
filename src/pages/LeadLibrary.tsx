@@ -1,9 +1,15 @@
+import { Building2, SearchX } from "lucide-react";
+import { cn } from "@/lib/utils";
+import DepartmentEmptyState from "@/components/layout/department/DepartmentEmptyState";
+import { DEPT_ACTION } from "@/components/layout/department/DepartmentHeader";
+import { SECONDARY_ACTION } from "@/components/layout/workspaceStyles";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { useLeadLibrary, loadLocalAug, saveLocalAug } from "@/hooks/leadLibrary/useLeadLibrary";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useDepartmentAgentStatus } from "@/hooks/useDepartmentAgentStatus";
 import { MetricStrip, type MetricKey } from "@/components/leads/library/MetricStrip";
 import { EMPTY_FILTERS, applyFilters, type Filters } from "@/components/leads/library/FilterBar";
 import { LeadTable } from "@/components/leads/library/LeadTable";
@@ -114,6 +120,9 @@ export default function LeadLibrary() {
     toast.success(`Saved view "${name}"`);
   };
 
+  // Atlas's live state — the same source as his dashboard card.
+  const atlasStatus = useDepartmentAgentStatus(workspaceId, "atlas");
+
   return (
     <div className="relative h-[calc(100vh-190px)] min-h-[640px]">
       <CommandBackdrop />
@@ -127,7 +136,7 @@ export default function LeadLibrary() {
         />
 
         <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-3">
-          <AtlasStrip rows={rows} />
+          <AtlasStrip rows={rows} status={atlasStatus} />
           <MetricStrip rows={rows} active={metric} onSelect={setMetric} />
         </div>
 
@@ -226,25 +235,18 @@ export default function LeadLibrary() {
 
 function EmptyState({ hasRows, onReset }: { hasRows: boolean; onReset: () => void }) {
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
-      <div className="text-center max-w-sm">
-        <div className="text-[13px] text-foreground font-medium">
-          {hasRows ? "No leads match this view" : "Your Lead Library is empty"}
-        </div>
-        <div className="mt-1 text-[12px] text-muted-foreground">
-          {hasRows
-            ? "Try adjusting or clearing filters to see the full library."
-            : "Ask Atlas to find accounts, or import a CSV to begin."}
-        </div>
-        {hasRows && (
-          <button
-            onClick={onReset}
-            className="ag-btn ag-btn-secondary mt-3 inline-flex items-center h-8 px-3 rounded-lg text-[12px] font-medium"
-          >
-            Clear filters
-          </button>
-        )}
-      </div>
-    </div>
+    <DepartmentEmptyState
+      className="flex-1 p-8"
+      icon={hasRows ? SearchX : Building2}
+      title={hasRows ? "No leads match this view" : "Your Lead Library is empty"}
+      description={hasRows
+        ? "Try adjusting or clearing filters to see the full library."
+        : "Ask Atlas to find accounts, or import a CSV to begin."}
+      actions={hasRows && (
+        <button onClick={onReset} className={cn(DEPT_ACTION, SECONDARY_ACTION)}>
+          Clear filters
+        </button>
+      )}
+    />
   );
 }

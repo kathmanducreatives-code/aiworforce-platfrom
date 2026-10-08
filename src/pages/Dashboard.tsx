@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Sparkles, X, ArrowUpRight, ArrowRight } from 'lucide-react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -10,7 +10,13 @@ import AgentPortrait from '@/components/agents/AgentPortrait';
 import WorkforceAgentCard from '@/components/dashboard/WorkforceAgentCard';
 import WorkforceGreeting from '@/components/dashboard/WorkforceGreeting';
 import { useAgentVisualStates } from '@/hooks/useAgentVisualStates';
-import { visualAgentKey } from '@/lib/agent3d/visualState';
+import { visualAgentKey, type VisualAgentKey } from '@/lib/agent3d/visualState';
+import { takeNewCompletions } from '@/lib/completionPulse';
+import { formatAgo, watchlistOf } from '@/lib/liveIntelligence';
+import { normalizeCompanyBrain } from '@/lib/normalizeCompanyBrain';
+import { useCompanyBrain } from '@/hooks/useCompanyBrain';
+import { AmbientBackdrop } from '@/components/layout/AmbientBackdrop';
+import { publishWorkforcePulse } from '@/lib/workforcePulse';
 import LiveIntelligenceBar from '@/components/dashboard/LiveIntelligenceBar';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { prepareChatDraft } from '@/lib/chatDraft';
@@ -28,7 +34,34 @@ const Dashboard = () => {
   const { workspaceId } = useWorkspace();
   const { agents, timeline, totals, brainComplete, loading, signalFeed } = useWorkforceState(workspaceId);
   // Live execution truth for the agents' visuals — separate from the count-based copy above.
-  const { states: visualStates } = useAgentVisualStates(workspaceId);
+  const { states: visualStates, ready: visualReady } = useAgentVisualStates(workspaceId);
+  const { data: brain } = useCompanyBrain();
+  const watchlist = useMemo(() => watchlistOf(normalizeCompanyBrain(brain?.profile as Record<string, unknown> | null)), [brain?.profile]);
+
+  // ONE COORDINATED BEAT when an agent really finishes a task while the page is
+  // open: that agent's card acknowledges it, Recent activity lights once, and the
+  // feed is re-read so the timeline and Live Intelligence show what changed.
+  // Only real `completed` events fire it (see completionPulse.ts).
+  const seenCompletions = useRef<Set<string> | null>(null);
+  const [pulse, setPulse] = useState<{ agent: VisualAgentKey; nonce: number } | null>(null);
+  const pulseTimer = useRef(0);
+  const refreshFeed = signalFeed.refresh;
+  useEffect(() => { seenCompletions.current = null; setPulse(null); }, [workspaceId]);
+  useEffect(() => {
+    if (!visualReady) return;
+    const { seen, fresh } = takeNewCompletions(visualStates, seenCompletions.current);
+    seenCompletions.current = seen;
+    if (!fresh.length) return;
+    setPulse((p) => ({ agent: fresh[0].agent, nonce: (p?.nonce ?? 0) + 1 }));
+    void refreshFeed();
+    window.clearTimeout(pulseTimer.current);
+    pulseTimer.current = window.setTimeout(() => setPulse(null), 2800);
+  }, [visualStates, visualReady, refreshFeed]);
+  useEffect(() => () => window.clearTimeout(pulseTimer.current), []);
+  // Share the live counts the command bar reacts to (see workforcePulse.ts).
+  useEffect(() => { if (workspaceId && !loading) publishWorkforcePulse({ workspaceId, signals24h: totals.signals24h }); }, [workspaceId, loading, totals.signals24h]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 60_000); return () => window.clearInterval(t); }, []);
   const [selectedId, setSelectedId] = useState<AgentId>('pilot');
   const [profileId, setProfileId] = useState<AgentId | null>(null);
   const chat = useChatWorkspace();
@@ -48,6 +81,7 @@ const Dashboard = () => {
 
   return (
     <div className="workforce-home min-h-screen bg-transparent">
+      <AmbientBackdrop variant="dashboard" />
       <div className="mx-auto w-full max-w-[1500px] px-5 lg:px-8 pt-5 pb-16">
         <header className="team-header">
           <WorkforceGreeting />
@@ -81,15 +115,31 @@ const Dashboard = () => {
 
         <div data-tour="dashboard-main">
           <section className="team-gallery" aria-label="Your AI workforce">
-            {(['scout', 'aria', 'penn', 'scribe'] as AgentId[]).map(id => <WorkforceAgentCard key={id} agent={agents[id]} visual={visualStates[visualAgentKey(id)!]} loading={loading} onProfile={() => { setSelectedId(id); setProfileId(id); }} onChat={() => talk(id)} onAction={() => { const action = agents[id].nextAction; if (action.route) navigate(action.route); else talk(id); }} />)}
+            {(['scout', 'aria', 'penn', 'scribe'] as AgentId[]).map(id => <WorkforceAgentCard key={id} agent={agents[id]} visual={visualStates[visualAgentKey(id)!]} loading={loading} onProfile={() => { setSelectedId(id); setProfileId(id); }} justFinished={!!pulse && pulse.agent === visualAgentKey(id)} onChat={() => talk(id)} onAction={() => { const action = agents[id].nextAction; if (action.route) navigate(action.route); else talk(id); }} />)}
           </section>
-          <LiveIntelligenceBar workspaceId={workspaceId} feed={signalFeed} />
+          <LiveIntelligenceBar workspaceId={workspaceId} feed={signalFeed} watchlist={watchlist} />
           <div className="team-lower">
-            <section className="team-panel" aria-label="Recent activity">
+            <section className="team-panel team-panel--ops" data-pulse={pulse ? 'true' : undefined} aria-label="Recent activity">
               <div className="team-panel-header"><h2>Recent activity</h2><button onClick={() => navigate('/workflows')}>Workflows <ArrowUpRight size={12} className="inline" /></button></div>
-              {loading ? <p className="team-review-copy">Loading your workspace…</p> : timeline.length ? timeline.slice(0, 3).map(item => <div className="team-activity" key={item.id}><AgentPortrait agentId={item.agentId} size={30} decorative /><div className="min-w-0"><p title={item.text}>{item.text}</p><time>{item.time}</time></div></div>) : <p className="team-review-copy">Your team's work will appear here. Start with a goal above.</p>}
+              {loading ? <TimelineSkeleton /> : timeline.length ? (
+                <ol className="team-timeline">
+                  {timeline.slice(0, 3).map(item => {
+                    const name = lookupPublicAgent(item.agentId)?.name ?? '';
+                    const rest = name && item.text.startsWith(name) ? item.text.slice(name.length) : ` ${item.text}`;
+                    return <li className="team-activity" key={item.id}>
+                      <span className="team-timeline__node"><AgentPortrait agentId={item.agentId} size={26} decorative /></span>
+                      <div className="min-w-0"><p title={item.text}><b>{name}</b>{rest}</p><time dateTime={item.at ?? undefined}>{formatAgo(item.at, now) ?? item.time}</time></div>
+                    </li>;
+                  })}
+                </ol>
+              ) : (
+                <div className="team-empty">
+                  <TimelineSkeleton />
+                  <p className="team-review-copy">Your team's work will appear here as a timeline. Start with a goal below.</p>
+                </div>
+              )}
             </section>
-            <section className="team-panel" aria-label="Your review queue">
+            <section className="team-panel team-panel--ops" aria-label="Your review queue">
               <div className="team-panel-header"><h2>Your review queue</h2><span className="team-eyebrow">Human approved</span></div>
               <div className="team-review-count">{loading ? '—' : totals.approvals.toString().padStart(2, '0')}</div>
               <p className="team-review-copy">{totals.approvals ? 'Decisions waiting for your attention. Review the work and choose what happens next.' : 'Nothing waiting for approval. Your next decisions will appear here.'}</p>
@@ -112,5 +162,19 @@ const Dashboard = () => {
     </div>
   );
 };
+
+/** A faint preview of the timeline to come — structure, never fake entries. */
+function TimelineSkeleton() {
+  return (
+    <ol className="team-timeline team-timeline--skeleton" aria-hidden>
+      {[62, 48, 55].map((w, i) => (
+        <li className="team-activity" key={i}>
+          <span className="team-timeline__node"><span className="team-skel team-skel--avatar" /></span>
+          <div className="min-w-0 flex-1"><span className="team-skel" style={{ width: `${w}%` }} /><span className="team-skel team-skel--sub" /></div>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 export default Dashboard;

@@ -7,6 +7,7 @@ import {
   type LeadDecisionState,
 } from "@/lib/leadLibrary/leadDecisionState";
 import { useMemo } from "react";
+import { METRIC_CELL, METRIC_DIVIDER, METRIC_LABEL, METRIC_STRIP, METRIC_STRIP_H, METRIC_VALUE } from "@/components/layout/workspaceStyles";
 
 // Kept for backwards compatibility with LeadLibrary.tsx.
 export type MetricKey = CounterKey;
@@ -43,8 +44,8 @@ export function MetricStrip({
   return (
     <div
       className={cn(
-        "flex items-stretch h-[72px] rounded-xl overflow-hidden",
-        "ag-glass",
+        METRIC_STRIP,
+        METRIC_STRIP_H,
         className,
       )}
     >
@@ -57,24 +58,25 @@ export function MetricStrip({
             title={m.help}
             onClick={() => onSelect(m.key)}
             className={cn(
-              "relative flex-1 min-w-0 px-3 flex flex-col justify-center gap-1 text-left transition-colors",
-              "hover:bg-white/[0.02]",
-              i !== 0 && "border-l border-white/[0.05]",
+              METRIC_CELL,
+              "relative px-3 text-left transition-colors hover:bg-white/[0.025]",
+              i !== 0 && METRIC_DIVIDER,
               isActive && "bg-[linear-gradient(180deg,rgba(16,185,129,0.09),transparent)]",
             )}
           >
             <div
               className={cn(
-                "text-[10px] uppercase tracking-[0.14em] font-medium truncate",
-                isActive ? "text-primary/90" : "text-muted-foreground",
+                METRIC_LABEL,
+                "truncate",
+                isActive && "text-primary/90",
               )}
             >
               {m.label}
             </div>
             <div
               className={cn(
-                "text-[20px] font-semibold tabular-nums leading-none",
-                isActive ? "text-primary" : "text-foreground",
+                METRIC_VALUE,
+                isActive && "text-primary",
               )}
             >
               {count}

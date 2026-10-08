@@ -241,7 +241,7 @@
 
 /* The one always-on emerald: the active row's icon. */
 .sb__row[data-active='true'] { color: var(--sb-text-active); }
-.sb__row[data-active='true'] .sb__icon { color: var(--sb-accent); }
+.sb__row[data-active='true'] .sb__icon { color: #6ee7b7; filter: drop-shadow(0 0 5px rgba(52, 211, 153, 0.35)); }
 
 .sb__icon {
   position: relative;
@@ -326,12 +326,21 @@
 
 /* ── the shared active indicator ─────────────────────────────────────────── */
 
+/* The active row is a lit pane, not a filled rectangle: light enters from the
+   rail side and fades across, a hairline edge holds its shape, and a faint
+   inner glow gives it depth. Inactive rows stay flat. */
 .sb__surface {
   position: absolute;
   inset: 0;
   z-index: 0;
   border-radius: var(--sb-radius);
-  background: var(--sb-surface-active);
+  background:
+    linear-gradient(90deg, rgba(52, 211, 153, 0.11), rgba(52, 211, 153, 0.035) 55%, rgba(52, 211, 153, 0.02)),
+    var(--sb-surface-active);
+  box-shadow:
+    inset 0 0 0 1px rgba(110, 231, 183, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 10px 0 18px -14px rgba(52, 211, 153, 0.35);
 }
 
 /* Aligned to the row, not the section: 20px of rail against a 40px row. */
@@ -343,7 +352,8 @@
   width: 2px;
   height: 20px;
   border-radius: 0 2px 2px 0;
-  background: var(--sb-accent);
+  background: linear-gradient(180deg, #a7f3d0, var(--sb-accent));
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.55), 0 0 2px rgba(167, 243, 208, 0.8);
 }
 
 /* ── footer ──────────────────────────────────────────────────────────────── */

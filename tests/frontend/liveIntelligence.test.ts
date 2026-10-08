@@ -10,6 +10,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import { normalizeSignalEventRow, type RawSignalEventRow } from "../../src/lib/signalEventProjection.ts";
 import { normalizeSignalRow, type FeedSignal } from "../../src/lib/signalFeedModel.ts";
 import {
+  watchlistOf,
   rankLiveItems, contextOf, formatAgo, incomingHighlight, mergeArrivals, headlineOf, allUnverified, acceptArrival,
   LIVE_MAX_ITEMS, type LiveItem, type LiveSignalItem,
 } from "../../src/lib/liveIntelligence.ts";
@@ -128,7 +129,34 @@ Deno.test("a pattern across five companies becomes one trend; week-over-week onl
   const truncated = rank([...thisWeek, ...lastWeek], { complete: false }).filter((i) => i.kind === "trend");
   assertEquals(contextOf(truncated[0], NOW), "Across your monitored market", "a partial read may not claim a comparison");
 
-  assertEquals(rank(thisWeek.slice(0, 4)).filter((i) => i.kind === "trend").length, 0, "four companies is not a trend");
+  const trend = complete[0];
+  assert(trend.kind === "trend" && trend.developing, "six companies is a developing trend");
+  assertEquals(trend.headline, "6 companies showing hiring intent", "a known family is said in plain words");
+
+  const four = rank(thisWeek.slice(0, 4)).filter((i) => i.kind === "trend");
+  assertEquals(four.length, 1, "a known family is summarised from two companies");
+  assert(four[0].kind === "trend" && !four[0].developing, "four companies is a weekly count, not a trend");
+  assertEquals(contextOf(four[0], NOW), "In the last 7 days");
+});
+
+Deno.test("summaries state only what was counted: families by phrase, unknown types need five", () => {
+  const roles = [1, 2].map((i) => event({ signal_type: "role_changed", subject_type: "person", nv: { company_name: null, title: `Person ${i} changed roles`, radar_signal_type: "role_changed" }, subject_key: `person-${i}` }));
+  const summary = rank(roles).find((i) => i.kind === "trend");
+  assertEquals(summary?.headline, "2 people changed roles");
+
+  const oddType = (k: number) => [...Array(k)].map((_, i) => event({ signal_type: "pricing_page_visit", nv: { company_name: `Visitor ${i}`, radar_signal_type: "pricing_page_visit" } }));
+  assertEquals(rank(oddType(4)).filter((i) => i.kind === "trend").length, 0, "no family: four is not enough");
+  assertEquals(rank(oddType(5)).filter((i) => i.kind === "trend").length, 1);
+
+  assertEquals(rank([event()]).filter((i) => i.kind === "trend").length, 0, "one company is never a summary");
+});
+
+Deno.test("the empty-state watchlist is the Company Brain's own words, de-duplicated", () => {
+  assertEquals(
+    watchlistOf({ triggers: ["Series A funding.", "series a funding", "  ", "New VP of Sales"], jobs_to_watch: ["SDR"] }),
+    ["Series A funding", "New VP of Sales", "Companies hiring: SDR"],
+  );
+  assertEquals(watchlistOf(null), []);
 });
 
 Deno.test("never more than the cap, and a trend never takes the first slot", () => {

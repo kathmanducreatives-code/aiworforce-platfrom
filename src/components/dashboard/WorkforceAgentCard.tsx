@@ -4,7 +4,7 @@ import { AGENTS } from '@/components/workforce/agents';
 import type { AgentState } from '@/hooks/useWorkforceState';
 import { AgentDepthCard } from '@/components/agents/AgentDepthCard';
 import { AgentCardPortrait } from '@/components/agents/AgentCardPortrait';
-import type { AgentVisualState } from '@/lib/agent3d/visualState';
+import { statusWordOf, type AgentVisualState } from '@/lib/agent3d/visualState';
 
 interface Props {
   agent: AgentState;
@@ -14,10 +14,14 @@ interface Props {
   onProfile: () => void;
   onChat: () => void;
   onAction: () => void;
+  /** An agent task finished while the page was open — a short, one-time acknowledgement. */
+  justFinished?: boolean;
 }
 
+
+
 /** A portrait stage: input-driven depth, with no idle animation or render loop. */
-export default function WorkforceAgentCard({ agent, visual, loading, onProfile, onChat, onAction }: Props) {
+export default function WorkforceAgentCard({ agent, visual, loading, onProfile, onChat, onAction, justFinished = false }: Props) {
   const meta = AGENTS[agent.id];
   const profile = lookupPublicAgent(agent.id);
   // The dot and the announced status are claims about right now, so they rest on
@@ -26,16 +30,19 @@ export default function WorkforceAgentCard({ agent, visual, loading, onProfile, 
   const base = visual?.base ?? 'idle';
   const attention = !loading && (base === 'awaiting' || base === 'blocked');
   const status = loading ? 'Loading workspace' : visual?.reason ?? 'No live work';
+  const statusWord = justFinished ? 'Just finished' : statusWordOf(visual);
+  const statusTone = justFinished ? 'done' : base;
   // VISUAL FIRST: at rest a card is the portrait and the name. The role and the
   // two actions are revealed on hover or keyboard focus; the profile (top right)
   // stays available on touch. Status is still announced to screen readers, and
   // a small dot marks an agent that needs you — nothing else is always on.
   return <AgentDepthCard className="team-agent team-agent--depth" accent={profile?.accentHex ?? '#10B981'} label={`${meta.name} — ${meta.role}`}>
-    <div className="team-agent__surface">
+    <div className="team-agent__surface" data-just-finished={justFinished || undefined}>
       <AgentCardPortrait stage id={profile?.id ?? agent.id} name={meta.name} role={meta.role} src={profile?.avatar} />
       <div className="team-agent__shade" />
       <div className="team-agent__reflection" />
-      <button className="team-agent__profile" onClick={onProfile} aria-label={`View ${meta.name}'s profile`}><ArrowUpRight size={16} /></button>
+      {!loading && <span className="team-agent__status" data-tone={statusTone} title={status} aria-hidden><i />{statusWord}</span>}
+      <button className="team-agent__profile" onClick={onProfile} aria-label={`View ${meta.name}'s profile`}><span className="team-agent__profile-label" aria-hidden>View agent</span><ArrowUpRight size={16} /></button>
       <div className="team-agent__body">
         <h2>{meta.name}{attention && <span className="team-agent__attention" title={status} aria-hidden />}</h2>
         <span className="sr-only">{status}</span>

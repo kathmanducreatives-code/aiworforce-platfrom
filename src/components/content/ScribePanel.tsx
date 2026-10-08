@@ -21,13 +21,13 @@ import {
 import type { ContentItem, ContentItemVersion } from "@/lib/content/contentItems";
 import type { StudioAsset } from "@/components/content/ContentStudioEditor";
 import { SCRIBE_ACTIONS, versionLabel } from "@/lib/content/contentStudioModel";
-import AgentPortrait from "@/components/agents/AgentPortrait";
+import AgentStatus from "@/components/layout/department/AgentStatus";
 import { ACCENT, FIELD, ROW_IDLE, ROW_SELECTED } from "@/components/content/studioStyles";
 
 type Tab = "scribe" | "history";
 
 export default function ScribePanel({
-  collapsed, onToggle, item, dirty, versions, assets, previewId, onPreview, onRevise, onImage,
+  collapsed, onToggle, item, dirty, versions, assets, previewId, onPreview, onRevise, onImage, status = null,
 }: {
   collapsed: boolean;
   onToggle: () => void;
@@ -40,6 +40,8 @@ export default function ScribePanel({
   onPreview: (v: ContentItemVersion | null) => void;
   onRevise: (revision: string) => Promise<void>;
   onImage: () => Promise<void>;
+  /** The content writer's live status word (useDepartmentAgentStatus), or null while unknown. */
+  status?: string | null;
 }) {
   const [tab, setTab] = useState<Tab>("scribe");
   const [ask, setAsk] = useState("");
@@ -79,17 +81,19 @@ export default function ScribePanel({
   return (
     <aside className="flex h-full w-[320px] shrink-0 flex-col border-l border-white/[0.06] bg-[rgba(8,11,10,0.62)] backdrop-blur-2xl" aria-label="Scribe panel">
       {/* identity + tabs */}
-      <div className="flex items-center gap-3 px-4 pb-3 pt-4">
-        <AgentPortrait agentId="scribe" size={32} decorative />
-        <div className="min-w-0 flex-1 leading-tight">
-          <p className="text-[13.5px] font-semibold text-foreground">Scribe</p>
-          <p className="text-[11.5px] text-muted-foreground/65">Content Strategist</p>
-        </div>
-        <button onClick={onToggle} aria-label="Collapse Scribe panel" title="Collapse"
-          className="rounded-lg p-1.5 text-muted-foreground/60 hover:bg-white/[0.05] hover:text-foreground">
-          <PanelRightClose className="h-4 w-4" />
-        </button>
-      </div>
+      <AgentStatus
+        className="px-4 pb-3 pt-4"
+        agentId="scribe"
+        name="Scribe"
+        role="Content Strategist"
+        status={status}
+        trailing={
+          <button onClick={onToggle} aria-label="Collapse Scribe panel" title="Collapse"
+            className="rounded-lg p-1.5 text-muted-foreground/60 hover:bg-white/[0.05] hover:text-foreground">
+            <PanelRightClose className="h-4 w-4" />
+          </button>
+        }
+      />
       <div className="mx-4 flex gap-1 border-b border-[var(--ag-line)]" role="tablist">
         {(["scribe", "history"] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
