@@ -1383,9 +1383,15 @@ function sourceSuffix(c: MissionCriterion): string {
  * `extraUnsupported` carries Stage 0's own gaps (the feasibility report), so
  * requirements the plan cannot prove appear beside those the language could
  * not express — one list of "will not be established".
+ *
+ * `targetNote` lets a caller that knows the PLAN say what a target also does
+ * there — the card uses it for a Company Brain industry that chooses the
+ * discovery population (missionConfirmationCard.ts). Criteria alone cannot
+ * know that: it depends on which providers the graph reaches.
  */
 export function criteriaSections(
   mission: LeadMissionV1, extraUnsupported: readonly string[] = [],
+  opts: { targetNote?: (c: MissionCriterion) => string | null } = {},
 ): CriteriaSections {
   const criteria = mission.criteria ?? deriveMissionCriteria(mission);
   const sections: CriteriaSections = {
@@ -1406,7 +1412,10 @@ export function criteriaSections(
     else if (c.kind === "opportunity_signal") add(sections.opportunity_signals, `${c.label} · can rank, never reject`);
     else if (isSignal) add(sections.opportunity_signals, `${c.label} · ${c.kind === "hard" ? "required" : "target"} · ${sourceSuffix(c)}`);
     else if (c.kind === "hard") add(sections.hard, `${c.label} · ${sourceSuffix(c)}`);
-    else add(sections.target, `${c.label} · ${sourceSuffix(c)}`);
+    else {
+      const note = opts.targetNote?.(c);
+      add(sections.target, `${c.label} · ${sourceSuffix(c)}${note ? ` · ${note}` : ""}`);
+    }
     if (c.time_window) {
       const w = c.time_window;
       const how = w.source === "system_default" ? `default for "${w.rule ?? "recent"}"`

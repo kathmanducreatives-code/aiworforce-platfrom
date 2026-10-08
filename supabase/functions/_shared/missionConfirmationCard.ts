@@ -35,7 +35,10 @@
 
 import type { LeadMissionV1 } from "./leadMission.ts";
 import type { MissionPreview } from "./missionPreview.ts";
-import { criteriaSections, type CriteriaSections } from "./missionCriteria.ts";
+import { criteriaSections, type CriteriaSections, type MissionCriterion } from "./missionCriteria.ts";
+import { industryIdsForVertical } from "./icpDiscoveryConstraints.ts";
+import { linkedinIndustryLabel } from "./linkedinIndustryTaxonomy.ts";
+import { POPULATION_FILTER_ACTORS } from "./providerCallSpec.ts";
 
 export const MISSION_CARD_VERSION = "mission-card-v1" as const;
 
@@ -81,6 +84,46 @@ const titleFor = (mission: LeadMissionV1): string => {
   const scope = verticals.length > 0 ? ` in ${verticals.join(", ")}` : "";
   return `Find ${n ?? "matching"} ${what}${scope}`;
 };
+
+// ── A BRAIN INDUSTRY THAT CHOOSES THE SEARCH SAYS SO ───────────────────────
+//
+// When the request names no industry, the Company Brain fills
+// `company_profile.verticals` / `business_models` (`mergeCompanyBrainIntoMission`,
+// provenance `company_brain`). Those become TARGET criteria — they rank and
+// never reject — so the card listed them under "Target criteria", which reads
+// as ranking only. But on a LinkedIn company search they are also the search
+// filter: `icpDiscoveryConstraints` turns them into `industryIds`, and
+// `providerCallSpec` keeps exactly those ids as the discovery population (an
+// industry is the only filter that selects one; the engine refuses a search
+// without it). The production smoke of 2026-10-08 (task ea562324) searched
+// LinkedIn industries 4, 6, 104 and 137 from two Brain industries, and the
+// card never said so.
+//
+// The note uses the same `industryIdsForVertical` discovery uses, and appears
+// only when the plan reaches a population-filter actor — so it cannot describe
+// a search the run will not make.
+function brainDiscoveryNote(
+  mission: LeadMissionV1, preview: MissionPreview,
+): (c: MissionCriterion) => string | null {
+  const searches = preview.steps.some((s) => s.providers.some((p) => POPULATION_FILTER_ACTORS.has(p)));
+  if (!searches) return () => null;
+  const prov = mission.field_provenance ?? {};
+  const cp = mission.company_profile;
+  const brainFilled: Record<string, readonly string[]> = {
+    industry: prov["company_profile.verticals"] === "company_brain" ? cp?.verticals ?? [] : [],
+    business_model: prov["company_profile.business_models"] === "company_brain" ? cp?.business_models ?? [] : [],
+  };
+  return (c) => {
+    if (c.kind !== "target" || c.source !== "company_brain_preference") return null;
+    const filled = brainFilled[c.dimension] ?? [];
+    if (typeof c.value !== "string" || !filled.includes(c.value)) return null;
+    const labels = industryIdsForVertical(c.value)
+      .map((id) => linkedinIndustryLabel(id)).filter((l): l is string => !!l);
+    return labels.length > 0
+      ? `also chooses which companies are searched (LinkedIn: ${labels.join("; ")})`
+      : null;
+  };
+}
 
 /**
  * Build the card from the mission and the preview.
@@ -130,6 +173,8 @@ export function buildMissionConfirmation(
     original_instruction: originalInstruction,
     workflow_kind: "account_opportunity_sourcing",
     card_version: MISSION_CARD_VERSION,
-    criteria_sections: criteriaSections(mission, preview.gaps.map((g) => g.detail)),
+    criteria_sections: criteriaSections(mission, preview.gaps.map((g) => g.detail), {
+      targetNote: brainDiscoveryNote(mission, preview),
+    }),
   };
 }
