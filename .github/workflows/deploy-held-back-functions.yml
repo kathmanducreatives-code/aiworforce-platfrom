@@ -1,22 +1,24 @@
 # DEPLOY A PINNED RELEASE OF THE LEAD V2 EDGE FUNCTIONS — manual, production.
 #
-# Release 12ab8a46 — pilot-chat ONLY: the mission card's hiring window line
-# (PR #44, "stop calling the enforced hiring window 'not yet enforced'").
+# Release 7892e071 — pilot-chat ONLY: the mission card says when a Company
+# Brain industry also chooses which companies are searched (PR #46).
 # Deployment only: no application file changes in this release PR. Measured
 # with `deno info --json` against the LIVE build (bundled local modules ∩ files
 # changed since that build):
-#   pilot-chat   cd9ee4b2 (v201) → 1 of 224 bundled modules changed:
-#                _shared/missionCriteria.ts (criteriaSections copy + comments)
-# cd9ee4b2..12ab8a46 changes no other file under supabase/.
+#   pilot-chat   12ab8a46 (v202) → 2 of 224 bundled modules changed:
+#                _shared/missionConfirmationCard.ts (brainDiscoveryNote)
+#                _shared/missionCriteria.ts (criteriaSections' optional targetNote)
+# 12ab8a46..7892e071 changes no other file under supabase/.
 #
 # NOT in this release (they stay on cd9ee4b2, checked before and after):
-#   orchestrate, run-agent  both bundle missionCriteria.ts, but the only change
-#     is the hiring line in `criteriaSections().time_windows`, which only
-#     pilot-chat renders (missionConfirmationCard.ts). run-agent reads
-#     `criteriaSections(...).unsupported` alone (run-agent/index.ts), which is
-#     byte-identical in output. No execution path changes.
+#   orchestrate, run-agent  both bundle missionCriteria.ts (1 changed module vs
+#     cd9ee4b2): the hiring time-window line (#44) and the optional
+#     `targetNote` (#46), which defaults to no note. Neither renders the card —
+#     only pilot-chat imports missionConfirmationCard.ts — and run-agent reads
+#     `criteriaSections(...).unsupported` alone, which is byte-identical in
+#     output. No execution path changes.
 # The six functions on a08ac0e4 stay there (checked before and after).
-# The Railway worker already runs 12ab8a46 (its /health build.sha, verified
+# The Railway worker already runs 7892e071 (its /health build.sha, verified
 # 2026-10-08; it redeploys itself from launch/hardening).
 #
 # ROLLBACK: the step "Back up the currently deployed function" downloads the
@@ -45,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_sha:
-        description: "Type the release SHA to deploy: 12ab8a46"
+        description: "Type the release SHA to deploy: 7892e071"
         required: true
         type: string
 
@@ -57,18 +59,18 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_SHA: 12ab8a46be62a4edc449f7b3b8882d0bfe2bbf49
+  RELEASE_SHA: 7892e0718e50879b15b3dcc8eef672880f92258a
   # The release the six untouched lead-path functions still run; the preflight
   # proves the build check works by reading one of them back.
   PREVIOUS_RELEASE_SHA: a08ac0e4edea6f3aa54314db4efe0073e371b82f
   # The release orchestrate and run-agent run, and keep running, through this
-  # deploy (the previous pinned release, run 37643630558).
+  # deploy (pinned release cd9ee4b2, run 37643630558).
   HELD_RELEASE_SHA: cd9ee4b24327c300508800c677331167e08ae417
-  # What the deployed function runs BEFORE this deploy. The preflight refuses
-  # if it has moved, so this never overwrites a build nobody backed up on
-  # purpose.
-  LIVE_PILOT_CHAT_SHA: cd9ee4b24327c300508800c677331167e08ae417
-  LIVE_PILOT_CHAT_VERSION: "201"
+  # What the deployed function runs BEFORE this deploy (pinned release
+  # 12ab8a46, run 37753444299). The preflight refuses if it has moved, so this
+  # never overwrites a build nobody backed up on purpose.
+  LIVE_PILOT_CHAT_SHA: 12ab8a46be62a4edc449f7b3b8882d0bfe2bbf49
+  LIVE_PILOT_CHAT_VERSION: "202"
   DEPLOYED_FUNCTIONS: "pilot-chat"
   # Lead-path functions this deploy must NOT touch, with the build each runs.
   UNTOUCHED_ON_HELD: "orchestrate run-agent"
@@ -90,11 +92,11 @@ jobs:
         env:
           CONFIRM: ${{ inputs.confirm_sha }}
         run: |
-          if [ "$CONFIRM" != "12ab8a46" ]; then echo "::error::confirm_sha must be 12ab8a46"; exit 1; fi
+          if [ "$CONFIRM" != "7892e071" ]; then echo "::error::confirm_sha must be 7892e071"; exit 1; fi
 
       - uses: actions/checkout@v4
         with:
-          ref: 12ab8a46be62a4edc449f7b3b8882d0bfe2bbf49
+          ref: 7892e0718e50879b15b3dcc8eef672880f92258a
           # Full history, so the ancestry check below is never defeated by a
           # shallow clone.
           fetch-depth: 0
