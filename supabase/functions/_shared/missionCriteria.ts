@@ -1388,6 +1388,13 @@ function sourceSuffix(c: MissionCriterion): string {
  * there — the card uses it for a Company Brain industry that chooses the
  * discovery population (missionConfirmationCard.ts). Criteria alone cannot
  * know that: it depends on which providers the graph reaches.
+ *
+ * THE SOURCE IS ALWAYS THE LAST PART OF A LINE. Lines read
+ * `<label> · <qualifiers…> · <source>`, and card readers split on " · " and
+ * take the source from the end to tell what the person asked for from what was
+ * added. So a note goes BEFORE the source, never after it — appended after,
+ * the line had no recognisable source and a Brain industry read as neither the
+ * person's nor added.
  */
 export function criteriaSections(
   mission: LeadMissionV1, extraUnsupported: readonly string[] = [],
@@ -1414,7 +1421,7 @@ export function criteriaSections(
     else if (c.kind === "hard") add(sections.hard, `${c.label} · ${sourceSuffix(c)}`);
     else {
       const note = opts.targetNote?.(c);
-      add(sections.target, `${c.label} · ${sourceSuffix(c)}${note ? ` · ${note}` : ""}`);
+      add(sections.target, `${c.label}${note ? ` · ${note}` : ""} · ${sourceSuffix(c)}`);
     }
     if (c.time_window) {
       const w = c.time_window;
