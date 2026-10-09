@@ -18,7 +18,7 @@ import {
 import { executionStages, COMPOUND_STAGE_NOTE } from '@/lib/qualifiedLead/planCopy';
 import { requestImpliesQualifiedLead } from '@/lib/qualifiedLead/routingExpectation';
 import {
-  cardCriteria, criteriaSectionsOf, criterionPhrase, missionTitle, type CardCriterion,
+  cardCriteria, criteriaSectionsOf, criterionNote, criterionPhrase, missionTitle, type CardCriterion,
 } from '@/lib/leadMission/missionView';
 
 interface WorkflowConfirmationPayload {
@@ -198,10 +198,11 @@ export default function WorkflowConfirmationCard({ payload, conversationId, mess
   //
   // Presentation only. Every value below is read from the payload / mission the
   // backend sent; nothing is re-derived. Criteria come from the backend's own
-  // lines (`cardCriteria`), split by the source each line states. The run's
-  // machinery (capabilities, the pre-spend check, output) sits one step further
-  // in, under "Run details".
-  const cc = cardCriteria(criteria);
+  // lines (`cardCriteria`), grouped by the source the mission's structured
+  // criteria record (the lines' own source when a mission predates them). The
+  // run's machinery (capabilities, the pre-spend check, output) sits one step
+  // further in, under "Run details".
+  const cc = cardCriteria(criteria, mission?.criteria ?? null);
   const title = preview ? preview.title : missionTitle(mission, payload.workflow_name);
   // The count is the title's; the summary carries the rest of the request.
   const summaryParts: string[] = criteria
@@ -371,6 +372,11 @@ export default function WorkflowConfirmationCard({ payload, conversationId, mess
                       ))}
                     </CriteriaGroup>
                   )}
+                  {cc.details.length > 0 && (
+                    <CriteriaGroup title="Request details">
+                      {cc.details.map((c) => <CriterionItem key={c.text} c={c} tone="neutral" />)}
+                    </CriteriaGroup>
+                  )}
                   {cc.considered.length > 0 && (
                     <CriteriaGroup title="Also considered">
                       {cc.considered.map((c) => (
@@ -537,14 +543,16 @@ export default function WorkflowConfirmationCard({ payload, conversationId, mess
         )}
       </div>
 
-      {/* Actions — the same Start and Edit as always; only the words follow the situation. */}
+      {/* Actions — the same Start and Edit as always; only the words follow the situation.
+          A plan the pre-spend check refuses cannot be started: the card says it
+          can't run as written, so Start must not suggest otherwise. */}
       <div className="mt-3 flex items-center gap-2">
         <Button
           size="sm"
           onClick={handleStart}
-          disabled={blocked || routingMismatch}
+          disabled={blocked || refused || routingMismatch}
           className={`ag-btn ag-btn-primary font-medium flex items-center gap-1.5 h-8 px-3.5 rounded-lg ${
-            blocked ? 'cursor-not-allowed opacity-45' : ''
+            blocked || refused ? 'cursor-not-allowed opacity-45' : ''
           }`}
         >
           <Play className="h-3.5 w-3.5" /> {limited ? 'Continue anyway' : 'Start workflow'}
@@ -624,39 +632,52 @@ function Disclosure({ open, onToggle, label, quiet }: { open: boolean; onToggle:
   );
 }
 
-const BULLET: Record<'user' | 'added' | 'limit', string> = {
+type ItemTone = 'user' | 'added' | 'neutral' | 'limit';
+
+const BULLET: Record<ItemTone, string> = {
   user: 'bg-[#ECE9E4]',
   added: 'border border-[#8B8F96]',
+  neutral: 'bg-[#5C6066]',
   limit: 'border border-amber-300/70',
 };
-const ITEM_TEXT: Record<'user' | 'added' | 'limit', string> = {
+const ITEM_TEXT: Record<ItemTone, string> = {
   user: 'text-[#ECE9E4]',
   added: 'text-[#A3A7AD]',
+  neutral: 'text-[#A3A7AD]',
   limit: 'text-[#A3A7AD]',
 };
 
-/** One line in a criteria group: the person's own reads solid; what was added reads softer and says where it came from. */
-function PlainItem({ tone, source, note, children }: {
-  tone: 'user' | 'added' | 'limit'; source?: string | null; note?: string | null; children: React.ReactNode;
+/**
+ * One line in a criteria group: the person's own reads solid; what was added
+ * reads softer and says where it came from. `detail` is a quieter second line —
+ * an explanation, never part of the criterion or its source.
+ */
+function PlainItem({ tone, source, note, detail, children }: {
+  tone: ItemTone; source?: string | null; note?: string | null; detail?: string | null; children: React.ReactNode;
 }) {
   return (
-    <li className="flex items-baseline gap-2 text-[12.5px]">
-      <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full translate-y-[-1px] ${BULLET[tone]}`} />
-      <span className={ITEM_TEXT[tone]}>{children}</span>
-      {note && <span className="text-[11px] text-[#6E7278]">{note}</span>}
-      {source && <span className="text-[11px] text-[#6E7278]">— {source}</span>}
+    <li className="text-[12.5px]">
+      <div className="flex items-baseline gap-2">
+        <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full translate-y-[-1px] ${BULLET[tone]}`} />
+        <span className={ITEM_TEXT[tone]}>{children}</span>
+        {note && <span className="shrink-0 whitespace-nowrap text-[11px] text-[#6E7278]">{note}</span>}
+        {source && <span className="shrink-0 whitespace-nowrap text-[11px] text-[#6E7278]">— {source}</span>}
+      </div>
+      {detail && (
+        <p data-testid="criterion-detail" className="mt-0.5 pl-3.5 text-[11.5px] leading-snug text-[#7D8187]">{detail}</p>
+      )}
     </li>
   );
 }
 
-/** A backend criterion: its phrase, a "preferred" note for a soft one, a window the backend only defaulted, its source when added. */
-function CriterionItem({ c, tone }: { c: CardCriterion; tone: 'user' | 'added' }) {
+/** A backend criterion: its phrase, "preferred" for a soft one, a defaulted window, its source when added, any explanation. */
+function CriterionItem({ c, tone }: { c: CardCriterion; tone: ItemTone }) {
   const notes = [
     c.section === 'target' || c.required === false ? 'preferred' : null,
-    c.window && c.window.source === 'default' ? (c.window.enforced ? 'default window' : 'default window, not yet enforced') : null,
+    c.window && c.window.source === 'default' ? 'default window' : null,
   ].filter(Boolean).join(' · ');
   return (
-    <PlainItem tone={tone} source={tone === 'added' ? c.source : null} note={notes || null}>
+    <PlainItem tone={tone} source={tone === 'added' ? c.source : null} note={notes || null} detail={criterionNote(c)}>
       {criterionPhrase(c)}
     </PlainItem>
   );

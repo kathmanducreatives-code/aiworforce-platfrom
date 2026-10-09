@@ -16,6 +16,7 @@ import InterpretationPill from './bubbles/InterpretationPill';
 import SafetyChip from './bubbles/SafetyChip';
 import AgentAvatar from './agents/AgentAvatar';
 import AgentTypingIndicator from './AgentTypingIndicator';
+import EmptyState from './EmptyState';
 import { dispatchChatAction } from '@/lib/chatActions';
 import { startedCardIds } from '@/lib/chat/startedCards';
 
@@ -58,7 +59,7 @@ interface Props {
 }
 
 export default function ChatView({ conversationId, agentSlug, pendingUserText, awaitingReply }: Props) {
-  const { messages } = useChatConversation(conversationId);
+  const { messages, state } = useChatConversation(conversationId);
   const { openWorkbench } = useChatWorkspace();
   const openedPanelsRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -108,6 +109,15 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
   // Track the prior agent so we can render a Slack-style handoff divider
   // between two consecutive agent messages from different team members.
   let prevAgentSlug: string | null = null;
+
+  // A NEW CHAT OPENS ON THE WELCOME SCREEN. "New chat" creates a conversation
+  // and opens it, so the workspace's own empty view never shows; a loaded
+  // conversation with nothing in it rendered a blank pane. Only once loading
+  // has settled on "empty" — an existing conversation never flashes it — and
+  // the first message (sent, pending or awaited) replaces it.
+  if (state === 'empty' && messages.length === 0 && !showPending && !awaitingReply) {
+    return <EmptyState />;
+  }
 
   return (
 
