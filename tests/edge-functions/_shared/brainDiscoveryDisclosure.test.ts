@@ -66,15 +66,30 @@ Deno.test("smoke sentence + Brain industries: the card names the LinkedIn indust
   const saas = target.find((l) => l.startsWith("Industry: b2b saas"));
   const staffing = target.find((l) => l.startsWith("Industry: recruiting"));
   assertEquals(saas,
-    "Industry: b2b saas (founder-led or small teams) · from your Company Brain · " +
-    `${NOTE} (LinkedIn: Software Development; Technology, Information and Internet)`);
+    "Industry: b2b saas (founder-led or small teams) · " +
+    `${NOTE} (LinkedIn: Software Development; Technology, Information and Internet) · from your Company Brain`);
   assertEquals(staffing,
-    "Industry: recruiting / talent acquisition / staffing agencies · from your Company Brain · " +
-    `${NOTE} (LinkedIn: Staffing and Recruiting; Human Resources Services)`);
+    "Industry: recruiting / talent acquisition / staffing agencies · " +
+    `${NOTE} (LinkedIn: Staffing and Recruiting; Human Resources Services) · from your Company Brain`);
 
   // The card names exactly the population discovery would search — the smoke's
   // industryIds 4, 6, 104, 137 — no more, no less.
   assertEquals(new Set(icpDiscoveryConstraints(mission).industryIds), new Set(["4", "6", "104", "137"]));
+});
+
+// Card readers take a line's source from its LAST " · " segment, to tell what
+// the person asked for from what was added. The first version of this note was
+// appended after the source, and a reader of that shape lost the source
+// entirely ("unspecified") — so the note sits before it.
+const SOURCES = /^(you said this|inferred( \(confidence [\d.]+\))?|Company Brain rule|from your Company Brain|default)$/;
+Deno.test("every attributed line still ends with its source, including the annotated ones", () => {
+  const s = pilotCard(SMOKE).card.criteria_sections;
+  const lines = [...s.hard, ...s.target, ...s.opportunity_signals.filter((l) => !l.endsWith("can rank, never reject"))];
+  assert(lines.some((l) => l.includes(NOTE)), "the smoke card carries the note");
+  for (const l of lines) {
+    const last = l.split(" · ").at(-1)!;
+    assert(SOURCES.test(last), `line does not end with its source: ${l}`);
+  }
 });
 
 Deno.test("the note is added to the target line only; nothing else on the card changes", () => {
