@@ -230,3 +230,123 @@ export function missionRejectedBroadening(m: MissionLike): string[] {
     })
     .filter(Boolean);
 }
+
+// ── THE CARD'S CRITERIA, READ FROM THE BACKEND'S OWN LINES ──────────────────
+//
+// `criteria_sections` lines are written by `missionCriteria.criteriaSections`
+// in one shape: `<text> · <qualifier…> · <source>`, the source from a fixed
+// table ("you said this", "inferred", "Company Brain rule", "from your Company
+// Brain", "default"). The card reads that source to split what the person asked
+// for from what Agentory added. Nothing is re-derived: a line whose shape is
+// not recognised keeps its full text and an unspecified origin.
+
+export type CriterionOrigin = 'user' | 'added' | 'unspecified';
+
+export interface CardCriterion {
+  section: Exclude<keyof CriteriaSections, 'version'>;
+  /** The line's own words, without its qualifiers: "Geography: United States", "Hiring: sales". */
+  text: string;
+  origin: CriterionOrigin;
+  /** The backend's source wording, when the line carries one. */
+  source: string | null;
+  /** For a signal line: "required" (true) or "target" (false); null otherwise. */
+  required: boolean | null;
+  /** A signal's time window, from the `time_windows` section. */
+  window: { days: number; source: string | null; enforced: boolean } | null;
+}
+
+const SOURCE_ORIGIN: Record<string, CriterionOrigin> = {
+  'you said this': 'user',
+  inferred: 'added',
+  'Company Brain rule': 'added',
+  'from your Company Brain': 'added',
+  default: 'added',
+};
+const LINE_NOTES = new Set(['can rank, never reject', 'to be tested, never required', 'shown, not yet enforced']);
+
+function sourceOf(token: string): { label: string; origin: CriterionOrigin } | null {
+  if (SOURCE_ORIGIN[token]) return { label: token, origin: SOURCE_ORIGIN[token] };
+  if (/^inferred \(confidence [\d.]+\)$/.test(token)) return { label: token, origin: 'added' };
+  if (/^default for /.test(token)) return { label: 'default', origin: 'added' };
+  return null;
+}
+
+/** One backend criteria line, split into its text, origin, signal kind and notes. */
+export function readCriterionLine(line: string): { text: string; source: string | null; origin: CriterionOrigin; required: boolean | null; notes: string[] } {
+  const tokens = String(line ?? '').split(' · ');
+  let source: { label: string; origin: CriterionOrigin } | null = null;
+  let required: boolean | null = null;
+  const notes: string[] = [];
+  while (tokens.length > 1) {
+    const last = tokens[tokens.length - 1];
+    const s: { label: string; origin: CriterionOrigin } | null = !source ? sourceOf(last) : null;
+    if (s) { source = s; tokens.pop(); continue; }
+    if (last === 'required' || last === 'target') { required = last === 'required'; tokens.pop(); continue; }
+    if (LINE_NOTES.has(last)) { notes.unshift(last); tokens.pop(); continue; }
+    break;
+  }
+  return { text: tokens.join(' · '), source: source?.label ?? null, origin: source?.origin ?? 'unspecified', required, notes };
+}
+
+const labelOf = (text: string) => text.split(':')[0].trim().toLowerCase();
+
+/**
+ * The card's criteria: what the person asked for, what Agentory added, what only
+ * ranks or is assumed, and what cannot be verified — each signal with its window.
+ */
+export function cardCriteria(s: CriteriaSections | null): {
+  user: CardCriterion[]; added: CardCriterion[]; considered: CardCriterion[]; unsupported: string[];
+} {
+  const out = { user: [] as CardCriterion[], added: [] as CardCriterion[], considered: [] as CardCriterion[], unsupported: [] as string[] };
+  if (!s) return out;
+  const windows = s.time_windows.map((line) => {
+    const r = readCriterionLine(line);
+    const m = r.text.match(/^(.*?):\s*last (\d+) days$/);
+    return m ? { label: m[1].trim().toLowerCase(), days: Number(m[2]), source: r.source, enforced: !r.notes.includes('shown, not yet enforced') } : null;
+  }).filter((w): w is NonNullable<typeof w> => !!w);
+  for (const section of ['hard', 'target', 'opportunity_signals', 'hypotheses'] as const) {
+    for (const line of s[section]) {
+      const r = readCriterionLine(line);
+      const w = section === 'opportunity_signals' ? windows.find((x) => x.label === labelOf(r.text)) ?? null : null;
+      const c: CardCriterion = {
+        section, text: r.text, origin: r.origin, source: r.source, required: r.required,
+        window: w ? { days: w.days, source: w.source, enforced: w.enforced } : null,
+      };
+      if (section === 'hypotheses' || r.origin === 'unspecified') out.considered.push(c);
+      else out[r.origin].push(c);
+    }
+  }
+  out.unsupported = [...s.unsupported];
+  return out;
+}
+
+/** "last 730 days" as a person says it: 24 months, 3 months, 30 days. */
+export function humanWindow(days: number): string {
+  if (days >= 365 && days % 365 === 0) return `${(days / 365) * 12} months`;
+  if (days >= 60 && days % 30 === 0) return `${days / 30} months`;
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
+/**
+ * A criterion in plain words for the card: a field's value ("United States",
+ * "11–50 employees"), a signal with its window ("Hiring sales in the last 30
+ * days").
+ */
+export function criterionPhrase(c: CardCriterion): string {
+  if (c.section === 'opportunity_signals') {
+    const what = c.text.replace(/:\s*/, ' ');
+    return c.window ? `${what} in the last ${humanWindow(c.window.days)}` : what;
+  }
+  const i = c.text.indexOf(': ');
+  return i > 0 && c.section !== 'hypotheses' ? c.text.slice(i + 2) : c.text;
+}
+
+/**
+ * The backend's generic company title with its count agreeing: "Find 1
+ * companies" reads "Find 1 company". Any other title is shown as written.
+ */
+export function missionTitle(m: MissionLike | null, title: string): string {
+  const n = m?.requested_count;
+  if (m?.target_entity !== 'company' || n !== 1 || !/^Find 1 companies$/.test(title.trim())) return title;
+  return 'Find 1 company';
+}

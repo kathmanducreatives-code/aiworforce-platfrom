@@ -24,6 +24,29 @@ export function inferVerbForAgent(slug?: string | null, hint?: string | null): A
   return 'thinking';
 }
 
+/**
+ * The short live state shown beside an agent's name while it works:
+ * "Pilot · Planning", "Lyra · Checking signals". Keyed on the PUBLIC agent
+ * (legacy slugs resolve first), so Scout's sourcing reads as Lyra's.
+ */
+const STATE_BY_VERB: Record<AgentVerb, string> = {
+  thinking: 'Thinking', coordinating: 'Coordinating', planning: 'Planning', reviewing: 'Reviewing',
+  sourcing: 'Checking signals', searching: 'Searching', scraping: 'Reading sources',
+  ranking: 'Ranking accounts', scoring: 'Scoring fit', prioritizing: 'Prioritizing',
+  researching: 'Researching', enriching: 'Enriching', reading: 'Reading sources',
+  drafting: 'Drafting', writing: 'Writing', summarizing: 'Summarizing',
+};
+const DEFAULT_STATE: Record<string, string> = {
+  pilot: 'Planning', lyra: 'Checking signals', atlas: 'Researching', mira: 'Drafting', orion: 'Organizing pipeline',
+};
+
+export function liveStateLabel(slug?: string | null, verb?: AgentVerb, hint?: string | null): string {
+  const profile = resolveAgent(slug);
+  if (verb) return STATE_BY_VERB[verb];
+  const inferred = inferVerbForAgent(slug, hint);
+  return inferred === 'thinking' ? (DEFAULT_STATE[profile.id] ?? 'Thinking') : STATE_BY_VERB[inferred];
+}
+
 interface Props {
   slug?: string | null;
   verb?: AgentVerb;
@@ -33,47 +56,29 @@ interface Props {
 }
 
 /**
- * Slack/Telegram-style "{Name} is {verb}…" indicator with agent avatar
- * and a soft accent pulse. Used in chat transcripts and agent bubbles.
+ * The agent that is working right now: avatar, "{Name} · {state}" and a small
+ * animated dot. Animation only while it is active — this component is only
+ * rendered then.
  */
 export default function AgentTypingIndicator({ slug, verb, hint, className, compact }: Props) {
   const profile = resolveAgent(slug);
-  const v: AgentVerb = verb ?? inferVerbForAgent(slug, hint);
+  const state = liveStateLabel(slug, verb, hint);
   const accent = profile.accentHex ?? '#10B981';
 
   return (
-    <div className={cn('flex items-start gap-3 animate-fade-in', className)}>
+    <div className={cn('flex items-center gap-3 animate-fade-in', className)} role="status" aria-live="polite">
       <AgentAvatar slug={profile.id} size={compact ? 'xs' : 'sm'} status="thinking" />
-      <div className="min-w-0 flex-1">
-        {!compact && (
-          <div className="flex items-baseline gap-1.5 mb-1">
-            <span className="text-[12.5px] font-semibold text-[#E6EDF3]">{profile.name}</span>
-            <span className="text-[11px]" style={{ color: accent }}>· {profile.role}</span>
-          </div>
-        )}
-        <div
-          className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-full border"
-          style={{
-            backgroundColor: `${accent}10`,
-            borderColor: `${accent}33`,
-          }}
-        >
-          <span className="text-[12px] text-[#C9D1D9]">
-            <span style={{ color: accent }} className="font-medium">{profile.name}</span>{' '}
-            is {v}
-          </span>
-          <span className="flex items-center gap-0.5">
-            {[0, 1, 2].map((i) => (
-              <motion.span
-                key={i}
-                className="h-1 w-1 rounded-full"
-                style={{ backgroundColor: accent }}
-                animate={{ opacity: [0.3, 1, 0.3], y: [0, -1.5, 0] }}
-                transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18, ease: 'easeInOut' }}
-              />
-            ))}
-          </span>
-        </div>
+      <div className="inline-flex items-center gap-2 text-[13px]">
+        <span className="relative flex h-1.5 w-1.5" aria-hidden>
+          <motion.span
+            className="absolute inset-0 rounded-full"
+            style={{ backgroundColor: accent }}
+            animate={{ opacity: [0.35, 1, 0.35] }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </span>
+        <span className="font-medium text-[#F2EFEA]">{profile.name}</span>
+        <span className="text-[#8B8F96]">· {state}</span>
       </div>
     </div>
   );

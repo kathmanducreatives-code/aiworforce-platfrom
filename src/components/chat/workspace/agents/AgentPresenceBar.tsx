@@ -1,52 +1,59 @@
 import { resolveAgent } from '@/lib/agentResolver';
+import { PUBLIC_AGENT_ORDER } from '@/config/agentRegistry';
 import AgentAvatar from './AgentAvatar';
+import { liveStateLabel } from '../AgentTypingIndicator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-const ROSTER = ['pilot', 'scout', 'aria', 'hawk', 'penn', 'scribe'] as const;
-
 interface Props {
-  /** Slug whose avatar should glow as "active". */
+  /** Slug (public or legacy) of the agent this view is talking to. */
   activeSlug?: string | null;
+  /** True while that agent is producing a reply (`pending.awaiting`). */
+  working?: boolean;
   className?: string;
 }
 
 /**
- * Compact Slack-style team-presence strip. Stateless — accepts an optional
- * `activeSlug` to highlight the agent currently "speaking" or working.
- * Pilot stays present as orchestrator.
+ * The team, one avatar per PUBLIC agent. The roster used the legacy slugs, and
+ * two of them (aria, hawk) are both Atlas, so Atlas appeared twice.
+ *
+ * The active agent gets a thin green ring; the rest stay quiet. Hover says who
+ * each agent is and, for the active one, what it is doing — only from state the
+ * frontend already has.
  */
-export default function AgentPresenceBar({ activeSlug, className }: Props) {
-  const active = (activeSlug ?? 'pilot').toLowerCase();
+export default function AgentPresenceBar({ activeSlug, working, className }: Props) {
+  const active = resolveAgent(activeSlug ?? 'pilot').id;
   return (
-    <div className={cn('inline-flex items-center gap-1.5', className)}>
-      <span className="text-[10px] uppercase tracking-widest text-[#7D8590] mr-1">Team</span>
-      {ROSTER.map((slug) => {
-        const profile = resolveAgent(slug);
-        const isActive = slug === active;
-        const accent = profile.accentHex ?? '#10B981';
+    <div className={cn('inline-flex items-center gap-1', className)} aria-label="Your team">
+      {PUBLIC_AGENT_ORDER.map((id) => {
+        const profile = resolveAgent(id);
+        const isActive = id === active;
+        const status = isActive ? (working ? liveStateLabel(id) : 'In this chat') : null;
         return (
-          <Tooltip key={slug}>
+          <Tooltip key={id}>
             <TooltipTrigger asChild>
               <span
+                tabIndex={0}
+                aria-label={`${profile.name}, ${profile.role}${status ? `, ${status}` : ''}`}
                 className={cn(
-                  'relative inline-flex rounded-full transition-all',
-                  isActive ? 'opacity-100' : 'opacity-60 hover:opacity-100',
+                  'relative inline-flex rounded-full transition-opacity outline-none focus-visible:ring-1 focus-visible:ring-white/40',
+                  isActive ? 'opacity-100 ring-1 ring-emerald-400/70 ring-offset-1 ring-offset-background' : 'opacity-50 hover:opacity-90',
                 )}
-                style={isActive ? { boxShadow: `0 0 0 2px ${accent}66, 0 0 12px ${accent}55` } : undefined}
               >
                 <AgentAvatar
-                  slug={slug}
+                  slug={id}
                   size="xs"
-                  status={isActive ? 'running' : 'idle'}
+                  status={isActive && working ? 'running' : 'idle'}
                   ring={false}
                 />
               </span>
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-[11px]">
-              <span className="font-medium" style={{ color: accent }}>{profile.name}</span>
-              <span className="text-[#9aa4af]"> · {profile.role}</span>
-              {isActive && <span className="ml-1 text-emerald-300">· active</span>}
+            <TooltipContent side="bottom" className="text-[12px]">
+              <span className="font-medium text-[#F2EFEA]">{profile.name}</span>
+              <span className="text-[#8B8F96]"> · {profile.role}</span>
+              {status && (
+                <span className={cn('block mt-0.5', working ? 'text-emerald-300' : 'text-[#8B8F96]')}>{status}</span>
+              )}
             </TooltipContent>
           </Tooltip>
         );

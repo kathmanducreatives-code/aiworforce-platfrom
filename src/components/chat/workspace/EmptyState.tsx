@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils';
 
 const CATEGORIES = ['For you', 'Research', 'Signals', 'Outreach', 'Content'] as const;
 type Category = typeof CATEGORIES[number];
-interface Idea { title: string; detail: string; prompt: string; category: Category }
+/** `team`: the agents whose roles fit the prompt (`agentRegistry`), shown as a hint — routing is Pilot's. */
+interface Idea { title: string; team: string; detail: string; prompt: string; category: Category }
 interface Props { onPickPrompt?: (text: string) => void }
 
 export default function EmptyState({ onPickPrompt }: Props) {
@@ -24,18 +25,18 @@ export default function EmptyState({ onPickPrompt }: Props) {
   const audience = industry || 'our target market';
   const buyer = persona || 'our ideal buyer';
   const ideas: Idea[] = [
-    { category: 'Research', title: `Find opportunities in ${audience}`, detail: 'Company fit · evidence · next step', prompt: `Research 5 companies in ${audience} against our saved ICP. Explain fit, exclusions, evidence and the next action for each. Flag anything you cannot verify.` },
-    { category: 'Research', title: 'Pressure-test our ideal customer', detail: 'Sharpen the assumptions behind our targeting', prompt: 'Review our Company Brain targeting. Identify unclear criteria, missing exclusions and three questions that would improve qualification.' },
-    { category: 'Research', title: `Understand ${buyer}`, detail: 'Priorities · pain points · buying context', prompt: `Build a brief for ${buyer} using our Company Brain. Separate saved facts from assumptions and suggest questions to validate gaps.` },
-    { category: 'Signals', title: 'Find changes worth acting on', detail: 'Timing backed by sources', prompt: 'Review available recent buying signals for our target market. Explain what changed, why it matters, source dates and next actions. If none are available, say so.' },
-    { category: 'Signals', title: 'Define our strongest buying moments', detail: 'Turn company context into monitoring priorities', prompt: 'Using our Company Brain, suggest three buying signals relevant to our ICP. Explain the evidence required and what would make each misleading.' },
-    { category: 'Signals', title: 'Separate signal from noise', detail: 'Review relevance before taking action', prompt: 'Review available signals against our ICP and exclusions. Separate relevant changes from noise, cite evidence and flag anything needing verification.' },
-    { category: 'Outreach', title: `Start a conversation with ${buyer}`, detail: 'A relevant, evidence-led first message', prompt: `Help draft a concise first message for ${buyer}. Use our saved positioning, ask me to choose an account, and personalize only with verified evidence. Prepare a draft for review; do not send.` },
-    { category: 'Outreach', title: 'Make a follow-up worth replying to', detail: 'Add value without repeating yourself', prompt: 'Ask for my original message and account context, then draft a short, useful follow-up with a clear reason to reply. Do not send it.' },
-    { category: 'Outreach', title: 'Review a message before it goes out', detail: 'Relevance · clarity · credibility', prompt: 'Ask me to paste an outreach draft, then review relevance, unsupported claims and clarity. Suggest a shorter version in our company voice. Do not send anything.' },
-    { category: 'Content', title: `Turn ${audience} insights into a post`, detail: 'A focused idea in your company voice', prompt: `Suggest three LinkedIn post angles relevant to ${audience}, using our saved positioning and brand voice. Ask me to choose before drafting. Do not invent customer results or publish.` },
-    { category: 'Content', title: 'Build a week of useful content', detail: 'Five angles with a clear audience and purpose', prompt: 'Plan five posts using our Company Brain content angles and buyer personas. Give each a hook, audience and evidence needed. Keep this as a plan for review.' },
-    { category: 'Content', title: 'Turn one insight into three formats', detail: 'Post · short article · email draft', prompt: 'Ask for one company insight or source, then suggest how to adapt it into a LinkedIn post, short article and email draft in our brand voice. Do not publish or send.' },
+    { category: 'Research', title: `Research 5 companies in ${audience}`, team: 'Atlas', detail: 'Based on your ICP · fit, evidence, next step', prompt: `Research 5 companies in ${audience} against our saved ICP. Explain fit, exclusions, evidence and the next action for each. Flag anything you cannot verify.` },
+    { category: 'Research', title: 'Pressure-test your ICP', team: 'Atlas', detail: 'Unclear criteria · missing exclusions · 3 questions', prompt: 'Review our Company Brain targeting. Identify unclear criteria, missing exclusions and three questions that would improve qualification.' },
+    { category: 'Research', title: `Brief me on ${buyer}`, team: 'Atlas', detail: 'Saved facts kept apart from assumptions', prompt: `Build a brief for ${buyer} using our Company Brain. Separate saved facts from assumptions and suggest questions to validate gaps.` },
+    { category: 'Signals', title: 'Review recent buying signals', team: 'Lyra', detail: 'What changed · why it matters · source dates', prompt: 'Review available recent buying signals for our target market. Explain what changed, why it matters, source dates and next actions. If none are available, say so.' },
+    { category: 'Signals', title: 'Pick 3 buying signals to watch', team: 'Lyra', detail: 'Based on your Company Brain · evidence each needs', prompt: 'Using our Company Brain, suggest three buying signals relevant to our ICP. Explain the evidence required and what would make each misleading.' },
+    { category: 'Signals', title: 'Sort relevant signals from noise', team: 'Lyra + Atlas', detail: 'Checked against your ICP and exclusions', prompt: 'Review available signals against our ICP and exclusions. Separate relevant changes from noise, cite evidence and flag anything needing verification.' },
+    { category: 'Outreach', title: `Draft a first message to ${buyer}`, team: 'Atlas + Mira', detail: 'Verified evidence only · nothing is sent', prompt: `Help draft a concise first message for ${buyer}. Use our saved positioning, ask me to choose an account, and personalize only with verified evidence. Prepare a draft for review; do not send.` },
+    { category: 'Outreach', title: 'Draft a follow-up worth replying to', team: 'Mira', detail: 'From your original message · nothing is sent', prompt: 'Ask for my original message and account context, then draft a short, useful follow-up with a clear reason to reply. Do not send it.' },
+    { category: 'Outreach', title: 'Review an outreach draft', team: 'Mira', detail: 'Relevance · clarity · credibility', prompt: 'Ask me to paste an outreach draft, then review relevance, unsupported claims and clarity. Suggest a shorter version in our company voice. Do not send anything.' },
+    { category: 'Content', title: `Suggest 3 post angles for ${audience}`, team: 'Mira', detail: 'In your brand voice · nothing is published', prompt: `Suggest three LinkedIn post angles relevant to ${audience}, using our saved positioning and brand voice. Ask me to choose before drafting. Do not invent customer results or publish.` },
+    { category: 'Content', title: 'Plan a week of posts', team: 'Mira', detail: 'Five hooks, each with audience and evidence', prompt: 'Plan five posts using our Company Brain content angles and buyer personas. Give each a hook, audience and evidence needed. Keep this as a plan for review.' },
+    { category: 'Content', title: 'Turn one insight into three formats', team: 'Mira', detail: 'Post · short article · email draft', prompt: 'Ask for one company insight or source, then suggest how to adapt it into a LinkedIn post, short article and email draft in our brand voice. Do not publish or send.' },
   ];
   const visible = category === 'For you'
     ? CATEGORIES.slice(1).map((item) => ideas.filter((s) => s.category === item)[round % 3])
@@ -52,7 +53,7 @@ export default function EmptyState({ onPickPrompt }: Props) {
         <h2 className="mt-3 text-[clamp(24px,4vw,32px)] font-medium leading-tight tracking-tight text-foreground">What should we move forward?</h2>
         <p className="mt-3 max-w-[560px] text-sm leading-relaxed text-muted-foreground">Start with a direction. Your team can help research, find signals, and turn the right insight into action.</p>
         <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Suggestion categories">
-          {CATEGORIES.map((item) => <button key={item} type="button" aria-pressed={category === item} onClick={() => { setCategory(item); setSelected(''); }} className={cn('rounded-full border px-3 py-1.5 text-xs transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400', category === item ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300' : 'border-white/[0.07] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground')}>{item}</button>)}
+          {CATEGORIES.map((item) => <button key={item} type="button" aria-pressed={category === item} onClick={() => { setCategory(item); setSelected(''); }} className={cn('rounded-full border px-3 py-1.5 text-xs transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400', category === item ? 'border-white/[0.12] bg-white/[0.07] text-[#F2EFEA]' : 'border-white/[0.07] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground')}>{item}</button>)}
         </div>
         <div className="mb-2 mt-6 flex min-h-8 items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">{loading ? 'Starter ideas · loading company context' : error ? 'Starter ideas · company context unavailable' : industry || persona ? 'Inspired by your Company Brain' : 'A few places to start'}</p>
@@ -60,8 +61,9 @@ export default function EmptyState({ onPickPrompt }: Props) {
         </div>
         <ul className="divide-y divide-white/[0.06]">
           {visible.map((idea) => <li key={idea.title}><button type="button" onClick={() => pick(idea)} className="group flex w-full items-center gap-4 rounded-lg px-3 py-4 text-left transition-colors hover:bg-white/[0.035] focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 motion-reduce:transition-none">
-            <div className="min-w-0 flex-1"><span className="mb-1 block text-[10px] uppercase tracking-wider text-emerald-400/75">{idea.category}</span><span className="block text-sm font-medium text-foreground">{idea.title}</span><span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{idea.detail}</span></div>
-            {selected === idea.title ? <Check size={16} className="shrink-0 text-emerald-400" /> : <ArrowUpRight size={16} className="shrink-0 text-muted-foreground group-hover:text-emerald-300" />}
+            <div className="min-w-0 flex-1"><span className="block text-[14px] font-medium text-[#F2EFEA]">{idea.title}</span><span className="mt-1 block text-[12px] leading-relaxed text-[#8B8F96]"><span className="text-[#B5B8BD]">{idea.team}</span> · {idea.detail}</span></div>
+            {category === 'For you' && <span className="hidden sm:block shrink-0 text-[11px] text-[#6E7278]">{idea.category}</span>}
+            {selected === idea.title ? <Check size={16} className="shrink-0 text-emerald-400" /> : <ArrowUpRight size={16} className="shrink-0 text-[#6E7278] group-hover:text-[#F2EFEA]" />}
           </button></li>)}
         </ul>
         <p className="mt-4 text-xs leading-relaxed text-muted-foreground" role="status">{selected ? 'Added to your message. Adjust the details, then send when ready.' : 'Choose an idea to customize it below. Nothing runs until you send.'}</p>

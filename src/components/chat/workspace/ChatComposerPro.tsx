@@ -10,6 +10,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useApprovals } from '@/hooks/useApprovals';
 import { useChatWorkspace, CHANNEL_DEFAULT_AGENT } from '@/contexts/ChatWorkspaceContext';
 import { pilotChat } from '@/lib/pilotChat';
+import { resolveAgent } from '@/lib/agentResolver';
 import { subscribeChatCommand } from '@/lib/chatCommandBus';
 import { toast } from 'sonner';
 
@@ -376,12 +377,15 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     null;
 
   const hasText = value.trim().length > 0;
+  // WHO THIS GOES TO — a label, not a selector: the conversation's agent inside
+  // a chat, the team otherwise. Routing is untouched (`submit` still decides).
+  const recipientLabel = view.kind === 'chat' ? resolveAgent(view.agentSlug).name : 'Team';
 
   return (
     <div className="relative w-full">
       {/* Quick suggestions (plain text, middle dot) */}
       {showSuggestions && !value && (
-        <div className="absolute bottom-full left-0 right-0 mb-3 px-1 pointer-events-auto">
+        <div className="hidden sm:block absolute bottom-full left-0 right-0 mb-3 px-1 pointer-events-auto">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-[#6e7681]">
             {suggestions.map((s, i) => (
               <span key={s} className="flex items-center gap-2">
@@ -454,12 +458,20 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
       )}
 
       <div className={cn(
-        'flex items-end gap-2.5 rounded-2xl bg-[#0f141a] border border-white/[0.07]',
-        'px-4 py-3 transition-[border-color,box-shadow] duration-150',
-        'focus-within:border-emerald-500/35 focus-within:shadow-[0_0_0_3px_rgba(16,185,129,0.10)]',
+        'flex items-end gap-2.5 rounded-[20px] bg-[#111214] border border-white/[0.07]',
+        'shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] min-h-[58px] px-3.5 py-3',
+        'transition-[border-color] duration-150 focus-within:border-white/[0.16]',
       )}>
+        {!contextLabel && (
+          <span
+            className="hidden sm:inline-flex shrink-0 items-center h-7 px-2.5 rounded-lg bg-white/[0.04] text-[12.5px] text-[#A3A7AD] select-none"
+            title={`Messages go to ${recipientLabel}`}
+          >
+            {recipientLabel}
+          </span>
+        )}
         {contextLabel && (
-          <div className="shrink-0 inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-white/[0.08] text-[12.5px] text-[#9aa4af]">
+          <div className="shrink-0 inline-flex items-center gap-1 h-7 px-2.5 rounded-lg bg-white/[0.04] text-[12.5px] text-[#A3A7AD]">
             <span>{contextLabel}</span>
             <button
               onClick={() => setView({ kind: 'empty' })}
@@ -487,8 +499,8 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
             setComposerFocused(false);
             setTimeout(() => setShowSuggestions(false), 100);
           }}
-          placeholder={placeholder ?? (view.kind === 'channel' ? `Message #${view.dept}…` : 'Message your AI workforce…')}
-          className="flex-1 resize-none bg-transparent outline-none text-[16px] leading-[1.55] text-[#F0F6FC] placeholder:text-[#6e7681] max-h-[240px] min-h-[28px] py-1 px-1"
+          placeholder={placeholder ?? (view.kind === 'channel' ? `Message #${view.dept}…` : 'What should your team work on?')}
+          className="flex-1 resize-none bg-transparent outline-none text-[15.5px] leading-[1.55] text-[#F2EFEA] placeholder:text-[#6E7278] max-h-[240px] min-h-[28px] py-1 px-1"
         />
 
 
@@ -503,7 +515,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 8, opacity: 0 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="h-9 w-9 shrink-0 rounded-full bg-[#10B981] text-white flex items-center justify-center hover:bg-[#0EA372] transition-colors shadow-[0_0_18px_rgba(16,185,129,0.35)]"
+              className="h-8 w-8 shrink-0 rounded-full bg-[#10B981] text-white flex items-center justify-center hover:bg-[#0EA372] transition-colors"
               aria-label="Send"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
