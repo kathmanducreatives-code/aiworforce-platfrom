@@ -9,6 +9,8 @@ import { useConversationActions } from '@/hooks/useConversationActions';
 import { DEPTS } from '@/lib/agentDeptIndex';
 import { AGENT_PROFILES } from '@/data/agentProfiles';
 import AgentAvatar from './agents/AgentAvatar';
+import { resolveAgent } from '@/lib/agentResolver';
+import { groupConversationsByDay } from '@/lib/chat/conversationGroups';
 import ConversationRowMenu from './ConversationRowMenu';
 import RenameConversationDialog from './RenameConversationDialog';
 import DeleteConversationDialog from './DeleteConversationDialog';
@@ -39,16 +41,19 @@ function ConversationItem({
   const rel = useRelativeTime(conv.updated_at);
   const active = view.kind === 'chat' && view.conversationId === conv.id;
   const title = (conv.title ?? '').slice(0, 40) || 'New chat';
+  // Pilot is the default; only a specialist conversation names its agent.
+  const agent = resolveAgent(conv.agent_slug);
+  const agentLabel = agent.id === 'pilot' ? null : agent.name;
 
   return (
     <div
       className={cn(
-        'group relative w-full flex items-start gap-2 pl-2.5 pr-1 py-1.5 rounded-md transition-colors cursor-pointer',
+        'group relative w-full flex items-center gap-2 pl-2.5 pr-1 py-1.5 rounded-lg transition-colors cursor-pointer',
         active && !selectionMode
-          ? 'bg-white/[0.05] text-[#F0F6FC]'
+          ? 'bg-white/[0.06] text-[#F2EFEA]'
           : selected
-            ? 'bg-emerald-500/10 text-[#F0F6FC]'
-            : 'text-[#7D8590] hover:text-[#F0F6FC] hover:bg-white/[0.025]',
+            ? 'bg-white/[0.06] text-[#F2EFEA]'
+            : 'text-[#B5B8BD] hover:text-[#F2EFEA] hover:bg-white/[0.03]',
       )}
       onClick={() => {
         if (selectionMode) {
@@ -59,25 +64,25 @@ function ConversationItem({
         setView({ kind: 'chat', conversationId: conv.id, agentSlug: conv.agent_slug });
       }}
     >
-      {active && !selectionMode && <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-emerald-400" />}
       {selectionMode ? (
         <input
           type="checkbox"
           checked={selected}
           onChange={() => onToggleSelect(conv.id)}
           onClick={(e) => e.stopPropagation()}
-          className="mt-1 h-3.5 w-3.5 accent-emerald-500 cursor-pointer"
+          className="h-3.5 w-3.5 accent-emerald-500 cursor-pointer"
           aria-label={`Select ${title}`}
         />
-      ) : (
-        <AgentAvatar slug={conv.agent_slug} size="xs" ring={false} />
-      )}
-      <div className="flex-1 min-w-0">
-        <div className="text-xs line-clamp-1">{title}</div>
-        <div className="text-[10px] text-[#484F58] mt-0.5">{rel}</div>
+      ) : null}
+      <div className="flex-1 min-w-0 flex items-baseline gap-2">
+        <span className="flex-1 min-w-0 truncate text-[12.5px]">{title}</span>
+        <span className="shrink-0 text-[10.5px] text-[#6E7278]">{agentLabel ? `${agentLabel} · ${rel}` : rel}</span>
       </div>
       {!selectionMode && (
-        <div className="opacity-60 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
           <ConversationRowMenu
             onRename={() => onRename(conv)}
             onDelete={() => onDelete(conv)}
@@ -157,7 +162,7 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
       <div className="px-3 pt-3 pb-2 space-y-2">
         <button
           onClick={() => void createConversation('pilot')}
-          className="w-full inline-flex items-center justify-center gap-1.5 h-8 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-200 text-[12px] font-medium transition-colors"
+          className="w-full inline-flex items-center justify-center gap-1.5 h-8 rounded-lg bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.08] text-[#F2EFEA] text-[12.5px] font-medium transition-colors"
         >
           <Plus className="h-3.5 w-3.5" /> New chat
         </button>
@@ -260,20 +265,27 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
             No conversations yet. Start by asking your AI workforce to run a workflow.
           </div>
         ) : (
-          <ul className="space-y-0.5">
-            {filtered.map((c) => (
-              <li key={c.id}>
-                <ConversationItem
-                  conv={c}
-                  onRename={setRenameTarget}
-                  onDelete={setDeleteTarget}
-                  selectionMode={selectionMode}
-                  selected={selectedIds.has(c.id)}
-                  onToggleSelect={toggleSelect}
-                />
-              </li>
+          <div className="space-y-3 pt-1">
+            {groupConversationsByDay(filtered).map((group) => (
+              <section key={group.label} aria-label={group.label}>
+                <div className="px-2.5 pb-1 text-[10.5px] font-medium text-[#6E7278]">{group.label}</div>
+                <ul className="space-y-0.5">
+                  {group.items.map((c) => (
+                    <li key={c.id}>
+                      <ConversationItem
+                        conv={c}
+                        onRename={setRenameTarget}
+                        onDelete={setDeleteTarget}
+                        selectionMode={selectionMode}
+                        selected={selectedIds.has(c.id)}
+                        onToggleSelect={toggleSelect}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 
@@ -288,10 +300,10 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
                 <button
                   onClick={() => setView({ kind: 'channel', dept: d.id })}
                   className={cn(
-                    'w-full flex items-center gap-1.5 py-1.5 text-xs transition-colors duration-150',
+                    'w-full flex items-center gap-1.5 py-1.5 pl-2.5 rounded-lg text-[12.5px] transition-colors duration-150',
                     active
-                      ? 'border-l-2 border-emerald-400 pl-2 text-[#F0F6FC]'
-                      : 'pl-2.5 text-[#7D8590] hover:text-[#F0F6FC]',
+                      ? 'bg-white/[0.06] text-[#F2EFEA]'
+                      : 'text-[#8B8F96] hover:text-[#F2EFEA] hover:bg-white/[0.03]',
                   )}
                 >
                   <span>#</span>

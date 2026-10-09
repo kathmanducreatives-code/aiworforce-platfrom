@@ -20,6 +20,7 @@ import ResizableWorkspaceSplit from './ResizableWorkspaceSplit';
 import { ChatPaneWidthProvider } from './ChatPaneWidthContext';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useConversationActions } from '@/hooks/useConversationActions';
+import { resolveAgent } from '@/lib/agentResolver';
 
 const NARROW_SPLIT_THRESHOLD = 1000;
 
@@ -128,11 +129,14 @@ export default function ChatWorkspace() {
                   <TooltipContent side="bottom">Conversation history</TooltipContent>
                 </Tooltip>
                 <div className="flex items-center gap-2 text-sm font-semibold text-foreground pl-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                   ScreeningPilot · AI Workforce
                 </div>
                 <div className="hidden md:flex pl-3 ml-1 border-l border-white/[0.06]">
-                  <AgentPresenceBar activeSlug={view.kind === 'chat' ? view.agentSlug : view.kind === 'agent' ? view.slug : 'pilot'} />
+                  <AgentPresenceBar
+                    activeSlug={view.kind === 'chat' ? view.agentSlug : view.kind === 'agent' ? view.slug : 'pilot'}
+                    working={view.kind === 'chat' && !!pending?.awaiting && pending.conversationId === view.conversationId}
+                  />
                 </div>
 
               </div>
@@ -288,7 +292,7 @@ function MobileNav() {
   const tabs: { id: string; label: string; onClick: () => void }[] = [
     { id: 'home', label: 'Home', onClick: () => setView({ kind: 'empty' }) },
     { id: 'channels', label: '#talent', onClick: () => setView({ kind: 'channel', dept: 'talent' }) },
-    { id: 'team', label: '@Aria', onClick: () => setView({ kind: 'agent', slug: 'aria' }) },
+    { id: 'team', label: `@${resolveAgent('aria').name}`, onClick: () => setView({ kind: 'agent', slug: 'aria' }) },
   ];
   return (
     <div className="flex items-center gap-1 px-3 py-2 border-b border-border/60 overflow-x-auto shrink-0">
@@ -331,7 +335,7 @@ function ChatPane({
         </ChatErrorBoundary>
       </div>
       <div
-        className="border-t border-border/60 px-4 py-3 bg-background/80 backdrop-blur shrink-0"
+        className="px-4 pt-2 pb-3 bg-background shrink-0"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       >
         <ChatErrorBoundary>

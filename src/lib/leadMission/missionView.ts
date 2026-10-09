@@ -34,6 +34,13 @@ export interface MissionLike {
   required_capabilities?: string[];
   prohibited_capabilities?: string[];
   field_provenance?: Record<string, string>;
+  /**
+   * The mission's criteria with their provenance, as pilot-chat derives them
+   * after the Company Brain merge (`deriveMissionCriteria`). The card's source
+   * of truth for who asked for what; its `criteria_sections` lines are the same
+   * criteria as display text. Absent on missions compiled before P1.
+   */
+  criteria?: MissionCriterionLike[];
   confidence?: number;
   brain_rejected_broadening?: Array<{ field?: string; values?: string[]; reason?: string }>;
   preflight_dry_run?: {
@@ -229,4 +236,212 @@ export function missionRejectedBroadening(m: MissionLike): string[] {
       return vals ? `${vals} (${r.reason ?? 'outside your request'})` : '';
     })
     .filter(Boolean);
+}
+
+// ── THE CARD'S CRITERIA ──────────────────────────────────────────────────────
+//
+// WHO ASKED FOR WHAT comes from the mission's own `criteria`, each of which
+// carries its `source` — the backend's structured record. The
+// `criteria_sections` lines are the same criteria as display text,
+// `<label> · <qualifiers / notes…> · <source>`, and supply the wording, the
+// signal kind, the windows and any explanation the backend attached.
+//
+// A line's source is read from ANY segment, not only the last: the backend may
+// place an explanation beside it (a Company Brain industry that "also chooses
+// which companies are searched"), and that must never erase where the
+// criterion came from. Missions compiled before P1 have no structured
+// criteria; their lines alone decide, the same way.
+//
+// A criterion whose source cannot be established is a request detail — never
+// the person's own.
+
+export type CriterionOrigin = 'user' | 'added' | 'unspecified';
+
+/** A criterion as the mission carries it (`MissionCriterion`, display fields only). */
+export interface MissionCriterionLike {
+  id?: string;
+  kind?: string;
+  dimension?: string;
+  label?: string;
+  source?: string;
+  status?: string;
+  time_window?: { days?: number; source?: string };
+}
+
+export interface CardCriterion {
+  section: Exclude<keyof CriteriaSections, 'version'>;
+  /** The line's own words, without its source or notes: "Geography: United States", "Hiring: sales". */
+  text: string;
+  origin: CriterionOrigin;
+  /** The backend's source wording ("you said this", "from your Company Brain", …), when known. */
+  source: string | null;
+  /** For a signal line: "required" (true) or "target" (false); null otherwise. */
+  required: boolean | null;
+  /**
+   * A signal's time window. Windows are enforced: the hiring verifier drops
+   * postings dated outside it, and an undated posting proves nothing (#44).
+   */
+  window: { days: number; source: string | null } | null;
+  /** An explanation the backend attached, shown beside the criterion, not as part of it. */
+  note: string | null;
+}
+
+const SOURCE_ORIGIN: Record<string, CriterionOrigin> = {
+  'you said this': 'user',
+  inferred: 'added',
+  'Company Brain rule': 'added',
+  'from your Company Brain': 'added',
+  default: 'added',
+};
+
+/** The backend's `CriterionSource` codes, worded as its lines word them. */
+const STRUCTURED_SOURCE: Record<string, { label: string; origin: CriterionOrigin }> = {
+  user_explicit: { label: 'you said this', origin: 'user' },
+  user_inferred: { label: 'inferred', origin: 'added' },
+  company_brain_policy: { label: 'Company Brain rule', origin: 'added' },
+  company_brain_preference: { label: 'from your Company Brain', origin: 'added' },
+  system_default: { label: 'default', origin: 'added' },
+};
+
+// Markers the backend appends for a section's meaning; never part of the words.
+// "shown, not yet enforced" appears only on cards compiled before #44 — that
+// window is enforced now — so it is recognised and dropped.
+const RANKS_ONLY = 'can rank, never reject';
+const LINE_MARKERS = new Set([RANKS_ONLY, 'to be tested, never required', 'shown, not yet enforced']);
+
+/** Explanations the backend attaches to a criterion (#46): shown beside it. */
+const EXPLANATION_RE = /^also chooses which companies are searched\b/i;
+
+function sourceOf(token: string): { label: string; origin: CriterionOrigin } | null {
+  if (SOURCE_ORIGIN[token]) return { label: token, origin: SOURCE_ORIGIN[token] };
+  if (/^inferred \(confidence [\d.]+\)$/.test(token)) return { label: token, origin: 'added' };
+  if (/^default for /.test(token)) return { label: 'default', origin: 'added' };
+  return null;
+}
+
+/**
+ * One backend criteria line, split into its words, source, signal kind, markers
+ * and explanation. The first segment is always the criterion itself; every
+ * other segment is classified wherever it sits, and anything unrecognised stays
+ * with the words.
+ */
+export function readCriterionLine(line: string): {
+  text: string; source: string | null; origin: CriterionOrigin; required: boolean | null;
+  notes: string[]; explanation: string | null;
+} {
+  const [head, ...rest] = String(line ?? '').split(' · ');
+  const words: string[] = [head];
+  let source: { label: string; origin: CriterionOrigin } | null = null;
+  let required: boolean | null = null;
+  const notes: string[] = [];
+  let explanation: string | null = null;
+  for (const seg of rest) {
+    const s = !source ? sourceOf(seg) : null;
+    if (s) { source = s; continue; }
+    if (seg === 'required' || seg === 'target') { required = seg === 'required'; continue; }
+    if (LINE_MARKERS.has(seg)) { notes.push(seg); continue; }
+    if (!explanation && EXPLANATION_RE.test(seg)) { explanation = seg; continue; }
+    words.push(seg);
+  }
+  return {
+    text: words.join(' · '), source: source?.label ?? null, origin: source?.origin ?? 'unspecified',
+    required, notes, explanation,
+  };
+}
+
+const labelOf = (text: string) => text.split(':')[0].trim().toLowerCase();
+
+/** The mission's criterion a line was written from: its exact label, or the label followed by qualifiers. */
+function structuredFor(text: string, list: readonly MissionCriterionLike[]): MissionCriterionLike | null {
+  const exact = list.find((c) => c.label === text);
+  if (exact) return exact;
+  return list.find((c) => !!c.label && text.startsWith(`${c.label} · `)) ?? null;
+}
+
+/**
+ * The card's criteria: what the person asked for, what Agentory added, request
+ * details whose source is not known, what only ranks or is assumed, and what
+ * cannot be verified — each signal with its window.
+ *
+ * `structured` is the mission's `criteria`; when a line's criterion is there,
+ * its `source` decides the group.
+ */
+export function cardCriteria(s: CriteriaSections | null, structured: readonly MissionCriterionLike[] | null = null): {
+  user: CardCriterion[]; added: CardCriterion[]; details: CardCriterion[]; considered: CardCriterion[]; unsupported: string[];
+} {
+  const out = {
+    user: [] as CardCriterion[], added: [] as CardCriterion[], details: [] as CardCriterion[],
+    considered: [] as CardCriterion[], unsupported: [] as string[],
+  };
+  if (!s) return out;
+  const list = Array.isArray(structured) ? structured : [];
+  const windows = s.time_windows.map((line) => {
+    const r = readCriterionLine(line);
+    const m = r.text.match(/^(.*?):\s*last (\d+) days$/);
+    return m ? { label: m[1].trim().toLowerCase(), days: Number(m[2]), source: r.source } : null;
+  }).filter((w): w is NonNullable<typeof w> => !!w);
+  for (const section of ['hard', 'target', 'opportunity_signals', 'hypotheses'] as const) {
+    for (const line of s[section]) {
+      const r = readCriterionLine(line);
+      const sc = section === 'hypotheses' ? null : structuredFor(r.text, list);
+      const known = sc?.source ? STRUCTURED_SOURCE[sc.source] : undefined;
+      const origin = known?.origin ?? r.origin;
+      // Keep the line's own wording ("inferred (confidence 0.80)") when it agrees.
+      const source = known ? (r.origin === known.origin && r.source ? r.source : known.label) : r.source;
+      let window: CardCriterion['window'] = null;
+      if (section === 'opportunity_signals') {
+        const w = windows.find((x) => x.label === labelOf(r.text));
+        const tw = sc?.time_window;
+        window = w ? { days: w.days, source: w.source }
+          : tw?.days ? { days: tw.days, source: (tw.source && STRUCTURED_SOURCE[tw.source]?.label) || null } : null;
+      }
+      const c: CardCriterion = { section, text: r.text, origin, source, required: r.required, window, note: r.explanation };
+      if (section === 'hypotheses' || r.notes.includes(RANKS_ONLY)) out.considered.push(c);
+      else if (origin === 'unspecified') out.details.push(c);
+      else out[origin].push(c);
+    }
+  }
+  out.unsupported = [...s.unsupported];
+  return out;
+}
+
+/** A backend explanation, worded for the card: "Also chooses which companies are searched (LinkedIn: …)". */
+export function criterionNote(c: CardCriterion): string | null {
+  if (!c.note) return null;
+  const n = c.note.trim();
+  return n ? n.charAt(0).toUpperCase() + n.slice(1) : null;
+}
+
+/** "last 730 days" as a person says it: 24 months, 3 months, 30 days. */
+export function humanWindow(days: number): string {
+  if (days >= 365 && days % 365 === 0) return `${(days / 365) * 12} months`;
+  if (days >= 60 && days % 30 === 0) return `${days / 30} months`;
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
+/**
+ * A criterion in plain words for the card: a field's value ("United States",
+ * "11–50 employees"), a signal with its window ("Hiring sales in the last 30
+ * days").
+ */
+export function criterionPhrase(c: CardCriterion): string {
+  if (c.section === 'opportunity_signals') {
+    const what = c.text.replace(/:\s*/, ' ');
+    return c.window ? `${what} in the last ${humanWindow(c.window.days)}` : what;
+  }
+  const i = c.text.indexOf(': ');
+  return i > 0 && c.section !== 'hypotheses' ? c.text.slice(i + 2) : c.text;
+}
+
+/**
+ * The backend's generic company title with its count agreeing: "Find 1
+ * companies" reads "Find 1 company". Any other title is shown as written.
+ */
+export function missionTitle(m: MissionLike | null, title: string): string {
+  const n = m?.requested_count;
+  const t = title.trim();
+  // "Find 1 companies" and "Find 1 companies in b2b saas, …" — the backend's
+  // title appends the industries the search is scoped to.
+  if (m?.target_entity !== 'company' || n !== 1 || !/^Find 1 companies(?: in |$)/.test(t)) return title;
+  return t.replace(/^Find 1 companies/, 'Find 1 company');
 }
