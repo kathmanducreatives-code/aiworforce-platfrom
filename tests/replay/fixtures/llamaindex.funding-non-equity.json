@@ -1,0 +1,301 @@
+{
+ "fixture": "llamaindex.funding-non-equity",
+ "schema": "lead-v2-replay-fixture-v1",
+ "provenance": {
+  "environment": "production",
+  "task_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+  "sources": [
+   "LlamaIndex's Atomus funding record as production recorded it (Canary 8 checkpoint, observed 2026-10-04T15:34:51Z; the same record Canary 5 154541e8 and Canary 7 1303e533 read)",
+   "the funding evidence item production built from it (its headline value)"
+  ],
+  "sanitization": [
+   "no credentials; public funding data only"
+  ]
+ },
+ "mission": {},
+ "ceilings": {
+  "per_call_usd": {},
+  "per_route_usd": {},
+  "mission_model_usd": 0.4,
+  "adaptive_reserve_usd": 0.3,
+  "mission_provider_usd": 2,
+  "per_candidate_evidence_usd": 0.06
+ },
+ "ledger_reservations": [],
+ "checkpoints": {},
+ "provider_responses": [],
+ "now": "2026-10-04T15:36:06.283Z",
+ "window_days": 730,
+ "record": {
+  "actor": "apify_funding_atomus",
+  "rounds": [
+   {
+    "method": "provider_field",
+    "investors": [
+     "Amazon Web Services"
+    ],
+    "amount_usd": 1000000,
+    "provenance": [
+     {
+      "role": "reported",
+      "actor": "apify_funding_atomus",
+      "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+     }
+    ],
+    "round_type": "NON_EQUITY_ASSISTANCE",
+    "source_urls": [],
+    "announced_date": "2025-10-08"
+   },
+   {
+    "method": "provider_field",
+    "investors": [
+     "Databricks Ventures",
+     "KPMG ventures"
+    ],
+    "amount_usd": null,
+    "provenance": [
+     {
+      "role": "reported",
+      "actor": "apify_funding_atomus",
+      "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+     }
+    ],
+    "round_type": "VENTURE_ROUND",
+    "source_urls": [],
+    "announced_date": "2025-05-01"
+   },
+   {
+    "method": "provider_field",
+    "investors": [
+     "Greylock",
+     "Norwest"
+    ],
+    "amount_usd": 19000000,
+    "provenance": [
+     {
+      "role": "reported",
+      "actor": "apify_funding_atomus",
+      "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+     }
+    ],
+    "round_type": "SERIES_A",
+    "source_urls": [],
+    "announced_date": "2025-03-04"
+   },
+   {
+    "method": "provider_field",
+    "investors": [
+     "Joey Gonzalez",
+     "Lenny Rachitsky",
+     "Mathilde Collin",
+     "Raquel Urtasun",
+     "Greylock"
+    ],
+    "amount_usd": 8500000,
+    "provenance": [
+     {
+      "role": "reported",
+      "actor": "apify_funding_atomus",
+      "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+     }
+    ],
+    "round_type": "SEED_ROUND",
+    "source_urls": [],
+    "announced_date": "2023-06-06"
+   },
+   {
+    "method": "provider_field",
+    "investors": [],
+    "amount_usd": 1000000,
+    "provenance": [
+     {
+      "role": "reported",
+      "actor": "apify_funding_atomus",
+      "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+     }
+    ],
+    "round_type": "SEED_ROUND",
+    "source_urls": [],
+    "announced_date": "2022-12-01"
+   }
+  ],
+  "provider": "apify",
+  "source_url": "https://www.linkedin.com/company/llamaindex",
+  "observed_at": "2026-09-21",
+  "completeness": {
+   "actor": "apify_funding_atomus",
+   "complete": true,
+   "history_complete": null,
+   "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2",
+   "reported_round_count": 5
+  },
+  "history_complete": null,
+  "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2",
+  "provider_call_ids": [
+   "pc_42174c8d2d0b3ef51a2f56a4b2"
+  ],
+  "reported_round_count": 5
+ },
+ "evidence_item": {
+  "value": {
+   "claim": "funding_record",
+   "record": {
+    "actor": "apify_funding_atomus",
+    "rounds": [
+     {
+      "method": "provider_field",
+      "investors": [
+       "Amazon Web Services"
+      ],
+      "amount_usd": 1000000,
+      "provenance": [
+       {
+        "role": "reported",
+        "actor": "apify_funding_atomus",
+        "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+       }
+      ],
+      "round_type": "NON_EQUITY_ASSISTANCE",
+      "source_urls": [],
+      "announced_date": "2025-10-08"
+     },
+     {
+      "method": "provider_field",
+      "investors": [
+       "Databricks Ventures",
+       "KPMG ventures"
+      ],
+      "amount_usd": null,
+      "provenance": [
+       {
+        "role": "reported",
+        "actor": "apify_funding_atomus",
+        "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+       }
+      ],
+      "round_type": "VENTURE_ROUND",
+      "source_urls": [],
+      "announced_date": "2025-05-01"
+     },
+     {
+      "method": "provider_field",
+      "investors": [
+       "Greylock",
+       "Norwest"
+      ],
+      "amount_usd": 19000000,
+      "provenance": [
+       {
+        "role": "reported",
+        "actor": "apify_funding_atomus",
+        "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+       }
+      ],
+      "round_type": "SERIES_A",
+      "source_urls": [],
+      "announced_date": "2025-03-04"
+     },
+     {
+      "method": "provider_field",
+      "investors": [
+       "Joey Gonzalez",
+       "Lenny Rachitsky",
+       "Mathilde Collin",
+       "Raquel Urtasun",
+       "Greylock"
+      ],
+      "amount_usd": 8500000,
+      "provenance": [
+       {
+        "role": "reported",
+        "actor": "apify_funding_atomus",
+        "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+       }
+      ],
+      "round_type": "SEED_ROUND",
+      "source_urls": [],
+      "announced_date": "2023-06-06"
+     },
+     {
+      "method": "provider_field",
+      "investors": [],
+      "amount_usd": 1000000,
+      "provenance": [
+       {
+        "role": "reported",
+        "actor": "apify_funding_atomus",
+        "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+       }
+      ],
+      "round_type": "SEED_ROUND",
+      "source_urls": [],
+      "announced_date": "2022-12-01"
+     }
+    ],
+    "provider": "apify",
+    "source_url": "https://www.linkedin.com/company/llamaindex",
+    "observed_at": "2026-09-21",
+    "completeness": {
+     "actor": "apify_funding_atomus",
+     "complete": true,
+     "history_complete": null,
+     "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2",
+     "reported_round_count": 5
+    },
+    "history_complete": null,
+    "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2",
+    "provider_call_ids": [
+     "pc_42174c8d2d0b3ef51a2f56a4b2"
+    ],
+    "reported_round_count": 5
+   },
+   "amount_usd": 1000000,
+   "round_type": "non-equity-assistance",
+   "announced_date": "2025-10-08"
+  },
+  "method": "provider_field",
+  "origin": "lead_mission",
+  "source": {
+   "url": "https://www.linkedin.com/company/llamaindex",
+   "actor": "apify_funding_atomus",
+   "excerpt": null,
+   "provider": "apify",
+   "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2",
+   "provider_call_ids": [
+    "pc_42174c8d2d0b3ef51a2f56a4b2"
+   ]
+  },
+  "status": "proven",
+  "dimension": "funding",
+  "confidence": "medium",
+  "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+  "company_key": "https://www.linkedin.com/company/llamaindex",
+  "evidence_id": "fdr_https://www.linkedin.com/company/llamaindex_apify_f~6bfdb065",
+  "observed_at": "2026-10-04T15:34:51.334Z",
+  "valid_until": null,
+  "derived_from": []
+ },
+ "anchors": {
+  "rounds": 5,
+  "nea_round": {
+   "round_type": "NON_EQUITY_ASSISTANCE",
+   "announced_date": "2025-10-08"
+  }
+ },
+ "expected": {
+  "full_history": {
+   "verdict": "pass",
+   "latest_announced_date": "2025-05-01",
+   "carriers_exclude": "NON_EQUITY_ASSISTANCE"
+  },
+  "only_nea_complete": {
+   "verdict": "fail",
+   "reason": "only_non_funding_events"
+  },
+  "only_nea_incomplete": {
+   "verdict": "pending",
+   "reason": "only_non_funding_events"
+  },
+  "known_gap": "the evidence item's headline (value.round_type / announced_date) is the NEA event \u2014 display only, the claim is decided on the venture round"
+ }
+}

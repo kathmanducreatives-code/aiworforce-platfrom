@@ -16,6 +16,7 @@
     "qa:lead-quality": "deno run --allow-read --allow-env --allow-write --allow-net scripts/lead-quality-benchmark/run.ts",
     "qa:lead-quality:test": "deno test --allow-read --allow-env scripts/lead-quality-benchmark/",
     "test:edge": "deno test --allow-read --allow-env --no-check tests/edge-functions/",
+    "test:lead-v2-readiness": "deno run --no-check --allow-read --allow-env --allow-run --allow-write scripts/lead-v2-readiness.ts",
     "test:ui": "deno test --allow-read --no-check --ignore='tests/frontend/**/*.test.cjs' tests/frontend/",
     "test:ui:node": "node --test tests/frontend/*.test.cjs",
     "qa:model-routing:test": "deno test --allow-read --allow-env scripts/model-routing-eval/",

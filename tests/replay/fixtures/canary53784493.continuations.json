@@ -1,0 +1,36 @@
+{
+  "fixture": "canary53784493.continuations",
+  "schema": "lead-v2-replay-fixture-v1",
+  "provenance": {
+    "environment": "production",
+    "task_id": "53784493-ef09-4cb5-9eea-8af2ceafa01e",
+    "sources": [
+      "Railway worker logs: queue counters and auto-continuation decisions per slice, 2026-10-03",
+      "tasks.result (status failed, terminal continuation_attempts_exhausted) and lead_mission_queue attempts=5",
+      "claim_progress 37 / 74 / 76 after slices 2 / 4 / 5 as persisted; slices 1 and 3 not persisted separately — 22 and 58 lie strictly between their neighbours and give the same decisions"
+    ],
+    "sanitization": ["counters only — no company data"]
+  },
+  "mission": {},
+  "ceilings": {"per_call_usd": {}, "per_route_usd": {}, "mission_model_usd": 0.4, "adaptive_reserve_usd": 0.3, "mission_provider_usd": 2, "per_candidate_evidence_usd": 0.06},
+  "ledger_reservations": [],
+  "checkpoints": {},
+  "provider_responses": [],
+  "anchors": {
+    "as_it_ran": {"claims": 5, "final_status": "failed", "final_attempts": 5, "terminal_reason": "continuation_attempts_exhausted", "page_3_ran": false}
+  },
+  "slices": [
+    {"label": "1: page 1",        "investigated": 10, "decided": 10, "costUnits": 2, "claimProgress": 22, "pendingRuns": 1, "verifiable": 0, "page": 1},
+    {"label": "2: verify page 1", "investigated": 10, "decided": 10, "costUnits": 2, "claimProgress": 37, "pendingRuns": 0, "verifiable": 0, "page": null},
+    {"label": "3: page 2",        "investigated": 19, "decided": 19, "costUnits": 4, "claimProgress": 58, "pendingRuns": 1, "verifiable": 0, "page": 2},
+    {"label": "4: verify page 2", "investigated": 19, "decided": 19, "costUnits": 4, "claimProgress": 74, "pendingRuns": 1, "verifiable": 0, "page": null},
+    {"label": "5: adopt",         "investigated": 19, "decided": 19, "costUnits": 4, "claimProgress": 76, "pendingRuns": 0, "verifiable": 0, "page": null},
+    {"label": "6: page 3",        "investigated": 28, "decided": 28, "costUnits": 5, "claimProgress": 85, "pendingRuns": 0, "verifiable": 0, "page": 3}
+  ],
+  "expected": {
+    "decisions_first_five": ["awaiting_provider_run", "replenishment_required", "awaiting_provider_run", "awaiting_provider_run", "replenishment_required"],
+    "slice_6_claimed": true,
+    "attempts_after_clean_slices": 0,
+    "page_3_runs": true
+  }
+}

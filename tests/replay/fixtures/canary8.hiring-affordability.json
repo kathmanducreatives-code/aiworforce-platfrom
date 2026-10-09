@@ -1,0 +1,3438 @@
+{
+ "fixture": "canary8.hiring-affordability",
+ "schema": "lead-v2-replay-fixture-v1",
+ "provenance": {
+  "environment": "production",
+  "task_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+  "queue_id": "778211d2-1a4e-41c2-9054-7954401a5674",
+  "plan_id": "bf53a1a4-4fae-4231-8b6e-aae8601fa0fe",
+  "workspace_id": "<workspace>",
+  "extracted_at": "2026-10-04",
+  "sources": [
+   "tasks.result.lead_mission (planner_runtime removed)",
+   "tasks.result.capability_execution_state.spend_ledger.reservations, each timed by its lead_execution_calls row (idempotency_key join)",
+   "tasks.result.lead_resume_checkpoint.companies[LlamaIndex, Solana Labs], trimmed to the checkpoint instant (see checkpoints.*.note)",
+   "Railway worker logs: [claim-verifier][verification_unaffordable] at 15:36:06.283Z and 15:44:19.618Z",
+   "lead_mission_events spec_compiled (task 1303e533, same mission text): apify_linkedin_job_search estimate_usd 0.049, ceiling_usd 0.05",
+   "settlement instants: the first call_settled lead_mission_events row per idempotency key (`settled_at`); a reservation settled after a checkpoint instant counts at its provisional figure, as the live ledger did",
+   "Delta Lake / Actioneer: decision instants placed just before each slice's post-phase settlement (15:55:53.952Z / 16:08:10.369Z) — production logged $0.0235 for both, which only the pre-settlement Atomus figure ($0.0211) reproduces; the log lines flushed at 15:55:57 / 16:08:10"
+  ],
+  "sanitization": [
+   "workspace id replaced",
+   "free text nulled: excerpt, description, tagline, about, text, summary, snippet; triage reasons emptied; hiring_assessment.reason shortened",
+   "provider_run_id, receipt_reads, settlement_stable removed from ledger reservations",
+   "no credentials, tokens, emails or user ids present"
+  ],
+  "query_file": "tests/replay/fixtures/queries/canary8.sql"
+ },
+ "mission": {
+  "version": "lead-mission-v1",
+  "criteria": [
+   {
+    "id": "industry:ai_saas",
+    "kind": "hard",
+    "label": "Industry: ai saas",
+    "value": "ai saas",
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "industry",
+    "rationale": "stated in the request",
+    "user_phrase": "ai saas"
+   },
+   {
+    "id": "industry:saas",
+    "kind": "hard",
+    "label": "Industry: saas",
+    "value": "saas",
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "industry",
+    "rationale": "stated in the request",
+    "user_phrase": "saas"
+   },
+   {
+    "id": "geography:united_states",
+    "kind": "hard",
+    "label": "Geography: United States",
+    "value": "United States",
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "geography",
+    "rationale": "stated in the request",
+    "user_phrase": ""
+   },
+   {
+    "id": "industry:b2b_founder_led_or_small_teams",
+    "kind": "target",
+    "label": "Industry preference: b2b founder-led or small teams",
+    "value": "b2b founder-led or small teams",
+    "source": "company_brain_preference",
+    "status": "unprovable_today",
+    "dimension": "industry",
+    "rationale": "your Company Brain narrows \"saas\"; a preference that can rank, never reject",
+    "user_phrase": ""
+   },
+   {
+    "id": "company_size:_min_11_max_50_",
+    "kind": "hard",
+    "label": "Company size: 11–50 employees",
+    "value": {
+     "max": 50,
+     "min": 11
+    },
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "company_size",
+    "rationale": "stated in the request",
+    "user_phrase": ""
+   },
+   {
+    "id": "funding:_event_funding_subject_company_qualifier_",
+    "kind": "hard",
+    "label": "Funding",
+    "value": {
+     "event": "funding",
+     "subject": "company",
+     "qualifier": {}
+    },
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "funding",
+    "rationale": "a funding window the request states, which the funding pair can verify",
+    "time_window": {
+     "days": 730,
+     "rule": "recently funded / raised",
+     "basis": "announced",
+     "source": "user_explicit",
+     "enforced": false
+    },
+    "user_phrase": "Find 5 US AI SaaS companies with 11–50 employees, funding in the last 2 years,"
+   },
+   {
+    "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+    "kind": "hard",
+    "label": "Hiring: sales",
+    "value": {
+     "event": "hiring",
+     "subject": "company",
+     "qualifier": {
+      "role_terms": [
+       "sales"
+      ],
+      "role_families": [
+       "gtm_sales"
+      ]
+     }
+    },
+    "source": "user_explicit",
+    "status": "ok",
+    "dimension": "hiring",
+    "rationale": "a signal the request states as a present fact the company must have",
+    "time_window": {
+     "days": 30,
+     "rule": "currently / actively hiring",
+     "basis": "posted",
+     "source": "system_default",
+     "enforced": false
+    },
+    "user_phrase": "hiring sales"
+   }
+  ],
+  "confidence": 0.99,
+  "directives": {
+   "source_strategy": [],
+   "adjacent_signals": [],
+   "excluded_signals": [],
+   "preferred_signals": [
+    "funding",
+    "hiring"
+   ],
+   "required_evidence": [],
+   "allowed_broadening": {
+    "geographies": [],
+    "company_types": [],
+    "role_families": [],
+    "employee_range": {
+     "max": null,
+     "min": null
+    }
+   },
+   "execution_preference": "balanced",
+   "disallowed_broadening": [],
+   "evaluation_instructions": "",
+   "founder_unlock_recommended": false,
+   "requested_contact_ready_count": null
+  },
+  "mission_type": "company_research",
+  "target_entity": "company",
+  "company_profile": {
+   "stages": [],
+   "locations": [
+    "United States"
+   ],
+   "verticals": [
+    "ai saas",
+    "saas"
+   ],
+   "employee_range": {
+    "max": 50,
+    "min": 11
+   },
+   "business_models": []
+  },
+  "decision_makers": {
+   "roles": [],
+   "current_employment_required": false
+  },
+  "requested_count": 5,
+  "field_provenance": {
+   "target_entity": "explicit_user_request",
+   "requested_count": "explicit_user_request",
+   "requested_output": "explicit_user_request",
+   "required_signals": "explicit_user_request",
+   "decision_makers.roles": "gpt_inference",
+   "company_profile.stages": "gpt_inference",
+   "company_profile.locations": "explicit_user_request",
+   "company_profile.verticals": "explicit_user_request",
+   "company_profile.business_models": "gpt_inference"
+  },
+  "hard_constraints": {
+   "company_profile.locations": {
+    "value": [
+     "United States"
+    ],
+    "reason": "stated explicitly in the user's query",
+    "operator": "in"
+   }
+  },
+  "requested_output": "qualified_companies",
+  "required_signals": [
+   {
+    "type": "funding",
+    "event": "funding",
+    "phrase": "funding",
+    "subject": "company",
+    "qualifier": {},
+    "timeframe_days": 730
+   },
+   {
+    "type": "hiring",
+    "event": "hiring",
+    "phrase": "hiring sales",
+    "subject": "company",
+    "qualifier": {
+     "role_terms": [
+      "sales"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ]
+    },
+    "role_families": [
+     "gtm_sales"
+    ],
+    "timeframe_days": 30
+   }
+  ],
+  "soft_preferences": {},
+  "brain_refinements": [
+   {
+    "field": "company_profile.verticals",
+    "qualifier": "b2b founder-led or small teams",
+    "user_value": "saas",
+    "brain_value": "b2b saas (founder-led or small teams)"
+   }
+  ],
+  "mission_semantics": {
+   "goal": "Find 5 US AI SaaS companies with 11–50 employees, funding in the last 2 years, and at least one currently open sales role. Only qualify a company when every required claim has evidence.",
+   "stage": null,
+   "version": "mission-semantics-v1",
+   "hypotheses": [],
+   "corrections": [
+    "window_belongs_to_another_signal:hiring:30d"
+   ],
+   "window_sources": {
+    "hiring": {
+     "rule": "currently / actively hiring",
+     "source": "system_default"
+    },
+    "funding": {
+     "source": "user_explicit"
+    }
+   },
+   "requested_count": 5,
+   "canonical_signals": [
+    {
+     "kind": "funding",
+     "alias": "reader",
+     "phrase": "Find 5 US AI SaaS companies with 11–50 employees, funding in the last 2 years,",
+     "source": "user_explicit",
+     "subject": "company",
+     "legacy_event": "funding"
+    },
+    {
+     "kind": "hiring",
+     "alias": "model",
+     "phrase": "hiring sales",
+     "source": "user_inferred",
+     "subject": "company",
+     "legacy_event": "hiring"
+    }
+   ],
+   "unmapped_signal_language": []
+  },
+  "original_user_query": "Find 5 US AI SaaS companies with 11–50 employees, funding in the last 2 years, and at least one currently open sales role. Only qualify a company when every required claim has evidence.",
+  "required_capabilities": [],
+  "required_signal_terms": [
+   "sales"
+  ],
+  "prohibited_capabilities": [
+   "founder_discovery",
+   "employer_verification",
+   "contact_enrichment"
+  ],
+  "lead_intelligence_contract_version": "v1"
+ },
+ "ceilings": {
+  "per_call_usd": {
+   "people": 0.1,
+   "identity": 0.03,
+   "enrichment": 0.05,
+   "web_evidence": 0.01,
+   "news_evidence": 0.05,
+   "hiring_evidence": 0.05,
+   "funding_evidence": 0.05,
+   "team_composition": 0.03,
+   "technology_evidence": 0.05
+  },
+  "per_route_usd": {
+   "hiring": 0.5,
+   "funding": 0.8,
+   "company_profile": 0.4
+  },
+  "mission_credits": 40,
+  "mission_model_usd": 0.4,
+  "adaptive_reserve_usd": 0.3,
+  "mission_provider_usd": 0.8,
+  "per_candidate_evidence_usd": 0.06
+ },
+ "ledger_reservations": [
+  {
+   "at": "2026-10-04T15:32:54.574Z",
+   "r": {
+    "status": "settled",
+    "purpose": "discovery",
+    "route_id": "general_company_discovery:apify_linkedin_company_search",
+    "settled_usd": 0.041,
+    "estimate_usd": 0.041,
+    "variance_usd": 0,
+    "candidate_keys": [],
+    "idempotency_key": "5314e22b90f631d4b0d933aa334ddfd281c33b030df15553b917d903f5053de7",
+    "provisional_usd": 0.041,
+    "provider_call_id": "pc_5314e22b90f631d4b0d933aa33",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:33:37.496Z",
+   "r": {
+    "status": "settled",
+    "purpose": "enrichment",
+    "route_id": null,
+    "settled_usd": 0.0361,
+    "estimate_usd": 0.0361,
+    "variance_usd": 0,
+    "candidate_keys": [],
+    "idempotency_key": "d4797893bcd47578f7faec1a79acc3f2560e5fa6547152f5212627b431cb19de",
+    "provisional_usd": 0.0361,
+    "provider_call_id": "pc_d4797893bcd47578f7faec1a79",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:34:52.024Z",
+   "r": {
+    "status": "settled",
+    "purpose": "funding_evidence",
+    "route_id": null,
+    "settled_usd": 0.0211,
+    "estimate_usd": 0.0211,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/bytebytego",
+     "https://www.linkedin.com/company/crewai-inc",
+     "https://www.linkedin.com/company/honest-ai-engine",
+     "https://www.linkedin.com/company/jobright-ai",
+     "https://www.linkedin.com/company/llamaindex",
+     "https://www.linkedin.com/company/usebraintrust"
+    ],
+    "idempotency_key": "42174c8d2d0b3ef51a2f56a4b293962bdfa249a3b6c3f411234aa71c2a1313b9",
+    "provisional_usd": 0.0211,
+    "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:35:04.393Z",
+   "r": {
+    "status": "settled",
+    "purpose": "funding_evidence",
+    "route_id": null,
+    "settled_usd": 0.0401,
+    "estimate_usd": 0.0401,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/bytebytego",
+     "https://www.linkedin.com/company/honest-ai-engine"
+    ],
+    "idempotency_key": "4cdc9772d4ab06a8469c34292b8314fe0eb7d98d353eedb655db1debb9f46f45",
+    "provisional_usd": 0.0401,
+    "provider_call_id": "pc_4cdc9772d4ab06a8469c34292b",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:35:19.669Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/crewai-inc"
+    ],
+    "idempotency_key": "8c52798d8a25ec200e7872a4aea49940ee55a0a6521c9adc36ea64e52516d63e",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_8c52798d8a25ec200e7872a4ae",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:35:24.282Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/crewai-inc"
+    ],
+    "idempotency_key": "fa63d64e53a30cf8d232c7cf1faadc699739107e5bd40af4b0ff6b794a5ca7ba",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_fa63d64e53a30cf8d232c7cf1f",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:35:33.472Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/crewai-inc"
+    ],
+    "idempotency_key": "91bfbdc32e0cad55b8575f2ec68f15afc520950f3be6214da29e1250af2cc533",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_91bfbdc32e0cad55b8575f2ec6",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:35:39.867Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/jobright-ai"
+    ],
+    "idempotency_key": "0cfe3f1af53f4ca57097289f9ea2bf176e5041fb072fae819b6bf3d2f2a4bbb9",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_0cfe3f1af53f4ca57097289f9e",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:35:44.861Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/llamaindex"
+    ],
+    "idempotency_key": "356070822e2fe0796526a44691cb63a9da6ba21765979fa558be5748603ad0bd",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_356070822e2fe0796526a44691",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:38:53.312Z",
+   "r": {
+    "status": "settled",
+    "purpose": "discovery",
+    "route_id": "general_company_discovery:apify_linkedin_company_search",
+    "settled_usd": 0.041,
+    "estimate_usd": 0.041,
+    "variance_usd": 0,
+    "candidate_keys": [],
+    "idempotency_key": "d8474d50aaedebf8596484382c2939a2cab04776959c91852c77ddafb4ddb0fa",
+    "provisional_usd": 0.041,
+    "provider_call_id": "pc_d8474d50aaedebf8596484382c",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:39:49.385Z",
+   "r": {
+    "status": "settled",
+    "purpose": "enrichment",
+    "route_id": null,
+    "settled_usd": 0.0361,
+    "estimate_usd": 0.0361,
+    "variance_usd": 0,
+    "candidate_keys": [],
+    "idempotency_key": "8b1d421fcf1ed858a064ec6fefa2941c04a4bed754aa6a4c8d3b55db3bb163e3",
+    "provisional_usd": 0.0361,
+    "provider_call_id": "pc_8b1d421fcf1ed858a064ec6fef",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:41:18.028Z",
+   "r": {
+    "status": "settled",
+    "purpose": "funding_evidence",
+    "route_id": null,
+    "settled_usd": 0.0211,
+    "estimate_usd": 0.0211,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/avalancheavax",
+     "https://www.linkedin.com/company/maviwork",
+     "https://www.linkedin.com/company/pika-labs",
+     "https://www.linkedin.com/company/skildai",
+     "https://www.linkedin.com/company/social-media-today-llc",
+     "https://www.linkedin.com/company/solanalabs"
+    ],
+    "idempotency_key": "2dc375d14a5ef20be3f999311b4c21301d26bde5cff71d42728d26de3e72caf0",
+    "provisional_usd": 0.0211,
+    "provider_call_id": "pc_2dc375d14a5ef20be3f999311b",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:41:28.027Z",
+   "r": {
+    "status": "settled",
+    "purpose": "funding_evidence",
+    "route_id": null,
+    "settled_usd": 0.0401,
+    "estimate_usd": 0.0401,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/skildai",
+     "https://www.linkedin.com/company/social-media-today-llc"
+    ],
+    "idempotency_key": "37c9a754736db2827476f38b6cc29757e9f90cbe99297b820a06b13febaabbad",
+    "provisional_usd": 0.0401,
+    "provider_call_id": "pc_37c9a754736db2827476f38b6c",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:41:40.834Z",
+   "r": {
+    "status": "settled",
+    "purpose": "funding_evidence",
+    "route_id": null,
+    "settled_usd": 0.0201,
+    "estimate_usd": 0.0201,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/solanalabs"
+    ],
+    "idempotency_key": "5684d38c91e04ae151e2d38e822a8008cb9a27493ad5b78a5ee9075fdc2e110e",
+    "provisional_usd": 0.0201,
+    "provider_call_id": "pc_5684d38c91e04ae151e2d38e82",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:43:16.293Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/maviwork"
+    ],
+    "idempotency_key": "25fccb9d62bdff67edc8809b95361b89e545d72cbf3762c22899d2c48110c0f2",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_25fccb9d62bdff67edc8809b95",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:43:21.145Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/skildai"
+    ],
+    "idempotency_key": "e430ad13a192494fe345bf8d449119e515bba7e919233a128c9e4b128351d4b5",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_e430ad13a192494fe345bf8d44",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:43:25.330Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/the-corporate-b"
+    ],
+    "idempotency_key": "b9f33f36e17e99cf3b0096aa5b6625c1c1d10cb949d058c2c539982df02acf7b",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_b9f33f36e17e99cf3b0096aa5b",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:43:40.100Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/the-corporate-b"
+    ],
+    "idempotency_key": "387ba149975d095557711538bae2ff1c7fe152c7c8e9cd76ef4683c7279f0902",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_387ba149975d095557711538ba",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:43:52.960Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/webbuddy-agency"
+    ],
+    "idempotency_key": "84ed32075cb9e3b445ddb8547c070d5a2d7f28d9ad898d531e165baad209a905",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_84ed32075cb9e3b445ddb8547c",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:50:21.344Z",
+   "settled_at": "2026-10-04T15:52:53.751Z",
+   "r": {
+    "status": "settled",
+    "purpose": "discovery",
+    "route_id": "general_company_discovery:apify_linkedin_company_search",
+    "settled_usd": 0.041,
+    "estimate_usd": 0.041,
+    "variance_usd": 0,
+    "candidate_keys": [],
+    "idempotency_key": "b54f601461ee7c7b92239299f0cca89704b5cc327a22bd126d074dcbd33c0ec3",
+    "provisional_usd": 0.041,
+    "provider_call_id": "pc_b54f601461ee7c7b92239299f0",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:51:32.306Z",
+   "settled_at": "2026-10-04T15:52:53.751Z",
+   "r": {
+    "status": "settled",
+    "purpose": "enrichment",
+    "route_id": null,
+    "settled_usd": 0.0401,
+    "estimate_usd": 0.0401,
+    "variance_usd": 0,
+    "candidate_keys": [],
+    "idempotency_key": "120f461aa420508f03c0a63eeda32fb41d24daac40e8068744f134dac4aac2d7",
+    "provisional_usd": 0.0401,
+    "provider_call_id": "pc_120f461aa420508f03c0a63eed",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:53:01.341Z",
+   "settled_at": "2026-10-04T15:55:53.952Z",
+   "r": {
+    "status": "settled",
+    "purpose": "funding_evidence",
+    "route_id": null,
+    "settled_usd": 0.0176,
+    "estimate_usd": 0.0211,
+    "variance_usd": -0.0035,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/cosoit",
+     "https://www.linkedin.com/company/cyber-jin",
+     "https://www.linkedin.com/company/deltalake",
+     "https://www.linkedin.com/company/dozti-international",
+     "https://www.linkedin.com/company/outlier-ai",
+     "https://www.linkedin.com/company/scholarships-com"
+    ],
+    "idempotency_key": "22c15bbf2c3ba049b80b8cb3ef8851425d586ee54fc0ea9dc6e8b332d83f1226",
+    "provisional_usd": 0.0211,
+    "provider_call_id": "pc_22c15bbf2c3ba049b80b8cb3ef",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:53:10.959Z",
+   "settled_at": "2026-10-04T15:55:53.952Z",
+   "r": {
+    "status": "settled",
+    "purpose": "funding_evidence",
+    "route_id": null,
+    "settled_usd": 0.0401,
+    "estimate_usd": 0.0401,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/cosoit",
+     "https://www.linkedin.com/company/cyber-jin"
+    ],
+    "idempotency_key": "b48530212927f0a22ed8ea3685940a571c8709f3fb06e3baf0134d974d99a1c4",
+    "provisional_usd": 0.0401,
+    "provider_call_id": "pc_b48530212927f0a22ed8ea3685",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:53:23.147Z",
+   "settled_at": "2026-10-04T15:59:25.115Z",
+   "r": {
+    "status": "settled",
+    "purpose": "funding_evidence",
+    "route_id": null,
+    "settled_usd": 0.0401,
+    "estimate_usd": 0.0401,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/deltalake",
+     "https://www.linkedin.com/company/dozti-international"
+    ],
+    "idempotency_key": "4a1e69845ed547fba1d59f6d5d757e9282c550767efb40f9ce995fcfabda9ea4",
+    "provisional_usd": 0.0401,
+    "provider_call_id": "pc_4a1e69845ed547fba1d59f6d5d",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:54:58.576Z",
+   "settled_at": "2026-10-04T15:55:53.952Z",
+   "r": {
+    "status": "settled",
+    "purpose": "funding_evidence",
+    "route_id": null,
+    "settled_usd": 0.0201,
+    "estimate_usd": 0.0201,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/scholarships-com"
+    ],
+    "idempotency_key": "287fac6010e4b170131fb6e234d501e52f7a5001a1a462b61f8cd739c8df4843",
+    "provisional_usd": 0.0201,
+    "provider_call_id": "pc_287fac6010e4b170131fb6e234",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T15:55:14.449Z",
+   "settled_at": "2026-10-04T15:55:25.167Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/spacenews"
+    ],
+    "idempotency_key": "d2e7fd074022b21797943911a9433bb96e4af263b06580be18bec2e242e7592b",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_d2e7fd074022b21797943911a9",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:55:26.136Z",
+   "settled_at": "2026-10-04T15:55:32.662Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/spacenews"
+    ],
+    "idempotency_key": "33a7746b6bfc70a16a865b41dc28fd237c96bf14404bdd7407f83b73a12615e1",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_33a7746b6bfc70a16a865b41dc",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T15:55:33.609Z",
+   "settled_at": "2026-10-04T15:55:36.880Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/testfits"
+    ],
+    "idempotency_key": "fa3ca8f55a9af2b4ace91e5c9752a0cfe5137056235f976453e875d9e5aadc05",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_fa3ca8f55a9af2b4ace91e5c97",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T16:02:17.237Z",
+   "settled_at": "2026-10-04T16:05:05.667Z",
+   "r": {
+    "status": "settled",
+    "purpose": "discovery",
+    "route_id": "general_company_discovery:apify_linkedin_company_search",
+    "settled_usd": 0.041,
+    "estimate_usd": 0.041,
+    "variance_usd": 0,
+    "candidate_keys": [],
+    "idempotency_key": "765701b5c4f5eed097c92aa196960fdd0f23739866b3ffc914c2bd158736ab3f",
+    "provisional_usd": 0.041,
+    "provider_call_id": "pc_765701b5c4f5eed097c92aa196",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T16:03:47.916Z",
+   "settled_at": "2026-10-04T16:05:05.667Z",
+   "r": {
+    "status": "settled",
+    "purpose": "enrichment",
+    "route_id": null,
+    "settled_usd": 0.0401,
+    "estimate_usd": 0.0401,
+    "variance_usd": 0,
+    "candidate_keys": [],
+    "idempotency_key": "e97593e8e9878cc9debb493e55921b741f02570ce6741688e4463bf4596f26cc",
+    "provisional_usd": 0.0401,
+    "provider_call_id": "pc_e97593e8e9878cc9debb493e55",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T16:05:15.346Z",
+   "settled_at": "2026-10-04T16:08:10.369Z",
+   "r": {
+    "status": "settled",
+    "purpose": "funding_evidence",
+    "route_id": null,
+    "settled_usd": 0.0176,
+    "estimate_usd": 0.0211,
+    "variance_usd": -0.0035,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/actioneer-hq",
+     "https://www.linkedin.com/company/bebee",
+     "https://www.linkedin.com/company/bigtoe-pose-inc.",
+     "https://www.linkedin.com/company/cluely",
+     "https://www.linkedin.com/company/finops-foundation",
+     "https://www.linkedin.com/company/hashlist"
+    ],
+    "idempotency_key": "c38c3e44b75a8c71c5241038fa40a41e30a370b7f52f10f48b29393fad7ae758",
+    "provisional_usd": 0.0211,
+    "provider_call_id": "pc_c38c3e44b75a8c71c5241038fa",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T16:05:24.525Z",
+   "settled_at": "2026-10-04T16:12:02.258Z",
+   "r": {
+    "status": "settled",
+    "purpose": "funding_evidence",
+    "route_id": null,
+    "settled_usd": 0.0401,
+    "estimate_usd": 0.0401,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/actioneer-hq",
+     "https://www.linkedin.com/company/finops-foundation"
+    ],
+    "idempotency_key": "599366c4176056f828bdfe2f7e72e267efd095bd5945abb3769875d7ee92bf14",
+    "provisional_usd": 0.0401,
+    "provider_call_id": "pc_599366c4176056f828bdfe2f7e",
+    "settlement_source": "provider_receipt"
+   }
+  },
+  {
+   "at": "2026-10-04T16:06:57.850Z",
+   "settled_at": "2026-10-04T16:07:01.704Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/cluely"
+    ],
+    "idempotency_key": "36c0dc34be511012ac3fd1d9c66bcb5d7330836ac101e20808180bbbc44e9885",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_36c0dc34be511012ac3fd1d9c6",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T16:07:02.680Z",
+   "settled_at": "2026-10-04T16:07:07.779Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/cluely"
+    ],
+    "idempotency_key": "bce253a8a2deabfc59dfec5661f655919cdd967d8dd10f17dafd0aa6a4003f06",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_bce253a8a2deabfc59dfec5661",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T16:07:08.721Z",
+   "settled_at": "2026-10-04T16:07:17.990Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/omnivoid"
+    ],
+    "idempotency_key": "4e775d41da28551674b9e6a0a9cfed9e831fb0b27a48be921df50747f03e9c90",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_4e775d41da28551674b9e6a0a9",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T16:07:18.928Z",
+   "settled_at": "2026-10-04T16:07:26.466Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/omnivoid"
+    ],
+    "idempotency_key": "7c8ae00c843e7cd58a954b2fcca3d635e8ce5ab5926f6180774ef74c0681a2bc",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_7c8ae00c843e7cd58a954b2fcc",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T16:07:27.404Z",
+   "settled_at": "2026-10-04T16:07:39.983Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/topcoder"
+    ],
+    "idempotency_key": "1f5e4d34e0a597148c845a45a7728ffe8d99676a057817e96a5068226bb61ad2",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_1f5e4d34e0a597148c845a45a7",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-04T16:07:40.906Z",
+   "settled_at": "2026-10-04T16:07:47.541Z",
+   "r": {
+    "status": "settled",
+    "purpose": "web_evidence",
+    "route_id": null,
+    "settled_usd": 0.0063,
+    "estimate_usd": 0.0063,
+    "variance_usd": 0,
+    "candidate_keys": [
+     "https://www.linkedin.com/company/topcoder"
+    ],
+    "idempotency_key": "68a50088a9449ed2d53982ebd592080363bc8a1c1ac8bf3d127a80d59fb432a3",
+    "provisional_usd": 0.0063,
+    "provider_call_id": "pc_68a50088a9449ed2d53982ebd5",
+    "settlement_source": "derived_floor"
+   }
+  }
+ ],
+ "checkpoints": {
+  "before_hiring_verification:slice1": {
+   "at": "2026-10-04T15:36:06.283Z",
+   "note": "Slice 1, after the funding and business-model verifiers ran and before the open-role verifier. LlamaIndex's observations are all observed before this instant; its `unaffordable:apify_linkedin_job_search` mark (written AT this instant by the PR #22 code under test) is removed.",
+   "verifier_pending_runs": [],
+   "companies": [
+    {
+     "brain": "not_started",
+     "hiring": "evidence_unavailable",
+     "founder": "not_eligible",
+     "identity": "resolved",
+     "enrichment": "completed",
+     "updated_at": "2026-10-04T15:36:06.283Z",
+     "company_key": "https://www.linkedin.com/company/llamaindex",
+     "company_name": "LlamaIndex",
+     "completed_operations": [
+      "verify:apify_funding_atomus",
+      "verify:firecrawl"
+     ],
+     "linkedin_company_url": "https://www.linkedin.com/company/llamaindex",
+     "snapshot": {
+      "brain": null,
+      "triage": {
+       "reasons": [],
+       "relevance": "relevant",
+       "confidence": 0.9,
+       "company_key": "https://www.linkedin.com/company/llamaindex",
+       "matched_roles": [],
+       "signal_strength": 76
+      },
+      "company": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_company_search",
+        "source_id": "91154103"
+       },
+       "website": "https://www.llamaindex.ai",
+       "geography": null,
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_type": "semantic",
+        "company_size_band": "direct",
+        "provider_industry": "unsafe",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "LlamaIndex",
+       "company_type": "Public Company",
+       "industry_ids": [
+        {
+         "id": "6",
+         "name": "Technology, Information and Internet",
+         "hierarchy": "Technology, Information and Media > Technology, Information and Internet"
+        }
+       ],
+       "hiring_status": null,
+       "candidate_only": true,
+       "missing_fields": [
+        "provider_industry:filter_returned_wrong_industries_use_enrichment",
+        "company_size_band:discovery_row_plausible_until_company_record_read"
+       ],
+       "canonical_domain": "llamaindex.ai",
+       "startup_evidence": null,
+       "company_size_band": {
+        "max": 50,
+        "min": 11,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Technology, Information and Internet",
+       "source_provenance": "harvestapi/linkedin-company-search",
+       "external_source_id": "li_company:91154103",
+       "linkedin_company_url": "https://www.linkedin.com/company/llamaindex",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 109
+      },
+      "enriched": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_company_details",
+        "source_id": "91154103"
+       },
+       "website": "https://www.llamaindex.ai",
+       "geography": "San Francisco, CA, United States",
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_type": "semantic",
+        "industry_ids": "direct",
+        "company_size_band": "direct",
+        "provider_industry": "direct",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "LlamaIndex",
+       "company_type": "Public Company",
+       "industry_ids": [
+        {
+         "id": "6",
+         "name": "Technology, Information and Internet",
+         "hierarchy": "Technology, Information and Media > Technology, Information and Internet"
+        }
+       ],
+       "hiring_status": null,
+       "missing_fields": [
+        "founded_year:frequently_null_from_actor"
+       ],
+       "canonical_domain": "llamaindex.ai",
+       "location_entries": [
+        {
+         "text": null,
+         "country": "United States of America",
+         "is_headquarters": true
+        }
+       ],
+       "startup_evidence": null,
+       "company_size_band": {
+        "max": 50,
+        "min": 11,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Technology, Information and Internet",
+       "source_provenance": "harvestapi/linkedin-company",
+       "external_source_id": "li_company:91154103",
+       "linkedin_company_url": "https://www.linkedin.com/company/llamaindex",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 109
+      },
+      "found_by": [
+       {
+        "method": "first_seen",
+        "route_id": "general_company_discovery:apify_linkedin_company_search",
+        "actor_key": "apify_linkedin_company_search",
+        "capability": "general_company_discovery",
+        "observed_at": "2026-10-04T15:33:04.341Z",
+        "plan_version": 1,
+        "provider_call_id": "pc_5314e22b90f631d4b0d933aa33"
+       }
+      ],
+      "identity": {
+       "status": "verified_match",
+       "evidence": [
+        "source_supplied_canonical_linkedin_url"
+       ],
+       "company_key": "https://www.linkedin.com/company/llamaindex",
+       "ambiguous_candidates": [],
+       "linkedin_company_url": "https://www.linkedin.com/company/llamaindex"
+      },
+      "hiring_jobs": [],
+      "prequal_key": null,
+      "shortlisted": true,
+      "observations": [
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "LlamaIndex",
+           "domain": "llamaindex.ai",
+           "linkedin_company_url": "https://www.linkedin.com/company/llamaindex"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/llamaindex",
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_5314e22b90f631d4b0d933aa33"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/llamaindex",
+          "evidence_id": "ev_e99e036b02893384a1a00b94",
+          "observed_at": "2026-10-04T15:33:04.341Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "max": 50,
+           "min": 11,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_5314e22b90f631d4b0d933aa33"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "company_size",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search declared_size_band can suggest company_size but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "medium",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/llamaindex",
+          "evidence_id": "ev_49f0a60b06a2f1f437ecedb3",
+          "observed_at": "2026-10-04T15:33:04.341Z",
+          "valid_until": "2027-01-02T15:33:04.341Z",
+          "derived_from": []
+         },
+         {
+          "value": 109,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_5314e22b90f631d4b0d933aa33"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "associated_members",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search associated_member_count can suggest associated_members but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "medium",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/llamaindex",
+          "evidence_id": "ev_90ab2f956e3434505422ad34",
+          "observed_at": "2026-10-04T15:33:04.341Z",
+          "valid_until": "2027-01-02T15:33:04.341Z",
+          "derived_from": []
+         },
+         {
+          "value": "Technology, Information and Internet",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_5314e22b90f631d4b0d933aa33"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/llamaindex",
+          "evidence_id": "ev_1674c854c4d5b29c79f979cf",
+          "observed_at": "2026-10-04T15:33:04.341Z",
+          "valid_until": null,
+          "derived_from": []
+         }
+        ],
+        "provider": "apify",
+        "route_id": "general_company_discovery:apify_linkedin_company_search",
+        "actor_key": "apify_linkedin_company_search",
+        "capability": "general_company_discovery",
+        "source_url": "https://www.linkedin.com/company/llamaindex",
+        "entity_hint": {
+         "name": "LlamaIndex",
+         "domain": "llamaindex.ai",
+         "country": null,
+         "website": "https://www.llamaindex.ai",
+         "external_ids": [
+          "li_company:91154103"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/llamaindex"
+        },
+        "observed_at": "2026-10-04T15:33:04.341Z",
+        "plan_version": 1,
+        "observation_id": "obs_abf0be704269e44b79e5c4b5",
+        "provider_call_id": "pc_5314e22b90f631d4b0d933aa33",
+        "source_record_id": "91154103"
+       },
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "LlamaIndex",
+           "domain": "llamaindex.ai",
+           "linkedin_company_url": "https://www.linkedin.com/company/llamaindex"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/llamaindex",
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_d4797893bcd47578f7faec1a79"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/llamaindex",
+          "evidence_id": "ev_110a457942dfdaddf8268b61",
+          "observed_at": "2026-10-04T15:33:49.503Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": "San Francisco, CA, United States",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_d4797893bcd47578f7faec1a79"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_structured_country",
+           "claim": "country",
+           "level": "proven",
+           "reason": "structured company locations, each with its country — presence in a market, not headquarters",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "geography",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/llamaindex",
+          "evidence_id": "ev_156770f5b3f4b583137a3131",
+          "observed_at": "2026-10-04T15:33:49.503Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "max": 50,
+           "min": 11,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_d4797893bcd47578f7faec1a79"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_declared_size_band",
+           "claim": "company_size",
+           "level": "proven",
+           "reason": "the company's own declared size band on its LinkedIn record (About tab) — a band, not a staff count",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/llamaindex",
+          "evidence_id": "ev_da295606ab2ebd7e25e4fc3e",
+          "observed_at": "2026-10-04T15:33:49.503Z",
+          "valid_until": "2027-01-02T15:33:49.503Z",
+          "derived_from": []
+         },
+         {
+          "value": 109,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_d4797893bcd47578f7faec1a79"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_associated_members",
+           "claim": "associated_members",
+           "level": "proven",
+           "reason": "LinkedIn's count of members who list the company as a current position — not staff, and no size claim",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/llamaindex",
+          "evidence_id": "ev_d46fecda3c5906ef15f0a388",
+          "observed_at": "2026-10-04T15:33:49.503Z",
+          "valid_until": "2027-01-02T15:33:49.503Z",
+          "derived_from": []
+         },
+         {
+          "value": "Technology, Information and Internet",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_d4797893bcd47578f7faec1a79"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_details industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/llamaindex",
+          "evidence_id": "ev_eadc0a7b26d890a121fc17a5",
+          "observed_at": "2026-10-04T15:33:49.503Z",
+          "valid_until": null,
+          "derived_from": []
+         }
+        ],
+        "provider": "apify",
+        "route_id": null,
+        "actor_key": "apify_linkedin_company_details",
+        "capability": "company_enrichment",
+        "source_url": "https://www.linkedin.com/company/llamaindex",
+        "entity_hint": {
+         "name": "LlamaIndex",
+         "domain": "llamaindex.ai",
+         "country": "US",
+         "website": "https://www.llamaindex.ai",
+         "external_ids": [
+          "li_company:91154103"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/llamaindex"
+        },
+        "observed_at": "2026-10-04T15:33:49.503Z",
+        "plan_version": 1,
+        "observation_id": "obs_4adaf5728480f6734afe389c",
+        "provider_call_id": "pc_d4797893bcd47578f7faec1a79",
+        "source_record_id": "91154103"
+       },
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "claim": "funding_record",
+           "record": {
+            "actor": "apify_funding_atomus",
+            "rounds": [
+             {
+              "method": "provider_field",
+              "investors": [
+               "Amazon Web Services"
+              ],
+              "amount_usd": 1000000,
+              "provenance": [
+               {
+                "role": "reported",
+                "actor": "apify_funding_atomus",
+                "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+               }
+              ],
+              "round_type": "NON_EQUITY_ASSISTANCE",
+              "source_urls": [],
+              "announced_date": "2025-10-08"
+             },
+             {
+              "method": "provider_field",
+              "investors": [
+               "Databricks Ventures",
+               "KPMG ventures"
+              ],
+              "amount_usd": null,
+              "provenance": [
+               {
+                "role": "reported",
+                "actor": "apify_funding_atomus",
+                "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+               }
+              ],
+              "round_type": "VENTURE_ROUND",
+              "source_urls": [],
+              "announced_date": "2025-05-01"
+             },
+             {
+              "method": "provider_field",
+              "investors": [
+               "Greylock",
+               "Norwest"
+              ],
+              "amount_usd": 19000000,
+              "provenance": [
+               {
+                "role": "reported",
+                "actor": "apify_funding_atomus",
+                "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+               }
+              ],
+              "round_type": "SERIES_A",
+              "source_urls": [],
+              "announced_date": "2025-03-04"
+             },
+             {
+              "method": "provider_field",
+              "investors": [
+               "Joey Gonzalez",
+               "Lenny Rachitsky",
+               "Mathilde Collin",
+               "Raquel Urtasun",
+               "Greylock"
+              ],
+              "amount_usd": 8500000,
+              "provenance": [
+               {
+                "role": "reported",
+                "actor": "apify_funding_atomus",
+                "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+               }
+              ],
+              "round_type": "SEED_ROUND",
+              "source_urls": [],
+              "announced_date": "2023-06-06"
+             },
+             {
+              "method": "provider_field",
+              "investors": [],
+              "amount_usd": 1000000,
+              "provenance": [
+               {
+                "role": "reported",
+                "actor": "apify_funding_atomus",
+                "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2"
+               }
+              ],
+              "round_type": "SEED_ROUND",
+              "source_urls": [],
+              "announced_date": "2022-12-01"
+             }
+            ],
+            "provider": "apify",
+            "source_url": "https://www.linkedin.com/company/llamaindex",
+            "observed_at": "2026-09-21",
+            "completeness": {
+             "actor": "apify_funding_atomus",
+             "complete": true,
+             "history_complete": null,
+             "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2",
+             "reported_round_count": 5
+            },
+            "history_complete": null,
+            "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2",
+            "provider_call_ids": [
+             "pc_42174c8d2d0b3ef51a2f56a4b2"
+            ],
+            "reported_round_count": 5
+           },
+           "amount_usd": 1000000,
+           "round_type": "non-equity-assistance",
+           "announced_date": "2025-10-08"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/llamaindex",
+           "actor": "apify_funding_atomus",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2",
+           "provider_call_ids": [
+            "pc_42174c8d2d0b3ef51a2f56a4b2"
+           ]
+          },
+          "status": "proven",
+          "dimension": "funding",
+          "confidence": "medium",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/llamaindex",
+          "evidence_id": "fdr_https://www.linkedin.com/company/llamaindex_apify_f~6bfdb065",
+          "observed_at": "2026-10-04T15:34:51.334Z",
+          "valid_until": null,
+          "derived_from": []
+         }
+        ],
+        "provider": "apify",
+        "route_id": null,
+        "actor_key": "apify_funding_atomus",
+        "capability": "claim_verification",
+        "source_url": "https://www.linkedin.com/company/llamaindex",
+        "entity_hint": {
+         "name": "LlamaIndex",
+         "domain": "llamaindex.ai",
+         "country": null,
+         "website": "https://www.llamaindex.ai",
+         "external_ids": [
+          "li_company:91154103"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/llamaindex"
+        },
+        "observed_at": "2026-10-04T15:34:51.334Z",
+        "plan_version": null,
+        "observation_id": "obs_vfy_fdr_https://www.linkedin.com/company/llamaindex~7455355e",
+        "provider_call_id": "pc_42174c8d2d0b3ef51a2f56a4b2",
+        "source_record_id": null
+       },
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": "ai saas",
+          "method": "model_extraction",
+          "origin": "web",
+          "source": {
+           "url": null,
+           "actor": "grounded_evidence_evaluation",
+           "excerpt": null,
+           "provider": "engine",
+           "provider_call_id": null
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "grounded_website_statement",
+           "claim": "business_model",
+           "level": "proven",
+           "reason": "the company's own website text, quoted and verified by the grounder",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "business_model",
+          "assessment": {
+           "decision": "review",
+           "grounding_score": 1,
+           "validated_claims": 1,
+           "business_model_facets": [
+            "ai",
+            "software_product",
+            "saas_delivery"
+           ],
+           "business_model_quotes": [
+            {
+             "excerpt": null,
+             "claim_type": "business_model",
+             "evidence_id": "web_page:company_website:e010d2b4"
+            },
+            {
+             "excerpt": null,
+             "claim_type": "business_model",
+             "evidence_id": "web_page:company_website:cf15d705"
+            },
+            {
+             "excerpt": null,
+             "claim_type": "business_model",
+             "evidence_id": "web_page:company_website:cf15d705"
+            },
+            {
+             "excerpt": null,
+             "claim_type": "business_model",
+             "evidence_id": "web_page:company_website:cf15d705"
+            },
+            {
+             "excerpt": null,
+             "claim_type": "product_type",
+             "evidence_id": "web_page:company_website:cf15d705"
+            },
+            {
+             "excerpt": null,
+             "claim_type": "product_type",
+             "evidence_id": "web_page:company_website:cf15d705"
+            }
+           ],
+           "business_model_reasons": [],
+           "business_model_decision": "accepted"
+          },
+          "confidence": "medium",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/llamaindex",
+          "evidence_id": "grd_https://www.linkedin.com/company/llamaindex_business_model",
+          "observed_at": "2026-10-04T15:36:06.276Z",
+          "valid_until": null,
+          "derived_from": [
+           "web_page:company_website:e010d2b4",
+           "web_page:company_website:cf15d705"
+          ]
+         }
+        ],
+        "provider": "engine",
+        "route_id": null,
+        "actor_key": "grounded_evidence_evaluation",
+        "capability": "web_evidence_verification",
+        "source_url": null,
+        "entity_hint": {
+         "name": "LlamaIndex",
+         "domain": "llamaindex.ai",
+         "country": null,
+         "website": "https://www.llamaindex.ai",
+         "external_ids": [
+          "li_company:91154103"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/llamaindex"
+        },
+        "observed_at": "2026-10-04T15:36:06.276Z",
+        "plan_version": null,
+        "observation_id": "obs_grd_grd_https://www.linkedin.com/company/llamaindex~be474648",
+        "provider_call_id": null,
+        "source_record_id": null
+       }
+      ],
+      "prequalified": {
+       "jobs": [],
+       "name": "LlamaIndex",
+       "batch": null,
+       "score": 75,
+       "yc_id": null,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_url": null,
+       "reasons": [],
+       "eligible": true,
+       "size_fit": true,
+       "best_tier": null,
+       "exclusion": null,
+       "locations": null,
+       "one_liner": null,
+       "team_size": null,
+       "technical": 0,
+       "company_key": "llamaindex.ai",
+       "size_status": "in_range",
+       "has_open_roles": false,
+       "canonical_domain": "llamaindex.ai",
+       "strongest_signal": null,
+       "identity_confidence": "domain_exact",
+       "linkedin_identity_status": "unresolved"
+      },
+      "yc_open_jobs": [],
+      "hiring_assessment": {
+       "tier": null,
+       "reason": "No open roles at all — nothing to judge against the mission's required role.",
+       "verdict": "hiring_not_verified",
+       "strongest": null,
+       "commercial_jobs": [],
+       "evidence_source": "none",
+       "supporting_signals": [],
+       "needs_external_verification": false
+      },
+      "enrichment_outcome": "success",
+      "identity_conflicts": [],
+      "investigation_rank": 1,
+      "mission_evaluation": null,
+      "investigation_state": "investigated",
+      "shortlist_exclusion": null
+     }
+    }
+   ]
+  },
+  "before_hiring_verification:slice2": {
+   "at": "2026-10-04T15:44:19.618Z",
+   "note": "Slice 2. Solana Labs' funding pair was IN FLIGHT: Atomus answered at 15:41:18 without a decisive round, the Pvalyou recency fallback (reserved 15:41:40) was still running and was adopted in slice 3 at 15:47:45 — so its funding observation (observed 15:47:45) and its verify:* marks did not exist yet and are excluded here; the in-flight run is restored as a pending verifier run. Its `unaffordable:` mark (written AT this instant by the PR #22 code under test) is removed.",
+   "verifier_pending_runs": [
+    {
+     "verifier": "funding_stage_corroboration",
+     "stage": "pvalyou_recency",
+     "actor_key": "apify_funding_pvalyou",
+     "run_id": "<pvalyou-run>",
+     "input": {
+      "tier": "basic",
+      "companies": [
+       "solanalabs.com"
+      ]
+     },
+     "candidate_keys": [
+      "https://www.linkedin.com/company/solanalabs"
+     ],
+     "started_at": "2026-10-04T15:41:40.834Z"
+    }
+   ],
+   "companies": [
+    {
+     "brain": "not_started",
+     "hiring": "evidence_unavailable",
+     "founder": "not_eligible",
+     "identity": "resolved",
+     "enrichment": "completed",
+     "updated_at": "2026-10-04T15:44:19.618Z",
+     "company_key": "https://www.linkedin.com/company/solanalabs",
+     "company_name": "Solana Labs",
+     "completed_operations": [],
+     "linkedin_company_url": "https://www.linkedin.com/company/solanalabs",
+     "snapshot": {
+      "brain": null,
+      "triage": {
+       "reasons": [],
+       "relevance": "uncertain",
+       "confidence": 0.9,
+       "company_key": "https://www.linkedin.com/company/solanalabs",
+       "matched_roles": [],
+       "signal_strength": 12
+      },
+      "company": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_company_search",
+        "source_id": "18453134"
+       },
+       "website": "https://solanalabs.com",
+       "geography": null,
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_type": "semantic",
+        "company_size_band": "direct",
+        "provider_industry": "unsafe",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "Solana Labs",
+       "company_type": "Privately Held",
+       "industry_ids": [
+        {
+         "id": "6",
+         "name": "Technology, Information and Internet",
+         "hierarchy": "Technology, Information and Media > Technology, Information and Internet"
+        }
+       ],
+       "hiring_status": null,
+       "candidate_only": true,
+       "missing_fields": [
+        "provider_industry:filter_returned_wrong_industries_use_enrichment",
+        "company_size_band:discovery_row_plausible_until_company_record_read"
+       ],
+       "canonical_domain": "solanalabs.com",
+       "startup_evidence": null,
+       "company_size_band": {
+        "max": 50,
+        "min": 11,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Technology, Information and Internet",
+       "source_provenance": "harvestapi/linkedin-company-search",
+       "external_source_id": "li_company:18453134",
+       "linkedin_company_url": "https://www.linkedin.com/company/solanalabs",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 249
+      },
+      "enriched": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_company_details",
+        "source_id": "18453134"
+       },
+       "website": "https://solanalabs.com",
+       "geography": "San Francisco, CA, United States",
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_type": "semantic",
+        "industry_ids": "direct",
+        "company_size_band": "direct",
+        "provider_industry": "direct",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "Solana Labs",
+       "company_type": "Privately Held",
+       "industry_ids": [
+        {
+         "id": "6",
+         "name": "Technology, Information and Internet",
+         "hierarchy": "Technology, Information and Media > Technology, Information and Internet"
+        }
+       ],
+       "hiring_status": null,
+       "missing_fields": [],
+       "canonical_domain": "solanalabs.com",
+       "location_entries": [
+        {
+         "text": null,
+         "country": "United States of America",
+         "is_headquarters": true
+        }
+       ],
+       "startup_evidence": {
+        "year_founded": 2018
+       },
+       "company_size_band": {
+        "max": 50,
+        "min": 11,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Technology, Information and Internet",
+       "source_provenance": "harvestapi/linkedin-company",
+       "external_source_id": "li_company:18453134",
+       "linkedin_company_url": "https://www.linkedin.com/company/solanalabs",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 249
+      },
+      "found_by": [
+       {
+        "method": "first_seen",
+        "route_id": "general_company_discovery:apify_linkedin_company_search",
+        "actor_key": "apify_linkedin_company_search",
+        "capability": "general_company_discovery",
+        "observed_at": "2026-10-04T15:39:03.057Z",
+        "plan_version": 1,
+        "provider_call_id": "pc_d8474d50aaedebf8596484382c"
+       }
+      ],
+      "identity": {
+       "status": "verified_match",
+       "evidence": [
+        "source_supplied_canonical_linkedin_url"
+       ],
+       "company_key": "https://www.linkedin.com/company/solanalabs",
+       "ambiguous_candidates": [],
+       "linkedin_company_url": "https://www.linkedin.com/company/solanalabs"
+      },
+      "hiring_jobs": [],
+      "prequal_key": null,
+      "shortlisted": true,
+      "observations": [
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "Solana Labs",
+           "domain": "solanalabs.com",
+           "linkedin_company_url": "https://www.linkedin.com/company/solanalabs"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/solanalabs",
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_d8474d50aaedebf8596484382c"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/solanalabs",
+          "evidence_id": "ev_bff97b8b3810f20a502bf938",
+          "observed_at": "2026-10-04T15:39:03.057Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "max": 50,
+           "min": 11,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_d8474d50aaedebf8596484382c"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "company_size",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search declared_size_band can suggest company_size but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "medium",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/solanalabs",
+          "evidence_id": "ev_fc2176ef6e05fed401d0bb21",
+          "observed_at": "2026-10-04T15:39:03.057Z",
+          "valid_until": "2027-01-02T15:39:03.057Z",
+          "derived_from": []
+         },
+         {
+          "value": 249,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_d8474d50aaedebf8596484382c"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "associated_members",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search associated_member_count can suggest associated_members but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "medium",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/solanalabs",
+          "evidence_id": "ev_328fbbce2e2c81d09e4df55b",
+          "observed_at": "2026-10-04T15:39:03.057Z",
+          "valid_until": "2027-01-02T15:39:03.057Z",
+          "derived_from": []
+         },
+         {
+          "value": "Technology, Information and Internet",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_d8474d50aaedebf8596484382c"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/solanalabs",
+          "evidence_id": "ev_ef408ef41bb75a88c4680b3e",
+          "observed_at": "2026-10-04T15:39:03.057Z",
+          "valid_until": null,
+          "derived_from": []
+         }
+        ],
+        "provider": "apify",
+        "route_id": "general_company_discovery:apify_linkedin_company_search",
+        "actor_key": "apify_linkedin_company_search",
+        "capability": "general_company_discovery",
+        "source_url": "https://www.linkedin.com/company/solanalabs",
+        "entity_hint": {
+         "name": "Solana Labs",
+         "domain": "solanalabs.com",
+         "country": null,
+         "website": "https://solanalabs.com",
+         "external_ids": [
+          "li_company:18453134"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/solanalabs"
+        },
+        "observed_at": "2026-10-04T15:39:03.057Z",
+        "plan_version": 1,
+        "observation_id": "obs_ec695aa165485d4d4eb74d3d",
+        "provider_call_id": "pc_d8474d50aaedebf8596484382c",
+        "source_record_id": "18453134"
+       },
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "Solana Labs",
+           "domain": "solanalabs.com",
+           "linkedin_company_url": "https://www.linkedin.com/company/solanalabs"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/solanalabs",
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_8b1d421fcf1ed858a064ec6fef"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/solanalabs",
+          "evidence_id": "ev_ad628a586d4f85568acc8c3c",
+          "observed_at": "2026-10-04T15:40:01.195Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": "San Francisco, CA, United States",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_8b1d421fcf1ed858a064ec6fef"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_structured_country",
+           "claim": "country",
+           "level": "proven",
+           "reason": "structured company locations, each with its country — presence in a market, not headquarters",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "geography",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/solanalabs",
+          "evidence_id": "ev_6e504c18236bdabaedead667",
+          "observed_at": "2026-10-04T15:40:01.195Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "max": 50,
+           "min": 11,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_8b1d421fcf1ed858a064ec6fef"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_declared_size_band",
+           "claim": "company_size",
+           "level": "proven",
+           "reason": "the company's own declared size band on its LinkedIn record (About tab) — a band, not a staff count",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/solanalabs",
+          "evidence_id": "ev_653accc7321928440672cbac",
+          "observed_at": "2026-10-04T15:40:01.195Z",
+          "valid_until": "2027-01-02T15:40:01.195Z",
+          "derived_from": []
+         },
+         {
+          "value": 249,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_8b1d421fcf1ed858a064ec6fef"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_associated_members",
+           "claim": "associated_members",
+           "level": "proven",
+           "reason": "LinkedIn's count of members who list the company as a current position — not staff, and no size claim",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/solanalabs",
+          "evidence_id": "ev_1d8fa42ee22fe64dea4dc628",
+          "observed_at": "2026-10-04T15:40:01.195Z",
+          "valid_until": "2027-01-02T15:40:01.195Z",
+          "derived_from": []
+         },
+         {
+          "value": "Technology, Information and Internet",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_8b1d421fcf1ed858a064ec6fef"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_details industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/solanalabs",
+          "evidence_id": "ev_2739e57e12558f8c808ccb1c",
+          "observed_at": "2026-10-04T15:40:01.195Z",
+          "valid_until": null,
+          "derived_from": []
+         }
+        ],
+        "provider": "apify",
+        "route_id": null,
+        "actor_key": "apify_linkedin_company_details",
+        "capability": "company_enrichment",
+        "source_url": "https://www.linkedin.com/company/solanalabs",
+        "entity_hint": {
+         "name": "Solana Labs",
+         "domain": "solanalabs.com",
+         "country": "US",
+         "website": "https://solanalabs.com",
+         "external_ids": [
+          "li_company:18453134"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/solanalabs"
+        },
+        "observed_at": "2026-10-04T15:40:01.195Z",
+        "plan_version": 1,
+        "observation_id": "obs_2eb9844ab69eda54a6d76952",
+        "provider_call_id": "pc_8b1d421fcf1ed858a064ec6fef",
+        "source_record_id": "18453134"
+       }
+      ],
+      "prequalified": {
+       "jobs": [],
+       "name": "Solana Labs",
+       "batch": null,
+       "score": 75,
+       "yc_id": null,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_url": null,
+       "reasons": [],
+       "eligible": true,
+       "size_fit": true,
+       "best_tier": null,
+       "exclusion": null,
+       "locations": null,
+       "one_liner": null,
+       "team_size": null,
+       "technical": 0,
+       "company_key": "solanalabs.com",
+       "size_status": "in_range",
+       "has_open_roles": false,
+       "canonical_domain": "solanalabs.com",
+       "strongest_signal": null,
+       "identity_confidence": "domain_exact",
+       "linkedin_identity_status": "unresolved"
+      },
+      "yc_open_jobs": [],
+      "hiring_assessment": {
+       "tier": null,
+       "reason": "No open roles at all — nothing to judge against the mission's required role.",
+       "verdict": "hiring_not_verified",
+       "strongest": null,
+       "commercial_jobs": [],
+       "evidence_source": "none",
+       "supporting_signals": [],
+       "needs_external_verification": false
+      },
+      "enrichment_outcome": "success",
+      "identity_conflicts": [],
+      "investigation_rank": 25,
+      "mission_evaluation": null,
+      "investigation_state": "investigated",
+      "shortlist_exclusion": null
+     }
+    }
+   ]
+  },
+  "before_hiring_verification:slice4": {
+   "at": "2026-10-04T15:55:53.900Z",
+   "note": "Slice 4. Delta Lake's funding pair in flight: Atomus answered (15:53:10), the Pvalyou fallback (reserved 15:53:23) was adopted in slice 5 at 15:59:33 — its funding observation and verify:* marks did not exist yet. Its `unaffordable:` mark (PR #22 code under test) removed.",
+   "verifier_pending_runs": [
+    {
+     "verifier": "funding_stage_corroboration",
+     "stage": "pvalyou_recency",
+     "actor_key": "apify_funding_pvalyou",
+     "run_id": "<pvalyou-run>",
+     "input": {
+      "tier": "basic",
+      "note": "the in-flight run's input is not replayed (the open-role replay never adopts it)"
+     },
+     "candidate_keys": [
+      "https://www.linkedin.com/company/deltalake",
+      "https://www.linkedin.com/company/dozti-international"
+     ],
+     "started_at": "2026-10-04T15:53:23.147Z"
+    }
+   ],
+   "companies": [
+    {
+     "brain": "not_started",
+     "hiring": "evidence_unavailable",
+     "founder": "not_eligible",
+     "identity": "resolved",
+     "enrichment": "completed",
+     "updated_at": "2026-10-04T15:55:53.900Z",
+     "company_key": "https://www.linkedin.com/company/deltalake",
+     "company_name": "Delta Lake",
+     "completed_operations": [],
+     "linkedin_company_url": "https://www.linkedin.com/company/deltalake",
+     "snapshot": {
+      "brain": null,
+      "triage": {
+       "reasons": [],
+       "relevance": "uncertain",
+       "confidence": 0.72,
+       "company_key": "https://www.linkedin.com/company/deltalake",
+       "matched_roles": [],
+       "signal_strength": 8
+      },
+      "company": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_company_search",
+        "source_id": "78792265"
+       },
+       "website": "https://delta.io",
+       "geography": null,
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_type": "semantic",
+        "company_size_band": "direct",
+        "provider_industry": "unsafe",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "Delta Lake",
+       "company_type": "Partnership",
+       "industry_ids": [
+        {
+         "id": "4",
+         "name": "Software Development",
+         "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Software Development"
+        }
+       ],
+       "hiring_status": null,
+       "candidate_only": true,
+       "missing_fields": [
+        "provider_industry:filter_returned_wrong_industries_use_enrichment",
+        "company_size_band:discovery_row_plausible_until_company_record_read"
+       ],
+       "canonical_domain": "delta.io",
+       "startup_evidence": null,
+       "company_size_band": {
+        "max": 50,
+        "min": 11,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Software Development",
+       "source_provenance": "harvestapi/linkedin-company-search",
+       "external_source_id": "li_company:78792265",
+       "linkedin_company_url": "https://www.linkedin.com/company/deltalake",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 63
+      },
+      "enriched": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_company_details",
+        "source_id": "78792265"
+       },
+       "website": "https://delta.io",
+       "geography": "San Francisco, CA, United States",
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_type": "semantic",
+        "industry_ids": "direct",
+        "company_size_band": "direct",
+        "provider_industry": "direct",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "Delta Lake",
+       "company_type": "Partnership",
+       "industry_ids": [
+        {
+         "id": "4",
+         "name": "Software Development",
+         "hierarchy": "Technology, Information and Media > Technology, Information and Internet > Software Development"
+        }
+       ],
+       "hiring_status": null,
+       "missing_fields": [],
+       "canonical_domain": "delta.io",
+       "location_entries": [
+        {
+         "text": null,
+         "country": "United States of America",
+         "is_headquarters": true
+        }
+       ],
+       "startup_evidence": {
+        "year_founded": 2019
+       },
+       "company_size_band": {
+        "max": 50,
+        "min": 11,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Software Development",
+       "source_provenance": "harvestapi/linkedin-company",
+       "external_source_id": "li_company:78792265",
+       "linkedin_company_url": "https://www.linkedin.com/company/deltalake",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 63
+      },
+      "found_by": [
+       {
+        "method": "first_seen",
+        "route_id": "general_company_discovery:apify_linkedin_company_search",
+        "actor_key": "apify_linkedin_company_search",
+        "capability": "general_company_discovery",
+        "observed_at": "2026-10-04T15:50:30.774Z",
+        "plan_version": 1,
+        "provider_call_id": "pc_b54f601461ee7c7b92239299f0"
+       }
+      ],
+      "identity": {
+       "status": "verified_match",
+       "evidence": [
+        "source_supplied_canonical_linkedin_url"
+       ],
+       "company_key": "https://www.linkedin.com/company/deltalake",
+       "ambiguous_candidates": [],
+       "linkedin_company_url": "https://www.linkedin.com/company/deltalake"
+      },
+      "hiring_jobs": [],
+      "prequal_key": null,
+      "shortlisted": true,
+      "observations": [
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "Delta Lake",
+           "domain": "delta.io",
+           "linkedin_company_url": "https://www.linkedin.com/company/deltalake"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/deltalake",
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_b54f601461ee7c7b92239299f0"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/deltalake",
+          "evidence_id": "ev_df50a2215e4bd3b60635f6cf",
+          "observed_at": "2026-10-04T15:50:30.774Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "max": 50,
+           "min": 11,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_b54f601461ee7c7b92239299f0"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "company_size",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search declared_size_band can suggest company_size but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "medium",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/deltalake",
+          "evidence_id": "ev_81acdd41fa235283492e256e",
+          "observed_at": "2026-10-04T15:50:30.774Z",
+          "valid_until": "2027-01-02T15:50:30.774Z",
+          "derived_from": []
+         },
+         {
+          "value": 63,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_b54f601461ee7c7b92239299f0"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "associated_members",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search associated_member_count can suggest associated_members but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "medium",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/deltalake",
+          "evidence_id": "ev_dae864d330bb72be5d9eb325",
+          "observed_at": "2026-10-04T15:50:30.774Z",
+          "valid_until": "2027-01-02T15:50:30.774Z",
+          "derived_from": []
+         },
+         {
+          "value": "Software Development",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_b54f601461ee7c7b92239299f0"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/deltalake",
+          "evidence_id": "ev_d746ab876f2c8596b016e374",
+          "observed_at": "2026-10-04T15:50:30.774Z",
+          "valid_until": null,
+          "derived_from": []
+         }
+        ],
+        "provider": "apify",
+        "route_id": "general_company_discovery:apify_linkedin_company_search",
+        "actor_key": "apify_linkedin_company_search",
+        "capability": "general_company_discovery",
+        "source_url": "https://www.linkedin.com/company/deltalake",
+        "entity_hint": {
+         "name": "Delta Lake",
+         "domain": "delta.io",
+         "country": null,
+         "website": "https://delta.io",
+         "external_ids": [
+          "li_company:78792265"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/deltalake"
+        },
+        "observed_at": "2026-10-04T15:50:30.774Z",
+        "plan_version": 1,
+        "observation_id": "obs_522fad8aff1e17d693d180a7",
+        "provider_call_id": "pc_b54f601461ee7c7b92239299f0",
+        "source_record_id": "78792265"
+       },
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "Delta Lake",
+           "domain": "delta.io",
+           "linkedin_company_url": "https://www.linkedin.com/company/deltalake"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/deltalake",
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_120f461aa420508f03c0a63eed"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/deltalake",
+          "evidence_id": "ev_89af17501d65f5ce63eca999",
+          "observed_at": "2026-10-04T15:51:44.167Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": "San Francisco, CA, United States",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_120f461aa420508f03c0a63eed"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_structured_country",
+           "claim": "country",
+           "level": "proven",
+           "reason": "structured company locations, each with its country — presence in a market, not headquarters",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "geography",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/deltalake",
+          "evidence_id": "ev_4546d4b1c38237574d946535",
+          "observed_at": "2026-10-04T15:51:44.167Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "max": 50,
+           "min": 11,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_120f461aa420508f03c0a63eed"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_declared_size_band",
+           "claim": "company_size",
+           "level": "proven",
+           "reason": "the company's own declared size band on its LinkedIn record (About tab) — a band, not a staff count",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/deltalake",
+          "evidence_id": "ev_6e7e92fa0a9ca2c72ff0506b",
+          "observed_at": "2026-10-04T15:51:44.167Z",
+          "valid_until": "2027-01-02T15:51:44.167Z",
+          "derived_from": []
+         },
+         {
+          "value": 63,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_120f461aa420508f03c0a63eed"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_associated_members",
+           "claim": "associated_members",
+           "level": "proven",
+           "reason": "LinkedIn's count of members who list the company as a current position — not staff, and no size claim",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/deltalake",
+          "evidence_id": "ev_67167b34ea93ff9a244c85c7",
+          "observed_at": "2026-10-04T15:51:44.167Z",
+          "valid_until": "2027-01-02T15:51:44.167Z",
+          "derived_from": []
+         },
+         {
+          "value": "Software Development",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_120f461aa420508f03c0a63eed"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_details industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/deltalake",
+          "evidence_id": "ev_bc44c315f6e6baf497fbe22a",
+          "observed_at": "2026-10-04T15:51:44.167Z",
+          "valid_until": null,
+          "derived_from": []
+         }
+        ],
+        "provider": "apify",
+        "route_id": null,
+        "actor_key": "apify_linkedin_company_details",
+        "capability": "company_enrichment",
+        "source_url": "https://www.linkedin.com/company/deltalake",
+        "entity_hint": {
+         "name": "Delta Lake",
+         "domain": "delta.io",
+         "country": "US",
+         "website": "https://delta.io",
+         "external_ids": [
+          "li_company:78792265"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/deltalake"
+        },
+        "observed_at": "2026-10-04T15:51:44.167Z",
+        "plan_version": 1,
+        "observation_id": "obs_66cf01fa98888f5592455946",
+        "provider_call_id": "pc_120f461aa420508f03c0a63eed",
+        "source_record_id": "78792265"
+       }
+      ],
+      "prequalified": {
+       "jobs": [],
+       "name": "Delta Lake",
+       "batch": null,
+       "score": 75,
+       "yc_id": null,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_url": null,
+       "reasons": [],
+       "eligible": true,
+       "size_fit": true,
+       "best_tier": null,
+       "exclusion": null,
+       "locations": null,
+       "one_liner": null,
+       "team_size": null,
+       "technical": 0,
+       "company_key": "delta.io",
+       "size_status": "in_range",
+       "has_open_roles": false,
+       "canonical_domain": "delta.io",
+       "strongest_signal": null,
+       "identity_confidence": "domain_exact",
+       "linkedin_identity_status": "unresolved"
+      },
+      "yc_open_jobs": [],
+      "hiring_assessment": {
+       "tier": null,
+       "reason": "No open roles at all — nothing to judge against the mission's required role.",
+       "verdict": "hiring_not_verified",
+       "strongest": null,
+       "commercial_jobs": [],
+       "evidence_source": "none",
+       "supporting_signals": [],
+       "needs_external_verification": false
+      },
+      "enrichment_outcome": "success",
+      "identity_conflicts": [],
+      "investigation_rank": 30,
+      "mission_evaluation": null,
+      "investigation_state": "investigated",
+      "shortlist_exclusion": null
+     }
+    }
+   ]
+  },
+  "before_hiring_verification:slice6": {
+   "at": "2026-10-04T16:08:10.300Z",
+   "note": "Slice 6. Actioneer's funding pair in flight: the Pvalyou fallback (reserved 16:05:24) was adopted in slice 7 at 16:12:13. Its `unaffordable:` mark (PR #22 code under test) removed.",
+   "verifier_pending_runs": [
+    {
+     "verifier": "funding_stage_corroboration",
+     "stage": "pvalyou_recency",
+     "actor_key": "apify_funding_pvalyou",
+     "run_id": "<pvalyou-run>",
+     "input": {
+      "tier": "basic",
+      "note": "the in-flight run's input is not replayed (the open-role replay never adopts it)"
+     },
+     "candidate_keys": [
+      "https://www.linkedin.com/company/actioneer-hq",
+      "https://www.linkedin.com/company/finops-foundation"
+     ],
+     "started_at": "2026-10-04T16:05:24.525Z"
+    }
+   ],
+   "companies": [
+    {
+     "brain": "not_started",
+     "hiring": "evidence_unavailable",
+     "founder": "not_eligible",
+     "identity": "resolved",
+     "enrichment": "completed",
+     "updated_at": "2026-10-04T16:08:10.300Z",
+     "company_key": "https://www.linkedin.com/company/actioneer-hq",
+     "company_name": "Actioneer",
+     "completed_operations": [],
+     "linkedin_company_url": "https://www.linkedin.com/company/actioneer-hq",
+     "snapshot": {
+      "brain": null,
+      "triage": {
+       "reasons": [],
+       "relevance": "relevant",
+       "confidence": 0.84,
+       "company_key": "https://www.linkedin.com/company/actioneer-hq",
+       "matched_roles": [],
+       "signal_strength": 39
+      },
+      "company": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_company_search",
+        "source_id": "106688682"
+       },
+       "website": "https://www.actioneer.com",
+       "geography": null,
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_type": "semantic",
+        "company_size_band": "direct",
+        "provider_industry": "unsafe",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "Actioneer",
+       "company_type": "Privately Held",
+       "industry_ids": [
+        {
+         "id": "6",
+         "name": "Technology, Information and Internet",
+         "hierarchy": "Technology, Information and Media > Technology, Information and Internet"
+        }
+       ],
+       "hiring_status": null,
+       "candidate_only": true,
+       "missing_fields": [
+        "provider_industry:filter_returned_wrong_industries_use_enrichment",
+        "company_size_band:discovery_row_plausible_until_company_record_read"
+       ],
+       "canonical_domain": "actioneer.com",
+       "startup_evidence": null,
+       "company_size_band": {
+        "max": 50,
+        "min": 11,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Technology, Information and Internet",
+       "source_provenance": "harvestapi/linkedin-company-search",
+       "external_source_id": "li_company:106688682",
+       "linkedin_company_url": "https://www.linkedin.com/company/actioneer-hq",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 29
+      },
+      "enriched": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_company_details",
+        "source_id": "106688682"
+       },
+       "website": "https://www.actioneer.com",
+       "geography": "Mountain View, CA, United States",
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_type": "semantic",
+        "industry_ids": "direct",
+        "company_size_band": "direct",
+        "provider_industry": "direct",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "Actioneer",
+       "company_type": "Privately Held",
+       "industry_ids": [
+        {
+         "id": "6",
+         "name": "Technology, Information and Internet",
+         "hierarchy": "Technology, Information and Media > Technology, Information and Internet"
+        }
+       ],
+       "hiring_status": null,
+       "missing_fields": [],
+       "canonical_domain": "actioneer.com",
+       "location_entries": [
+        {
+         "text": null,
+         "country": "United States of America",
+         "is_headquarters": true
+        }
+       ],
+       "startup_evidence": {
+        "year_founded": 2025
+       },
+       "company_size_band": {
+        "max": 50,
+        "min": 11,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Technology, Information and Internet",
+       "source_provenance": "harvestapi/linkedin-company",
+       "external_source_id": "li_company:106688682",
+       "linkedin_company_url": "https://www.linkedin.com/company/actioneer-hq",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 29
+      },
+      "found_by": [
+       {
+        "method": "first_seen",
+        "route_id": "general_company_discovery:apify_linkedin_company_search",
+        "actor_key": "apify_linkedin_company_search",
+        "capability": "general_company_discovery",
+        "observed_at": "2026-10-04T16:02:26.249Z",
+        "plan_version": 1,
+        "provider_call_id": "pc_765701b5c4f5eed097c92aa196"
+       }
+      ],
+      "identity": {
+       "status": "verified_match",
+       "evidence": [
+        "source_supplied_canonical_linkedin_url"
+       ],
+       "company_key": "https://www.linkedin.com/company/actioneer-hq",
+       "ambiguous_candidates": [],
+       "linkedin_company_url": "https://www.linkedin.com/company/actioneer-hq"
+      },
+      "hiring_jobs": [],
+      "prequal_key": null,
+      "shortlisted": true,
+      "observations": [
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "Actioneer",
+           "domain": "actioneer.com",
+           "linkedin_company_url": "https://www.linkedin.com/company/actioneer-hq"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/actioneer-hq",
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_765701b5c4f5eed097c92aa196"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/actioneer-hq",
+          "evidence_id": "ev_4998d7ed6e8deb48b19dff3c",
+          "observed_at": "2026-10-04T16:02:26.249Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "max": 50,
+           "min": 11,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_765701b5c4f5eed097c92aa196"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "company_size",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search declared_size_band can suggest company_size but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "medium",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/actioneer-hq",
+          "evidence_id": "ev_c6c38649e61cdf3e51c62172",
+          "observed_at": "2026-10-04T16:02:26.249Z",
+          "valid_until": "2027-01-02T16:02:26.249Z",
+          "derived_from": []
+         },
+         {
+          "value": 29,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_765701b5c4f5eed097c92aa196"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "associated_members",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search associated_member_count can suggest associated_members but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "medium",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/actioneer-hq",
+          "evidence_id": "ev_0242acef3ca30faa56d901a5",
+          "observed_at": "2026-10-04T16:02:26.249Z",
+          "valid_until": "2027-01-02T16:02:26.249Z",
+          "derived_from": []
+         },
+         {
+          "value": "Technology, Information and Internet",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_765701b5c4f5eed097c92aa196"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_search industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/actioneer-hq",
+          "evidence_id": "ev_56cc546719738b84e71bd070",
+          "observed_at": "2026-10-04T16:02:26.249Z",
+          "valid_until": null,
+          "derived_from": []
+         }
+        ],
+        "provider": "apify",
+        "route_id": "general_company_discovery:apify_linkedin_company_search",
+        "actor_key": "apify_linkedin_company_search",
+        "capability": "general_company_discovery",
+        "source_url": "https://www.linkedin.com/company/actioneer-hq",
+        "entity_hint": {
+         "name": "Actioneer",
+         "domain": "actioneer.com",
+         "country": null,
+         "website": "https://www.actioneer.com",
+         "external_ids": [
+          "li_company:106688682"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/actioneer-hq"
+        },
+        "observed_at": "2026-10-04T16:02:26.249Z",
+        "plan_version": 1,
+        "observation_id": "obs_379feb1e0f0049aac6677138",
+        "provider_call_id": "pc_765701b5c4f5eed097c92aa196",
+        "source_record_id": "106688682"
+       },
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "Actioneer",
+           "domain": "actioneer.com",
+           "linkedin_company_url": "https://www.linkedin.com/company/actioneer-hq"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/actioneer-hq",
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_e97593e8e9878cc9debb493e55"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/actioneer-hq",
+          "evidence_id": "ev_1d0656c07468660ab51a7133",
+          "observed_at": "2026-10-04T16:04:05.983Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": "Mountain View, CA, United States",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_e97593e8e9878cc9debb493e55"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_structured_country",
+           "claim": "country",
+           "level": "proven",
+           "reason": "structured company locations, each with its country — presence in a market, not headquarters",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "geography",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/actioneer-hq",
+          "evidence_id": "ev_b790ec1f5593af59ff1055a5",
+          "observed_at": "2026-10-04T16:04:05.983Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "max": 50,
+           "min": 11,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_e97593e8e9878cc9debb493e55"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_declared_size_band",
+           "claim": "company_size",
+           "level": "proven",
+           "reason": "the company's own declared size band on its LinkedIn record (About tab) — a band, not a staff count",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/actioneer-hq",
+          "evidence_id": "ev_3c8ad2bdb2d3b9f507fc5749",
+          "observed_at": "2026-10-04T16:04:05.983Z",
+          "valid_until": "2027-01-02T16:04:05.983Z",
+          "derived_from": []
+         },
+         {
+          "value": 29,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_e97593e8e9878cc9debb493e55"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_associated_members",
+           "claim": "associated_members",
+           "level": "proven",
+           "reason": "LinkedIn's count of members who list the company as a current position — not staff, and no size claim",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "high",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/actioneer-hq",
+          "evidence_id": "ev_7127e2b24c56a7d8a35a81f9",
+          "observed_at": "2026-10-04T16:04:05.983Z",
+          "valid_until": "2027-01-02T16:04:05.983Z",
+          "derived_from": []
+         },
+         {
+          "value": "Technology, Information and Internet",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_e97593e8e9878cc9debb493e55"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_details industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "c01d28d8-0e6c-47c5-9ffd-fc146296d169",
+          "company_key": "https://www.linkedin.com/company/actioneer-hq",
+          "evidence_id": "ev_d71f955d808c26a0c3dcce1e",
+          "observed_at": "2026-10-04T16:04:05.983Z",
+          "valid_until": null,
+          "derived_from": []
+         }
+        ],
+        "provider": "apify",
+        "route_id": null,
+        "actor_key": "apify_linkedin_company_details",
+        "capability": "company_enrichment",
+        "source_url": "https://www.linkedin.com/company/actioneer-hq",
+        "entity_hint": {
+         "name": "Actioneer",
+         "domain": "actioneer.com",
+         "country": "US",
+         "website": "https://www.actioneer.com",
+         "external_ids": [
+          "li_company:106688682"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/actioneer-hq"
+        },
+        "observed_at": "2026-10-04T16:04:05.983Z",
+        "plan_version": 1,
+        "observation_id": "obs_2f21f7575ce28526939b2541",
+        "provider_call_id": "pc_e97593e8e9878cc9debb493e55",
+        "source_record_id": "106688682"
+       }
+      ],
+      "prequalified": {
+       "jobs": [],
+       "name": "Actioneer",
+       "batch": null,
+       "score": 75,
+       "yc_id": null,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_url": null,
+       "reasons": [],
+       "eligible": true,
+       "size_fit": true,
+       "best_tier": null,
+       "exclusion": null,
+       "locations": null,
+       "one_liner": null,
+       "team_size": null,
+       "technical": 0,
+       "company_key": "actioneer.com",
+       "size_status": "in_range",
+       "has_open_roles": false,
+       "canonical_domain": "actioneer.com",
+       "strongest_signal": null,
+       "identity_confidence": "domain_exact",
+       "linkedin_identity_status": "unresolved"
+      },
+      "yc_open_jobs": [],
+      "hiring_assessment": {
+       "tier": null,
+       "reason": "No open roles at all — nothing to judge against the mission's required role.",
+       "verdict": "hiring_not_verified",
+       "strongest": null,
+       "commercial_jobs": [],
+       "evidence_source": "none",
+       "supporting_signals": [],
+       "needs_external_verification": false
+      },
+      "enrichment_outcome": "success",
+      "identity_conflicts": [],
+      "investigation_rank": 8,
+      "mission_evaluation": null,
+      "investigation_state": "investigated",
+      "shortlist_exclusion": null
+     }
+    }
+   ]
+  }
+ },
+ "provider_responses": [
+  {
+   "actor": "apify_linkedin_job_search",
+   "candidate_keys": [
+    "https://www.linkedin.com/company/llamaindex"
+   ],
+   "rows": [],
+   "provenance": "synthetic — production never bought this search (Canary 8 refused it). An empty answer: LinkedIn shows no matching posting; the claim stays PENDING, answered."
+  }
+ ],
+ "anchors": {
+  "spent_usd_at_checkpoint": {
+   "https://www.linkedin.com/company/llamaindex": 0.0098,
+   "https://www.linkedin.com/company/solanalabs": 0.0236,
+   "https://www.linkedin.com/company/deltalake": 0.0235,
+   "https://www.linkedin.com/company/actioneer-hq": 0.0235
+  },
+  "compiled_job_search_estimate_usd": 0.049,
+  "compiled_job_search_ceiling_usd": 0.05,
+  "raw_input_job_search_estimate_usd": 0.121,
+  "per_candidate_evidence_usd": 0.06,
+  "hiring_titles": 12,
+  "hiring_titles_leading": [
+   "sdr",
+   "bdr",
+   "account executive",
+   "gtm",
+   "go to market",
+   "business development"
+  ]
+ },
+ "expected": {
+  "before_hiring_verification:slice1": {
+   "https://www.linkedin.com/company/llamaindex": {
+    "affordable": true,
+    "would_commit_usd": 0.0588,
+    "job_searches": 1,
+    "reserved_estimate_usd": 0.049,
+    "hiring_after": "unknown",
+    "route_after": "tried"
+   }
+  },
+  "before_hiring_verification:slice2": {
+   "https://www.linkedin.com/company/solanalabs": {
+    "affordable": false,
+    "would_commit_usd": 0.0726,
+    "job_searches": 0,
+    "route_after": "unaffordable"
+   }
+  },
+  "before_hiring_verification:slice4": {
+   "https://www.linkedin.com/company/deltalake": {
+    "affordable": false,
+    "would_commit_usd": 0.0725,
+    "job_searches": 0,
+    "route_after": "unaffordable"
+   }
+  },
+  "before_hiring_verification:slice6": {
+   "https://www.linkedin.com/company/actioneer-hq": {
+    "affordable": false,
+    "would_commit_usd": 0.0725,
+    "job_searches": 0,
+    "route_after": "unaffordable"
+   }
+  }
+ }
+}
