@@ -142,6 +142,9 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
   const [selectionByConversation, setSelectionByConversation] =
     useState<Record<string, WorkbenchSelection>>({});
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Read by the Escape handler, which is registered once.
+  const historyOpenRef = useRef(historyOpen);
+  historyOpenRef.current = historyOpen;
   const [composerFocused, setComposerFocusedState] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -205,8 +208,22 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
         e.preventDefault();
         setMode((m) => (m === 'closed' ? 'fullscreen' : 'closed'));
       } else if (e.key === 'Escape') {
-        setHistoryOpen((h) => (h ? false : h));
-        setMode((m) => (m === 'closed' ? m : 'closed'));
+        // ESCAPE CLOSES THE TOPMOST THING, NOT EVERYTHING. Escape closing the
+        // workspace is the dock's shortcut and stays. But it used to close the
+        // workspace on the same keypress that closed a menu, a dialog, the
+        // history drawer or the composer's popup — Escape in "Rename" lost the
+        // whole chat. A layer that handles Escape marks the event
+        // (`preventDefault`: Radix menus, dialogs and the history sheet do,
+        // and so do the workspace's own popups); this closes the workspace only
+        // when nothing above it took the key.
+        if (e.defaultPrevented) return;
+        // Layers that listen on window/document after this one run later in
+        // the same dispatch; decide once the event has finished dispatching.
+        setTimeout(() => {
+          if (e.defaultPrevented) return;
+          if (historyOpenRef.current) { setHistoryOpen(false); return; }
+          setMode((m) => (m === 'closed' ? m : 'closed'));
+        }, 0);
       }
     };
     window.addEventListener('keydown', onKey);

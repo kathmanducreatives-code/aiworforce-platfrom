@@ -15,7 +15,7 @@ import ChatErrorBoundary from './ChatErrorBoundary';
 import WorkbenchPanel from './workbench/WorkbenchPanel';
 import AgentPresenceBar from './agents/AgentPresenceBar';
 
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import ResizableWorkspaceSplit from './ResizableWorkspaceSplit';
 import { ChatPaneWidthProvider } from './ChatPaneWidthContext';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -223,6 +223,10 @@ export default function ChatWorkspace() {
             {/* Conversation history drawer */}
             <Sheet open={historyOpen} onOpenChange={(o) => (o ? openHistory() : closeHistory())}>
               <SheetContent side="left" className="p-0 w-[300px] sm:max-w-[320px] bg-background border-r border-white/[0.06]">
+                {/* The drawer is a dialog: it needs a name for screen readers. The
+                    visible list already says what it is, so the title is sr-only. */}
+                <SheetTitle className="sr-only">Conversations</SheetTitle>
+                <SheetDescription className="sr-only">Your chats and channels. Press Escape to close.</SheetDescription>
                 <div className="h-full flex flex-col">
                   <ConversationsSidebar wide />
                 </div>

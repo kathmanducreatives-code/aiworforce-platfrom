@@ -135,7 +135,8 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
   useEffect(() => {
     if (!selectionMode) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') exitSelection();
+      // Handled here: the workspace's Escape must not also close the chat.
+      if (e.key === 'Escape') { e.preventDefault(); exitSelection(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
