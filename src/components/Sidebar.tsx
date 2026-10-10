@@ -4,6 +4,9 @@ import { motion, useReducedMotion, type Transition } from 'framer-motion';
 import CreditPill from './credits/CreditPill';
 import ProfileMenu from './account/ProfileMenu';
 import { TOUR_TAG_BY_NAV_KEY } from './tour/tourSteps';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useApprovals } from '@/hooks/useApprovals';
+import { approvalBadge } from '@/lib/nav/approvalBadge';
 import {
   IconDashboard, IconAwaiting, IconWorkflows,
   IconSignals, IconLeads, IconContent, IconSequences,
@@ -35,7 +38,7 @@ const navGroups: NavGroup[] = [
     label: 'Command',
     items: [
       { key: 'dashboard', path: '/dashboard', icon: IconDashboard, label: 'Dashboard', matchExact: true },
-      { key: 'awaiting', path: '/awaiting-you', icon: IconAwaiting, label: 'Awaiting You', badge: '4', badgeColor: 'amber' },
+      { key: 'awaiting', path: '/awaiting-you', icon: IconAwaiting, label: 'Awaiting You', badgeColor: 'amber' },
       { key: 'workflows', path: '/workflows', icon: IconWorkflows, label: 'Workflows' },
     ],
   },
@@ -96,6 +99,11 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
   const { pathname } = useLocation();
   const activeKey = resolveActiveKey(pathname);
   const travel = useReducedMotion() ? INDICATOR_INSTANT : INDICATOR_TRAVEL;
+  // Awaiting You shows the live pending-approvals count (the same rows the
+  // page lists); nothing at zero.
+  const { workspaceId } = useWorkspace();
+  const { count: pendingApprovals, loading: approvalsLoading } = useApprovals(workspaceId);
+  const awaitingBadge = approvalBadge(pendingApprovals, approvalsLoading);
 
   return (
     <aside className="sb" data-collapsed={collapsed ? 'true' : 'false'}>
@@ -111,7 +119,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
             {group.items.map((item) => (
               <SidebarNavItem
                 key={item.key}
-                item={item}
+                item={item.key === 'awaiting' ? { ...item, badge: awaitingBadge } : item}
                 active={item.key === activeKey}
                 collapsed={collapsed}
                 travel={travel}
