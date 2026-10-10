@@ -43,7 +43,8 @@ function Field({ k, v }: { k: string; v: React.ReactNode }) {
 export default function LeadDetailDrawer({ row, onClose }: Props) {
   useEffect(() => {
     if (!row) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    // Handled here: the workspace's Escape must not also close the chat.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [row, onClose]);

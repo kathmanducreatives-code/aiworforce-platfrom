@@ -340,7 +340,8 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
           return;
         }
       }
-      if (e.key === 'Escape') { setPopup(null); return; }
+      // Handled here: the workspace's Escape must not also close the chat.
+      if (e.key === 'Escape') { e.preventDefault(); setPopup(null); return; }
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
