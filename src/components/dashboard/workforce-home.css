@@ -393,3 +393,84 @@
   .team-agent__status i, .team-agent__surface[data-just-finished], .team-panel[data-pulse] { animation: none; }
   .team-agent__status, .team-agent__profile-label { transition: none; }
 }
+
+/* ── live recent activity ───────────────────────────────────────────────
+ * Same panel, same timeline spine. Each line: the agent (ringed in its own
+ * accent), the action with the date on the right, the entity, then the outcome
+ * with a small tone dot. A line with a destination is one button. */
+.team-activity-panel { display: flex; flex-direction: column; }
+.team-live { display: inline-flex; align-items: center; gap: 5px; font-size: 9.5px; font-weight: 560; letter-spacing: .1em; text-transform: uppercase; color: #6ee7b7b3; }
+.team-live i { width: 5px; height: 5px; border-radius: 50%; background: #34d399; animation: team-live 2.4s ease-in-out infinite; }
+.team-live--off { color: #b8a27a; }
+.team-live--off i { background: #d9b26a; animation: none; }
+
+.team-timeline--live .team-activity { padding: 0; align-items: stretch; }
+.team-timeline--live .team-activity::before { inset: 1px -8px; }
+.team-activity__hit { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 7px 0; text-align: left; border-radius: 9px; color: inherit; background: none; }
+button.team-activity__hit { cursor: pointer; }
+button.team-activity__hit:focus-visible { outline: 2px solid #9ee8c3; outline-offset: 2px; }
+.team-timeline--live::before { top: 20px; bottom: 20px; }
+.team-timeline--live .team-timeline__node { margin-top: 1px; box-shadow: 0 0 0 3px #0b1310, 0 0 0 4px color-mix(in srgb, var(--agent-accent, #34d399) 45%, transparent); }
+.team-activity__line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.team-activity__action { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #c0ccc5; transition: color .2s ease; }
+.team-activity__action b { color: #e6efea; font-weight: 560; }
+.team-timeline--live .team-activity time { flex-shrink: 0; margin: 0; font-size: 10px; }
+.team-activity__detail { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: #8fa198; }
+.team-activity__outcome { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin-top: 3px; font-size: 10.5px; color: #74877b; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.team-activity__outcome > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.team-activity__outcome i { width: 5px; height: 5px; flex-shrink: 0; border-radius: 50%; background: #74877b; }
+.team-activity__outcome[data-tone='success'] i { background: #34d399; }
+.team-activity__outcome[data-tone='attention'] i { background: #dfc995; }
+.team-activity__outcome[data-tone='failed'] { color: #c9a090; }
+.team-activity__outcome[data-tone='failed'] i { background: #e08a6d; }
+.team-activity:hover .team-activity__action { color: #dde7e2; }
+@media (hover:hover) and (pointer:fine) {
+  .team-activity:hover .team-timeline__node { transform: scale(1.06); }
+  .team-timeline__node { transition: transform .25s var(--team-ease); }
+}
+/* A line that arrived while you watched settles in once. */
+.team-activity[data-fresh] { animation: team-arrive .6s var(--team-ease) both; }
+.team-activity[data-fresh]::before { animation: team-arrive-band 2.4s ease-out 1; }
+@keyframes team-arrive { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes team-arrive-band { 0%, 30% { background: #34d39912; } 100% { background: transparent; } }
+/* The live dot keeps its colour; the pulse and the arrival motion stop. */
+@media (prefers-reduced-motion: reduce) {
+  .team-live i { animation: none; }
+  .team-activity[data-fresh], .team-activity[data-fresh]::before { animation: none; }
+}
+.team-feed-note { display: grid; gap: 8px; justify-items: start; padding: 6px 0 2px; }
+.team-feed-note p { font-size: 12px; line-height: 1.55; color: #8ea699; }
+.team-feed-note p b { color: #d7e3dd; font-weight: 560; }
+.team-feed-note button { font-size: 11.5px; color: #9ee8c3; }
+
+/* ── review queue: a summary line, then the decisions themselves ──────── */
+.team-review { display: flex; flex-direction: column; gap: 10px; }
+.team-review .team-panel-header { margin-bottom: 0; }
+.team-review__summary { font-size: 12.5px; color: #a9b8b1; }
+.team-review__summary b { font-size: 15px; font-weight: 600; color: #f1f7f4; font-variant-numeric: tabular-nums; margin-right: 2px; }
+.team-review__list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; list-style: none; margin: 0; padding: 0; }
+.team-review__row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 9px; text-align: left; background: #ffffff04; box-shadow: inset 0 0 0 1px #ffffff08; color: #c5d1cb; transition: background-color .2s ease, box-shadow .2s ease, color .2s ease; }
+.team-review__row:hover { background: #dfc99509; box-shadow: inset 0 0 0 1px #dfc99526; color: #eef4f1; }
+.team-review__row:focus-visible { outline: 2px solid #9ee8c3; outline-offset: 2px; }
+.team-review__row svg { color: #6f8277; transition: transform .25s var(--team-ease), color .2s ease; }
+.team-review__row:hover svg { transform: translateX(2px); color: #dfc995; }
+.team-review__row-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 520; }
+.team-review__row-meta { display: block; margin-top: 1px; font-size: 10px; color: #8a7d62; }
+.team-review__dot { width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%; background: radial-gradient(circle, #dfc995 0 3px, #dfc99522 4px 100%); }
+.team-review__clear { display: flex; align-items: flex-start; gap: 10px; padding: 4px 0; }
+.team-review__clear svg { margin-top: 2px; color: #6ee7b7; flex-shrink: 0; }
+.team-review__title { font-size: 13px; font-weight: 560; color: #e6efea; }
+.team-review__clear .team-review-copy { margin: 2px 0 0; }
+
+@media (prefers-reduced-motion:reduce) {
+  .team-live i, .team-activity[data-fresh], .team-activity[data-fresh]::before { animation: none; }
+  .team-timeline__node, .team-review__row svg { transition: none; }
+}
+
+/* ── Pilot briefing: takeaway, two facts, the next move ──────────────── */
+.pilot-brief__takeaway { margin-top: 2px; font-size: 14px; font-weight: 560; letter-spacing: -.01em; line-height: 1.35; color: #eef4f1; }
+.pilot-brief__facts { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.pilot-brief__facts li { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.45; color: #b3c1ba; }
+.pilot-brief__bullet { width: 4px; height: 4px; margin-top: 6px; flex-shrink: 0; border-radius: 50%; background: #34d399cc; box-shadow: 0 0 6px #34d39966; }
+.pilot-brief__next { margin-top: auto; padding-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #ffffff08; font-size: 11.5px; color: #93a59c; }
+.pilot-brief__next-label { margin-right: 8px; font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #6ee7b7e6; }

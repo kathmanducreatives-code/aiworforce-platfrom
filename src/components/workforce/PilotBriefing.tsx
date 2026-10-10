@@ -53,12 +53,17 @@ export default function PilotBriefing({ totals, compact = false }: Props) {
     }
   }
 
-  const next =
+  // The next move follows the same live counts as the briefing. A null route
+  // means the move is a conversation with Pilot, not a page.
+  const brainIncompleteForNext = !!brain && !brain.onboarding_completed;
+  const next: { label: string; primary: string; route: string | null } =
     totals.approvals > 0
-      ? { label: 'Review approvals so Mira can continue.', primary: 'Review approvals', route: '/awaiting-you' }
-      : totals.signals > 0
-      ? { label: 'New signals are ready for triage.', primary: 'Open signal feed', route: '/signals' }
-      : { label: 'Kick off your first mission.', primary: 'Ask Pilot', route: '/dashboard' };
+      ? { label: 'Work is paused until you decide.', primary: 'Review approvals', route: '/awaiting-you' }
+      : brainIncompleteForNext
+      ? { label: 'The team needs your Company Brain.', primary: 'Finish setup', route: '/onboarding/company-brain' }
+      : (totals.signals24h ?? 0) > 0
+      ? { label: 'New signals are ready for triage.', primary: 'Open signals', route: '/signals' }
+      : { label: 'Give the team a goal to start.', primary: 'Ask Pilot', route: null };
 
   const askPilot = () => {
     window.dispatchEvent(new CustomEvent('chat:prefill', { detail: { text: 'Pilot, give me my briefing for today.' } }));
@@ -87,32 +92,32 @@ export default function PilotBriefing({ totals, compact = false }: Props) {
       <section className="team-panel team-panel--pilot flex flex-col" aria-label="Pilot briefing">
         <div className="team-panel-header">
           <h2 className="flex items-center gap-2">
-            <AgentAvatar id="pilot" size={22} status={runningRun ? 'working' : totals.approvals > 0 ? 'awaiting' : 'working'} active />
+            <AgentAvatar id="pilot" size={22} status={runningRun ? 'working' : totals.approvals > 0 ? 'awaiting' : 'idle'} active />
             Pilot briefing
           </h2>
           <button onClick={askPilot} className="inline-flex items-center gap-1">Ask Pilot <MessageCircle className="h-3 w-3" /></button>
         </div>
-        <p className="flex items-center gap-2 text-[13.5px] font-medium text-foreground/90 leading-snug">
+        <p className="pilot-brief__takeaway flex items-center gap-2">
           {runningRun && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-400" />}
           <span className="min-w-0 truncate">{title}</span>
         </p>
         {!runningRun && (
-          <ul className="mt-1.5 space-y-1">
+          <ul className="pilot-brief__facts">
             {insights.slice(0, 2).map((l, i) => (
-              <li key={i} className="flex items-start gap-2 text-[12px] leading-snug text-neutral-300">
-                <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-emerald-400/80" />
+              <li key={i}>
+                <span className="pilot-brief__bullet" aria-hidden />
                 <span className="min-w-0">{l}</span>
               </li>
             ))}
           </ul>
         )}
-        <div className="mt-auto flex items-center justify-between gap-3 pt-3">
-          <span className="min-w-0 truncate text-[11.5px] text-neutral-400">
-            <span className="font-semibold uppercase tracking-[0.12em] text-emerald-300/90">Next</span> · {runningRun ? 'Workbench opens when it finishes.' : next.label}
+        <div className="pilot-brief__next">
+          <span className="min-w-0 truncate">
+            <span className="pilot-brief__next-label">Next</span>{runningRun ? 'Workbench opens when it finishes.' : next.label}
           </span>
           {!runningRun && (
             <button
-              onClick={() => navigate(next.route)}
+              onClick={() => (next.route ? navigate(next.route) : askPilot())}
               className="ag-btn ag-btn-primary inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium"
             >
               {next.primary}

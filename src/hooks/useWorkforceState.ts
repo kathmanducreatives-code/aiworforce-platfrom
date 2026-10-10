@@ -36,7 +36,7 @@ export function useWorkforceState(workspaceId: string | null) {
   // The ONE signal read on the dashboard. The Live Intelligence bar consumes it
   // through `signalFeed` below rather than calling the hook a second time.
   const { signals, clusters, relevance, coverage, error: signalError, refresh: refreshSignals, drafts, savedOutputs, loading } = useSignalFeed(workspaceId);
-  const { approvals } = useApprovals(workspaceId);
+  const { approvals, loading: approvalsLoading } = useApprovals(workspaceId);
   const { data: brain } = useCompanyBrain();
 
   return useMemo(() => {
@@ -176,8 +176,11 @@ export function useWorkforceState(workspaceId: string | null) {
       agents,
       timeline,
       decisions,
+      /** Pending approvals as stored (live via useApprovals). */
+      approvals,
+      approvalsLoading,
       totals: { signals: signals.length, signals24h, outreachDrafts, contentDrafts, approvals: approvalsCount, hotSignals, competitorSignals },
       signalFeed: { signals, clusters, relevance, coverage, loading, error: signalError, refresh: refreshSignals },
     };
-  }, [signals, clusters, relevance, coverage, signalError, refreshSignals, drafts, savedOutputs, approvals, brain, loading]);
+  }, [signals, clusters, relevance, coverage, signalError, refreshSignals, drafts, savedOutputs, approvals, approvalsLoading, brain, loading]);
 }

@@ -9,6 +9,8 @@ import AgentProfileDrawer from '@/components/workforce/AgentProfileDrawer';
 import AgentPortrait from '@/components/agents/AgentPortrait';
 import WorkforceAgentCard from '@/components/dashboard/WorkforceAgentCard';
 import WorkforceGreeting from '@/components/dashboard/WorkforceGreeting';
+import RecentActivityPanel from '@/components/dashboard/RecentActivityPanel';
+import ReviewQueuePanel from '@/components/dashboard/ReviewQueuePanel';
 import { useAgentVisualStates } from '@/hooks/useAgentVisualStates';
 import { visualAgentKey, type VisualAgentKey } from '@/lib/agent3d/visualState';
 import { takeNewCompletions } from '@/lib/completionPulse';
@@ -32,7 +34,7 @@ import type { AgentId } from '@/components/workforce/agents';
 
 const Dashboard = () => {
   const { workspaceId } = useWorkspace();
-  const { agents, timeline, totals, brainComplete, loading, signalFeed } = useWorkforceState(workspaceId);
+  const { agents, totals, brainComplete, loading, signalFeed, approvals, approvalsLoading } = useWorkforceState(workspaceId);
   // Live execution truth for the agents' visuals — separate from the count-based copy above.
   const { states: visualStates, ready: visualReady } = useAgentVisualStates(workspaceId);
   const { data: brain } = useCompanyBrain();
@@ -119,32 +121,9 @@ const Dashboard = () => {
           </section>
           <LiveIntelligenceBar workspaceId={workspaceId} feed={signalFeed} watchlist={watchlist} />
           <div className="team-lower">
-            <section className="team-panel team-panel--ops" data-pulse={pulse ? 'true' : undefined} aria-label="Recent activity">
-              <div className="team-panel-header"><h2>Recent activity</h2><button onClick={() => navigate('/workflows')}>Workflows <ArrowUpRight size={12} className="inline" /></button></div>
-              {loading ? <TimelineSkeleton /> : timeline.length ? (
-                <ol className="team-timeline">
-                  {timeline.slice(0, 3).map(item => {
-                    const name = lookupPublicAgent(item.agentId)?.name ?? '';
-                    const rest = name && item.text.startsWith(name) ? item.text.slice(name.length) : ` ${item.text}`;
-                    return <li className="team-activity" key={item.id}>
-                      <span className="team-timeline__node"><AgentPortrait agentId={item.agentId} size={26} decorative /></span>
-                      <div className="min-w-0"><p title={item.text}><b>{name}</b>{rest}</p><time dateTime={item.at ?? undefined}>{formatAgo(item.at, now) ?? item.time}</time></div>
-                    </li>;
-                  })}
-                </ol>
-              ) : (
-                <div className="team-empty">
-                  <TimelineSkeleton />
-                  <p className="team-review-copy">Your team's work will appear here as a timeline. Start with a goal below.</p>
-                </div>
-              )}
-            </section>
-            <section className="team-panel team-panel--ops" aria-label="Your review queue">
-              <div className="team-panel-header"><h2>Your review queue</h2><span className="team-eyebrow">Human approved</span></div>
-              <div className="team-review-count">{loading ? '—' : totals.approvals.toString().padStart(2, '0')}</div>
-              <p className="team-review-copy">{totals.approvals ? 'Decisions waiting for your attention. Review the work and choose what happens next.' : 'Nothing waiting for approval. Your next decisions will appear here.'}</p>
-              <button className="ag-btn ag-btn-secondary rounded-lg px-4 py-2 text-xs flex items-center gap-5" onClick={() => navigate('/awaiting-you')}>Open approvals <ArrowRight size={14} /></button>
-            </section>
+            {/* Live: activity_feed + signals + drafts + failed runs (useActivityFeed). */}
+            <RecentActivityPanel workspaceId={workspaceId} pulse={!!pulse} />
+            <ReviewQueuePanel approvals={approvals} loading={approvalsLoading} />
             {/* Pilot's briefing sits in the row instead of below it, so the whole
                 command center reads in one screen. */}
             <PilotBriefing totals={totals} compact />
@@ -162,19 +141,5 @@ const Dashboard = () => {
     </div>
   );
 };
-
-/** A faint preview of the timeline to come — structure, never fake entries. */
-function TimelineSkeleton() {
-  return (
-    <ol className="team-timeline team-timeline--skeleton" aria-hidden>
-      {[62, 48, 55].map((w, i) => (
-        <li className="team-activity" key={i}>
-          <span className="team-timeline__node"><span className="team-skel team-skel--avatar" /></span>
-          <div className="min-w-0 flex-1"><span className="team-skel" style={{ width: `${w}%` }} /><span className="team-skel team-skel--sub" /></div>
-        </li>
-      ))}
-    </ol>
-  );
-}
 
 export default Dashboard;
