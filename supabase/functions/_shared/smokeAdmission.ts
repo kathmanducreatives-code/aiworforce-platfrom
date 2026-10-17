@@ -661,6 +661,10 @@ export function createAdmissionFetch(d: AdmissionGateDeps): typeof fetch {
     // not bought. Here, after `prior`, so a refused replay stays uncertain.
     if (c.kind === "provider" && c.vendor === "apify") {
       const plan = planSmokeStart(await readState(ctx, auth, actor!));
+      // Count reads can wait/fail after `prior=no`. A concurrent attempt may
+      // have bought this run meanwhile; the old lookup cannot prove absence.
+      // Refuse without sending, but retain shared/earlier credit uncertainty.
+      if (!plan.ok && plan.reason === "read_state_unknown") prior = "unknown";
       if (!plan.ok) return refuse("read_plan", plan.reason);
     }
 

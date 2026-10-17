@@ -755,3 +755,60 @@ Deno.test("read lifecycle (Codex P2): a preliminary snapshot answered late is no
   assertEquals([p.reported_microusd, p.report_source], ["4500", APIFY_SETTLED_SOURCE], "the settled figure, from the receipt read");
   assertEquals((await unsettled(m)).length, 0);
 });
+
+// Inject only the poll-count query failure: prior purchase, admission, receipts,
+// credit settlement and all other PostgREST operations remain real.
+Deno.test("read availability: count outage on uncertain replay preserves the committed liability and HELD credit", opts, async () => {
+  const m = await fundedMission();
+  const v = fakeVendor(() => json(503, { error: "lost start response" }));
+  const first = await inMission(m, v, () => runTool("source_with_apify", jobsSearch(), toolCtx(m)));
+  assert(String(first.error).startsWith(APIFY_START_UNCERTAIN));
+  const before = await ops(m);
+  assertEquals(before.length, 1);
+  const db = {
+    rpc: (fn: string, args: Record<string, unknown>) => client.rpc(fn, args),
+    from: (table: string) => ({ select: (cols: string) => {
+      if (table !== "discovery_smoke_operations" || cols !== "operation_key") return client.from(table).select(cols);
+      const q = { eq: () => q, then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { message: "count query failed" } }).then(resolve) };
+      return q;
+    }}),
+  } as unknown as AdmissionDb;
+  const replay = await inMission(m, v, () => runTool("source_with_apify", jobsSearch(), toolCtx(m)), {}, db);
+  assert(String(replay.error).startsWith(APIFY_START_UNCERTAIN), String(replay.error));
+  assertEquals(v.seen.length, 1, "no second physical purchase");
+  assertEquals(await ops(m), before, "committed liability unchanged");
+  assertEquals(await credits(m.ws), { balance: 9, reserved: 1, statuses: ["reserved"] });
+});
+
+Deno.test("read availability: a count failure delayed behind a concurrent uncertain start cannot refund its credit", opts, async () => {
+  const m = await fundedMission();
+  const v = fakeVendor(() => json(503, { error: "uncertain concurrent start" }));
+  const counting = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let counts = 0;
+  const db = {
+    rpc: (fn: string, args: Record<string, unknown>) => client.rpc(fn, args),
+    from: (table: string) => ({ select: (cols: string) => {
+      if (table !== "discovery_smoke_operations" || cols !== "operation_key" || counts++ > 0) return client.from(table).select(cols);
+      const q = { eq: () => q, then: (resolve: (v: unknown) => unknown) => {
+        counting.resolve();
+        return release.promise.then(() => ({ data: null, error: { message: "delayed count failure" } })).then(resolve);
+      }};
+      return q;
+    }}),
+  } as unknown as AdmissionDb;
+  await inMission(m, v, async () => {
+    // Both attempts identify the same purchase/credit key. The first already
+    // observed no purchase, then waits in its count query. The second buys it.
+    const first = runTool("source_with_apify", jobsSearch(), toolCtx(m));
+    await Promise.race([counting.promise, first.then(() => { throw new Error("count query was never reached"); })]);
+    try {
+      const second = await runTool("source_with_apify", jobsSearch(), toolCtx(m));
+      assert(String(second.error).startsWith(APIFY_START_UNCERTAIN));
+    } finally { release.resolve(); }
+    await first;
+  }, {}, db);
+  assertEquals(v.seen.length, 1);
+  assertEquals((await ops(m)).length, 1, "vendor liability remains committed");
+  assertEquals(await credits(m.ws), { balance: 9, reserved: 1, statuses: ["reserved"] }, "a stale prior=no cannot refund the concurrent uncertain purchase");
+});
