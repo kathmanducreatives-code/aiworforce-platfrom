@@ -117,7 +117,7 @@ vendors) at the merged #94 → #96 → #93 tree.
 |---|---|---|
 | Separate non-production Supabase project | ⛔ operator | Phase 1; `build-test-schema.sh` refuses production and the abandoned project |
 | Held billing + admission migrations | ✅ offline | 50 files build in the DB lane; Phase 2 verifies them on the project |
-| Worker: minimal orchestration, two vendor keys | ✅ proposal | `discovery-test-worker.workflow.yml`: `LEAD_V2_SMOKE_ORCHESTRATION=minimal`, Apify + OpenAI keys only (infra test) |
+| Worker: minimal orchestration, two vendor keys | ✅ manual workflow | `.github/workflows/discovery-test-worker.yml`: `LEAD_V2_SMOKE_ORCHESTRATION=minimal`, Apify + OpenAI keys only (infra test) |
 | Apify permission for both actors | ⛔ operator | The test account must be able to run `harvestapi/linkedin-job-search` and `harvestapi/linkedin-company` (Phase 3) |
 | Actor prices and billing units | ✅ public list, 2026-10-17 · ⛔ account tier | Job search: start $0.001 + job $0.001 (3 jobs → $0.004). Company details: start $0.00005 per GB (256 MB → 1 event) + company $0.004 FREE/BRONZE, $0.0035 SILVER, $0.003 GOLD+ (1 company → ≤ $0.00405). Confirm the tier. |
 | Vendor-side caps | ✅ offline · ⛔ account | The gate pins `maxTotalChargeUsd` = each template maximum on every start; confirm it caps `harvestapi/linkedin-company` on the account; set the account usage limit to its minimum |
@@ -133,8 +133,8 @@ vendors) at the merged #94 → #96 → #93 tree.
 
 1. **Separate execution approval.** Prior liability must be zero (Phase 7 from
    any earlier run is complete, and the reconciliation query returns no rows).
-2. Move `docs/launch/proposals/discovery-test-worker.workflow.yml` into
-   `.github/workflows/` through a CI-only PR to `launch/hardening`.
+2. The workflow is `.github/workflows/discovery-test-worker.yml` (moved by a
+   CI-only PR to `launch/hardening`; manual dispatch only).
 3. Dispatch it, typing `<ref>`. The worker starts idle; nothing is queued.
 4. In **one** reviewed transaction, as an administrator on the test project:
    ```sql

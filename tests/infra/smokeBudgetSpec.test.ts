@@ -1,6 +1,6 @@
 // The smoke budget specification (from Codex's codex/smoke-budget-spec,
 // updated after PR #90) must agree with what actually enforces it: the held
-// admission migration's hard caps and the inactive worker proposal's settings.
+// admission migration's hard caps and the manual test worker's settings.
 // It is an inert document: nothing reads it at runtime, and it unlocks nothing.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { parse } from "https://deno.land/std@0.224.0/yaml/mod.ts";
@@ -9,7 +9,7 @@ import spec from "../../docs/launch/discovery-smoke-budget.spec.json" with { typ
 const root = new URL("../../", import.meta.url);
 const read = (p: string) => Deno.readTextFileSync(new URL(p, root));
 const sql = read("supabase/migrations-held/20261015140000_discovery_smoke_admission.sql");
-const proposal = parse(read("docs/launch/proposals/discovery-test-worker.workflow.yml")) as {
+const proposal = parse(read(".github/workflows/discovery-test-worker.yml")) as {
   jobs: { worker: { env: Record<string, string>; steps: Array<{ run?: string; env?: Record<string, string> }> } };
 };
 /** What the worker process sees: the job's settings plus its own step's secrets (H1). */
@@ -51,7 +51,7 @@ Deno.test("smoke spec: every limit equals the held migration's hard cap", () => 
   assert(actorSum <= l.provider_purchases, "actor allowances fit inside the purchase cap");
 });
 
-Deno.test("smoke spec: the inactive worker proposal sets exactly the candidate environment", () => {
+Deno.test("smoke spec: the manual test worker sets exactly the candidate environment", () => {
   const env = workerEnv;
   for (const [k, v] of Object.entries(spec.candidate_environment_spec_not_applied)) {
     assertEquals(env[k], v, `${k} in the worker proposal`);
@@ -101,7 +101,8 @@ Deno.test("smoke spec: activation stays blocked until the target, prices and a s
   const g = spec.activation_gate;
   assertEquals(g.ready, false);
   assert(g.separate_execution_approval_required);
-  assert(g.worker_proposal_remains_inactive);
+  assert(g.worker_workflow_manual_dispatch_only);
+  assertEquals(Object.keys((parse(read(".github/workflows/discovery-test-worker.yml")) as { on: Record<string, unknown> }).on), ["workflow_dispatch"]);
   for (const k of ["held_migration_applied_anywhere", "isolated_test_target_provisioned", "all_required_prices_verified",
     "approved_quote_catalog_reviewed", "live_receipts_and_credits_reconciled", "firecrawl_included"] as const) {
     assertEquals(g[k], false, k);
@@ -113,6 +114,8 @@ Deno.test("smoke spec: an inert document; no workflow reads it or turns a smoke 
   for (const f of Deno.readDirSync(new URL(".github/workflows/", root))) {
     const text = read(`.github/workflows/${f.name}`);
     assert(!text.includes("discovery-smoke-budget.spec.json"), f.name);
+    // The manual test worker is the one workflow that turns the smoke switches on (checked above).
+    if (f.name === "discovery-test-worker.yml") continue;
     for (const k of ["LEAD_V2_SMOKE_WALL_CLOCK", "DISCOVERY_SMOKE_ADMISSION"]) assert(!text.includes(k), `${f.name}: ${k}`);
   }
   for (const f of ["railway.json", "worker/Dockerfile"]) {

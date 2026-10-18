@@ -94,7 +94,7 @@
     "approved_quote_catalog_reviewed": false,
     "live_receipts_and_credits_reconciled": false,
     "strategist_provider_is_openai": true,
-    "worker_proposal_remains_inactive": true,
+    "worker_workflow_manual_dispatch_only": true,
     "firecrawl_included": false
   },
   "first_smoke_profile": {

@@ -1,13 +1,14 @@
-// The test-worker workflow is a PROPOSAL: it must stay outside
-// .github/workflows/ (so GitHub never loads it), and the guards that make it
-// safe to activate later must not erode while it waits.
+// The test-worker workflow is ACTIVE for manual dispatch only. It must stay the
+// one workflow that carries the worker or reads the test project's secrets, and
+// the guards that make it safe to dispatch must not erode.
 // docs/launch/test-worker-hosting.md explains each one.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { parse } from "https://deno.land/std@0.224.0/yaml/mod.ts";
 
 const ROOT = new URL("../../", import.meta.url);
 const read = (rel: string) => Deno.readTextFileSync(new URL(rel, ROOT));
-const PATH = "docs/launch/proposals/discovery-test-worker.workflow.yml";
+const NAME = "discovery-test-worker.yml";
+const PATH = `.github/workflows/${NAME}`;
 const RAW = read(PATH);
 interface Step { name?: string; run?: string; uses?: string; with?: Record<string, string>; env?: Record<string, string> }
 interface Workflow {
@@ -24,12 +25,18 @@ const workerStep = steps.find((s) => (s.run ?? "").includes("worker/main.ts"))!;
 const secretKeys = (env: Record<string, string> = {}) =>
   Object.entries(env).filter(([, v]) => String(v).includes("secrets.")).map(([k]) => k).sort();
 
-Deno.test("test worker: the proposal is not an active workflow", async () => {
+Deno.test("test worker: it is the only workflow that carries the worker or reads the test secrets", async () => {
+  let found = false;
   for await (const e of Deno.readDir(new URL(".github/workflows/", ROOT))) {
+    if (e.name === NAME) { found = true; continue; }
     const text = read(`.github/workflows/${e.name}`);
-    assert(!text.includes("discovery-test-worker"), `${e.name} must not carry the proposal`);
-    assert(!text.includes("TEST_SUPABASE_SERVICE_ROLE_KEY"), `${e.name} must not read the test project's secrets`);
+    assert(!text.includes("discovery-test"), `${e.name} must not carry the test worker or its Environment`);
+    assert(!/secrets\.TEST_/.test(text), `${e.name} must not read the test project's secrets`);
+    assert(!/^\s*LEAD_V2_WORKER_WORKSPACES\s*:/m.test(text), `${e.name} must not configure a V2 worker`);
   }
+  assert(found, `${PATH} is the active test worker`);
+  try { Deno.statSync(new URL("docs/launch/proposals/discovery-test-worker.workflow.yml", ROOT)); assert(false, "no stale proposal copy"); }
+  catch (e) { if (!(e instanceof Deno.errors.NotFound)) throw e; }
 });
 
 Deno.test("test worker: manual only, one at a time, bounded, read-only token", () => {

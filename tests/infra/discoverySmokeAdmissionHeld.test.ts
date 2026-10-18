@@ -19,7 +19,9 @@ Deno.test("smoke admission: held — no deploy path applies it", async () => {
   for await (const e of Deno.readDir(new URL(".github/workflows/", ROOT))) {
     const wf = read(`.github/workflows/${e.name}`);
     assert(!wf.includes(NAME), `${e.name} must not name the held admission`);
-    assert(!wf.includes("DISCOVERY_SMOKE_ADMISSION"), `${e.name} must not configure the gate (only the inactive proposal does)`);
+    // Only the manual, non-production test worker turns the gate on (tests/infra/testWorkerProposal.test.ts).
+    if (e.name === "discovery-test-worker.yml") continue;
+    assert(!wf.includes("DISCOVERY_SMOKE_ADMISSION"), `${e.name} must not configure the gate (only the test worker does)`);
   }
   assert(!read("railway.json").includes("DISCOVERY_SMOKE_ADMISSION"));
   const bootstrap = read("tests/db-contract/bootstrap.sh");
