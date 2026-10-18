@@ -41,17 +41,16 @@ jobs:
     runs-on: ubuntu-latest
     # Holds ONLY the test project's secrets; add a required reviewer if the plan allows.
     environment: discovery-test
-    # Session (<= 25 min) + drain of one mission (LEAD_WORKER_MAX_RUNTIME_MS, 5 min)
+    # Session (<= 25 min) + drain of one slice (LEAD_WORKER_MAX_RUNTIME_MS, 2.5 min)
     # + kill grace (10 min) fits inside this, so GitHub never SIGKILLs a mission mid-run.
     timeout-minutes: 45
     env:
       CONFIRM_REF: ${{ inputs.confirm_project_ref }}
       SESSION_MINUTES: ${{ inputs.session_minutes }}
       TEST_PROJECT_REF: ${{ vars.TEST_PROJECT_REF }}
-      # ── Supabase: the TEST project only ──────────────────────────────────
-      SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
-      SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      # NO SECRET AT JOB LEVEL. A job-level secret reaches every step, including
+      # the third-party actions below; each secret is set on the one step that
+      # reads it (the guard: the URL only; the worker: all five).
       # ── The V2 gate: exactly one test workspace ──────────────────────────
       LEAD_V2_WORKER_WORKSPACES: ${{ vars.TEST_WORKSPACE_ID }}
       # ── Fail-closed spend controls ───────────────────────────────────────
@@ -81,14 +80,10 @@ jobs:
       MODEL_RUN_MAX_CALLS: "2"                   # per slice, so at most 4 per mission
       # ── Worker bounds ────────────────────────────────────────────────────
       LEAD_WORKER_MAX_RUNTIME_MS: "150000"       # per slice; 2 slices fit in #89's 300 s
-      # ── Providers: test-scoped keys; the Apify account carries its own spending limit ──
-      # Only the two vendors the smoke catalog prices. No Firecrawl or Anthropic
-      # key: the catalog has no template for either (the gate would refuse
-      # them), and the offline rehearsal runs with both absent.
-      APIFY_API_TOKEN: ${{ secrets.TEST_APIFY_API_TOKEN }}
-      OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY }}     # gptProvider and the OpenAI strategist require it
     steps:
       - name: Refuse anything but the confirmed non-production project
+        env:
+          SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
         run: |
           set -euo pipefail
           # The live project and the abandoned former one are never a test target.
@@ -110,13 +105,27 @@ jobs:
           [[ "$SESSION_MINUTES" =~ ^[0-9]+$ ]] && [ "$SESSION_MINUTES" -ge 1 ] && [ "$SESSION_MINUTES" -le 25 ] \
             || { echo "refusing: session_minutes must be 1-25" >&2; exit 1; }
 
-      - uses: actions/checkout@v4
+      # Pinned to full commit SHAs: a moved tag cannot change what runs here.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          persist-credentials: false   # the job's read-only token is not left in .git/config
 
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed   # v2.0.5
         with:
           deno-version: v2.8.2   # worker/Dockerfile's version
 
       - name: One bounded worker session (drains on SIGTERM, then exits)
+        env:
+          # ── Supabase: the TEST project only ──────────────────────────────
+          SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+          # ── Providers: test-scoped keys ──────────────────────────────────
+          # Only the two vendors the smoke catalog prices. No Firecrawl or
+          # Anthropic key: the catalog has no template for either (the gate
+          # would refuse them), and the offline rehearsal runs with both absent.
+          APIFY_API_TOKEN: ${{ secrets.TEST_APIFY_API_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY }}   # gptProvider and the OpenAI strategist require it
         run: |
           set +e
           # SIGTERM asks the worker to drain: a mission in flight finishes and

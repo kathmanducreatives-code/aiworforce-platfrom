@@ -10,7 +10,12 @@ const root = new URL("../../", import.meta.url);
 const read = (p: string) => Deno.readTextFileSync(new URL(p, root));
 const sql = read("supabase/migrations-held/20261015140000_discovery_smoke_admission.sql");
 const proposal = parse(read("docs/launch/proposals/discovery-test-worker.workflow.yml")) as {
-  jobs: { worker: { env: Record<string, string> } };
+  jobs: { worker: { env: Record<string, string>; steps: Array<{ run?: string; env?: Record<string, string> }> } };
+};
+/** What the worker process sees: the job's settings plus its own step's secrets (H1). */
+const workerEnv: Record<string, string> = {
+  ...proposal.jobs.worker.env,
+  ...proposal.jobs.worker.steps.find((s) => (s.run ?? "").includes("worker/main.ts"))?.env,
 };
 
 /** `<column> <type> not null default N check (<column> between 0 and N)` from the held migration. */
@@ -47,7 +52,7 @@ Deno.test("smoke spec: every limit equals the held migration's hard cap", () => 
 });
 
 Deno.test("smoke spec: the inactive worker proposal sets exactly the candidate environment", () => {
-  const env = proposal.jobs.worker.env;
+  const env = workerEnv;
   for (const [k, v] of Object.entries(spec.candidate_environment_spec_not_applied)) {
     assertEquals(env[k], v, `${k} in the worker proposal`);
   }
@@ -61,7 +66,7 @@ Deno.test("smoke spec: the inactive worker proposal sets exactly the candidate e
 });
 
 Deno.test("smoke spec: the first smoke omits Firecrawl; an unset rate would still refuse it", async () => {
-  const env = proposal.jobs.worker.env;
+  const env = workerEnv;
   for (const k of ["FIRECRAWL_API_KEY", "FIRECRAWL_USD_PER_CREDIT", "FIRECRAWL_PRICE_TIER"]) assert(!(k in env), `${k} is not mapped`);
   const p = spec.first_smoke_profile;
   assert(!Object.keys(p.actor_limits).some((a) => a.startsWith("firecrawl:")), "no Firecrawl allowance");
