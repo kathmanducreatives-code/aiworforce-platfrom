@@ -104,7 +104,10 @@ Deno.test("test worker: one worker session that drains on SIGTERM, on the worker
   const run = workerStep.run!;
   assert(run.includes("timeout -s TERM --kill-after=10m"));
   assert(run.includes('> "$RUNNER_TEMP/worker.log" 2>&1'), "worker output stays off the public Actions log");
-  assert(run.includes("deno run --allow-env --allow-net --allow-read worker/main.ts"));
+  assert(run.includes("deno run --allow-env --allow-read --allow-import=esm.sh:443"));
+  // The network is the confirmed test project and the two priced vendors, nothing else (H4).
+  assert(run.includes('--allow-net="$CONFIRM_REF.supabase.co:443,api.apify.com:443,api.openai.com:443"'));
+  assert(!/--allow-net(\s|$)/.test(run) && !run.includes("--allow-all") && !/\s-A\s/.test(run), "no unrestricted network");
   const deno = steps.find((s) => s.uses?.startsWith("denoland/setup-deno"));
   assert(read("worker/Dockerfile").includes(`denoland/deno:${deno?.with?.["deno-version"]?.replace(/^v/, "")}`));
 });
