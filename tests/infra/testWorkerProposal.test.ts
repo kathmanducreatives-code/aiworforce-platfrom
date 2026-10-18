@@ -9,7 +9,7 @@ const ROOT = new URL("../../", import.meta.url);
 const read = (rel: string) => Deno.readTextFileSync(new URL(rel, ROOT));
 const PATH = "docs/launch/proposals/discovery-test-worker.workflow.yml";
 const RAW = read(PATH);
-interface Step { name?: string; run?: string; uses?: string; with?: Record<string, string> }
+interface Step { name?: string; run?: string; uses?: string; with?: Record<string, string>; env?: Record<string, string> }
 interface Workflow {
   on: Record<string, unknown>;
   permissions: Record<string, string>;
@@ -20,6 +20,9 @@ const wf = parse(RAW) as Workflow;
 const job = wf.jobs.worker;
 const steps: Step[] = job.steps;
 const guard = steps[0].run ?? "";
+const workerStep = steps.find((s) => (s.run ?? "").includes("worker/main.ts"))!;
+const secretKeys = (env: Record<string, string> = {}) =>
+  Object.entries(env).filter(([, v]) => String(v).includes("secrets.")).map(([k]) => k).sort();
 
 Deno.test("test worker: the proposal is not an active workflow", async () => {
   for await (const e of Deno.readDir(new URL(".github/workflows/", ROOT))) {
@@ -64,9 +67,11 @@ Deno.test("test worker: spend controls are set, fail-closed, and never from prod
   assert(Number(env.MODEL_RUN_MAX_CALLS) > 0, "set, so the per-slice model-call bound is on");
   // Exactly 1: a value below 1 (including 0) is ignored and falls back to 10 continuations.
   assertEquals(env.LEAD_MAX_AUTO_CONTINUATIONS, "1", "at most two slices");
-  for (const [k, v] of Object.entries(env)) {
-    if (!String(v).includes("secrets.")) continue;
-    assert(/secrets\.TEST_[A-Z_]+/.test(String(v)), `${k} must come from a TEST_ secret`);
+  for (const scope of [env, ...steps.map((s) => s.env ?? {})]) {
+    for (const [k, v] of Object.entries(scope)) {
+      if (!String(v).includes("secrets.")) continue;
+      assert(/secrets\.TEST_[A-Z_]+/.test(String(v)), `${k} must come from a TEST_ secret`);
+    }
   }
 });
 
@@ -75,16 +80,34 @@ Deno.test("test worker: the smoke's minimal orchestration, and keys for only the
   // Without it the customer orchestration runs and needs more than the four model attempts.
   assertEquals(env.LEAD_V2_SMOKE_ORCHESTRATION, "minimal");
   // The catalog prices Apify and OpenAI only; the offline rehearsal runs with these absent.
-  for (const k of ["FIRECRAWL_API_KEY", "ANTHROPIC_API_KEY", "LOVABLE_API_KEY"]) assert(!(k in env), `${k} must not be set`);
-  const secrets = Object.entries(env).filter(([, v]) => String(v).includes("secrets.")).map(([k]) => k).sort();
-  assertEquals(secrets, ["APIFY_API_TOKEN", "OPENAI_API_KEY", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_URL"]);
+  for (const k of ["FIRECRAWL_API_KEY", "ANTHROPIC_API_KEY", "LOVABLE_API_KEY"]) {
+    assert(!(k in env) && !(k in (workerStep.env ?? {})), `${k} must not be set`);
+  }
+  assertEquals(secretKeys(workerStep.env),
+    ["APIFY_API_TOKEN", "OPENAI_API_KEY", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_URL"]);
+});
+
+Deno.test("test worker: each secret reaches only the step that reads it; actions are pinned (H1-H3)", () => {
+  assertEquals(secretKeys(job.env), [], "no secret at job level: it would reach every step, third-party actions included");
+  assertEquals(steps[0].env, { SUPABASE_URL: "${{ secrets.TEST_SUPABASE_URL }}" }, "the guard reads the URL only");
+  for (const s of steps.filter((s) => s !== steps[0] && s !== workerStep)) {
+    assertEquals(secretKeys(s.env), [], `${s.name ?? s.uses} receives no secret`);
+  }
+  for (const s of steps.filter((s) => s.uses)) {
+    assert(/^[^@]+@[0-9a-f]{40}$/.test(s.uses!), `${s.uses} must be pinned to a full commit SHA`);
+  }
+  const checkout = steps.find((s) => s.uses?.startsWith("actions/checkout@"));
+  assertEquals(String(checkout?.with?.["persist-credentials"]), "false", "no token left in .git/config");
 });
 
 Deno.test("test worker: one worker session that drains on SIGTERM, on the worker's own Deno", () => {
-  const run = steps.find((s) => (s.run ?? "").includes("worker/main.ts"))!.run!;
+  const run = workerStep.run!;
   assert(run.includes("timeout -s TERM --kill-after=10m"));
   assert(run.includes('> "$RUNNER_TEMP/worker.log" 2>&1'), "worker output stays off the public Actions log");
-  assert(run.includes("deno run --allow-env --allow-net --allow-read worker/main.ts"));
+  assert(run.includes("deno run --allow-env --allow-read --allow-import=esm.sh:443"));
+  // The network is the confirmed test project and the two priced vendors, nothing else (H4).
+  assert(run.includes('--allow-net="$CONFIRM_REF.supabase.co:443,api.apify.com:443,api.openai.com:443"'));
+  assert(!/--allow-net(\s|$)/.test(run) && !run.includes("--allow-all") && !/\s-A\s/.test(run), "no unrestricted network");
   const deno = steps.find((s) => s.uses?.startsWith("denoland/setup-deno"));
   assert(read("worker/Dockerfile").includes(`denoland/deno:${deno?.with?.["deno-version"]?.replace(/^v/, "")}`));
 });
