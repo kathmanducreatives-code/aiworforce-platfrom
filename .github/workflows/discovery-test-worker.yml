@@ -1,12 +1,13 @@
-# PROPOSAL. NOT ACTIVE.
+# ACTIVE, MANUAL DISPATCH ONLY. Nothing starts it but a person.
 #
-# This file deliberately lives OUTSIDE .github/workflows/, so GitHub never
-# loads it: no trigger exists, nothing can start it, and no secret is read.
-# tests/infra/testWorkerProposal.test.ts keeps it out and checks the guards
-# below. See docs/launch/test-worker-hosting.md for what must be true before
-# anyone moves it (each step there needs explicit approval).
+# Its only trigger is workflow_dispatch: no push, schedule or pull request ever
+# runs it. A dispatch then waits for the `discovery-test` Environment's
+# required reviewer before any secret is read. tests/infra/testWorkerProposal.test.ts
+# checks the guards below and that no other workflow carries them. Dispatching
+# it is a separate, explicitly approved step (docs/launch/discovery-smoke-runbook.md,
+# Phase 5); with no authorized mission in the queue the worker buys nothing.
 #
-# What it would do, once activated: run ONE LeadMission V2 worker for ONE
+# What it does: run ONE LeadMission V2 worker for ONE
 # bounded session against a NON-PRODUCTION Supabase project, for ONE allowlisted
 # test workspace, then drain and exit. It claims at most what the queue offers.
 # It never deploys anything, never applies a migration, and never reads a
@@ -39,7 +40,7 @@ concurrency:
 jobs:
   worker:
     runs-on: ubuntu-latest
-    # Holds ONLY the test project's secrets; add a required reviewer if the plan allows.
+    # Holds ONLY the test project's secrets, behind a required reviewer.
     environment: discovery-test
     # Session (<= 25 min) + drain of one slice (LEAD_WORKER_MAX_RUNTIME_MS, 2.5 min)
     # + kill grace (10 min) fits inside this, so GitHub never SIGKILLs a mission mid-run.

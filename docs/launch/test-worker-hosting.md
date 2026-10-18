@@ -1,10 +1,12 @@
-# Test-worker hosting: a proposal (nothing created, nothing active)
+# Test-worker hosting
 
-**Status: PROPOSAL.** No infrastructure exists for it. The workflow lives at
-`docs/launch/proposals/discovery-test-worker.workflow.yml`, outside
-`.github/workflows/`, so GitHub never loads it. No Supabase project is
-connected, and no secret has been added. Every step under *Activation* needs
-explicit approval. It replaces Railway for **one controlled Discovery worker
+**Status: ACTIVE FOR MANUAL DISPATCH ONLY.** The workflow is
+`.github/workflows/discovery-test-worker.yml`. Its only trigger is
+`workflow_dispatch`, and the `discovery-test` Environment's required reviewer
+gates every run before a secret is read. Dispatching it is a separate,
+explicitly approved step (`discovery-smoke-runbook.md`, Phase 5). Every step
+under *Activation* needs explicit approval; sections 1 and 2 record the
+reasoning from before the test project existed. It replaces Railway for **one controlled Discovery worker
 in a non-production environment**. It is not a production host.
 
 ## 1. There is no non-production Supabase project today

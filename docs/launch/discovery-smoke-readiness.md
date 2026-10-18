@@ -304,7 +304,7 @@ the workflow refuse both.
 8. [ ] Set the vendor account limits from §5.
 
 **C. Activation**
-9. [ ] Move `docs/launch/proposals/discovery-test-worker.workflow.yml` into `.github/workflows/` through a CI-only PR to `launch/hardening`. Its env equals `discovery-smoke-budget.spec.json` (`tests/infra/smokeBudgetSpec.test.ts`).
+9. [x] Move the worker workflow into `.github/workflows/discovery-test-worker.yml` through a CI-only PR to `launch/hardening` (manual dispatch only). Its env equals `discovery-smoke-budget.spec.json` (`tests/infra/smokeBudgetSpec.test.ts`).
 10. [ ] In one reviewed transaction, as an administrator:
     - insert one queue row with `run_budget {provider_usd: 0.20, max_candidates: 3}`;
     - run `select public.authorize_discovery_smoke(<queue_id>, '<pricing_version>', '<catalog>'::jsonb, '<actor_limits>'::jsonb, 300);`.
