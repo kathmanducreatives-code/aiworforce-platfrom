@@ -65,15 +65,22 @@ Deno.test("S34: after a real mission, every purchase is open liability until a p
   assertEquals(Object.values(r.outcome.credits).sort(), ["charged", "charged"]);
 });
 
-Deno.test("S30: the mission's deadline passes after a lead was persisted — the lead stands, nothing more is admitted", opts, async () => {
+Deno.test("S30: after a mission persisted its lead and its deadline passed — the lead stands and nothing more is admitted", opts, async () => {
   const r = await runScenario({ label: "S30", jobs: [job("s30", company("s30", { name: "S30 Software" }))], model: "honest" });
   assertEquals(r.outcome.qualified, ["S30 Software"]);
-  // Move the authorization's deadline into the past, as the 300 s clock would.
+  // The 300 s clock runs out after the lead was written.
   await sql`update public.discovery_smoke_authorizations set deadline_at = now() - interval '1 second', authorized_at = now() - interval '2 seconds'
               where id = ${r.m.authorizationId}`;
   const [d] = await sql`select public.admit_discovery_smoke(${r.m.queueId}, ${r.m.workerId}, ${r.m.taskId}, ${r.m.generation},
     ${"late-" + uuid()}, 'model', 'openai:gpt-5.6-luna', 'model', ${"a".repeat(64)}, null) as d`;
-  assertEquals(d.d.decision, "stopped", `a late admission after the deadline: ${JSON.stringify(d.d)}`);
-  const leads = await sql`select count(*)::int as n from public.lead_candidates where workspace_id = ${r.m.ws}`;
-  assertEquals(leads[0].n, 1, "the persisted lead is not removed by the deadline");
+  // `stopped` here has several sufficient causes (the deadline, the ended mission,
+  // its terminal lineage). That the deadline ALONE refuses is pinned by
+  // smokeAdmission "deadline: absolute, from the queue row, read after the lock,
+  // never renewed" and "deadline: an admission that waited on the lock past the
+  // deadline is refused". This scenario pins what follows it: nothing is admitted
+  // and the persisted lead is neither removed nor rewritten.
+  assertEquals(d.d.decision, "stopped", JSON.stringify(d.d));
+  const [l] = await sql`select count(*)::int as n, bool_and((raw->'canonical_decision'->>'qualified')::boolean) as q
+                          from public.lead_candidates where workspace_id = ${r.m.ws}`;
+  assertEquals([l.n, l.q], [1, true], "the persisted lead stands, still qualified");
 });

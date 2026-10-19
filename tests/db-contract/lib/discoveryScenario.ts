@@ -363,6 +363,12 @@ export async function runScenario(s: Scenario): Promise<Run> {
   } finally {
     // The contract runner grants no write access: the trace goes to the log.
     console.log("A7_SCENARIO_TRACE", JSON.stringify(trace));
+    // END THIS SCENARIO'S QUEUE ROW. The runner does not release it, so it would
+    // stay `running` with a three-minute lease and, once that lapsed, become
+    // claimable by any later test that claims the next mission in this shared
+    // database (offlineSmokeProgress claims and asserts its own row).
+    await sql`update public.lead_mission_queue set status = 'complete'
+                where id = ${m.queueId} and status in ('queued', 'running', 'resumable')`;
     globalThis.fetch = originalFetch;
     for (const [k, v] of saved) { if (v === undefined) Deno.env.delete(k); else Deno.env.set(k, v); }
   }

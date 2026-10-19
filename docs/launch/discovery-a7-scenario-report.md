@@ -87,7 +87,7 @@ actor, a vendor cap on every start, ≤ $0.05 model, ≤ $0.20 provider, ≤ $0.
 | S27 | crash after a run id | `discoveryReliability` "failed resume read (402/403/429/500/0/200) cannot forget or refund an existing purchase" (#106) | COVERED |
 | S28 | 5 expired claims, 6th refused | `leadMissionExhaustedLease` regression (#108); ends `failed`, no sixth attempt | COVERED |
 | S29 | two workers recover one exhausted mission | both refused a claim; row ended `failed` once | PASS (new) |
-| S30 | deadline after a lead is persisted | late admission → `stopped`; the lead stands | PASS (new) |
+| S30 | deadline after a lead is persisted | the lead stands, still qualified; a late admission → `stopped`. The deadline-only refusal itself is pinned by `smokeAdmission` "deadline: absolute, from the queue row, read after the lock, never renewed" | PASS (new) + COVERED |
 | S31 | partial / duplicate result writes | `fencedWrite` (stale generation fenced, finalized row fenced, end-to-end D1) | COVERED |
 | S32 | stale worker on a completed mission | heartbeat refused, release refused, never re-claimed, outcome unchanged | PASS (new) |
 | S33 | completed, but dashboard retrieval fails | not reachable offline: hosted RLS and browser rendering | NOT TESTED |
