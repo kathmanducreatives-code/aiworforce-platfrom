@@ -21,6 +21,8 @@ import {
   missionAdmission,
 } from "../../supabase/functions/_shared/smokeAdmission.ts";
 import { createLeadMissionRunner } from "../../worker/leadMissionRunner.ts";
+import { isTerminalQueueStatus, releaseQueuedMission } from "../../supabase/functions/_shared/leadMissionTerminal.ts";
+import { reconcileTerminalRows } from "../../supabase/functions/_shared/leadMissionCancellation.ts";
 import { createExecutionDeadline } from "../../supabase/functions/_shared/leadExecutionFinalizer.ts";
 import { buildMissionCompilerBinding } from "../../supabase/functions/_shared/leadMissionCompilerBinding.ts";
 import { compileLeadMission } from "../../supabase/functions/_shared/leadMissionCompiler.ts";
@@ -183,6 +185,10 @@ function batchAnswer(input: { companies?: Array<{ company_key: string; evidence?
 }
 
 interface Variant {
+  /** Audit the stricter request without changing the approved live package. */
+  goal?: string;
+  auditCompany?: "us_hq" | "foreign_hq" | "no_hq" | "missing_description";
+  auditJobDate?: "future" | "expired";
   /** LEAD_V2_SMOKE_ORCHESTRATION; absent = the customer orchestration. */
   orchestration?: "minimal";
   /** The proposed two-actor catalog (job search + company details) instead of the job search alone. */
@@ -217,6 +223,7 @@ let selfDescription = STRONG_SELF_DESCRIPTION;
 type Rehearsal = Record<string, any>;
 
 async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void>) {
+  const missionGoal = v.goal ?? MISSION;
   selfDescription = v.weakEvidence ? WEAK_SELF_DESCRIPTION : STRONG_SELF_DESCRIPTION;
   {
     const originalFetch = globalThis.fetch;
@@ -288,13 +295,18 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
         request_limits: { max_reads_per_actor: { [JOBS]: (p.reads.request_limits as Rehearsal).max_reads_per_actor[JOBS] } } },
       ...(v.companyDetails ? { details: { ...fill(p.details), maximum_microusd: SYNTHETIC_DETAILS_MAXIMUM } } : {}),
     };
-    const m = await seedSmokeMission({ quotes, actorLimits: { [JOBS]: 1, ...(v.companyDetails ? { [DETAILS]: 1 } : {}) } });
+    const actorLimits = { [JOBS]: 1, ...(v.companyDetails ? { [DETAILS]: 1 } : {}) };
+    const m = await seedSmokeMission({ authorize: false });
     const user = uuid(), plan = uuid();
     await sql`insert into auth.users (id, email) values (${user}, ${
       "offline-" + user + "@example.invalid"
     })`;
     await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${m.ws}, 'scout', 'Offline Scout', 'Find and verify the requested company using source evidence.', 'research')`;
-    await sql`insert into public.task_plans (id, workspace_id, user_id, user_instruction, status) values (${plan}, ${m.ws}, ${user}, ${MISSION}, 'running')`;
+    await sql`insert into public.task_plans (id, workspace_id, user_id, user_instruction, status) values (${plan}, ${m.ws}, ${user}, ${missionGoal}, 'running')`;
+    const conversation = uuid();
+    await sql`insert into public.conversations (id,user_id,workspace_id,title) values (${conversation},${user},${m.ws},'Offline A7 audit')`;
+    await sql`insert into public.messages (conversation_id,role,content,metadata) values
+      (${conversation},'assistant','Approved offline fixture plan',${sql.json({ plan_id: plan })})`;
     await sql`insert into public.workspace_credit_balances (workspace_id, balance_credits) values (${m.ws}, 10)`;
 
     type HandlerCall = { status: number; body: Record<string, unknown> };
@@ -315,7 +327,7 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
     const trace: Trace = {
       variant: v.label,
       proposed_spec_sha: "0fb6312c1b78bf0282401140e62e903b31567930",
-      mission: MISSION,
+      mission: missionGoal,
       requests: [],
       attempted_requests: [],
       admissions: [],
@@ -363,6 +375,15 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
         isHeadquarter: true,
       }],
     });
+    if (v.auditCompany) row.company.locations = [
+      { country: "US", city: "Boston", headquarter: v.auditCompany !== "foreign_hq", parsed: { text: "Boston, United States", countryFull: "United States" } },
+      ...(v.auditCompany === "foreign_hq" ? [{ country: "CA", city: "Toronto", headquarter: true, parsed: { text: "Toronto, Canada", countryFull: "Canada" } }] : []),
+    ];
+    if (v.auditCompany) row.company.employeeCount = 27;
+    if (v.auditJobDate) {
+      const date = new Date(Date.now() + (v.auditJobDate === "future" ? 45 : -45) * 86400_000).toISOString();
+      row.postedAt = date; row.postedDate = date;
+    }
     // Three postings for the dedupe case: the same employer twice, plus one the
     // mission's own hard limits exclude (5001-10000 employees, Germany).
     const jobRows = () => {
@@ -459,6 +480,8 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
       if (url.pathname.includes("dataset-details")) {
         const company = structuredClone(row.company);
         if (v.detailsIncomplete) { delete company.employeeCountRange; delete company.description; }
+        if (v.auditCompany === "no_hq") for (const location of company.locations) location.headquarter = false;
+        if (v.auditCompany === "missing_description") delete company.description;
         return json([company]);
       }
       if (v.jobsEmpty) return json([]);
@@ -506,7 +529,7 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
         generation: m.generation,
       }, () =>
         binding.proposeMission!({
-          originalUserQuery: MISSION,
+          originalUserQuery: missionGoal,
           requestedCount: 1,
         }));
       assert(
@@ -526,7 +549,7 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
         },
       );
       const compiled = compileLeadMission({
-        originalUserQuery: MISSION,
+        originalUserQuery: missionGoal,
         proposal: raw,
         requestedCount: 1,
       });
@@ -545,7 +568,7 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
         agent_slug: "scout",
         workspace_id: m.ws,
         user_id: user,
-        instruction: MISSION,
+        instruction: missionGoal,
         requested_lead_count: 1,
         workflow_kind: "qualified_lead_sourcing",
         execution_mode: "company_first",
@@ -556,17 +579,22 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
       };
       // The contract helper starts bound so compilation can be metered too.
       // Prepare the worker's fresh queued kickoff after compilation, preserving
-      // the same authorization, original creation time and every admission.
+      // the original creation time. Authorize the FINAL request through the
+      // real administrator RPC, then claim it through the worker's real RPC.
       // No runtime decision or qualification state is synthesized here.
       await sql`update public.tasks set status = 'complete' where id = ${m.taskId}`;
-      await sql`update public.lead_mission_queue set task_id = null, lineage_id = null, request = ${
+      await sql`update public.lead_mission_queue set task_id = null, lineage_id = null, status='queued', claimed_by=null, lease_expires_at=null, request = ${
         sql.json(request as never)
       } where id = ${m.queueId}`;
       // Runbook Phase 5 order: the authorization is over the FINAL kickoff body
       // (the queue row's request cannot change after authorization).
-      await sql`update public.discovery_smoke_authorizations a
-                   set criteria_hash = encode(sha256(convert_to(q.request::text, 'UTF8')), 'hex')
-                  from public.lead_mission_queue q where q.id = a.queue_id and a.id = ${m.authorizationId}`;
+      m.authorizationId = await authorizeSmoke(m.queueId, { quotes, actorLimits });
+      const { data: claims, error: claimError } = await client.rpc("claim_next_lead_mission", {
+        p_worker_id: m.workerId, p_lease_seconds: 180,
+      });
+      assertEquals(claimError, null);
+      assertEquals(claims[0].queue_id, m.queueId);
+      trace.claim = claims[0];
       const { handleRunAgent } = await import(
         "../../supabase/functions/run-agent/index.ts"
       );
@@ -639,13 +667,49 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
         heldUntil: null,
         enqueuedAt: new Date(q.created_at).toISOString(),
       };
-      trace.outcome = await runner.run(queued, {
+      const missionOutcome = await runner.run(queued, {
         executionBudgetMs: 150000,
         signal: new AbortController().signal,
       });
+      trace.outcome = missionOutcome;
+      const release = await releaseQueuedMission((fn, args) => client.rpc(fn, args), {
+        queueId: m.queueId, workerId: m.workerId, attempts: claims[0].attempts,
+        outcome: missionOutcome, outcomeDoc: { ...missionOutcome },
+      });
+      assertEquals(release.released, true, JSON.stringify(release));
+      trace.release = release;
+      if (isTerminalQueueStatus(release.finalStatus)) {
+        await reconcileTerminalRows({
+          readTask: async (id) => {
+            const { data, error } = await client.from("tasks").select("status,result").eq("id", id).maybeSingle();
+            assertEquals(error, null); return data;
+          },
+          readLineage: async (id) => {
+            const { data, error } = await client.from("lead_lineages").select("status").eq("lineage_id", id).maybeSingle();
+            assertEquals(error, null); return data;
+          },
+          readPlan: async (id) => {
+            const { data, error } = await client.from("task_plans").select("status").eq("id", id).maybeSingle();
+            assertEquals(error, null); return data;
+          },
+          writeTask: async (id, patch) => { const { error } = await client.from("tasks").update(patch).eq("id", id); assertEquals(error, null); },
+          writeLineage: async (id, patch) => { const { error } = await client.from("lead_lineages").update(patch).eq("lineage_id", id); assertEquals(error, null); },
+          writePlan: async (id, patch) => { const { error } = await client.from("task_plans").update(patch).eq("id", id); assertEquals(error, null); },
+        }, release.finalStatus, release.terminalReason ?? release.finalStatus, {
+          taskId: trace.task_id ?? null, lineageId: trace.task_id ?? null, planId: plan,
+        }, new Date().toISOString());
+      }
+      trace.queue = await sql`select status,attempts,claimed_by,lease_expires_at from public.lead_mission_queue where id=${m.queueId}`;
+      assert(trace.task_id, "the worker bound the task it actually executed");
+      trace.lineage = await sql`select status,terminal_reason,lease_holder from public.lead_lineages where lineage_id=${trace.task_id}`;
+      trace.plan = await sql`select status from public.task_plans where id=${plan}`;
+      trace.messages = await sql`select role,content,metadata from public.messages where conversation_id=${conversation} order by created_at`;
+      trace.accounts = await sql`select id,name,domain,linkedin_url,location,employee_count from public.accounts where workspace_id=${m.ws}`;
+      trace.brain = await sql`select count(*)::int as rows from public.company_brain where workspace_id=${m.ws}`;
       const operations =
         await sql`select kind, actor, committed_microusd, reported_microusd, report_source, provider_run_id from public.discovery_smoke_operations where authorization_id = ${m.authorizationId} order by admitted_at`;
       trace.operations = operations;
+      trace.unreconciled_purchases = await unreconciled(m.queueId);
       trace.tasks =
         await sql`select id,status,result from public.tasks where workspace_id = ${m.ws}`;
       const dashboard = await client.from("lead_candidates").select("*").eq(
@@ -775,6 +839,17 @@ Deno.test("offline smoke, two actors: one evidence-backed lead is qualified and 
     // ── THE LEAD ──
     assertEquals(r.dashboard.error, null);
     assertEquals(r.dashboard.data?.length, 1, "one lead persisted");
+    // The caller and panel must describe the same canonical company outcome
+    // that the task row and real worker already read.
+    assertEquals(r.trace.handler.body.success, true, "persisted qualified company must not be reported as failed");
+    assertEquals(r.trace.handler.body.terminal_status, r.trace.outcome.status);
+    assertEquals(r.trace.handler.body.eligible_leads, 1);
+    assertEquals(r.trace.handler.body.remaining_leads, 0);
+    assertEquals(r.trace.handler.body.count_entity, "qualified_company");
+    assertEquals(r.trace.handler.body.counts.persisted, 1);
+    assertEquals(r.trace.handler.body.ui_panel.lead_count, 1);
+    assertEquals(r.trace.handler.body.ui_panel.lead_candidate_ids, [r.dashboard.data[0].id]);
+    assertEquals(r.trace.handler.body.run_context.eligible_leads, 1);
     const raw = r.dashboard.data[0].raw as Rehearsal;
     assertEquals(raw.qualification_basis, "p5_canonical_eligibility");
     assertEquals(raw.canonical_decision.qualified, true);
@@ -947,3 +1022,80 @@ Deno.test("A7 offline: the company record lacks its size band and description �
     assertEquals(o.leads.filter((l: unknown[]) => l[1] === true), [], `missing evidence never qualifies: ${JSON.stringify(o)}`);
     assertEquals(o.credits, { apify_linkedin_job_search: "charged", apify_linkedin_company_details: "charged" });
   }));
+
+const HQ_AUDIT_GOAL = "Find 1 US-headquartered B2B software company with a declared 11–50 employee band and an open Account Executive posting dated within 30 days.";
+function auditLifecycle(r: Rehearsal, qualified: number) {
+  limitsHeld(r);
+  assertEquals(r.trace.unreconciled_purchases.length, 2,
+    "terminal execution does not close either provider purchase without administrator reconciliation");
+  assertEquals(r.trace.queue[0].status, "complete", "execution ended even when the requested quota was not met");
+  assertEquals(r.trace.queue[0].claimed_by, null);
+  assertEquals(r.trace.queue[0].lease_expires_at, null);
+  assertEquals(r.trace.lineage[0].status, "terminal");
+  assertEquals(r.trace.lineage[0].lease_holder, null);
+  assertEquals(r.trace.plan[0].status, qualified ? "complete" : "partial");
+  assertEquals(r.dashboard.data.length, qualified);
+  assertEquals(r.trace.handler.body.eligible_leads, qualified);
+  assertEquals(r.trace.handler.body.ui_panel.lead_count, qualified);
+  assertEquals(r.trace.handler.body.counts.persisted, qualified);
+  assertEquals(r.trace.handler.body.count_entity, "qualified_company");
+  assertEquals(r.trace.handler.body.success, qualified > 0);
+  assertEquals(r.trace.handler.body.terminal_status, r.trace.outcome.status);
+  assertEquals(r.trace.brain[0].rows, 0, "the no-Brain smoke never creates Company Brain content");
+  const notices = r.trace.messages.filter((m: Rehearsal) => m.metadata.ui_panel);
+  assertEquals(notices.length, 1, "one persistent final result, not just a worker exit");
+  assertEquals(notices[0].metadata.ui_panel.lead_count, qualified);
+  assert(notices[0].content.includes(`${qualified} of 1 qualified company`));
+}
+
+Deno.test("A7 output audit: three postings, verified US headquarters, one fully persisted answer", opts, () =>
+  rehearse({ orchestration: "minimal", companyDetails: true, slowJobSearch: true, duplicateEmployer: true,
+    goal: HQ_AUDIT_GOAL, auditCompany: "us_hq", label: "a7-output-valid" }, (r) => {
+    auditLifecycle(r, 1);
+    const lead = r.dashboard.data[0];
+    assertEquals(lead.raw.company_name, "Example Software");
+    assertEquals(lead.raw.company_linkedin_url, "https://www.linkedin.com/company/offline-software");
+    assertEquals(r.trace.accounts[0].linkedin_url, "https://www.linkedin.com/company/offline-software");
+    assertEquals(lead.raw.job_evidence.title, "Account Executive");
+    assertEquals(lead.raw.job_evidence.url, "https://www.linkedin.com/jobs/view/offline-ae");
+    const age = Date.now() - Date.parse(lead.raw.job_evidence.posted);
+    assert(age >= 0 && age <= 30 * 86400_000);
+    const task = r.trace.tasks.find((t: Rehearsal) => t.id === r.trace.task_id);
+    const facts = task.result.research_fabric.companies[0].evidence.dimensions;
+    assertEquals(facts.find((f: Rehearsal) => f.dimension === "company_size_band").value,
+      { min: 11, max: 50, source: "linkedin_declared" });
+    assertEquals(facts.find((f: Rehearsal) => f.dimension === "geography").value, "Boston, United States");
+    assert(task.result.workbench_grounded_explanations[0].why_it_matched.length > 0);
+    assertEquals(r.trace.handler.body.ui_panel.lead_candidate_ids, [lead.id]);
+    assertEquals(r.trace.handler.body.provider_calls, 2);
+  }));
+
+Deno.test("A7 output audit: a Canadian headquarters with a US office produces zero qualified companies", opts, () =>
+  rehearse({ orchestration: "minimal", companyDetails: true, slowJobSearch: true,
+    goal: HQ_AUDIT_GOAL, auditCompany: "foreign_hq", label: "a7-output-none" }, (r) => {
+    auditLifecycle(r, 0);
+    const task = r.trace.tasks.find((t: Rehearsal) => t.id === r.trace.task_id);
+    assertEquals(task.result.task_status, "partial");
+    assert(r.trace.messages.some((m: Rehearsal) => m.content.includes("0 qualified")));
+  }));
+
+Deno.test("A7 output audit: a future-dated posting cannot prove hiring within the last 30 days", opts, () =>
+  rehearse({ orchestration: "minimal", companyDetails: true, slowJobSearch: true,
+    goal: HQ_AUDIT_GOAL, auditCompany: "us_hq", auditJobDate: "future", label: "a7-output-future" }, (r) => {
+    auditLifecycle(r, 0);
+  }));
+
+// Explicit diagnostics for known missing contracts, excluded from ordinary CI
+// rather than recording a false-positive qualification as a passing test. Run
+// with A7_AUDIT_KNOWN_GAPS=1 and --filter 'A7 known gap' to reproduce the blocks.
+if (Deno.env.get("A7_AUDIT_KNOWN_GAPS") === "1") {
+  for (const [kind, label] of [["no_hq", "headquarters evidence is missing"],
+    ["missing_description", "company-record description is missing"]] as const) {
+    Deno.test(`A7 known gap: ${label} must not be silently verified`, opts, () =>
+      rehearse({ orchestration: "minimal", companyDetails: true, slowJobSearch: true,
+        goal: HQ_AUDIT_GOAL, auditCompany: kind, label: `a7-gap-${kind}` }, (r) => {
+        limitsHeld(r);
+        assertEquals(r.dashboard.data.length, 0, `${label}: source gaps must remain gaps`);
+      }));
+  }
+}

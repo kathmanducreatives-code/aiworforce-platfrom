@@ -35,7 +35,7 @@
 
 import type { PendingDecisionMaker } from "./compoundSourcingPipeline.ts";
 import type { CompoundPersistencePlan } from "./runAgentCompoundPersistenceAdapter.ts";
-import { hasStrongId } from "./companyIdentity.ts";
+import { canonicalLinkedinCompanyUrl, hasStrongId } from "./companyIdentity.ts";
 
 /**
  * What the mission asked for, as far as this projection is concerned.
@@ -112,7 +112,7 @@ export function buildCompanyRowPersistencePlan(
       ? {
         name: id.name,
         domain: id.canonicalDomain,
-        linkedinUrl: id.linkedinUrl,
+        linkedinUrl: canonicalLinkedinCompanyUrl(id),
         description: job?.companyDescription ?? null,
       }
       : null,
@@ -134,7 +134,7 @@ export function buildCompanyRowPersistencePlan(
         pending_reason: pending.reason,
         company_name: id.name ?? null,
         company_domain: id.canonicalDomain ?? null,
-        company_linkedin_url: id.linkedinUrl ?? null,
+        company_linkedin_url: canonicalLinkedinCompanyUrl(id),
         company_identity_key: id.dedupeKey ?? null,
         company_resolution_status: identified ? "verified" : "unresolved",
         company_brain_status: pending.brainGate === "pass"
