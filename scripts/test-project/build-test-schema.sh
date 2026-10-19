@@ -62,6 +62,7 @@ held_v2=(
   20260915120000_sweep_skips_v2_queue_tasks.sql
   20261003120000_lead_mission_v2_continuations_not_retries.sql
   20261011120000_lead_mission_v2_productive_continuation_no_backoff.sql
+  20261019120000_lead_mission_exhausted_claim_recovery.sql
 )
 billing_fix="$held/20261015130000_credits_rearm_settled_key.sql"
 admission="$held/20261015140000_discovery_smoke_admission.sql"

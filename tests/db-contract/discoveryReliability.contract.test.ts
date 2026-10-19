@@ -514,10 +514,10 @@ for (
   );
 }
 
-// Characterization of an existing queue recovery gap; deliberately names the
-// defect instead of presenting a permanently running mission as a success.
+// Original crash reproduction, now requiring coordinated recovery instead of
+// characterizing the stranded queue as an expected result.
 Deno.test(
-  "KNOWN DEFECT: a hard crash on claim five strands the queue and task running",
+  "A7 recovery: a hard crash on claim five terminalizes without granting claim six",
   opts,
   async () => {
     const m = await mission();
@@ -543,6 +543,6 @@ Deno.test(
     await sql`select * from public.tasks_sweep_stuck_runs(interval '5 minutes')`;
     const [row] =
       await sql`select q.status as queue_status, t.status as task_status from public.lead_mission_queue q join public.tasks t on t.id=q.task_id where q.id=${m.queueId}`;
-    assertEquals(row, { queue_status: "running", task_status: "running" });
+    assertEquals(row, { queue_status: "failed", task_status: "failed" });
   },
 );

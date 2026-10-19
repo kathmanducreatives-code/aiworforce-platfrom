@@ -1,5 +1,10 @@
 # Independent A7 failure-recovery review
 
+Follow-up: the exhausted-claim recovery candidate now replaces the historical
+known-defect characterization below with a required passing regression. See
+`discovery-exhausted-claim-recovery.md` for the new transaction, evidence and
+rollout limits. This original report records the earlier transport review.
+
 Reviewed base: `a6a56df20321b2982bef587a3fcf7f1f89f986cf` on
 `launch/hardening`, independently confirmed with `git ls-remote` at the end of
 the review. Candidate changes are local on `codex/discovery-a7-reliability`.
@@ -16,12 +21,13 @@ remain external prerequisites. This review supplies none of those approvals.
 | --- | --- | --- |
 | P2: in-flight model requests ignore ownership cancellation and deadlines | Admit a model request, leave its fake transport pending, then revoke ownership/cancel. The outgoing request has no worker signal; without a caller signal it has no timeout either. The worker can remain awaiting it past the slice/authorization deadline. This does not bypass the spending cap. | Compose caller and worker signals with the earlier slice/authorization deadline in `smokeAdmission.ts`. Reservations and attempts remain consumed after dispatch. |
 | P2: failed resume GET forgets a known run and refunds its reserved credit | Pause after POST/run-ID persistence but before credit settlement. Resume that run; a 402/403/429/500, connection loss or malformed 200 omits its known ID. `credits_finalize` records `started=false`; the original credit is refunded, and its eventual settlement cannot charge it. The USD commitment stays held. | Preserve the known run ID and pending/unsettled state in those failure returns in `toolRegistry.ts`. No new POST, budget increase or reconciliation. |
-| P2, unresolved: crash on the fifth claim strands the mission | Claim and expire the same bound queue row five times using the actual RPC. Claim six returns `no_eligible_mission`; `tasks_sweep_stuck_runs` skips the queue-owned task. Both rows remain `running`. | Explicit known-defect characterization retained. No broad queue/migration change mixed into the transport patch. |
+| P2, fixed in follow-up: crash on the fifth claim strands the mission | Claim and expire the same bound queue row five times using the actual RPC. Before recovery, claim six returns `no_eligible_mission` and both rows remain `running`. | The original reproduction now requires terminal recovery; the held function-only migration and its evidence are described in `discovery-exhausted-claim-recovery.md`. |
 
-The last defect needs a separate, coordinated recovery change before unattended
-beta: terminalize exhausted expired queue rows without granting another execution
-attempt, reconcile task/lineage/plan state idempotently, and retain all provider
-liabilities. Include concurrent reclaim, stale-worker and partial-write tests.
+The follow-up candidate terminalizes exhausted expired queue rows without another
+execution attempt, reconciles task/lineage/plan state idempotently and retains all
+provider liabilities. Concurrent reclaim, stale-worker and partial-write tests
+are included. Review and deliberate installation of the held migration remain
+necessary before relying on this recovery in a hosted environment.
 For any controlled test, inspect queue/task/lineage outcomes explicitly; neither
 worker exit nor lease expiry proves the mission finished. An interruption needs
 operator inspection and reconciliation before another authorization, never an
@@ -35,7 +41,7 @@ New file: `tests/db-contract/discoveryReliability.contract.test.ts`, **23 checks
 HTTP 402/403/429/500 and lost start responses; unreadable final status; eight
 concurrent uncertain starts; ownership loss during POST; interrupted resume
 failures; model timeout/429/500 retry ceilings; caller/worker/deadline aborts;
-credit-reaper isolation; and the explicitly named unresolved queue defect.
+credit-reaper isolation; and the now-enforced fifth-claim recovery regression.
 
 - Final focused fresh-database run: **29 passed**, comprising the 23 checks
   above and six existing lineage/queue contracts.
