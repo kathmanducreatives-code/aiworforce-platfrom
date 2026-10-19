@@ -118,7 +118,8 @@ Depends on the queue chain (20260910140000, 20260915120000, 20261003120000,
 20261003120000's function:
 `rollback/20261019120000_lead_mission_v2_exhausted_lease_terminal.down.sql`.
 Tested against real Postgres + PostgREST in
-`tests/db-contract/lineageQueue.contract.test.ts`.
+`tests/db-contract/leadMissionExhaustedLease.contract.test.ts` (unit:
+`tests/edge-functions/_shared/leadMissionLapsedLease.test.ts`).
 
 ## `20261015120000_provider_purchase_claims.sql`
 
