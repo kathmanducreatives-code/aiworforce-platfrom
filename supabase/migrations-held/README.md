@@ -97,6 +97,29 @@ ignored (hold kept). Rollback, verbatim to 20261003120000's function:
 Replayed against real Postgres (PGlite) in
 `tests/infra/leadMissionV2ProductiveContinuationNoBackoff.test.ts`.
 
+## `20261019120000_lead_mission_v2_exhausted_lease_terminal.sql`
+
+Lead V2: a mission whose FINAL lease lapses is ended, not stranded. Redefines
+`claim_next_lead_mission` (same signature) as 20261003120000's function plus one
+step: before selecting, every `running` row with a lapsed lease and no retry
+(`attempts >= 5`) or slice (`continuations >= 25`) left is set `failed`, with
+`last_outcome.lease_lapsed = true` and its reason. Before this, a worker that
+died holding the fifth claim left the queue row, task and lineage `running` for
+ever (the claim requires `attempts < 5`; the stuck-run sweeper skips a task an
+active queue row owns). No attempt is granted, nothing is refunded, and provider
+liabilities are untouched. The worker's idle sweep
+(`leadMissionCancellation.ts` `sweepLapsedMissions`) then ends the task, lineage
+and plan with the release's own reconciliation, visiting only rows this function
+marked.
+
+**HELD — NOT APPLIED, and not approved for production or the test project.**
+Depends on the queue chain (20260910140000, 20260915120000, 20261003120000,
+20261011120000). Either deploy order is safe. Rollback, verbatim to
+20261003120000's function:
+`rollback/20261019120000_lead_mission_v2_exhausted_lease_terminal.down.sql`.
+Tested against real Postgres + PostgREST in
+`tests/db-contract/lineageQueue.contract.test.ts`.
+
 ## `20261015120000_provider_purchase_claims.sql`
 
 **PROPOSED — NOT APPLIED, NOT WIRED, NOT APPROVED.** One buyer per provider-call
