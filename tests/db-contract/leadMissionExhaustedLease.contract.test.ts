@@ -11,6 +11,21 @@ import { sweepLapsedMissions, type LapsedSweepDb } from "../../supabase/function
 import { seedLineage, seedTask, seedWorkspace, serviceClient, sql, uuid } from "./lib/harness.ts";
 
 const opts = { sanitizeResources: false, sanitizeOps: false };
+
+// ROW HYGIENE. This database is shared by every contract file, and some of them
+// (offlineSmokeProgress) claim "the next mission" and assert it is their own.
+// A row left `running` here becomes claimable once its 60 s lease lapses, so
+// every queue row a test creates is ended when the test finishes, pass or fail.
+const created: string[] = [];
+async function endOwnRows() {
+  const ids = created.splice(0);
+  if (ids.length) {
+    await sql`update public.lead_mission_queue set status = 'complete'
+                where id = any(${ids}) and status in ('queued', 'running', 'resumable')`;
+  }
+}
+const test = (name: string, fn: () => Promise<void>) =>
+  Deno.test(name, opts, async () => { try { await fn(); } finally { await endOwnRows(); } });
 const WORKER = await Deno.readTextFile(new URL("../../worker/main.ts", import.meta.url));
 
 /** A bound V2 mission: workspace, plan, live lineage, running task and its queue row. */
@@ -22,6 +37,7 @@ async function mission(over: { attempts?: number; continuations?: number } = {})
   const lineage = await seedLineage(ws, { status: "active" });
   const task = await seedTask(ws, { lineage_id: lineage, status: "running" });
   const queueId = uuid();
+  created.push(queueId);
   await sql`insert into public.lead_mission_queue (id, workspace_id, request, status, attempts, continuations, task_id, lineage_id)
             values (${queueId}, ${ws}, ${sql.json({ plan_id: plan })}, 'queued', ${over.attempts ?? 0}, ${over.continuations ?? 0}, ${task}, ${lineage})`;
   // Only this test's row is claimable.
@@ -38,7 +54,7 @@ const lapse = (queueId: string) => sql`update public.lead_mission_queue set leas
 const queueRow = async (id: string) =>
   (await sql`select status, attempts, continuations, claimed_by, lease_expires_at, last_outcome from public.lead_mission_queue where id = ${id}`)[0];
 
-Deno.test("REGRESSION (was KNOWN DEFECT): a hard crash on claim five ends the mission failed, granting nothing", opts, async () => {
+test("REGRESSION (was KNOWN DEFECT): a hard crash on claim five ends the mission failed, granting nothing", async () => {
   const m = await mission();
   let last = "";
   for (let n = 1; n <= 5; n++) {
@@ -70,7 +86,7 @@ Deno.test("REGRESSION (was KNOWN DEFECT): a hard crash on claim five ends the mi
   assertEquals((await claim()).row.claimed, false);
 });
 
-Deno.test("lapsed lease: the worker's own sweep query finds the row, and the sweep ends task, lineage and plan", opts, async () => {
+test("lapsed lease: the worker's own sweep query finds the row, and the sweep ends task, lineage and plan", async () => {
   const m = await mission({ attempts: 4 });
   await claim();
   await lapse(m.queueId);
@@ -110,7 +126,7 @@ Deno.test("lapsed lease: the worker's own sweep query finds the row, and the swe
   assertEquals((await sweepLapsedMissions(rowsDb, new Date().toISOString())).reconciled, 0);
 });
 
-Deno.test("lapsed lease WITH attempts left: reclaimed exactly as before, nothing ended", opts, async () => {
+test("lapsed lease WITH attempts left: reclaimed exactly as before, nothing ended", async () => {
   const m = await mission();
   await claim();
   await lapse(m.queueId);
@@ -120,7 +136,7 @@ Deno.test("lapsed lease WITH attempts left: reclaimed exactly as before, nothing
   assertEquals([q.status, q.last_outcome], ["running", null]);
 });
 
-Deno.test("a LIVE final claim is never ended: only a lapsed lease is", opts, async () => {
+test("a LIVE final claim is never ended: only a lapsed lease is", async () => {
   const m = await mission({ attempts: 4 });
   const fifth = await claim();
   assertEquals(fifth.row.attempts, 5);
@@ -129,7 +145,7 @@ Deno.test("a LIVE final claim is never ended: only a lapsed lease is", opts, asy
   assertEquals([q.status, q.claimed_by, q.last_outcome], ["running", fifth.worker, null], "the holder keeps it while its lease is live");
 });
 
-Deno.test("lapsed lease with no slice left: ended failed as slices_exhausted", opts, async () => {
+test("lapsed lease with no slice left: ended failed as slices_exhausted", async () => {
   const m = await mission({ attempts: 1 });
   await sql`update public.lead_mission_queue set status = 'running', claimed_by = ${uuid()}, continuations = 25,
               lease_expires_at = now() - interval '1 second' where id = ${m.queueId}`;
@@ -138,7 +154,7 @@ Deno.test("lapsed lease with no slice left: ended failed as slices_exhausted", o
   assertEquals([q.status, q.attempts, q.last_outcome.reason, q.last_outcome.lease_lapsed], ["failed", 1, "slices_exhausted", true]);
 });
 
-Deno.test("an ended mission is never rewritten: complete, failed and cancelled rows are untouched", opts, async () => {
+test("an ended mission is never rewritten: complete, failed and cancelled rows are untouched", async () => {
   const m = await mission({ attempts: 5 });
   for (const status of ["complete", "failed", "cancelled"]) {
     // An ended row as a release leaves it: no holder, no lease.
