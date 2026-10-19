@@ -684,8 +684,24 @@ export function createAdmissionFetch(d: AdmissionGateDeps): typeof fetch {
     if (ctx.closedReason) return refuse("closed_after_admission", ctx.closedReason);
     if (!(now() < Date.parse(admitted.deadline_at))) return refuse("deadline_after_admission");
 
+    // Revocation must also reach a request already in flight. In particular,
+    // the model transport supplies no timeout of its own. Keep the caller's
+    // timeout, but bound every admitted transport by ownership and the earlier
+    // of the authorization deadline and this slice's remaining time. Aborting
+    // a dispatched request does NOT return its reservation or attempt.
+    const untilDeadline = Date.parse(admitted.deadline_at) - now();
+    const sliceRemaining = ctx.remainingMs?.();
+    const remaining = typeof sliceRemaining === "number" && Number.isFinite(sliceRemaining)
+      ? Math.min(untilDeadline, sliceRemaining) : untilDeadline;
+    if (!(remaining > 0)) return refuse("deadline_after_admission");
+    const callerSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+    const signals = [AbortSignal.timeout(Math.ceil(remaining))];
+    if (ctx.signal) signals.push(ctx.signal);
+    if (callerSignal) signals.push(callerSignal);
+    const signal = AbortSignal.any(signals);
+
     // Exactly the request that was bounded and hashed: its URL (with any
-    // pinned caps) and its body. Headers and signal are the caller's.
+    // pinned caps) and its body. Headers remain the caller's.
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
     headers.delete("content-length");
     // When the request left: the vendor's snapshot is no older than this, so
@@ -693,7 +709,7 @@ export function createAdmissionFetch(d: AdmissionGateDeps): typeof fetch {
     const sentAt = now();
     const res = await d.baseFetch(final.url.href, {
       method: final.method, headers, body: final.body ?? undefined, redirect: "manual",
-      signal: init?.signal ?? (input instanceof Request ? input.signal : undefined),
+      signal,
     });
     if (isRedirect(res)) {
       // Sent and admitted, but not followed: a provider request stays uncertain.

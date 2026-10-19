@@ -8,6 +8,23 @@ is synced to the production-connected repository (Lovable builds from its
 Migrations are applied to production one at a time, deliberately — see
 `docs/SUPABASE_TARGETING.md`.
 
+## `20261019120000_lead_mission_exhausted_claim_recovery.sql`
+
+Function-only follow-up to the V2 queue chain: an expired fifth claim is closed
+atomically before ordinary claiming. Queue, task, lineage and plan are reconciled
+without another execution attempt. Task generation and lineage state fences are
+advanced; financial authorizations, receipts, reservations and reconciliation
+records are untouched. Existing persisted terminal outcomes take precedence over
+the crash failure. Each claim recovers at most ten rows with `SKIP LOCKED`.
+
+Requires the baseline, regular migrations and held V2 queue chain through
+`20261011120000`. The localhost contract bootstrap and fresh-test-project builder
+include it; neither script was run against a hosted database for this change.
+No table, column, cron, spending limit or production setting changes. An existing
+hosted installation needs separate approval to apply this held file; merging
+code alone does not install it. Rollback restores the previous claim function and
+drops the recovery helper; already recovered rows remain terminal.
+
 ## `20260816120000_baseline_schema.sql`
 
 The schema baseline: a `pg_dump` of the live schema taken 2026-08-16 (111
