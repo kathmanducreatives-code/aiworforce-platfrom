@@ -191,6 +191,16 @@ interface Variant {
   weakEvidence?: boolean;
   /** The job search's first long poll returns RUNNING (independent review, PR #96). */
   slowJobSearch?: boolean;
+  /** Apify refuses the job search's start with this HTTP status (e.g. a restricted account). */
+  jobsStartStatus?: number;
+  /** Apify refuses the company-details start with this HTTP status. */
+  detailsStartStatus?: number;
+  /** The job search succeeds with an empty dataset. */
+  jobsEmpty?: boolean;
+  /** Three postings: two from the same employer, one from a large non-US employer. */
+  duplicateEmployer?: boolean;
+  /** The company record comes back without its size band or description. */
+  detailsIncomplete?: boolean;
   label: string;
 }
 
@@ -353,6 +363,21 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
         isHeadquarter: true,
       }],
     });
+    // Three postings for the dedupe case: the same employer twice, plus one the
+    // mission's own hard limits exclude (5001-10000 employees, Germany).
+    const jobRows = () => {
+      const dup = structuredClone(row);
+      Object.assign(dup, { id: "offline-ae-2", title: "Senior Account Executive",
+        linkedinUrl: "https://www.linkedin.com/jobs/view/offline-ae-2" });
+      const other = structuredClone(row);
+      Object.assign(other, { id: "offline-ae-3", linkedinUrl: "https://www.linkedin.com/jobs/view/offline-ae-3",
+        descriptionText: "Large Enterprise GmbH is hiring an Account Executive in Berlin." });
+      other.company = { ...structuredClone(row.company), id: "offline-large", name: "Large Enterprise GmbH",
+        linkedinUrl: "https://www.linkedin.com/company/offline-large", website: "https://offline-large.example",
+        employeeCountRange: { start: 5001, end: 10000 },
+        locations: [{ country: "Germany", city: "Berlin", isHeadquarter: true }] };
+      return [row, dup, other];
+    };
     let models = 0;
     const fakeTransport: typeof fetch = (u, init) => {
       const url = new URL(u instanceof Request ? u.url : String(u));
@@ -408,6 +433,10 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
       // One run per actor: `run-jobs` / `run-details`, each with its dataset.
       const kind = url.pathname.includes("linkedin-company") || url.pathname.includes("details") ? "details" : "jobs";
       if (request.method === "POST") {
+        const refused = kind === "jobs" ? v.jobsStartStatus : v.detailsStartStatus;
+        if (refused) {
+          return json({ error: { type: "user-or-token-limited", message: "offline: Apify refused the run" } }, refused);
+        }
         return json({
           data: { id: `run-${kind}`, defaultDatasetId: `dataset-${kind}`, status: "RUNNING" },
         }, 201);
@@ -427,7 +456,13 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
         });
       }
       assert(url.pathname.includes("/datasets/"));
-      return json(url.pathname.includes("dataset-details") ? [structuredClone(row.company)] : [row]);
+      if (url.pathname.includes("dataset-details")) {
+        const company = structuredClone(row.company);
+        if (v.detailsIncomplete) { delete company.employeeCountRange; delete company.description; }
+        return json([company]);
+      }
+      if (v.jobsEmpty) return json([]);
+      return json(v.duplicateEmployer ? jobRows() : [row]);
     };
     const gate = createAdmissionFetch({
       db: client as never,
@@ -815,4 +850,100 @@ Deno.test("offline smoke, customer orchestration: the stages the smoke skips sti
     limitsHeld(r);
     assert(stageRan(r, "research_route_control") && stageRan(r, "You triage companies"),
       JSON.stringify(r.trace.model_stages));
+  }));
+
+// ── A7 OFFLINE SUCCESS AND FAILURE PATHS ────────────────────────────────────
+// The same rehearsal, with the vendor answering differently. Each asserts the
+// limits, what was bought, what was persisted, and what a person must close.
+
+/** What a run left behind, for the trace and for a failing assertion's message. */
+function outcome(r: Rehearsal) {
+  const o = {
+    provider: r.of("provider").map((x: Rehearsal) => [x.actor, x.committed_microusd, x.provider_run_id ?? null, x.report_source ?? null]),
+    polls: r.of("poll").length,
+    models: r.of("model").length,
+    leads: (r.dashboard.data ?? []).map((c: Rehearsal) => [c.raw?.company_name ?? null, c.raw?.canonical_decision?.qualified ?? null]),
+    // Credit per purchase, by capability: `<task>:<actor key>:v2:<hash>` -> status.
+    credits: Object.fromEntries(r.credits.map((c: Rehearsal) => [String(c.idempotency_key).split(":")[1], c.status])),
+    // Why each provider attempt ended, as the run records it for the operator.
+    attempts: ((r.trace.tasks as Rehearsal[]).map((t) => t.result).find((x) => x?.capability_execution_state)
+      ?.capability_execution_state?.provider_attempts ?? []).map((a: Rehearsal) => a.reason ?? a.outcome ?? null),
+    refused: r.refused,
+    task: (r.trace.tasks as Rehearsal[]).map((t) => [t.status, t.result?.terminal_status ?? t.result?.status ?? null]),
+  };
+  r.trace.a7_outcome = o;
+  return o;
+}
+/** A refused start: a purchase admitted at its maximum, no run, closed only as NO_RUN at zero. */
+async function refusedStartCloses(r: Rehearsal, actor: string) {
+  const open = (await unreconciled(r.m.queueId)).filter((o) => o.actor === actor);
+  assertEquals(open.length, 1, `the refused ${actor} start is listed for a person`);
+  assertEquals(open[0].provider_run_id, null, "no run id: Apify created no run");
+  await sql`select public.stop_discovery_smoke(${r.m.queueId}, 'offline: closing a refused start')`;
+  const key = r.of("provider").find((x: Rehearsal) => x.actor === actor) && (await sql`
+    select operation_key from public.discovery_smoke_operations
+     where authorization_id = ${r.m.authorizationId} and kind = 'provider' and actor = ${actor}`)[0].operation_key;
+  await sql`select public.reconcile_discovery_smoke_operation(${r.m.queueId}, ${key}, 0, 'apify run history: none (offline)', 'NO_RUN')`;
+  assertEquals((await unreconciled(r.m.queueId)).filter((o) => o.actor === actor).length, 0, "NO_RUN at zero closes it");
+}
+
+Deno.test("A7 offline: three postings, one employer twice — one company lookup, one lead, no duplicate", opts, () =>
+  rehearse({ orchestration: "minimal", companyDetails: true, duplicateEmployer: true, label: "a7-dedupe" }, (r) => {
+    limitsHeld(r);
+    minimalShape(r);
+    const o = outcome(r);
+    const details = r.trace.requests.filter((q: Rehearsal) => q.method === "POST" && q.url.includes("linkedin-company"));
+    assertEquals(details.length, 1, `one company-details purchase: ${JSON.stringify(o)}`);
+    assertEquals(details[0].body, { companies: ["https://www.linkedin.com/company/offline-software"] },
+      "the in-band US employer is the one looked up, not the excluded one");
+    assertEquals(o.leads, [["Example Software", true]], `one lead, the qualifying employer, once: ${JSON.stringify(o)}`);
+    assertEquals(o.credits, { apify_linkedin_job_search: "charged", apify_linkedin_company_details: "charged" });
+  }));
+
+for (const status of [403, 402]) {
+  Deno.test(`A7 offline: Apify refuses the job search (${status}) — nothing else is bought, nothing persisted, a person closes it at zero`, opts, () =>
+    rehearse({ orchestration: "minimal", companyDetails: true, jobsStartStatus: status, label: `a7-jobs-${status}` }, async (r) => {
+      limitsHeld(r);
+      const o = outcome(r);
+      assertEquals(o.provider.length, 1, `only the refused job search was admitted: ${JSON.stringify(o)}`);
+      assertEquals(o.provider[0][0], JOBS);
+      assertEquals(o.polls, 0, "no run, so nothing is read");
+      assertEquals(o.leads, [], "nothing persisted");
+      assertEquals(o.models, 1, "only the execution plan: nothing to evaluate");
+      assertEquals(o.credits, { apify_linkedin_job_search: "not_charged" }, "a refused start costs the workspace no credit");
+      assertEquals(o.attempts, [`Error: ${status === 403 ? "apify_unauthorized" : "apify_insufficient_credits"}`],
+        "the run records why the vendor refused");
+      await refusedStartCloses(r, JOBS);
+    }));
+}
+
+Deno.test("A7 offline: Apify refuses the company details (403) — the posting alone never qualifies", opts, () =>
+  rehearse({ orchestration: "minimal", companyDetails: true, detailsStartStatus: 403, label: "a7-details-403" }, async (r) => {
+    limitsHeld(r);
+    const o = outcome(r);
+    assertEquals(o.provider.map((p: unknown[]) => p[0]), [JOBS, DETAILS], JSON.stringify(o));
+    assertEquals(o.leads.filter((l: unknown[]) => l[1] === true), [], `no qualified lead without the company record: ${JSON.stringify(o)}`);
+    assertEquals(o.credits, { apify_linkedin_job_search: "charged", apify_linkedin_company_details: "not_charged" });
+    assert(/"enrichment_outcome": ?"provider_error"/.test(taskJson(r)), "held: the company record was refused");
+    await refusedStartCloses(r, DETAILS);
+  }));
+
+Deno.test("A7 offline: the job search finds nothing — no company lookup, nothing persisted", opts, () =>
+  rehearse({ orchestration: "minimal", companyDetails: true, jobsEmpty: true, label: "a7-jobs-empty" }, (r) => {
+    limitsHeld(r);
+    const o = outcome(r);
+    assertEquals(o.provider.map((p: unknown[]) => p[0]), [JOBS], `nothing to look up: ${JSON.stringify(o)}`);
+    assertEquals(o.leads, []);
+    assertEquals(o.models, 1, "nothing to evaluate");
+    assertEquals(o.attempts, ["empty"], "recorded as an empty search, not a failure");
+    assertEquals(o.credits, { apify_linkedin_job_search: "charged" }, "the run did happen");
+  }));
+
+Deno.test("A7 offline: the company record lacks its size band and description — not qualified", opts, () =>
+  rehearse({ orchestration: "minimal", companyDetails: true, detailsIncomplete: true, label: "a7-details-incomplete" }, (r) => {
+    limitsHeld(r);
+    const o = outcome(r);
+    assertEquals(o.provider.map((p: unknown[]) => p[0]), [JOBS, DETAILS], JSON.stringify(o));
+    assertEquals(o.leads.filter((l: unknown[]) => l[1] === true), [], `missing evidence never qualifies: ${JSON.stringify(o)}`);
+    assertEquals(o.credits, { apify_linkedin_job_search: "charged", apify_linkedin_company_details: "charged" });
   }));
