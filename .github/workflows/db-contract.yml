@@ -18,10 +18,19 @@
 # are applied to this disposable database only.
 name: Database contract
 
+# TWO STAGES (docs/launch/ci.md, "Two-stage testing"):
+#   Stage 1 — a DRAFT pull request: the contract tests run on every push
+#     (about 4 min); the mutation proofs (about 25 min) are deferred.
+#   Stage 2 — a pull request marked ready for review (and every push after
+#     that), a push to main, launch/hardening or an integration/** branch, or a
+#     manual dispatch: the complete job, contract tests AND mutation proofs.
+# Nothing is removed: every test still runs on the final commit.
 on:
   pull_request:
+    # `ready_for_review` starts the complete run when a draft is promoted.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [main, launch/hardening]
+    branches: [main, launch/hardening, "integration/**"]
   workflow_dispatch:
 
 permissions:
@@ -82,7 +91,9 @@ jobs:
       - name: Contract tests
         run: tests/db-contract/run.sh
 
+      # Stage 2 only: deferred on DRAFT pull requests (see the header).
       - name: Mutation proof — reverting the D1 PostgREST fix must fail the contract
+        if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
         run: tests/db-contract/mutation.sh
 
       - name: Postgres log on failure
