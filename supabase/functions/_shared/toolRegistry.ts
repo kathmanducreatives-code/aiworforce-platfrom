@@ -1204,6 +1204,13 @@ async function execSourceWithApify(
       timeoutMs: 20_000,
     }).catch((e) => ({ ok: false, status: 0, data: { error: String(e) } }));
 
+  // A failed GET cannot undo the purchase whose ID the caller is resuming.
+  // Preserve it on every failure: the ledger/recovery path and credit
+  // settlement must never interpret an unreadable run as a definite non-start.
+  const resumeFailure = resumeRunId
+    ? { data: { run_id: resumeRunId, actor_id, pending: true, resumable: true, receipt: "unsettled" } }
+    : {};
+
   if (startRes.status === 401 || startRes.status === 403) {
     // Token reached Apify but was rejected — almost always actor access/rental,
     // not a malformed token. Surface a clear, actionable hint (rule 9).
@@ -1213,6 +1220,7 @@ async function execSourceWithApify(
       unavailable: true,
       error: "apify_unauthorized",
       data: {
+        ...resumeFailure.data,
         actor_id,
         source_type,
         status: startRes.status,
@@ -1221,7 +1229,7 @@ async function execSourceWithApify(
     };
   }
   if (startRes.status === 402) {
-    return { ok: false, unavailable: true, error: "apify_insufficient_credits" };
+    return { ok: false, unavailable: true, error: "apify_insufficient_credits", ...resumeFailure };
   }
   if (startRes.status === 400) {
     // Malformed actor input. Log the SHAPE only (keys), never values or the
@@ -1238,6 +1246,7 @@ async function execSourceWithApify(
       ok: false,
       error: "apify_input_schema_error",
       data: {
+        ...resumeFailure.data,
         actor_id,
         source_type,
         payload_keys: Object.keys(actorInput),
@@ -1260,7 +1269,7 @@ async function execSourceWithApify(
     if (!resumeRunId && (startRes.status === 0 || startRes.status >= 500)) {
       return { ok: false, error: `${APIFY_START_UNCERTAIN}:${startRes.status}` };
     }
-    return { ok: false, error: `apify_start_failed:${startRes.status}` };
+    return { ok: false, error: `apify_start_failed:${startRes.status}`, ...resumeFailure };
   }
 
   const run = startRes.data?.data ?? startRes.data ?? {};
@@ -1268,7 +1277,7 @@ async function execSourceWithApify(
   const dataset_id: string | undefined = run.defaultDatasetId;
   // A 2xx start that names no run: the run may well exist — uncertain, as above.
   if (!run_id) {
-    return { ok: false, error: resumeRunId ? "apify_missing_run_id" : `${APIFY_START_UNCERTAIN}:missing_run_id` };
+    return { ok: false, error: resumeRunId ? "apify_missing_run_id" : `${APIFY_START_UNCERTAIN}:missing_run_id`, ...resumeFailure };
   }
 
   // ── PERSIST BEFORE WAITING ───────────────────────────────────────────────
