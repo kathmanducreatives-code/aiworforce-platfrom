@@ -14,7 +14,7 @@ import {
   assertRejects,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mintJwt, REST_URL, sql, uuid } from "./lib/harness.ts";
+import { mintJwt, REST_URL, serviceClient, sql, uuid } from "./lib/harness.ts";
 import { authorizeSmoke, seedSmokeMission } from "./lib/smokeMission.ts";
 import {
   createAdmissionFetch,
@@ -221,6 +221,44 @@ let selfDescription = STRONG_SELF_DESCRIPTION;
 // deno-lint-ignore no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- trace rows and SQL results, read field by field
 type Rehearsal = Record<string, any>;
+
+/**
+ * CLAIM ONLY THIS REHEARSAL'S MISSION.
+ *
+ * `claim_next_lead_mission` takes the oldest claimable row in the WHOLE
+ * contract database, and this file shares it with every other contract file.
+ * Rows other fixtures leave `running` (`seedSmokeMission` gives them a
+ * three-minute lease nothing releases) become claimable once that lease lapses
+ * — on a slow CI runner, before this file's later rehearsals run — and the claim
+ * then took a stranger's row (#109 CI: the Canadian-HQ and future-date audits).
+ *
+ * So every OTHER claimable row (queued or resumable, or running with a lapsed
+ * lease) is parked before the real RPC is called. Should one lapse in the
+ * instant between the two, the stray claim is parked too and the claim retried
+ * (bounded). Test fixture only: the production RPC, lease durations and queue
+ * semantics are unchanged.
+ */
+/** The one call this needs from a supabase-js client. */
+type ClaimRpc = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }> };
+async function claimOwnMission(client: ClaimRpc, queueId: string, workerId: string) {
+  const park = (except: string) => sql`update public.lead_mission_queue set status = 'complete'
+    where id <> ${except} and (status in ('queued', 'resumable')
+       or (status = 'running' and lease_expires_at is not null and lease_expires_at <= now()))`;
+  await park(queueId);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await client.rpc("claim_next_lead_mission", { p_worker_id: workerId, p_lease_seconds: 180 });
+    assertEquals(error, null);
+    const row = (Array.isArray(data) ? data[0] : data) as Rehearsal;
+    if (row?.queue_id === queueId) return row;
+    if (row?.claimed && row.queue_id) {
+      // A row that lapsed between the park and the claim: hand it back and retry.
+      await sql`update public.lead_mission_queue set status = 'complete' where id = ${row.queue_id}`;
+      continue;
+    }
+    return row; // not claimed at all: the caller's own-row assertion reports it
+  }
+  throw new Error("claimOwnMission: another fixture's row kept being claimed");
+}
 
 async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void>) {
   const missionGoal = v.goal ?? MISSION;
@@ -589,12 +627,9 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
       // Runbook Phase 5 order: the authorization is over the FINAL kickoff body
       // (the queue row's request cannot change after authorization).
       m.authorizationId = await authorizeSmoke(m.queueId, { quotes, actorLimits });
-      const { data: claims, error: claimError } = await client.rpc("claim_next_lead_mission", {
-        p_worker_id: m.workerId, p_lease_seconds: 180,
-      });
-      assertEquals(claimError, null);
-      assertEquals(claims[0].queue_id, m.queueId);
-      trace.claim = claims[0];
+      const claimed = await claimOwnMission(client, m.queueId, m.workerId);
+      assertEquals(claimed?.queue_id, m.queueId);
+      trace.claim = claimed;
       const { handleRunAgent } = await import(
         "../../supabase/functions/run-agent/index.ts"
       );
@@ -673,7 +708,7 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
       });
       trace.outcome = missionOutcome;
       const release = await releaseQueuedMission((fn, args) => client.rpc(fn, args), {
-        queueId: m.queueId, workerId: m.workerId, attempts: claims[0].attempts,
+        queueId: m.queueId, workerId: m.workerId, attempts: claimed.attempts,
         outcome: missionOutcome, outcomeDoc: { ...missionOutcome },
       });
       assertEquals(release.released, true, JSON.stringify(release));
@@ -1099,3 +1134,23 @@ if (Deno.env.get("A7_AUDIT_KNOWN_GAPS") === "1") {
       }));
   }
 }
+
+// ── ISOLATION REGRESSION ────────────────────────────────────────────────────
+// What #109's CI hit: another fixture's mission, older and with a lapsed lease,
+// was the next claimable row. The rehearsal's claim must still take its own.
+Deno.test("isolation: another fixture's lapsed, older mission is never claimed in place of the rehearsal's own", opts, async () => {
+  const foreign = await seedSmokeMission({ authorize: false });
+  await sql`update public.lead_mission_queue set lease_expires_at = now() - interval '1 second', created_at = now() - interval '1 hour'
+              where id = ${foreign.queueId}`;
+  const [before] = await sql`select attempts from public.lead_mission_queue where id = ${foreign.queueId}`;
+  const own = await seedSmokeMission({ authorize: false });
+  await sql`update public.lead_mission_queue set status = 'queued', claimed_by = null, lease_expires_at = null where id = ${own.queueId}`;
+  const claimed = await claimOwnMission(await serviceClient(), own.queueId, own.workerId);
+  assertEquals(claimed?.queue_id, own.queueId, "the rehearsal claims its own mission");
+  assertEquals(claimed?.claimed, true);
+  const [f] = await sql`select status, attempts, claimed_by from public.lead_mission_queue where id = ${foreign.queueId}`;
+  assertEquals(f.status, "complete", "the stranger's row was parked, not claimed");
+  assertEquals(f.attempts, before.attempts, "no claim attempt was spent on it");
+  assert(f.claimed_by !== own.workerId);
+  await sql`update public.lead_mission_queue set status = 'complete' where id = ${own.queueId}`;
+});
