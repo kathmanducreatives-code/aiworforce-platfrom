@@ -18,7 +18,7 @@ import {
 } from "../../supabase/functions/_shared/toolRegistry.ts";
 import { gptStructured } from "../../supabase/functions/_shared/gptProvider.ts";
 import { APIFY_START_UNCERTAIN } from "../../supabase/functions/_shared/verifierPurchaseRecovery.ts";
-import { mintJwt, REST_URL, sql, uuid } from "./lib/harness.ts";
+import { mintJwt, REST_URL, sql } from "./lib/harness.ts";
 import { seedSmokeMission, type SmokeMission } from "./lib/smokeMission.ts";
 
 const opts = { sanitizeResources: false, sanitizeOps: false };
@@ -514,35 +514,6 @@ for (
   );
 }
 
-// Characterization of an existing queue recovery gap; deliberately names the
-// defect instead of presenting a permanently running mission as a success.
-Deno.test(
-  "KNOWN DEFECT: a hard crash on claim five strands the queue and task running",
-  opts,
-  async () => {
-    const m = await mission();
-    await sql`update public.lead_mission_queue set status='complete' where id <> ${m.queueId} and status in ('queued','resumable','running')`;
-    await sql`update public.lead_mission_queue set status='queued', claimed_by=null, attempts=0, lease_expires_at=null where id=${m.queueId}`;
-    for (let n = 1; n <= 5; n++) {
-      const claimed = await db.rpc("claim_next_lead_mission", {
-        p_worker_id: uuid(),
-        p_lease_seconds: 60,
-      });
-      assertEquals(claimed.error, null);
-      assertEquals(claimed.data[0].queue_id, m.queueId);
-      assertEquals(claimed.data[0].attempts, n);
-      await sql`update public.lead_mission_queue set lease_expires_at=now()-interval '1 second' where id=${m.queueId}`;
-    }
-    await sql`update public.tasks set updated_at=now()-interval '10 minutes' where id=${m.taskId}`;
-    const claimed = await db.rpc("claim_next_lead_mission", {
-      p_worker_id: uuid(),
-      p_lease_seconds: 60,
-    });
-    assertEquals(claimed.error, null);
-    assertEquals(claimed.data[0].claimed, false);
-    await sql`select * from public.tasks_sweep_stuck_runs(interval '5 minutes')`;
-    const [row] =
-      await sql`select q.status as queue_status, t.status as task_status from public.lead_mission_queue q join public.tasks t on t.id=q.task_id where q.id=${m.queueId}`;
-    assertEquals(row, { queue_status: "running", task_status: "running" });
-  },
-);
+// The claim-five crash this file once characterized as a KNOWN DEFECT is fixed by
+// held migration 20261019120000; its regression (the same scenario, inverted) is
+// tests/db-contract/leadMissionExhaustedLease.contract.test.ts.
