@@ -219,6 +219,63 @@ export async function sweepCancelledMissions(
   return out;
 }
 
+// ── A MISSION WHOSE LAST LEASE LAPSED ──────────────────────────────────────
+//
+// A worker that dies holding a mission's final claim never releases it. The
+// held migration 20261019120000 has `claim_next_lead_mission` end such a row —
+// `failed`, `last_outcome.lease_lapsed = true` and its reason — but, like a
+// cancellation, that writes ONE row. Nobody will claim a failed row, so no
+// release reconciles its task, lineage and plan. This does, with the same
+// reconciliation, on the same idle tick as the cancel sweep.
+//
+// ONLY MARKED ROWS. A mission a worker released as `failed` was reconciled by
+// that release; it is never listed here, so nothing a release settled is
+// visited again.
+
+/** The default reason when a marked row names none (the claim always writes one). */
+export const LEASE_LAPSED_REASON = "attempts_exhausted" as const;
+
+/** A queue row the claim function ended because its final lease lapsed. */
+export interface LapsedQueueRow extends CancelledQueueRow {
+  /** `last_outcome->>reason`: `attempts_exhausted` or `slices_exhausted`. */
+  reason?: string | null;
+}
+
+export interface LapsedSweepDb extends TerminalRowsDb {
+  /**
+   * Queue rows `failed` with `last_outcome.lease_lapsed`, most recent first.
+   * The implementation bounds the window and the count.
+   */
+  listLapsed: (limit: number) => Promise<LapsedQueueRow[]>;
+  resolveNotices?: (planId: string, queueStatus: "failed", reason: string) => Promise<void>;
+}
+
+/** Reconcile missions the claim function ended after their final lease lapsed. */
+export async function sweepLapsedMissions(
+  db: LapsedSweepDb,
+  nowIso: string,
+  limit: number = CANCEL_SWEEP_LIMIT,
+): Promise<CancelSweepResult> {
+  const rows = await db.listLapsed(limit);
+  const out: CancelSweepResult = { scanned: rows.length, reconciled: 0, details: [] };
+  for (const row of rows) {
+    const planId = typeof row.plan_id === "string" && row.plan_id
+      ? row.plan_id
+      : (typeof row.request?.plan_id === "string" ? row.request.plan_id : null);
+    const reason = typeof row.reason === "string" && row.reason ? row.reason : LEASE_LAPSED_REASON;
+    const r = await reconcileTerminalRows(db, "failed", reason, {
+      taskId: row.task_id,
+      lineageId: row.lineage_id ?? row.task_id,
+      planId,
+    }, nowIso, "the worker holding the mission's final claim stopped before releasing it");
+    if (r.written.length === 0) continue;
+    if (planId && db.resolveNotices) await db.resolveNotices(planId, "failed", reason);
+    out.reconciled++;
+    out.details.push({ queue_id: row.id, violations: r.violations, written: r.written, remaining: r.remaining });
+  }
+  return out;
+}
+
 // ── CANCEL AND FINALIZE, IN ONE SUPPORTED CALL ─────────────────────────────
 //
 // Query B d22d9ee6 (2026-10-12): `cancel_lead_mission` set the queue row and

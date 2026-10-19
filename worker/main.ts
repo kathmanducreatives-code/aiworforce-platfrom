@@ -30,8 +30,8 @@ import {
   isTerminalQueueStatus, releaseQueuedMission,
 } from "../supabase/functions/_shared/leadMissionTerminal.ts";
 import {
-  CANCEL_SWEEP_LIMIT, CANCELLED_REASON, reconcileTerminalRows, sweepCancelledMissions,
-  type CancelSweepDb, type TerminalIds,
+  CANCEL_SWEEP_LIMIT, CANCELLED_REASON, reconcileTerminalRows, sweepCancelledMissions, sweepLapsedMissions,
+  type CancelSweepDb, type LapsedSweepDb, type TerminalIds,
 } from "../supabase/functions/_shared/leadMissionCancellation.ts";
 import { resolvePlanNoticesForQueueEnd, supabaseNoticeDb } from "../supabase/functions/_shared/runNotices.ts";
 import { createLeadMissionRunner } from "./leadMissionRunner.ts";
@@ -274,7 +274,7 @@ async function main() {
   // plan partial` because the queue decided alone. The rule lives in
   // leadMissionTerminal.ts and the row I/O in leadMissionCancellation.ts, which
   // a test can drive without a database — this file cannot be imported.
-  const rowsDb: CancelSweepDb = {
+  const rowsDb: CancelSweepDb & LapsedSweepDb = {
     // THE CHECK: three short strings, projected server-side. This is what the
     // sweep reads on every pass; the 150-500 kB result below is read only when
     // a write is actually required.
@@ -309,6 +309,19 @@ async function main() {
     writePlan: async (planId, patch) => {
       const { error } = await db.from("task_plans").update(patch).eq("id", planId);
       if (error) log("[worker] terminal reconcile: plan write failed", error.message);
+    },
+    // FAILED ONLY WHEN THE CLAIM ENDED IT: a final lease that lapsed (held
+    // migration 20261019120000 marks `last_outcome.lease_lapsed`). A mission a
+    // worker released as failed was reconciled by that release and is never
+    // listed. Same 24 h window and bound as the cancellations.
+    listLapsed: async (limit) => {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await db.from("lead_mission_queue")
+        .select("id, task_id, lineage_id, plan_id:request->>plan_id, reason:last_outcome->>reason")
+        .eq("status", "failed").eq("last_outcome->>lease_lapsed", "true").gte("updated_at", since)
+        .order("updated_at", { ascending: false }).limit(limit);
+      if (error) { log("[worker] lapsed sweep read failed", error.message); return []; }
+      return (data ?? []) as Array<{ id: string; task_id: string | null; lineage_id: string | null; plan_id: string | null; reason: string | null }>;
     },
     // CANCELLED ONLY, and only the recent ones: a cancellation no release will
     // ever follow (the row was unclaimed when it was cancelled). Terminal
@@ -416,7 +429,15 @@ async function main() {
           queue: d.queue_id, reason: CANCELLED_REASON, before: d.violations, written: d.written, after: d.remaining,
         });
       }
-      return { scanned: r.scanned, reconciled: r.reconciled };
+      // The same safety net for a mission the claim ended after its final
+      // lease lapsed: no worker will release it either.
+      const l = await sweepLapsedMissions(rowsDb, new Date().toISOString(), CANCEL_SWEEP_LIMIT);
+      for (const d of l.details) {
+        log("[worker] lapsed mission reconciled", {
+          queue: d.queue_id, before: d.violations, written: d.written, after: d.remaining,
+        });
+      }
+      return { scanned: r.scanned + l.scanned, reconciled: r.reconciled + l.reconciled };
     },
   };
 
