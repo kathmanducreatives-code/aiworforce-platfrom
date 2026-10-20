@@ -1,0 +1,15 @@
+{
+  "source": "User clarification in this conversation, 2026-10-20",
+  "working_roles": {
+    "Apollo": "lead management, enrichment and sequencing",
+    "iGTM": "human cold calling",
+    "Jungler": "buying signals and prospect research"
+  },
+  "unverified": [
+    "Exact iGTM vendor/product identity",
+    "Exact Jungler vendor/product identity",
+    "Whether Apollo is the official CRM of record",
+    "Account permissions, API access and Agentory connections"
+  ],
+  "design_boundary": "No vendor-specific API dependency until identity/access confirmed; prioritize existing records, client context, grounded caller preparation and enforceable model choice."
+}

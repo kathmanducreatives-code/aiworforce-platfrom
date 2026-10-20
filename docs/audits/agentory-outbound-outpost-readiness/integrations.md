@@ -1,6 +1,6 @@
 # Nosh's stack: integration feasibility and missing contracts
 
-Checked 2026-10-20. The tool list is discovery-call context, not verified account inventory. The exact iGTM/Jungler products, CRM, campaign system, plans, ownership and credential scopes were not confirmed. Public `igtm.ai` and `jungler.ai` materials are candidate vendor identities only. No account was accessed and no connector or third-party operation was executed.
+Checked 2026-10-20. The user clarified the working roles: Apollo handles lead management, enrichment and sequencing; iGTM supports human cold calling; Jungler supplies buying signals and prospect research. These are working assumptions from discovery, not account inspection or verified Agentory integration. The exact iGTM/Jungler products and official CRM of record, plans, ownership and credential scopes were not confirmed. Public `igtm.ai` and `jungler.ai` materials are candidate vendor identities only. No account was accessed and no connector or third-party operation was executed.
 
 Agentory source searches found no Apollo, iGTM, Jungler, Sheets, Slack or Sales Navigator adapter in the execution registry. Apollo references in competitor lists and Company Brain text are not integrations. A selectable Slack builder label is not a registered tool. The settings page links email sequences and labels other integrations “coming soon.” The inbound Agentory MCP is three read-only legacy-table tools; it does not connect those vendors or provide canonical qualification write-back.
 
@@ -50,10 +50,13 @@ Candidate Jungler documentation describes an API key and workspace scope, and li
 
 Sheets' official limits document project/user quotas and bounded exponential backoff. Slack documents event delivery and retries; neither service supplies exactly-once end-to-end business processing for this proposed integration. [Sheets limits](https://developers.google.com/workspace/sheets/api/limits), [Slack Events API](https://docs.slack.dev/apis/events-api/).
 
-## Proposed connection contract — not implemented
+## Vendor-independent connection requirements — not implemented
 
 Reuse Agentory as a processing layer around the existing CRM. Persist `workspace/client binding`, source system and immutable external record ID on every imported record; retain source facts and timestamps rather than overwrite them with model summaries. A model proposes a patch; a deterministic validator and human authorize the allowlisted write. Separate ingestion, research, decision, approval and delivery states so a successful draft cannot mean a successful CRM update.
 
 Inbound event identity must include vendor account and client/campaign. Persist raw signed event metadata safely, deduplicate before effects, order by a vendor sequence/version when available, and quarantine ambiguous contact matches. A delayed “not interested” must not overwrite a newer “do not contact,” and opt-out must dominate outbound scheduling. These rules cannot yet be tested through an iGTM adapter because that adapter does not exist.
 
 Deliver through a durable outbox with explicit intended/pending/accepted/uncertain/reconciled states and remote operation IDs. A timeout is not proof of failure. Reconciliation reads the destination before replaying an uncertain operation. Vendor idempotency support and expiration must be confirmed; do not claim exactly-once delivery from a database lock alone. Start read-only, then approved writes to a sandbox with a separate explicit authorization.
+
+
+Before selecting any vendor-specific adapter, verify with Nosh: (1) exact iGTM product/vendor; (2) exact Jungler product/vendor; (3) whether Apollo or another CRM is the authoritative system of record and destination for approved outputs. Until then, public iGTM/Jungler API material is conditional feasibility evidence only. No provider-specific integration design or implementation is authorized by these working assumptions.

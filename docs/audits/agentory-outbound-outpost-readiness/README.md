@@ -12,6 +12,12 @@ The first useful pilot should prepare human callers from a small, approved set o
 
 The minimum sequence is: establish deployment/health and permissions; preserve Claude's qualification work; establish explicit client scope and approved source identities; repair approval/delivery durability; add the existing-lead import and call-brief seam. **A7 remains NO-GO.** This audit authorizes no release, migration, spending or live test.
 
+### Working assumptions confirmed in this conversation
+
+Nosh uses Apollo for lead management, enrichment and sequencing; iGTM for human cold calling; and Jungler for buying signals and prospect research. These describe the intended workflow, not verified Agentory connections or account access. Apollo appears central, but its status as the official CRM of record remains unconfirmed. The exact iGTM and Jungler product identities remain unconfirmed.
+
+The pilot therefore centers on improving existing records and preparing human callers. Vendor-specific API adapters, authentication choices, event schemas and write-back destinations remain conditional until the three questions below are answered. Official API research in this report establishes possible routes, not a selected integration design. Model policy, client-context isolation and grounded draft contracts can be specified independently of those vendor identities.
+
 Evidence navigation:
 
 - [Complete feature inventory](feature-inventory.md), [per-capability JSON](feature-inventory.json).
@@ -250,3 +256,11 @@ Do not present as working live:
 Before a real demo/pilot obtain separate permission for the exact non-customer sandbox or approved customer sample, accounts and allowed operations. Required evidence/access is precise: confirmed CRM/iGTM/Jungler identities; sanitized saved-lead and call-event examples; official API/field/scopes and rate/credit limits; read-only release/worker/schema/policy metadata; approved client-to-destination map; model/data-sharing consent and explicit spend cap. Do not request production secrets in chat. Supply credentials through the approved server secret-management process only after authorization.
 
 Any later live test must record release SHA, workspace/client, source IDs, authorized inputs and limits, actual provider/model IDs and usage, evidence dates, canonical decision, persisted output, human approval, destination receipt and replay/cancellation outcome. Without those receipts the verdict stays UNVERIFIED.
+
+### Final questions to verify with Nosh
+
+1. **Which exact iGTM product does he use?** Confirm the vendor URL, product/edition and supported ways to export or access call outcomes; do not assume `igtm.ai`.
+2. **Which exact Jungler product does he use?** Confirm the vendor URL, product/edition and supported ways to export or access signals and research; do not assume `jungler.ai`.
+3. **What is his official CRM/system of record?** Is Apollo authoritative for contacts, companies, campaign activity and follow-up state, or does another CRM own some of those records? Confirm where approved AI outputs should return.
+
+These are discovery questions, not requests for credentials or permission to run live workflows. Account access, scopes, data-sharing consent and bounded live-test authorization remain separate later gates.
