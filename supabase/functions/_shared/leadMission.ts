@@ -804,6 +804,32 @@ export interface DeterministicParseOpts {
  * user's words and `system_default` when it did not. Nothing here is
  * `gpt_inference` — that provenance is reserved for the model path.
  */
+/**
+ * Q3 — an employee range the sentence states outright, or null. Only explicit
+ * company-size phrasing is read ("exactly 23 employees", "11–50 employees",
+ * "between 11 and 50 people", "under 50 employees", "at least 200 staff",
+ * "500+ employees"); a bare count with no qualifier is not guessed at.
+ */
+export function readEmployeeRange(text: string): { min?: number; max?: number } | null {
+  const n = (v: string) => Number(v.replace(/,/g, ""));
+  const UNIT = String.raw`(?:employees|people|persons|staff|headcount|team members)`;
+  let m = new RegExp(String.raw`\bexactly\s+([\d,]+)\s+${UNIT}\b`, "i").exec(text);
+  if (m) return { min: n(m[1]), max: n(m[1]) };
+  m = new RegExp(String.raw`\b(?:between\s+)?([\d,]+)\s*(?:-|–|to|and)\s*([\d,]+)\s+${UNIT}\b`, "i").exec(text);
+  if (m) return { min: n(m[1]), max: n(m[2]) };
+  m = new RegExp(String.raw`\b(?:under|fewer than|less than|below)\s+([\d,]+)\s+${UNIT}\b`, "i").exec(text);
+  if (m) return { max: Math.max(0, n(m[1]) - 1) };
+  m = new RegExp(String.raw`\b(?:at most|up to|no more than)\s+([\d,]+)\s+${UNIT}\b`, "i").exec(text);
+  if (m) return { max: n(m[1]) };
+  m = new RegExp(String.raw`\b(?:over|more than|above)\s+([\d,]+)\s+${UNIT}\b`, "i").exec(text);
+  if (m) return { min: n(m[1]) + 1 };
+  m = new RegExp(String.raw`\b(?:at least|no fewer than|minimum of)\s+([\d,]+)\s+${UNIT}\b`, "i").exec(text);
+  if (m) return { min: n(m[1]) };
+  m = new RegExp(String.raw`\b([\d,]+)\s*\+\s*${UNIT}\b`, "i").exec(text);
+  if (m) return { min: n(m[1]) };
+  return null;
+}
+
 export function parseLeadMissionDeterministic(
   originalUserQuery: string, opts: DeterministicParseOpts = {},
 ): LeadMissionV1 {
@@ -820,6 +846,12 @@ export function parseLeadMissionDeterministic(
 
   const known = extractKnownCompanies(q);
   if (known.length) prov["company_profile.known_companies"] = "explicit_user_request";
+
+  // Q3 — THE SIZE THE CUSTOMER STATED. This reading used to carry no size at
+  // all, so "exactly 23 employees" or "11–50 employees" vanished whenever it
+  // was the compiler in use (the base of every compile, and the fallback).
+  const employeeRange = readEmployeeRange(t);
+  if (employeeRange) prov["company_profile.employee_range"] = "explicit_user_request";
 
   const roleFamilies = allMatches(t, ROLE_FAMILY_MARKERS);
 
@@ -1003,6 +1035,7 @@ export function parseLeadMissionDeterministic(
       stages,
       locations,
       ...(known.length ? { known_companies: known } : {}),
+      ...(employeeRange ? { employee_range: employeeRange } : {}),
     },
     required_signals: signals,
     // What the sentence asked for that no signal type can express. Recorded so

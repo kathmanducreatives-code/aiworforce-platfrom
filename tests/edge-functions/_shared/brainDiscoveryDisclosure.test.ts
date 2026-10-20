@@ -97,7 +97,8 @@ Deno.test("the note is added to the target line only; nothing else on the card c
   for (const k of ["hard", "opportunity_signals", "hypotheses", "time_windows", "unsupported"] as const) {
     assertFalse(withBrain[k].some((l) => l.includes(NOTE)), `${k}: ${withBrain[k].join(" | ")}`);
   }
-  assert(withBrain.hard.some((l) => l.startsWith("Geography: United States")));
+  // Q3: an unscoped hard geography is a headquarters requirement, and the card says so.
+  assert(withBrain.hard.some((l) => l.startsWith("Headquarters: United States")), withBrain.hard.join(" | "));
   assert(withBrain.time_windows.some((l) => l.startsWith("Funding: last 730 days")));
 });
 

@@ -859,6 +859,21 @@ export function requirementElevation(kind: CanonicalSignalKind, phrase: string, 
   return idx > 0 ? q.slice(Math.max(0, idx - 30), idx).match(/\b(must(?: currently)?(?: be)?|only|required to|strictly)\b[^.]*$/) : null;
 }
 
+/**
+ * Q3 — the geography scope the customer's own words state. PRESENCE when they
+ * speak of an office, presence, operations, a team or a location IN the place;
+ * HEADQUARTERS otherwise. Read only from the request, never from a rewrite.
+ * ("50 employees in the US" states a size, not a presence, so headcount words
+ * are not presence words.)
+ */
+/** The company-kind noun itself — "startup(s)", "start-up(s)" — as the customer wrote it. */
+const STARTUP_NOUN = /\bstart-?ups?\b/i;
+
+export function scopeFromWords(query: string): "headquarters" | "presence" {
+  return /\b(?:offices?|presence|operations|operating|operates|branch(?:es)?|locations?|teams?)\s+(?:in|across|throughout)\b/i.test(query)
+    ? "presence" : "headquarters";
+}
+
 export function deriveMissionCriteria(
   mission: LeadMissionV1,
   /**
@@ -984,10 +999,24 @@ export function deriveMissionCriteria(
   profileList("industry", "company_profile.verticals", cp.verticals ?? [], "Industry");
   profileList("business_model", "company_profile.business_models", cp.business_models ?? [], "Business model");
   profileList("geography", "company_profile.locations", cp.locations ?? [], "Geography");
+  // ── Q3 — A HARD GEOGRAPHY IS ALWAYS COMPILED WITH A SCOPE (A7 S02, S03b) ──
+  //
+  // The scope reached a criterion only from the model's proposal; when that was
+  // null the RUNTIME evaluator's answer chose it, and a model reading "US
+  // company" as office presence qualified a Canadian-HQ company with a US office.
+  // The scope is fixed here, from the customer's own words, where the intent is:
+  // the proposal's scope when it gives one; otherwise PRESENCE when the request
+  // itself speaks of an office / presence / operations in the place; otherwise
+  // HEADQUARTERS — "a US company" is a company headquartered in the US. A
+  // compiled scope is never replaced by an evaluator's (#113 refuses a verdict
+  // whose scope disagrees).
+  const geographyScope = cp.geography_scope ?? scopeFromWords(query);
   for (const c of out) {
-    if (c.dimension === "geography" && cp.geography_scope) {
-      c.geography_scope = cp.geography_scope;
-      if (cp.geography_scope === "headquarters") c.label = `Headquarters: ${String(c.value)}`;
+    if (c.dimension !== "geography") continue;
+    const scope = cp.geography_scope ?? (c.kind === "hard" ? geographyScope : undefined);
+    if (scope) {
+      c.geography_scope = scope;
+      if (scope === "headquarters") c.label = `Headquarters: ${String(c.value)}`;
     }
   }
 
@@ -1022,6 +1051,14 @@ export function deriveMissionCriteria(
     // Brain rung is pushed exactly as before.
     if (stageIntent?.kind === "hard" && slug(stageIntent.value) === slug(st)) continue;
     const source = sourceFromProvenance(prov["company_profile.stages"], true);
+    // Q3 — NO COMPANY KIND THE CUSTOMER DID NOT STATE. The deterministic parser
+    // files stage and cohort words ("seed-stage", "Series A", "early stage",
+    // "YC") under the company kind "startup" for ROUTING, with
+    // explicit-request provenance — so "must be seed-stage" compiled a
+    // MANDATORY, user_explicit "Company kind: startup" nothing can prove. The
+    // stage word is already its own criterion (`stageIntent`); the company kind
+    // is a criterion only when the request itself says "startup".
+    if (st === "startup" && source === "user_explicit" && !STARTUP_NOUN.test(query)) continue;
     if (st === "startup") {
       // The noun ("startups") is the company kind; a stage word, when the
       // sentence has one, is pushed separately below.

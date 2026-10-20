@@ -185,7 +185,10 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
       claims: graph.claims.map((x) => x.dimension === dim ? { ...x, current: other, supporting: [], conflicting: [] } : x),
     };
     const theirs = checkAgainst(c, alone);
-    if (theirs.result !== check.result) {
+    // An item that cannot answer this criterion (unknown — e.g. a location
+    // copy with no HQ authority) does not DISPUTE it: only a definite, different
+    // answer is a material conflict.
+    if (theirs.result !== "unknown" && theirs.result !== check.result) {
       return {
         ...check, result: "unknown", evidence_ids: [current.evidence_id, other.evidence_id],
         reason: `equally authoritative sources disagree: ${current.source.actor} says ${check.result} (${check.reason}), ` +
@@ -234,8 +237,18 @@ function checkAgainst(c: MissionCriterion, graph: CompanyEvidenceGraph): Criteri
   }
   const ids = [item.evidence_id];
   const provenance = provenanceOf(item);
-  if (c.dimension === "geography" && c.geography_scope === "headquarters" &&
-    !(item.status === "proven" && item.authority?.claim === "headquarters" && item.authority.level === "proven")) {
+  // HEADQUARTERS NEEDS PROVEN HQ AUTHORITY — from the item speaking for the
+  // dimension or from a proven item AGREEING with it (Q3). The same location
+  // can reach the graph twice: as the company record's observation, which
+  // carries the HQ authority, and as the registry's `company_location`, which
+  // does not. Which of two equal items is `current` must not decide whether HQ
+  // is established; a DISAGREEING item never lends its authority.
+  const hqAuthority = (e: EvidenceItem | null | undefined) =>
+    !!e && e.status === "proven" && e.authority?.claim === "headquarters" && e.authority.level === "proven";
+  // A DISPROVEN location fails whatever the scope: the headquarters question
+  // only arises for a location that is not already ruled out (below).
+  if (c.dimension === "geography" && c.geography_scope === "headquarters" && item.status !== "disproven" && !(item.status === "proven" &&
+    (hqAuthority(item) || (graph.claims.find((x) => x.dimension === dim)?.supporting ?? []).some(hqAuthority)))) {
     return { ...base, result: "unknown", reason: "headquarters is not explicitly established",
       evidence_ids: ids, provenance };
   }

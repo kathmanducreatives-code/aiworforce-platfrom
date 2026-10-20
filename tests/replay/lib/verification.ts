@@ -59,6 +59,24 @@ export interface VerificationReplay {
 /** Production readiness with no probe and no experimental routes. */
 export const replayReadiness = () => readinessPolicyFor("<workspace>", () => undefined);
 
+/**
+ * THE MISSION AS PRODUCTION COMPILED IT. These fixtures record production
+ * decisions made before Q3, when an unscoped geography ("US AI SaaS
+ * companies") compiled with NO scope; today it compiles as a HEADQUARTERS
+ * requirement (A7 S02/S03b), and the fixtures' sanitized geography carries no
+ * headquarters authority at all (it predates the authority model). The replay
+ * therefore reads the geography as the PRESENCE its records prove, so the spend,
+ * stop and adoption mechanics it exists to check are exercised. No record or
+ * flag is changed. `strictScope` replays under today's compiler instead —
+ * asserted in F_canary8HiringAffordability ("STRICT HQ").
+ */
+export function asRecorded(
+  criteria: MissionCriterion[], mission: LeadMissionV1, strictScope = false,
+): MissionCriterion[] {
+  if (strictScope || mission.company_profile?.geography_scope) return criteria;
+  return criteria.map((c) => c.dimension === "geography" ? { ...c, geography_scope: "presence" as const } : c);
+}
+
 export async function replayVerificationAt(
   fx: ReplayFixture, checkpoint: string,
   opts: {
@@ -77,6 +95,8 @@ export async function replayVerificationAt(
      * run-agent's `verifierPriorPurchases` reads it. Absent: nothing known.
      */
     prior?: PriorPurchases;
+    /** Replay under today's compiler (Q3 headquarters scope) instead of as recorded. */
+    strictScope?: boolean;
     /** Wall clock for the uncertain-purchase window. Absent: `Date.now`. */
     now?: () => number;
   } = {},
@@ -86,7 +106,7 @@ export async function replayVerificationAt(
   if (!cp) throw new Error(`fixture ${fx.fixture} has no checkpoint ${checkpoint}`);
   const readiness = replayReadiness();
   const mission = fx.mission as unknown as LeadMissionV1;
-  const criteria = deriveMissionCriteria(mission, readiness);
+  const criteria = asRecorded(deriveMissionCriteria(mission, readiness), mission, opts.strictScope);
   const companies = opts.resume ? structuredClone(opts.resume.companies) : companiesAt(fx, checkpoint);
   const run = { companies };
   const ledger = opts.resume ? structuredClone(opts.resume.ledger) : ledgerAt(fx, cp.at);
@@ -149,9 +169,9 @@ export async function replayVerificationAt(
  */
 export function canonicalView(
   run: { companies: readonly EngineCompany[] }, mission: LeadMissionV1, missionId: string,
-  entryCapability = "general_company_discovery",
+  entryCapability = "general_company_discovery", strictScope = false,
 ): WorkbenchMissionView {
-  const criteria = deriveMissionCriteria(mission);
+  const criteria = asRecorded(deriveMissionCriteria(mission), mission, strictScope);
   const candidates = missionCandidatesFrom(run, {
     missionId,
     required: requiredEvidenceDimensions(

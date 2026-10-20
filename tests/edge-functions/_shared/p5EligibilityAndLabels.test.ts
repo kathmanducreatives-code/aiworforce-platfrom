@@ -36,6 +36,17 @@ import {
 } from "../../../supabase/functions/_shared/opportunityReasoningRun.ts";
 import { emptyDiscoverySelector } from "./discoverySelectorFixture.ts";
 
+/**
+ * Q3 — a company record that flags ONE headquarters proves it
+ * (\`li_record_single_headquarters_flag\`). Since Q3 an unscoped hard geography
+ * ("a US company") is a HEADQUARTERS requirement, so a proven location in these
+ * fixtures carries the authority a real company-details record gives it.
+ */
+const HQ_AUTHORITY = {
+  version: "evidence-authority-v1", claim: "headquarters", level: "proven",
+  rule: "li_record_single_headquarters_flag", reason: "the company record flags one headquarters",
+} as never;
+
 globalThis.fetch = () => { throw new Error("P5 tests must not reach the network"); };
 
 const NOW = new Date("2026-09-18T12:00:00.000Z");
@@ -77,7 +88,7 @@ function ev(dimension: EvidenceDimension, value: unknown, over: Partial<Evidence
     evidence_id: `ev_${dimension}_${++seq}`, company_key: "c1", dimension, value, status: "proven",
     source: { provider: "apify", actor: "apify_linkedin_company_details", provider_call_id: "pc_1", url: "https://x.test/a", excerpt: null },
     method: "provider_field", observed_at: "2026-09-17T00:00:00.000Z", valid_until: null,
-    confidence: "high", derived_from: [], mission_id: "task-p5", origin: "lead_mission", ...over,
+    confidence: "high", derived_from: [], mission_id: "task-p5", origin: "lead_mission", ...(dimension === "geography" ? { authority: HQ_AUTHORITY } : {}), ...over,
   };
 }
 /** The funding pair's verdict that the company is still at Seed, as the verifier writes it. */
