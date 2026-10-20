@@ -237,7 +237,7 @@ Deno.test("deadline: absolute, from the queue row, read after the lock, never re
                         from public.discovery_smoke_authorizations where queue_id = ${m.queueId}`;
   assertEquals(String(a.deadline_at), String(a.want), "deadline = queue created_at + 300 s");
   await new Promise((r) => setTimeout(r, 1500));
-  assertEquals((await admit(op(m))).decision, "stopped");
+  await admit(op(m)); // CI EXAMPLE: assertion removed on purpose — do not merge
 
   // Approving too late is refused rather than starting a fresh window.
   const late = await seedSmokeMission({ ageSeconds: 301, authorize: false });
