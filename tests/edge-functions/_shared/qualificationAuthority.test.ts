@@ -199,6 +199,12 @@ Deno.test("resume: the engine's own holds survive a checkpoint; the evaluator's 
   // A slice that re-judges a company decides from what it derived itself.
   const rejudged = (after as unknown as Array<Record<string, unknown>>).map((c) => ({ ...c, evaluation_path: "model_evaluated" }));
   assertEquals(codes(rejudged)["fact.test"], [], "a fresh decision replaces a previous slice's engine hold");
+  // A restored hold lasts only as long as its condition: enrichment adopted by
+  // the next slice (a details read still running at slice end) lifts it.
+  const adopted = (after as unknown as Array<Record<string, unknown>>).map((c) =>
+    c.key === "enrich.test" ? { ...c, enriched: { company_name: "Held" }, enrichment_outcome: "success" } : c);
+  assertEquals(codes(adopted)["enrich.test"], [], "enrichment now in hand: the restored hold lapses");
+  assertEquals(codes(adopted)["fact.test"], ["verified_fact_rejected"], "a verified fact stands");
   // An untrusted checkpoint cannot invent a hold code.
   assertEquals(restoredHolds([{ code: "evaluator_rejected_by_attacker", reason: "x" }, { code: "enrichment_evidence_missing", reason: 1 }]),
     [{ code: "enrichment_evidence_missing", reason: "1" }]);

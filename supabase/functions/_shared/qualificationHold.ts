@@ -28,6 +28,7 @@
 // as before. Pure.
 
 import type { MissionEvaluation } from "./missionEvaluation.ts";
+import { enrichmentIsEvidence, type EnrichmentOutcome } from "./leadEnrichmentState.ts";
 
 export const QUALIFICATION_HOLD_VERSION = "qualification-hold-v1" as const;
 
@@ -50,6 +51,8 @@ export interface HoldSource {
   qualification_holds?: readonly QualificationHold[] | null;
   /** How this slice reached (or did not reach) a decision for the company. */
   evaluation_path?: string | null;
+  /** The company's enrichment outcome now — a restored enrichment hold lapses once it is evidence. */
+  enrichment_outcome?: EnrichmentOutcome | null;
 }
 
 /** Holds only the engine's own record can show — not re-derivable from a restored evaluation. */
@@ -121,9 +124,17 @@ export function qualificationHoldsOf(c: HoldSource): QualificationHold[] {
   // evaluator's holds are never copied — they are re-derived from the restored
   // evaluation above, so a later re-evaluation can change them — and a slice
   // that re-judges the company decides from what it derived itself.
+  //
+  // A RESTORED HOLD LASTS ONLY AS LONG AS ITS CONDITION. Missing enrichment is
+  // retryable: a company-details read still running at slice end is adopted by
+  // the next slice (replay "[failure] 6"), and once the company has enrichment
+  // evidence the hold has nothing left to say. A verified-fact rejection is a
+  // fact about the company and stands.
   if (UNDECIDED_PATHS.has(c.evaluation_path ?? "not_reached")) {
     for (const h of c.qualification_holds ?? []) {
-      if (ENGINE_HOLDS.has(h.code) && !holds.some((x) => x.code === h.code)) holds.push(h);
+      if (!ENGINE_HOLDS.has(h.code) || holds.some((x) => x.code === h.code)) continue;
+      if (h.code === "enrichment_evidence_missing" && c.enrichment_outcome && enrichmentIsEvidence(c.enrichment_outcome)) continue;
+      holds.push(h);
     }
   }
   return holds;
