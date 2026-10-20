@@ -112,6 +112,7 @@ export interface MissionCriterion {
    * claim (`fundingStageClaim.stageRequirement`). Absent: an ordinary criterion.
    */
   any_of?: string[];
+  geography_scope?: "headquarters" | "presence";
 }
 
 export interface CanonicalSignalRecord {
@@ -983,6 +984,12 @@ export function deriveMissionCriteria(
   profileList("industry", "company_profile.verticals", cp.verticals ?? [], "Industry");
   profileList("business_model", "company_profile.business_models", cp.business_models ?? [], "Business model");
   profileList("geography", "company_profile.locations", cp.locations ?? [], "Geography");
+  for (const c of out) {
+    if (c.dimension === "geography" && cp.geography_scope) {
+      c.geography_scope = cp.geography_scope;
+      if (cp.geography_scope === "headquarters") c.label = `Headquarters: ${String(c.value)}`;
+    }
+  }
 
   // ── Company Brain refinements of what the user closed: targets, never hard ──
   const REFINED: Record<string, [CriterionDimension, string]> = {

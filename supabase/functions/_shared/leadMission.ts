@@ -411,6 +411,8 @@ export interface MissionCompanyProfile {
   verticals: string[];
   stages: string[];
   locations: string[];
+  /** The interpreting model's location meaning; absence is unspecified, never HQ proof. */
+  geography_scope?: "headquarters" | "presence";
   employee_range?: { min?: number; max?: number };
   /** Supplied domains/names. Non-empty means discovery is SKIPPED. */
   known_companies?: string[];
@@ -1192,6 +1194,8 @@ export function validateLeadMission(
         ? base.company_profile.stages : strArray(cp.stages),
       locations: base.company_profile.locations.length
         ? base.company_profile.locations : strArray(cp.locations),
+      ...(cp.geography_scope === "headquarters" || cp.geography_scope === "presence"
+        ? { geography_scope: cp.geography_scope } : {}),
       ...(employee_range ? { employee_range } : {}),
       // One entry per company: "LlamaIndex and Llama Index" is one company (RC08).
       ...(base.company_profile.known_companies?.length

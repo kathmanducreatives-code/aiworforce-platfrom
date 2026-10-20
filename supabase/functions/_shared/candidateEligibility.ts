@@ -45,6 +45,7 @@
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import type { EvidenceDimension, EvidenceItem } from "./candidateObservation.ts";
 import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts";
+import type { CriterionVerdict } from "./missionEvaluation.ts";
 import { geographyContradicts } from "./leadEligiblePool.ts";
 import { matchBusinessModel } from "./businessModelMatch.ts";
 import {
@@ -164,7 +165,10 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
     return { ...base, result: "unknown", reason: `no evidence dimension answers ${c.dimension}`, evidence_ids: [], provenance: null };
   }
   if (c.dimension === "industry" || c.dimension === "business_model") return checkBusinessModel(c, graph, base);
-  const item = currentItem(graph, dim);
+  const current = currentItem(graph, dim);
+  const item = c.dimension === "geography" && c.geography_scope === "presence" && current?.geography_presence
+    ? { ...current, value: current.geography_presence.value, status: current.geography_presence.status,
+      authority: current.geography_presence.authority } : current;
   if (!item || item.status === "unknown") {
     const stale = graph.claims.find((x) => x.dimension === dim)?.stale.length ?? 0;
     return {
@@ -174,6 +178,11 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
   }
   const ids = [item.evidence_id];
   const provenance = provenanceOf(item);
+  if (c.dimension === "geography" && c.geography_scope === "headquarters" &&
+    !(item.status === "proven" && item.authority?.claim === "headquarters" && item.authority.level === "proven")) {
+    return { ...base, result: "unknown", reason: "headquarters is not explicitly established",
+      evidence_ids: ids, provenance };
+  }
   // P6 — A DECIDED FUNDING-STAGE CLAIM ANSWERS THE STAGE CRITERION DIRECTLY.
   // `fundingStageClaim.ts` already ordered the verified rounds; re-reading its
   // verdict as a string would only reintroduce the substring test it replaces.
@@ -510,9 +519,20 @@ function anyOfResolved(criteria: readonly MissionCriterion[], checks: CriterionC
  */
 export function evaluateEligibility(
   criteria: readonly MissionCriterion[], graph: CompanyEvidenceGraph,
+  verdicts?: readonly CriterionVerdict[],
 ): EligibilityResult {
   const usable = criteria.filter((c) => c.status === "ok");
-  const checks = anyOfResolved(usable, usable.map((c) => checkCriterion(c, graph)));
+  const checks = anyOfResolved(usable, usable.map((c) => {
+    const rows = verdicts?.filter((v) => v.criterion_id === c.id) ?? [];
+    const verdict = rows.length === 1 ? rows[0] : null;
+    const check = checkCriterion(c.dimension === "geography" && !c.geography_scope && verdict?.geography_scope
+      ? { ...c, geography_scope: verdict.geography_scope } : c, graph);
+    if (!verdicts || check.result === "fail") return check;
+    if (verdict?.result === "pass") return check; // never upgrades missing facts
+    return { ...check, result: verdict?.result === "fail" ? "fail" as const : "unknown" as const,
+      reason: verdict?.reason ?? "the evaluator did not establish this criterion",
+      evidence_ids: verdict?.evidence.map((e) => e.evidence_id) ?? [] };
+  }));
   const hard = checks.filter((c) => c.kind === "hard");
   const hard_checks: Record<string, CheckResult> = {};
   for (const h of hard) {

@@ -45,6 +45,8 @@ export type EvidenceMethod = "provider_field" | "deterministic_derivation" | "mo
 export type EvidenceOrigin = "lead_mission" | "signals" | "enrichment" | "web";
 
 export interface EvidenceItem {
+  /** Same provider row's structured offices, kept apart from its HQ claim. */
+  geography_presence?: { value: string; status: EvidenceStatus; authority: EvidenceItem["authority"] };
   evidence_id: string;
   /** Null until the union assigns the canonical company. */
   company_key: string | null;
@@ -185,6 +187,7 @@ function item(
     status: EvidenceStatus; method?: EvidenceMethod; confidence: EvidenceItem["confidence"];
     url?: string | null; excerpt?: string | null; derived_from?: string[]; source_record_id?: string | null;
     authority?: EvidenceItem["authority"];
+    geography_presence?: EvidenceItem["geography_presence"];
   },
 ): EvidenceItem {
   const source = {
@@ -198,6 +201,7 @@ function item(
     valid_until: validUntil(dimension, ctx.observed_at), confidence: o.confidence,
     derived_from: o.derived_from ?? [], mission_id: ctx.mission_id, origin: ctx.origin ?? "lead_mission",
     ...(o.authority ? { authority: o.authority } : {}),
+    ...(o.geography_presence ? { geography_presence: o.geography_presence } : {}),
   };
 }
 
@@ -250,8 +254,12 @@ export function observationFromCompany(
     const hq = entries.filter((e) => e.is_headquarters);
     if (hq.length === 1) {
       const a = weigh("headquarters", "headquarters_flag", { single_headquarters_flag: true });
+      const presence = weigh("country", "location_entries", {
+        structured_country: entries.length > 0 && entries.every((e) => !!e.country),
+      });
       ev.push(item(ctx, "geography", hq[0].text, {
         ...base, status: statusForAuthority(a.authority), authority: authorityRecord(a),
+        geography_presence: { value: c.geography, status: statusForAuthority(presence.authority), authority: authorityRecord(presence) },
         confidence: a.authority === "proven" ? "high" : "medium",
       }));
     } else {

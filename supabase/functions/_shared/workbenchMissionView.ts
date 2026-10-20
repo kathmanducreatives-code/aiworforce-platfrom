@@ -27,6 +27,7 @@ import type { ReadinessPolicy } from "./routeReadiness.ts";
 import { canStillQualify, evidenceGapsFor, summarizeGaps, type EvidenceGap, type GapSummary } from "./evidenceGapRouter.ts";
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import type { MissionCriterion } from "./missionCriteria.ts";
+import type { CriterionVerdict } from "./missionEvaluation.ts";
 import type { ResearchWaveSummary } from "./researchFeedback.ts";
 import type { SpendLedger } from "./budgetPolicy.ts";
 import {
@@ -45,6 +46,7 @@ export type Bucket =
   | "screened_out" | "identity_unresolved" | "investigating" | "ineligible" | "pending" | Label;
 
 export interface MissionCandidate {
+  criterion_verdicts?: readonly CriterionVerdict[];
   company_key: string;
   name: string | null;
   domain: string | null;
@@ -269,7 +271,7 @@ export const LABEL_BUCKETS: ReadonlySet<Bucket> = new Set<Bucket>([
 export function candidateDecision(i: {
   criteria: readonly MissionCriterion[]; candidate: MissionCandidate; anchor: string | null;
 }): CandidateDecision {
-  const eligibility = evaluateEligibility(i.criteria, i.candidate.graph);
+  const eligibility = evaluateEligibility(i.criteria, i.candidate.graph, i.candidate.criterion_verdicts);
   const ceiling = computeCeiling({ criteria: i.criteria, graph: i.candidate.graph, eligibility, anchor: i.anchor });
   const bucket = bucketOf(i.candidate, eligibility, ceiling.ceiling);
   return {
@@ -325,7 +327,7 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
   const blockedKeys = new Set(i.candidates.filter((c) => c.paid_verification_blocked).map((c) => c.company_key));
 
   for (const c of i.candidates) {
-    const eligibility = evaluateEligibility(i.criteria, c.graph);
+    const eligibility = evaluateEligibility(i.criteria, c.graph, c.criterion_verdicts);
     const ceiling = computeCeiling({ criteria: i.criteria, graph: c.graph, eligibility, anchor: i.mission.anchor });
     const proposal = i.reasoning?.[c.company_key];
     const reasoned = applyReasoning(ceiling, proposal ?? null);

@@ -371,7 +371,7 @@ import {
 import {
   buildMissionTriageBinding, triageTaskDiagnostics,
 } from "../_shared/missionTriageBinding.ts";
-import { parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
+import { evaluationCriteria, parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
 // The SAME sizing function the engine shortlists with, so the evaluation budget
 // and the set of companies that can be evaluated are derived from one rule
 // rather than two that may drift.
@@ -3625,7 +3625,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   // THE REGISTRY THE ENGINE BUILT, not one reconstructed here:
                   // the parser refuses any citation that is not in it, which is
                   // what stops the evaluator inventing evidence.
-                  const parsed = parseMissionEvaluationStrict(raw, registry);
+                  const parsed = parseMissionEvaluationStrict(raw, registry, evaluationCriteria(input));
                   evaluationCompaniesEvaluated++;
                   console.log("[run-agent][mission-evaluation]", {
                     task_id: task.id, company_key,

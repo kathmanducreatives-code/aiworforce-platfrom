@@ -589,20 +589,25 @@ export function jobEmployerIdentityConflict(r: Record<string, unknown>):
 /** The hiring a mission asked for: the role families it named, and a window it stated. */
 export interface RequestedHiring {
   role_families: readonly string[];
+  /** Literal role terms only when the mission explicitly forbids role broadening. */
+  exact_role_terms?: readonly string[];
   /** Days, when the mission stated one; null leaves the search's own freshness filter to govern. */
   window_days: number | null;
 }
 
 /** The requested hiring, read from the mission's hiring signals. Null when it asks for none. */
 export function requestedHiringFromSignals(
-  hiringSignals: ReadonlyArray<{ role_families?: readonly string[] | null; timeframe_days?: number | null }>,
+  hiringSignals: ReadonlyArray<{ role_families?: readonly string[] | null; timeframe_days?: number | null;
+    qualifier?: { role_terms?: readonly string[] } }>,
+  forbidRoleBroadening = false,
 ): RequestedHiring | null {
   if (hiringSignals.length === 0) return null;
   const families = [...new Set(hiringSignals.flatMap((sig) => sig.role_families ?? [])
     .map((f) => String(f).trim()).filter((f) => f.length > 0))];
   const windows = hiringSignals.map((sig) => Number(sig.timeframe_days))
     .filter((d) => Number.isFinite(d) && d > 0);
-  return { role_families: families, window_days: windows.length ? Math.min(...windows) : null };
+  return { role_families: families, window_days: windows.length ? Math.min(...windows) : null,
+    ...(forbidRoleBroadening ? { exact_role_terms: hiringSignals.flatMap((s) => s.qualifier?.role_terms ?? []) } : {}) };
 }
 
 /**
@@ -625,6 +630,12 @@ export function jobProvesRequestedHiring(
   now: Date = new Date(),
 ): boolean {
   if (!requested) return true;
+  // Preserve an explicit no-broadening constraint using the request's own
+  // terms, not a title exception list. Broader/synonymous requests still go to
+  // contextual model evaluation. Modifiers around a literal term are allowed.
+  const words = (s: string) => ` ${s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+  const exact = (requested.exact_role_terms ?? []).filter((s) => s.trim());
+  if (exact.length && !exact.some((term) => words(job.title ?? "").includes(words(term)))) return false;
   const families = requested.role_families.filter((f): f is Exclude<RoleFamily, null | "custom"> =>
     Object.hasOwn(ROLE_FAMILY_ALIASES, f));
   if (families.length > 0 && !families.some((f) => roleMatchesFamily(job.title, f))) return false;

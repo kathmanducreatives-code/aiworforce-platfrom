@@ -2803,7 +2803,8 @@ export async function runCapabilityPlan(
     // bucket would let a verdict cite the wrong one.
     expansion_evidence: c.signal_evidence["expansion"] ?? [],
     launch_evidence: c.signal_evidence["product_launch"] ?? [],
-    yc_description: c.company.description ?? null,
+    yc_description: ["apify_yc_companies_memo23", "apify_yc_companies_solidcode"].includes(c.company.raw_ref?.actor_key ?? "")
+      ? c.company.description ?? null : null,
     // A FAILED PROVIDER IS RECORDED AS A FAILURE. Reading it as "nothing
     // found" would let an outage look like a company that is not hiring —
     // the one inference this whole stage exists to forbid.
@@ -6143,7 +6144,8 @@ export async function runCapabilityPlan(
             // asked for (Query B: "Assistant Manager" for a sales search), so a
             // posting proves only the hiring the mission named.
             const requestedHiring = requestedHiringFromSignals(
-              (opts.mission?.required_signals ?? []).filter(isHiringSignal));
+              (opts.mission?.required_signals ?? []).filter(isHiringSignal),
+              opts.mission?.directives?.disallowed_broadening?.includes("role") === true);
             const discoveryInput = {
               maxItems: Math.min(maxCandidates, JOB_DISCOVERY_LIMITS.maxItems),
               ...boundedJobDiscoveryInput(sel.input),
@@ -9497,6 +9499,9 @@ export async function runCapabilityPlan(
         // `mission_evaluation_observability`. Silence reported as silence.
         c.decision_source = "insufficient_evidence";
         c.mission_evaluation = notEvaluated("no evaluator was available for this run");
+        // An enabled evaluator that failed to answer cannot be bypassed by
+        // the broader facts the earlier batch happened to establish.
+        if (deps.evaluateMission) c.mission_evaluation.criterion_verdicts = [];
         c.evaluation_path = "model_unavailable";
         // The Brain still runs, with no semantic assessment, so the deterministic
         // gate record exists for a reviewer. It cannot QUALIFY without one — see
@@ -11834,6 +11839,7 @@ export function missionCandidatesFrom(
       investigated: c.investigation_state === "investigated" || c.verdict !== null ||
         c.brain !== null || c.hiring_assessment !== null,
       graph,
+      criterion_verdicts: c.mission_evaluation?.criterion_verdicts,
       next_action: null,
       attempted_routes: attemptedRoutesOf(c),
       unaffordable_routes: unaffordableRoutes(c.completed_operations),
@@ -11909,7 +11915,7 @@ export function canonicallyWorkableKeys(
   const criteria = deriveMissionCriteria(opts.mission, readiness);
   const out = new Set<string>();
   for (const c of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
-    const eligibility = evaluateEligibility(criteria, c.graph);
+    const eligibility = evaluateEligibility(criteria, c.graph, c.criterion_verdicts);
     const bucket = bucketOf(c, eligibility, null);
     if (bucket === "investigating" || bucket === "identity_unresolved") {
       out.add(c.company_key);

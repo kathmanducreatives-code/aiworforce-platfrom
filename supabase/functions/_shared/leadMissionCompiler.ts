@@ -148,6 +148,7 @@ export interface GptMissionProposal {
   no_broadening_requested: boolean;
   /** The geography was STATED by the user, not inferred from workspace context. */
   geography_is_hard: boolean;
+  geography_scope?: "headquarters" | "presence";
   /**
    * Actions the request forbids in its own words — "do not send outreach", "do
    * not invent contacts". Distinct from `excluded_signals`, which is about what
@@ -529,6 +530,7 @@ export function buildMissionCompilerPayload(
       required_signal_terms: "string[] — the user's own role/signal words, verbatim",
       no_broadening_requested: "boolean",
       geography_is_hard: "boolean",
+      geography_scope: "headquarters|presence|null — interpret the user's location intent: headquarters requires explicit HQ proof; an office or market presence is not HQ",
       prohibitions: "string[] — actions the request forbids",
       output_intent: REQUESTED_OUTPUTS,
       strategies: MISSION_STRATEGIES,
@@ -719,6 +721,8 @@ export function parseMissionProposal(raw: unknown, userText = ""): ParsedProposa
       required_signal_terms: strArray(c.required_signal_terms),
       no_broadening_requested: c.no_broadening_requested === true,
       geography_is_hard: c.geography_is_hard === true,
+      ...(c.geography_scope === "headquarters" || c.geography_scope === "presence"
+        ? { geography_scope: c.geography_scope } : {}),
       prohibitions: strArray(c.prohibitions),
       // Dropped AND NAMED here, not silently filtered. `validateLeadMission`
       // has the same guard, but by the time it runs an unknown value has
@@ -1400,6 +1404,7 @@ function proposalToMissionCandidate(
     company_profile: {
       verticals: p.company_types,
       locations: p.geographies,
+      ...(p.geography_scope ? { geography_scope: p.geography_scope } : {}),
       business_models: [],
       stages: [],
       employee_range: {

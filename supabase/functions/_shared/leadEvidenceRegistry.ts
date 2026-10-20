@@ -362,7 +362,14 @@ export function buildEvidenceRegistry(i: RegistryInput): EvidenceRegistry {
     push("company_description", "linkedin", e.description, {
       source_text: e.description,
       source_url: e.linkedin_company_url,
-      verification_state: e.identity_state === "resolved" ? "verified" : "reported",
+      verification_state: e.identity_state === "resolved" &&
+          e.description_provenance?.actor_key === "apify_linkedin_company_details"
+        ? "verified" : "reported",
+      metadata: {
+        field_provenance: e.description_provenance ?? null,
+        field_origin: e.description_provenance?.actor_key === "apify_linkedin_company_details"
+          ? "company_record" : e.description_provenance ? "discovery" : "unknown",
+      },
     });
   }
   const yc = clean(i.yc_description);
@@ -648,6 +655,7 @@ export function registryForPrompt(r: EvidenceRegistry): Array<Record<string, unk
     observed_at: x.observed_at,
     freshness: x.freshness,
     verification_state: x.verification_state,
+    ...(x.evidence_type === "company_description" ? { field_origin: x.metadata.field_origin ?? "unknown" } : {}),
     // ── WHICH PAGE THIS IS ──────────────────────────────────────────────
     //
     // Five `web_page` items were indistinguishable here: same type, same

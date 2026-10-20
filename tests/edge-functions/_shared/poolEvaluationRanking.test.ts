@@ -67,7 +67,7 @@ function company(over: Record<string, unknown> = {}) {
     employee_range_advisory: null, geography: "United States",
     company_type: null, startup_evidence: null, hiring_status: true,
     source_provenance: "harvestapi/linkedin-company", field_trust: {},
-    missing_fields: [], raw_ref: { actor_key: "x", source_id: "x" },
+    missing_fields: [], raw_ref: { actor_key: "apify_linkedin_company_details", source_id: "x" },
     ...over,
   } as never;
 }

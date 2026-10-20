@@ -25,6 +25,7 @@ import {
   buildMissionReevaluationInput,
   mergeReevaluation,
   parseMissionEvaluationStrict,
+  evaluationCriteria,
   type MissionEvaluation,
   type MissionEvaluationInput,
 } from "./missionEvaluation.ts";
@@ -342,7 +343,7 @@ export async function reevaluateWithWebEvidence(
     // The SAME strict parser as the first pass, against the SAME registry the
     // model was shown — so a citation to an evidence_id that is not there is
     // dropped here exactly as it would have been on the first pass.
-    const parsed = parseMissionEvaluationStrict(raw, registry);
+    const parsed = parseMissionEvaluationStrict(raw, registry, evaluationCriteria(payload));
     // ── WHICH EVIDENCE IS ACTUALLY NEW ──────────────────────────────────
     //
     // The first pass's registry is the reference. A requirement it left open
