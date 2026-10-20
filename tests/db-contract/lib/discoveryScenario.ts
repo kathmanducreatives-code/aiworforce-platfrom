@@ -16,6 +16,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { mintJwt, REST_URL, sql, uuid } from "./harness.ts";
 import { seedSmokeMission } from "./smokeMission.ts";
+import { mockCriterionVerdicts } from "./criterionFixture.ts";
 import { createAdmissionFetch, missionAdmission } from "../../../supabase/functions/_shared/smokeAdmission.ts";
 import { createLeadMissionRunner } from "../../../worker/leadMissionRunner.ts";
 import { createExecutionDeadline } from "../../../supabase/functions/_shared/leadExecutionFinalizer.ts";
@@ -124,7 +125,9 @@ function citations(ev: Ev[], model: Model) {
   }
   return {
     business: cite(find(ev, /^company_description$/, /\b(software|platform)\b.*\b(teams|companies|businesses|customers)\b/i)),
-    location: cite(find(ev, /headquarter/, /United States/), /United States/),
+    // The registry files a company's location as `company_location` (#113 cites it
+    // per criterion); a `headquarter` type alone never matched, so this cited nothing.
+    location: cite(find(ev, /headquarter|^company_location$/, /United States/), /United States/),
     size: cite(find(ev, /^company_size_band$/, /11-50 employees/), /11-50 employees/),
     hiring: cite(find(ev, /job|posting|hiring/, /Account Executive/), /Account Executive/),
   };
@@ -139,6 +142,10 @@ function evaluatorAnswer(input: unknown, model: Model) {
   return {
     mission_fit: missing.length === 0 ? "pass" : "review", icp_fit: "plausible",
     hiring_fit: c.hiring ? "verified" : "absent", confidence: 0.8, match_score: missing.length === 0 ? 80 : 0,
+    // One verdict per compiled criterion, citing the SAME receipts as above (#113's
+    // evaluator contract). The credulous model's receipts stay irrelevant on purpose:
+    // production must refuse them; nothing here decides eligibility.
+    criterion_verdicts: mockCriterionVerdicts(input, c),
     matched_requirements: req.filter(([, x]) => x).map(([requirement, x]) => ({ requirement, ...x!, support: "verified" })),
     failed_requirements: [], reasoning: missing.length ? `not established: ${missing.join("; ")}` : "every requirement cited",
     rejection_reasons: [], evidence_quality: missing.length ? "weak" : "moderate", unknown_fields: missing, next_action: null,
