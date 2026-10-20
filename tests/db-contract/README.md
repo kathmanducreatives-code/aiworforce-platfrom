@@ -9,7 +9,10 @@ every offline test and failed against PostgREST with 42703 on every open-row
 write (PR #73, fixed in `b9fa8516`).
 
 CI: `.github/workflows/db-contract.yml`, **advisory** (its own workflow, not a
-required check).
+required check). On a **draft** PR it runs the contract tests only; the mutation
+proofs run once the PR is ready for review, on `main`, `launch/hardening` and
+`integration/**` pushes, and on manual dispatch (`docs/launch/ci.md`, "Two-stage
+testing").
 
 ## What it covers
 

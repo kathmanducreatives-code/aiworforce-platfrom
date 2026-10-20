@@ -20,6 +20,33 @@ never deploys.
 Measured on a fresh checkout (2026-09-29): edge 8,100, deploy-safety 78, UI 582 + 5, QA 55 + 30 —
 all green; type ratchet 23 = baseline, lint ratchet 1,286 = baseline; build ~8 s.
 
+## Two-stage testing
+
+Development runs fast checks on draft pull requests; the complete verification
+runs on the final commit. Nothing is removed — only *when* the slowest step runs.
+
+| | Stage 1 — draft pull request | Stage 2 — final integration |
+|---|---|---|
+| When | every push to a draft PR | a PR marked ready for review (and every push after that); a push to `main`, `launch/hardening` or an `integration/**` branch; a manual dispatch |
+| `CI` (`ci.yml`) | complete: type checks, edge/unit, deploy-safety and infra tests, QA harness, UI, `tsc`/`eslint` ratchets, build (~5 min) | complete |
+| `Database contract` (`db-contract.yml`) | the contract tests against real Postgres + PostgREST (~4 min), including the A7 scenario suites | contract tests **and** the mutation proofs (~25 min) |
+
+**The merge rule** (by practice — `launch/hardening` has no branch protection
+or required checks, so this is not enforced by GitHub):
+1. Develop as independent **draft** PRs; run the relevant contract files
+   locally (`tests/db-contract/run.sh <files>`) while iterating.
+2. To integrate, either mark a PR ready for review, or combine approved PRs on
+   an `integration/<name>` branch and push it.
+3. Merge only a commit whose **complete** `Database contract` run (both steps,
+   no skip) and `CI` run are green **on that exact SHA**. A run on an earlier
+   head, or a draft run with the mutation proofs skipped, does not count.
+4. Before any A7 execution: the same complete runs green on the exact commit
+   the worker will dispatch, and the A7 package re-validated against it.
+
+Promoting `Database contract (Postgres + PostgREST)` to a required check on
+`launch/hardening` would make rule 3 enforced; that is a repository-settings
+change and needs separate approval.
+
 ## The ratchet
 
 Existing debt is held, not ignored: `tsc` (23 errors, all in the unrouted Talent Intelligence scrapers,
