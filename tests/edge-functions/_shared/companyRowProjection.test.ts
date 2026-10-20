@@ -54,3 +54,14 @@ Deno.test("company row key is stable and non-empty for an identified company", (
   assertEquals(companyRowKey(pending()), (strong.dedupeKey ?? "").toLowerCase());
   assert(companyRowKey(pending()).length > 0);
 });
+
+Deno.test("persisted LinkedIn links are absolute URLs while the dedup identity stays schemeless", () => {
+  const company = resolveCompanyIdentity({ name: "Example", linkedin_url: "https://www.linkedin.com/company/example" });
+  const p = pending({ company });
+  const key = companyRowKey(p);
+  const plan = buildCompanyRowPersistencePlan(p, "ws-1", "company");
+  assertEquals(plan.account?.linkedinUrl, "https://www.linkedin.com/company/example");
+  assertEquals(plan.leadCandidate.raw.company_linkedin_url, "https://www.linkedin.com/company/example");
+  assertEquals(companyRowKey(p), key);
+  assertEquals(company.linkedinUrl, "linkedin.com/company/example");
+});

@@ -631,7 +631,8 @@ export function jobProvesRequestedHiring(
   if (requested.window_days != null && requested.window_days > 0) {
     const posted = Date.parse(job.posted_date ?? "");
     if (!Number.isFinite(posted)) return false;
-    if (now.getTime() - posted > requested.window_days * 86_400_000) return false;
+    const ageMs = now.getTime() - posted;
+    if (ageMs < 0 || ageMs > requested.window_days * 86_400_000) return false;
   }
   return true;
 }

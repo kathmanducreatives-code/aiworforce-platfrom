@@ -1,0 +1,1300 @@
+{
+  "integration_base": "2493eccfc679af4bef3b8b268f97a2c20863358a",
+  "kind": "Measured localhost execution; all vendors, company data, model outputs and quote prices are mocked. No account-specific claims.",
+  "compiler": "One separately mocked offline compilation before authorization; counts below include authorized runtime only.",
+  "scenarios": [
+    {
+      "variant": "two-actor",
+      "elapsed_ms": 10794,
+      "queue": [
+        {
+          "status": "complete",
+          "attempts": 1,
+          "claimed_by": null,
+          "lease_expires_at": null
+        }
+      ],
+      "lineage": [
+        {
+          "status": "terminal",
+          "terminal_reason": "quota_met",
+          "lease_holder": null
+        }
+      ],
+      "plan": [
+        {
+          "status": "complete"
+        }
+      ],
+      "worker_outcome": {
+        "status": "completed",
+        "terminal": true,
+        "taskId": "0cf9d1c2-fa35-404c-b0fa-6e6123430ea8"
+      },
+      "response": {
+        "success": true,
+        "terminal_status": "completed",
+        "task_status": "completed",
+        "count_entity": "qualified_company",
+        "eligible_leads": 1,
+        "remaining_leads": 0,
+        "provider_calls": 2
+      },
+      "qualified_dashboard_records": 1,
+      "company_brain_rows": 0,
+      "runtime_model_attempts": 4,
+      "max_runtime_model_request_bytes": 29417,
+      "apify_reads": 5,
+      "committed_microusd": {
+        "model": 49920,
+        "provider": 10000
+      },
+      "actor_starts": [
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-job-search/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "jobTitles": [
+              "Account Executive"
+            ],
+            "locations": [
+              "United States"
+            ],
+            "maxItems": 3,
+            "postedLimit": "month",
+            "sortBy": "date"
+          }
+        },
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-company/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "companies": [
+              "https://www.linkedin.com/company/offline-software"
+            ]
+          }
+        }
+      ],
+      "open_provider_liabilities": [
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-job-search",
+          "provider_run_id": "run-jobs",
+          "committed_microusd": "5000",
+          "reported_microusd": "2000",
+          "receipt": "settled"
+        },
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-company",
+          "provider_run_id": "run-details",
+          "committed_microusd": "5000",
+          "reported_microusd": "4000",
+          "receipt": "unsettled"
+        }
+      ],
+      "credit_transactions": [
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        },
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        }
+      ],
+      "lead_evidence": {
+        "company_name": "Example Software",
+        "company_domain": "offline-software.example",
+        "company_linkedin_url": "https://www.linkedin.com/company/offline-software",
+        "job_evidence": {
+          "url": "https://www.linkedin.com/jobs/view/offline-ae",
+          "title": "Account Executive",
+          "posted": "2026-10-18T08:40:09.667Z",
+          "location": "San Francisco, CA"
+        },
+        "canonical_decision": {
+          "label": "strong_opportunity",
+          "bucket": "strong_opportunity",
+          "qualified": true,
+          "hard_checks": {
+            "hiring": "pass",
+            "industry": "pass",
+            "geography": "pass",
+            "company_size": "pass"
+          }
+        }
+      },
+      "grounded_explanations": [
+        {
+          "decision": "pass",
+          "company_key": "https://www.linkedin.com/company/offline-software",
+          "uncertainty": [],
+          "company_name": "Example Software",
+          "current_signal": {
+            "evidence": [
+              "job posting (job source)"
+            ],
+            "statement": "has an open Account Executive posting"
+          },
+          "why_it_matched": [
+            {
+              "evidence": [
+                "company description (linkedin)"
+              ],
+              "statement": "sells sales software for revenue teams at mid-size companies"
+            },
+            {
+              "evidence": [
+                "company description (linkedin)"
+              ],
+              "statement": "sells sales software for revenue teams at mid-size companies"
+            }
+          ],
+          "grounding_score": 1,
+          "missing_evidence": [],
+          "recommended_action": "offer_founder_unlock",
+          "confidence_after_grounding": 0.7
+        }
+      ],
+      "company_evidence_dimensions": [
+        {
+          "value": "b2b software",
+          "method": "model_extraction",
+          "status": "proven",
+          "sources": [
+            "grounded_evidence_evaluation"
+          ],
+          "dimension": "business_model",
+          "confidence": "medium",
+          "source_urls": [
+            "https://www.linkedin.com/company/offline-software"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": {
+            "max": 50,
+            "min": 11,
+            "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin"
+          ],
+          "dimension": "company_size_band",
+          "confidence": "high",
+          "source_urls": [],
+          "valid_until": "2027-01-17T08:40:20.187Z",
+          "conflicting_values": []
+        },
+        {
+          "value": "Example Software builds sales software for revenue teams at mid-size companies.",
+          "method": "provider_field",
+          "status": "plausible",
+          "sources": [
+            "yc"
+          ],
+          "dimension": "company_stage",
+          "confidence": "medium",
+          "source_urls": [],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": "Boston, United States",
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin"
+          ],
+          "dimension": "geography",
+          "confidence": "high",
+          "source_urls": [],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": true,
+          "method": "deterministic_derivation",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "deterministic_verdict"
+          ],
+          "dimension": "hiring",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/jobs/view/offline-ae"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": {
+            "name": "Example Software",
+            "domain": "offline-software.example",
+            "linkedin_company_url": "https://www.linkedin.com/company/offline-software"
+          },
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details"
+          ],
+          "dimension": "identity",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/company/offline-software"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": "Software Development",
+          "method": "provider_field",
+          "status": "plausible",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin",
+            "provider_label"
+          ],
+          "dimension": "industry",
+          "confidence": "medium",
+          "source_urls": [],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": {
+            "title": "Account Executive",
+            "location": "San Francisco, CA",
+            "posted_date": "2026-10-18T08:40:09.667Z"
+          },
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "harvestapi/linkedin-job-search"
+          ],
+          "dimension": "job",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/jobs/view/offline-ae"
+          ],
+          "valid_until": "2026-11-18T08:40:20.043Z",
+          "conflicting_values": []
+        },
+        {
+          "value": 23643,
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin"
+          ],
+          "dimension": "linkedin_member_count",
+          "confidence": "high",
+          "source_urls": [],
+          "valid_until": "2027-01-17T08:40:20.187Z",
+          "conflicting_values": []
+        },
+        {
+          "value": "Example Software builds sales software for revenue teams at mid-size companies.",
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "linkedin"
+          ],
+          "dimension": "web_claim",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/company/offline-software"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        }
+      ]
+    },
+    {
+      "variant": "two-actor-slow",
+      "elapsed_ms": 423,
+      "queue": [
+        {
+          "status": "complete",
+          "attempts": 1,
+          "claimed_by": null,
+          "lease_expires_at": null
+        }
+      ],
+      "lineage": [
+        {
+          "status": "terminal",
+          "terminal_reason": "quota_met",
+          "lease_holder": null
+        }
+      ],
+      "plan": [
+        {
+          "status": "complete"
+        }
+      ],
+      "worker_outcome": {
+        "status": "completed",
+        "terminal": true,
+        "taskId": "59198656-f8e6-4e18-a5f9-27f8cc689bcb"
+      },
+      "response": {
+        "success": true,
+        "terminal_status": "completed",
+        "task_status": "completed",
+        "count_entity": "qualified_company",
+        "eligible_leads": 1,
+        "remaining_leads": 0,
+        "provider_calls": 2
+      },
+      "qualified_dashboard_records": 1,
+      "company_brain_rows": 0,
+      "runtime_model_attempts": 4,
+      "max_runtime_model_request_bytes": 29417,
+      "apify_reads": 5,
+      "committed_microusd": {
+        "model": 49920,
+        "provider": 10000
+      },
+      "actor_starts": [
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-job-search/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "jobTitles": [
+              "Account Executive"
+            ],
+            "locations": [
+              "United States"
+            ],
+            "maxItems": 3,
+            "postedLimit": "month",
+            "sortBy": "date"
+          }
+        },
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-company/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "companies": [
+              "https://www.linkedin.com/company/offline-software"
+            ]
+          }
+        }
+      ],
+      "open_provider_liabilities": [
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-job-search",
+          "provider_run_id": "run-jobs",
+          "committed_microusd": "5000",
+          "reported_microusd": "2000",
+          "receipt": "unsettled"
+        },
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-company",
+          "provider_run_id": "run-details",
+          "committed_microusd": "5000",
+          "reported_microusd": "4000",
+          "receipt": "unsettled"
+        }
+      ],
+      "credit_transactions": [
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        },
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        }
+      ],
+      "lead_evidence": {
+        "company_name": "Example Software",
+        "company_domain": "offline-software.example",
+        "company_linkedin_url": "https://www.linkedin.com/company/offline-software",
+        "job_evidence": {
+          "url": "https://www.linkedin.com/jobs/view/offline-ae",
+          "title": "Account Executive",
+          "posted": "2026-10-18T08:40:20.481Z",
+          "location": "San Francisco, CA"
+        },
+        "canonical_decision": {
+          "label": "strong_opportunity",
+          "bucket": "strong_opportunity",
+          "qualified": true,
+          "hard_checks": {
+            "hiring": "pass",
+            "industry": "pass",
+            "geography": "pass",
+            "company_size": "pass"
+          }
+        }
+      },
+      "grounded_explanations": [
+        {
+          "decision": "pass",
+          "company_key": "https://www.linkedin.com/company/offline-software",
+          "uncertainty": [],
+          "company_name": "Example Software",
+          "current_signal": {
+            "evidence": [
+              "job posting (job source)"
+            ],
+            "statement": "has an open Account Executive posting"
+          },
+          "why_it_matched": [
+            {
+              "evidence": [
+                "company description (linkedin)"
+              ],
+              "statement": "sells sales software for revenue teams at mid-size companies"
+            },
+            {
+              "evidence": [
+                "company description (linkedin)"
+              ],
+              "statement": "sells sales software for revenue teams at mid-size companies"
+            }
+          ],
+          "grounding_score": 1,
+          "missing_evidence": [],
+          "recommended_action": "offer_founder_unlock",
+          "confidence_after_grounding": 0.7
+        }
+      ],
+      "company_evidence_dimensions": [
+        {
+          "value": "b2b software",
+          "method": "model_extraction",
+          "status": "proven",
+          "sources": [
+            "grounded_evidence_evaluation"
+          ],
+          "dimension": "business_model",
+          "confidence": "medium",
+          "source_urls": [
+            "https://www.linkedin.com/company/offline-software"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": {
+            "max": 50,
+            "min": 11,
+            "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin"
+          ],
+          "dimension": "company_size_band",
+          "confidence": "high",
+          "source_urls": [],
+          "valid_until": "2027-01-17T08:40:20.711Z",
+          "conflicting_values": []
+        },
+        {
+          "value": "Example Software builds sales software for revenue teams at mid-size companies.",
+          "method": "provider_field",
+          "status": "plausible",
+          "sources": [
+            "yc"
+          ],
+          "dimension": "company_stage",
+          "confidence": "medium",
+          "source_urls": [],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": "Boston, United States",
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin"
+          ],
+          "dimension": "geography",
+          "confidence": "high",
+          "source_urls": [],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": true,
+          "method": "deterministic_derivation",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "deterministic_verdict"
+          ],
+          "dimension": "hiring",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/jobs/view/offline-ae"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": {
+            "name": "Example Software",
+            "domain": "offline-software.example",
+            "linkedin_company_url": "https://www.linkedin.com/company/offline-software"
+          },
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details"
+          ],
+          "dimension": "identity",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/company/offline-software"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": "Software Development",
+          "method": "provider_field",
+          "status": "plausible",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin",
+            "provider_label"
+          ],
+          "dimension": "industry",
+          "confidence": "medium",
+          "source_urls": [],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": {
+            "title": "Account Executive",
+            "location": "San Francisco, CA",
+            "posted_date": "2026-10-18T08:40:20.481Z"
+          },
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "harvestapi/linkedin-job-search"
+          ],
+          "dimension": "job",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/jobs/view/offline-ae"
+          ],
+          "valid_until": "2026-11-18T08:40:20.619Z",
+          "conflicting_values": []
+        },
+        {
+          "value": 23643,
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin"
+          ],
+          "dimension": "linkedin_member_count",
+          "confidence": "high",
+          "source_urls": [],
+          "valid_until": "2027-01-17T08:40:20.711Z",
+          "conflicting_values": []
+        },
+        {
+          "value": "Example Software builds sales software for revenue teams at mid-size companies.",
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "linkedin"
+          ],
+          "dimension": "web_claim",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/company/offline-software"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        }
+      ]
+    },
+    {
+      "variant": "weak-evidence",
+      "elapsed_ms": 10401,
+      "queue": [
+        {
+          "status": "complete",
+          "attempts": 1,
+          "claimed_by": null,
+          "lease_expires_at": null
+        }
+      ],
+      "lineage": [
+        {
+          "status": "terminal",
+          "terminal_reason": "budget_exhausted",
+          "lease_holder": null
+        }
+      ],
+      "plan": [
+        {
+          "status": "partial"
+        }
+      ],
+      "worker_outcome": {
+        "status": "budget_exhausted",
+        "terminal": true,
+        "taskId": "36860497-a892-4f22-9664-24c65041b8ef"
+      },
+      "response": {
+        "success": false,
+        "terminal_status": "budget_exhausted",
+        "task_status": "partial",
+        "count_entity": "qualified_company",
+        "eligible_leads": 0,
+        "remaining_leads": 1,
+        "provider_calls": 2
+      },
+      "qualified_dashboard_records": 0,
+      "company_brain_rows": 0,
+      "runtime_model_attempts": 3,
+      "max_runtime_model_request_bytes": 29417,
+      "apify_reads": 5,
+      "committed_microusd": {
+        "model": 37440,
+        "provider": 10000
+      },
+      "actor_starts": [
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-job-search/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "jobTitles": [
+              "Account Executive"
+            ],
+            "locations": [
+              "United States"
+            ],
+            "maxItems": 3,
+            "postedLimit": "month",
+            "sortBy": "date"
+          }
+        },
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-company/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "companies": [
+              "https://www.linkedin.com/company/offline-software"
+            ]
+          }
+        }
+      ],
+      "open_provider_liabilities": [
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-job-search",
+          "provider_run_id": "run-jobs",
+          "committed_microusd": "5000",
+          "reported_microusd": "2000",
+          "receipt": "settled"
+        },
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-company",
+          "provider_run_id": "run-details",
+          "committed_microusd": "5000",
+          "reported_microusd": "4000",
+          "receipt": "unsettled"
+        }
+      ],
+      "credit_transactions": [
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        },
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        }
+      ]
+    },
+    {
+      "variant": "a7-output-valid",
+      "elapsed_ms": 483,
+      "queue": [
+        {
+          "status": "complete",
+          "attempts": 1,
+          "claimed_by": null,
+          "lease_expires_at": null
+        }
+      ],
+      "lineage": [
+        {
+          "status": "terminal",
+          "terminal_reason": "quota_met",
+          "lease_holder": null
+        }
+      ],
+      "plan": [
+        {
+          "status": "complete"
+        }
+      ],
+      "worker_outcome": {
+        "status": "completed",
+        "terminal": true,
+        "taskId": "28eb9e94-5cc9-4bb3-8c77-e606822bc2fb"
+      },
+      "response": {
+        "success": true,
+        "terminal_status": "completed",
+        "task_status": "completed",
+        "count_entity": "qualified_company",
+        "eligible_leads": 1,
+        "remaining_leads": 0,
+        "provider_calls": 2
+      },
+      "qualified_dashboard_records": 1,
+      "company_brain_rows": 0,
+      "runtime_model_attempts": 4,
+      "max_runtime_model_request_bytes": 29423,
+      "apify_reads": 5,
+      "committed_microusd": {
+        "model": 49920,
+        "provider": 10000
+      },
+      "actor_starts": [
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-job-search/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "jobTitles": [
+              "Account Executive"
+            ],
+            "locations": [
+              "United States"
+            ],
+            "maxItems": 3,
+            "postedLimit": "month",
+            "sortBy": "date"
+          }
+        },
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-company/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "companies": [
+              "https://www.linkedin.com/company/offline-software"
+            ]
+          }
+        }
+      ],
+      "open_provider_liabilities": [
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-job-search",
+          "provider_run_id": "run-jobs",
+          "committed_microusd": "5000",
+          "reported_microusd": "2000",
+          "receipt": "unsettled"
+        },
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-company",
+          "provider_run_id": "run-details",
+          "committed_microusd": "5000",
+          "reported_microusd": "4000",
+          "receipt": "unsettled"
+        }
+      ],
+      "credit_transactions": [
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        },
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        }
+      ],
+      "lead_evidence": {
+        "company_name": "Example Software",
+        "company_domain": "offline-software.example",
+        "company_linkedin_url": "https://www.linkedin.com/company/offline-software",
+        "job_evidence": {
+          "url": "https://www.linkedin.com/jobs/view/offline-ae",
+          "title": "Account Executive",
+          "posted": "2026-10-18T08:40:31.331Z",
+          "location": "San Francisco, CA"
+        },
+        "canonical_decision": {
+          "label": "strong_opportunity",
+          "bucket": "strong_opportunity",
+          "qualified": true,
+          "hard_checks": {
+            "hiring": "pass",
+            "industry": "pass",
+            "geography": "pass",
+            "company_size": "pass"
+          }
+        }
+      },
+      "grounded_explanations": [
+        {
+          "decision": "pass",
+          "company_key": "https://www.linkedin.com/company/offline-software",
+          "uncertainty": [],
+          "company_name": "Example Software",
+          "current_signal": {
+            "evidence": [
+              "job posting (job source)"
+            ],
+            "statement": "has an open Account Executive posting"
+          },
+          "why_it_matched": [
+            {
+              "evidence": [
+                "company description (linkedin)"
+              ],
+              "statement": "sells sales software for revenue teams at mid-size companies"
+            },
+            {
+              "evidence": [
+                "company description (linkedin)"
+              ],
+              "statement": "sells sales software for revenue teams at mid-size companies"
+            }
+          ],
+          "grounding_score": 1,
+          "missing_evidence": [],
+          "recommended_action": "offer_founder_unlock",
+          "confidence_after_grounding": 0.7
+        }
+      ],
+      "company_evidence_dimensions": [
+        {
+          "value": "b2b software",
+          "method": "model_extraction",
+          "status": "proven",
+          "sources": [
+            "grounded_evidence_evaluation"
+          ],
+          "dimension": "business_model",
+          "confidence": "medium",
+          "source_urls": [
+            "https://www.linkedin.com/company/offline-software"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": {
+            "max": 50,
+            "min": 11,
+            "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin"
+          ],
+          "dimension": "company_size_band",
+          "confidence": "high",
+          "source_urls": [],
+          "valid_until": "2027-01-17T08:40:31.568Z",
+          "conflicting_values": []
+        },
+        {
+          "value": "Example Software builds sales software for revenue teams at mid-size companies.",
+          "method": "provider_field",
+          "status": "plausible",
+          "sources": [
+            "yc"
+          ],
+          "dimension": "company_stage",
+          "confidence": "medium",
+          "source_urls": [],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": "Boston, United States",
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin"
+          ],
+          "dimension": "geography",
+          "confidence": "high",
+          "source_urls": [],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": true,
+          "method": "deterministic_derivation",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "deterministic_verdict"
+          ],
+          "dimension": "hiring",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/jobs/view/offline-ae"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": {
+            "name": "Example Software",
+            "domain": "offline-software.example",
+            "linkedin_company_url": "https://www.linkedin.com/company/offline-software"
+          },
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details"
+          ],
+          "dimension": "identity",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/company/offline-software"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": "Software Development",
+          "method": "provider_field",
+          "status": "plausible",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin",
+            "provider_label"
+          ],
+          "dimension": "industry",
+          "confidence": "medium",
+          "source_urls": [],
+          "valid_until": null,
+          "conflicting_values": []
+        },
+        {
+          "value": {
+            "title": "Account Executive",
+            "location": "San Francisco, CA",
+            "posted_date": "2026-10-18T08:40:31.331Z"
+          },
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "harvestapi/linkedin-job-search"
+          ],
+          "dimension": "job",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/jobs/view/offline-ae",
+            "https://www.linkedin.com/jobs/view/offline-ae-2"
+          ],
+          "valid_until": "2026-11-18T08:40:31.452Z",
+          "conflicting_values": []
+        },
+        {
+          "value": 27,
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "apify_linkedin_job_search",
+            "apify_linkedin_company_details",
+            "linkedin"
+          ],
+          "dimension": "linkedin_member_count",
+          "confidence": "high",
+          "source_urls": [],
+          "valid_until": "2027-01-17T08:40:31.568Z",
+          "conflicting_values": []
+        },
+        {
+          "value": "Example Software builds sales software for revenue teams at mid-size companies.",
+          "method": "provider_field",
+          "status": "proven",
+          "sources": [
+            "linkedin"
+          ],
+          "dimension": "web_claim",
+          "confidence": "high",
+          "source_urls": [
+            "https://www.linkedin.com/company/offline-software"
+          ],
+          "valid_until": null,
+          "conflicting_values": []
+        }
+      ]
+    },
+    {
+      "variant": "a7-output-none",
+      "elapsed_ms": 390,
+      "queue": [
+        {
+          "status": "complete",
+          "attempts": 1,
+          "claimed_by": null,
+          "lease_expires_at": null
+        }
+      ],
+      "lineage": [
+        {
+          "status": "terminal",
+          "terminal_reason": "budget_exhausted",
+          "lease_holder": null
+        }
+      ],
+      "plan": [
+        {
+          "status": "partial"
+        }
+      ],
+      "worker_outcome": {
+        "status": "budget_exhausted",
+        "terminal": true,
+        "taskId": "115074d2-1ac0-4331-a85e-0b293c05f0a8"
+      },
+      "response": {
+        "success": false,
+        "terminal_status": "budget_exhausted",
+        "task_status": "partial",
+        "count_entity": "qualified_company",
+        "eligible_leads": 0,
+        "remaining_leads": 1,
+        "provider_calls": 2
+      },
+      "qualified_dashboard_records": 0,
+      "company_brain_rows": 0,
+      "runtime_model_attempts": 3,
+      "max_runtime_model_request_bytes": 29423,
+      "apify_reads": 5,
+      "committed_microusd": {
+        "model": 37440,
+        "provider": 10000
+      },
+      "actor_starts": [
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-job-search/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "jobTitles": [
+              "Account Executive"
+            ],
+            "locations": [
+              "United States"
+            ],
+            "maxItems": 3,
+            "postedLimit": "month",
+            "sortBy": "date"
+          }
+        },
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-company/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "companies": [
+              "https://www.linkedin.com/company/offline-software"
+            ]
+          }
+        }
+      ],
+      "open_provider_liabilities": [
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-job-search",
+          "provider_run_id": "run-jobs",
+          "committed_microusd": "5000",
+          "reported_microusd": "2000",
+          "receipt": "unsettled"
+        },
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-company",
+          "provider_run_id": "run-details",
+          "committed_microusd": "5000",
+          "reported_microusd": "4000",
+          "receipt": "unsettled"
+        }
+      ],
+      "credit_transactions": [
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        },
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        }
+      ]
+    },
+    {
+      "variant": "a7-output-future",
+      "elapsed_ms": 327,
+      "queue": [
+        {
+          "status": "complete",
+          "attempts": 1,
+          "claimed_by": null,
+          "lease_expires_at": null
+        }
+      ],
+      "lineage": [
+        {
+          "status": "terminal",
+          "terminal_reason": "budget_exhausted",
+          "lease_holder": null
+        }
+      ],
+      "plan": [
+        {
+          "status": "partial"
+        }
+      ],
+      "worker_outcome": {
+        "status": "budget_exhausted",
+        "terminal": true,
+        "taskId": "a214af70-121d-4242-a606-3391eed411ad"
+      },
+      "response": {
+        "success": false,
+        "terminal_status": "budget_exhausted",
+        "task_status": "partial",
+        "count_entity": "qualified_company",
+        "eligible_leads": 0,
+        "remaining_leads": 1,
+        "provider_calls": 2
+      },
+      "qualified_dashboard_records": 0,
+      "company_brain_rows": 0,
+      "runtime_model_attempts": 1,
+      "max_runtime_model_request_bytes": 29423,
+      "apify_reads": 5,
+      "committed_microusd": {
+        "model": 12480,
+        "provider": 10000
+      },
+      "actor_starts": [
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-job-search/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "jobTitles": [
+              "Account Executive"
+            ],
+            "locations": [
+              "United States"
+            ],
+            "maxItems": 3,
+            "postedLimit": "month",
+            "sortBy": "date"
+          }
+        },
+        {
+          "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-company/runs?memory=256&timeout=120&maxTotalChargeUsd=0.005",
+          "input": {
+            "companies": [
+              "https://www.linkedin.com/company/offline-software"
+            ]
+          }
+        }
+      ],
+      "open_provider_liabilities": [
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-job-search",
+          "provider_run_id": "run-jobs",
+          "committed_microusd": "5000",
+          "reported_microusd": "2000",
+          "receipt": "unsettled"
+        },
+        {
+          "state": "open",
+          "actor": "apify:harvestapi~linkedin-company",
+          "provider_run_id": "run-details",
+          "committed_microusd": "5000",
+          "reported_microusd": "4000",
+          "receipt": "unsettled"
+        }
+      ],
+      "credit_transactions": [
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        },
+        {
+          "status": "charged",
+          "reserved_credits": 1,
+          "actual_credits": 1,
+          "refunded_credits": 0
+        }
+      ]
+    }
+  ],
+  "known_gap_diagnostics": [
+    {
+      "variant": "a7-gap-no_hq",
+      "expected_qualified": 0,
+      "observed_qualified": 1,
+      "result": "FAIL: missing HQ flag accepted under generic geography"
+    },
+    {
+      "variant": "a7-gap-missing_description",
+      "expected_qualified": 0,
+      "observed_qualified": 1,
+      "result": "FAIL: discovery description treated as verified company description"
+    }
+  ]
+}

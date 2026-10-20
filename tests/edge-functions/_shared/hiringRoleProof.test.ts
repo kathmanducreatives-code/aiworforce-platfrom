@@ -50,6 +50,13 @@ Deno.test("I. a valid sales role outside a 30-day window does not prove current 
   assertFalse(jobProvesRequestedHiring(posting("Account Executive", daysAgo(45)), SALES_30, NOW));
 });
 
+Deno.test("a future posting cannot prove hiring in the last 30 days", () => {
+  assertFalse(jobProvesRequestedHiring(posting("Account Executive", daysAgo(-45)), SALES_30, NOW));
+  assertFalse(jobProvesRequestedHiring(posting("Account Executive", new Date(NOW.getTime() + 1).toISOString()), SALES_30, NOW));
+  assert(jobProvesRequestedHiring(posting("Account Executive", NOW.toISOString()), SALES_30, NOW));
+  assert(jobProvesRequestedHiring(posting("Account Executive", daysAgo(30)), SALES_30, NOW));
+});
+
 Deno.test("an undated posting cannot prove a stated window (T02)", () => {
   assertFalse(jobProvesRequestedHiring(posting("Account Executive", null), SALES_30, NOW));
   // With no stated window the search's own freshness filter governs, as before.
