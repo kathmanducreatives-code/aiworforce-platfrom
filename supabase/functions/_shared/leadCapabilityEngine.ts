@@ -183,6 +183,7 @@ import {
   type CompanyFitResult, type CompanyRecordState, type FunnelCounts,
 } from "./companyFirstStages.ts";
 import { missionTargetsIntermediaries } from "./companyAggregatorEvidence.ts";
+import { qualificationHoldsOf } from "./qualificationHold.ts";
 import { mergeDiscoveryActorInput } from "./discoveryInputMerge.ts";
 import { authorityForEvidence, authorityRecord, statusForAuthority } from "./evidenceAuthority.ts";
 import {
@@ -2655,7 +2656,10 @@ export async function runCapabilityPlan(
   // of a hundred (TEST run cf6cce3d): its own required signal was classified
   // `technical`, and `technical` could not produce a qualifying tier.
   const qualificationCtx = buildQualificationContext(opts.mission,
-    { criteriaAuthority: opts.specMode === "enforce" });
+    // Q1 — the SAME criteria the canonical decision reads (`canonicalDecisions`
+    // derives them under `opts.readiness`), so the evaluator answers the
+    // requirements that decide, with the same ids and statuses.
+    { criteriaAuthority: opts.specMode === "enforce", readiness: opts.readiness });
   log("qualification_context", qualificationContextSummary(qualificationCtx));
 
   // ── WHAT A SECOND LOOK NEEDS, BUILT ONCE FOR THE WHOLE RUN ──────────────
@@ -11852,6 +11856,9 @@ export function missionCandidatesFrom(
         c.brain !== null || c.hiring_assessment !== null,
       graph,
       criterion_verdicts: c.mission_evaluation?.criterion_verdicts,
+      // Q1 — the evaluator's aggregate answer and the engine's own holds reach
+      // the canonical decision; before, only the per-criterion rows did (G09).
+      holds: qualificationHoldsOf(c),
       next_action: null,
       attempted_routes: attemptedRoutesOf(c),
       unaffordable_routes: unaffordableRoutes(c.completed_operations),
@@ -11927,7 +11934,7 @@ export function canonicallyWorkableKeys(
   const criteria = deriveMissionCriteria(opts.mission, readiness);
   const out = new Set<string>();
   for (const c of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
-    const eligibility = evaluateEligibility(criteria, c.graph, c.criterion_verdicts);
+    const eligibility = evaluateEligibility(criteria, c.graph, c.criterion_verdicts, c.holds);
     const bucket = bucketOf(c, eligibility, null);
     if (bucket === "investigating" || bucket === "identity_unresolved") {
       out.add(c.company_key);

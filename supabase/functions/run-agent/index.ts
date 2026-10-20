@@ -5236,10 +5236,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   // saas delivery", because nothing ever re-read them.
                   let regroundReport: Awaited<ReturnType<typeof regroundPendingClaims>> | null = null;
                   try {
-                    const phaseCCriteria = deriveMissionCriteria(persistedMission!);
+                    const phaseCCriteria = deriveMissionCriteria(persistedMission!, leadReadiness);
                     const phaseCCandidates = missionCandidatesFrom(engineRun, { missionId: String(task.id) });
                     const pendingByKey = new Map(phaseCCandidates.map((cand) => {
-                      const e = evaluateEligibility(phaseCCriteria, cand.graph);
+                      const e = evaluateEligibility(phaseCCriteria, cand.graph, cand.criterion_verdicts, cand.holds);
                       // Only the business-model claim: `industry` is the
                       // criterion dimension it answers (candidateEligibility).
                       const pending = e.eligibility === "pending" &&
@@ -5397,7 +5397,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // mission may run can prove it.
                 const vCriteria = deriveMissionCriteria(vMission, leadReadiness);
                 const vCandidates = () => missionCandidatesFrom(engineRun, { missionId: String(task.id) }).map((cand) => {
-                  const e = evaluateEligibility(vCriteria, cand.graph);
+                  // The canonical decision (Q1): a held or vetoed candidate is
+                  // not a verification target, and the same verdicts decide.
+                  const e = evaluateEligibility(vCriteria, cand.graph, cand.criterion_verdicts, cand.holds);
                   return {
                     company_key: cand.company_key, name: cand.name, domain: cand.domain, linkedin_url: cand.linkedin_url,
                     graph: cand.graph, eligibility: e.eligibility,
@@ -6752,7 +6754,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // a semantics change carries the OLD projection. Canary
                 // 62c8b188 still enforced "Company kind: startup" as provable
                 // from a card compiled before P5.2 said it was not.
-                const criteria = deriveMissionCriteria(persistedMission);
+                // Q1 — under the run's readiness, as the engine's canonical
+                // decision derives them, so the view and the count agree.
+                const criteria = deriveMissionCriteria(persistedMission, leadReadiness);
                 const anchor = anchorForCapability(String(missionPlan?.entry_capability ?? "")) ?? null;
                 const candidates = missionCandidatesFrom(capabilityRun, {
                   missionId: String(task.id),

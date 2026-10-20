@@ -46,6 +46,7 @@ import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import type { EvidenceDimension, EvidenceItem } from "./candidateObservation.ts";
 import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts";
 import type { CriterionVerdict } from "./missionEvaluation.ts";
+import type { QualificationHold } from "./qualificationHold.ts";
 import { geographyContradicts } from "./leadEligiblePool.ts";
 import { matchBusinessModel } from "./businessModelMatch.ts";
 import {
@@ -108,6 +109,12 @@ export interface CriterionCheck {
   evidence_ids: string[];
   /** The item the answer rests on. Null when nothing answered it. */
   provenance: CheckProvenance | null;
+  /**
+   * Q1 — set when NO purchase can close this check: a hold another authority
+   * placed on the company (`hold:<code>`). The gap router reports it blocked,
+   * so a candidate carrying one is never bought more evidence.
+   */
+  blocked?: string;
 }
 
 export interface EligibilityResult {
@@ -120,6 +127,8 @@ export interface EligibilityResult {
   disproven: string[];
   /** Hard dimensions still unknown: exactly what evidence completion should buy. */
   gaps: EvidenceDimension[];
+  /** Q1 — holds that kept an otherwise eligible candidate pending (`qualificationHold.ts`). */
+  held: QualificationHold[];
 }
 
 const text = (v: unknown): string => String(v ?? "").trim().toLowerCase();
@@ -514,13 +523,23 @@ function anyOfResolved(criteria: readonly MissionCriterion[], checks: CriterionC
 }
 
 /**
- * The candidate's eligibility. Hard criteria decide it; everything else is
- * checked for the record and cannot change the outcome.
+ * The candidate's eligibility — THE canonical qualification decision (Q1).
+ * Hard criteria decide it; everything else is checked for the record and
+ * cannot change the outcome.
+ *
+ *   - The evaluator's per-criterion verdicts can only lower a check (#113).
+ *   - A `hold` (`qualificationHold.ts`) can only stop an otherwise ELIGIBLE
+ *     candidate: it becomes pending with a blocked `qualification_hold` check.
  */
 export function evaluateEligibility(
   criteria: readonly MissionCriterion[], graph: CompanyEvidenceGraph,
   verdicts?: readonly CriterionVerdict[],
+  holds: readonly QualificationHold[] = [],
 ): EligibilityResult {
+  // Unsupported mandatory criteria (`unprovable_today`) are still disclosed,
+  // not enforced (P5.2): enforcing them waits for Q3, which first stops the
+  // compiler inventing them ("seed-stage" → "Company kind: startup") — audit
+  // G08/G08b stay visible known gaps until then.
   const usable = criteria.filter((c) => c.status === "ok");
   const checks = anyOfResolved(usable, usable.map((c) => {
     const rows = verdicts?.filter((v) => v.criterion_id === c.id) ?? [];
@@ -534,6 +553,28 @@ export function evaluateEligibility(
       evidence_ids: verdict?.evidence.map((e) => e.evidence_id) ?? [] };
   }));
   const hard = checks.filter((c) => c.kind === "hard");
+  const disproven = hard.filter((h) => h.result === "fail").map((h) => h.criterion_id);
+  const unknown = hard.filter((h) => h.result === "unknown");
+  let eligibility: Eligibility = disproven.length > 0
+    ? "ineligible"
+    : unknown.length > 0
+    ? "pending"
+    : "eligible";
+  // A HOLD STOPS ONLY WHAT WOULD OTHERWISE QUALIFY. Pending and ineligible
+  // candidates already say why; adding a blocked check there would also stop
+  // the ordinary purchase that could still answer their open questions.
+  const held = eligibility === "eligible" ? [...holds] : [];
+  if (held.length > 0) {
+    eligibility = "pending";
+    for (const h of held) {
+      const check: CriterionCheck = {
+        criterion_id: `qualification_hold:${h.code}`, dimension: "qualification_hold" as CriterionDimension,
+        kind: "hard", result: "unknown", reason: h.reason, evidence_ids: [], provenance: null, blocked: `hold:${h.code}`,
+      };
+      checks.push(check);
+      hard.push(check);
+    }
+  }
   const hard_checks: Record<string, CheckResult> = {};
   for (const h of hard) {
     // Worst result wins when two hard criteria share a dimension.
@@ -544,15 +585,9 @@ export function evaluateEligibility(
       ? "unknown"
       : "pass";
   }
-  const disproven = hard.filter((h) => h.result === "fail").map((h) => h.criterion_id);
-  const unknown = hard.filter((h) => h.result === "unknown");
-  const eligibility: Eligibility = disproven.length > 0
-    ? "ineligible"
-    : unknown.length > 0
-    ? "pending"
-    : "eligible";
-  const gaps = [...new Set(unknown
+  // Only what a purchase could close is a gap.
+  const gaps = [...new Set(hard.filter((h) => h.result === "unknown" && !h.blocked)
     .map((h) => CRITERION_EVIDENCE_DIMENSION[h.dimension])
     .filter((d): d is EvidenceDimension => !!d))];
-  return { version: ELIGIBILITY_VERSION, eligibility, checks, hard_checks, disproven, gaps };
+  return { version: ELIGIBILITY_VERSION, eligibility, checks, hard_checks, disproven, gaps, held };
 }

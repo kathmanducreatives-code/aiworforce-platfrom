@@ -558,9 +558,10 @@ Deno.test("P5.2: the view derives criteria from the mission, so an approved card
   assertEquals(evaluateEligibility(stale.criteria, g).eligibility, "pending", "the stale projection still gates");
   assertEquals(evaluateEligibility(fresh, g).eligibility, "eligible", "the derived criteria do not");
 
-  // run-agent derives rather than reading the stored array.
+  // run-agent derives rather than reading the stored array — under the run's
+  // readiness since Q1, the same derivation the engine's canonical decision uses.
   const src = Deno.readTextFileSync(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
-  assert(/const criteria = deriveMissionCriteria\(persistedMission\);/.test(src));
+  assert(/const criteria = deriveMissionCriteria\(persistedMission, leadReadiness\);/.test(src));
   assertFalse(/persistedMission\.criteria \?\? deriveMissionCriteria/.test(src));
 });
 

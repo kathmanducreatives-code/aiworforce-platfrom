@@ -694,6 +694,42 @@ export function buildMissionReevaluationInput(i: {
  * A requirement the second pass CONTRADICTS is a different matter: that is new
  * information and it wins.
  */
+/**
+ * Q1 — THE SECOND LOOK, PER CRITERION.
+ *
+ * `mergeReevaluation` used to take `criterion_verdicts` from the second pass
+ * wholesale (`...next`), so a criterion the first pass FAILED with cited
+ * evidence could come back PASS on a more generous reading of the same
+ * evidence — and a re-evaluation without criteria erased them altogether.
+ *
+ *   second pass absent        → the first pass stands
+ *   one side lacks a row       → the other side's row
+ *   first FAIL, second not FAIL → the second only when it cites NEW evidence
+ *                                 (`isNewEvidence`; omitted ⇒ not held back,
+ *                                 as for requirements above)
+ *   otherwise                  → the second pass (it may always lower)
+ */
+export function mergeCriterionVerdicts(
+  prior: readonly CriterionVerdict[] | undefined,
+  next: readonly CriterionVerdict[] | undefined,
+  isNewEvidence?: (evidenceId: string) => boolean,
+): CriterionVerdict[] {
+  if (!next) return [...(prior ?? [])];
+  if (!prior) return [...next];
+  const before = new Map(prior.map((v) => [v.criterion_id, v]));
+  const out: CriterionVerdict[] = [];
+  for (const v of next) {
+    const p = before.get(v.criterion_id);
+    before.delete(v.criterion_id);
+    if (p?.result === "fail" && v.result !== "fail" && isNewEvidence &&
+      !v.evidence.some((e) => isNewEvidence(e.evidence_id))) {
+      out.push({ ...p, reason: `${p.reason} (a second look cited no new evidence)` });
+    } else out.push(v);
+  }
+  for (const p of before.values()) out.push(p);
+  return out;
+}
+
 export function mergeReevaluation(
   prior: MissionEvaluation, next: MissionEvaluation,
   /** Maps an evidence_id to its page, when the registry knows one. */
@@ -796,6 +832,11 @@ export function mergeReevaluation(
 
   return {
     ...next,
+    // Q1 — per criterion, not wholesale: a second look replaces a FAIL only
+    // with a verdict that cites evidence the first pass did not have.
+    ...(prior.criterion_verdicts || next.criterion_verdicts
+      ? { criterion_verdicts: mergeCriterionVerdicts(prior.criterion_verdicts, next.criterion_verdicts, isNewEvidence) }
+      : {}),
     matched_requirements: kept,
     unknown_fields: stillOpen,
     // The decision follows the merged picture, not the second pass alone: a

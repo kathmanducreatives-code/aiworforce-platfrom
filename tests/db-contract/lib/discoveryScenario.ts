@@ -132,7 +132,12 @@ function citations(ev: Ev[], model: Model) {
     hiring: cite(find(ev, /job|posting|hiring/, /Account Executive/), /Account Executive/),
   };
 }
-function evaluatorAnswer(input: unknown, model: Model) {
+/**
+ * `aggregate` (Q1): the evaluator's OVERALL answer, independent of its
+ * per-criterion rows. "fail" / "review" keep every row PASS with real receipts
+ * and contradict them in `mission_fit` — the audit's G09 shape.
+ */
+function evaluatorAnswer(input: unknown, model: Model, aggregate?: "fail" | "review") {
   const c = citations(evidenceIn(input), model);
   const req: Array<[string, { evidence_id: string; excerpt: string } | null]> = [
     ["B2B software company", c.business], ["located in the United States", c.location],
@@ -140,7 +145,7 @@ function evaluatorAnswer(input: unknown, model: Model) {
   ];
   const missing = req.filter(([, x]) => !x).map(([r]) => r);
   return {
-    mission_fit: missing.length === 0 ? "pass" : "review", icp_fit: "plausible",
+    mission_fit: aggregate ?? (missing.length === 0 ? "pass" : "review"), icp_fit: "plausible",
     hiring_fit: c.hiring ? "verified" : "absent", confidence: 0.8, match_score: missing.length === 0 ? 80 : 0,
     // One verdict per compiled criterion, citing the SAME receipts as above (#113's
     // evaluator contract). The credulous model's receipts stay irrelevant on purpose:
@@ -148,7 +153,9 @@ function evaluatorAnswer(input: unknown, model: Model) {
     criterion_verdicts: mockCriterionVerdicts(input, c),
     matched_requirements: req.filter(([, x]) => x).map(([requirement, x]) => ({ requirement, ...x!, support: "verified" })),
     failed_requirements: [], reasoning: missing.length ? `not established: ${missing.join("; ")}` : "every requirement cited",
-    rejection_reasons: [], evidence_quality: missing.length ? "weak" : "moderate", unknown_fields: missing, next_action: null,
+    rejection_reasons: aggregate === "fail" ? ["the overall fit is wrong for this mission"] : [],
+    evidence_quality: missing.length ? "weak" : "moderate", unknown_fields: missing, next_action: null,
+    ...(aggregate ? { reasoning: `overall ${aggregate}, although every requirement is cited` } : {}),
   };
 }
 function groundedResult(company_key: string, ev: Ev[], model: Model) {
@@ -178,6 +185,8 @@ export interface Scenario {
   /** The company-details record for a requested LinkedIn URL (default: the posting's own company). */
   details?: (url: string) => Json | null;
   model?: Model;
+  /** The evaluator's overall answer, contradicting its PASS rows (Q1, audit G09). */
+  aggregate?: "fail" | "review";
   /** Override the compiler's proposal (S22: semantically wrong criteria). */
   proposal?: Json;
   jobsStartStatus?: number;
@@ -255,7 +264,7 @@ export async function runScenario(s: Scenario): Promise<Run> {
       const answer = name === "lead_mission_proposal" ? (s.proposal ?? PROPOSAL)
         : name === "lead_execution_plan" ? EXECUTION_PLAN
         : system.startsWith("You assess several companies") ? { results: (userMsg?.companies ?? []).map((co: Json) => groundedResult(co.company_key, evidenceIn(co.evidence), model)) }
-        : system.startsWith("Decide whether this company satisfies") ? evaluatorAnswer(userMsg, model)
+        : system.startsWith("Decide whether this company satisfies") ? evaluatorAnswer(userMsg, model, s.aggregate)
         : system.startsWith("You interpret supplied company evidence") ? groundedResult(String(userMsg?.company_key ?? ""), evidenceIn(userMsg), model)
         : {};
       return Promise.resolve(new Response(JSON.stringify({
