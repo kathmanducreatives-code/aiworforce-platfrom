@@ -46,6 +46,14 @@ const json = (body: unknown, status = 200) =>
 Deno.env.set("APIFY_API_TOKEN", "offline-fake");
 Deno.env.set("LEAD_CREDIT_ENFORCEMENT", "enforce");
 
+// ROW HYGIENE. Every mission here is a queue row seeded `running` with a
+// three-minute lease that no release ever ends. Once that lease lapsed the row
+// was claimable by a later file that claims "the next mission" in this shared
+// database (offlineSmokeProgress, on #109, claims and asserts its own row), and
+// it took this file's row instead. The rows are recorded here and ended by the
+// last test in the file.
+const created: string[] = [];
+
 async function mission() {
   // Proposed limits unchanged. Evidence and the unverified details price are
   // synthetic fixture values ONLY, never approved account-specific quotes.
@@ -63,6 +71,7 @@ async function mission() {
     actorLimits: catalog.actor_limits,
   });
   await sql`insert into public.workspace_credit_balances (workspace_id, balance_credits) values (${m.ws}, 10)`;
+  created.push(m.queueId);
   return m;
 }
 type Vendor = (url: URL, init: RequestInit) => Response | Promise<Response>;
@@ -517,3 +526,14 @@ for (
 // The claim-five crash this file once characterized as a KNOWN DEFECT is fixed by
 // held migration 20261019120000; its regression (the same scenario, inverted) is
 // tests/db-contract/leadMissionExhaustedLease.contract.test.ts.
+
+Deno.test("hygiene: end every queue row this file created (none may become claimable later)", opts, async () => {
+  const ids = created.splice(0);
+  if (ids.length) {
+    await sql`update public.lead_mission_queue set status = 'complete'
+                where id = any(${ids}) and status in ('queued', 'running', 'resumable')`;
+  }
+  const [left] = await sql`select count(*)::int as n from public.lead_mission_queue
+                            where id = any(${ids}) and status in ('queued', 'running', 'resumable')`;
+  assertEquals(left.n, 0);
+});
