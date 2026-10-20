@@ -7009,6 +7009,18 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             requested: cf.quota.requested_leads,
           });
         const taskStatus = statuses.taskStatus;
+        // The persisted mission and the caller/panel must describe the same
+        // deliverable. The bypassed legacy controller counts CONTACTs and may
+        // still say round_limit_reached after a company mission met its quota.
+        const deliveredCount = v2Outcome?.delivered ?? cf.quota.eligible_leads;
+        const requestedCount = v2Outcome?.requested ?? cf.quota.requested_leads;
+        const countEntity = v2Outcome?.deliverable === "company" ? "qualified_company" : "contact_ready_lead";
+        const responseQuotaPolicy = v2Outcome?.deliverable === "company" ? "qualified_companies" : cf.quota.quota_policy;
+        if (v2Outcome) Object.assign(runContext, {
+          terminal_status: effectiveTerminal, count_entity: countEntity, quota_policy: responseQuotaPolicy,
+          requested_lead_count: requestedCount, requested_leads: requestedCount,
+          eligible_leads: deliveredCount, remaining_leads: Math.max(0, requestedCount - deliveredCount),
+        });
         // The claim is RELEASED here so the next Continue can take it. Leaving it
         // set would make the task look permanently in-flight.
         // ── PHASE 8: LEADS → SIGNALS ────────────────────────────────────────
@@ -7953,10 +7965,12 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         const uiPanel = {
           kind: "lead_results",
           title: "Qualified lead sourcing",
-          subtitle: `${cf.quota.eligible_leads} of ${cf.quota.requested_leads} CONTACT-ready leads`,
+          subtitle: v2Outcome
+            ? `${deliveredCount} of ${requestedCount} ${v2Outcome.deliverable === "company" ? "qualified companies" : "CONTACT-ready leads"}`
+            : `${cf.quota.eligible_leads} of ${cf.quota.requested_leads} CONTACT-ready leads`,
           source_type: "hiring_signal",
           plan_id: plan_id ?? null,
-          lead_count: cf.quota.eligible_leads,
+          lead_count: deliveredCount,
           enrichable_count: 0,
           lead_candidate_ids: cf.items.map((i) => i.leadCandidateId).filter(Boolean),
           actions: [],
@@ -7976,6 +7990,15 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           .select("result").eq("id", task.id).maybeSingle();
         const panelResult =
           ((panelRow as { result?: Record<string, unknown> } | null)?.result ?? {});
+        const libraryResult = panelResult.lead_library_persistence as {
+          persisted?: number; results?: Array<{ ok?: boolean; lead_candidate_id?: unknown }>;
+        } | undefined;
+        const responseOutcome = readPersistedRunOutcome(panelResult);
+        const missionJobRows = capabilityRun?.capability_outcomes.find((o) => o.capability === "job_discovery")?.rows ?? 0;
+        const missionIdentities = capabilityRun?.state.progress?.identity_resolved ?? 0;
+        if (v2Outcome) uiPanel.lead_candidate_ids = (libraryResult?.results ?? [])
+          .filter((r) => r.ok && typeof r.lead_candidate_id === "string")
+          .map((r) => r.lead_candidate_id as string);
         const { data: lineageRows } = await supabase.from("tasks")
           .select("id").eq("lineage_id", lineageRootId);
         const lineageTaskIds = Array.isArray(lineageRows) && lineageRows.length > 0
@@ -8039,16 +8062,17 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
 
         // Conclusively SKIP the ordinary people-first branch for this request.
         return json({
-          success: cf.status === "completed", task_id: task.id,
+          success: v2Outcome ? taskStatus === "completed" && !sliceSuperseded : cf.status === "completed", task_id: task.id,
           executed_sourcing_mode: "company_first",
-          terminal_status: cf.status, terminal_reason: cf.terminal_reason,
+          terminal_status: v2Outcome ? effectiveTerminal : cf.status,
+          terminal_reason: v2Outcome ? autoDecision.reason : cf.terminal_reason,
           // FRONTEND QUOTA CONTRACT. The UI must never re-derive CONTACT progress
           // from accepted accounts or persisted rows, so every number it needs is
           // stated here explicitly — including what the count actually counts.
           task_status: taskStatus,
           workflow_kind: "qualified_lead_sourcing",
-          count_entity: "contact_ready_lead",
-          quota_policy: cf.quota.quota_policy,
+          count_entity: v2Outcome ? countEntity : "contact_ready_lead",
+          quota_policy: responseQuotaPolicy,
           rounds_completed: cf.rounds_attempted,
           continuation_token: cf.continuation.continuation_token,
           next_round: cf.continuation.next_round,
@@ -8067,13 +8091,18 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           // it so the CSV export can populate every diagnostic column.
           // The SAME object that was persisted above — one payload, not two.
           ui_panel: uiPanel,
-          requested_leads: cf.quota.requested_leads, eligible_leads: cf.quota.eligible_leads,
-          remaining_leads: cf.quota.remaining_leads, requested_count_source: cf.quota.requested_count_source,
+          requested_leads: requestedCount, eligible_leads: deliveredCount,
+          remaining_leads: Math.max(0, requestedCount - deliveredCount), requested_count_source: cf.quota.requested_count_source,
           rounds_attempted: cf.rounds_attempted, expansions_attempted: cf.expansions_attempted,
-          raw_jobs_processed: cf.counts.rawJobs, verified_companies: cf.counts.verifiedCompanies,
-          people_candidates: cf.counts.candidates, provider_calls: cf.provider_calls,
+          raw_jobs_processed: v2Outcome ? missionJobRows : cf.counts.rawJobs,
+          verified_companies: v2Outcome ? missionIdentities : cf.counts.verifiedCompanies,
+          people_candidates: cf.counts.candidates,
+          provider_calls: v2Outcome ? responseOutcome?.spend.provider_calls ?? null : cf.provider_calls,
           provider_side_writes: cf.writeBoundary.providerSideWrites, budget_consumed: cf.budget_consumed,
-          counts: cf.counts, job_search: cf.routing.job_search_spec, write_boundary: cf.writeBoundary,
+          counts: v2Outcome
+            ? { ...cf.counts, rawJobs: missionJobRows, verifiedCompanies: missionIdentities, persisted: libraryResult?.persisted ?? 0 }
+            : cf.counts,
+          job_search: cf.routing.job_search_spec, write_boundary: cf.writeBoundary,
           plan_sources: cf.plan_sources, planner_metadata: cf.planner_metadata,
           bottlenecks: cf.bottlenecks, idempotency: cf.idempotency, continuation: cf.continuation,
           // SEMANTIC CLASSIFICATION AUDIT. Counts, reasons, provider and model

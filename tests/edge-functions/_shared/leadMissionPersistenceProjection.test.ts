@@ -76,8 +76,8 @@ Deno.test("a Brain-qualified company becomes an account-type persistence plan", 
   assertEquals(plan.workspaceId, "ws-1");
   assert(plan.persistable, plan.persistenceReason);
   assertEquals(plan.account?.domain, "sortly.com");
-  assertEquals(plan.account?.linkedinUrl, "linkedin.com/company/sortly",
-    "the canonical LinkedIn form the identity resolver produces");
+  assertEquals(plan.account?.linkedinUrl, "https://www.linkedin.com/company/sortly",
+    "the absolute LinkedIn URL, not the resolver's comparison key");
 });
 
 Deno.test("the never-CONTACT invariant is inherited, not restated", () => {
@@ -197,7 +197,7 @@ Deno.test("resolved identity outranks whatever discovery carried", () => {
   });
   const p = projectMissionCompanyRows([c], "ws-1");
   assertEquals(
-    p.rows[0].plan.account?.linkedinUrl, "linkedin.com/company/sortly",
+    p.rows[0].plan.account?.linkedinUrl, "https://www.linkedin.com/company/sortly",
     "the RESOLVED url wins over the discovery row's",
   );
 });
