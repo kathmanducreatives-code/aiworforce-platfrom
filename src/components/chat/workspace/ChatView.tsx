@@ -320,3 +320,5 @@ function HandoffDivider({ fromSlug, toSlug }: { fromSlug: string; toSlug: string
     </div>
   );
 }
+
+// CI example (ui-only): comment only, do not merge
