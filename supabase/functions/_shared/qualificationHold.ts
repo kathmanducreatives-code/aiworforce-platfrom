@@ -46,6 +46,29 @@ export interface HoldSource {
   decision_source?: string | null;
   fit?: { reason?: string | null } | null;
   record?: { stage_reason?: string | null } | null;
+  /** Holds restored from a checkpoint; see `qualificationHoldsOf`. */
+  qualification_holds?: readonly QualificationHold[] | null;
+  /** How this slice reached (or did not reach) a decision for the company. */
+  evaluation_path?: string | null;
+}
+
+/** Holds only the engine's own record can show — not re-derivable from a restored evaluation. */
+const ENGINE_HOLDS: ReadonlySet<QualificationHoldCode> = new Set(["verified_fact_rejected", "enrichment_evidence_missing"]);
+/** Paths on which this slice made no fresh decision, so a previous slice's decision stands. */
+const UNDECIDED_PATHS: ReadonlySet<string> = new Set(["restored_decision", "not_reached"]);
+
+const HOLD_CODES: ReadonlySet<string> = new Set<QualificationHoldCode>([
+  "evaluator_rejected", "evaluator_review", "verified_fact_rejected", "enrichment_evidence_missing",
+]);
+
+/** Holds read back from an (untrusted) checkpoint: known codes only, reason as text. */
+export function restoredHolds(raw: unknown): QualificationHold[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((h) => {
+    const r = h as { code?: unknown; reason?: unknown } | null;
+    return r && typeof r.code === "string" && HOLD_CODES.has(r.code)
+      ? [{ code: r.code as QualificationHoldCode, reason: String(r.reason ?? "") }] : [];
+  });
 }
 
 /**
@@ -92,6 +115,16 @@ export function qualificationHoldsOf(c: HoldSource): QualificationHold[] {
   if (stage.startsWith("enrichment_evidence_missing")) {
     holds.push({ code: "enrichment_evidence_missing",
       reason: `planned company enrichment returned no evidence (${stage.split(":")[1] ?? "unknown"})` });
+  }
+  // A PREVIOUS SLICE'S ENGINE HOLD STANDS while this slice has not re-decided
+  // the company: the fields it was read from are not in the checkpoint. The
+  // evaluator's holds are never copied — they are re-derived from the restored
+  // evaluation above, so a later re-evaluation can change them — and a slice
+  // that re-judges the company decides from what it derived itself.
+  if (UNDECIDED_PATHS.has(c.evaluation_path ?? "not_reached")) {
+    for (const h of c.qualification_holds ?? []) {
+      if (ENGINE_HOLDS.has(h.code) && !holds.some((x) => x.code === h.code)) holds.push(h);
+    }
   }
   return holds;
 }

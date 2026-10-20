@@ -8,7 +8,8 @@
 //   - a held company is never bought more evidence (its hold check is blocked);
 //   - every caller passes the same verdicts and holds;
 //   - the evaluator answers the SAME criteria the decision reads;
-//   - a second look cannot quietly turn a cited FAIL into a PASS.
+//   - a second look cannot quietly turn a cited FAIL into a PASS;
+//   - a resumed slice holds what the previous slice held.
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { evaluateEligibility } from "../../../supabase/functions/_shared/candidateEligibility.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
@@ -22,7 +23,9 @@ import { PRODUCTION_READINESS } from "../../../supabase/functions/_shared/routeR
 import {
   type CriterionVerdict, type MissionEvaluation, mergeCriterionVerdicts, notEvaluated,
 } from "../../../supabase/functions/_shared/missionEvaluation.ts";
-import { qualificationHoldsOf } from "../../../supabase/functions/_shared/qualificationHold.ts";
+import { qualificationHoldsOf, restoredHolds } from "../../../supabase/functions/_shared/qualificationHold.ts";
+import { buildCheckpoint, CHECKPOINT_RESULT_KEY, readCheckpointCompanies } from "../../../supabase/functions/_shared/leadResumeState.ts";
+import { restoreWorkingSet, toResumeRecord } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 
 const NOW = new Date("2026-10-20T12:00:00.000Z");
 const MISSION = parseLeadMissionDeterministic("Find B2B SaaS companies in the United States");
@@ -154,4 +157,49 @@ Deno.test("second look: a cited FAIL stands unless the new PASS cites NEW eviden
   assertEquals(merged.map((v) => [v.criterion_id, v.result]), [["geo", "unknown"], ["size", "pass"]]);
   // A re-evaluation without rows erases nothing.
   assertEquals(mergeCriterionVerdicts([fail], undefined, isNew), [fail]);
+});
+
+// ════════════════════════════════════════════════════════════════ resume ══
+
+/** One company as the engine holds it after a slice decided it. */
+function decided(over: Record<string, unknown> = {}) {
+  return {
+    key: "held.test", company: { company_name: "Held", domain: "held.test", website: "https://held.test" },
+    yc_open_jobs: [], prequal_key: "held.test", prequalified: null, shortlisted: true, triage: null,
+    investigation_state: "investigated", investigation_rank: 1, enriched: null, enrichment_outcome: null,
+    identity: null, hiring_assessment: null, brain: null, fit: null, verdict: null, founders: [],
+    verified_founders: [], contact_identities: [], completed_operations: [], mission_evaluation: null,
+    ...over,
+  } as never;
+}
+/** Writer → checkpoint → JSON (a jsonb column) → reader → restored working set. */
+function resumed(companies: unknown[]) {
+  const checkpoint = buildCheckpoint({
+    now: 0, deadlineAt: 120_000, remainingMs: 10_000, lastCompletedCapability: "x", nextPendingCapability: "y",
+    companies: (companies as never[]).map(toResumeRecord), reason: "execution_deadline_checkpoint",
+  });
+  return restoreWorkingSet(readCheckpointCompanies(JSON.parse(JSON.stringify({ [CHECKPOINT_RESULT_KEY]: checkpoint }))));
+}
+
+Deno.test("resume: the engine's own holds survive a checkpoint; the evaluator's are re-derived", () => {
+  const before = [
+    decided({ key: "fact.test", decision_source: "hard_constraint_rejection", fit: { reason: "staffing_or_aggregator" } }),
+    decided({ key: "enrich.test", record: { stage_reason: "enrichment_evidence_missing:empty" } }),
+    decided({ key: "eval.test", mission_evaluation: evaluation("not_qualified", HARD.map(pass)) }),
+    decided({ key: "clear.test", mission_evaluation: evaluation("qualified", HARD.map(pass)) }),
+  ];
+  const codes = (cs: unknown[]): Record<string, string[]> => Object.fromEntries((cs as Array<{ key: string }>).map((c) =>
+    [c.key, qualificationHoldsOf(c as never).map((h) => h.code as string)]));
+  const want: Record<string, string[]> = { "fact.test": ["verified_fact_rejected"], "enrich.test": ["enrichment_evidence_missing"],
+    "eval.test": ["evaluator_rejected"], "clear.test": [] };
+  assertEquals(codes(before), want, "this slice's holds");
+  // The fields the engine holds were read from are not in the checkpoint.
+  const after = resumed(before);
+  assertEquals(codes(after), want, "the resumed slice decides the same");
+  // A slice that re-judges a company decides from what it derived itself.
+  const rejudged = (after as unknown as Array<Record<string, unknown>>).map((c) => ({ ...c, evaluation_path: "model_evaluated" }));
+  assertEquals(codes(rejudged)["fact.test"], [], "a fresh decision replaces a previous slice's engine hold");
+  // An untrusted checkpoint cannot invent a hold code.
+  assertEquals(restoredHolds([{ code: "evaluator_rejected_by_attacker", reason: "x" }, { code: "enrichment_evidence_missing", reason: 1 }]),
+    [{ code: "enrichment_evidence_missing", reason: "1" }]);
 });

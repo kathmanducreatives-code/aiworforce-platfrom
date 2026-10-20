@@ -183,7 +183,7 @@ import {
   type CompanyFitResult, type CompanyRecordState, type FunnelCounts,
 } from "./companyFirstStages.ts";
 import { missionTargetsIntermediaries } from "./companyAggregatorEvidence.ts";
-import { qualificationHoldsOf } from "./qualificationHold.ts";
+import { qualificationHoldsOf, restoredHolds, type QualificationHold } from "./qualificationHold.ts";
 import { mergeDiscoveryActorInput } from "./discoveryInputMerge.ts";
 import { authorityForEvidence, authorityRecord, statusForAuthority } from "./evidenceAuthority.ts";
 import {
@@ -1829,6 +1829,13 @@ export interface EngineCompany {
   decision_source: DecisionSource;
   /** The evaluator's structured answer. Null until qualification runs. */
   mission_evaluation: MissionEvaluation | null;
+  /**
+   * Q1 — holds restored from a checkpoint (`qualificationHold.ts`). The fields
+   * a fresh hold is read from (`decision_source`, `record.stage_reason`, `fit`)
+   * are not part of the checkpoint, so without this a resumed slice could label
+   * a company the first slice held.
+   */
+  qualification_holds?: QualificationHold[];
   /**
    * THE QUALIFICATION DECISION, held explicitly.
    *
@@ -10643,6 +10650,8 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       // could ever qualify.
       mission_evaluation: (c.mission_evaluation ?? null) as unknown as
         Record<string, unknown> | null,
+      // Q1 — the holds this slice decided, so a resumed slice decides the same.
+      qualification_holds: qualificationHoldsOf(c) as unknown as Record<string, unknown>[],
     },
     updated_at: new Date().toISOString(),
   };
@@ -10863,6 +10872,7 @@ export function restoreWorkingSet(
     // as "ICP fit could not be established".
     c.mission_evaluation = (s.mission_evaluation ?? null) as unknown as
       EngineCompany["mission_evaluation"];
+    c.qualification_holds = restoredHolds(s.qualification_holds);
     // A company already carried to a terminal outcome must not re-enter the
     // frontier; `shortlisted` stays the derived view of that.
     c.shortlisted = wasInvestigated(c.investigation_state);

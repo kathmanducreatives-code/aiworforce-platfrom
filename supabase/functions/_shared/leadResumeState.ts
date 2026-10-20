@@ -373,6 +373,12 @@ export interface CompanyWorkingSetSnapshot {
    * badly — see `restoredBrainKeys`.
    */
   mission_evaluation?: Record<string, unknown> | null;
+  /**
+   * Q1 — the qualification holds the slice decided (`qualificationHold.ts`).
+   * Optional: a checkpoint written before Q1 has none, and the evaluator's own
+   * holds are re-derived from `mission_evaluation` either way.
+   */
+  qualification_holds?: Record<string, unknown>[];
 }
 
 /**
@@ -858,6 +864,9 @@ function readWorkingSetSnapshot(raw: unknown): CompanyWorkingSetSnapshot | null 
     // AND THE EVALUATION IT CITES. Written, declared and read — all three, or
     // the verdict comes back as an outcome with no reasoning behind it.
     mission_evaluation: asObjectOrNull(s.mission_evaluation),
+    // Q1 — written, declared and read, like the evaluation above. Only when
+    // present, so a checkpoint without holds reads back exactly as written.
+    ...(Array.isArray(s.qualification_holds) ? { qualification_holds: boundedRecords(s.qualification_holds, 8) } : {}),
     // P4 — THE UNION'S PROVENANCE, READ BACK AS WELL AS WRITTEN.
     //
     // Canary 0dbce8d5 restored ten companies whose `found_by` the writer had
