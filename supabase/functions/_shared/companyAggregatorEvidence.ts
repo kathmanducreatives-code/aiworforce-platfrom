@@ -292,6 +292,30 @@ export function missionTargetsIntermediaries(i: {
 }
 
 /**
+ * Q3 — DISCOVERY ADMISSION FOLLOWS THE CUSTOMER'S ICP (Codex routing audit H05).
+ *
+ * Job discovery used to drop every agency employer unconditionally
+ * (`jobEmployerAgencyReason`), so a mission ASKING for recruiting agencies
+ * never saw one: "Find a recruiting agency hiring its own Account Executives"
+ * discarded the agency before any qualification, while the company-fit gate
+ * downstream already honoured `missionTargetsIntermediaries`. Discovery now
+ * reads the same compiled intent, once per mission.
+ *
+ * What still protects the mission: a posting the agency advertises FOR A
+ * CLIENT is caught by `jobEmployerIdentityConflict` ("agency_client_posting"),
+ * which keeps the agency a candidate but never lets that posting prove its own
+ * hiring (H06). Missions that do not target intermediaries are unchanged.
+ *
+ * Returns the drop reason, or null when the row is admitted.
+ */
+export function discoveryAgencyRejection(
+  agencyReason: string | null, targets: { targets: boolean },
+): string | null {
+  if (!agencyReason) return null;
+  return targets.targets ? null : agencyReason;
+}
+
+/**
  * Does a posting prove THIS company is the employer?
  *
  * Never true when aggregator evidence is supported: the posting company and the

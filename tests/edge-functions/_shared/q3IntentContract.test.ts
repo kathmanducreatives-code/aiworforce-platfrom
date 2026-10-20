@@ -118,3 +118,19 @@ Deno.test("Q3 G08b-exact-size: 'exactly 23 employees' is a requirement, never dr
   const g = buildCompanyEvidenceGraph("co", [item("business_model", "b2b_software"), item("geography", "Boston, United States")], { now: NOW });
   assertEquals(evaluateEligibility(cs, g).eligibility === "eligible", false, "not eligible without any size evidence");
 });
+
+// ══════════════════════════════════ recruiting agencies at discovery (H05) ══
+
+import { discoveryAgencyRejection, missionTargetsIntermediaries } from "../../../supabase/functions/_shared/companyAggregatorEvidence.ts";
+
+Deno.test("Q3 H05: discovery admits an agency employer only when the customer asks for intermediaries", () => {
+  const asked = missionTargetsIntermediaries({ mission_verticals: ["recruiting agencies"] });
+  const notAsked = missionTargetsIntermediaries({ mission_verticals: ["B2B software"] });
+  assertEquals(asked.targets, true);
+  assertEquals(discoveryAgencyRejection("employer_industry:Staffing and Recruiting", asked), null, "admitted: it is the ICP");
+  assertEquals(discoveryAgencyRejection("employer_industry:Staffing and Recruiting", notAsked), "employer_industry:Staffing and Recruiting",
+    "every other mission still drops agencies before any paid stage");
+  assertEquals(discoveryAgencyRejection(null, notAsked), null);
+  // A posting the agency advertises for a client is still never its own hiring
+  // proof: `jobEmployerIdentityConflict` → "agency_client_posting" (H06).
+});

@@ -182,7 +182,7 @@ import {
   advance, evaluateCompanyFit, newCompanyRecord, projectFunnel,
   type CompanyFitResult, type CompanyRecordState, type FunnelCounts,
 } from "./companyFirstStages.ts";
-import { missionTargetsIntermediaries } from "./companyAggregatorEvidence.ts";
+import { discoveryAgencyRejection, missionTargetsIntermediaries } from "./companyAggregatorEvidence.ts";
 import { qualificationHoldsOf, restoredHolds, type QualificationHold } from "./qualificationHold.ts";
 import { mergeDiscoveryActorInput } from "./discoveryInputMerge.ts";
 import { authorityForEvidence, authorityRecord, statusForAuthority } from "./evidenceAuthority.ts";
@@ -2662,6 +2662,14 @@ export async function runCapabilityPlan(
   // and a Mission asking for companies hiring software engineers qualified none
   // of a hundred (TEST run cf6cce3d): its own required signal was classified
   // `technical`, and `technical` could not produce a qualifying tier.
+  // ── IS THE EXCLUDED CATEGORY THE REQUESTED ONE? ─────────────────────────
+  //
+  // A property of the MISSION, resolved once for the whole run: job discovery's
+  // agency admission (Q3, H05) and the company-fit gate read the same answer,
+  // so two stages of one run can never disagree about it.
+  const targetsIntermediaries = missionTargetsIntermediaries({
+    mission_verticals: opts.mission?.company_profile?.verticals ?? [],
+  });
   const qualificationCtx = buildQualificationContext(opts.mission,
     // Q1 — the SAME criteria the canonical decision reads (`canonicalDecisions`
     // derives them under `opts.readiness`), so the evaluator answers the
@@ -6177,7 +6185,7 @@ export async function runCapabilityPlan(
                 dropped.set("posting_closed", (dropped.get("posting_closed") ?? 0) + 1);
                 continue;
               }
-              const agency = jobEmployerAgencyReason(r);
+              const agency = discoveryAgencyRejection(jobEmployerAgencyReason(r), targetsIntermediaries);
               if (agency) {
                 dropped.set(`staffing_agency(${agency})`, (dropped.get(`staffing_agency(${agency})`) ?? 0) + 1);
                 continue;
@@ -8812,9 +8820,8 @@ export async function runCapabilityPlan(
       // Resolved once for the whole eligible set, like the bounds above, and for
       // the same reason: it is a property of the MISSION, not of a company, and
       // computing it per company would invite two answers in one run.
-      const targetsIntermediaries = missionTargetsIntermediaries({
-        mission_verticals: opts.mission.company_profile?.verticals ?? [],
-      });
+      // Resolved ONCE for the run (`targetsIntermediaries`, above): discovery
+      // admission and this gate read the same answer (Q3, H05).
       if (targetsIntermediaries.targets) {
         // Worth a line of its own: it suspends a hard gate, and an operator
         // reading a run that returned staffing firms must be able to see that
