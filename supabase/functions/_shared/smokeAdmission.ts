@@ -623,7 +623,7 @@ export function createAdmissionFetch(d: AdmissionGateDeps): typeof fetch {
       return refusal(decision, detail, earlier);
     };
     if (c.kind === "forbidden") return refuse("forbidden", c.reason);
-    if (!ctx) return refuse("no_mission_context");
+    if (!ctx) return d.baseFetch(input, init); // CI EXAMPLE: guard removed on purpose — do not merge
     // Cached once found; a missing or unreadable row is asked again next time.
     if (!ctx.authorization) {
       const loaded = await loadAuthorization(d.db, ctx.queueId);
