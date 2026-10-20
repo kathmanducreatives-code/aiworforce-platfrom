@@ -49,7 +49,7 @@ actor, a vendor cap on every start, ≤ $0.05 model, ≤ $0.20 provider, ≤ $0.
 | S04 | 201–500 band | 0 | 0, rejected before any lookup was bought | PASS |
 | S05a/b | band unknown / posting 11–50 vs record 201–500 | 0 | 0 / 0 | PASS |
 | S06 | posted 45 d ago | 0 | 0 | PASS |
-| S07 | posted 5 d in the **future** | 0 | **1 qualified** | **FAIL** on base; **PASS with #109** |
+| S07 | posted 5 d in the **future** | 0 | 1 qualified on 24b19bd6; **0 after #109** (merged) | **PASS** (fixed by #109) |
 | S08a/b | 29 d 23 h / 30 d 1 h (UTC) | 1 / 0 | 1 / 0 | PASS |
 | S08c | date-only, exactly 30 calendar days | deterministic | 0: a bare date is read as 00:00 UTC, so "30 days" is exclusive after midnight | PASS (P3 note) |
 | S08d | same instant as `+05:45` offset | 1 | 1 | PASS |
@@ -95,7 +95,7 @@ actor, a vendor cap on every start, ≤ $0.05 model, ≤ $0.20 provider, ≤ $0.
 | S35 | recovery migration absent vs present | `leadMissionExhaustedLease` with `DB_CONTRACT_OMIT_HELD`: 3 fail without it, all pass with it (#108) | COVERED |
 
 **Totals (35 scenarios):** PASS 23 · COVERED 7 · FIXED 1 (S25) ·
-FAIL 3 (S07, S10, S13) · NOT TESTED 1 (S33). One further failing **variant**:
+FAIL 2 (S10, S13) · FIXED by #109 1 (S07) · NOT TESTED 1 (S33). One further failing **variant**:
 S03b (S03 itself passes).
 
 ## Defects, ranked by A7 risk
@@ -109,7 +109,7 @@ breach in any scenario.
 | 2 | **P1, false qualification** | **S10: any sales-family title proves "open Account Executive posting".** `jobProvesRequestedHiring` and the `hiring` hard check compare role families only. `gtm_sales` includes SDR, so the mission's `role_terms: ["account executive"]` and `disallowed_broadening: ["role"]` are ignored. Qualifies even with an honest model. | **Not fixed here**: #109 edits the same function. Failing tests `S10`/`S10b`; reported on #109 |
 | 3 | P1, false qualification | **S13: the posting's company text stands in for a missing company-record description** | Codex provenance work; failing tests `S13`/`S13b` |
 | 4 | P1, false qualification | **S03b: a US office with no HQ flag satisfies the US-headquarters requirement** | Codex HQ work; failing test `S03b` |
-| 5 | P1, false qualification | **S07: a future-dated posting proves recent hiring** | Fixed by **#109** (verified: S07 passes on a local merge of #109) |
+| 5 | P1, false qualification | **S07: a future-dated posting proves recent hiring** | **Fixed by #109** (merged); S07 now runs on every build |
 | 6 | P2 | S18a: a malformed vendor dataset is recorded as `empty` | Observability; not fixed |
 | 7 | P3 | S21: a model timeout ends `unhandled_exception`; S08c: a date-only posting at exactly 30 days is excluded; S25: after the model allowance is used, further model calls are attempted and refused locally (`usd_limit`, nothing sent) | Polish |
 
@@ -146,8 +146,9 @@ Run on the exact SHA to be dispatched. All must pass, with no known-gap skips:
 **NO-GO.** Offline blockers:
 - the S10 role-term false qualification;
 - the S13 provenance and S03b HQ gaps (Codex);
-- #109 unmerged (S07);
 - this PR's S25 fix unmerged.
+
+(S07 is resolved: #109 merged on 2026-10-20.)
 
 External prerequisites:
 - Apify account restriction lifted;
