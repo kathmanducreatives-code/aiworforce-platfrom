@@ -180,6 +180,8 @@ function groundedResult(company_key: string, ev: Ev[], model: Model) {
 // ── THE SCENARIO ─────────────────────────────────────────────────────────────
 export interface Scenario {
   label: string;
+  /** The customer's request (Q4: varied requests through the same real path). Default: the A7 mission. */
+  goal?: string;
   /** Job-search dataset rows (default: one qualifying posting). */
   jobs?: Json[];
   /** The company-details record for a requested LinkedIn URL (default: the posting's own company). */
@@ -206,6 +208,7 @@ export interface Run {
 
 export async function runScenario(s: Scenario): Promise<Run> {
   const model = s.model ?? "honest";
+  const missionGoal = s.goal ?? MISSION;
   const originalFetch = globalThis.fetch;
   const key = await mintJwt("service_role");
   const localFetch: typeof fetch = (u, i) => {
@@ -235,7 +238,7 @@ export async function runScenario(s: Scenario): Promise<Run> {
   const user = uuid(), plan = uuid();
   await sql`insert into auth.users (id, email) values (${user}, ${"scenario-" + user + "@example.invalid"})`;
   await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${m.ws}, 'scout', 'Offline Scout', 'Find and verify the requested company using source evidence.', 'research')`;
-  await sql`insert into public.task_plans (id, workspace_id, user_id, user_instruction, status) values (${plan}, ${m.ws}, ${user}, ${MISSION}, 'running')`;
+  await sql`insert into public.task_plans (id, workspace_id, user_id, user_instruction, status) values (${plan}, ${m.ws}, ${user}, ${missionGoal}, 'running')`;
   await sql`insert into public.workspace_credit_balances (workspace_id, balance_credits) values (${m.ws}, 10)`;
 
   const base = company("qualified");
@@ -305,16 +308,16 @@ export async function runScenario(s: Scenario): Promise<Run> {
     const compilerCalls = new ModelCallCollector();
     const binding = buildMissionCompilerBinding({ workspaceId: m.ws, onModelCall: compilerCalls.sink });
     const raw = await missionAdmission.run({ queueId: m.queueId, workerId: m.workerId, taskId: m.taskId, generation: m.generation },
-      () => binding.proposeMission!({ originalUserQuery: MISSION, requestedCount: 1 }));
+      () => binding.proposeMission!({ originalUserQuery: missionGoal, requestedCount: 1 }));
     assert(raw, JSON.stringify({ compiler_failure: binding.lastModelFailure() }));
     await compilerCalls.drain(createLedgerWriter(client as never), { workspace_id: m.ws, task_id: m.taskId, plan_id: plan, logical_call_key: "offline:mission_compilation" });
-    const c = compileLeadMission({ originalUserQuery: MISSION, proposal: raw, requestedCount: 1 });
+    const c = compileLeadMission({ originalUserQuery: missionGoal, proposal: raw, requestedCount: 1 });
     const mission = { ...c.final_mission, mission_parser_source: c.parser_source,
       lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION, planner_runtime: runtimeIdentity("planner", "offline-rehearsal") };
     trace.compiled_mission = mission;
     compiled = true;
     globalThis.fetch = gate;
-    const request = { plan_id: plan, step_index: 0, agent_slug: "scout", workspace_id: m.ws, user_id: user, instruction: MISSION,
+    const request = { plan_id: plan, step_index: 0, agent_slug: "scout", workspace_id: m.ws, user_id: user, instruction: missionGoal,
       requested_lead_count: 1, workflow_kind: "qualified_lead_sourcing", execution_mode: "company_first", tool_needed: "source_with_apify",
       lead_mission: mission, tool_input: { lead_mission: mission, source_type: "jobs" }, run_budget: { provider_usd: 0.20, max_candidates: 3 } };
     await sql`update public.tasks set status = 'complete' where id = ${m.taskId}`;
