@@ -192,3 +192,5 @@ default).
 
 Rollback (refuses while any authorization or operation row exists):
 `rollback/20261015140000_discovery_smoke_admission.down.sql`.
+
+<!-- CI example (database): comment only, do not merge -->
