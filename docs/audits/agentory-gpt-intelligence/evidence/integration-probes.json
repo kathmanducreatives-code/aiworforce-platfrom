@@ -1,0 +1,5407 @@
+{
+  "sha": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+  "compiler_probes": [
+    {
+      "id": "I01",
+      "request": "Find SaaS companies that must be hiring Account Executives in the last 30 days.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [
+          "SaaS"
+        ],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "qualified_companies",
+        "preferred_signals": [
+          "hiring Account Executives"
+        ],
+        "required_signal_terms": [
+          "hiring Account Executives"
+        ],
+        "required_capabilities": [
+          "general_company_discovery",
+          "company_semantic_evaluation"
+        ],
+        "strategies": [
+          "hiring"
+        ],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_repaired",
+        "original_query": "Find SaaS companies that must be hiring Account Executives in the last 30 days.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [
+            "SaaS"
+          ],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [
+            "hiring Account Executives"
+          ],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [
+            "hiring Account Executives"
+          ],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [
+            "hiring"
+          ],
+          "output_intent": "qualified_companies"
+        },
+        "validator_changes": [
+          "output_intent_disagreement:deterministic=contact_ready_leads:model=qualified_companies",
+          "target_entity_disagreement:deterministic=person:model=company",
+          "output_intent_model_authoritative:qualified_companies:deterministic_would_have_said:contact_ready_leads",
+          "window_from_user_words:hiring:30d"
+        ],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Find SaaS companies that must be hiring Account Executives in the last 30 days.",
+          "mission_type": "company_research",
+          "target_entity": "company",
+          "requested_output": "qualified_companies",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [
+              "saas"
+            ],
+            "stages": [],
+            "locations": []
+          },
+          "required_signals": [
+            {
+              "type": "hiring",
+              "role_families": [
+                "gtm_sales"
+              ],
+              "event": "hiring",
+              "subject": "company",
+              "qualifier": {
+                "role_families": [
+                  "gtm_sales"
+                ],
+                "role_terms": [
+                  "account executives"
+                ]
+              },
+              "phrase": "hiring Account Executives",
+              "timeframe_days": 30
+            }
+          ],
+          "decision_makers": {
+            "roles": [
+              "Founder",
+              "Co-Founder",
+              "CEO"
+            ],
+            "current_employment_required": true
+          },
+          "hard_constraints": {},
+          "soft_preferences": {},
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "company_profile.verticals": "explicit_user_request",
+            "required_signals": "explicit_user_request",
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "decision_makers.roles": "system_default",
+            "requested_count": "system_default",
+            "company_profile.stages": "gpt_inference",
+            "company_profile.locations": "gpt_inference",
+            "company_profile.business_models": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "strategies": [
+            "hiring"
+          ],
+          "required_signal_terms": [
+            "hiring Account Executives"
+          ],
+          "proposed_output_intent": "qualified_companies",
+          "directives": {
+            "preferred_signals": [
+              "hiring Account Executives"
+            ],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Find SaaS companies that must be hiring Account Executives in the last 30 days.",
+            "requested_count": 1,
+            "canonical_signals": [
+              {
+                "kind": "hiring",
+                "legacy_event": "hiring",
+                "subject": "company",
+                "phrase": "Find SaaS companies that must be hiring Account Executives in the last 30 days.",
+                "alias": "reader",
+                "source": "user_explicit"
+              }
+            ],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": null,
+            "window_sources": {
+              "hiring": {
+                "source": "user_explicit"
+              }
+            },
+            "corrections": [
+              "window_from_user_words:hiring:30d"
+            ]
+          },
+          "criteria": [
+            {
+              "kind": "hard",
+              "dimension": "industry",
+              "value": "saas",
+              "label": "Industry: saas",
+              "source": "user_explicit",
+              "user_phrase": "saas",
+              "rationale": "stated in the request",
+              "id": "industry:saas",
+              "status": "ok"
+            },
+            {
+              "kind": "hard",
+              "dimension": "hiring",
+              "value": {
+                "event": "hiring",
+                "subject": "company",
+                "qualifier": {
+                  "role_families": [
+                    "gtm_sales"
+                  ],
+                  "role_terms": [
+                    "account executives"
+                  ]
+                }
+              },
+              "label": "Hiring: account executives",
+              "source": "user_explicit",
+              "time_window": {
+                "days": 30,
+                "basis": "posted",
+                "source": "user_explicit",
+                "rule": "currently / actively hiring",
+                "enforced": false
+              },
+              "elevated_by": "must",
+              "user_phrase": "Find SaaS companies that must be hiring Account Executives in the last 30 days.",
+              "rationale": "an observable signal the request asks for",
+              "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+              "status": "ok"
+            }
+          ],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "approved": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "rejected": [],
+          "offers": [],
+          "internal": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ]
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "saas",
+          "label": "Industry: saas",
+          "source": "user_explicit",
+          "user_phrase": "saas",
+          "rationale": "stated in the request",
+          "id": "industry:saas",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "hiring",
+          "value": {
+            "event": "hiring",
+            "subject": "company",
+            "qualifier": {
+              "role_families": [
+                "gtm_sales"
+              ],
+              "role_terms": [
+                "account executives"
+              ]
+            }
+          },
+          "label": "Hiring: account executives",
+          "source": "user_explicit",
+          "time_window": {
+            "days": 30,
+            "basis": "posted",
+            "source": "user_explicit",
+            "rule": "currently / actively hiring",
+            "enforced": false
+          },
+          "elevated_by": "must",
+          "user_phrase": "Find SaaS companies that must be hiring Account Executives in the last 30 days.",
+          "rationale": "an observable signal the request asks for",
+          "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+          "status": "ok"
+        }
+      ],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "job_discovery",
+            "order": 0,
+            "reason": "the mission is hiring-led: an open account executives role is how these companies are found",
+            "providers": [
+              "apify_linkedin_job_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 3,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "job_deduplication",
+            "order": 1,
+            "reason": "job output must be deduplicated",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 2,
+            "reason": "the posting names the employer's LinkedIn page; Company Search runs only for an employer without one",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 3,
+            "reason": "qualification requires enriched evidence, never job-row fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "hiring_verification",
+            "order": 4,
+            "reason": "the postings are the hiring evidence; nothing already held is bought again",
+            "providers": [
+              "apify_linkedin_job_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 5,
+            "reason": "the employers are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 6,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "general_company_discovery",
+          "known_company_resolution",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_job_search",
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details"
+        ],
+        "entry_capability": "job_discovery",
+        "estimated_cost_units": 8,
+        "offered_capabilities": [
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission is hiring-led: an open account executives role is how these companies are found",
+        "routing_advisories": [
+          "This mission is hiring-led and enters through job_discovery. apify_linkedin_job_search called WITHOUT `company` discovers employers that have the open role right now; every row carries the employer's LinkedIn URL, website and declared size band, so identity resolution reuses that URL. Plan job_discovery with actor-native input \u2014 jobTitles as one boolean OR query of the role's real titles, locations for a hard geography, postedLimit, maxItems \u2014 then identity resolution, enrichment, hiring verification and qualification.",
+          "Stage, company size and industry are judged afterwards from enrichment and ranked; a target criterion is evidence for ranking, never a reason to plan fewer steps."
+        ],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": []
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": true
+            }
+          ],
+          "readiness": "READY",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    },
+    {
+      "id": "I02",
+      "request": "Find founders who might be considering outsourcing their outbound sales based on LinkedIn discussions.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "social_posts",
+        "preferred_signals": [
+          "founder discussions about outbound sales outsourcing"
+        ],
+        "required_signal_terms": [
+          "founder discussions about outbound sales outsourcing"
+        ],
+        "required_capabilities": [
+          "offer_founder_unlock"
+        ],
+        "strategies": [
+          "social"
+        ],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_repaired",
+        "original_query": "Find founders who might be considering outsourcing their outbound sales based on LinkedIn discussions.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [
+            "founder discussions about outbound sales outsourcing"
+          ],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "offer_founder_unlock"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [
+            "founder discussions about outbound sales outsourcing"
+          ],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [
+            "social"
+          ],
+          "output_intent": "social_posts"
+        },
+        "validator_changes": [
+          "output_intent_disagreement:deterministic=contact_ready_leads:model=social_posts",
+          "output_intent_model_authoritative:social_posts:deterministic_would_have_said:contact_ready_leads"
+        ],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Find founders who might be considering outsourcing their outbound sales based on LinkedIn discussions.",
+          "mission_type": "qualified_lead_sourcing",
+          "target_entity": "person",
+          "requested_output": "social_posts",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [],
+            "stages": [],
+            "locations": []
+          },
+          "required_signals": [
+            {
+              "type": "founder discussions about outbound sales outsourcing",
+              "phrase": "founder discussions about outbound sales outsourcing"
+            }
+          ],
+          "decision_makers": {
+            "roles": [
+              "Founder",
+              "Co-Founder",
+              "CEO"
+            ],
+            "current_employment_required": true
+          },
+          "hard_constraints": {},
+          "soft_preferences": {},
+          "required_capabilities": [],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "decision_makers.roles": "explicit_user_request",
+            "requested_count": "system_default",
+            "company_profile.verticals": "gpt_inference",
+            "company_profile.stages": "gpt_inference",
+            "company_profile.locations": "gpt_inference",
+            "company_profile.business_models": "gpt_inference",
+            "required_signals": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "strategies": [
+            "social"
+          ],
+          "required_signal_terms": [
+            "founder discussions about outbound sales outsourcing"
+          ],
+          "proposed_output_intent": "social_posts",
+          "directives": {
+            "preferred_signals": [
+              "founder discussions about outbound sales outsourcing"
+            ],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Find founders who might be considering outsourcing their outbound sales based on LinkedIn discussions.",
+            "requested_count": 1,
+            "canonical_signals": [],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": null,
+            "window_sources": {},
+            "corrections": []
+          },
+          "criteria": [
+            {
+              "kind": "target",
+              "dimension": "unrecognised_signal",
+              "value": "founder discussions about outbound sales outsourcing",
+              "label": "Signal not recognised: \"founder discussions about outbound sales outsourcing\"",
+              "source": "user_inferred",
+              "user_phrase": "founder discussions about outbound sales outsourcing",
+              "status": "unrecognised",
+              "rationale": "no canonical signal kind matches these words; nothing will prove it",
+              "id": "unrecognised_signal:founder_discussions_about_outbound_sales_outsourcing",
+              "confidence": 0.95
+            }
+          ],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "offer_founder_unlock"
+          ],
+          "approved": [
+            "offer_founder_unlock"
+          ],
+          "rejected": [],
+          "offers": [
+            "offer_founder_unlock"
+          ],
+          "internal": []
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [
+        {
+          "kind": "target",
+          "dimension": "unrecognised_signal",
+          "value": "founder discussions about outbound sales outsourcing",
+          "label": "Signal not recognised: \"founder discussions about outbound sales outsourcing\"",
+          "source": "user_inferred",
+          "user_phrase": "founder discussions about outbound sales outsourcing",
+          "status": "unrecognised",
+          "rationale": "no canonical signal kind matches these words; nothing will prove it",
+          "id": "unrecognised_signal:founder_discussions_about_outbound_sales_outsourcing",
+          "confidence": 0.95
+        }
+      ],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "general_company_discovery",
+            "order": 0,
+            "reason": "the mission targets companies by profile",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 1,
+            "reason": "candidates need a canonical identity before enrichment",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 2,
+            "reason": "qualification requires enriched evidence, never discovery-time fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 3,
+            "reason": "companies are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 4,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "known_company_resolution",
+          "job_discovery",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "hiring_verification",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment",
+          "job_deduplication"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details"
+        ],
+        "entry_capability": "general_company_discovery",
+        "estimated_cost_units": 5,
+        "offered_capabilities": [
+          "offer_founder_unlock",
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission targets companies by profile",
+        "routing_advisories": [],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": []
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "startup_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "general_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "funding_signal_discovery",
+              "applies": false
+            },
+            {
+              "capability": "expansion_signal_discovery",
+              "applies": false
+            },
+            {
+              "capability": "product_launch_discovery",
+              "applies": false
+            },
+            {
+              "capability": "startup_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "general_company_discovery",
+              "applies": true
+            }
+          ],
+          "readiness": "READY",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    },
+    {
+      "id": "I03",
+      "request": "Find recruiting agencies that must be hiring internal salespeople, excluding client job advertisements.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [
+          "recruiting agency"
+        ],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "qualified_companies",
+        "preferred_signals": [
+          "hiring internal salespeople"
+        ],
+        "required_signal_terms": [
+          "hiring internal salespeople"
+        ],
+        "required_capabilities": [
+          "general_company_discovery",
+          "company_semantic_evaluation"
+        ],
+        "strategies": [
+          "hiring"
+        ],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_repaired",
+        "original_query": "Find recruiting agencies that must be hiring internal salespeople, excluding client job advertisements.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [
+            "recruiting agency"
+          ],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [
+            "hiring internal salespeople"
+          ],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [
+            "hiring internal salespeople"
+          ],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [
+            "hiring"
+          ],
+          "output_intent": "qualified_companies"
+        },
+        "validator_changes": [
+          "output_intent_disagreement:deterministic=job_listings:model=qualified_companies",
+          "target_entity_disagreement:deterministic=job:model=company",
+          "company_types_overridden_by_user_words:recruiting agency",
+          "output_intent_model_authoritative:qualified_companies:deterministic_would_have_said:job_listings"
+        ],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Find recruiting agencies that must be hiring internal salespeople, excluding client job advertisements.",
+          "mission_type": "company_research",
+          "target_entity": "company",
+          "requested_output": "qualified_companies",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [
+              "recruiting agencies"
+            ],
+            "stages": [],
+            "locations": []
+          },
+          "required_signals": [
+            {
+              "type": "hiring",
+              "role_families": [
+                "gtm_sales"
+              ],
+              "event": "hiring",
+              "subject": "company",
+              "qualifier": {
+                "role_families": [
+                  "gtm_sales"
+                ],
+                "role_terms": [
+                  "internal salespeople"
+                ]
+              },
+              "phrase": "hiring internal salespeople"
+            }
+          ],
+          "decision_makers": {
+            "roles": [],
+            "current_employment_required": false
+          },
+          "hard_constraints": {},
+          "soft_preferences": {},
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "company_profile.verticals": "explicit_user_request",
+            "required_signals": "explicit_user_request",
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "requested_count": "system_default",
+            "company_profile.stages": "gpt_inference",
+            "company_profile.locations": "gpt_inference",
+            "company_profile.business_models": "gpt_inference",
+            "decision_makers.roles": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "strategies": [
+            "hiring"
+          ],
+          "required_signal_terms": [
+            "hiring internal salespeople"
+          ],
+          "proposed_output_intent": "qualified_companies",
+          "directives": {
+            "preferred_signals": [
+              "hiring internal salespeople"
+            ],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Find recruiting agencies that must be hiring internal salespeople, excluding client job advertisements.",
+            "requested_count": 1,
+            "canonical_signals": [
+              {
+                "kind": "hiring",
+                "legacy_event": "hiring",
+                "subject": "company",
+                "phrase": "Find recruiting agencies that must be hiring internal salespeople, excluding client job advertisements.",
+                "alias": "reader",
+                "source": "user_explicit"
+              }
+            ],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": null,
+            "window_sources": {},
+            "corrections": []
+          },
+          "criteria": [
+            {
+              "kind": "hard",
+              "dimension": "industry",
+              "value": "recruiting agencies",
+              "label": "Industry: recruiting agencies",
+              "source": "user_explicit",
+              "user_phrase": "recruiting agencies",
+              "rationale": "stated in the request",
+              "id": "industry:recruiting_agencies",
+              "status": "ok"
+            },
+            {
+              "kind": "hard",
+              "dimension": "hiring",
+              "value": {
+                "event": "hiring",
+                "subject": "company",
+                "qualifier": {
+                  "role_families": [
+                    "gtm_sales"
+                  ],
+                  "role_terms": [
+                    "internal salespeople"
+                  ]
+                }
+              },
+              "label": "Hiring: internal salespeople",
+              "source": "user_explicit",
+              "time_window": {
+                "days": 30,
+                "basis": "posted",
+                "source": "system_default",
+                "rule": "currently / actively hiring",
+                "enforced": false
+              },
+              "elevated_by": "must",
+              "user_phrase": "Find recruiting agencies that must be hiring internal salespeople, excluding client job advertisements.",
+              "rationale": "an observable signal the request asks for",
+              "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+              "status": "ok"
+            }
+          ],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "approved": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "rejected": [],
+          "offers": [],
+          "internal": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ]
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "recruiting agencies",
+          "label": "Industry: recruiting agencies",
+          "source": "user_explicit",
+          "user_phrase": "recruiting agencies",
+          "rationale": "stated in the request",
+          "id": "industry:recruiting_agencies",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "hiring",
+          "value": {
+            "event": "hiring",
+            "subject": "company",
+            "qualifier": {
+              "role_families": [
+                "gtm_sales"
+              ],
+              "role_terms": [
+                "internal salespeople"
+              ]
+            }
+          },
+          "label": "Hiring: internal salespeople",
+          "source": "user_explicit",
+          "time_window": {
+            "days": 30,
+            "basis": "posted",
+            "source": "system_default",
+            "rule": "currently / actively hiring",
+            "enforced": false
+          },
+          "elevated_by": "must",
+          "user_phrase": "Find recruiting agencies that must be hiring internal salespeople, excluding client job advertisements.",
+          "rationale": "an observable signal the request asks for",
+          "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+          "status": "ok"
+        }
+      ],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "job_discovery",
+            "order": 0,
+            "reason": "the mission is hiring-led: an open internal salespeople role is how these companies are found",
+            "providers": [
+              "apify_linkedin_job_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 3,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "job_deduplication",
+            "order": 1,
+            "reason": "job output must be deduplicated",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 2,
+            "reason": "the posting names the employer's LinkedIn page; Company Search runs only for an employer without one",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 3,
+            "reason": "qualification requires enriched evidence, never job-row fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "hiring_verification",
+            "order": 4,
+            "reason": "the postings are the hiring evidence; nothing already held is bought again",
+            "providers": [
+              "apify_linkedin_job_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 5,
+            "reason": "the employers are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 6,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "general_company_discovery",
+          "known_company_resolution",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_job_search",
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details"
+        ],
+        "entry_capability": "job_discovery",
+        "estimated_cost_units": 8,
+        "offered_capabilities": [
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission is hiring-led: an open internal salespeople role is how these companies are found",
+        "routing_advisories": [
+          "This mission is hiring-led and enters through job_discovery. apify_linkedin_job_search called WITHOUT `company` discovers employers that have the open role right now; every row carries the employer's LinkedIn URL, website and declared size band, so identity resolution reuses that URL. Plan job_discovery with actor-native input \u2014 jobTitles as one boolean OR query of the role's real titles, locations for a hard geography, postedLimit, maxItems \u2014 then identity resolution, enrichment, hiring verification and qualification.",
+          "Stage, company size and industry are judged afterwards from enrichment and ranked; a target criterion is evidence for ranking, never a reason to plan fewer steps."
+        ],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": []
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": true
+            }
+          ],
+          "readiness": "READY",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    },
+    {
+      "id": "I04",
+      "request": "Find growing manufacturing companies expanding production and struggling with outdated sales processes.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [
+          "manufacturing"
+        ],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "qualified_companies",
+        "preferred_signals": [
+          "expanding production",
+          "struggling with outdated sales processes"
+        ],
+        "required_signal_terms": [
+          "expanding production",
+          "struggling with outdated sales processes"
+        ],
+        "required_capabilities": [
+          "general_company_discovery",
+          "company_semantic_evaluation"
+        ],
+        "strategies": [
+          "news"
+        ],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_validated",
+        "original_query": "Find growing manufacturing companies expanding production and struggling with outdated sales processes.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [
+            "manufacturing"
+          ],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [
+            "expanding production",
+            "struggling with outdated sales processes"
+          ],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [
+            "expanding production",
+            "struggling with outdated sales processes"
+          ],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [
+            "news"
+          ],
+          "output_intent": "qualified_companies"
+        },
+        "validator_changes": [],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Find growing manufacturing companies expanding production and struggling with outdated sales processes.",
+          "mission_type": "company_research",
+          "target_entity": "company",
+          "requested_output": "qualified_companies",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [
+              "manufacturing"
+            ],
+            "stages": [],
+            "locations": []
+          },
+          "required_signals": [
+            {
+              "type": "expansion",
+              "event": "expansion",
+              "subject": "company",
+              "qualifier": {},
+              "phrase": "expanding production"
+            },
+            {
+              "type": "struggling with outdated sales processes",
+              "phrase": "struggling with outdated sales processes"
+            }
+          ],
+          "decision_makers": {
+            "roles": [],
+            "current_employment_required": false
+          },
+          "hard_constraints": {},
+          "soft_preferences": {},
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "company_profile.verticals": "explicit_user_request",
+            "required_signals": "explicit_user_request",
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "requested_count": "system_default",
+            "company_profile.stages": "gpt_inference",
+            "company_profile.locations": "gpt_inference",
+            "company_profile.business_models": "gpt_inference",
+            "decision_makers.roles": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "strategies": [
+            "news"
+          ],
+          "required_signal_terms": [
+            "expanding production",
+            "struggling with outdated sales processes"
+          ],
+          "proposed_output_intent": "qualified_companies",
+          "directives": {
+            "preferred_signals": [
+              "expanding production",
+              "struggling with outdated sales processes"
+            ],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Find growing manufacturing companies expanding production and struggling with outdated sales processes.",
+            "requested_count": 1,
+            "canonical_signals": [
+              {
+                "kind": "expansion",
+                "legacy_event": "expansion",
+                "subject": "company",
+                "phrase": "Find growing manufacturing companies expanding production",
+                "alias": "reader",
+                "source": "user_explicit"
+              }
+            ],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": null,
+            "window_sources": {},
+            "corrections": []
+          },
+          "criteria": [
+            {
+              "kind": "hard",
+              "dimension": "industry",
+              "value": "manufacturing",
+              "label": "Industry: manufacturing",
+              "source": "user_explicit",
+              "user_phrase": "manufacturing",
+              "rationale": "stated in the request",
+              "id": "industry:manufacturing",
+              "status": "ok"
+            },
+            {
+              "kind": "target",
+              "dimension": "expansion",
+              "value": {
+                "event": "expansion",
+                "subject": "company",
+                "qualifier": {}
+              },
+              "label": "Expansion",
+              "source": "user_explicit",
+              "user_phrase": "Find growing manufacturing companies expanding production",
+              "rationale": "an observable signal the request asks for",
+              "id": "expansion:_event_expansion_subject_company_qualifier_",
+              "status": "ok"
+            },
+            {
+              "kind": "target",
+              "dimension": "unrecognised_signal",
+              "value": "struggling with outdated sales processes",
+              "label": "Signal not recognised: \"struggling with outdated sales processes\"",
+              "source": "user_inferred",
+              "user_phrase": "struggling with outdated sales processes",
+              "status": "unrecognised",
+              "rationale": "no canonical signal kind matches these words; nothing will prove it",
+              "id": "unrecognised_signal:struggling_with_outdated_sales_processes",
+              "confidence": 0.95
+            }
+          ],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "approved": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "rejected": [],
+          "offers": [],
+          "internal": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ]
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "manufacturing",
+          "label": "Industry: manufacturing",
+          "source": "user_explicit",
+          "user_phrase": "manufacturing",
+          "rationale": "stated in the request",
+          "id": "industry:manufacturing",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "expansion",
+          "value": {
+            "event": "expansion",
+            "subject": "company",
+            "qualifier": {}
+          },
+          "label": "Expansion",
+          "source": "user_explicit",
+          "user_phrase": "Find growing manufacturing companies expanding production",
+          "rationale": "an observable signal the request asks for",
+          "id": "expansion:_event_expansion_subject_company_qualifier_",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "unrecognised_signal",
+          "value": "struggling with outdated sales processes",
+          "label": "Signal not recognised: \"struggling with outdated sales processes\"",
+          "source": "user_inferred",
+          "user_phrase": "struggling with outdated sales processes",
+          "status": "unrecognised",
+          "rationale": "no canonical signal kind matches these words; nothing will prove it",
+          "id": "unrecognised_signal:struggling_with_outdated_sales_processes",
+          "confidence": 0.95
+        }
+      ],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "general_company_discovery",
+            "order": 0,
+            "reason": "the mission requires general company discovery outside startup cohorts",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 1,
+            "reason": "candidates need a canonical identity before enrichment",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 2,
+            "reason": "qualification requires enriched evidence, never discovery-time fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 3,
+            "reason": "companies are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 4,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "known_company_resolution",
+          "job_discovery",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "hiring_verification",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment",
+          "job_deduplication"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details"
+        ],
+        "entry_capability": "general_company_discovery",
+        "estimated_cost_units": 5,
+        "offered_capabilities": [
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission requires general company discovery outside startup cohorts",
+        "routing_advisories": [
+          "expansion_signal_verification is not executable yet (executable): apify_google_news|expansion_signal_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it; apify_linkedin_company_posts|expansion_signal_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it. It was not scheduled; this signal is not verified by this plan."
+        ],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": [
+            {
+              "capability": "expansion_signal_verification",
+              "role": "verification",
+              "state": "executable",
+              "reason": "apify_google_news|expansion_signal_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it; apify_linkedin_company_posts|expansion_signal_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it",
+              "readiness": "CARDED_BUT_NOT_LIVE"
+            }
+          ]
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "startup_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "general_company_discovery",
+              "applies": true
+            }
+          ],
+          "readiness": "READY",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    },
+    {
+      "id": "I05",
+      "request": "Find companies that must have adopted Salesforce in the last 60 days, excluding resellers.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "qualified_companies",
+        "preferred_signals": [
+          "adopted Salesforce in the last 60 days"
+        ],
+        "required_signal_terms": [
+          "adopted Salesforce in the last 60 days"
+        ],
+        "required_capabilities": [
+          "general_company_discovery",
+          "company_semantic_evaluation"
+        ],
+        "strategies": [
+          "news"
+        ],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_validated",
+        "original_query": "Find companies that must have adopted Salesforce in the last 60 days, excluding resellers.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [
+            "adopted Salesforce in the last 60 days"
+          ],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [
+            "adopted Salesforce in the last 60 days"
+          ],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [
+            "news"
+          ],
+          "output_intent": "qualified_companies"
+        },
+        "validator_changes": [],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Find companies that must have adopted Salesforce in the last 60 days, excluding resellers.",
+          "mission_type": "company_research",
+          "target_entity": "company",
+          "requested_output": "qualified_companies",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [],
+            "stages": [],
+            "locations": []
+          },
+          "required_signals": [
+            {
+              "type": "technology",
+              "event": "technology",
+              "subject": "company",
+              "qualifier": {},
+              "phrase": "adopted Salesforce in the last 60 days"
+            }
+          ],
+          "decision_makers": {
+            "roles": [],
+            "current_employment_required": false
+          },
+          "hard_constraints": {},
+          "soft_preferences": {},
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "required_signals": "explicit_user_request",
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "requested_count": "system_default",
+            "company_profile.verticals": "gpt_inference",
+            "company_profile.stages": "gpt_inference",
+            "company_profile.locations": "gpt_inference",
+            "company_profile.business_models": "gpt_inference",
+            "decision_makers.roles": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "strategies": [
+            "news"
+          ],
+          "required_signal_terms": [
+            "adopted Salesforce in the last 60 days"
+          ],
+          "proposed_output_intent": "qualified_companies",
+          "directives": {
+            "preferred_signals": [
+              "adopted Salesforce in the last 60 days"
+            ],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Find companies that must have adopted Salesforce in the last 60 days, excluding resellers.",
+            "requested_count": 1,
+            "canonical_signals": [
+              {
+                "kind": "technology",
+                "legacy_event": "technology",
+                "subject": "company",
+                "phrase": "Find companies that must have adopted Salesforce in the last 60 days, excluding resellers.",
+                "alias": "reader",
+                "source": "user_explicit"
+              }
+            ],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": null,
+            "window_sources": {},
+            "corrections": []
+          },
+          "criteria": [
+            {
+              "kind": "target",
+              "dimension": "technology",
+              "value": {
+                "event": "technology",
+                "subject": "company",
+                "qualifier": {}
+              },
+              "label": "Technology",
+              "source": "user_explicit",
+              "user_phrase": "Find companies that must have adopted Salesforce in the last 60 days, excluding resellers.",
+              "rationale": "an observable signal the request asks for",
+              "id": "technology:_event_technology_subject_company_qualifier_",
+              "status": "ok"
+            }
+          ],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "approved": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "rejected": [],
+          "offers": [],
+          "internal": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ]
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [
+        {
+          "kind": "target",
+          "dimension": "technology",
+          "value": {
+            "event": "technology",
+            "subject": "company",
+            "qualifier": {}
+          },
+          "label": "Technology",
+          "source": "user_explicit",
+          "user_phrase": "Find companies that must have adopted Salesforce in the last 60 days, excluding resellers.",
+          "rationale": "an observable signal the request asks for",
+          "id": "technology:_event_technology_subject_company_qualifier_",
+          "status": "ok"
+        }
+      ],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "general_company_discovery",
+            "order": 0,
+            "reason": "the mission requires general company discovery outside startup cohorts",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 1,
+            "reason": "candidates need a canonical identity before enrichment",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 2,
+            "reason": "qualification requires enriched evidence, never discovery-time fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 3,
+            "reason": "companies are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 4,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "known_company_resolution",
+          "job_discovery",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "hiring_verification",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment",
+          "job_deduplication"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details"
+        ],
+        "entry_capability": "general_company_discovery",
+        "estimated_cost_units": 5,
+        "offered_capabilities": [
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission requires general company discovery outside startup cohorts",
+        "routing_advisories": [
+          "technology_verification is not executable yet (needs_engine_work): technology_verification is not executable by the engine (needs_engine_work). It was not scheduled; this signal is not verified by this plan."
+        ],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": [
+            {
+              "capability": "technology_verification",
+              "role": "verification",
+              "state": "needs_engine_work",
+              "reason": "technology_verification is not executable by the engine (needs_engine_work)",
+              "readiness": "NEEDS_EXTRACTION_WORK"
+            }
+          ]
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "startup_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "general_company_discovery",
+              "applies": true
+            }
+          ],
+          "readiness": "READY",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    },
+    {
+      "id": "I06",
+      "request": "Find startups that must be hiring their first sales leader.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [
+          "startup"
+        ],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "qualified_companies",
+        "preferred_signals": [
+          "hiring their first sales leader"
+        ],
+        "required_signal_terms": [
+          "hiring their first sales leader"
+        ],
+        "required_capabilities": [
+          "general_company_discovery",
+          "company_semantic_evaluation"
+        ],
+        "strategies": [
+          "hiring"
+        ],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_validated",
+        "original_query": "Find startups that must be hiring their first sales leader.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [
+            "startup"
+          ],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [
+            "hiring their first sales leader"
+          ],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [
+            "hiring their first sales leader"
+          ],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [
+            "hiring"
+          ],
+          "output_intent": "qualified_companies"
+        },
+        "validator_changes": [
+          "first_in_function_from_user_words:\"first sales\""
+        ],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Find startups that must be hiring their first sales leader.",
+          "mission_type": "company_research",
+          "target_entity": "company",
+          "requested_output": "qualified_companies",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [
+              "startup"
+            ],
+            "stages": [
+              "startup"
+            ],
+            "locations": []
+          },
+          "required_signals": [
+            {
+              "type": "hiring",
+              "role_families": [
+                "gtm_sales"
+              ],
+              "event": "hiring",
+              "subject": "company",
+              "qualifier": {
+                "role_families": [
+                  "gtm_sales"
+                ],
+                "role_terms": [
+                  "their first sales leader"
+                ],
+                "first_in_function": {
+                  "phrase": "first sales",
+                  "source": "user_explicit"
+                }
+              },
+              "phrase": "hiring their first sales leader"
+            }
+          ],
+          "decision_makers": {
+            "roles": [],
+            "current_employment_required": false
+          },
+          "hard_constraints": {},
+          "soft_preferences": {},
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "company_profile.stages": "explicit_user_request",
+            "required_signals": "explicit_user_request",
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "requested_count": "system_default",
+            "company_profile.verticals": "gpt_inference",
+            "company_profile.locations": "gpt_inference",
+            "company_profile.business_models": "gpt_inference",
+            "decision_makers.roles": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "strategies": [
+            "hiring"
+          ],
+          "required_signal_terms": [
+            "hiring their first sales leader"
+          ],
+          "proposed_output_intent": "qualified_companies",
+          "directives": {
+            "preferred_signals": [
+              "hiring their first sales leader"
+            ],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Find startups that must be hiring their first sales leader.",
+            "requested_count": 1,
+            "canonical_signals": [
+              {
+                "kind": "hiring",
+                "legacy_event": "hiring",
+                "subject": "company",
+                "phrase": "Find startups that must be hiring their first sales leader.",
+                "alias": "reader",
+                "source": "user_explicit"
+              }
+            ],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": null,
+            "window_sources": {},
+            "corrections": [
+              "first_in_function_from_user_words:\"first sales\""
+            ]
+          },
+          "criteria": [
+            {
+              "kind": "hard",
+              "dimension": "industry",
+              "value": "startup",
+              "label": "Industry: startup",
+              "source": "user_explicit",
+              "user_phrase": "startup",
+              "rationale": "stated in the request",
+              "id": "industry:startup",
+              "status": "ok"
+            },
+            {
+              "kind": "hard",
+              "dimension": "company_stage",
+              "value": "startup",
+              "label": "Company kind: startup",
+              "source": "user_explicit",
+              "user_phrase": "startup",
+              "rationale": "the company kind in the request",
+              "status": "unprovable_today",
+              "id": "company_stage:startup"
+            },
+            {
+              "kind": "hard",
+              "dimension": "hiring",
+              "value": {
+                "event": "hiring",
+                "subject": "company",
+                "qualifier": {
+                  "role_families": [
+                    "gtm_sales"
+                  ],
+                  "role_terms": [
+                    "their first sales leader"
+                  ],
+                  "first_in_function": {
+                    "phrase": "first sales",
+                    "source": "user_explicit"
+                  }
+                }
+              },
+              "label": "Hiring: their first sales leader \u00b7 first hire in the function",
+              "source": "user_explicit",
+              "time_window": {
+                "days": 30,
+                "basis": "posted",
+                "source": "system_default",
+                "rule": "currently / actively hiring",
+                "enforced": false
+              },
+              "elevated_by": "must",
+              "user_phrase": "Find startups that must be hiring their first sales leader.",
+              "rationale": "an observable signal the request asks for",
+              "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+              "status": "ok"
+            }
+          ],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "approved": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "rejected": [],
+          "offers": [],
+          "internal": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ]
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "startup",
+          "label": "Industry: startup",
+          "source": "user_explicit",
+          "user_phrase": "startup",
+          "rationale": "stated in the request",
+          "id": "industry:startup",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "company_stage",
+          "value": "startup",
+          "label": "Company kind: startup",
+          "source": "user_explicit",
+          "user_phrase": "startup",
+          "rationale": "the company kind in the request",
+          "status": "unprovable_today",
+          "id": "company_stage:startup"
+        },
+        {
+          "kind": "hard",
+          "dimension": "hiring",
+          "value": {
+            "event": "hiring",
+            "subject": "company",
+            "qualifier": {
+              "role_families": [
+                "gtm_sales"
+              ],
+              "role_terms": [
+                "their first sales leader"
+              ],
+              "first_in_function": {
+                "phrase": "first sales",
+                "source": "user_explicit"
+              }
+            }
+          },
+          "label": "Hiring: their first sales leader \u00b7 first hire in the function",
+          "source": "user_explicit",
+          "time_window": {
+            "days": 30,
+            "basis": "posted",
+            "source": "system_default",
+            "rule": "currently / actively hiring",
+            "enforced": false
+          },
+          "elevated_by": "must",
+          "user_phrase": "Find startups that must be hiring their first sales leader.",
+          "rationale": "an observable signal the request asks for",
+          "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+          "status": "ok"
+        }
+      ],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "job_discovery",
+            "order": 0,
+            "reason": "the mission is hiring-led: an open their first sales leader role is how these companies are found",
+            "providers": [
+              "apify_linkedin_job_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 3,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "job_deduplication",
+            "order": 1,
+            "reason": "job output must be deduplicated",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 2,
+            "reason": "the posting names the employer's LinkedIn page; Company Search runs only for an employer without one",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 3,
+            "reason": "qualification requires enriched evidence, never job-row fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "hiring_verification",
+            "order": 4,
+            "reason": "the postings are the hiring evidence; nothing already held is bought again",
+            "providers": [
+              "apify_linkedin_job_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 5,
+            "reason": "the employers are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 6,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "general_company_discovery",
+          "known_company_resolution",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_job_search",
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details"
+        ],
+        "entry_capability": "job_discovery",
+        "estimated_cost_units": 8,
+        "offered_capabilities": [
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission is hiring-led: an open their first sales leader role is how these companies are found",
+        "routing_advisories": [
+          "This mission is hiring-led and enters through job_discovery. apify_linkedin_job_search called WITHOUT `company` discovers employers that have the open role right now; every row carries the employer's LinkedIn URL, website and declared size band, so identity resolution reuses that URL. Plan job_discovery with actor-native input \u2014 jobTitles as one boolean OR query of the role's real titles, locations for a hard geography, postedLimit, maxItems \u2014 then identity resolution, enrichment, hiring verification and qualification.",
+          "Stage, company size and industry are judged afterwards from enrichment and ranked; a target criterion is evidence for ranking, never a reason to plan fewer steps.",
+          "'First in the function' is a target: it is read from the posting's own words during hiring verification, and no paid team lookup is scheduled for it. No extra step is needed."
+        ],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": []
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": true
+            }
+          ],
+          "readiness": "READY",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    },
+    {
+      "id": "I07",
+      "request": "Find software companies with confirmed seed funding in the last 90 days; hold conflicting funding reports.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [
+          "software"
+        ],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "qualified_companies",
+        "preferred_signals": [
+          "seed funding in the last 90 days"
+        ],
+        "required_signal_terms": [
+          "seed funding in the last 90 days"
+        ],
+        "required_capabilities": [
+          "general_company_discovery",
+          "company_semantic_evaluation"
+        ],
+        "strategies": [
+          "funding"
+        ],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_validated",
+        "original_query": "Find software companies with confirmed seed funding in the last 90 days; hold conflicting funding reports.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [
+            "software"
+          ],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [
+            "seed funding in the last 90 days"
+          ],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [
+            "seed funding in the last 90 days"
+          ],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [
+            "funding"
+          ],
+          "output_intent": "qualified_companies"
+        },
+        "validator_changes": [
+          "window_from_user_words:funding:90d"
+        ],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Find software companies with confirmed seed funding in the last 90 days; hold conflicting funding reports.",
+          "mission_type": "company_research",
+          "target_entity": "company",
+          "requested_output": "qualified_companies",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [
+              "software"
+            ],
+            "stages": [],
+            "locations": []
+          },
+          "required_signals": [
+            {
+              "type": "funding",
+              "event": "funding",
+              "subject": "company",
+              "qualifier": {
+                "round_type": "seed"
+              },
+              "phrase": "seed funding in the last 90 days",
+              "timeframe_days": 90
+            }
+          ],
+          "decision_makers": {
+            "roles": [],
+            "current_employment_required": false
+          },
+          "hard_constraints": {},
+          "soft_preferences": {
+            "stage": {
+              "value": "seed",
+              "reason": "stated without only/must \u2014 a target, not a hard constraint"
+            }
+          },
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "required_signals": "explicit_user_request",
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "requested_count": "system_default",
+            "company_profile.verticals": "gpt_inference",
+            "company_profile.stages": "gpt_inference",
+            "company_profile.locations": "gpt_inference",
+            "company_profile.business_models": "gpt_inference",
+            "decision_makers.roles": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "strategies": [
+            "funding"
+          ],
+          "required_signal_terms": [
+            "seed funding in the last 90 days"
+          ],
+          "proposed_output_intent": "qualified_companies",
+          "directives": {
+            "preferred_signals": [
+              "seed funding in the last 90 days"
+            ],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Find software companies with confirmed seed funding in the last 90 days; hold conflicting funding reports.",
+            "requested_count": 1,
+            "canonical_signals": [
+              {
+                "kind": "funding",
+                "legacy_event": "funding",
+                "subject": "company",
+                "phrase": "Find software companies with confirmed seed funding in the last 90 days; hold conflicting funding reports.",
+                "alias": "reader",
+                "source": "user_explicit"
+              }
+            ],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": {
+              "value": "seed",
+              "phrase": "seed",
+              "kind": "target",
+              "elevated_by": null,
+              "hedged": false
+            },
+            "window_sources": {
+              "funding": {
+                "source": "user_explicit"
+              }
+            },
+            "corrections": [
+              "window_from_user_words:funding:90d"
+            ]
+          },
+          "criteria": [
+            {
+              "kind": "hard",
+              "dimension": "industry",
+              "value": "software",
+              "label": "Industry: software",
+              "source": "user_explicit",
+              "user_phrase": "software",
+              "rationale": "stated in the request",
+              "id": "industry:software",
+              "status": "ok"
+            },
+            {
+              "kind": "target",
+              "dimension": "company_stage",
+              "value": "seed",
+              "label": "Stage: seed",
+              "source": "user_explicit",
+              "elevated_by": null,
+              "user_phrase": "seed",
+              "rationale": "stated without only/must, so a target",
+              "status": "ok",
+              "id": "company_stage:seed"
+            },
+            {
+              "kind": "hard",
+              "dimension": "funding",
+              "value": {
+                "event": "funding",
+                "subject": "company",
+                "qualifier": {
+                  "round_type": "seed"
+                }
+              },
+              "label": "Funding: seed",
+              "source": "user_explicit",
+              "time_window": {
+                "days": 90,
+                "basis": "announced",
+                "source": "user_explicit",
+                "rule": "recently funded / raised",
+                "enforced": false
+              },
+              "user_phrase": "Find software companies with confirmed seed funding in the last 90 days; hold conflicting funding reports.",
+              "rationale": "a funding window the request states, which the funding pair can verify",
+              "id": "funding:_event_funding_subject_company_qualifier_round_type_seed_",
+              "status": "ok"
+            }
+          ],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "approved": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "rejected": [],
+          "offers": [],
+          "internal": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ]
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "software",
+          "label": "Industry: software",
+          "source": "user_explicit",
+          "user_phrase": "software",
+          "rationale": "stated in the request",
+          "id": "industry:software",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "company_stage",
+          "value": "seed",
+          "label": "Stage: seed",
+          "source": "user_explicit",
+          "elevated_by": null,
+          "user_phrase": "seed",
+          "rationale": "stated without only/must, so a target",
+          "status": "ok",
+          "id": "company_stage:seed"
+        },
+        {
+          "kind": "hard",
+          "dimension": "funding",
+          "value": {
+            "event": "funding",
+            "subject": "company",
+            "qualifier": {
+              "round_type": "seed"
+            }
+          },
+          "label": "Funding: seed",
+          "source": "user_explicit",
+          "time_window": {
+            "days": 90,
+            "basis": "announced",
+            "source": "user_explicit",
+            "rule": "recently funded / raised",
+            "enforced": false
+          },
+          "user_phrase": "Find software companies with confirmed seed funding in the last 90 days; hold conflicting funding reports.",
+          "rationale": "a funding window the request states, which the funding pair can verify",
+          "id": "funding:_event_funding_subject_company_qualifier_round_type_seed_",
+          "status": "ok"
+        }
+      ],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "general_company_discovery",
+            "order": 0,
+            "reason": "the mission requires general company discovery outside startup cohorts",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 1,
+            "reason": "candidates need a canonical identity before enrichment",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 2,
+            "reason": "qualification requires enriched evidence, never discovery-time fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 3,
+            "reason": "companies are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 4,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "known_company_resolution",
+          "job_discovery",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "hiring_verification",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment",
+          "job_deduplication"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details"
+        ],
+        "entry_capability": "general_company_discovery",
+        "estimated_cost_units": 5,
+        "offered_capabilities": [
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission requires general company discovery outside startup cohorts",
+        "routing_advisories": [],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": []
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "startup_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "general_company_discovery",
+              "applies": true
+            }
+          ],
+          "readiness": "READY",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    },
+    {
+      "id": "I08",
+      "request": "Find recruiting agencies that must be expanding into European markets within 90 days.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [
+          "recruiting agency"
+        ],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "qualified_companies",
+        "preferred_signals": [
+          "expanding into European markets"
+        ],
+        "required_signal_terms": [
+          "expanding into European markets"
+        ],
+        "required_capabilities": [
+          "general_company_discovery",
+          "company_semantic_evaluation"
+        ],
+        "strategies": [
+          "news"
+        ],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_validated",
+        "original_query": "Find recruiting agencies that must be expanding into European markets within 90 days.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [
+            "recruiting agency"
+          ],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [
+            "expanding into European markets"
+          ],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [
+            "expanding into European markets"
+          ],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [
+            "news"
+          ],
+          "output_intent": "qualified_companies"
+        },
+        "validator_changes": [
+          "company_types_overridden_by_user_words:recruiting agency"
+        ],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Find recruiting agencies that must be expanding into European markets within 90 days.",
+          "mission_type": "company_research",
+          "target_entity": "company",
+          "requested_output": "qualified_companies",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [
+              "recruiting agencies"
+            ],
+            "stages": [],
+            "locations": [
+              "Europe"
+            ]
+          },
+          "required_signals": [
+            {
+              "type": "expansion",
+              "event": "expansion",
+              "subject": "company",
+              "qualifier": {},
+              "phrase": "expanding into European markets"
+            }
+          ],
+          "decision_makers": {
+            "roles": [],
+            "current_employment_required": false
+          },
+          "hard_constraints": {
+            "company_profile.locations": {
+              "operator": "in",
+              "value": [
+                "Europe"
+              ],
+              "reason": "stated explicitly in the user's query"
+            }
+          },
+          "soft_preferences": {},
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "company_profile.verticals": "explicit_user_request",
+            "company_profile.locations": "explicit_user_request",
+            "required_signals": "explicit_user_request",
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "requested_count": "system_default",
+            "company_profile.stages": "gpt_inference",
+            "company_profile.business_models": "gpt_inference",
+            "decision_makers.roles": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "strategies": [
+            "news"
+          ],
+          "required_signal_terms": [
+            "expanding into European markets"
+          ],
+          "proposed_output_intent": "qualified_companies",
+          "directives": {
+            "preferred_signals": [
+              "expanding into European markets"
+            ],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Find recruiting agencies that must be expanding into European markets within 90 days.",
+            "requested_count": 1,
+            "canonical_signals": [
+              {
+                "kind": "expansion",
+                "legacy_event": "expansion",
+                "subject": "company",
+                "phrase": "Find recruiting agencies that must be expanding into European markets within 90 days.",
+                "alias": "reader",
+                "source": "user_explicit"
+              }
+            ],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": null,
+            "window_sources": {},
+            "corrections": []
+          },
+          "criteria": [
+            {
+              "kind": "hard",
+              "dimension": "industry",
+              "value": "recruiting agencies",
+              "label": "Industry: recruiting agencies",
+              "source": "user_explicit",
+              "user_phrase": "recruiting agencies",
+              "rationale": "stated in the request",
+              "id": "industry:recruiting_agencies",
+              "status": "ok"
+            },
+            {
+              "kind": "hard",
+              "dimension": "geography",
+              "value": "Europe",
+              "label": "Geography: Europe",
+              "source": "user_explicit",
+              "user_phrase": "Europe",
+              "rationale": "stated in the request",
+              "id": "geography:europe",
+              "status": "ok"
+            },
+            {
+              "kind": "target",
+              "dimension": "expansion",
+              "value": {
+                "event": "expansion",
+                "subject": "company",
+                "qualifier": {}
+              },
+              "label": "Expansion",
+              "source": "user_explicit",
+              "user_phrase": "Find recruiting agencies that must be expanding into European markets within 90 days.",
+              "rationale": "an observable signal the request asks for",
+              "id": "expansion:_event_expansion_subject_company_qualifier_",
+              "status": "ok"
+            }
+          ],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "approved": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "rejected": [],
+          "offers": [],
+          "internal": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ]
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "recruiting agencies",
+          "label": "Industry: recruiting agencies",
+          "source": "user_explicit",
+          "user_phrase": "recruiting agencies",
+          "rationale": "stated in the request",
+          "id": "industry:recruiting_agencies",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "geography",
+          "value": "Europe",
+          "label": "Geography: Europe",
+          "source": "user_explicit",
+          "user_phrase": "Europe",
+          "rationale": "stated in the request",
+          "id": "geography:europe",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "expansion",
+          "value": {
+            "event": "expansion",
+            "subject": "company",
+            "qualifier": {}
+          },
+          "label": "Expansion",
+          "source": "user_explicit",
+          "user_phrase": "Find recruiting agencies that must be expanding into European markets within 90 days.",
+          "rationale": "an observable signal the request asks for",
+          "id": "expansion:_event_expansion_subject_company_qualifier_",
+          "status": "ok"
+        }
+      ],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "general_company_discovery",
+            "order": 0,
+            "reason": "the mission requires general company discovery outside startup cohorts",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 1,
+            "reason": "candidates need a canonical identity before enrichment",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 2,
+            "reason": "qualification requires enriched evidence, never discovery-time fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 3,
+            "reason": "companies are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 4,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "known_company_resolution",
+          "job_discovery",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "hiring_verification",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment",
+          "job_deduplication"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details"
+        ],
+        "entry_capability": "general_company_discovery",
+        "estimated_cost_units": 5,
+        "offered_capabilities": [
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission requires general company discovery outside startup cohorts",
+        "routing_advisories": [
+          "expansion_signal_verification is not executable yet (executable): apify_google_news|expansion_signal_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it; apify_linkedin_company_posts|expansion_signal_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it. It was not scheduled; this signal is not verified by this plan."
+        ],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": [
+            {
+              "capability": "expansion_signal_verification",
+              "role": "verification",
+              "state": "executable",
+              "reason": "apify_google_news|expansion_signal_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it; apify_linkedin_company_posts|expansion_signal_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it",
+              "readiness": "CARDED_BUT_NOT_LIVE"
+            }
+          ]
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "startup_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "general_company_discovery",
+              "applies": true
+            }
+          ],
+          "readiness": "READY",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    },
+    {
+      "id": "I09",
+      "request": "Find B2B software companies hiring Account Executives OR funded in the last 90 days, AND headquartered in the US.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [
+          "B2B software"
+        ],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "qualified_companies",
+        "preferred_signals": [
+          "hiring Account Executives",
+          "funding in the last 90 days"
+        ],
+        "required_signal_terms": [
+          "hiring Account Executives",
+          "funding in the last 90 days"
+        ],
+        "required_capabilities": [
+          "general_company_discovery",
+          "company_semantic_evaluation"
+        ],
+        "strategies": [
+          "hiring",
+          "funding"
+        ],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_validated",
+        "original_query": "Find B2B software companies hiring Account Executives OR funded in the last 90 days, AND headquartered in the US.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [
+            "B2B software"
+          ],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [
+            "hiring Account Executives",
+            "funding in the last 90 days"
+          ],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [
+            "hiring Account Executives",
+            "funding in the last 90 days"
+          ],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [
+            "hiring",
+            "funding"
+          ],
+          "output_intent": "qualified_companies"
+        },
+        "validator_changes": [
+          "window_from_user_words:funding:90d"
+        ],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Find B2B software companies hiring Account Executives OR funded in the last 90 days, AND headquartered in the US.",
+          "mission_type": "company_research",
+          "target_entity": "company",
+          "requested_output": "qualified_companies",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [
+              "B2B software"
+            ],
+            "stages": [],
+            "locations": [
+              "United States"
+            ]
+          },
+          "required_signals": [
+            {
+              "type": "hiring",
+              "role_families": [
+                "gtm_sales"
+              ],
+              "event": "hiring",
+              "subject": "company",
+              "qualifier": {
+                "role_families": [
+                  "gtm_sales"
+                ],
+                "role_terms": [
+                  "account executives"
+                ]
+              },
+              "phrase": "hiring Account Executives"
+            },
+            {
+              "type": "funding",
+              "event": "funding",
+              "subject": "company",
+              "qualifier": {},
+              "phrase": "funding in the last 90 days",
+              "timeframe_days": 90
+            }
+          ],
+          "decision_makers": {
+            "roles": [],
+            "current_employment_required": false
+          },
+          "hard_constraints": {
+            "company_profile.locations": {
+              "operator": "in",
+              "value": [
+                "United States"
+              ],
+              "reason": "stated explicitly in the user's query"
+            }
+          },
+          "soft_preferences": {},
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "company_profile.locations": "explicit_user_request",
+            "required_signals": "explicit_user_request",
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "requested_count": "system_default",
+            "company_profile.verticals": "gpt_inference",
+            "company_profile.stages": "gpt_inference",
+            "company_profile.business_models": "gpt_inference",
+            "decision_makers.roles": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "strategies": [
+            "hiring",
+            "funding"
+          ],
+          "required_signal_terms": [
+            "hiring Account Executives",
+            "funding in the last 90 days"
+          ],
+          "proposed_output_intent": "qualified_companies",
+          "directives": {
+            "preferred_signals": [
+              "hiring Account Executives",
+              "funding in the last 90 days"
+            ],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Find B2B software companies hiring Account Executives OR funded in the last 90 days, AND headquartered in the US.",
+            "requested_count": 1,
+            "canonical_signals": [
+              {
+                "kind": "hiring",
+                "legacy_event": "hiring",
+                "subject": "company",
+                "phrase": "Find B2B software companies hiring Account Executives OR funded in the last 90 days,",
+                "alias": "reader",
+                "source": "user_explicit"
+              },
+              {
+                "kind": "funding",
+                "legacy_event": "funding",
+                "subject": "company",
+                "phrase": "Find B2B software companies hiring Account Executives OR funded in the last 90 days,",
+                "alias": "reader",
+                "source": "user_explicit"
+              }
+            ],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": null,
+            "window_sources": {
+              "hiring": {
+                "source": "system_default",
+                "rule": "currently / actively hiring"
+              },
+              "funding": {
+                "source": "user_explicit"
+              }
+            },
+            "corrections": [
+              "window_from_user_words:funding:90d"
+            ]
+          },
+          "criteria": [
+            {
+              "kind": "hard",
+              "dimension": "industry",
+              "value": "B2B software",
+              "label": "Industry: B2B software",
+              "source": "user_explicit",
+              "user_phrase": "B2B software",
+              "rationale": "stated in the request",
+              "id": "industry:b2b_software",
+              "status": "ok"
+            },
+            {
+              "kind": "hard",
+              "dimension": "geography",
+              "value": "United States",
+              "label": "Geography: United States",
+              "source": "user_explicit",
+              "user_phrase": "",
+              "rationale": "stated in the request",
+              "id": "geography:united_states",
+              "status": "ok"
+            },
+            {
+              "kind": "hard",
+              "dimension": "hiring",
+              "value": {
+                "event": "hiring",
+                "subject": "company",
+                "qualifier": {
+                  "role_families": [
+                    "gtm_sales"
+                  ],
+                  "role_terms": [
+                    "account executives"
+                  ]
+                }
+              },
+              "label": "Hiring: account executives",
+              "source": "user_explicit",
+              "time_window": {
+                "days": 30,
+                "basis": "posted",
+                "source": "system_default",
+                "rule": "currently / actively hiring",
+                "enforced": false
+              },
+              "user_phrase": "Find B2B software companies hiring Account Executives OR funded in the last 90 days,",
+              "rationale": "a signal the request states as a present fact the company must have",
+              "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+              "status": "ok"
+            },
+            {
+              "kind": "hard",
+              "dimension": "funding",
+              "value": {
+                "event": "funding",
+                "subject": "company",
+                "qualifier": {}
+              },
+              "label": "Funding",
+              "source": "user_explicit",
+              "time_window": {
+                "days": 90,
+                "basis": "announced",
+                "source": "user_explicit",
+                "rule": "recently funded / raised",
+                "enforced": false
+              },
+              "user_phrase": "Find B2B software companies hiring Account Executives OR funded in the last 90 days,",
+              "rationale": "a funding window the request states, which the funding pair can verify",
+              "id": "funding:_event_funding_subject_company_qualifier_",
+              "status": "ok"
+            }
+          ],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "approved": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "rejected": [],
+          "offers": [],
+          "internal": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ]
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "B2B software",
+          "label": "Industry: B2B software",
+          "source": "user_explicit",
+          "user_phrase": "B2B software",
+          "rationale": "stated in the request",
+          "id": "industry:b2b_software",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "geography",
+          "value": "United States",
+          "label": "Geography: United States",
+          "source": "user_explicit",
+          "user_phrase": "",
+          "rationale": "stated in the request",
+          "id": "geography:united_states",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "hiring",
+          "value": {
+            "event": "hiring",
+            "subject": "company",
+            "qualifier": {
+              "role_families": [
+                "gtm_sales"
+              ],
+              "role_terms": [
+                "account executives"
+              ]
+            }
+          },
+          "label": "Hiring: account executives",
+          "source": "user_explicit",
+          "time_window": {
+            "days": 30,
+            "basis": "posted",
+            "source": "system_default",
+            "rule": "currently / actively hiring",
+            "enforced": false
+          },
+          "user_phrase": "Find B2B software companies hiring Account Executives OR funded in the last 90 days,",
+          "rationale": "a signal the request states as a present fact the company must have",
+          "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "funding",
+          "value": {
+            "event": "funding",
+            "subject": "company",
+            "qualifier": {}
+          },
+          "label": "Funding",
+          "source": "user_explicit",
+          "time_window": {
+            "days": 90,
+            "basis": "announced",
+            "source": "user_explicit",
+            "rule": "recently funded / raised",
+            "enforced": false
+          },
+          "user_phrase": "Find B2B software companies hiring Account Executives OR funded in the last 90 days,",
+          "rationale": "a funding window the request states, which the funding pair can verify",
+          "id": "funding:_event_funding_subject_company_qualifier_",
+          "status": "ok"
+        }
+      ],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "general_company_discovery",
+            "order": 0,
+            "reason": "the mission requires general company discovery outside startup cohorts",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 1,
+            "reason": "candidates need a canonical identity before enrichment",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 2,
+            "reason": "qualification requires enriched evidence, never discovery-time fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "hiring_verification",
+            "order": 3,
+            "reason": "the mission requires hiring evidence and no discovery provider supplies it for this population",
+            "providers": [
+              "apify_linkedin_job_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 4,
+            "reason": "companies are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 5,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "known_company_resolution",
+          "job_discovery",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment",
+          "job_deduplication"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details",
+          "apify_linkedin_job_search"
+        ],
+        "entry_capability": "general_company_discovery",
+        "estimated_cost_units": 7,
+        "offered_capabilities": [
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission requires general company discovery outside startup cohorts",
+        "routing_advisories": [
+          "This mission names a hiring requirement and enters through general_company_discovery. A HARD hiring requirement is verified per still-viable candidate by the open-role verifier (apify_linkedin_job_search with `company`), after country and size are settled and with the mission's own role titles; a hiring TARGET ranks candidates and schedules no purchase. Plan discovery, identity resolution, enrichment and qualification as usual."
+        ],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": []
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "startup_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "general_company_discovery",
+              "applies": true
+            }
+          ],
+          "readiness": "READY",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    },
+    {
+      "id": "I10",
+      "request": "Find unusually efficient service companies with exactly 23 employees and a credible plan to grow, preferably founder-led.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [
+          "service"
+        ],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "qualified_companies",
+        "preferred_signals": [
+          "credible plan to grow"
+        ],
+        "required_signal_terms": [
+          "credible plan to grow"
+        ],
+        "required_capabilities": [
+          "general_company_discovery",
+          "company_semantic_evaluation"
+        ],
+        "strategies": [],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_repaired",
+        "original_query": "Find unusually efficient service companies with exactly 23 employees and a credible plan to grow, preferably founder-led.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [
+            "service"
+          ],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [
+            "credible plan to grow"
+          ],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [
+            "credible plan to grow"
+          ],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [],
+          "output_intent": "qualified_companies"
+        },
+        "validator_changes": [
+          "output_intent_disagreement:deterministic=contact_ready_leads:model=qualified_companies",
+          "target_entity_disagreement:deterministic=person:model=company",
+          "output_intent_model_authoritative:qualified_companies:deterministic_would_have_said:contact_ready_leads"
+        ],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Find unusually efficient service companies with exactly 23 employees and a credible plan to grow, preferably founder-led.",
+          "mission_type": "company_research",
+          "target_entity": "company",
+          "requested_output": "qualified_companies",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [
+              "service"
+            ],
+            "stages": [],
+            "locations": []
+          },
+          "required_signals": [
+            {
+              "type": "credible plan to grow",
+              "phrase": "credible plan to grow"
+            }
+          ],
+          "decision_makers": {
+            "roles": [
+              "Founder",
+              "Co-Founder",
+              "CEO"
+            ],
+            "current_employment_required": true
+          },
+          "hard_constraints": {},
+          "soft_preferences": {},
+          "required_capabilities": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "decision_makers.roles": "explicit_user_request",
+            "requested_count": "system_default",
+            "company_profile.verticals": "gpt_inference",
+            "company_profile.stages": "gpt_inference",
+            "company_profile.locations": "gpt_inference",
+            "company_profile.business_models": "gpt_inference",
+            "required_signals": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "required_signal_terms": [
+            "credible plan to grow"
+          ],
+          "proposed_output_intent": "qualified_companies",
+          "directives": {
+            "preferred_signals": [
+              "credible plan to grow"
+            ],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Find unusually efficient service companies with exactly 23 employees and a credible plan to grow, preferably founder-led.",
+            "requested_count": 1,
+            "canonical_signals": [],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": null,
+            "window_sources": {},
+            "corrections": []
+          },
+          "criteria": [
+            {
+              "kind": "hard",
+              "dimension": "industry",
+              "value": "service",
+              "label": "Industry: service",
+              "source": "user_explicit",
+              "user_phrase": "service",
+              "rationale": "stated in the request",
+              "id": "industry:service",
+              "status": "ok"
+            },
+            {
+              "kind": "target",
+              "dimension": "unrecognised_signal",
+              "value": "credible plan to grow",
+              "label": "Signal not recognised: \"credible plan to grow\"",
+              "source": "user_inferred",
+              "user_phrase": "credible plan to grow",
+              "status": "unrecognised",
+              "rationale": "no canonical signal kind matches these words; nothing will prove it",
+              "id": "unrecognised_signal:credible_plan_to_grow",
+              "confidence": 0.95
+            }
+          ],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "approved": [
+            "general_company_discovery",
+            "company_semantic_evaluation"
+          ],
+          "rejected": [],
+          "offers": [],
+          "internal": [
+            "general_company_discovery",
+            "company_brain_qualification"
+          ]
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "service",
+          "label": "Industry: service",
+          "source": "user_explicit",
+          "user_phrase": "service",
+          "rationale": "stated in the request",
+          "id": "industry:service",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "unrecognised_signal",
+          "value": "credible plan to grow",
+          "label": "Signal not recognised: \"credible plan to grow\"",
+          "source": "user_inferred",
+          "user_phrase": "credible plan to grow",
+          "status": "unrecognised",
+          "rationale": "no canonical signal kind matches these words; nothing will prove it",
+          "id": "unrecognised_signal:credible_plan_to_grow",
+          "confidence": 0.95
+        }
+      ],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "general_company_discovery",
+            "order": 0,
+            "reason": "the mission requires general company discovery outside startup cohorts",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 1,
+            "reason": "candidates need a canonical identity before enrichment",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 2,
+            "reason": "qualification requires enriched evidence, never discovery-time fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 3,
+            "reason": "companies are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 4,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "known_company_resolution",
+          "job_discovery",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "hiring_verification",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment",
+          "job_deduplication"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details"
+        ],
+        "entry_capability": "general_company_discovery",
+        "estimated_cost_units": 5,
+        "offered_capabilities": [
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission requires general company discovery outside startup cohorts",
+        "routing_advisories": [],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": []
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "startup_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "general_company_discovery",
+              "applies": true
+            }
+          ],
+          "readiness": "READY",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    },
+    {
+      "id": "I11",
+      "request": "Find founders explicitly seeking a CRM; exclude quotations, employees' opinions and statements that they are not looking for tools.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "social_posts",
+        "preferred_signals": [
+          "founders seeking a CRM"
+        ],
+        "required_signal_terms": [
+          "founders seeking a CRM"
+        ],
+        "required_capabilities": [
+          "offer_founder_unlock"
+        ],
+        "strategies": [
+          "social"
+        ],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_repaired",
+        "original_query": "Find founders explicitly seeking a CRM; exclude quotations, employees' opinions and statements that they are not looking for tools.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [
+            "founders seeking a CRM"
+          ],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "offer_founder_unlock"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [
+            "founders seeking a CRM"
+          ],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [
+            "social"
+          ],
+          "output_intent": "social_posts"
+        },
+        "validator_changes": [
+          "output_intent_disagreement:deterministic=contact_ready_leads:model=social_posts",
+          "output_intent_model_authoritative:social_posts:deterministic_would_have_said:contact_ready_leads"
+        ],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Find founders explicitly seeking a CRM; exclude quotations, employees' opinions and statements that they are not looking for tools.",
+          "mission_type": "qualified_lead_sourcing",
+          "target_entity": "person",
+          "requested_output": "social_posts",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [],
+            "stages": [],
+            "locations": []
+          },
+          "required_signals": [
+            {
+              "type": "founders seeking a crm",
+              "phrase": "founders seeking a CRM"
+            }
+          ],
+          "decision_makers": {
+            "roles": [
+              "Founder",
+              "Co-Founder",
+              "CEO"
+            ],
+            "current_employment_required": true
+          },
+          "hard_constraints": {},
+          "soft_preferences": {},
+          "required_capabilities": [],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "decision_makers.roles": "explicit_user_request",
+            "requested_count": "system_default",
+            "company_profile.verticals": "gpt_inference",
+            "company_profile.stages": "gpt_inference",
+            "company_profile.locations": "gpt_inference",
+            "company_profile.business_models": "gpt_inference",
+            "required_signals": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "strategies": [
+            "social"
+          ],
+          "required_signal_terms": [
+            "founders seeking a CRM"
+          ],
+          "proposed_output_intent": "social_posts",
+          "directives": {
+            "preferred_signals": [
+              "founders seeking a CRM"
+            ],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Find founders explicitly seeking a CRM; exclude quotations, employees' opinions and statements that they are not looking for tools.",
+            "requested_count": 1,
+            "canonical_signals": [],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": null,
+            "window_sources": {},
+            "corrections": []
+          },
+          "criteria": [
+            {
+              "kind": "target",
+              "dimension": "unrecognised_signal",
+              "value": "founders seeking a CRM",
+              "label": "Signal not recognised: \"founders seeking a CRM\"",
+              "source": "user_inferred",
+              "user_phrase": "founders seeking a CRM",
+              "status": "unrecognised",
+              "rationale": "no canonical signal kind matches these words; nothing will prove it",
+              "id": "unrecognised_signal:founders_seeking_a_crm",
+              "confidence": 0.95
+            }
+          ],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "offer_founder_unlock"
+          ],
+          "approved": [
+            "offer_founder_unlock"
+          ],
+          "rejected": [],
+          "offers": [
+            "offer_founder_unlock"
+          ],
+          "internal": []
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [
+        {
+          "kind": "target",
+          "dimension": "unrecognised_signal",
+          "value": "founders seeking a CRM",
+          "label": "Signal not recognised: \"founders seeking a CRM\"",
+          "source": "user_inferred",
+          "user_phrase": "founders seeking a CRM",
+          "status": "unrecognised",
+          "rationale": "no canonical signal kind matches these words; nothing will prove it",
+          "id": "unrecognised_signal:founders_seeking_a_crm",
+          "confidence": 0.95
+        }
+      ],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "general_company_discovery",
+            "order": 0,
+            "reason": "the mission targets companies by profile",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 1,
+            "reason": "candidates need a canonical identity before enrichment",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 2,
+            "reason": "qualification requires enriched evidence, never discovery-time fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 3,
+            "reason": "companies are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 4,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "known_company_resolution",
+          "job_discovery",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "hiring_verification",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment",
+          "job_deduplication"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details"
+        ],
+        "entry_capability": "general_company_discovery",
+        "estimated_cost_units": 5,
+        "offered_capabilities": [
+          "offer_founder_unlock",
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission targets companies by profile",
+        "routing_advisories": [],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": []
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "job_discovery",
+              "applies": false
+            },
+            {
+              "capability": "startup_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "general_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "funding_signal_discovery",
+              "applies": false
+            },
+            {
+              "capability": "expansion_signal_discovery",
+              "applies": false
+            },
+            {
+              "capability": "product_launch_discovery",
+              "applies": false
+            },
+            {
+              "capability": "startup_company_discovery",
+              "applies": false
+            },
+            {
+              "capability": "general_company_discovery",
+              "applies": true
+            }
+          ],
+          "readiness": "READY",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    },
+    {
+      "id": "I12",
+      "request": "Research these approved existing Apollo leads and prepare source-backed call briefs. Do not find new prospects or send messages.",
+      "proposal": {
+        "requested_opportunity_count": 1,
+        "company_types": [],
+        "geographies": [],
+        "employee_range": {
+          "min": null,
+          "max": null
+        },
+        "output_intent": "enriched_companies",
+        "preferred_signals": [],
+        "required_signal_terms": [],
+        "required_capabilities": [
+          "known_company_identity_resolution",
+          "company_details_enrichment"
+        ],
+        "strategies": [],
+        "confidence": 0.95
+      },
+      "compiled": {
+        "parser_source": "gpt_repaired",
+        "original_query": "Research these approved existing Apollo leads and prepare source-backed call briefs. Do not find new prospects or send messages.",
+        "gpt_proposal": {
+          "requested_opportunity_count": 1,
+          "requested_contact_ready_count": null,
+          "company_types": [],
+          "geographies": [],
+          "employee_range": {
+            "min": null,
+            "max": null
+          },
+          "decision_maker_roles": [],
+          "hard_constraints": [],
+          "soft_preferences": [],
+          "preferred_signals": [],
+          "adjacent_signals": [],
+          "excluded_signals": [],
+          "allowed_broadening": {
+            "role_families": [],
+            "company_types": [],
+            "geographies": [],
+            "employee_range": {
+              "min": null,
+              "max": null
+            }
+          },
+          "disallowed_broadening": [],
+          "required_evidence": [],
+          "required_capabilities": [
+            "known_company_identity_resolution",
+            "company_details_enrichment"
+          ],
+          "preferred_source_strategy": [],
+          "evaluation_instructions": "",
+          "founder_unlock_recommended": false,
+          "confidence": 0.95,
+          "unknowns": [],
+          "known_companies": [],
+          "signal_recency_days": null,
+          "required_signal_terms": [],
+          "no_broadening_requested": false,
+          "geography_is_hard": false,
+          "prohibitions": [],
+          "strategies": [],
+          "output_intent": "enriched_companies"
+        },
+        "validator_changes": [
+          "output_intent_disagreement:deterministic=contact_ready_leads:model=enriched_companies",
+          "target_entity_disagreement:deterministic=person:model=company",
+          "output_intent_model_authoritative:enriched_companies:deterministic_would_have_said:contact_ready_leads"
+        ],
+        "final_mission": {
+          "version": "lead-mission-v1",
+          "original_user_query": "Research these approved existing Apollo leads and prepare source-backed call briefs. Do not find new prospects or send messages.",
+          "mission_type": "known_company_enrichment",
+          "target_entity": "company",
+          "requested_output": "enriched_companies",
+          "requested_count": 1,
+          "company_profile": {
+            "business_models": [],
+            "verticals": [],
+            "stages": [],
+            "locations": []
+          },
+          "required_signals": [],
+          "decision_makers": {
+            "roles": [
+              "Founder",
+              "Co-Founder",
+              "CEO"
+            ],
+            "current_employment_required": true
+          },
+          "hard_constraints": {},
+          "soft_preferences": {},
+          "required_capabilities": [
+            "known_company_resolution",
+            "company_identity_resolution",
+            "company_enrichment"
+          ],
+          "prohibited_capabilities": [
+            "founder_discovery",
+            "employer_verification",
+            "contact_enrichment"
+          ],
+          "field_provenance": {
+            "target_entity": "explicit_user_request",
+            "requested_output": "explicit_user_request",
+            "decision_makers.roles": "system_default",
+            "requested_count": "system_default",
+            "company_profile.verticals": "gpt_inference",
+            "company_profile.stages": "gpt_inference",
+            "company_profile.locations": "gpt_inference",
+            "company_profile.business_models": "gpt_inference",
+            "required_signals": "gpt_inference"
+          },
+          "confidence": 0.95,
+          "proposed_output_intent": "enriched_companies",
+          "directives": {
+            "preferred_signals": [],
+            "adjacent_signals": [],
+            "excluded_signals": [],
+            "required_evidence": [],
+            "allowed_broadening": {
+              "role_families": [],
+              "company_types": [],
+              "geographies": [],
+              "employee_range": {
+                "min": null,
+                "max": null
+              }
+            },
+            "disallowed_broadening": [],
+            "evaluation_instructions": "",
+            "source_strategy": [],
+            "requested_contact_ready_count": null,
+            "founder_unlock_recommended": false,
+            "execution_preference": "balanced"
+          },
+          "mission_semantics": {
+            "version": "mission-semantics-v1",
+            "goal": "Research these approved existing Apollo leads and prepare source-backed call briefs. Do not find new prospects or send messages.",
+            "requested_count": 1,
+            "canonical_signals": [],
+            "hypotheses": [],
+            "unmapped_signal_language": [],
+            "stage": null,
+            "window_sources": {},
+            "corrections": []
+          },
+          "criteria": [],
+          "planner_runtime": {
+            "role": "planner",
+            "function": "lead-mission-compiler",
+            "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+            "git_short": "046b61b0",
+            "build_timestamp": "2026-08-29T10:44:33.276Z",
+            "lead_intelligence_contract_version": "v1",
+            "dirty": false
+          },
+          "lead_intelligence_contract_version": "v1"
+        },
+        "schema_version": "lead-mission-compiler-v1",
+        "workspace_context": {
+          "consulted": false,
+          "categories_offered": [],
+          "categories_applied": [],
+          "categories_ignored": []
+        },
+        "capability_decision": {
+          "requested": [
+            "known_company_identity_resolution",
+            "company_details_enrichment"
+          ],
+          "approved": [
+            "known_company_identity_resolution",
+            "company_details_enrichment"
+          ],
+          "rejected": [],
+          "offers": [],
+          "internal": [
+            "known_company_resolution",
+            "company_identity_resolution",
+            "company_enrichment"
+          ]
+        },
+        "confidence": 0.95,
+        "unknowns": [],
+        "safety_violations": []
+      },
+      "criteria": [],
+      "graph": {
+        "version": "lead-capability-graph-v1",
+        "steps": [
+          {
+            "capability": "known_company_resolution",
+            "order": 0,
+            "reason": "the mission names the companies to evaluate \u2014 no discovery is needed",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_identity_resolution",
+            "order": 1,
+            "reason": "supplied identifiers are resolved to canonical identities",
+            "providers": [
+              "apify_linkedin_company_search"
+            ],
+            "cost_units": 1,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "company_enrichment",
+            "order": 2,
+            "reason": "qualification requires enriched evidence, never discovery-time fields",
+            "providers": [
+              "apify_linkedin_company_details"
+            ],
+            "cost_units": 1,
+            "max_attempts": 2,
+            "fallback_policy": "provider_fallback_only"
+          },
+          {
+            "capability": "company_brain_qualification",
+            "order": 3,
+            "reason": "companies are qualified against the Company Brain",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          },
+          {
+            "capability": "persistence",
+            "order": 4,
+            "reason": "results are persisted to the Workbench",
+            "providers": [],
+            "cost_units": 0,
+            "max_attempts": 1,
+            "fallback_policy": "terminal_on_exhaustion"
+          }
+        ],
+        "prohibited": [
+          "startup_company_discovery",
+          "general_company_discovery",
+          "job_discovery",
+          "funding_signal_discovery",
+          "expansion_signal_discovery",
+          "product_launch_discovery",
+          "hiring_verification",
+          "expansion_signal_verification",
+          "company_post_verification",
+          "product_launch_verification",
+          "technology_verification",
+          "founder_discovery",
+          "employer_verification",
+          "contact_enrichment",
+          "job_deduplication"
+        ],
+        "allowed_providers": [
+          "apify_linkedin_company_search",
+          "apify_linkedin_company_details"
+        ],
+        "entry_capability": "known_company_resolution",
+        "estimated_cost_units": 3,
+        "offered_capabilities": [
+          "offer_deep_company_research"
+        ],
+        "routing_reason": "the mission names the companies to evaluate \u2014 no discovery is needed",
+        "routing_advisories": [],
+        "executability": {
+          "mode": "enforce",
+          "unexecutable": []
+        },
+        "entry_selection": {
+          "considered": [
+            {
+              "capability": "known_company_resolution",
+              "applies": false
+            },
+            {
+              "capability": "known_company_resolution",
+              "applies": true
+            }
+          ],
+          "readiness": "ENGINE",
+          "runnable": true,
+          "mode": "production"
+        }
+      },
+      "boundary": "real pure compiler/graph with supplied mock proposal; no provider, evaluator, persistence or UI executed"
+    }
+  ],
+  "risk_probes": [
+    {
+      "id": "F01",
+      "citing_provider_round": "Seed",
+      "result": {
+        "corroboration": {
+          "version": "funding-corroboration-v1",
+          "corroborated_rounds": 1,
+          "conflicts": [],
+          "sources": [
+            "apify_funding_atomus",
+            "pvalyou"
+          ],
+          "record": {
+            "provider": "apify",
+            "actor": "funding_corroboration",
+            "rounds": [
+              {
+                "round_type": "Seed",
+                "announced_date": "2026-10-10",
+                "amount_usd": 1000000,
+                "investors": [
+                  "Synthetic Investor"
+                ],
+                "source_urls": [
+                  "https://synthetic.example/funding"
+                ],
+                "method": "provider_field",
+                "provenance": [
+                  {
+                    "actor": "atomus",
+                    "provider_call_id": null,
+                    "role": "reported"
+                  },
+                  {
+                    "actor": "pvalyou",
+                    "provider_call_id": null,
+                    "role": "cited"
+                  }
+                ]
+              }
+            ],
+            "reported_round_count": 1,
+            "history_complete": null,
+            "observed_at": "2026-10-20T14:52:38.539Z",
+            "source_url": null,
+            "provider_call_id": null,
+            "provider_call_ids": [],
+            "completeness": {
+              "actor": "atomus",
+              "provider_call_id": null,
+              "reported_round_count": 1,
+              "history_complete": true,
+              "complete": true
+            }
+          }
+        },
+        "decision": {
+          "version": "funding-stage-claim-v1",
+          "verdict": "pass",
+          "required_stage": "seed",
+          "highest_verified_stage": "seed",
+          "highest_unverified_stage": null,
+          "reasons": [
+            "required_stage_verified_and_latest"
+          ],
+          "explanation": "the latest verified round is seed, with no later round in a complete history",
+          "carrier_rounds": [
+            {
+              "round_type": "Seed",
+              "announced_date": "2026-10-10",
+              "amount_usd": 1000000,
+              "investors": [
+                "Synthetic Investor"
+              ],
+              "source_urls": [
+                "https://synthetic.example/funding"
+              ],
+              "method": "provider_field",
+              "provenance": [
+                {
+                  "actor": "atomus",
+                  "provider_call_id": null,
+                  "role": "reported"
+                },
+                {
+                  "actor": "pvalyou",
+                  "provider_call_id": null,
+                  "role": "cited"
+                }
+              ]
+            }
+          ],
+          "corroborated_by_model": false
+        }
+      },
+      "boundary": "real pure funding corroboration/decision, synthetic provider records; not a complete mission"
+    },
+    {
+      "id": "F01",
+      "citing_provider_round": "Series A",
+      "result": {
+        "corroboration": {
+          "version": "funding-corroboration-v1",
+          "corroborated_rounds": 0,
+          "conflicts": [
+            "rung_mismatch:seed_vs_series-a@2026-10-10"
+          ],
+          "sources": [
+            "apify_funding_atomus",
+            "pvalyou"
+          ],
+          "record": {
+            "provider": "apify",
+            "actor": "funding_corroboration",
+            "rounds": [
+              {
+                "round_type": "Seed",
+                "announced_date": "2026-10-10",
+                "amount_usd": 1000000,
+                "investors": [
+                  "Synthetic Investor"
+                ],
+                "source_urls": [],
+                "method": "provider_field",
+                "provenance": [
+                  {
+                    "actor": "atomus",
+                    "provider_call_id": null,
+                    "role": "reported"
+                  }
+                ]
+              },
+              {
+                "round_type": "Series A",
+                "announced_date": "2026-10-10",
+                "amount_usd": 1000000,
+                "investors": [
+                  "Synthetic Investor"
+                ],
+                "source_urls": [
+                  "https://synthetic.example/funding"
+                ],
+                "method": "provider_field",
+                "provenance": [
+                  {
+                    "actor": "pvalyou",
+                    "provider_call_id": null,
+                    "role": "cited"
+                  }
+                ]
+              }
+            ],
+            "reported_round_count": null,
+            "history_complete": null,
+            "observed_at": "2026-10-20T14:52:38.539Z",
+            "source_url": null,
+            "provider_call_id": null,
+            "provider_call_ids": [],
+            "completeness": null
+          }
+        },
+        "decision": {
+          "version": "funding-stage-claim-v1",
+          "verdict": "fail",
+          "required_stage": "seed",
+          "highest_verified_stage": "series-a",
+          "highest_unverified_stage": null,
+          "reasons": [
+            "later_round_verified"
+          ],
+          "explanation": "a verified series-a round is later than seed",
+          "carrier_rounds": [
+            {
+              "round_type": "Series A",
+              "announced_date": "2026-10-10",
+              "amount_usd": 1000000,
+              "investors": [
+                "Synthetic Investor"
+              ],
+              "source_urls": [
+                "https://synthetic.example/funding"
+              ],
+              "method": "provider_field",
+              "provenance": [
+                {
+                  "actor": "pvalyou",
+                  "provider_call_id": null,
+                  "role": "cited"
+                }
+              ]
+            }
+          ],
+          "corroborated_by_model": false
+        }
+      },
+      "boundary": "real pure funding corroboration/decision, synthetic provider records; not a complete mission"
+    },
+    {
+      "id": "E01",
+      "negative": {
+        "claims": [
+          {
+            "version": "web-evidence-claim-v1",
+            "company_key": "synthetic.example",
+            "requirement_id": "buying-intent",
+            "claim": "Company is searching for new sales tools",
+            "excerpt": "We are not looking for new sales tools. We already have a CRM.",
+            "source_url": "https://synthetic.example/about",
+            "page_intent": "about",
+            "supports": "supports",
+            "confidence": "high"
+          }
+        ],
+        "rejected": []
+      },
+      "fabricated": {
+        "claims": [],
+        "rejected": [
+          {
+            "reason": "excerpt_not_in_page",
+            "detail": "We are looking for a CRM vendor now."
+          }
+        ]
+      },
+      "meaning": "substring validation accepts a real negative quotation labelled supports; this is an inference-parser boundary probe, NOT proof of a final qualified company"
+    },
+    {
+      "id": "T01",
+      "finish_reason": "stop",
+      "accepted": true,
+      "calls": 1,
+      "boundary": "real GPT transport parser; injected external response, no model"
+    },
+    {
+      "id": "T01",
+      "finish_reason": "length",
+      "accepted": true,
+      "calls": 1,
+      "boundary": "real GPT transport parser; injected external response, no model"
+    }
+  ]
+}
