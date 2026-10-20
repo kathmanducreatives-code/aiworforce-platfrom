@@ -1,0 +1,40 @@
+[
+  {
+    "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+    "id": "C01",
+    "name": "mandatory founder discussion",
+    "actual": "target",
+    "expected": "hard",
+    "status": "FAIL"
+  },
+  {
+    "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+    "id": "C04",
+    "name": "separate 7-day hiring / 30-day social windows",
+    "actual": [
+      7,
+      90
+    ],
+    "expected": [
+      7,
+      30
+    ],
+    "status": "FAIL"
+  },
+  {
+    "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+    "id": "H04",
+    "name": "sales-team growth is not geographic expansion",
+    "actual": false,
+    "expected": true,
+    "status": "FAIL"
+  },
+  {
+    "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+    "id": "C02",
+    "name": "cross-signal OR represented as alternatives",
+    "actual": false,
+    "expected": true,
+    "status": "FAIL"
+  }
+]

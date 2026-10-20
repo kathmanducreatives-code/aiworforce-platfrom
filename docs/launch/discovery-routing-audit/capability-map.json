@@ -1,0 +1,1882 @@
+{
+  "registry": {
+    "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+    "map": [
+      {
+        "capability": "startup_company_discovery",
+        "declared": {
+          "id": "startup_company_discovery",
+          "label": "Discover startup companies",
+          "requires": [
+            "company_profile.stages includes startup"
+          ],
+          "produces": [
+            "company_candidate"
+          ],
+          "allowed_next": [
+            "company_identity_resolution"
+          ],
+          "providers": [
+            "apify_yc_companies_memo23",
+            "apify_yc_companies_solidcode",
+            "apify_linkedin_company_search"
+          ],
+          "cost_units": 1,
+          "max_attempts": 2,
+          "fallback_policy": "provider_fallback_only",
+          "evidence_required": [
+            "company_name"
+          ]
+        },
+        "executable": {
+          "capability": "startup_company_discovery",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": true
+          },
+          "limitations": [
+            "YC-cohort sources: funding stage is not provable from a batch"
+          ],
+          "reason": "memo23 / solidcode / LinkedIn company search, engine-driven discovery"
+        },
+        "engine_driven": true,
+        "providers": [
+          {
+            "actor": "apify_yc_companies_memo23",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_yc_companies_memo23",
+              "capability": "startup_company_discovery",
+              "readiness": "READY",
+              "executable": true,
+              "via": "ready",
+              "reason": "live-proven: P2 canaries (2026-09-16)"
+            },
+            "live_authorized": false
+          },
+          {
+            "actor": "apify_yc_companies_solidcode",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_yc_companies_solidcode",
+              "capability": "startup_company_discovery",
+              "readiness": "CARDED_BUT_NOT_LIVE",
+              "executable": false,
+              "via": null,
+              "reason": "apify_yc_companies_solidcode|startup_company_discovery is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it"
+            },
+            "live_authorized": false
+          },
+          {
+            "actor": "apify_linkedin_company_search",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_linkedin_company_search",
+              "capability": "startup_company_discovery",
+              "readiness": "CARDED_BUT_NOT_LIVE",
+              "executable": false,
+              "via": null,
+              "reason": "apify_linkedin_company_search|startup_company_discovery is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "general_company_discovery",
+        "declared": {
+          "id": "general_company_discovery",
+          "label": "Discover companies by profile",
+          "requires": [
+            "company_profile.verticals or company_profile.locations"
+          ],
+          "produces": [
+            "company_candidate"
+          ],
+          "allowed_next": [
+            "company_identity_resolution"
+          ],
+          "providers": [
+            "apify_yc_companies_memo23",
+            "apify_yc_companies_solidcode",
+            "apify_linkedin_company_search"
+          ],
+          "cost_units": 1,
+          "max_attempts": 2,
+          "fallback_policy": "provider_fallback_only",
+          "evidence_required": [
+            "company_name"
+          ]
+        },
+        "executable": {
+          "capability": "general_company_discovery",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": true
+          },
+          "limitations": [],
+          "reason": "company directory / search, engine-driven discovery"
+        },
+        "engine_driven": true,
+        "providers": [
+          {
+            "actor": "apify_yc_companies_memo23",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_yc_companies_memo23",
+              "capability": "general_company_discovery",
+              "readiness": "CARDED_BUT_NOT_LIVE",
+              "executable": false,
+              "via": null,
+              "reason": "apify_yc_companies_memo23|general_company_discovery is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it"
+            },
+            "live_authorized": false
+          },
+          {
+            "actor": "apify_yc_companies_solidcode",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_yc_companies_solidcode",
+              "capability": "general_company_discovery",
+              "readiness": "CARDED_BUT_NOT_LIVE",
+              "executable": false,
+              "via": null,
+              "reason": "apify_yc_companies_solidcode|general_company_discovery is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it"
+            },
+            "live_authorized": false
+          },
+          {
+            "actor": "apify_linkedin_company_search",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_linkedin_company_search",
+              "capability": "general_company_discovery",
+              "readiness": "READY",
+              "executable": true,
+              "via": "ready",
+              "reason": "live-proven: spine canary 2026-09-24 task 89adf8fb: search\u2192details\u2192band+country grounding\u2192Atomus\u2192eligibility\u2192Workbench, $0.0242 settled"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "known_company_resolution",
+        "declared": {
+          "id": "known_company_resolution",
+          "label": "Resolve supplied companies",
+          "requires": [
+            "company_profile.known_companies is non-empty"
+          ],
+          "produces": [
+            "company_candidate"
+          ],
+          "allowed_next": [
+            "company_identity_resolution",
+            "company_enrichment"
+          ],
+          "providers": [],
+          "cost_units": 0,
+          "max_attempts": 1,
+          "fallback_policy": "terminal_on_exhaustion",
+          "evidence_required": [
+            "company_domain"
+          ]
+        },
+        "executable": {
+          "capability": "known_company_resolution",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": true
+          },
+          "limitations": [],
+          "reason": "resolves companies the user supplied; no provider needed"
+        },
+        "engine_driven": true,
+        "providers": []
+      },
+      {
+        "capability": "job_discovery",
+        "declared": {
+          "id": "job_discovery",
+          "label": "Discover job postings",
+          "requires": [
+            "requested_output is job_listings, or job_discovery explicitly allowed"
+          ],
+          "produces": [
+            "job_posting",
+            "company_candidate"
+          ],
+          "allowed_next": [
+            "job_deduplication",
+            "company_identity_resolution"
+          ],
+          "providers": [
+            "apify_linkedin_job_search",
+            "apify_jobs",
+            "apify_linkedin_jobs_crawlworks",
+            "apify_indeed_jobs_automation_lab",
+            "apify_glassdoor_jobs"
+          ],
+          "cost_units": 1,
+          "max_attempts": 3,
+          "fallback_policy": "provider_fallback_only",
+          "evidence_required": [
+            "job_title",
+            "company_name"
+          ]
+        },
+        "executable": {
+          "capability": "job_discovery",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": true
+          },
+          "limitations": [
+            "LinkedIn job search only: no company-size input, so size is read from each employer's declared band (plausible until enrichment)",
+            "staffing-agency postings are dropped by a deterministic guard, not by the provider",
+            "the four job-board Actors remain uncarded and are never selected"
+          ],
+          "reason": "LinkedIn job search (P3, verified 2026-09-16): the employer's LinkedIn page, website and headcount arrive on each posting, engine-driven discovery"
+        },
+        "engine_driven": true,
+        "providers": [
+          {
+            "actor": "apify_linkedin_job_search",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_linkedin_job_search",
+              "capability": "job_discovery",
+              "readiness": "READY",
+              "executable": true,
+              "via": "ready",
+              "reason": "live-proven: canary 2a215d44 (2026-09-17)"
+            },
+            "live_authorized": false
+          },
+          {
+            "actor": "apify_jobs",
+            "catalogued": false,
+            "decision": {
+              "actor": "apify_jobs",
+              "capability": "job_discovery",
+              "readiness": "NOT_PRESENT",
+              "executable": false,
+              "via": null,
+              "reason": "apify_jobs|job_discovery is NOT_PRESENT: not in the actor catalog"
+            },
+            "live_authorized": false
+          },
+          {
+            "actor": "apify_linkedin_jobs_crawlworks",
+            "catalogued": false,
+            "decision": {
+              "actor": "apify_linkedin_jobs_crawlworks",
+              "capability": "job_discovery",
+              "readiness": "NOT_PRESENT",
+              "executable": false,
+              "via": null,
+              "reason": "apify_linkedin_jobs_crawlworks|job_discovery is NOT_PRESENT: not in the actor catalog"
+            },
+            "live_authorized": false
+          },
+          {
+            "actor": "apify_indeed_jobs_automation_lab",
+            "catalogued": false,
+            "decision": {
+              "actor": "apify_indeed_jobs_automation_lab",
+              "capability": "job_discovery",
+              "readiness": "NOT_PRESENT",
+              "executable": false,
+              "via": null,
+              "reason": "apify_indeed_jobs_automation_lab|job_discovery is NOT_PRESENT: not in the actor catalog"
+            },
+            "live_authorized": false
+          },
+          {
+            "actor": "apify_glassdoor_jobs",
+            "catalogued": false,
+            "decision": {
+              "actor": "apify_glassdoor_jobs",
+              "capability": "job_discovery",
+              "readiness": "NOT_PRESENT",
+              "executable": false,
+              "via": null,
+              "reason": "apify_glassdoor_jobs|job_discovery is NOT_PRESENT: not in the actor catalog"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "funding_signal_discovery",
+        "declared": {
+          "id": "funding_signal_discovery",
+          "label": "Discover recently funded companies",
+          "requires": [
+            "required_signals includes funding"
+          ],
+          "produces": [
+            "company_candidate",
+            "funding_signal"
+          ],
+          "allowed_next": [
+            "company_identity_resolution"
+          ],
+          "providers": [
+            "apify_funding_rounds_datahyena"
+          ],
+          "cost_units": 3,
+          "max_attempts": 2,
+          "fallback_policy": "terminal_on_exhaustion",
+          "evidence_required": [
+            "company_name",
+            "funding_event",
+            "announced_date"
+          ]
+        },
+        "executable": {
+          "capability": "funding_signal_discovery",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": true
+          },
+          "limitations": [
+            "discovery only: it cannot verify funding for a company found another way"
+          ],
+          "reason": "datahyena funding rounds, engine-driven discovery"
+        },
+        "engine_driven": true,
+        "providers": [
+          {
+            "actor": "apify_funding_rounds_datahyena",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_funding_rounds_datahyena",
+              "capability": "funding_signal_discovery",
+              "readiness": "CARDED_BUT_NOT_LIVE",
+              "executable": false,
+              "via": null,
+              "reason": "apify_funding_rounds_datahyena|funding_signal_discovery is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "expansion_signal_discovery",
+        "declared": {
+          "id": "expansion_signal_discovery",
+          "label": "Discover expanding companies",
+          "requires": [
+            "required_signals includes expansion"
+          ],
+          "produces": [
+            "company_candidate",
+            "expansion_signal"
+          ],
+          "allowed_next": [
+            "company_identity_resolution"
+          ],
+          "providers": [
+            "apify_google_news"
+          ],
+          "cost_units": 2,
+          "max_attempts": 2,
+          "fallback_policy": "terminal_on_exhaustion",
+          "evidence_required": [
+            "company_name",
+            "expansion_statement",
+            "published_at",
+            "source_url"
+          ]
+        },
+        "executable": {
+          "capability": "expansion_signal_discovery",
+          "state": "needs_extraction_work",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": false,
+            "normalizer": true,
+            "entity_extraction": false
+          },
+          "limitations": [],
+          "reason": "news articles carry no canonical company, so expansion evidence cannot yet start a search; the engine skips this step"
+        },
+        "engine_driven": false,
+        "providers": [
+          {
+            "actor": "apify_google_news",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_google_news",
+              "capability": "expansion_signal_discovery",
+              "readiness": "NEEDS_EXTRACTION_WORK",
+              "executable": false,
+              "via": null,
+              "reason": "expansion_signal_discovery is not executable by the engine (needs_extraction_work)"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "product_launch_discovery",
+        "declared": {
+          "id": "product_launch_discovery",
+          "label": "Discover companies by a product launch",
+          "requires": [
+            "required_signals includes product_launch"
+          ],
+          "produces": [
+            "company_candidate",
+            "launch_signal"
+          ],
+          "allowed_next": [
+            "company_identity_resolution"
+          ],
+          "providers": [
+            "apify_google_news"
+          ],
+          "cost_units": 2,
+          "max_attempts": 2,
+          "fallback_policy": "terminal_on_exhaustion",
+          "evidence_required": [
+            "company_name",
+            "launch_statement",
+            "published_at",
+            "source_url"
+          ]
+        },
+        "executable": {
+          "capability": "product_launch_discovery",
+          "state": "needs_extraction_work",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": false,
+            "normalizer": true,
+            "entity_extraction": false
+          },
+          "limitations": [],
+          "reason": "news articles carry no canonical company, so launch evidence cannot yet start a search; the engine has no executor for this step"
+        },
+        "engine_driven": false,
+        "providers": [
+          {
+            "actor": "apify_google_news",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_google_news",
+              "capability": "product_launch_discovery",
+              "readiness": "NEEDS_EXTRACTION_WORK",
+              "executable": false,
+              "via": null,
+              "reason": "product_launch_discovery is not executable by the engine (needs_extraction_work)"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "company_identity_resolution",
+        "declared": {
+          "id": "company_identity_resolution",
+          "label": "Resolve company identity",
+          "requires": [
+            "company_candidate"
+          ],
+          "produces": [
+            "company_identity"
+          ],
+          "allowed_next": [
+            "company_enrichment"
+          ],
+          "providers": [
+            "apify_linkedin_company_search"
+          ],
+          "cost_units": 1,
+          "max_attempts": 1,
+          "fallback_policy": "terminal_on_exhaustion",
+          "evidence_required": [
+            "canonical_domain or linkedin_company_url"
+          ]
+        },
+        "executable": {
+          "capability": "company_identity_resolution",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [],
+          "reason": "LinkedIn company search, domain-confirmed"
+        },
+        "engine_driven": true,
+        "providers": [
+          {
+            "actor": "apify_linkedin_company_search",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_linkedin_company_search",
+              "capability": "company_identity_resolution",
+              "readiness": "READY",
+              "executable": true,
+              "via": "ready",
+              "reason": "live-proven: P2 canaries (2026-09-16)"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "company_enrichment",
+        "declared": {
+          "id": "company_enrichment",
+          "label": "Enrich company",
+          "requires": [
+            "company_identity"
+          ],
+          "produces": [
+            "company_evidence"
+          ],
+          "allowed_next": [
+            "hiring_verification",
+            "expansion_signal_verification",
+            "company_brain_qualification"
+          ],
+          "providers": [
+            "apify_linkedin_company_details"
+          ],
+          "cost_units": 1,
+          "max_attempts": 2,
+          "fallback_policy": "provider_fallback_only",
+          "evidence_required": [
+            "company_size_band or industry_ids or description"
+          ]
+        },
+        "executable": {
+          "capability": "company_enrichment",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [],
+          "reason": "LinkedIn company details"
+        },
+        "engine_driven": true,
+        "providers": [
+          {
+            "actor": "apify_linkedin_company_details",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_linkedin_company_details",
+              "capability": "company_enrichment",
+              "readiness": "READY",
+              "executable": true,
+              "via": "ready",
+              "reason": "live-proven: canary 2a215d44 (2026-09-17)"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "hiring_verification",
+        "declared": {
+          "id": "hiring_verification",
+          "label": "Verify hiring signal",
+          "requires": [
+            "company_identity",
+            "required_signals includes hiring"
+          ],
+          "produces": [
+            "hiring_evidence"
+          ],
+          "allowed_next": [
+            "company_brain_qualification"
+          ],
+          "providers": [
+            "apify_linkedin_job_search"
+          ],
+          "cost_units": 1,
+          "max_attempts": 2,
+          "fallback_policy": "provider_fallback_only",
+          "evidence_required": [
+            "job_title",
+            "posted_date"
+          ]
+        },
+        "executable": {
+          "capability": "hiring_verification",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [
+            "company-scoped: verifies hiring for companies it is given, cannot find employers"
+          ],
+          "reason": "embedded YC open jobs or company-scoped LinkedIn job search"
+        },
+        "engine_driven": true,
+        "providers": [
+          {
+            "actor": "apify_linkedin_job_search",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_linkedin_job_search",
+              "capability": "hiring_verification",
+              "readiness": "READY",
+              "executable": true,
+              "via": "ready",
+              "reason": "live-proven: canary 03f4c9c6 (2026-09-17)"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "expansion_signal_verification",
+        "declared": {
+          "id": "expansion_signal_verification",
+          "label": "Verify expansion signal",
+          "requires": [
+            "company_identity",
+            "required_signals includes expansion"
+          ],
+          "produces": [
+            "expansion_evidence"
+          ],
+          "allowed_next": [
+            "company_brain_qualification"
+          ],
+          "providers": [
+            "apify_google_news",
+            "apify_linkedin_company_posts"
+          ],
+          "cost_units": 2,
+          "max_attempts": 2,
+          "fallback_policy": "provider_fallback_only",
+          "evidence_required": [
+            "expansion_statement",
+            "published_at",
+            "source_url"
+          ]
+        },
+        "executable": {
+          "capability": "expansion_signal_verification",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [
+            "only Google News is executed; LinkedIn company posts are listed but not run"
+          ],
+          "reason": "Google News per named company"
+        },
+        "engine_driven": true,
+        "providers": [
+          {
+            "actor": "apify_google_news",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_google_news",
+              "capability": "expansion_signal_verification",
+              "readiness": "CARDED_BUT_NOT_LIVE",
+              "executable": false,
+              "via": null,
+              "reason": "apify_google_news|expansion_signal_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it"
+            },
+            "live_authorized": false
+          },
+          {
+            "actor": "apify_linkedin_company_posts",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_linkedin_company_posts",
+              "capability": "expansion_signal_verification",
+              "readiness": "CARDED_BUT_NOT_LIVE",
+              "executable": false,
+              "via": null,
+              "reason": "apify_linkedin_company_posts|expansion_signal_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "company_post_verification",
+        "declared": {
+          "id": "company_post_verification",
+          "label": "Read the company's own posts",
+          "requires": [
+            "company_identity"
+          ],
+          "produces": [
+            "company_activity_evidence"
+          ],
+          "allowed_next": [
+            "company_brain_qualification"
+          ],
+          "providers": [
+            "apify_linkedin_company_posts"
+          ],
+          "cost_units": 1,
+          "max_attempts": 2,
+          "fallback_policy": "terminal_on_exhaustion",
+          "evidence_required": [
+            "post_url",
+            "posted_at"
+          ]
+        },
+        "executable": {
+          "capability": "company_post_verification",
+          "state": "needs_engine_work",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": false,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [],
+          "reason": "LinkedIn company posts are carded, but the engine has no executor for this step"
+        },
+        "engine_driven": false,
+        "providers": [
+          {
+            "actor": "apify_linkedin_company_posts",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_linkedin_company_posts",
+              "capability": "company_post_verification",
+              "readiness": "NEEDS_EXTRACTION_WORK",
+              "executable": false,
+              "via": null,
+              "reason": "company_post_verification is not executable by the engine (needs_engine_work)"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "product_launch_verification",
+        "declared": {
+          "id": "product_launch_verification",
+          "label": "Verify a product launch",
+          "requires": [
+            "company_identity",
+            "required_signals includes product_launch"
+          ],
+          "produces": [
+            "launch_evidence"
+          ],
+          "allowed_next": [
+            "company_brain_qualification"
+          ],
+          "providers": [
+            "apify_google_news",
+            "apify_linkedin_company_posts"
+          ],
+          "cost_units": 2,
+          "max_attempts": 2,
+          "fallback_policy": "provider_fallback_only",
+          "evidence_required": [
+            "launch_statement",
+            "published_at",
+            "source_url"
+          ]
+        },
+        "executable": {
+          "capability": "product_launch_verification",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [
+            "only Google News is executed; LinkedIn company posts are listed but not run"
+          ],
+          "reason": "Google News per named company"
+        },
+        "engine_driven": true,
+        "providers": [
+          {
+            "actor": "apify_google_news",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_google_news",
+              "capability": "product_launch_verification",
+              "readiness": "CARDED_BUT_NOT_LIVE",
+              "executable": false,
+              "via": null,
+              "reason": "apify_google_news|product_launch_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it"
+            },
+            "live_authorized": false
+          },
+          {
+            "actor": "apify_linkedin_company_posts",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_linkedin_company_posts",
+              "capability": "product_launch_verification",
+              "readiness": "CARDED_BUT_NOT_LIVE",
+              "executable": false,
+              "via": null,
+              "reason": "apify_linkedin_company_posts|product_launch_verification is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "technology_verification",
+        "declared": {
+          "id": "technology_verification",
+          "label": "Verify the company's technology",
+          "requires": [
+            "company_domain",
+            "required_signals includes technology"
+          ],
+          "produces": [
+            "technology_evidence"
+          ],
+          "allowed_next": [
+            "company_brain_qualification"
+          ],
+          "providers": [
+            "apify_builtwith_technology"
+          ],
+          "cost_units": 1,
+          "max_attempts": 1,
+          "fallback_policy": "terminal_on_exhaustion",
+          "evidence_required": [
+            "domain",
+            "technologies"
+          ]
+        },
+        "executable": {
+          "capability": "technology_verification",
+          "state": "needs_engine_work",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": false,
+            "normalizer": false,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [
+            "BuiltWith maps a known domain to technologies; it cannot find companies by technology"
+          ],
+          "reason": "BuiltWith is carded, but the engine has no executor for this step"
+        },
+        "engine_driven": false,
+        "providers": [
+          {
+            "actor": "apify_builtwith_technology",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_builtwith_technology",
+              "capability": "technology_verification",
+              "readiness": "NEEDS_EXTRACTION_WORK",
+              "executable": false,
+              "via": null,
+              "reason": "technology_verification is not executable by the engine (needs_engine_work)"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "company_brain_qualification",
+        "declared": {
+          "id": "company_brain_qualification",
+          "label": "Qualify against Company Brain",
+          "requires": [
+            "company_evidence"
+          ],
+          "produces": [
+            "qualification_verdict"
+          ],
+          "allowed_next": [
+            "founder_discovery",
+            "persistence"
+          ],
+          "providers": [],
+          "cost_units": 0,
+          "max_attempts": 1,
+          "fallback_policy": "terminal_on_exhaustion",
+          "evidence_required": [
+            "verdict",
+            "reasons"
+          ]
+        },
+        "executable": {
+          "capability": "company_brain_qualification",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [],
+          "reason": "deterministic + model qualification; no provider"
+        },
+        "engine_driven": true,
+        "providers": []
+      },
+      {
+        "capability": "founder_discovery",
+        "declared": {
+          "id": "founder_discovery",
+          "label": "Find decision-makers",
+          "requires": [
+            "qualification_verdict is pass"
+          ],
+          "produces": [
+            "person_candidate"
+          ],
+          "allowed_next": [
+            "employer_verification"
+          ],
+          "providers": [
+            "apify_linkedin_company_employees",
+            "apify_people_search"
+          ],
+          "cost_units": 1,
+          "max_attempts": 2,
+          "fallback_policy": "provider_fallback_only",
+          "evidence_required": [
+            "person_name",
+            "person_title"
+          ]
+        },
+        "executable": {
+          "capability": "founder_discovery",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [
+            "people stage: offered after qualification, never scheduled automatically"
+          ],
+          "reason": "people search / company employees, unlock-gated"
+        },
+        "engine_driven": true,
+        "providers": [
+          {
+            "actor": "apify_linkedin_company_employees",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_linkedin_company_employees",
+              "capability": "founder_discovery",
+              "readiness": "CARDED_BUT_NOT_LIVE",
+              "executable": false,
+              "via": null,
+              "reason": "apify_linkedin_company_employees|founder_discovery is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it"
+            },
+            "live_authorized": false
+          },
+          {
+            "actor": "apify_people_search",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_people_search",
+              "capability": "founder_discovery",
+              "readiness": "NEEDS_PROVIDER_WORK",
+              "executable": false,
+              "via": null,
+              "reason": "apify_people_search|founder_discovery is NEEDS_PROVIDER_WORK: opt-in only at the tool layer"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "employer_verification",
+        "declared": {
+          "id": "employer_verification",
+          "label": "Verify current employer",
+          "requires": [
+            "person_candidate"
+          ],
+          "produces": [
+            "employment_evidence"
+          ],
+          "allowed_next": [
+            "contact_enrichment",
+            "persistence"
+          ],
+          "providers": [],
+          "cost_units": 0,
+          "max_attempts": 1,
+          "fallback_policy": "terminal_on_exhaustion",
+          "evidence_required": [
+            "employer_match"
+          ]
+        },
+        "executable": {
+          "capability": "employer_verification",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [
+            "people stage: offered after qualification, never scheduled automatically"
+          ],
+          "reason": "deterministic employer match; no provider"
+        },
+        "engine_driven": true,
+        "providers": []
+      },
+      {
+        "capability": "contact_enrichment",
+        "declared": {
+          "id": "contact_enrichment",
+          "label": "Find contact method",
+          "requires": [
+            "employment_evidence"
+          ],
+          "produces": [
+            "contact_method"
+          ],
+          "allowed_next": [
+            "persistence"
+          ],
+          "providers": [
+            "apify_people_search"
+          ],
+          "cost_units": 1,
+          "max_attempts": 2,
+          "fallback_policy": "provider_fallback_only",
+          "evidence_required": [
+            "email or profile_url"
+          ]
+        },
+        "executable": {
+          "capability": "contact_enrichment",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [
+            "people stage: offered after qualification, never scheduled automatically"
+          ],
+          "reason": "profile enrichment, unlock-gated"
+        },
+        "engine_driven": true,
+        "providers": [
+          {
+            "actor": "apify_people_search",
+            "catalogued": true,
+            "decision": {
+              "actor": "apify_people_search",
+              "capability": "contact_enrichment",
+              "readiness": "CARDED_BUT_NOT_LIVE",
+              "executable": false,
+              "via": null,
+              "reason": "apify_people_search|contact_enrichment is CARDED_BUT_NOT_LIVE: never run live in Lead V2; only an explicit provider probe may run it"
+            },
+            "live_authorized": false
+          }
+        ]
+      },
+      {
+        "capability": "job_deduplication",
+        "declared": {
+          "id": "job_deduplication",
+          "label": "Deduplicate job postings",
+          "requires": [
+            "job_posting"
+          ],
+          "produces": [
+            "unique_job_posting"
+          ],
+          "allowed_next": [
+            "company_identity_resolution",
+            "persistence"
+          ],
+          "providers": [],
+          "cost_units": 0,
+          "max_attempts": 1,
+          "fallback_policy": "terminal_on_exhaustion",
+          "evidence_required": [
+            "job_url"
+          ]
+        },
+        "executable": {
+          "capability": "job_deduplication",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [],
+          "reason": "job rows are deduplicated by job id, and employers by LinkedIn company, during job discovery"
+        },
+        "engine_driven": true,
+        "providers": []
+      },
+      {
+        "capability": "persistence",
+        "declared": {
+          "id": "persistence",
+          "label": "Persist results",
+          "requires": [],
+          "produces": [
+            "persisted_record"
+          ],
+          "allowed_next": [],
+          "providers": [],
+          "cost_units": 0,
+          "max_attempts": 1,
+          "fallback_policy": "terminal_on_exhaustion",
+          "evidence_required": []
+        },
+        "executable": {
+          "capability": "persistence",
+          "state": "executable",
+          "primitives": {
+            "provider_available": true,
+            "verified_contract": true,
+            "engine_executor": true,
+            "normalizer": true,
+            "entity_extraction": "n/a"
+          },
+          "limitations": [],
+          "reason": "writes results to the Workbench; no provider"
+        },
+        "engine_driven": true,
+        "providers": []
+      }
+    ],
+    "actor_evidence": [
+      {
+        "actor_key": "apify_yc_companies_memo23",
+        "unlock_gated": false,
+        "cohort_scope": "y_combinator",
+        "produces": [
+          {
+            "event": "hiring",
+            "subject": "company",
+            "power": "discovery",
+            "evidence_fields": [
+              "isHiring",
+              "openJobs[]"
+            ],
+            "qualifiers": [
+              "role_terms"
+            ],
+            "basis": "verified schema: isHiring filter; output carries openJobs[] with YC's own role taxonomy"
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_yc_companies_solidcode",
+        "unlock_gated": false,
+        "cohort_scope": "y_combinator",
+        "produces": []
+      },
+      {
+        "actor_key": "apify_linkedin_company_search",
+        "unlock_gated": false,
+        "cohort_scope": null,
+        "produces": []
+      },
+      {
+        "actor_key": "apify_linkedin_company_details",
+        "unlock_gated": false,
+        "cohort_scope": null,
+        "produces": []
+      },
+      {
+        "actor_key": "apify_linkedin_job_search",
+        "unlock_gated": false,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "hiring",
+            "subject": "company",
+            "power": "verification",
+            "evidence_fields": [
+              "title",
+              "postedDate",
+              "company{name,linkedinUrl}",
+              "location"
+            ],
+            "qualifiers": [
+              "role_families",
+              "role_terms"
+            ],
+            "basis": "verified schema: company[<=10], jobTitles, postedLimit; observed zero cross-company leakage"
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_funding_atomus",
+        "unlock_gated": false,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "funding",
+            "subject": "company",
+            "power": "verification",
+            "evidence_fields": [
+              "rounds[].type",
+              "rounds[].announced_at",
+              "rounds[].raised_amount",
+              "num_funding_rounds"
+            ],
+            "qualifiers": [
+              "round_type"
+            ],
+            "basis": "live probe 2026-09-19 (wordware, stripe, cal-com, dioptra, 37signals): company.financial.funding carries dated typed rounds and a TRUE num_funding_rounds; no per-round source URL."
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_funding_pvalyou",
+        "unlock_gated": false,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "funding",
+            "subject": "company",
+            "power": "verification",
+            "evidence_fields": [
+              "rounds[].round_type",
+              "rounds[].round_date",
+              "rounds[].source_urls[]"
+            ],
+            "qualifiers": [
+              "round_type"
+            ],
+            "basis": "live probe 2026-09-19 (wordware, stripe, plausible): record.funding.rounds[] with round_type, round_date + precision and source_urls (the company's own announcement among them); rounds_count is only what it holds."
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_funding_rounds_datahyena",
+        "unlock_gated": false,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "funding",
+            "subject": "company",
+            "power": "discovery",
+            "evidence_fields": [
+              "company_name",
+              "round_stage",
+              "amount_usd",
+              "announced_date",
+              "investors[]",
+              "source_articles[]"
+            ],
+            "qualifiers": [
+              "round_type",
+              "region"
+            ],
+            "basis": "live Store schema read 2026-08-22: since/round[]/countries[]/verticals[]/minAmountUsd filters, one row per funding event with amount ungated (no session cookie). OUTPUT NOT YET OBSERVED \u2014 card confidence is low."
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_linkedin_company_posts",
+        "unlock_gated": false,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "post",
+            "subject": "company",
+            "power": "verification",
+            "evidence_fields": [
+              "post_url",
+              "posted_at",
+              "text",
+              "author_url"
+            ],
+            "qualifiers": [
+              "topic"
+            ],
+            "basis": "live Store schema 2026-08-22: targetUrls + postedLimit/postedLimitDate. Scope is enforced by compileCompanyPostsInput, which refuses /in/ URLs \u2014 the schema itself accepts both shapes. OUTPUT NOT OBSERVED."
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_linkedin_profile_posts",
+        "unlock_gated": true,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "post",
+            "subject": "leadership",
+            "power": "verification",
+            "evidence_fields": [
+              "post_url",
+              "posted_at",
+              "text",
+              "author_url",
+              "author_name"
+            ],
+            "qualifiers": [
+              "topic"
+            ],
+            "basis": "live Store schema 2026-08-22: identical to the company posts Actor. compileProfilePostsInput refuses /company/ URLs. OUTPUT NOT OBSERVED."
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_linkedin_post_search",
+        "unlock_gated": true,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "post",
+            "subject": "leadership",
+            "power": "discovery",
+            "evidence_fields": [
+              "post_url",
+              "posted_at",
+              "text",
+              "author_url",
+              "author_name",
+              "author_headline"
+            ],
+            "qualifiers": [
+              "topic",
+              "region"
+            ],
+            "basis": "live Store schema 2026-08-22: searchQueries (Boolean full-text), authorKeywords on headline, authorsCompanies, postedLimit, sortBy. OUTPUT NOT OBSERVED."
+          },
+          {
+            "event": "comment",
+            "subject": "leadership",
+            "power": "discovery",
+            "evidence_fields": [
+              "commenter_url",
+              "commenter_name",
+              "commenter_headline",
+              "posted_at",
+              "text",
+              "parent_post_url"
+            ],
+            "qualifiers": [
+              "topic"
+            ],
+            "basis": "live Store schema 2026-08-22: scrapeComments, maxComments, commentsPostedLimit, commentsProfileScraperMode. Comments are billed per item at the price of a post. OUTPUT NOT OBSERVED."
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_google_news",
+        "unlock_gated": false,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "expansion",
+            "subject": "company",
+            "power": "discovery",
+            "evidence_fields": [
+              "title",
+              "url",
+              "source",
+              "published_at",
+              "description"
+            ],
+            "qualifiers": [
+              "topic",
+              "region"
+            ],
+            "basis": "live Store schema 2026-08-22: keywords[] with Google News operators, timeframe, region_language. decodeUrls forced on so the citation is followable. OUTPUT NOT OBSERVED."
+          },
+          {
+            "event": "expansion",
+            "subject": "company",
+            "power": "verification",
+            "evidence_fields": [
+              "title",
+              "url",
+              "source",
+              "published_at",
+              "description"
+            ],
+            "qualifiers": [
+              "topic",
+              "region"
+            ],
+            "basis": "same call shape, scoped to a known company name plus a topic term."
+          },
+          {
+            "event": "product_launch",
+            "subject": "company",
+            "power": "discovery",
+            "evidence_fields": [
+              "title",
+              "url",
+              "source",
+              "published_at",
+              "description"
+            ],
+            "qualifiers": [
+              "topic"
+            ],
+            "basis": "live Store schema 2026-08-22: keyword search over dated articles."
+          },
+          {
+            "event": "product_launch",
+            "subject": "company",
+            "power": "verification",
+            "evidence_fields": [
+              "title",
+              "url",
+              "source",
+              "published_at",
+              "description"
+            ],
+            "qualifiers": [
+              "topic"
+            ],
+            "basis": "same call shape, scoped to a known company name plus a launch term."
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_builtwith_technology",
+        "unlock_gated": false,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "technology",
+            "subject": "company",
+            "power": "verification",
+            "evidence_fields": [
+              "domain",
+              "technologies",
+              "categories"
+            ],
+            "qualifiers": [],
+            "basis": "live Store schema 2026-08-22: exactly two input fields, domain in and technologies out. OUTPUT NOT OBSERVED."
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_linkedin_company_employees",
+        "unlock_gated": true,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "leadership_change",
+            "subject": "leadership",
+            "power": "discovery",
+            "evidence_fields": [
+              "person_name",
+              "person_title",
+              "current_employer"
+            ],
+            "qualifiers": [],
+            "basis": "verified schema: per-company cap; observed current-employer evidence"
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_linkedin_profile_enrichment",
+        "unlock_gated": true,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "leadership_change",
+            "subject": "leadership",
+            "power": "verification",
+            "evidence_fields": [
+              "person_name",
+              "person_title",
+              "profile_url",
+              "current_employer",
+              "business_email"
+            ],
+            "qualifiers": [],
+            "basis": "live store schema 2026-08-23: takes urls/publicIdentifiers/profileIds and returns profile detail; the email event is a best-effort lookup, never a guarantee, and no phone is returned"
+          }
+        ]
+      },
+      {
+        "actor_key": "apify_people_search",
+        "unlock_gated": true,
+        "cohort_scope": null,
+        "produces": [
+          {
+            "event": "leadership_change",
+            "subject": "leadership",
+            "power": "discovery",
+            "evidence_fields": [
+              "person_name",
+              "person_title",
+              "profile_url"
+            ],
+            "qualifiers": [],
+            "basis": "verified schema: people search not scoped to a company list"
+          }
+        ]
+      }
+    ]
+  },
+  "provider_only": {
+    "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+    "post_search": {
+      "actor_key": "apify_linkedin_post_search",
+      "actor_id": "harvestapi/linkedin-post-search",
+      "purposes": [
+        "social_discovery"
+      ],
+      "supported_filters": [
+        "searchQueries",
+        "maxPosts",
+        "postedLimit",
+        "postedLimitDate",
+        "sortBy",
+        "authorUrls",
+        "authorsCompanies",
+        "authorKeywords",
+        "authorsIndustryId",
+        "mentioningMember",
+        "mentioningCompany",
+        "contentType",
+        "profileScraperMode",
+        "scrapeComments",
+        "maxComments",
+        "commentsPostedLimit",
+        "commentsProfileScraperMode",
+        "scrapeReactions",
+        "maxReactions",
+        "startPage",
+        "scrapePages"
+      ],
+      "verified_enums": {
+        "postedLimit": [
+          "any",
+          "1h",
+          "24h",
+          "week",
+          "month",
+          "3months",
+          "6months",
+          "year"
+        ],
+        "commentsPostedLimit": [
+          "any",
+          "1h",
+          "24h",
+          "week",
+          "month",
+          "3months",
+          "6months",
+          "year"
+        ],
+        "sortBy": [
+          "relevance",
+          "date"
+        ],
+        "profileScraperMode": [
+          "short",
+          "main"
+        ],
+        "commentsProfileScraperMode": [
+          "short",
+          "main"
+        ],
+        "contentType": [
+          "all",
+          "videos",
+          "images",
+          "jobs",
+          "live_videos",
+          "documents",
+          "collaborative_articles"
+        ]
+      },
+      "input_limits": {
+        "maxPosts": "PER search query. 0 means ALL posts \u2014 never send 0",
+        "scrapePages": "each page is 100 posts and each post is billed"
+      },
+      "outputs": [
+        "type ('post' | 'comment') \u2014 the discriminator",
+        "POST: id, linkedinUrl, content, postedAt.{date,timestamp}, author.{name,linkedinUrl,type,info,publicIdentifier,profileId}, engagement.{likes,comments,shares}, query.search",
+        "COMMENT: id, postId, linkedinUrl (deep permalink), commentary, createdAt (flat ISO), actor.{id,name,linkedinUrl,position,type,author}, engagement.{likes,comments}, query.post (the PARENT post URL)"
+      ],
+      "best_for": [
+        "finding posts by TOPIC before any company or person is known",
+        "Boolean full-text search with date bounds and relevance/date sorting",
+        "comments WITH commenter profile metadata, which is what makes \"who commented on this topic\" answerable at all",
+        "narrowing authors by headline keywords, company, or industry id"
+      ],
+      "not_for": [
+        "proving a signal about a SPECIFIC company you already hold \u2014 use the URL-fed Actors for that; a topic search may simply miss them",
+        "treating an author's headline as verified employment \u2014 a headline is self-reported and is not employer evidence",
+        "collapsing company and person authorship: `author.type` decides the subject, and the normalizer keeps them apart"
+      ],
+      "cost_model": {
+        "tier": "BRONZE",
+        "start_usd": 5e-05,
+        "per_result_usd": 0.002,
+        "events_usd": {
+          "actor-start": 5e-05,
+          "post": 0.002,
+          "comment": 0.002,
+          "reaction": 0.002,
+          "main-profile": 0.002,
+          "full-profile": 0.004,
+          "zero-result-query": 0.001
+        },
+        "cost_multiplier_fields": [
+          "maxPosts (per search query)",
+          "maxComments (per post, billed separately at the same price as a post)",
+          "profileScraperMode=main / full profile enrichment, billed per profile"
+        ]
+      },
+      "normalizer_key": "linkedin_post",
+      "schema_build": "store-modified-2026-08-19",
+      "last_verified_at": "2026-08-22",
+      "confidence": "medium",
+      "known_defects": [
+        {
+          "id": "post_search_comments_are_separate_items_with_a_different_shape",
+          "summary": "COMMENTS ARE NOT NESTED. They arrive as separate dataset rows with `type: \"comment\"`, and almost every field differs from a post: the author is `actor` not `author`, the headline is `actor.position` not `author.info`, the text is `commentary` not `content`, and the date is a flat `createdAt` string rather than a `postedAt` object. One run with maxPosts 6 returned 5 posts and 23 comments in one flat dataset.",
+          "mitigation": "`splitPostSearchRows` discriminates on `type` before normalising, and `normalizeSocialComment` reads the comment shape. Read as posts, all 23 comments would have normalised to nulls and been billed anyway.",
+          "evidence_ref": "run 6YHiwmXEcP933uqst, 28 items"
+        },
+        {
+          "id": "post_search_comment_noise_is_the_dominant_failure_mode",
+          "summary": "COMMENT QUALITY IS BIMODAL. Of 23 observed comments, roughly a quarter carried real signal \u2014 one founder wrote \"three email campaigns earlier this summer, not a single reply... I still can't tell you if that's channel, list quality, or us\" \u2014 while the rest were congratulation noise (\"say it louder\", \"this is seriously useful!!\"), self-promotional links, or near-identical AI-written engagement bait: two different accounts posted the same observation about \"1 positive reply per 53 emails\" in nearly the same words.",
+          "mitigation": "A comment is a CANDIDATE, never intent. The model must read each one for meaning, and near-duplicate comments across accounts must be treated as one low-value signal rather than corroboration.",
+          "evidence_ref": "run 6YHiwmXEcP933uqst"
+        },
+        {
+          "id": "post_search_commenters_are_mostly_sellers_not_buyers",
+          "summary": "A B2B problem query surfaces the people who SELL the solution. Observed commenter headlines included \"Cold Email Specialist\", \"B2B Lead Generation & Outbound Specialist\" and \"Sales Automation for Agencies\" \u2014 practitioners marketing themselves on a thread about the problem they sell against.",
+          "mitigation": "This is exactly why ICP fit is judged SEPARATELY from intent. Someone discussing the problem fluently is often a competitor, and signal alone must never promote a candidate.",
+          "evidence_ref": "run 6YHiwmXEcP933uqst"
+        },
+        {
+          "id": "post_search_commenter_url_is_clean_but_the_author_url_is_not",
+          "summary": "A COMMENTER's `actor.linkedinUrl` is a clean `/in/handle`. A POST author's `author.linkedinUrl` carries a rotating `miniProfileUrn` query parameter. The same person can therefore appear under two different URLs depending on which row they came from.",
+          "mitigation": "Both normalizers strip the query string, and identity keys on the opaque `ACoAAA\u2026` member id, which is stable across both shapes.",
+          "evidence_ref": "run 6YHiwmXEcP933uqst"
+        },
+        {
+          "id": "post_search_actor_author_flag_marks_the_op",
+          "summary": "`actor.author` is a boolean marking whether the commenter is the post's own author replying in their thread.",
+          "mitigation": "Carried as `is_post_author`. An author replying to their own post is not third-party engagement and should not be counted as one.",
+          "evidence_ref": "run 6YHiwmXEcP933uqst"
+        },
+        {
+          "id": "post_search_comments_billed_per_item",
+          "summary": "Comments are billed at the SAME price as posts. maxPosts 50 with maxComments 10 is up to 550 billable items, not 50.",
+          "mitigation": "The compiler caps posts and comments separately and states the multiplied worst case in the cost estimate.",
+          "evidence_ref": "pricing events, 2026-08-22"
+        },
+        {
+          "id": "post_search_author_headline_is_not_employment",
+          "summary": "`authorKeywords` matches the author's self-written headline. A headline saying CEO is a claim by that person, not verified employment.",
+          "mitigation": "A person-subject claim from this Actor is corroboration. Employer verification remains the existing people-stage contract.",
+          "evidence_ref": "input schema field description, 2026-08-22"
+        },
+        {
+          "id": "post_search_relevance_is_not_topicality",
+          "summary": "LinkedIn full-text relevance decides what matches, not a topic model. A post can match a query without being about the topic.",
+          "mitigation": "The topic qualifier is re-checked against post text during qualification; a search match alone never satisfies a topic requirement.",
+          "evidence_ref": "vendor README, 2026-08-22"
+        }
+      ],
+      "requires_enrichment_before_qualification": true
+    },
+    "social_readiness": {
+      "actor": "apify_linkedin_post_search",
+      "capability": "social_discovery",
+      "readiness": "NEEDS_EXTRACTION_WORK",
+      "executable": false,
+      "via": null,
+      "reason": "social_discovery is not executable by the engine (unsupported)"
+    },
+    "proposed_a7_catalog": {
+      "status": "PROPOSED \u2014 offline rehearsal only. Not authorized for purchase; live execution stays blocked.",
+      "live_execution": "blocked",
+      "live_blockers": [
+        "details.maximum_microusd: the HarvestAPI LinkedIn company-details price (per company, per start) is not observed. No figure is invented; authorize_discovery_smoke rejects a template without a numeric maximum.",
+        "details: Apify's provider-side cap (maxTotalChargeUsd, pinned by the gate to the template maximum) is not verified for apify:harvestapi~linkedin-company on the test account.",
+        "details: the test account's permission to run apify:harvestapi~linkedin-company (and its pricing tier) is not verified.",
+        "every template: source and observed_at must be replaced with observations no older than 24 h before authorization (Phase 5).",
+        "the company-details purchase is the mission's final run: its receipt is deferred to reconciliation (five reads: 3 + 2), and no later smoke can be authorized until it is reconciled."
+      ],
+      "based_on": "docs/launch/discovery-smoke-runbook.md (PR #93), 'The catalog' \u2014 jobs, reads and luna are unchanged except that reads now cover both actors.",
+      "approved_quotes": {
+        "jobs": {
+          "allowed_kinds": [
+            "provider"
+          ],
+          "allowed_actors": [
+            "apify:harvestapi~linkedin-job-search"
+          ],
+          "maximum_microusd": 5000,
+          "discovery_page": true,
+          "source": "<Apify actor pricing: job $0.001, start $0.001, tier <tier>>",
+          "liability_bound_ref": "maxTotalChargeUsd=0.005 (gate-pinned)",
+          "observed_at": "<ISO time>",
+          "request_limits": {
+            "max_request_bytes": 4096,
+            "pin_query": {
+              "timeout": "120",
+              "memory": "256"
+            },
+            "max_fields": {
+              "maxItems": 3
+            },
+            "max_array_items": {
+              "jobTitles": 1,
+              "locations": 1,
+              "geoIds": 0
+            }
+          }
+        },
+        "details": {
+          "allowed_kinds": [
+            "provider"
+          ],
+          "allowed_actors": [
+            "apify:harvestapi~linkedin-company"
+          ],
+          "maximum_microusd": null,
+          "source": null,
+          "liability_bound_ref": "maxTotalChargeUsd = the maximum once observed (gate-pinned)",
+          "observed_at": null,
+          "request_limits": {
+            "max_request_bytes": 1024,
+            "pin_query": {
+              "timeout": "120",
+              "memory": "256"
+            },
+            "max_array_items": {
+              "companies": 1,
+              "searches": 0
+            }
+          }
+        },
+        "reads": {
+          "allowed_kinds": [
+            "poll"
+          ],
+          "allowed_actors": [
+            "apify:harvestapi~linkedin-job-search",
+            "apify:harvestapi~linkedin-company"
+          ],
+          "maximum_microusd": 0,
+          "source": "<Apify usage page: API reads not charged for these actors>",
+          "liability_bound_ref": "reads are not actor events",
+          "observed_at": "<ISO time>",
+          "request_limits": {
+            "max_reads_per_actor": {
+              "apify:harvestapi~linkedin-job-search": 3,
+              "apify:harvestapi~linkedin-company": 2
+            }
+          }
+        },
+        "luna": {
+          "allowed_kinds": [
+            "model"
+          ],
+          "allowed_actors": [
+            "openai:gpt-5.6-luna"
+          ],
+          "maximum_microusd": 12480,
+          "source": "<OpenAI project pricing, Standard: $<in>/1M input, $<cache write>/1M cache writes, $<out>/1M output>",
+          "liability_bound_ref": "B=30720 bytes (tokens <= bytes) priced at the cache-write rate, the dearest input rate ($0.25/1M listed 2026-10-17); O=4000 at $1.20/1M. 0.25*30720 + 1.2*4000 = 12480; four attempts 49920 <= 50000",
+          "observed_at": "<ISO time>",
+          "request_limits": {
+            "max_request_bytes": 30720,
+            "max_output_tokens": 4000
+          }
+        }
+      },
+      "request_bounds_basis": {
+        "details": "The actor bills per company looked up, and both `companies[]` (URLs) and `searches[]` (names to search) are looked up (experiments/hiring-actor-benchmark-2026-08-01/schemas/harvestapi__linkedin-company.input.json; compileHarvestCompanyDetailsInput bills companies + searches). The engine sends one LinkedIn URL in `companies` and never `searches`, so `searches` is refused outright and the purchase is one company.",
+        "jobs": "Billed rows are maxItems per job title per location: the actor runs once per `jobTitles` entry, and maxItems applies per title and location input (harvestapi__linkedin-job-search.input.json). `jobTitles`, `locations` and `geoIds` (the other location filter) are therefore bounded, and `maxItems` is mandatory. `company`, `industryIds`, `workplaceType`, `employmentType`, `experienceLevel`, `salary`, `postedLimit`, `sortBy`, `under10Applicants` and `easyApply` are filters that narrow each search, and `page` only chooses where a search starts, so none of them multiplies the rows. They are left unbounded, and the gate-pinned maxTotalChargeUsd caps the run either way."
+      },
+      "actor_limits": {
+        "apify:harvestapi~linkedin-job-search": 1,
+        "apify:harvestapi~linkedin-company": 1
+      },
+      "read_plan": {
+        "cap": 5,
+        "apify:harvestapi~linkedin-job-search": [
+          "status (long poll)",
+          "settled receipt",
+          "dataset"
+        ],
+        "apify:harvestapi~linkedin-company": [
+          "status (long poll)",
+          "dataset"
+        ],
+        "enforced_by": "reads.request_limits.max_reads_per_actor (admit_discovery_smoke refuses `read_allocation`; the worker's read plan uses each actor's share), inside the shared cap of 5",
+        "slow_job_search": "a job search needing two status reads keeps its dataset read and defers its receipt; company details keeps its two",
+        "deferred": "any receipt the allocation leaves no read for (normally the company details'): committed maximum held, listed by scripts/test-project/smoke-reconciliation.sql, closed only by reconcile_discovery_smoke_operation"
+      },
+      "orchestration": "LEAD_V2_SMOKE_ORCHESTRATION=minimal (model attempts: execution plan, batch evaluation, mission evaluation, opportunity reasoning)"
+    },
+    "live_authorized": false
+  }
+}

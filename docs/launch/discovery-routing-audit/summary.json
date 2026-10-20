@@ -1,0 +1,155 @@
+{
+  "base": {
+    "tested_commit": "e0a5daefa6b9ddfdca43aaa0fdcceffe9f7d7f61",
+    "runtime_statuses": {
+      "NOT SUPPORTED": 10,
+      "FAIL": 12,
+      "PASS": 13,
+      "BLOCKED": 3,
+      "NOT TESTED": 2
+    },
+    "characterization_tests": 85,
+    "semantic_failures": [
+      {
+        "tested_commit": "e0a5daefa6b9ddfdca43aaa0fdcceffe9f7d7f61",
+        "id": "C01",
+        "name": "mandatory founder discussion",
+        "actual": "target",
+        "expected": "hard",
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "e0a5daefa6b9ddfdca43aaa0fdcceffe9f7d7f61",
+        "id": "C04",
+        "name": "separate 7-day hiring / 30-day social windows",
+        "actual": [
+          7,
+          90
+        ],
+        "expected": [
+          7,
+          30
+        ],
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "e0a5daefa6b9ddfdca43aaa0fdcceffe9f7d7f61",
+        "id": "H04",
+        "name": "sales-team growth is not geographic expansion",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "e0a5daefa6b9ddfdca43aaa0fdcceffe9f7d7f61",
+        "id": "C02",
+        "name": "cross-signal OR represented as alternatives",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      }
+    ]
+  },
+  "integration": {
+    "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+    "runtime_statuses": {
+      "NOT SUPPORTED": 10,
+      "FAIL": 12,
+      "PASS": 13,
+      "BLOCKED": 3,
+      "NOT TESTED": 2
+    },
+    "characterization_tests": 85,
+    "semantic_failures": [
+      {
+        "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+        "id": "C01",
+        "name": "mandatory founder discussion",
+        "actual": "target",
+        "expected": "hard",
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+        "id": "C04",
+        "name": "separate 7-day hiring / 30-day social windows",
+        "actual": [
+          7,
+          90
+        ],
+        "expected": [
+          7,
+          30
+        ],
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+        "id": "H04",
+        "name": "sales-team growth is not geographic expansion",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+        "id": "C02",
+        "name": "cross-signal OR represented as alternatives",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      }
+    ]
+  },
+  "pr113": {
+    "tested_commit": "623db1b43caefe58a905445c816b294ffbc88555",
+    "runtime_statuses": {
+      "NOT SUPPORTED": 10,
+      "FAIL": 7,
+      "PASS": 18,
+      "BLOCKED": 3,
+      "NOT TESTED": 2
+    },
+    "characterization_tests": 85,
+    "semantic_failures": [
+      {
+        "tested_commit": "623db1b43caefe58a905445c816b294ffbc88555",
+        "id": "C01",
+        "name": "mandatory founder discussion",
+        "actual": "target",
+        "expected": "hard",
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "623db1b43caefe58a905445c816b294ffbc88555",
+        "id": "C04",
+        "name": "separate 7-day hiring / 30-day social windows",
+        "actual": [
+          7,
+          90
+        ],
+        "expected": [
+          7,
+          30
+        ],
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "623db1b43caefe58a905445c816b294ffbc88555",
+        "id": "H04",
+        "name": "sales-team growth is not geographic expansion",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "623db1b43caefe58a905445c816b294ffbc88555",
+        "id": "C02",
+        "name": "cross-signal OR represented as alternatives",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      }
+    ]
+  }
+}
