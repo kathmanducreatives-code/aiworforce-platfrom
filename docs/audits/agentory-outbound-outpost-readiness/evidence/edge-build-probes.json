@@ -1,0 +1,119 @@
+{
+  "observed_at": "2026-10-20T09:46:58.757026+00:00",
+  "method": "unauthenticated OPTIONS via curl with default TLS verification; no customer data",
+  "initial_probe_limitation": "Python system CA trust failed; curl verified TLS successfully",
+  "results": [
+    {
+      "function": "pilot-chat",
+      "status_line": "HTTP/2 200 ",
+      "build": "86ac1b922f8519f75760642bb09cceef096168eb@2026-10-13T01:47:10Z",
+      "date": "Tue, 20 Oct 2026 09:46:59 GMT",
+      "request_id": "01a158b4-fd7e-7fe8-99d3-f2cfab74466e",
+      "error": null
+    },
+    {
+      "function": "orchestrate",
+      "status_line": "HTTP/2 200 ",
+      "build": "b51ad3dddf2604f9d218d7c495e17e22d20932db@2026-10-11T06:46:43Z",
+      "date": "Tue, 20 Oct 2026 09:46:59 GMT",
+      "request_id": "01a158b4-fd7e-7b2f-9693-aa879d54bdc9",
+      "error": null
+    },
+    {
+      "function": "run-agent",
+      "status_line": "HTTP/2 200 ",
+      "build": "e4da19e8828898f05414da953a13acb74c74e6a4@2026-10-13T08:59:32Z",
+      "date": "Tue, 20 Oct 2026 09:46:59 GMT",
+      "request_id": "01a158b4-fd84-76a0-9ced-15daa87e112e",
+      "error": null
+    },
+    {
+      "function": "enqueue-lead-mission",
+      "status_line": "HTTP/2 200 ",
+      "build": "b51ad3dddf2604f9d218d7c495e17e22d20932db@2026-10-11T06:46:43Z",
+      "date": "Tue, 20 Oct 2026 09:46:59 GMT",
+      "request_id": "01a158b4-fd89-709b-8c7b-54509809f109",
+      "error": null
+    },
+    {
+      "function": "approve-and-continue",
+      "status_line": "HTTP/2 200 ",
+      "build": "a08ac0e4edea6f3aa54314db4efe0073e371b82f@2026-09-29T08:02:34Z",
+      "date": "Tue, 20 Oct 2026 09:46:58 GMT",
+      "request_id": "01a158b4-fd83-763d-a694-8d5f48d431be",
+      "error": null
+    },
+    {
+      "function": "send-scheduled-emails",
+      "status_line": "HTTP/2 200 ",
+      "build": "a08ac0e4edea6f3aa54314db4efe0073e371b82f@2026-09-29T08:02:34Z",
+      "date": "Tue, 20 Oct 2026 09:46:58 GMT",
+      "request_id": "01a158b4-fd81-7c33-8e40-6c47a5033aec",
+      "error": null
+    },
+    {
+      "function": "continue-workflow",
+      "status_line": "HTTP/2 200 ",
+      "build": "b51ad3dddf2604f9d218d7c495e17e22d20932db@2026-10-11T06:46:43Z",
+      "date": "Tue, 20 Oct 2026 09:46:58 GMT",
+      "request_id": "01a158b4-fd7f-725f-8a19-276a13801ac0",
+      "error": null
+    },
+    {
+      "function": "resume-stalled-leads",
+      "status_line": "HTTP/2 200 ",
+      "build": "b51ad3dddf2604f9d218d7c495e17e22d20932db@2026-10-11T06:46:43Z",
+      "date": "Tue, 20 Oct 2026 09:46:59 GMT",
+      "request_id": "01a158b4-fe33-748f-9d7f-6ad18cdae697",
+      "error": null
+    },
+    {
+      "function": "ops-health",
+      "status_line": "HTTP/2 405 ",
+      "build": "a08ac0e4edea6f3aa54314db4efe0073e371b82f@2026-09-29T13:09:15Z",
+      "date": "Tue, 20 Oct 2026 09:46:59 GMT",
+      "request_id": "01a158b4-fe42-7321-8f32-cd786f156735",
+      "error": null
+    },
+    {
+      "function": "setup-company-brain",
+      "status_line": "HTTP/2 200 ",
+      "build": null,
+      "date": "Tue, 20 Oct 2026 09:46:59 GMT",
+      "request_id": "01a158b4-fe61-783a-a60e-0b2a1a951b38",
+      "error": null
+    },
+    {
+      "function": "generate-company-brain-draft",
+      "status_line": "HTTP/2 200 ",
+      "build": null,
+      "date": "Tue, 20 Oct 2026 09:46:59 GMT",
+      "request_id": "01a158b4-fe84-763b-86c4-403c9b96bf3f",
+      "error": null
+    },
+    {
+      "function": "google-calendar-auth",
+      "status_line": "HTTP/2 200 ",
+      "build": null,
+      "date": "Tue, 20 Oct 2026 09:46:59 GMT",
+      "request_id": "01a158b4-fe87-76c8-ba80-afef43f4251d",
+      "error": null
+    },
+    {
+      "function": "google-calendar-events",
+      "status_line": "HTTP/2 200 ",
+      "build": null,
+      "date": "Tue, 20 Oct 2026 09:46:59 GMT",
+      "request_id": "01a158b4-fea6-75a5-9d5e-cac842c097e2",
+      "error": null
+    },
+    {
+      "function": "email-tracking",
+      "status_line": "HTTP/2 400 ",
+      "build": null,
+      "date": "Tue, 20 Oct 2026 09:46:59 GMT",
+      "request_id": "01a158b4-fed0-7a27-8f3c-56c97fabb0b2",
+      "error": null
+    }
+  ]
+}

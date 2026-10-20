@@ -1,0 +1,34 @@
+{
+  "observed_at": "2026-10-20T09:54:24.075335+00:00",
+  "integration_sha": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+  "latest_ci": {
+    "run": 39400841523,
+    "conclusion": "success",
+    "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/actions/runs/39400841523"
+  },
+  "latest_scheduled_health_reviewed": {
+    "run": 39374636467,
+    "created_at": "2026-10-20T05:23:27Z",
+    "conclusion": "failure",
+    "critical_log_lines": [
+      "2026-10-20T05:23:38.4529140Z CRITICAL ops_read_failed: the health snapshot could not be read",
+      "2026-10-20T05:23:38.4542955Z CRITICAL worker_unhealthy: worker /health: HTTP 404, status error"
+    ],
+    "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/actions/runs/39374636467"
+  },
+  "latest_release_workflow_reviewed": {
+    "run": 38372262536,
+    "conclusion": "success",
+    "released_function": "run-agent",
+    "released_sha": "e4da19e8828898f05414da953a13acb74c74e6a4",
+    "timestamp": "2026-10-13T08:59:32Z",
+    "worker_check": "WORKER_HEALTH_URL not set: the worker is not checked",
+    "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/actions/runs/38372262536"
+  },
+  "limitations": [
+    "GitHub deploy success is not mission execution proof",
+    "No authenticated hosted queries or customer data read",
+    "Current Netlify version, worker SHA and schema state not established",
+    "OPTIONS proves response/build stamp only, never successful POST work"
+  ]
+}
