@@ -4,11 +4,12 @@
 // convention as the A7 and audit lanes). Remove an id from KNOWN_GAPS when its
 // fix lands. Every gap has a positive control that must keep passing.
 //
-// The runtime and compiler contracts for founder-social necessity (C01, L08),
-// cross-signal OR (C02), per-clause windows (C04), sales-team growth (H04) and
-// recruiting-agency discovery (H05) live in Codex's routing audit
-// (`independentRoutingAudit.test.ts`, commit aca94e6b), which runs unchanged
-// against this stack via ROUTING_AUDIT_SOURCE_ROOT — they are not duplicated.
+// The compiler contracts for founder-social necessity (C01, L08), cross-signal
+// OR (C02), per-clause windows (C04) and sales-team growth (H04) are taken from
+// Codex's routing audit (`independentRoutingAudit.test.ts`, aca94e6b) — the
+// same requests and proposal shape — so this stack's own CI holds them; the
+// full runtime scenarios stay in that harness, which runs unchanged against
+// this stack via ROUTING_AUDIT_SOURCE_ROOT.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 import { deriveMissionCriteria, type MissionCriterion } from "../../../supabase/functions/_shared/missionCriteria.ts";
@@ -18,7 +19,10 @@ import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/e
 import type { EvidenceItem } from "../../../supabase/functions/_shared/candidateObservation.ts";
 
 /** Ids whose fix has not landed. Each runs only under Q3_ASSERT_GAPS=1. */
-const KNOWN_GAPS = new Set(["S02-scope", "G08-unsupported", "G08b-exact-size", "PHANTOM-startup"]);
+const KNOWN_GAPS = new Set([
+  "S02-scope", "G08-unsupported", "G08b-exact-size", "PHANTOM-startup",
+  "C01-necessity", "L08-necessity", "C02-or", "C04-windows", "H04-growth",
+]);
 const gap = (id: string) => ({ ignore: KNOWN_GAPS.has(id) && Deno.env.get("Q3_ASSERT_GAPS") !== "1" });
 
 /** The reviewed A7 proposal (tests/db-contract/lib/discoveryScenario.ts), inlined: that module needs a database. */
@@ -133,4 +137,77 @@ Deno.test("Q3 H05: discovery admits an agency employer only when the customer as
   assertEquals(discoveryAgencyRejection(null, notAsked), null);
   // A posting the agency advertises for a client is still never its own hiring
   // proof: `jobEmployerIdentityConflict` → "agency_client_posting" (H06).
+});
+
+
+// ════════════════════════ clause necessity, OR, windows, growth (Codex audit) ══
+
+/** The routing audit's proposal shape (independentRoutingAudit.test.ts `proposal`). */
+const routingProposal = (signal: string[], capabilities?: string[], strategies?: string[]) => ({
+  requested_opportunity_count: 1, company_types: ["B2B software"], geographies: [], employee_range: { min: null, max: null },
+  output_intent: "qualified_companies", preferred_signals: signal, required_signal_terms: signal,
+  required_capabilities: capabilities ?? ["general_company_discovery", "embedded_hiring_evidence", "company_semantic_evaluation"],
+  strategies: strategies ?? ["hiring"], confidence: 0.95,
+});
+const FOUNDER_CAPS = ["general_company_discovery", "embedded_hiring_evidence", "offer_founder_unlock"];
+const compiledMission = (query: string, proposal: Record<string, unknown>) =>
+  compileLeadMission({ originalUserQuery: query, proposal: proposal as never }).final_mission;
+const criteriaOf = (query: string, proposal: Record<string, unknown>) => deriveMissionCriteria(compiledMission(query, proposal));
+const dim = (cs: MissionCriterion[], d: string) => cs.find((c) => c.dimension === d);
+
+Deno.test("Q3 C01-necessity: 'whose founder MUST have discussed…' compiles the social clause as mandatory", gap("C01-necessity"), () => {
+  const q = "Find 1 B2B software company that must be hiring Account Executives AND whose founder must have discussed outbound problems on LinkedIn.";
+  const cs = criteriaOf(q, routingProposal(["hiring Account Executives", "founder comments about outbound problems"], FOUNDER_CAPS, ["hiring", "multi_signal"]));
+  assertEquals(dim(cs, "social_activity")?.kind, "hard");
+});
+
+Deno.test("Q3 L08-necessity: the mandatory founder clause first, hiring second — still mandatory", gap("L08-necessity"), () => {
+  const q = "Find 1 B2B software company whose founder must have commented about outbound problems, and which must be hiring Account Executives.";
+  const cs = criteriaOf(q, routingProposal(["founder comments on outbound problems", "hiring Account Executives"], FOUNDER_CAPS, ["hiring", "multi_signal"]));
+  assertEquals(dim(cs, "social_activity")?.kind, "hard");
+});
+
+Deno.test("Q3 necessity control: an 'ideally' founder clause stays a preference", () => {
+  const q = "Find 1 B2B software company that should ideally be hiring Account Executives, and whose founder has ideally discussed outbound problems on LinkedIn.";
+  const cs = criteriaOf(q, routingProposal(["hiring Account Executives", "founder comments about outbound problems"], FOUNDER_CAPS, ["hiring", "multi_signal"]));
+  assertEquals(dim(cs, "social_activity")?.kind, "target");
+});
+
+Deno.test("Q3 C02-or: 'hiring … OR having raised funding' is ONE requirement either signal satisfies", gap("C02-or"), () => {
+  const q = "Find 1 B2B software company hiring Account Executives OR having raised funding in the last 90 days.";
+  const cs = criteriaOf(q, routingProposal(["hiring Account Executives", "recent funding"], undefined, ["hiring", "funding"]));
+  assert(cs.filter((c) => ["hiring", "funding"].includes(c.dimension)).some((c) => (c.any_of?.length ?? 0) > 1),
+    "the cross-signal alternative survives compilation");
+});
+
+Deno.test("Q3 OR control: 'hiring … AND raised funding' stays two mandatory requirements", () => {
+  const q = "Find 1 B2B software company hiring Account Executives AND having raised funding in the last 90 days.";
+  const cs = criteriaOf(q, routingProposal(["hiring Account Executives", "recent funding"], undefined, ["hiring", "funding"]));
+  assertEquals([dim(cs, "hiring")?.kind, dim(cs, "funding")?.kind], ["hard", "hard"]);
+  assertEquals([dim(cs, "hiring")?.any_of, dim(cs, "funding")?.any_of], [undefined, undefined]);
+});
+
+Deno.test("Q3 C04-windows: each clause keeps its own window — 7 days hiring, 30 days founder comments", gap("C04-windows"), () => {
+  const q = "Find 1 B2B software company hiring Account Executives in the last 7 days AND whose founder must have commented on outbound in the last 30 days.";
+  const cs = criteriaOf(q, routingProposal(["hiring Account Executives", "founder comments about outbound"], FOUNDER_CAPS, ["hiring", "multi_signal"]));
+  assertEquals([dim(cs, "hiring")?.time_window?.days, dim(cs, "social_activity")?.time_window?.days], [7, 30]);
+});
+
+Deno.test("Q3 windows control: 7-day hiring and 90-day funding keep their own windows", () => {
+  const q = "Find 1 B2B software company hiring Account Executives in the last 7 days AND that raised funding in the last 90 days.";
+  const cs = criteriaOf(q, routingProposal(["hiring Account Executives", "recent funding"], undefined, ["hiring", "funding"]));
+  assertEquals([dim(cs, "hiring")?.time_window?.days, dim(cs, "funding")?.time_window?.days], [7, 90]);
+});
+
+Deno.test("Q3 H04-growth: 'rapidly expanding its sales team' is headcount growth, not expansion", gap("H04-growth"), () => {
+  const q = "Find 1 B2B software company that must be rapidly expanding its sales team within the last 30 days.";
+  const m = compiledMission(q, routingProposal(["rapidly expanding sales team"]));
+  assert(m.required_signals.some((x) => x.type === "headcount_change" || x.type === "headcount_growth"), JSON.stringify(m.required_signals.map((x) => x.type)));
+  assert(!m.required_signals.some((x) => x.type === "expansion"), "not geographic expansion");
+});
+
+Deno.test("Q3 growth control: 'expanding into Germany' stays expansion", () => {
+  const q = "Find 1 B2B software company expanding into Germany within the last 30 days.";
+  const m = compiledMission(q, routingProposal(["expanding into Germany"]));
+  assert(m.required_signals.some((x) => x.type === "expansion"));
 });
