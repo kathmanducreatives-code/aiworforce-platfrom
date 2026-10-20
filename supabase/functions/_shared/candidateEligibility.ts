@@ -43,7 +43,7 @@
 // GPT is not consulted and cannot appeal. Pure.
 
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
-import type { EvidenceDimension, EvidenceItem } from "./candidateObservation.ts";
+import { eventWithinWindow, type EvidenceDimension, type EvidenceItem } from "./candidateObservation.ts";
 import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts";
 import type { CriterionVerdict } from "./missionEvaluation.ts";
 import type { QualificationHold } from "./qualificationHold.ts";
@@ -110,8 +110,10 @@ export interface CriterionCheck {
   /** The item the answer rests on. Null when nothing answered it. */
   provenance: CheckProvenance | null;
   /**
-   * Q1 — set when NO purchase can close this check: a hold another authority
-   * placed on the company (`hold:<code>`). The gap router reports it blocked,
+   * Set when NO purchase can close this check: a hold another authority placed
+   * on the company (`hold:<code>`, Q1), equally authoritative sources that
+   * disagree (`conflict:<dimension>`, Q2), or a requirement no route can
+   * establish (`unproven:<claim>`, Q2). The gap router reports it blocked,
    * so a candidate carrying one is never bought more evidence.
    */
   blocked?: string;
@@ -151,10 +153,55 @@ function currentItem(graph: CompanyEvidenceGraph, dim: EvidenceDimension): Evide
 }
 
 /**
+ * Q2 — WHEN EQUALLY AUTHORITATIVE SOURCES DISAGREE, NOTHING IS DECIDED.
+ *
+ * The graph keeps every fresh item that disagrees with the one it picked
+ * (`conflicting`), but a check used to read `current` only — and `current` is
+ * chosen by method, status, confidence, recency and finally evidence ID, so
+ * which of two equally authoritative answers won could depend on arrival order
+ * (audit G01: two company records, US vs Canadian HQ; G02: 11–50 vs 201–500).
+ *
+ * The rule is generic: a fresh, PROVEN item of the same method as `current`
+ * is re-checked against this criterion; when any would give a different
+ * result, the check is `unknown` and BLOCKED (buying the same kind of source
+ * again cannot settle it). Disagreement that does not change THIS criterion's
+ * answer is not material and decides nothing. A weaker item (plausible, or a
+ * lower method) never overturns a stronger one — that ordering is the graph's.
+ * HQ and office presence are compared within the criterion's own scope.
+ */
+const CONFLICT_DIMENSIONS: ReadonlySet<CriterionDimension> = new Set<CriterionDimension>(["geography", "company_size"]);
+
+export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph): CriterionCheck {
+  const check = checkAgainst(c, graph);
+  const dim = CRITERION_EVIDENCE_DIMENSION[c.dimension];
+  if (!dim || !CONFLICT_DIMENSIONS.has(c.dimension) || check.result === "unknown") return check;
+  const claim = graph.claims.find((x) => x.dimension === dim);
+  const current = claim?.current;
+  if (!claim || !current) return check;
+  for (const other of claim.conflicting) {
+    if (other.status !== "proven" || other.method !== current.method) continue;
+    const alone: CompanyEvidenceGraph = {
+      ...graph,
+      claims: graph.claims.map((x) => x.dimension === dim ? { ...x, current: other, supporting: [], conflicting: [] } : x),
+    };
+    const theirs = checkAgainst(c, alone);
+    if (theirs.result !== check.result) {
+      return {
+        ...check, result: "unknown", evidence_ids: [current.evidence_id, other.evidence_id],
+        reason: `equally authoritative sources disagree: ${current.source.actor} says ${check.result} (${check.reason}), ` +
+          `${other.source.actor} says ${theirs.result} (${theirs.reason})`,
+        blocked: `conflict:${dim}`,
+      };
+    }
+  }
+  return check;
+}
+
+/**
  * One criterion against the evidence. `unknown` whenever the evidence cannot
  * answer it — never a guess, and never a rejection by absence.
  */
-export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph): CriterionCheck {
+function checkAgainst(c: MissionCriterion, graph: CompanyEvidenceGraph): CriterionCheck {
   const base = { criterion_id: c.id, dimension: c.dimension, kind: c.kind };
   // ── A SELECTION, CHECKED AGAINST WHO THE COMPANY TURNED OUT TO BE ────────
   //
@@ -321,12 +368,48 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
       if (found !== null && wanted.length > 0 && !wanted.some((w) => found.includes(w))) {
         return { ...base, result: "unknown", reason: `an open role was found, but not in ${wanted.join(" / ")}`, evidence_ids: ids, provenance };
       }
+      // ── Q2 — "THE FIRST HIRE IN THE FUNCTION" IS PART OF THE REQUIREMENT ───
+      //
+      // The compiler keeps the user's own first-hire words on the hiring
+      // qualifier (`first_in_function`); this check used to ignore them, so an
+      // ordinary sales posting satisfied "must be hiring its FIRST sales
+      // representative" (Codex routing audit H03). The engine already records
+      // first-in-function evidence (`team_composition`, from the posting's own
+      // words or a team lookup): supported → pass, contradicted → fail,
+      // otherwise unknown. Unknown is BLOCKED: the open-role verifier would
+      // only re-buy the opening that is already proven.
+      const firstHire = (c.value as { qualifier?: { first_in_function?: unknown } } | null)?.qualifier?.first_in_function;
+      if (firstHire) {
+        const team = currentItem(graph, "team_composition");
+        const said = (team?.value as { first_in_function?: unknown } | null)?.first_in_function;
+        if (team && team.status === "proven" && said === "supported") {
+          return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}, and it is the first hire in the function (${team.source.actor})`,
+            evidence_ids: [...ids, team.evidence_id], provenance };
+        }
+        if (team && (team.status === "disproven" || said === "contradicted")) {
+          return { ...base, result: "fail", reason: `an open role is proven, but it is not the first hire in the function (${team.source.actor})`,
+            evidence_ids: [...ids, team.evidence_id], provenance };
+        }
+        return { ...base, result: "unknown", reason: "an open role is proven, but that it is the first hire in the function is not established",
+          evidence_ids: ids, provenance, blocked: "unproven:first_in_function" };
+      }
       return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}`, evidence_ids: ids, provenance };
     }
     default: {
       // Signal dimensions: presence of a fresh, proven item satisfies them.
       if (!proven) return { ...base, result: "unknown", reason: `${dim} is reported, not proven`, evidence_ids: ids, provenance };
       if (item.value === false) return { ...base, result: "fail", reason: `${dim} is false`, evidence_ids: ids, provenance };
+      // Q2 — THE CUSTOMER'S WINDOW, ON THE EVENT'S OWN DATE (audit G14). The
+      // graph's validity (`EVIDENCE_VALIDITY_DAYS`, 180 days for expansion) says
+      // how long a fact stays usable in general; a criterion that asked for
+      // "in the last 7 days" is judged against the event's date, and an item
+      // that does not carry one cannot pass it. Hiring and funding keep their
+      // own dated rules above.
+      if (c.time_window?.days) {
+        const w = eventWithinWindow(item.occurred_at, c.time_window.days);
+        if (!w.inside) return { ...base, result: "unknown", reason: `${dim} is proven, but ${w.reason}`, evidence_ids: ids, provenance };
+        return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}, ${w.reason}`, evidence_ids: ids, provenance };
+      }
       return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}`, evidence_ids: ids, provenance };
     }
   }

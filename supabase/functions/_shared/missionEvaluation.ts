@@ -53,6 +53,7 @@
 
 import type { QualificationContext, BrainAuthority } from "./missionQualificationContext.ts";
 import type { MissionCriterion } from "./missionCriteria.ts";
+import { eventWithinWindow } from "./candidateObservation.ts";
 import {
   findEvidence, hardFactsForPrompt, registryForPrompt,
   type EvidenceItem, type EvidenceRegistry,
@@ -1163,7 +1164,14 @@ export function parseMissionEvaluationStrict(
         !containsExcerpt(item.source_text, excerpt) || item.verification_state === "invalid" ||
         item.verification_state === "conflicting" || item.freshness === "stale" ||
         (item.evidence_type === "company_description" && item.verification_state !== "verified") ||
-        (c.dimension === "hiring" && !["job_posting", "yc_job"].includes(item.evidence_type))) {
+        (c.dimension === "hiring" && !["job_posting", "yc_job"].includes(item.evidence_type)) ||
+        // Q2 — A WINDOWED REQUIREMENT NEEDS A DATED EVENT INSIDE THE WINDOW
+        // (audit G05–G07, G14). A fetch date is not an event date, so a page
+        // with no `occurred_at` cannot prove "in the last 30 days". Hiring and
+        // funding keep their own dated rules (the open-role verifier's window,
+        // `decideRecentlyFunded`).
+        (c.time_window?.days && c.dimension !== "hiring" && c.dimension !== "funding" &&
+          !eventWithinWindow(item.occurred_at, c.time_window.days).inside)) {
         invalid = true;
       } else evidence.push({ evidence_id: id, excerpt });
     }

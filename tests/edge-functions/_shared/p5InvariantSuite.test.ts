@@ -133,12 +133,17 @@ Deno.test("INV a quote that argues against the label sends the business model to
 
 const cand = (key: string, items: EvidenceItem[], over: Partial<MissionCandidate> = {}): MissionCandidate => ({
   company_key: key, name: key, domain: null, linkedin_url: null, found_by: [], screened_out: null,
-  identity_resolved: true, investigated: true, graph: buildCompanyEvidenceGraph(key, items, { now: NOW }), ...over,
+  // The union keys every item to the company it assigns them to (Q2: an item
+  // keyed to another company is not this company's evidence).
+  identity_resolved: true, investigated: true,
+  graph: buildCompanyEvidenceGraph(key, items.map((e) => ({ ...e, company_key: key })), { now: NOW }), ...over,
 });
 
 Deno.test("INV the canonical Workbench count controls continuation — no stale legacy counter", () => {
   const anchor = "hiring";
-  const surfaced = cand("a", [US(), ev("company_size_band", band(11, 50)), bm("b2b saas", "accepted"), ev("hiring", true)]);
+  const surfaced = cand("a", [US(), ev("company_size_band", band(11, 50)), bm("b2b saas", "accepted"), ev("hiring", true),
+    // "…its FIRST growth marketer" (Q2, H03): the posting's own first-hire words.
+    ev("team_composition", { first_in_function: "supported", source: "job_posting", quote: "you will be our first growth marketer" })]);
   const pending = cand("b", [US(), ev("company_size_band", band(11, 50)), bm("b2b saas", "review")]);
   const counts = decisionCounts({ criteria: CRITERIA, candidates: [surfaced, pending], anchor });
   const summary = decisionSummary(counts);
@@ -228,7 +233,18 @@ Deno.test("INV an unavailable provider stays unavailable until readiness or an o
 // ══════════════════════════════════════════════ THE REAL ENGINE, 3 SLICES ══
 
 const PROBE = JSON.parse(Deno.readTextFileSync(new URL("../../fixtures/lead-v2/p3-job-discovery-probe.json", import.meta.url)));
-const ROWS = PROBE.probes["harvestapi~linkedin-job-search"].items as Array<Record<string, unknown>>;
+/**
+ * SYNTHETIC FIRST-HIRE WORDS. The mission asks for a company hiring its FIRST
+ * growth marketer, and since Q2 (Codex routing audit H03) an ordinary opening
+ * does not prove that. The real postings never say it, so Audicus — the company
+ * these tests surface — is given the sentence the engine's own first-hire
+ * detector reads (`firstHireLanguage`). Every other row is the fixture's own.
+ */
+const FIRST_HIRE_POSTING: Record<string, string> = { "Audicus": " You will be our first growth marketer." };
+const ROWS = (PROBE.probes["harvestapi~linkedin-job-search"].items as Array<Record<string, unknown>>).map((r) => {
+  const add = FIRST_HIRE_POSTING[String((r.company as { name?: string } | undefined)?.name)];
+  return add ? { ...r, descriptionText: `${String(r.descriptionText ?? "")}${add}` } : r;
+});
 /**
  * SYNTHETIC SELF-DESCRIPTIONS. The fixture's real descriptions do not state a
  * business model (Audicus is a hearing-aid company; its real first words are

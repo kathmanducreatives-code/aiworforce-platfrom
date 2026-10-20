@@ -85,6 +85,17 @@ const seedProven = () => ev("company_stage", {
   claim: "funding_stage", required_stage: "seed", verdict: "pass", latest_verified_stage: "seed",
   reasons: ["required_stage_verified_and_latest"], explanation: "", rounds_cited: [],
 }, { method: "deterministic_derivation" });
+/**
+ * The hiring this mission asks for, proven: an open role AND that it is the
+ * first hire in its function — the posting's own words, as the engine records
+ * them (`team_composition`). The mission says "its FIRST growth marketer", and
+ * since Q2 (Codex routing audit H03) an ordinary opening alone does not prove
+ * that (see "Q2 H03" in qualificationEvidenceIntegrity.test.ts).
+ */
+const firstHireProven = () => [
+  ev("hiring", true),
+  ev("team_composition", { first_in_function: "supported", source: "job_posting", quote: "you will be our first growth marketer" }),
+];
 const graphOf = (items: EvidenceItem[], required: EvidenceDimension[] = []) =>
   buildCompanyEvidenceGraph("c1", items, { now: NOW, required });
 
@@ -105,7 +116,7 @@ Deno.test("SEM-1: a preference that fails never makes a candidate ineligible", (
 
   // Every hard criterion proven; the size PREFERENCE is violated outright
   // (4,000 people against a 1–150 band) and the anchor is proven.
-  const g = graphOf([...hardProven(), ev("company_size_band", { min: 1001, max: 5000, source: "linkedin_declared" }), ev("hiring", true)]);
+  const g = graphOf([...hardProven(), ev("company_size_band", { min: 1001, max: 5000, source: "linkedin_declared" }), ...firstHireProven()]);
   const r = evaluateEligibility(CRITERIA_PREF, g);
   assertEquals(r.eligibility, "eligible", "a preference cannot reject");
   assertEquals(r.disproven, []);
@@ -113,7 +124,7 @@ Deno.test("SEM-1: a preference that fails never makes a candidate ineligible", (
     "the failure is recorded — it just does not reject");
 
   // A DISPROVEN preference changes nothing either.
-  const g2 = graphOf([...hardProven(), ev("company_size_band", { min: 1001, max: 5000, source: "linkedin_declared" }, { status: "disproven" }), ev("hiring", true)]);
+  const g2 = graphOf([...hardProven(), ev("company_size_band", { min: 1001, max: 5000, source: "linkedin_declared" }, { status: "disproven" }), ...firstHireProven()]);
   assertEquals(evaluateEligibility(CRITERIA_PREF, g2).eligibility, "eligible");
   // Only hard dimensions appear in the hard checks. `company_stage` is absent
   // because "Company kind: startup" is `unprovable_today` (P5.2) — disclosed on
@@ -178,7 +189,7 @@ Deno.test("a hard anchor gates the label: unproven ⇒ no label, and an empty ta
   assertEquals(e.eligibility, "pending", "the hard anchor is unknown");
   assertEquals(computeCeiling({ criteria: hardHiring, graph: unproven, eligibility: e, anchor: "hiring" }).ceiling, null);
 
-  const proven = graphOf([...hardProven(), ev("hiring", true)]);
+  const proven = graphOf([...hardProven(), ...firstHireProven()]);
   const e2 = evaluateEligibility(hardHiring, proven);
   const c2 = computeCeiling({ criteria: hardHiring, graph: proven, eligibility: e2, anchor: "hiring" });
   assertEquals([e2.eligibility, c2.ceiling, c2.targets_total], ["eligible", "strong_opportunity", 0],
@@ -216,17 +227,17 @@ Deno.test("WORTH-1: hard proven, anchor missing, funding proven ⇒ Worth Consid
 });
 
 Deno.test("the ceiling rises with the evidence, and pending or ineligible have no label at all", () => {
-  const hiring = ev("hiring", true);
+  const hiring = firstHireProven();
   const ceilingFor = (criteria: MissionCriterion[], items: EvidenceItem[]) => {
     const g = graphOf(items, ["hiring"]);
     return computeCeiling({ criteria, graph: g, eligibility: evaluateEligibility(criteria, g), anchor: "hiring" });
   };
   // Anchor proven and every usable target proven (size within the band).
-  const exact = ceilingFor(CRITERIA_PREF, [...hardProven(), hiring, ev("company_size_band", { min: 11, max: 50, source: "linkedin_declared" }), seedProven()]);
+  const exact = ceilingFor(CRITERIA_PREF, [...hardProven(), ...hiring, ev("company_size_band", { min: 11, max: 50, source: "linkedin_declared" }), seedProven()]);
   assertEquals(exact.ceiling, "exact_match", JSON.stringify(exact.targets_unproven));
 
   // Anchor proven, size band unknown — one unproven target.
-  const strong = ceilingFor(CRITERIA_PREF, [...hardProven(), hiring, seedProven()]);
+  const strong = ceilingFor(CRITERIA_PREF, [...hardProven(), ...hiring, seedProven()]);
   assertEquals([strong.ceiling, strong.targets_unproven.length], ["strong_opportunity", 1]);
 
   // Eligible, no anchor and no other proven signal.
@@ -267,13 +278,13 @@ Deno.test("GPT may not promote past the ceiling, cite what does not exist, or hi
 });
 
 Deno.test("a reasoner that declines to promote is honoured, and a missing reasoner still explains", () => {
-  const hiring = ev("hiring", true);
-  const g = graphOf([...hardProven(), hiring, ev("company_size_band", { min: 11, max: 50, source: "linkedin_declared" }), seedProven()]);
+  const hiring = firstHireProven();
+  const g = graphOf([...hardProven(), ...hiring, ev("company_size_band", { min: 11, max: 50, source: "linkedin_declared" }), seedProven()]);
   const ceiling = computeCeiling({ criteria: CRITERIA_PREF, graph: g, eligibility: evaluateEligibility(CRITERIA_PREF, g), anchor: "hiring" });
   assertEquals(ceiling.ceiling, "exact_match");
   const modest = applyReasoning(ceiling, {
     label: "strong_opportunity",
-    why_surfaced: [{ text: "Open growth role.", evidence_ids: [hiring.evidence_id] }],
+    why_surfaced: [{ text: "Open growth role.", evidence_ids: [hiring[0].evidence_id] }],
   });
   assertEquals([modest.label, modest.capped_from], ["strong_opportunity", null], "below the ceiling is allowed");
 
@@ -289,7 +300,7 @@ function candidate(key: string, over: Partial<MissionCandidate> = {}): MissionCa
   return {
     company_key: key, name: key, domain: `${key}.test`, linkedin_url: `https://www.linkedin.com/company/${key}`,
     found_by: ["job_discovery:apify_linkedin_job_search"], screened_out: null, identity_resolved: true,
-    investigated: true, graph: graphOf([...hardProven(), ev("hiring", true)]), ...over,
+    investigated: true, graph: graphOf([...hardProven(), ...firstHireProven()]), ...over,
   };
 }
 
@@ -299,8 +310,8 @@ Deno.test("WB-1: every discovered company lands in exactly one bucket, and the l
     criteria: CRITERIA_BONUS, stage: "complete",
     candidates: [
       // Under CRITERIA_BONUS the targets are the anchor (hiring) and funding.
-      candidate("exact", { graph: graphOf([...hardProven(), ev("hiring", true), ev("funding", { round: "seed" })]) }),
-      candidate("strong", { graph: graphOf([...hardProven(), ev("hiring", true)], ["funding"]) }),
+      candidate("exact", { graph: graphOf([...hardProven(), ...firstHireProven(), ev("funding", { round: "seed" })]) }),
+      candidate("strong", { graph: graphOf([...hardProven(), ...firstHireProven()], ["funding"]) }),
       candidate("worth", { graph: graphOf([...hardProven(), ev("funding", { round: "seed" })], ["hiring"]) }),
       candidate("low", { graph: graphOf(hardProven()) }),
       candidate("pending", { graph: graphOf([]) }),
@@ -413,7 +424,7 @@ Deno.test("WB-1: the view of a real engine run reconciles — one bucket each, s
 // ── THE REASONER'S BATCH ────────────────────────────────────────────────────
 
 Deno.test("only eligible candidates are worth a model call, best evidence first", async () => {
-  const eligibleRich = candidate("rich", { graph: graphOf([...hardProven(), ev("hiring", true), ev("funding", { round: "seed" })]) });
+  const eligibleRich = candidate("rich", { graph: graphOf([...hardProven(), ...firstHireProven(), ev("funding", { round: "seed" })]) });
   const eligibleThin = candidate("thin", { graph: graphOf(hardProven()) });
   const pending = candidate("pending", { graph: graphOf([]) });
   const ineligible = candidate("ineligible", { graph: graphOf([ev("geography", "Berlin, Germany"), ev("industry", "b2b saas")]) });
@@ -468,7 +479,7 @@ Deno.test("P5.2: an unprovable hard criterion is disclosed, not enforced — it 
   assert(/Company kind: startup \(hard\) — no current source proves it/.test(unsupported), unsupported);
 
   // And it no longer decides eligibility: geography + industry proven ⇒ eligible.
-  const g = graphOf([...hardProven(), ev("hiring", true)]);
+  const g = graphOf([...hardProven(), ...firstHireProven()]);
   const e = evaluateEligibility(CRITERIA, g);
   assertEquals(e.eligibility, "eligible");
   assertFalse(e.gaps.includes("company_stage"));
@@ -554,7 +565,7 @@ Deno.test("P5.2: the view derives criteria from the mission, so an approved card
   assertEquals(fresh.find((c) => c.label === "Company kind: startup")!.status, "unprovable_today",
     "deriving again gives today's truth, not the card's");
 
-  const g = graphOf([...hardProven(), ev("hiring", true)]);
+  const g = graphOf([...hardProven(), ...firstHireProven()]);
   assertEquals(evaluateEligibility(stale.criteria, g).eligibility, "pending", "the stale projection still gates");
   assertEquals(evaluateEligibility(fresh, g).eligibility, "eligible", "the derived criteria do not");
 

@@ -68,7 +68,15 @@ export interface EvidenceItem {
     excerpt: string | null;
   };
   method: EvidenceMethod;
+  /** When WE saw it (a fetch, a provider read). Never the date the event happened. */
   observed_at: string;
+  /**
+   * Q2 — when the EVENT happened, as the source dates it (a posting's date, an
+   * article's publication, a round's announcement). Absent when the source
+   * gives none. A customer's time window is judged against this, never
+   * against `observed_at`.
+   */
+  occurred_at?: string | null;
   valid_until: string | null;
   confidence: "high" | "medium" | "low";
   derived_from: string[];
@@ -188,6 +196,7 @@ function item(
     url?: string | null; excerpt?: string | null; derived_from?: string[]; source_record_id?: string | null;
     authority?: EvidenceItem["authority"];
     geography_presence?: EvidenceItem["geography_presence"];
+    occurred_at?: string | null;
   },
 ): EvidenceItem {
   const source = {
@@ -202,6 +211,7 @@ function item(
     derived_from: o.derived_from ?? [], mission_id: ctx.mission_id, origin: ctx.origin ?? "lead_mission",
     ...(o.authority ? { authority: o.authority } : {}),
     ...(o.geography_presence ? { geography_presence: o.geography_presence } : {}),
+    ...(o.occurred_at ? { occurred_at: o.occurred_at } : {}),
   };
 }
 
@@ -331,12 +341,17 @@ export function observationFromCompany(
 /** A web page's deterministic claim about a company (e.g. a careers page naming a role). */
 export function observationFromWebClaim(
   hint: EntityHint, ctx: ObservationContext,
-  claim: { dimension: EvidenceDimension; value: unknown; url: string; excerpt: string | null; method: EvidenceMethod; confidence: EvidenceItem["confidence"] },
+  claim: {
+    dimension: EvidenceDimension; value: unknown; url: string; excerpt: string | null; method: EvidenceMethod;
+    confidence: EvidenceItem["confidence"];
+    /** The event's own date, when the page states one (Q2). */
+    occurred_at?: string | null;
+  },
 ): CandidateObservation {
   const ev = item({ ...ctx, origin: ctx.origin ?? "web" }, claim.dimension, claim.value, {
     status: claim.method === "model_extraction" ? "plausible" : "proven",
     method: claim.method, confidence: claim.confidence, url: claim.url, excerpt: claim.excerpt,
-    source_record_id: claim.url,
+    source_record_id: claim.url, occurred_at: claim.occurred_at ?? null,
   });
   return {
     version: CANDIDATE_OBSERVATION_VERSION,
@@ -351,4 +366,26 @@ export function observationFromWebClaim(
 /** Bounds an observation for a checkpoint: facts kept, excerpts already capped. */
 export function compactObservation(o: CandidateObservation, maxEvidence = 8): CandidateObservation {
   return o.evidence.length <= maxEvidence ? o : { ...o, evidence: o.evidence.slice(0, maxEvidence) };
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Q2 — IS THIS EVENT INSIDE THE CUSTOMER'S WINDOW?
+ *
+ * Judged on the event's own date (`occurred_at`), never on when it was
+ * fetched or observed. A missing or unparseable date, or one more than a day
+ * in the future, is NOT inside any window: it answers `unknown`, not `pass`.
+ */
+export function eventWithinWindow(
+  occurredAt: string | null | undefined, days: number, now: number = Date.now(),
+): { inside: boolean; reason: string } {
+  if (!occurredAt) return { inside: false, reason: "the event's own date is not established" };
+  const t = Date.parse(occurredAt);
+  if (!Number.isFinite(t)) return { inside: false, reason: `the event date "${occurredAt}" cannot be read` };
+  if (t > now + DAY_MS) return { inside: false, reason: `the event date ${occurredAt} is in the future` };
+  const age = Math.floor((now - t) / DAY_MS);
+  return age <= days
+    ? { inside: true, reason: `dated ${occurredAt.slice(0, 10)}, inside the ${days}-day window` }
+    : { inside: false, reason: `dated ${occurredAt.slice(0, 10)}, ${age} days ago — outside the ${days}-day window` };
 }
