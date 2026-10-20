@@ -192,6 +192,8 @@ export function fixture() {
     signals: [],
     approvals: [],
     agents: [],
+    lead_evidence: [],
+    lead_lineages: [],
   };
   const n = installStrictNetwork({
     tables,

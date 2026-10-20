@@ -16,6 +16,7 @@ import {
 } from "./pilotPolicy.ts";
 import {
   type PilotScopeStore,
+  recordIdColumn,
   type ResourceKind,
   type ResourceRef,
   RESOURCES,
@@ -61,7 +62,7 @@ export function resourceRefs(value: unknown): ResourceRef[] {
     return ref;
   });
 }
-// All ownership-bearing relational columns in the supported records. No joined
+// Known ownership-bearing relational columns in the supported records. No joined
 // child is trusted just because its parent row belongs to this workspace.
 const PARENTS: Readonly<Record<string, ResourceKind>> = {
   account_id: "account",
@@ -75,6 +76,11 @@ const PARENTS: Readonly<Record<string, ResourceKind>> = {
   signal_id: "signal",
   approval_id: "approval",
   agent_id: "agent",
+  evidence_id: "evidence",
+  legacy_signal_id: "signal",
+  tool_call_id: "research",
+  lineage_id: "lineage",
+  lease_holder: "task",
 };
 const PUBLIC_FIELDS: Partial<Record<ResourceKind, readonly string[]>> = {
   account: ["name", "domain", "website_url", "linkedin_url", "industry"],
@@ -340,7 +346,7 @@ export class PilotAccess {
         [r.id],
       );
       if (
-        rows.length !== 1 || rows[0].id !== r.id ||
+        rows.length !== 1 || rows[0][recordIdColumn(r.kind)] !== r.id ||
         rows[0].workspace_id !== this.enrollment.workspace_id
       ) throw new PilotRefusal("resource_unavailable", 404);
       const row = rows[0];
@@ -372,8 +378,11 @@ export class PilotAccess {
         : PUBLIC_FIELDS[r.kind] ?? [];
       out.push(
         Object.fromEntries(
-          ["id", "workspace_id", ...fields].filter((k) => Object.hasOwn(row, k))
-            .map((k) => [k, row[k]]),
+          [
+            ["id", r.id],
+            ...["workspace_id", ...fields]
+              .filter((k) => Object.hasOwn(row, k)).map((k) => [k, row[k]]),
+          ],
         ),
       );
     }

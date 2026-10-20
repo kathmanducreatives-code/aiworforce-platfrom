@@ -640,3 +640,62 @@ Deno.test("P1 concurrent task creator change refuses binding without overwriting
   );
   noPaid(f.n);
 });
+
+for (const relation of ["evidence", "tool_call", "lineage"]) {
+  Deno.test(`P1 rejects a foreign ${relation} parent discovered in the schema`, async () => {
+    const f = fixture();
+    const foreign = id(1100);
+    let root = { kind: "lead", id: LEAD_A };
+    if (relation === "evidence") {
+      f.n.tables.lead_evidence.push({ id: foreign, workspace_id: B });
+      f.n.tables.lead_candidates[0].evidence_id = foreign;
+    } else if (relation === "tool_call") {
+      f.n.tables.signals.push({
+        id: id(1101),
+        workspace_id: A,
+        tool_call_id: RESEARCH_B,
+      });
+      root = { kind: "signal", id: id(1101) };
+    } else {
+      f.n.tables.lead_lineages.push({ lineage_id: foreign, workspace_id: B });
+      task(f).lineage_id = foreign;
+      root = { kind: "task", id: TASK_A };
+    }
+    assertEquals(
+      (await call(f, "read_records", { resources: [root] })).status,
+      404,
+    );
+    noPaid(f.n);
+  });
+}
+
+Deno.test("P1 same-workspace evidence and lineage parent graph remains readable", async () => {
+  const f = fixture();
+  f.n.tables.lead_evidence.push({
+    id: id(1100),
+    workspace_id: A,
+    account_id: ACCOUNT_A,
+    lead_candidate_id: LEAD_A,
+    legacy_signal_id: id(1101),
+  });
+  f.n.tables.lead_candidates[0].evidence_id = id(1100);
+  f.n.tables.signals.push({
+    id: id(1101),
+    workspace_id: A,
+    tool_call_id: RESEARCH_A,
+  });
+  f.n.tables.lead_lineages.push({
+    lineage_id: id(1102),
+    workspace_id: A,
+    lease_holder: TASK_A,
+  });
+  task(f).lineage_id = id(1102);
+  const r = await call(f, "read_records", {
+    resources: [{ kind: "lead", id: LEAD_A }],
+  });
+  assertEquals(r.status, 200);
+  assertEquals(r.body.records[0].id, LEAD_A);
+  assertEquals((await bind(f)).status, 200);
+  assertEquals((await call(f, "resume_task", { task_id: TASK_A })).status, 200);
+  noPaid(f.n);
+});

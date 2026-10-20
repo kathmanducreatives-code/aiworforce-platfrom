@@ -102,11 +102,12 @@ metadata or binding a task.
 
 Supported **existing record** kinds are account, contact, lead, memory
 (`saved_outputs`), draft, research (`tool_calls`), task and their
-plan/conversation/ signal/approval/agent parents. Each ID lookup includes
-`workspace_id`. Every returned row is checked again. Cross-workspace
-account/contact/task/plan and other recognized parent links are refused,
-including dependencies. Traversal is bounded to avoid repeated/unbounded work.
-Mixed sets return no partial content.
+plan/conversation/ signal/approval/agent/evidence/lineage parents (lineages use
+`lineage_id` as their primary key). Each ID lookup includes `workspace_id`.
+Every returned row is checked again. Cross-workspace account/contact/task/plan
+and other recognized parent links are refused, including dependencies. Traversal
+is bounded to avoid repeated/unbounded work. Mixed sets return no partial
+content.
 
 There are no imported-row tables yet. `import_record` and arbitrary table names
 are rejected before record reads; P3 must add scoped import storage and tests.
@@ -198,7 +199,7 @@ Commands run from the isolated worktree, using a temporary Deno lockfile:
 
 ```sh
 deno test --node-modules-dir=auto --lock=/tmp/p1-deno.lock --allow-read --allow-env tests/edge-functions/pilotScope.test.ts
-# 56 passed, 0 failed
+# 60 passed, 0 failed
 
 deno test --node-modules-dir=auto --lock=/tmp/p1-deno.lock --allow-read --allow-env \
   tests/edge-functions/_shared/companyBrainConsumption.test.ts \

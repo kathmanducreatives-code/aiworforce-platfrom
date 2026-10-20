@@ -16,8 +16,12 @@ export const RESOURCES = {
   signal: "signals",
   approval: "approvals",
   agent: "agents",
+  evidence: "lead_evidence",
+  lineage: "lead_lineages",
 } as const;
 export type ResourceKind = keyof typeof RESOURCES;
+export const recordIdColumn = (kind: ResourceKind): string =>
+  kind === "lineage" ? "lineage_id" : "id";
 export interface ResourceRef {
   kind: ResourceKind;
   id: string;
@@ -60,7 +64,7 @@ export function createPilotScopeStore(deps: AuthDeps): PilotScopeStore {
       const { data, error } = await db.from(RESOURCES[kind]).select("*").eq(
         "workspace_id",
         workspace,
-      ).in("id", [...ids]);
+      ).in(recordIdColumn(kind), [...ids]);
       if (error) throw new PilotRefusal("pilot_store_unavailable", 503);
       return (data ?? []) as Row[];
     },
