@@ -204,7 +204,7 @@ Deno.test("models: every physical attempt is admitted and counted; fallback and 
     if (r.url.hostname === "api.anthropic.com") return json(500, { error: "overloaded" });
     openaiCalls++;
     if (openaiCalls === 3) return json(429, { error: { message: "Rate limit. Please try again in 10ms." } });
-    return json(200, { choices: [{ message: { content: "{\"ok\":true}" } }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
+    return json(200, { choices: [{ finish_reason: "stop", message: { content: "{\"ok\":true}" } }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
   });
   await inMission(m, v, async () => {
     const a = await gptStructured<{ ok: boolean }>({ purpose: "t", system: "s", user: "u", model: "gpt-4.1-mini", maxTokens: 500 });
@@ -254,7 +254,7 @@ Deno.test("gate: outside a mission, before binding, after revocation, or to an u
 
 Deno.test("runner: the handler's billable calls run inside the mission, with the bound task and generation", opts, async () => {
   const m = await fundedMission();
-  const v = fakeVendor(() => json(200, { choices: [{ message: { content: "{}" } }] }));
+  const v = fakeVendor(() => json(200, { choices: [{ finish_reason: "stop", message: { content: "{}" } }] }));
   const gate = createAdmissionFetch({ baseFetch: v.fetch, db: client as unknown as AdmissionDb, ownApi: REST_URL, log: () => {} });
   const decisions: number[] = [];
   let lastCtx: MissionAdmissionContext | null = null;
@@ -446,7 +446,7 @@ const strategist = (model: string, endpoint = OPENAI_CHAT_URL, provider: "openai
     { model, systemPrompt: "synthetic control", userMessage: "return {}", maxCompletionTokens: 500 },
     { provider, endpoint, headers: { Authorization: "Bearer test" } },
   );
-const chat = () => json(200, { choices: [{ message: { content: "{}" } }], usage: { prompt_tokens: 1, completion_tokens: 1 } });
+const chat = () => json(200, { choices: [{ finish_reason: "stop", message: { content: "{}" } }], usage: { prompt_tokens: 1, completion_tokens: 1 } });
 
 Deno.test("strategist: an unpriced model, or the Lovable gateway, is refused before transport", opts, async () => {
   const m = await fundedMission();
@@ -694,7 +694,7 @@ Deno.test("leases: nothing reaches the transport when ownership expires while th
   const m = await fundedMission();
   const v = fakeVendor((r) => r.method === "POST" && r.url.hostname === "api.apify.com"
     ? json(201, { data: { id: "run-late", defaultDatasetId: "ds-late", status: "RUNNING" } })
-    : json(200, { choices: [{ message: { content: "{}" } }], usage: { prompt_tokens: 1, completion_tokens: 1 } }));
+    : json(200, { choices: [{ finish_reason: "stop", message: { content: "{}" } }], usage: { prompt_tokens: 1, completion_tokens: 1 } }));
 
   await expireIn(m, 1.5);
   let holder = holdLock(2500);
@@ -722,7 +722,7 @@ Deno.test("models: a Terra template priced above the model allocation is never a
       request_limits: { max_request_bytes: 32_768, max_output_tokens: 4_000 } },
   });
   const m = await fundedMission({ quotes });
-  const v = fakeVendor(() => json(200, { choices: [{ message: { content: "{}" } }] }));
+  const v = fakeVendor(() => json(200, { choices: [{ finish_reason: "stop", message: { content: "{}" } }] }));
   const r = await inMission(m, v, () => gptStructured({ purpose: "t", system: "s", user: "u", model: "gpt-5.6-terra", maxTokens: 500 }));
   assertEquals(r.ok, false);
   assertEquals([v.seen.length, (await ops(m)).length], [0, 0], "its maximum exceeds the $0.05 model allocation: refused, nothing sent");

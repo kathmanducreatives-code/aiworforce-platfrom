@@ -171,3 +171,10 @@ A7 remains NO-GO.
 The old source-string telemetry assertion was replaced with a behavioral test
 that checks malformed content retains usage and emits one failed event. No
 baseline was weakened to make a completion with missing metadata succeed.
+
+The first GitHub CI run passed backend, frontend, Replay Lab and two contract
+shards. The third exposed two admission runtime tests whose successful vendor
+fixtures omitted termination metadata. All five successful envelopes in that
+contract fixture now explicitly report `stop`; no assertion or limit changed.
+Terminal cases also test malformed/empty partial content, ensuring termination
+is checked before content parsing can enter the ordinary repair path.

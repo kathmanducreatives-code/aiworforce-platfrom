@@ -52,6 +52,17 @@ for (const finish of ["stop", ...BAD_FINISHES]) {
     assertEquals([f.events[0].t.input_tokens, f.events[0].t.cached_input_tokens, f.events[0].t.output_tokens], [100, 10, 20]);
     assert((f.events[0].t.estimated_cost_usd ?? 0) > 0, "rejection cannot erase billed usage");
     assertEquals(f.events[0].t.fallback_reason, r.ok ? null : r.code);
+    if (!r.ok) {
+      // Termination must be checked BEFORE content. Otherwise malformed or
+      // empty partial output could re-enter the ordinary repair path.
+      for (const content of ["{", ""]) {
+        const partial = seam(finish, content);
+        const rejected = await gptStructured(REQUEST, partial.deps);
+        assert(!rejected.ok);
+        assertEquals(rejected.code, r.code);
+        assertEquals([partial.calls(), partial.events.length], [1, 1]);
+      }
+    }
   });
 }
 
