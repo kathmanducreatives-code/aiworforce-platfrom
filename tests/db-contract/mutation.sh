@@ -9,14 +9,27 @@
 #
 #   PG_ADMIN_URL=… POSTGREST_BIN=… tests/db-contract/mutation.sh
 #
+# SHARDING (release verification runs the proofs in parallel jobs, each with
+# its OWN Postgres): MUTATION_SHARDS=N MUTATION_SHARD=i runs proof k when
+# (k-1) % N == i. Unset, it runs every proof, as before. Every shard walks the
+# whole list, so each prints the same `total`; the workflow's gate requires the
+# shards' `ran` counts to add up to it (docs/launch/ci.md, "Test levels").
+#
 # The real module is restored on exit whatever happens. Run it only in a
 # disposable checkout (CI) or a clean working tree.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
+shards="${MUTATION_SHARDS:-1}"; shard="${MUTATION_SHARD:-0}"
+case "$shards$shard" in *[!0-9]*) echo "MUTATION_SHARDS/MUTATION_SHARD must be integers" >&2; exit 2 ;; esac
+[ "$shard" -lt "$shards" ] || { echo "MUTATION_SHARD must be below MUTATION_SHARDS" >&2; exit 2; }
+proof_n=0; ran=0
+# take: count this proof; true when it belongs to this shard.
+take() { proof_n=$((proof_n + 1)); [ $(( (proof_n - 1) % shards )) -eq "$shard" ]; }
 real="$root/supabase/functions/_shared/fencedTaskWrite.ts"
 backup="$(mktemp)"; out="$(mktemp)"
 cp "$real" "$backup"
 trap 'cp "$backup" "$real"; rm -f "$backup" "$out"' EXIT
+if take; then
 cp "$root/tests/db-contract/mutants/fencedTaskWrite.pre-d1-fix.ts" "$real"
 set +e
 "$root/tests/db-contract/run.sh" "$root/tests/db-contract/fencedWrite.contract.test.ts" >"$out" 2>&1
@@ -33,10 +46,13 @@ if ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep 'own generation, open row: the writ
   echo "the mutant run failed, but not on the fenced write itself:" >&2; tail -30 "$out" >&2; exit 1
 fi
 echo "mutant killed: reverting the D1 fix fails the fenced-write contract"
+cp "$backup" "$real"; ran=$((ran + 1))
+fi
 
 # ── PROOF 2: the credit re-arm ──────────────────────────────────────────────
 # Build the database WITHOUT the held billing fix and require the credit test
 # to fail on its behaviour: the refunded key is replayed, not re-armed.
+if take; then
 set +e
 DB_CONTRACT_OMIT_HELD=20261015130000_credits_rearm_settled_key.sql \
   "$root/tests/db-contract/run.sh" "$root/tests/db-contract/creditRearm.contract.test.ts" >"$out" 2>&1
@@ -50,6 +66,8 @@ if ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep 'a key refunded once (not_charged) 
   echo "the credit mutant failed, but not on the re-arm itself:" >&2; tail -30 "$out" >&2; exit 1
 fi
 echo "mutant killed: without the re-arm migration a refunded key's purchase goes uncharged"
+ran=$((ran + 1))
+fi
 
 # ── PROOFS 3+: durable smoke admission ─────────────────────────────────────
 # Each mutant removes ONE guard (in the held migration, the gate or the poll
@@ -78,6 +96,7 @@ planner_tests="$root/tests/edge-functions/_shared/smokePlannerRequestSize.test.t
 # prove_killed <label> <file> <literal to find> <replacement> <test file> <test name that must FAIL>
 prove_killed() {
   local label="$1" file="$2" find="$3" repl="$4" tests="$5" name="$6"
+  take || return 0
   cp "$file.mutation-backup" "$file"
   FIND="$find" REPL="$repl" perl -0pi -e 's/\Q$ENV{FIND}\E/$ENV{REPL}/' "$file"
   if cmp -s "$file" "$file.mutation-backup"; then
@@ -93,8 +112,10 @@ prove_killed() {
     echo "the mutant ($label) failed, but not on '$name':" >&2; tail -30 "$out" >&2; exit 1
   fi
   echo "mutant killed: $label"
+  ran=$((ran + 1))
 }
 
+if take; then
 set +e
 DB_CONTRACT_OMIT_HELD=20261015140000_discovery_smoke_admission.sql "$root/tests/db-contract/run.sh" "$adm_tests" >"$out" 2>&1
 status=$?
@@ -103,6 +124,8 @@ if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "admission:
   echo "MUTANT SURVIVED or failed elsewhere: admission tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
 fi
 echo "mutant killed: without the held admission migration nothing is admitted"
+ran=$((ran + 1))
+fi
 
 prove_killed "no serialization lock" "$adm_sql" \
   "where queue_id = p_queue for update;
@@ -297,3 +320,9 @@ prove_killed "settlement judged at arrival, not send time (Codex P2)" "$tools_ts
 prove_killed "smoke planner shown every authorised actor (Codex P1)" "$planner_ts" \
   "    const payload = approved ? smokePlannerPayload(i.payload, approved) : i.payload;" "    const payload = i.payload;" \
   "$planner_tests" "smoke planner: the execution-planner request for the smoke's mission fits the Luna template"
+
+# THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
+echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
+if [ -n "${MUTATION_TALLY_FILE:-}" ]; then
+  printf '{"shard":%d,"shards":%d,"total":%d,"ran":%d}\n' "$shard" "$shards" "$proof_n" "$ran" > "$MUTATION_TALLY_FILE"
+fi

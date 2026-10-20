@@ -1,33 +1,101 @@
-# CI — every suite the repo already has, run on every push and pull request.
+# CI — three test levels, one gate (docs/launch/ci.md, "Test levels").
 #
-# Needs NO secrets and touches NO external system: the suites run against fakes
-# and a fake network (tests/edge-functions/_helpers/fakeNetwork.ts); the build
-# needs no environment. Read-only token.
+#   Level 1  development   draft pull requests, feature-branch pushes
+#   Level 2  integration   pull requests ready for review
+#   Level 3  release       pushes to main / launch/hardening / integration/**,
+#                          and manual runs (workflow_dispatch, level=full)
+#
+# The fast suites (types, lint, UI, edge functions, deploy safety, Replay Lab,
+# build) run at EVERY level, in parallel. Only the slow database-backed work is
+# planned (scripts/ci/planCore.mjs): the database contract on a draft runs the
+# contract files whose dependency closure the change touches; every level from
+# 2 runs all of them; the 64+ mutation proofs run at level 3, and at level 2
+# when the change can affect what they prove. Every doubt widens the plan.
+#
+# THE GATE is the job `CI gate`. It passes only when every job the plan
+# required SUCCEEDED (skipped, cancelled or missing fails it) and the mutation
+# shards account for every proof. It is the one check to require.
+#
+# Needs NO secrets and touches NO external system beyond pulling the pinned
+# Postgres image and PostgREST binary. Every database credential is generated
+# per job; each database job owns its own Postgres. Read-only token.
 #
 # Existing type and lint debt is held by a RATCHET (scripts/ci/ratchet.mjs):
 # nothing may get worse than the committed baseline in scripts/ci/baselines/,
-# and a fix lowers it. See docs/launch/ci.md.
+# and a fix lowers it.
 name: CI
 
 on:
   pull_request:
+    # `ready_for_review` starts the integration run when a draft is promoted.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [main, launch/hardening, feat/lead-mission-v2-worker]
+    branches: [main, launch/hardening, "integration/**", feat/lead-mission-v2-worker]
   workflow_dispatch:
+    inputs:
+      level:
+        description: "full = release verification (level 3); integration = level 2"
+        type: choice
+        options: [full, integration]
+        default: full
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push supersedes a pull request's run. Release-branch and manual
+  # runs are never cancelled: each commit there keeps its own verification.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Pinned to the version the suites are run with locally.
   DENO_VERSION: v2.8.2
   NODE_VERSION: "22"
+  # Database contract lane: pinned TEST versions (tests/db-contract/README.md).
+  POSTGRES_IMAGE: postgres:17.6
+  POSTGREST_VERSION: v12.2.3
+  POSTGREST_SHA256: 9f71269e61ac3a940281e93ff415760f5957e430e475ba4c3889f3ede7d5527c
+  # Mutation proofs run in this many parallel shards at levels 2–3; the gate
+  # requires every shard's tally and at least MIN_PROOFS proofs in all.
+  MUTATION_SHARDS: "8"
+  MIN_PROOFS: "64"
 
 jobs:
+  plan:
+    name: Plan tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      level: ${{ steps.plan.outputs.level }}
+      contract: ${{ steps.plan.outputs.contract }}
+      contract_all: ${{ steps.plan.outputs.contract_all }}
+      mutation: ${{ steps.plan.outputs.mutation }}
+      contract_count: ${{ steps.plan.outputs.contract_count }}
+      contract_shard_1: ${{ steps.plan.outputs.contract_shard_1 }}
+      contract_shard_2: ${{ steps.plan.outputs.contract_shard_2 }}
+      contract_shard_3: ${{ steps.plan.outputs.contract_shard_3 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The plan diffs the pull request's base...head (or a push's
+          # before...after); a shallow clone cannot.
+          fetch-depth: 0
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Decide the test plan
+        id: plan
+        env:
+          REQUESTED_LEVEL: ${{ inputs.level }}
+        run: node scripts/ci/plan.mjs
+
   backend:
     name: Edge functions, worker, deploy safety
     runs-on: ubuntu-latest
@@ -64,6 +132,31 @@ jobs:
       - name: Deploy-safety tests
         run: deno test --allow-read --allow-env --allow-run tests/infra/
 
+      - name: QA harness tests
+        run: |
+          deno test --allow-read --allow-env scripts/lead-quality-benchmark/
+          deno test --allow-read --allow-env scripts/model-routing-eval/
+
+  replay:
+    name: Lead V2 readiness (offline Replay Lab)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
       - name: Lead V2 readiness (offline Replay Lab)
         # Production canaries replayed from sanitized fixtures, the golden
         # missions, and the claim / provider-spec / budget / continuation
@@ -72,11 +165,6 @@ jobs:
         run: |
           deno check tests/replay/lib/*.ts
           npm run -s test:lead-v2-readiness
-
-      - name: QA harness tests
-        run: |
-          deno test --allow-read --allow-env scripts/lead-quality-benchmark/
-          deno test --allow-read --allow-env scripts/model-routing-eval/
 
   frontend:
     name: Frontend build, UI tests, type and lint ratchets
@@ -114,3 +202,199 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+  contract:
+    # The repository's real Supabase client and query modules against a REAL
+    # Postgres and a REAL PostgREST, built from the repository's migrations in
+    # a throwaway database (tests/db-contract/README.md). Each shard is its own
+    # runner with its own Postgres.
+    name: Database contract (shard ${{ matrix.shard }}/3)
+    needs: plan
+    if: needs.plan.outputs.contract == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+          cache: true
+
+      - name: Start a disposable Postgres (generated password)
+        run: |
+          pw="$(openssl rand -hex 16)"
+          echo "::add-mask::$pw"
+          docker run -d --name contract-pg -e POSTGRES_PASSWORD="$pw" \
+            -p 127.0.0.1:5432:5432 "$POSTGRES_IMAGE" >/dev/null
+          # Over TCP: the image's entrypoint first runs a temporary init server
+          # on the Unix socket only, which answers pg_isready and then shuts
+          # down (seen in CI: "rejecting connections"). Only the final server
+          # listens on 127.0.0.1.
+          for _ in $(seq 1 90); do
+            docker exec contract-pg pg_isready -h 127.0.0.1 -U postgres -q && break
+            sleep 1
+          done
+          docker exec contract-pg pg_isready -h 127.0.0.1 -U postgres
+          echo "PG_ADMIN_URL=postgres://postgres:$pw@127.0.0.1:5432/postgres" >> "$GITHUB_ENV"
+
+      - name: Fetch the pinned PostgREST (checksum verified)
+        run: |
+          dir="$RUNNER_TEMP/postgrest"; mkdir -p "$dir"
+          curl -fsSL -o "$dir/postgrest.tar.xz" \
+            "https://github.com/PostgREST/postgrest/releases/download/$POSTGREST_VERSION/postgrest-$POSTGREST_VERSION-linux-static-x64.tar.xz"
+          echo "$POSTGREST_SHA256  $dir/postgrest.tar.xz" | sha256sum -c -
+          tar -xJf "$dir/postgrest.tar.xz" -C "$dir"
+          "$dir/postgrest" --version
+          echo "POSTGREST_BIN=$dir/postgrest" >> "$GITHUB_ENV"
+
+      - name: Contract tests
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARD_1: ${{ needs.plan.outputs.contract_shard_1 }}
+          SHARD_2: ${{ needs.plan.outputs.contract_shard_2 }}
+          SHARD_3: ${{ needs.plan.outputs.contract_shard_3 }}
+          TALLY: ${{ runner.temp }}/contract-tally-${{ matrix.shard }}.json
+        run: |
+          set -o pipefail
+          case "$SHARD" in 1) FILES="$SHARD_1" ;; 2) FILES="$SHARD_2" ;; 3) FILES="$SHARD_3" ;; *) echo "unknown shard $SHARD" >&2; exit 2 ;; esac
+          # shellcheck disable=SC2086
+          set -- $FILES
+          planned=$#
+          ran=0
+          if [ "$planned" -eq 0 ]; then
+            echo "this shard has no contract file in the plan"
+          else
+            printf '%s\n' "$@"
+            tests/db-contract/run.sh "$@" 2>&1 | tee "$RUNNER_TEMP/contract.log"
+            # Files Deno actually executed — counted from its own output, not
+            # from the list it was given.
+            ran=$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/contract.log" | grep -cE '^running [0-9]+ tests? from ' || true)
+          fi
+          # THE TALLY the gate adds up against the plan's contract_count.
+          printf '{"shard":%d,"planned":%d,"ran":%d}\n' "$SHARD" "$planned" "$ran" > "$TALLY"
+          cat "$TALLY"
+
+      - name: Keep this shard's tally for the gate
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-tally-${{ matrix.shard }}
+          path: ${{ runner.temp }}/contract-tally-${{ matrix.shard }}.json
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Postgres log on failure
+        if: failure()
+        run: docker logs contract-pg 2>&1 | tail -50
+
+  mutation:
+    # Each proof removes one fix and requires a named contract test to FAIL on
+    # that behaviour (tests/db-contract/mutation.sh). Sharded across runners,
+    # each with its own Postgres and its own checkout to mutate.
+    name: Mutation proofs (shard ${{ matrix.shard }})
+    needs: plan
+    if: needs.plan.outputs.mutation == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+          cache: true
+
+      - name: Start a disposable Postgres (generated password)
+        run: |
+          pw="$(openssl rand -hex 16)"
+          echo "::add-mask::$pw"
+          docker run -d --name contract-pg -e POSTGRES_PASSWORD="$pw" \
+            -p 127.0.0.1:5432:5432 "$POSTGRES_IMAGE" >/dev/null
+          # Over TCP: the image's entrypoint first runs a temporary init server
+          # on the Unix socket only, which answers pg_isready and then shuts
+          # down (seen in CI: "rejecting connections"). Only the final server
+          # listens on 127.0.0.1.
+          for _ in $(seq 1 90); do
+            docker exec contract-pg pg_isready -h 127.0.0.1 -U postgres -q && break
+            sleep 1
+          done
+          docker exec contract-pg pg_isready -h 127.0.0.1 -U postgres
+          echo "PG_ADMIN_URL=postgres://postgres:$pw@127.0.0.1:5432/postgres" >> "$GITHUB_ENV"
+
+      - name: Fetch the pinned PostgREST (checksum verified)
+        run: |
+          dir="$RUNNER_TEMP/postgrest"; mkdir -p "$dir"
+          curl -fsSL -o "$dir/postgrest.tar.xz" \
+            "https://github.com/PostgREST/postgrest/releases/download/$POSTGREST_VERSION/postgrest-$POSTGREST_VERSION-linux-static-x64.tar.xz"
+          echo "$POSTGREST_SHA256  $dir/postgrest.tar.xz" | sha256sum -c -
+          tar -xJf "$dir/postgrest.tar.xz" -C "$dir"
+          "$dir/postgrest" --version
+          echo "POSTGREST_BIN=$dir/postgrest" >> "$GITHUB_ENV"
+
+      - name: Mutation proof — every removed fix must fail its contract
+        env:
+          MUTATION_SHARD: ${{ matrix.shard }}
+          MUTATION_TALLY_FILE: ${{ runner.temp }}/mutation-tally-${{ matrix.shard }}.json
+        run: tests/db-contract/mutation.sh
+
+      - name: Keep this shard's tally for the gate
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-tally-${{ matrix.shard }}
+          path: ${{ runner.temp }}/mutation-tally-${{ matrix.shard }}.json
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Postgres log on failure
+        if: failure()
+        run: docker logs contract-pg 2>&1 | tail -50
+
+  gate:
+    name: CI gate
+    needs: [plan, backend, replay, frontend, contract, mutation]
+    # ALWAYS runs, so a failed, skipped or cancelled job is judged, not ignored.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Collect the contract tallies
+        if: needs.plan.outputs.contract == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: contract-tally-*
+          path: ${{ runner.temp }}/contract-tallies
+        continue-on-error: true
+
+      - name: Collect the mutation tallies
+        if: needs.plan.outputs.mutation == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mutation-tally-*
+          path: ${{ runner.temp }}/tallies
+        continue-on-error: true
+
+      - name: Judge the run
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          TALLY_DIR: ${{ runner.temp }}/tallies
+          CONTRACT_TALLY_DIR: ${{ runner.temp }}/contract-tallies
+          CONTRACT_SHARDS: "3"
+        run: node scripts/ci/gate.mjs
