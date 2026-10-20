@@ -8,11 +8,13 @@ version (`fencedTaskUpdate` asking for `select=id` beside an `or` filter) passed
 every offline test and failed against PostgREST with 42703 on every open-row
 write (PR #73, fixed in `b9fa8516`).
 
-CI: `.github/workflows/db-contract.yml`, **advisory** (its own workflow, not a
-required check). On a **draft** PR it runs the contract tests only; the mutation
-proofs run once the PR is ready for review, on `main`, `launch/hardening` and
-`integration/**` pushes, and on manual dispatch (`docs/launch/ci.md`, "Two-stage
-testing").
+CI: the `contract` and `mutation` jobs of `.github/workflows/ci.yml`, judged by
+its `CI gate` (`docs/launch/ci.md`, "Test levels"). On a **draft** PR the
+contract runs the files whose dependency closure the change touches; from ready
+for review every file runs, in 3 shards, each with its own Postgres. The
+mutation proofs run in 8 shards (`MUTATION_SHARDS` / `MUTATION_SHARD`) at
+release level, and at integration level when the change touches what they run
+or mutate; the gate requires every shard's tally to account for every proof.
 
 ## What it covers
 

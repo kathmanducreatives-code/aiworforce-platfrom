@@ -6,7 +6,7 @@ outside it, so only a person with access can confirm them.
 
 ## What the repository already guarantees
 
-- **No workflow deploys on push.** `ci.yml` and `db-contract.yml` run tests on
+- **No workflow deploys on push.** `ci.yml` runs tests on
   `pull_request`/`push`. `deploy-held-back-functions.yml` is
   `workflow_dispatch` only and asks for the release SHA to be typed.
   `ops-health.yml` is scheduled and read-only.
