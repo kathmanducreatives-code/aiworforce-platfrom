@@ -170,10 +170,13 @@ Deno.test("shards: a lost or duplicated file is an error, not a quieter run", ()
 // ═════════════════════════════════════════════════════════════════ gate ══
 
 const ok = { result: "success" };
-const planned = (o: Record<string, string>) => ({ result: "success", outputs: { contract_all: "true", ...o } });
+const planned = (o: Record<string, string>) => ({ result: "success", outputs: { contract_all: "true", contract_count: "14", ...o } });
 const tallies = (n: number, total: number, ranEach?: number[]) =>
   Array.from({ length: n }, (_, k) => ({ shard: k, shards: n, total, ran: ranEach ? ranEach[k] : Math.floor(total / n) + (k < total % n ? 1 : 0) }));
-const gate = (needs: Record<string, unknown>, t: unknown[] = []) => gateVerdict({ needs, tallies: t, shards: 8, minProofs: 64 });
+// Three contract shards that ran every planned file (the plan's contract_count defaults to 14 below).
+const ctally = (ran = [5, 5, 4], planned = [5, 5, 4]) => planned.map((p, k) => ({ shard: k + 1, planned: p, ran: ran[k] }));
+const gate = (needs: Record<string, unknown>, t: unknown[] = [], c: unknown[] = ctally()) =>
+  gateVerdict({ needs, tallies: t, shards: 8, minProofs: 64, contractTallies: c, contractShards: 3 });
 
 Deno.test("gate: a full level-3 run passes only with every job and every proof", () => {
   const needs = { plan: planned({ level: "3", contract: "true", mutation: "true" }), backend: ok, replay: ok, frontend: ok, contract: ok, mutation: ok };
@@ -201,4 +204,19 @@ Deno.test("gate: a job the plan skipped may not fail either; level 3 without pro
   assertEquals(gate({ ...draft, contract: { result: "failure" } }).ok, false);
   const forged = { plan: planned({ level: "3", contract: "true", mutation: "false" }), backend: ok, replay: ok, frontend: ok, contract: ok, mutation: { result: "skipped" } };
   assertEquals(gate(forged).ok, false);
+});
+
+Deno.test("gate: a contract shard that succeeded without running its files fails the gate", () => {
+  const base = { plan: planned({ level: "2", contract: "true", mutation: "false" }), backend: ok, replay: ok, frontend: ok, contract: ok, mutation: { result: "skipped" } };
+  assertEquals(gate(base).ok, true);
+  // Every shard green, but the planned files never reached them (e.g. a lost plan output).
+  assertEquals(gate(base, [], ctally([0, 0, 0], [0, 0, 0])).ok, false, "nothing assigned, nothing ran");
+  assertEquals(gate(base, [], ctally([5, 0, 4])).ok, false, "one shard ran nothing of its files");
+  assertEquals(gate(base, [], ctally([5, 5, 4], [5, 5, 3])).ok, false, "a planned file was never assigned");
+  assertEquals(gate(base, [], ctally().slice(0, 2)).ok, false, "a shard tally is missing");
+  assertEquals(gate({ ...base, plan: planned({ level: "2", contract: "true", mutation: "false", contract_count: "" }) }).ok, false,
+    "no planned count, nothing to check against");
+  // Not planned: no tallies are expected.
+  const draft = { plan: planned({ level: "1", contract: "false", mutation: "false", contract_all: "false", contract_count: "0" }), backend: ok, replay: ok, frontend: ok, contract: { result: "skipped" }, mutation: { result: "skipped" } };
+  assertEquals(gate(draft, [], []).ok, true);
 });

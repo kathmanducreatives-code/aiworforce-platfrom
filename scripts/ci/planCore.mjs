@@ -268,14 +268,18 @@ export function assertExact(files, shards) {
 // One check decides whether a commit is verified at its level. A job the plan
 // required must have SUCCEEDED — skipped, cancelled or missing is a failure,
 // never a pass. A job the plan did not require must have been SKIPPED (or have
-// succeeded): a failure anywhere fails the gate. The mutation proofs must also
-// add up: every shard reported, every shard walked the same list, and the
-// proofs that ran account for every proof in it, which is at least MIN_PROOFS.
+// succeeded): a failure anywhere fails the gate. Success is not taken on
+// trust: every contract shard reports how many files Deno actually ran, and
+// they must add up to the plan's count; the mutation proofs must add up too —
+// every shard reported, every shard walked the same list, and the proofs that
+// ran account for every proof in it, which is at least MIN_PROOFS.
 
 export const ALWAYS_REQUIRED = ["backend", "frontend", "replay"];
 
 /**
  * @param i.needs    the workflow's `needs` context: { job: { result, outputs } }
+ * @param i.contractTallies  parsed contract-shard tallies { shard, planned, ran }
+ * @param i.contractShards   contract shard count the workflow ran (3)
  * @param i.tallies  parsed MUTATION_TALLY files, one per shard that reported
  * @param i.shards   mutation shard count the workflow ran
  * @param i.minProofs the floor on the number of proofs (64)
@@ -298,6 +302,20 @@ export function gateVerdict(i) {
   }
   if (level === 3 && !conditional.mutation) problems.push("level 3 without the mutation proofs");
   if (level >= 2 && out.contract_all !== "true") problems.push(`level ${level} without the complete database contract`);
+  if (conditional.contract) {
+    // A shard that succeeded having run nothing must not pass: every planned
+    // file must have been EXECUTED (counted from Deno's own output).
+    const t = i.contractTallies ?? [];
+    const seen = new Set(t.map((x) => x.shard));
+    const want = Number(out.contract_count);
+    if (t.length !== i.contractShards || seen.size !== i.contractShards) {
+      problems.push(`contract: ${seen.size} of ${i.contractShards} shard tallies`);
+    }
+    for (const x of t) if (x.ran !== x.planned) problems.push(`contract shard ${x.shard}: ran ${x.ran} of ${x.planned} planned file(s)`);
+    const planned = t.reduce((n, x) => n + x.planned, 0), ran = t.reduce((n, x) => n + x.ran, 0);
+    if (!Number.isInteger(want) || want < 1) problems.push(`contract: the plan names no file count (${out.contract_count})`);
+    else if (planned !== want || ran !== want) problems.push(`contract: ${ran} file(s) ran, ${planned} assigned, of ${want} planned`);
+  }
   if (conditional.mutation) {
     const t = i.tallies ?? [];
     const seen = new Set(t.map((x) => x.shard));

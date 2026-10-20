@@ -258,12 +258,34 @@ jobs:
           SHARD_1: ${{ needs.plan.outputs.contract_shard_1 }}
           SHARD_2: ${{ needs.plan.outputs.contract_shard_2 }}
           SHARD_3: ${{ needs.plan.outputs.contract_shard_3 }}
+          TALLY: ${{ runner.temp }}/contract-tally-${{ matrix.shard }}.json
         run: |
+          set -o pipefail
           case "$SHARD" in 1) FILES="$SHARD_1" ;; 2) FILES="$SHARD_2" ;; 3) FILES="$SHARD_3" ;; *) echo "unknown shard $SHARD" >&2; exit 2 ;; esac
-          if [ -z "$FILES" ]; then echo "this shard has no contract file in the plan"; exit 0; fi
-          echo "$FILES" | tr ' ' '\n'
           # shellcheck disable=SC2086
-          tests/db-contract/run.sh $FILES
+          set -- $FILES
+          planned=$#
+          ran=0
+          if [ "$planned" -eq 0 ]; then
+            echo "this shard has no contract file in the plan"
+          else
+            printf '%s\n' "$@"
+            tests/db-contract/run.sh "$@" 2>&1 | tee "$RUNNER_TEMP/contract.log"
+            # Files Deno actually executed — counted from its own output, not
+            # from the list it was given.
+            ran=$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/contract.log" | grep -cE '^running [0-9]+ tests? from ' || true)
+          fi
+          # THE TALLY the gate adds up against the plan's contract_count.
+          printf '{"shard":%d,"planned":%d,"ran":%d}\n' "$SHARD" "$planned" "$ran" > "$TALLY"
+          cat "$TALLY"
+
+      - name: Keep this shard's tally for the gate
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-tally-${{ matrix.shard }}
+          path: ${{ runner.temp }}/contract-tally-${{ matrix.shard }}.json
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Postgres log on failure
         if: failure()
@@ -353,6 +375,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Collect the contract tallies
+        if: needs.plan.outputs.contract == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: contract-tally-*
+          path: ${{ runner.temp }}/contract-tallies
+        continue-on-error: true
+
       - name: Collect the mutation tallies
         if: needs.plan.outputs.mutation == 'true'
         uses: actions/download-artifact@v4
@@ -365,4 +395,6 @@ jobs:
         env:
           NEEDS: ${{ toJSON(needs) }}
           TALLY_DIR: ${{ runner.temp }}/tallies
+          CONTRACT_TALLY_DIR: ${{ runner.temp }}/contract-tallies
+          CONTRACT_SHARDS: "3"
         run: node scripts/ci/gate.mjs

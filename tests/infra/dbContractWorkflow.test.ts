@@ -43,8 +43,13 @@ Deno.test("contract: planned, sharded, each shard its own Postgres, running the 
   assertEquals(job.strategy!.matrix.shard, [1, 2, 3]);
   assert(step("contract", "Start a disposable Postgres")!.run!.includes("docker run"), "a fresh Postgres per shard");
   const run = step("contract", "Contract tests")!.run!;
-  assert(run.includes("tests/db-contract/run.sh $FILES"));
+  assert(run.includes('tests/db-contract/run.sh "$@" 2>&1 | tee'));
+  assert(run.startsWith("set -o pipefail"), "the tee cannot swallow the runner's exit status");
   assert(run.includes(`*) echo "unknown shard $SHARD" >&2; exit 2`), "an unknown shard fails, never runs nothing");
+  assert(run.includes("grep -cE '^running [0-9]+ tests? from '"), "files counted from Deno's own output");
+  const keep = step("contract", "Keep this shard's tally")!;
+  assert(keep.uses?.startsWith("actions/upload-artifact@"));
+  assert(TEXT.includes("name: contract-tally-${{ matrix.shard }}"));
 });
 
 Deno.test("mutation: planned, every shard runs the COMPLETE proof script, and reports a tally", () => {
@@ -69,6 +74,8 @@ Deno.test("gate: always runs, needs every job, and is the only thing that judges
   const judge = step("gate", "Judge the run")!;
   assertEquals(judge.run, "node scripts/ci/gate.mjs");
   assertEquals(judge.env!.NEEDS, "${{ toJSON(needs) }}");
+  assertEquals(judge.env!.CONTRACT_SHARDS, String(wf.jobs.contract.strategy!.matrix.shard.length), "the gate expects every contract shard");
+  assert(step("gate", "Collect the contract tallies"), "the gate reads what each contract shard ran");
 });
 
 Deno.test("fast suites: never planned away — no condition on backend, replay or frontend", () => {
