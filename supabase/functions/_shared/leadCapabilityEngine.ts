@@ -7716,7 +7716,19 @@ export async function runCapabilityPlan(
         // normal case for a shortlist of five; the bound exists so a larger
         // mission degrades into a few calls rather than one request the Actor
         // rejects.
-        for (const batch of chunk(urls, COMPANY_DETAILS_BATCH_SIZE)) {
+        //
+        // THE SMOKE LOOKS UP ONE COMPANY. Under the admission gate the reviewed
+        // catalog bounds a company-details request to ONE company and the
+        // authorization to ONE start (docs/launch/proposals/smoke-catalog-two-
+        // actor.json: `companies` 1, actor limit 1). A batch of the whole
+        // shortlist is refused by the gate before it is sent
+        // (`array_unbounded:companies`), so whenever discovery found two or more
+        // employers NO company was looked up and nothing could qualify. The
+        // first-ranked actionable company is looked up instead; the rest stay
+        // unenriched, which qualification holds as unknown — never a "no".
+        const smokeOneCompany = smokeAdmissionActive();
+        const batches = smokeOneCompany ? [urls.slice(0, 1)] : chunk(urls, COMPANY_DETAILS_BATCH_SIZE);
+        for (const batch of batches) {
           const compiled = compileHarvestCompanyDetailsInput({ companies: batch });
           const rows = await callProvider(cap, "apify_linkedin_company_details", compiled);
           const enrichedBy = observedBy(cap, "apify_linkedin_company_details");
@@ -7865,7 +7877,7 @@ export async function runCapabilityPlan(
             : null);
       log("company_enrichment_complete", {
         resolved_urls: urls.length,
-        actor_starts: Math.ceil(urls.length / COMPANY_DETAILS_BATCH_SIZE),
+        actor_starts: smokeAdmissionActive() ? Math.min(urls.length, 1) : Math.ceil(urls.length / COMPANY_DETAILS_BATCH_SIZE),
         enriched,
         // THE COUNTS THAT WERE PREVIOUSLY COLLAPSED INTO ONE `null`.
         outcomes: enrichmentOutcomes,
