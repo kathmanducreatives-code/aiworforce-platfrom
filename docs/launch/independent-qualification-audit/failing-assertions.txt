@@ -1,0 +1,617 @@
+running 43 tests from ./tests/edge-functions/_shared/independentQualificationAudit.test.ts
+audit V00 valid receipts: parser, canonical and Workbench agree ... ok (8ms)
+audit V01 uncited PASS ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"V01 uncited PASS","status":"PASS","parser":"insufficient_evidence","canonical":"pending","bucket":"pending"}
+----- output end -----
+audit V01 uncited PASS ... ok (0ms)
+audit V02 mandatory FAIL under overall PASS ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"V02 mandatory FAIL under overall PASS","status":"PASS","parser":"not_qualified","canonical":"ineligible","bucket":"ineligible"}
+----- output end -----
+audit V02 mandatory FAIL under overall PASS ... ok (0ms)
+audit V03 mandatory UNKNOWN ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"V03 mandatory UNKNOWN","status":"PASS","parser":"insufficient_evidence","canonical":"pending","bucket":"pending"}
+----- output end -----
+audit V03 mandatory UNKNOWN ... ok (0ms)
+audit V04 omitted criterion ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"V04 omitted criterion","status":"PASS","parser":"insufficient_evidence","canonical":"pending","bucket":"pending"}
+----- output end -----
+audit V04 omitted criterion ... ok (0ms)
+audit V05 contradictory criterion rows ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"V05 contradictory criterion rows","status":"PASS","parser":"insufficient_evidence","canonical":"pending","bucket":"pending"}
+----- output end -----
+audit V05 contradictory criterion rows ... ok (0ms)
+audit V06 another company evidence ID ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"V06 another company evidence ID","status":"PASS","parser":"insufficient_evidence","canonical":"pending","bucket":"pending"}
+----- output end -----
+audit V06 another company evidence ID ... ok (0ms)
+audit V07 fabricated quote ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"V07 fabricated quote","status":"PASS","parser":"insufficient_evidence","canonical":"pending","bucket":"pending"}
+----- output end -----
+audit V07 fabricated quote ... ok (0ms)
+audit V08 malformed JSON ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"V08 malformed JSON","status":"PASS","parser":"insufficient_evidence","canonical":"pending","bucket":"pending"}
+----- output end -----
+audit V08 malformed JSON ... ok (0ms)
+audit V09 truncated JSON ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"V09 truncated JSON","status":"PASS","parser":"insufficient_evidence","canonical":"pending","bucket":"pending"}
+----- output end -----
+audit V09 truncated JSON ... ok (0ms)
+audit V10 partially valid response ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"V10 partially valid response","status":"PASS","parser":"insufficient_evidence","canonical":"pending","bucket":"pending"}
+----- output end -----
+audit V10 partially valid response ... ok (0ms)
+audit V11 absent evaluator after optimistic proof ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"V11 absent evaluator after optimistic proof","status":"PASS","parser":"insufficient_evidence","canonical":"pending","bucket":"pending"}
+----- output end -----
+audit V11 absent evaluator after optimistic proof ... ok (0ms)
+audit V12 failed preference does not veto mandatory pass ... ok (0ms)
+audit C01 recruiting agencies expanding regions: mandatory UNKNOWN survives contextual customer value ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"C01 recruiting agencies expanding regions","status":"PASS","criterion":{"region":"Germany"},"canonical":"pending"}
+----- output end -----
+audit C01 recruiting agencies expanding regions: mandatory UNKNOWN survives contextual customer value ... ok (0ms)
+audit C01 recruiting agencies expanding regions: verbatim contradiction under model PASS (semantic limit) ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"C01 recruiting agencies expanding regions semantic limit","parser":"qualified","canonical":"eligible","quote":"Example has no plans to expand into Germany."}
+----- output end -----
+audit C01 recruiting agencies expanding regions: verbatim contradiction under model PASS (semantic limit) ... ok (0ms)
+audit C02 B2B hiring sales leadership: mandatory UNKNOWN survives contextual customer value ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"C02 B2B hiring sales leadership","status":"PASS","criterion":{"role":"VP of Sales"},"canonical":"pending"}
+----- output end -----
+audit C02 B2B hiring sales leadership: mandatory UNKNOWN survives contextual customer value ... ok (0ms)
+audit C02 B2B hiring sales leadership: verbatim contradiction under model PASS (semantic limit) ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"C02 B2B hiring sales leadership semantic limit","parser":"qualified","canonical":"eligible","quote":"Sales Development Representative"}
+----- output end -----
+audit C02 B2B hiring sales leadership: verbatim contradiction under model PASS (semantic limit) ... ok (0ms)
+audit C03 manufacturing facility expansion: mandatory UNKNOWN survives contextual customer value ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"C03 manufacturing facility expansion","status":"PASS","criterion":{"facility":true},"canonical":"pending"}
+----- output end -----
+audit C03 manufacturing facility expansion: mandatory UNKNOWN survives contextual customer value ... ok (0ms)
+audit C03 manufacturing facility expansion: verbatim contradiction under model PASS (semantic limit) ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"C03 manufacturing facility expansion semantic limit","parser":"qualified","canonical":"eligible","quote":"Example closed its factory and cancelled the expansion."}
+----- output end -----
+audit C03 manufacturing facility expansion: verbatim contradiction under model PASS (semantic limit) ... ok (0ms)
+audit C04 software recent funding: mandatory UNKNOWN survives contextual customer value ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"C04 software recent funding","status":"PASS","criterion":{"kind":"venture"},"canonical":"pending"}
+----- output end -----
+audit C04 software recent funding: mandatory UNKNOWN survives contextual customer value ... ok (0ms)
+audit C04 software recent funding: verbatim contradiction under model PASS (semantic limit) ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"C04 software recent funding semantic limit","parser":"qualified","canonical":"eligible","quote":"Example has not raised funding; it declined a grant."}
+----- output end -----
+audit C04 software recent funding: verbatim contradiction under model PASS (semantic limit) ... ok (0ms)
+audit C05 service business new locations: mandatory UNKNOWN survives contextual customer value ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"C05 service business new locations","status":"PASS","criterion":{"new_locations":true},"canonical":"pending"}
+----- output end -----
+audit C05 service business new locations: mandatory UNKNOWN survives contextual customer value ... ok (0ms)
+audit C05 service business new locations: verbatim contradiction under model PASS (semantic limit) ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"C05 service business new locations semantic limit","parser":"qualified","canonical":"eligible","quote":"Example closed all branch locations and will not reopen."}
+----- output end -----
+audit C05 service business new locations: verbatim contradiction under model PASS (semantic limit) ... ok (0ms)
+audit G01 two equally authoritative HQ providers disagree ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G01","actual":{"eligibility":"eligible","surfaced":true},"expected":{"eligibility":"pending","surfaced":false},"status":"FAIL"}
+----- output end -----
+audit G01 two equally authoritative HQ providers disagree ... FAILED (7ms)
+audit G02 equally authoritative size providers disagree ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G02","actual":"eligible","expected":"pending","status":"FAIL"}
+----- output end -----
+audit G02 equally authoritative size providers disagree ... FAILED (0ms)
+audit G03 foreign employer posting is relabelled to candidate ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G03","actual":"pass","expected":"unknown","status":"FAIL"}
+----- output end -----
+audit G03 foreign employer posting is relabelled to candidate ... FAILED (0ms)
+audit G04 graph takes proven fact from another company ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G04","actual":"eligible","expected":"pending","status":"FAIL"}
+----- output end -----
+audit G04 graph takes proven fact from another company ... FAILED (0ms)
+audit G05 stale page: cached web timestamp cannot support a current requirement ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G05 stale page","freshness":"current","observed_at":"2020-01-01T00:00:00Z","projected":null}
+INDEPENDENT_AUDIT {"id":"G05 stale page","actual":"pass","expected":"unknown","status":"FAIL"}
+----- output end -----
+audit G05 stale page: cached web timestamp cannot support a current requirement ... FAILED (0ms)
+audit G06 missing timestamp: cached web timestamp cannot support a current requirement ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G06 missing timestamp","freshness":"unknown","observed_at":null,"projected":null}
+INDEPENDENT_AUDIT {"id":"G06 missing timestamp","actual":"pass","expected":"unknown","status":"FAIL"}
+----- output end -----
+audit G06 missing timestamp: cached web timestamp cannot support a current requirement ... FAILED (0ms)
+audit G07 invalid timestamp: cached web timestamp cannot support a current requirement ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G07 invalid timestamp","freshness":"current","observed_at":"bad-date","projected":null}
+INDEPENDENT_AUDIT {"id":"G07 invalid timestamp","actual":"pass","expected":"unknown","status":"FAIL"}
+----- output end -----
+audit G07 invalid timestamp: cached web timestamp cannot support a current requirement ... FAILED (0ms)
+audit G08 unsupported mandatory criterion disappears ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G08","actual":{"eligibility":"eligible","surfaced":true},"expected":{"eligibility":"pending","surfaced":false},"status":"FAIL"}
+----- output end -----
+audit G08 unsupported mandatory criterion disappears ... FAILED (0ms)
+audit G09 parsed aggregate FAIL overridden by canonical factual PASS ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G09","actual":{"eligibility":"eligible","surfaced":true},"expected":{"eligibility":"ineligible","surfaced":false},"status":"FAIL"}
+----- output end -----
+audit G09 parsed aggregate FAIL overridden by canonical factual PASS ... FAILED (0ms)
+audit G10 current registry item with foreign company_key is refused ... ok (0ms)
+audit G11 old active job cannot supply a mandatory hiring receipt ... ok (0ms)
+audit G12 re-evaluation preserves mandatory UNKNOWN despite new unrelated receipt ... ok (0ms)
+audit G13 explicit mandatory exclusion is preserved but cannot be proven by model PASS ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G13 compiled","constraints":{"ownership":{"operator":"exclude","value":"franchises","reason":"explicit customer exclusion"}},"criteria":[{"kind":"hard","dimension":"industry","value":"software","label":"Industry: software","source":"user_explicit","user_phrase":"software","rationale":"stated in the request","id":"industry:software","status":"ok"},{"kind":"hard","dimension":"exclusion","value":{"field":"ownership","value":"franchises"},"label":"Excluding: franchises","source":"user_explicit","elevated_by":"excluding","user_phrase":"franchises","rationale":"stated in the request","id":"exclusion:_field_ownership_value_franchises_","status":"ok"}]}
+----- output end -----
+audit G13 explicit mandatory exclusion is preserved but cannot be proven by model PASS ... ok (12ms)
+audit G08b real compiled exact-size mandatory criterion is skipped ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G08b","actual":"eligible","expected":"pending","status":"FAIL"}
+----- output end -----
+audit G08b real compiled exact-size mandatory criterion is skipped ... FAILED (1ms)
+audit G14 customer 7-day expansion window ignored for 45-day-old proven signal ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"G14","actual":{"receipt":"pass","eligibility":"eligible","surfaced":true},"expected":{"receipt":"unknown","eligibility":"pending","surfaced":false},"status":"FAIL"}
+----- output end -----
+audit G14 customer 7-day expansion window ignored for 45-day-old proven signal ... FAILED (0ms)
+audit compiler preserves customer contract: recruiting expanding regions ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"compiler recruiting expanding regions","status":"PASS","criteria":[{"kind":"hard","dimension":"industry","value":"recruiting agencies","label":"Industry: recruiting agencies","source":"user_explicit","user_phrase":"recruiting agencies","rationale":"stated in the request","id":"industry:recruiting_agencies","status":"ok"},{"kind":"hard","dimension":"exclusion","value":{"field":"customer_exclusion","value":"franchises"},"label":"Excluding: franchises","source":"user_explicit","elevated_by":"excluding","user_phrase":"franchises","rationale":"stated in the request","id":"exclusion:_field_customer_exclusion_value_franchises_","status":"ok"},{"kind":"target","dimension":"constraint","value":{"field":"customer_preference","value":"founder-led"},"label":"customer preference: founder-led (preference)","source":"user_explicit","user_phrase":"founder-led","rationale":"a preference, which can rank but never reject","id":"constraint:_field_customer_preference_value_founder_led_","status":"ok"},{"kind":"target","dimension":"expansion","value":{"event":"expansion","subject":"company","qualifier":{"region":"germany"}},"label":"Expansion: germany","source":"user_explicit","user_phrase":"Find recruiting agencies with expansion into Germany; exclude franchises; prefer founder-led.","rationale":"an observable signal the request asks for","id":"expansion:_event_expansion_subject_company_qualifier_region_germany_","status":"ok"}]}
+----- output end -----
+audit compiler preserves customer contract: recruiting expanding regions ... ok (4ms)
+audit compiler preserves customer contract: B2B hiring sales leadership ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"compiler B2B hiring sales leadership","status":"PASS","criteria":[{"kind":"hard","dimension":"industry","value":"B2B software","label":"Industry: B2B software","source":"user_explicit","user_phrase":"B2B software","rationale":"stated in the request","id":"industry:b2b_software","status":"ok"},{"kind":"hard","dimension":"exclusion","value":{"field":"customer_exclusion","value":"staffing agencies"},"label":"Excluding: staffing agencies","source":"user_explicit","elevated_by":"excluding","user_phrase":"staffing agencies","rationale":"stated in the request","id":"exclusion:_field_customer_exclusion_value_staffing_agencies_","status":"ok"},{"kind":"target","dimension":"constraint","value":{"field":"customer_preference","value":"remote-first"},"label":"customer preference: remote-first (preference)","source":"user_explicit","user_phrase":"remote-first","rationale":"a preference, which can rank but never reject","id":"constraint:_field_customer_preference_value_remote_first_","status":"ok"}]}
+----- output end -----
+audit compiler preserves customer contract: B2B hiring sales leadership ... ok (0ms)
+audit compiler preserves customer contract: manufacturers expanding facilities ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"compiler manufacturers expanding facilities","status":"PASS","criteria":[{"kind":"hard","dimension":"industry","value":"manufacturing","label":"Industry: manufacturing","source":"user_explicit","user_phrase":"","rationale":"stated in the request","id":"industry:manufacturing","status":"ok"},{"kind":"hard","dimension":"exclusion","value":{"field":"customer_exclusion","value":"distributors"},"label":"Excluding: distributors","source":"user_explicit","elevated_by":"excluding","user_phrase":"distributors","rationale":"stated in the request","id":"exclusion:_field_customer_exclusion_value_distributors_","status":"ok"},{"kind":"target","dimension":"constraint","value":{"field":"customer_preference","value":"renewable energy"},"label":"customer preference: renewable energy (preference)","source":"user_explicit","user_phrase":"renewable energy","rationale":"a preference, which can rank but never reject","id":"constraint:_field_customer_preference_value_renewable_energy_","status":"ok"},{"kind":"target","dimension":"expansion","value":{"event":"expansion","subject":"company","qualifier":{}},"label":"Expansion","source":"user_explicit","user_phrase":"Find manufacturers with facility expansion; exclude distributors; prefer renewable energy.","rationale":"an observable signal the request asks for","id":"expansion:_event_expansion_subject_company_qualifier_","status":"ok"}]}
+----- output end -----
+audit compiler preserves customer contract: manufacturers expanding facilities ... ok (0ms)
+audit compiler preserves customer contract: software recent funding ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"compiler software recent funding","status":"PASS","criteria":[{"kind":"hard","dimension":"industry","value":"software","label":"Industry: software","source":"user_explicit","user_phrase":"software","rationale":"stated in the request","id":"industry:software","status":"ok"},{"kind":"hard","dimension":"company_stage","value":"startup","label":"Company kind: startup","source":"user_explicit","user_phrase":"startup","rationale":"the company kind in the request","status":"unprovable_today","id":"company_stage:startup"},{"kind":"target","dimension":"company_stage","value":"seed","label":"Stage: seed","source":"user_explicit","elevated_by":null,"user_phrase":"seed stage","rationale":"stated as a preference","status":"ok","id":"company_stage:seed"},{"kind":"hard","dimension":"exclusion","value":{"field":"customer_exclusion","value":"grants"},"label":"Excluding: grants","source":"user_explicit","elevated_by":"excluding","user_phrase":"grants","rationale":"stated in the request","id":"exclusion:_field_customer_exclusion_value_grants_","status":"ok"},{"kind":"target","dimension":"constraint","value":{"field":"customer_preference","value":"seed stage"},"label":"customer preference: seed stage (preference)","source":"user_explicit","user_phrase":"seed stage","rationale":"a preference, which can rank but never reject","id":"constraint:_field_customer_preference_value_seed_stage_","status":"ok"},{"kind":"target","dimension":"funding","value":{"event":"funding","subject":"company","qualifier":{"round_type":"seed"}},"label":"Funding: seed","source":"user_explicit","user_phrase":"Find software with funding within 90 days; exclude grants; prefer seed stage.","rationale":"an observable signal the request asks for","id":"funding:_event_funding_subject_company_qualifier_round_type_seed_","status":"ok"}]}
+----- output end -----
+audit compiler preserves customer contract: software recent funding ... ok (1ms)
+audit compiler preserves customer contract: services opening locations ...
+------- output -------
+INDEPENDENT_AUDIT {"id":"compiler services opening locations","status":"PASS","criteria":[{"kind":"hard","dimension":"industry","value":"service businesses","label":"Industry: service businesses","source":"user_explicit","user_phrase":"service businesses","rationale":"stated in the request","id":"industry:service_businesses","status":"ok"},{"kind":"hard","dimension":"exclusion","value":{"field":"customer_exclusion","value":"franchises"},"label":"Excluding: franchises","source":"user_explicit","elevated_by":"excluding","user_phrase":"franchises","rationale":"stated in the request","id":"exclusion:_field_customer_exclusion_value_franchises_","status":"ok"},{"kind":"target","dimension":"constraint","value":{"field":"customer_preference","value":"independently owned"},"label":"customer preference: independently owned (preference)","source":"user_explicit","user_phrase":"independently owned","rationale":"a preference, which can rank but never reject","id":"constraint:_field_customer_preference_value_independently_owned_","status":"ok"}]}
+----- output end -----
+audit compiler preserves customer contract: services opening locations ... ok (0ms)
+running 19 tests from ./tests/edge-functions/_shared/independentQualificationEngineAudit.test.ts
+independent native engine pass ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"pass","companies":1,"qualified":["https://www.linkedin.com/company/audit-example"],"persistencePlans":1,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"strong_opportunity","label":"strong_opportunity","hard_checks":{"industry":"pass","hiring":"pass"}}],"evaluator":["qualified"],"coherent":true,"restoredQualified":["https://www.linkedin.com/company/audit-example"],"terminal":{"terminal":"completed","deliverable":"company","delivered":1,"requested":1,"quota":{"contactReady":1,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 1 qualified. No credits were used."}
+----- post-test output end -----
+independent native engine pass ... ok (52ms)
+independent native engine fail ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"fail","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"ineligible","label":null,"hard_checks":{"industry":"pass","hiring":"fail"}}],"evaluator":["not_qualified"],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 ruled out. No credits were used."}
+----- post-test output end -----
+independent native engine fail ... ok (8ms)
+independent native engine unknown ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"unknown","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"pass","hiring":"unknown"}}],"evaluator":["insufficient_evidence"],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine unknown ... ok (5ms)
+independent native engine missing ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"missing","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"pass","hiring":"unknown"}}],"evaluator":["insufficient_evidence"],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine missing ... ok (4ms)
+independent native engine uncited ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"uncited","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown","hiring":"unknown"}}],"evaluator":["insufficient_evidence"],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine uncited ... ok (4ms)
+independent native engine fabricated ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"fabricated","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown","hiring":"unknown"}}],"evaluator":["insufficient_evidence"],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine fabricated ... ok (3ms)
+independent native engine foreign_id ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"foreign_id","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown","hiring":"unknown"}}],"evaluator":["insufficient_evidence"],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine foreign_id ... ok (5ms)
+independent native engine truncated ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"truncated","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown","hiring":"unknown"}}],"evaluator":["insufficient_evidence"],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine truncated ... ok (7ms)
+independent native engine timeout ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"timeout","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown","hiring":"unknown"}}],"evaluator":["insufficient_evidence"],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine timeout ... ok (3ms)
+independent native engine aggregate_fail ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"aggregate_fail","companies":1,"qualified":["https://www.linkedin.com/company/audit-example"],"persistencePlans":1,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"strong_opportunity","label":"strong_opportunity","hard_checks":{"industry":"pass","hiring":"pass"}}],"evaluator":["not_qualified"],"coherent":true,"restoredQualified":["https://www.linkedin.com/company/audit-example"],"terminal":{"terminal":"completed","deliverable":"company","delivered":1,"requested":1,"quota":{"contactReady":1,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 1 qualified. No credits were used."}
+----- post-test output end -----
+independent native engine aggregate_fail ... FAILED (4ms)
+independent native engine aggregate_review ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"aggregate_review","companies":1,"qualified":["https://www.linkedin.com/company/audit-example"],"persistencePlans":1,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"strong_opportunity","label":"strong_opportunity","hard_checks":{"industry":"pass","hiring":"pass"}}],"evaluator":["insufficient_evidence"],"coherent":true,"restoredQualified":["https://www.linkedin.com/company/audit-example"],"terminal":{"terminal":"completed","deliverable":"company","delivered":1,"requested":1,"quota":{"contactReady":1,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 1 qualified. No credits were used."}
+----- post-test output end -----
+independent native engine aggregate_review ... FAILED (3ms)
+independent native engine agency ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"agency","companies":0,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search"],"modelCalls":1,"decisions":[],"evaluator":[],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. No company reached qualification. No credits were used."}
+----- post-test output end -----
+independent native engine agency ... FAILED (1ms)
+independent native engine employer_conflict ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"employer_conflict","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":1,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown","hiring":"unknown"}}],"evaluator":[null],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine employer_conflict ... ok (2ms)
+independent native engine multiple_identities ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"multiple_identities","companies":1,"qualified":["https://www.linkedin.com/company/audit-example"],"persistencePlans":1,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"strong_opportunity","label":"strong_opportunity","hard_checks":{"industry":"pass","hiring":"pass"}}],"evaluator":["qualified"],"coherent":true,"restoredQualified":["https://www.linkedin.com/company/audit-example"],"terminal":{"terminal":"completed","deliverable":"company","delivered":1,"requested":1,"quota":{"contactReady":1,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 1 qualified. No credits were used."}
+----- post-test output end -----
+independent native engine multiple_identities ... ok (2ms)
+independent native engine contradictory ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"contradictory","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"pass","hiring":"unknown"}}],"evaluator":["insufficient_evidence"],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine contradictory ... ok (3ms)
+independent native engine malformed ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"malformed","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown","hiring":"unknown"}}],"evaluator":["insufficient_evidence"],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine malformed ... ok (4ms)
+independent native engine partially_valid ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"partially_valid","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":3,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"pass","hiring":"unknown"}}],"evaluator":["insufficient_evidence"],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine partially_valid ... ok (3ms)
+independent native engine stale_active ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"stale_active","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":1,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown","hiring":"unknown"}}],"evaluator":[null],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine stale_active ... ok (2ms)
+independent native engine undated_job ...
+------- post-test output -------
+INDEPENDENT_ENGINE {"mode":"undated_job","companies":1,"qualified":[],"persistencePlans":0,"calls":["apify_linkedin_job_search","apify_linkedin_company_details"],"modelCalls":1,"decisions":[{"company_key":"https://www.linkedin.com/company/audit-example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown","hiring":"unknown"}}],"evaluator":[null],"coherent":true,"restoredQualified":[],"terminal":{"terminal":"search_exhausted","deliverable":"company","delivered":0,"requested":1,"quota":{"contactReady":0,"requested":1}},"notice":"0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."}
+----- post-test output end -----
+independent native engine undated_job ... ok (2ms)
+running 6 tests from ./tests/edge-functions/_shared/independentQualificationProjectionAudit.test.ts
+independent engine projection: mandatory pass ...
+------- post-test output -------
+INDEPENDENT_PROJECTION {"mode":"pass","evaluator":"qualified","canonical":[{"company_key":"https://www.linkedin.com/company/example","bucket":"strong_opportunity","label":"strong_opportunity","hard_checks":{"industry":"pass"}}],"rowCount":1,"summary":{"discovered":1,"qualified":1,"pending":0,"ineligible":0,"screened_out":0,"undecided":0},"workbench":{"discovered":1,"screened_out":0,"investigating":0,"identity_unresolved":0,"pending":0,"exact_match":0,"strong_opportunity":1,"worth_considering":0,"low_priority":0,"ineligible":0},"rows":[{"key":"domain:example.invalid","company_key":"https://www.linkedin.com/company/example","plan":{"workspaceId":"audit-workspace","account":{"name":"Example","domain":"example.invalid","linkedinUrl":"https://www.linkedin.com/company/example","description":null},"contact":null,"leadCandidate":{"lead_type":"account","reason":null,"next_action":"find_decision_maker","raw":{"compound":true,"row_kind":"company","workbench_stage":"company_qualified","verdict":"QUALIFIED","pending_reason":"no_decision_maker_returned","company_name":"Example","company_domain":"example.invalid","company_linkedin_url":"https://www.linkedin.com/company/example","company_identity_key":"domain:example.invalid","company_resolution_status":"verified","company_brain_status":"qualified","company_type_status":null,"job_evidence":null,"hiring_signal_title":null,"hiring_signal_url":null,"hiring_signal_date":null,"decision_maker_status":"not_required","contact_status":"needs_contact","quota_eligible":true,"qualification_basis":"p5_canonical_eligibility","canonical_decision":{"qualified":true,"bucket":"strong_opportunity","label":"strong_opportunity","hard_checks":{"industry":"pass"}},"quota_basis":"qualified_companies_mission"}},"verdict":"NEEDS_REVIEW","persistable":true,"persistenceReason":"company_row_persistable:company_qualified","contactBlocked":true,"blockReasons":["no_verified_decision_maker","contact_not_requested"]}}]}
+----- post-test output end -----
+independent engine projection: mandatory pass ... ok (10ms)
+independent engine projection: mandatory fail ...
+------- post-test output -------
+INDEPENDENT_PROJECTION {"mode":"fail","evaluator":"not_qualified","canonical":[{"company_key":"https://www.linkedin.com/company/example","bucket":"ineligible","label":null,"hard_checks":{"industry":"fail"}}],"rowCount":0,"summary":{"discovered":1,"qualified":0,"pending":0,"ineligible":1,"screened_out":0,"undecided":0},"workbench":{"discovered":1,"screened_out":0,"investigating":0,"identity_unresolved":0,"pending":0,"exact_match":0,"strong_opportunity":0,"worth_considering":0,"low_priority":0,"ineligible":1},"rows":[]}
+----- post-test output end -----
+independent engine projection: mandatory fail ... ok (0ms)
+independent engine projection: mandatory unknown ...
+------- post-test output -------
+INDEPENDENT_PROJECTION {"mode":"unknown","evaluator":"insufficient_evidence","canonical":[{"company_key":"https://www.linkedin.com/company/example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown"}}],"rowCount":0,"summary":{"discovered":1,"qualified":0,"pending":1,"ineligible":0,"screened_out":0,"undecided":0},"workbench":{"discovered":1,"screened_out":0,"investigating":0,"identity_unresolved":0,"pending":1,"exact_match":0,"strong_opportunity":0,"worth_considering":0,"low_priority":0,"ineligible":0},"rows":[]}
+----- post-test output end -----
+independent engine projection: mandatory unknown ... ok (0ms)
+independent engine projection: mandatory missing ...
+------- post-test output -------
+INDEPENDENT_PROJECTION {"mode":"missing","evaluator":"insufficient_evidence","canonical":[{"company_key":"https://www.linkedin.com/company/example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown"}}],"rowCount":0,"summary":{"discovered":1,"qualified":0,"pending":1,"ineligible":0,"screened_out":0,"undecided":0},"workbench":{"discovered":1,"screened_out":0,"investigating":0,"identity_unresolved":0,"pending":1,"exact_match":0,"strong_opportunity":0,"worth_considering":0,"low_priority":0,"ineligible":0},"rows":[]}
+----- post-test output end -----
+independent engine projection: mandatory missing ... ok (0ms)
+independent engine projection: mandatory timeout ...
+------- post-test output -------
+INDEPENDENT_PROJECTION {"mode":"timeout","evaluator":"insufficient_evidence","canonical":[{"company_key":"https://www.linkedin.com/company/example","bucket":"pending","label":null,"hard_checks":{"industry":"unknown"}}],"rowCount":0,"summary":{"discovered":1,"qualified":0,"pending":1,"ineligible":0,"screened_out":0,"undecided":0},"workbench":{"discovered":1,"screened_out":0,"investigating":0,"identity_unresolved":0,"pending":1,"exact_match":0,"strong_opportunity":0,"worth_considering":0,"low_priority":0,"ineligible":0},"rows":[]}
+----- post-test output end -----
+independent engine projection: mandatory timeout ... ok (0ms)
+independent engine projection G09: aggregate rejection reaches qualified persistence plan ...
+------- post-test output -------
+INDEPENDENT_PROJECTION {"id":"G09","actual":{"qualified":1,"persistencePlans":1,"summary":1},"decision":[{"company_key":"https://www.linkedin.com/company/example","bucket":"strong_opportunity","label":"strong_opportunity","hard_checks":{"industry":"pass"}}],"rows":[{"key":"domain:example.invalid","company_key":"https://www.linkedin.com/company/example","plan":{"workspaceId":"audit-workspace","account":{"name":"Example","domain":"example.invalid","linkedinUrl":"https://www.linkedin.com/company/example","description":null},"contact":null,"leadCandidate":{"lead_type":"account","reason":null,"next_action":"find_decision_maker","raw":{"compound":true,"row_kind":"company","workbench_stage":"company_qualified","verdict":"QUALIFIED","pending_reason":"no_decision_maker_returned","company_name":"Example","company_domain":"example.invalid","company_linkedin_url":"https://www.linkedin.com/company/example","company_identity_key":"domain:example.invalid","company_resolution_status":"verified","company_brain_status":"rejected","company_type_status":null,"job_evidence":null,"hiring_signal_title":null,"hiring_signal_url":null,"hiring_signal_date":null,"decision_maker_status":"not_required","contact_status":"needs_contact","quota_eligible":true,"qualification_basis":"p5_canonical_eligibility","canonical_decision":{"qualified":true,"bucket":"strong_opportunity","label":"strong_opportunity","hard_checks":{"industry":"pass"}},"quota_basis":"qualified_companies_mission"}},"verdict":"NEEDS_REVIEW","persistable":true,"persistenceReason":"company_row_persistable:company_qualified","contactBlocked":true,"blockReasons":["no_verified_decision_maker","contact_not_requested"]}}]}
+----- post-test output end -----
+independent engine projection G09: aggregate rejection reaches qualified persistence plan ... FAILED (1ms)
+
+ ERRORS
+
+audit G01 two equally authoritative HQ providers disagree => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:374:6
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+    {
+-     eligibility: "eligible",
+-     surfaced: true,
++     eligibility: "pending",
++     surfaced: false,
+    }
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at gap (file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:201:50)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:403:3
+
+audit G02 equally authoritative size providers disagree => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:408:6
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+-   eligible
++   pending
+
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at gap (file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:201:50)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:424:3
+
+audit G03 foreign employer posting is relabelled to candidate => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:426:6
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+-   pass
++   unknown
+
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at gap (file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:201:50)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:451:3
+
+audit G04 graph takes proven fact from another company => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:453:6
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+-   eligible
++   pending
+
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at gap (file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:201:50)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:457:3
+
+audit G05 stale page: cached web timestamp cannot support a current requirement => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:465:8
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+-   pass
++   unknown
+
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at gap (file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:201:50)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:495:5
+
+audit G06 missing timestamp: cached web timestamp cannot support a current requirement => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:465:8
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+-   pass
++   unknown
+
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at gap (file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:201:50)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:495:5
+
+audit G07 invalid timestamp: cached web timestamp cannot support a current requirement => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:465:8
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+-   pass
++   unknown
+
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at gap (file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:201:50)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:495:5
+
+audit G08 unsupported mandatory criterion disappears => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:498:6
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+    {
+-     eligibility: "eligible",
+-     surfaced: true,
++     eligibility: "pending",
++     surfaced: false,
+    }
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at gap (file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:201:50)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:503:3
+
+audit G09 parsed aggregate FAIL overridden by canonical factual PASS => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:508:6
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+    {
+-     eligibility: "eligible",
+-     surfaced: true,
++     eligibility: "ineligible",
++     surfaced: false,
+    }
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at gap (file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:201:50)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:520:3
+
+audit G08b real compiled exact-size mandatory criterion is skipped => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:611:6
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+-   eligible
++   pending
+
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at gap (file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:201:50)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:624:3
+
+audit G14 customer 7-day expansion window ignored for 45-day-old proven signal => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:630:6
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+    {
+-     eligibility: "eligible",
+-     receipt: "pass",
+-     surfaced: true,
++     eligibility: "pending",
++     receipt: "unknown",
++     surfaced: false,
+    }
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at gap (file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:201:50)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationAudit.test.ts:675:3
+
+independent native engine aggregate_fail => ./tests/edge-functions/_shared/independentQualificationEngineAudit.test.ts:67:8
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+-   1
++   0
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationEngineAudit.test.ts:433:9
+
+independent native engine aggregate_review => ./tests/edge-functions/_shared/independentQualificationEngineAudit.test.ts:67:8
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+-   1
++   0
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationEngineAudit.test.ts:433:9
+
+independent native engine agency => ./tests/edge-functions/_shared/independentQualificationEngineAudit.test.ts:67:8
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+-   0
++   1
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationEngineAudit.test.ts:437:9
+
+independent engine projection G09: aggregate rejection reaches qualified persistence plan => ./tests/edge-functions/_shared/independentQualificationProjectionAudit.test.ts:196:6
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+    {
+-     persistencePlans: 1,
+-     qualified: 1,
+-     summary: 1,
++     persistencePlans: 0,
++     qualified: 0,
++     summary: 0,
+    }
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at file:///Users/prasidha/Downloads/screeningpilot-main/qualification-evidence-audit/tests/edge-functions/_shared/independentQualificationProjectionAudit.test.ts:216:5
+
+ FAILURES
+
+audit G01 two equally authoritative HQ providers disagree => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:374:6
+audit G02 equally authoritative size providers disagree => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:408:6
+audit G03 foreign employer posting is relabelled to candidate => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:426:6
+audit G04 graph takes proven fact from another company => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:453:6
+audit G05 stale page: cached web timestamp cannot support a current requirement => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:465:8
+audit G06 missing timestamp: cached web timestamp cannot support a current requirement => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:465:8
+audit G07 invalid timestamp: cached web timestamp cannot support a current requirement => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:465:8
+audit G08 unsupported mandatory criterion disappears => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:498:6
+audit G09 parsed aggregate FAIL overridden by canonical factual PASS => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:508:6
+audit G08b real compiled exact-size mandatory criterion is skipped => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:611:6
+audit G14 customer 7-day expansion window ignored for 45-day-old proven signal => ./tests/edge-functions/_shared/independentQualificationAudit.test.ts:630:6
+independent native engine aggregate_fail => ./tests/edge-functions/_shared/independentQualificationEngineAudit.test.ts:67:8
+independent native engine aggregate_review => ./tests/edge-functions/_shared/independentQualificationEngineAudit.test.ts:67:8
+independent native engine agency => ./tests/edge-functions/_shared/independentQualificationEngineAudit.test.ts:67:8
+independent engine projection G09: aggregate rejection reaches qualified persistence plan => ./tests/edge-functions/_shared/independentQualificationProjectionAudit.test.ts:196:6
+
+FAILED | 53 passed | 15 failed (320ms)
+
+error: Test failed

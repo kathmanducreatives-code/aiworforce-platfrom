@@ -1,0 +1,1730 @@
+{
+  "repository": "kathmanducreatives-code/aiworforce-platfrom",
+  "baseline": "ea3baf9ece0c2d54626f5db729b986b8660b483e",
+  "pr110": "ee91048c767a28c3b525f48c120a0194f60da20c",
+  "integration_fetched": "a10efd20075ef28126eebc8688299cef3d0b98b2",
+  "recorded_at": "2026-10-20T11:09:37.378881+05:45",
+  "method": "Real qualification, capability engine, checkpoint restore, Workbench, persistence plan and notice/terminal pure reducers; synthetic external responses. No DB mocks or writer execution. Deno runtime has no network permission.",
+  "safety": "A7 NO-GO; no paid calls, migration installation, deployment or merges.",
+  "summaries": {
+    "characterization": [
+      "ok | 68 passed | 0 failed (369ms)"
+    ],
+    "assert_gaps": [
+      "FAILED | 53 passed | 15 failed (320ms)"
+    ],
+    "regressions": [
+      "ok | 132 passed | 0 failed (661ms)"
+    ],
+    "admission": [
+      "ok | 9 passed | 0 failed | 11 filtered out (18ms)"
+    ]
+  },
+  "events": [
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "V01 uncited PASS",
+      "status": "PASS",
+      "parser": "insufficient_evidence",
+      "canonical": "pending",
+      "bucket": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "V02 mandatory FAIL under overall PASS",
+      "status": "PASS",
+      "parser": "not_qualified",
+      "canonical": "ineligible",
+      "bucket": "ineligible"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "V03 mandatory UNKNOWN",
+      "status": "PASS",
+      "parser": "insufficient_evidence",
+      "canonical": "pending",
+      "bucket": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "V04 omitted criterion",
+      "status": "PASS",
+      "parser": "insufficient_evidence",
+      "canonical": "pending",
+      "bucket": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "V05 contradictory criterion rows",
+      "status": "PASS",
+      "parser": "insufficient_evidence",
+      "canonical": "pending",
+      "bucket": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "V06 another company evidence ID",
+      "status": "PASS",
+      "parser": "insufficient_evidence",
+      "canonical": "pending",
+      "bucket": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "V07 fabricated quote",
+      "status": "PASS",
+      "parser": "insufficient_evidence",
+      "canonical": "pending",
+      "bucket": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "V08 malformed JSON",
+      "status": "PASS",
+      "parser": "insufficient_evidence",
+      "canonical": "pending",
+      "bucket": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "V09 truncated JSON",
+      "status": "PASS",
+      "parser": "insufficient_evidence",
+      "canonical": "pending",
+      "bucket": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "V10 partially valid response",
+      "status": "PASS",
+      "parser": "insufficient_evidence",
+      "canonical": "pending",
+      "bucket": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "V11 absent evaluator after optimistic proof",
+      "status": "PASS",
+      "parser": "insufficient_evidence",
+      "canonical": "pending",
+      "bucket": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "C01 recruiting agencies expanding regions",
+      "status": "PASS",
+      "criterion": {
+        "region": "Germany"
+      },
+      "canonical": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "C01 recruiting agencies expanding regions semantic limit",
+      "parser": "qualified",
+      "canonical": "eligible",
+      "quote": "Example has no plans to expand into Germany."
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "C02 B2B hiring sales leadership",
+      "status": "PASS",
+      "criterion": {
+        "role": "VP of Sales"
+      },
+      "canonical": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "C02 B2B hiring sales leadership semantic limit",
+      "parser": "qualified",
+      "canonical": "eligible",
+      "quote": "Sales Development Representative"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "C03 manufacturing facility expansion",
+      "status": "PASS",
+      "criterion": {
+        "facility": true
+      },
+      "canonical": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "C03 manufacturing facility expansion semantic limit",
+      "parser": "qualified",
+      "canonical": "eligible",
+      "quote": "Example closed its factory and cancelled the expansion."
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "C04 software recent funding",
+      "status": "PASS",
+      "criterion": {
+        "kind": "venture"
+      },
+      "canonical": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "C04 software recent funding semantic limit",
+      "parser": "qualified",
+      "canonical": "eligible",
+      "quote": "Example has not raised funding; it declined a grant."
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "C05 service business new locations",
+      "status": "PASS",
+      "criterion": {
+        "new_locations": true
+      },
+      "canonical": "pending"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "C05 service business new locations semantic limit",
+      "parser": "qualified",
+      "canonical": "eligible",
+      "quote": "Example closed all branch locations and will not reopen."
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G01",
+      "actual": {
+        "eligibility": "eligible",
+        "surfaced": true
+      },
+      "expected": {
+        "eligibility": "pending",
+        "surfaced": false
+      },
+      "status": "FAIL"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G02",
+      "actual": "eligible",
+      "expected": "pending",
+      "status": "FAIL"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G03",
+      "actual": "pass",
+      "expected": "unknown",
+      "status": "FAIL"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G04",
+      "actual": "eligible",
+      "expected": "pending",
+      "status": "FAIL"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G05 stale page",
+      "freshness": "current",
+      "observed_at": "2020-01-01T00:00:00Z",
+      "projected": null
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G05 stale page",
+      "actual": "pass",
+      "expected": "unknown",
+      "status": "FAIL"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G06 missing timestamp",
+      "freshness": "unknown",
+      "observed_at": null,
+      "projected": null
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G06 missing timestamp",
+      "actual": "pass",
+      "expected": "unknown",
+      "status": "FAIL"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G07 invalid timestamp",
+      "freshness": "current",
+      "observed_at": "bad-date",
+      "projected": null
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G07 invalid timestamp",
+      "actual": "pass",
+      "expected": "unknown",
+      "status": "FAIL"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G08",
+      "actual": {
+        "eligibility": "eligible",
+        "surfaced": true
+      },
+      "expected": {
+        "eligibility": "pending",
+        "surfaced": false
+      },
+      "status": "FAIL"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G09",
+      "actual": {
+        "eligibility": "eligible",
+        "surfaced": true
+      },
+      "expected": {
+        "eligibility": "ineligible",
+        "surfaced": false
+      },
+      "status": "FAIL"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G13 compiled",
+      "constraints": {
+        "ownership": {
+          "operator": "exclude",
+          "value": "franchises",
+          "reason": "explicit customer exclusion"
+        }
+      },
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "software",
+          "label": "Industry: software",
+          "source": "user_explicit",
+          "user_phrase": "software",
+          "rationale": "stated in the request",
+          "id": "industry:software",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "exclusion",
+          "value": {
+            "field": "ownership",
+            "value": "franchises"
+          },
+          "label": "Excluding: franchises",
+          "source": "user_explicit",
+          "elevated_by": "excluding",
+          "user_phrase": "franchises",
+          "rationale": "stated in the request",
+          "id": "exclusion:_field_ownership_value_franchises_",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G08b",
+      "actual": "eligible",
+      "expected": "pending",
+      "status": "FAIL"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "G14",
+      "actual": {
+        "receipt": "pass",
+        "eligibility": "eligible",
+        "surfaced": true
+      },
+      "expected": {
+        "receipt": "unknown",
+        "eligibility": "pending",
+        "surfaced": false
+      },
+      "status": "FAIL"
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "compiler recruiting expanding regions",
+      "status": "PASS",
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "recruiting agencies",
+          "label": "Industry: recruiting agencies",
+          "source": "user_explicit",
+          "user_phrase": "recruiting agencies",
+          "rationale": "stated in the request",
+          "id": "industry:recruiting_agencies",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "exclusion",
+          "value": {
+            "field": "customer_exclusion",
+            "value": "franchises"
+          },
+          "label": "Excluding: franchises",
+          "source": "user_explicit",
+          "elevated_by": "excluding",
+          "user_phrase": "franchises",
+          "rationale": "stated in the request",
+          "id": "exclusion:_field_customer_exclusion_value_franchises_",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "constraint",
+          "value": {
+            "field": "customer_preference",
+            "value": "founder-led"
+          },
+          "label": "customer preference: founder-led (preference)",
+          "source": "user_explicit",
+          "user_phrase": "founder-led",
+          "rationale": "a preference, which can rank but never reject",
+          "id": "constraint:_field_customer_preference_value_founder_led_",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "expansion",
+          "value": {
+            "event": "expansion",
+            "subject": "company",
+            "qualifier": {
+              "region": "germany"
+            }
+          },
+          "label": "Expansion: germany",
+          "source": "user_explicit",
+          "user_phrase": "Find recruiting agencies with expansion into Germany; exclude franchises; prefer founder-led.",
+          "rationale": "an observable signal the request asks for",
+          "id": "expansion:_event_expansion_subject_company_qualifier_region_germany_",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "compiler B2B hiring sales leadership",
+      "status": "PASS",
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "B2B software",
+          "label": "Industry: B2B software",
+          "source": "user_explicit",
+          "user_phrase": "B2B software",
+          "rationale": "stated in the request",
+          "id": "industry:b2b_software",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "exclusion",
+          "value": {
+            "field": "customer_exclusion",
+            "value": "staffing agencies"
+          },
+          "label": "Excluding: staffing agencies",
+          "source": "user_explicit",
+          "elevated_by": "excluding",
+          "user_phrase": "staffing agencies",
+          "rationale": "stated in the request",
+          "id": "exclusion:_field_customer_exclusion_value_staffing_agencies_",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "constraint",
+          "value": {
+            "field": "customer_preference",
+            "value": "remote-first"
+          },
+          "label": "customer preference: remote-first (preference)",
+          "source": "user_explicit",
+          "user_phrase": "remote-first",
+          "rationale": "a preference, which can rank but never reject",
+          "id": "constraint:_field_customer_preference_value_remote_first_",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "compiler manufacturers expanding facilities",
+      "status": "PASS",
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "manufacturing",
+          "label": "Industry: manufacturing",
+          "source": "user_explicit",
+          "user_phrase": "",
+          "rationale": "stated in the request",
+          "id": "industry:manufacturing",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "exclusion",
+          "value": {
+            "field": "customer_exclusion",
+            "value": "distributors"
+          },
+          "label": "Excluding: distributors",
+          "source": "user_explicit",
+          "elevated_by": "excluding",
+          "user_phrase": "distributors",
+          "rationale": "stated in the request",
+          "id": "exclusion:_field_customer_exclusion_value_distributors_",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "constraint",
+          "value": {
+            "field": "customer_preference",
+            "value": "renewable energy"
+          },
+          "label": "customer preference: renewable energy (preference)",
+          "source": "user_explicit",
+          "user_phrase": "renewable energy",
+          "rationale": "a preference, which can rank but never reject",
+          "id": "constraint:_field_customer_preference_value_renewable_energy_",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "expansion",
+          "value": {
+            "event": "expansion",
+            "subject": "company",
+            "qualifier": {}
+          },
+          "label": "Expansion",
+          "source": "user_explicit",
+          "user_phrase": "Find manufacturers with facility expansion; exclude distributors; prefer renewable energy.",
+          "rationale": "an observable signal the request asks for",
+          "id": "expansion:_event_expansion_subject_company_qualifier_",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "compiler software recent funding",
+      "status": "PASS",
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "software",
+          "label": "Industry: software",
+          "source": "user_explicit",
+          "user_phrase": "software",
+          "rationale": "stated in the request",
+          "id": "industry:software",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "company_stage",
+          "value": "startup",
+          "label": "Company kind: startup",
+          "source": "user_explicit",
+          "user_phrase": "startup",
+          "rationale": "the company kind in the request",
+          "status": "unprovable_today",
+          "id": "company_stage:startup"
+        },
+        {
+          "kind": "target",
+          "dimension": "company_stage",
+          "value": "seed",
+          "label": "Stage: seed",
+          "source": "user_explicit",
+          "elevated_by": null,
+          "user_phrase": "seed stage",
+          "rationale": "stated as a preference",
+          "status": "ok",
+          "id": "company_stage:seed"
+        },
+        {
+          "kind": "hard",
+          "dimension": "exclusion",
+          "value": {
+            "field": "customer_exclusion",
+            "value": "grants"
+          },
+          "label": "Excluding: grants",
+          "source": "user_explicit",
+          "elevated_by": "excluding",
+          "user_phrase": "grants",
+          "rationale": "stated in the request",
+          "id": "exclusion:_field_customer_exclusion_value_grants_",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "constraint",
+          "value": {
+            "field": "customer_preference",
+            "value": "seed stage"
+          },
+          "label": "customer preference: seed stage (preference)",
+          "source": "user_explicit",
+          "user_phrase": "seed stage",
+          "rationale": "a preference, which can rank but never reject",
+          "id": "constraint:_field_customer_preference_value_seed_stage_",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "funding",
+          "value": {
+            "event": "funding",
+            "subject": "company",
+            "qualifier": {
+              "round_type": "seed"
+            }
+          },
+          "label": "Funding: seed",
+          "source": "user_explicit",
+          "user_phrase": "Find software with funding within 90 days; exclude grants; prefer seed stage.",
+          "rationale": "an observable signal the request asks for",
+          "id": "funding:_event_funding_subject_company_qualifier_round_type_seed_",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "lane": "INDEPENDENT_AUDIT",
+      "id": "compiler services opening locations",
+      "status": "PASS",
+      "criteria": [
+        {
+          "kind": "hard",
+          "dimension": "industry",
+          "value": "service businesses",
+          "label": "Industry: service businesses",
+          "source": "user_explicit",
+          "user_phrase": "service businesses",
+          "rationale": "stated in the request",
+          "id": "industry:service_businesses",
+          "status": "ok"
+        },
+        {
+          "kind": "hard",
+          "dimension": "exclusion",
+          "value": {
+            "field": "customer_exclusion",
+            "value": "franchises"
+          },
+          "label": "Excluding: franchises",
+          "source": "user_explicit",
+          "elevated_by": "excluding",
+          "user_phrase": "franchises",
+          "rationale": "stated in the request",
+          "id": "exclusion:_field_customer_exclusion_value_franchises_",
+          "status": "ok"
+        },
+        {
+          "kind": "target",
+          "dimension": "constraint",
+          "value": {
+            "field": "customer_preference",
+            "value": "independently owned"
+          },
+          "label": "customer preference: independently owned (preference)",
+          "source": "user_explicit",
+          "user_phrase": "independently owned",
+          "rationale": "a preference, which can rank but never reject",
+          "id": "constraint:_field_customer_preference_value_independently_owned_",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "pass",
+      "companies": 1,
+      "qualified": [
+        "https://www.linkedin.com/company/audit-example"
+      ],
+      "persistencePlans": 1,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "strong_opportunity",
+          "label": "strong_opportunity",
+          "hard_checks": {
+            "industry": "pass",
+            "hiring": "pass"
+          }
+        }
+      ],
+      "evaluator": [
+        "qualified"
+      ],
+      "coherent": true,
+      "restoredQualified": [
+        "https://www.linkedin.com/company/audit-example"
+      ],
+      "terminal": {
+        "terminal": "completed",
+        "deliverable": "company",
+        "delivered": 1,
+        "requested": 1,
+        "quota": {
+          "contactReady": 1,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 1 qualified. No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "fail",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "ineligible",
+          "label": null,
+          "hard_checks": {
+            "industry": "pass",
+            "hiring": "fail"
+          }
+        }
+      ],
+      "evaluator": [
+        "not_qualified"
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 ruled out. No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "unknown",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "pass",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        "insufficient_evidence"
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "missing",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "pass",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        "insufficient_evidence"
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "uncited",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        "insufficient_evidence"
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "fabricated",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        "insufficient_evidence"
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "foreign_id",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        "insufficient_evidence"
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "truncated",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        "insufficient_evidence"
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "timeout",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        "insufficient_evidence"
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "aggregate_fail",
+      "companies": 1,
+      "qualified": [
+        "https://www.linkedin.com/company/audit-example"
+      ],
+      "persistencePlans": 1,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "strong_opportunity",
+          "label": "strong_opportunity",
+          "hard_checks": {
+            "industry": "pass",
+            "hiring": "pass"
+          }
+        }
+      ],
+      "evaluator": [
+        "not_qualified"
+      ],
+      "coherent": true,
+      "restoredQualified": [
+        "https://www.linkedin.com/company/audit-example"
+      ],
+      "terminal": {
+        "terminal": "completed",
+        "deliverable": "company",
+        "delivered": 1,
+        "requested": 1,
+        "quota": {
+          "contactReady": 1,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 1 qualified. No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "aggregate_review",
+      "companies": 1,
+      "qualified": [
+        "https://www.linkedin.com/company/audit-example"
+      ],
+      "persistencePlans": 1,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "strong_opportunity",
+          "label": "strong_opportunity",
+          "hard_checks": {
+            "industry": "pass",
+            "hiring": "pass"
+          }
+        }
+      ],
+      "evaluator": [
+        "insufficient_evidence"
+      ],
+      "coherent": true,
+      "restoredQualified": [
+        "https://www.linkedin.com/company/audit-example"
+      ],
+      "terminal": {
+        "terminal": "completed",
+        "deliverable": "company",
+        "delivered": 1,
+        "requested": 1,
+        "quota": {
+          "contactReady": 1,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 1 qualified. No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "agency",
+      "companies": 0,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search"
+      ],
+      "modelCalls": 1,
+      "decisions": [],
+      "evaluator": [],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. No company reached qualification. No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "employer_conflict",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 1,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        null
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "multiple_identities",
+      "companies": 1,
+      "qualified": [
+        "https://www.linkedin.com/company/audit-example"
+      ],
+      "persistencePlans": 1,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "strong_opportunity",
+          "label": "strong_opportunity",
+          "hard_checks": {
+            "industry": "pass",
+            "hiring": "pass"
+          }
+        }
+      ],
+      "evaluator": [
+        "qualified"
+      ],
+      "coherent": true,
+      "restoredQualified": [
+        "https://www.linkedin.com/company/audit-example"
+      ],
+      "terminal": {
+        "terminal": "completed",
+        "deliverable": "company",
+        "delivered": 1,
+        "requested": 1,
+        "quota": {
+          "contactReady": 1,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 1 qualified. No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "contradictory",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "pass",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        "insufficient_evidence"
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "malformed",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        "insufficient_evidence"
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "partially_valid",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 3,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "pass",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        "insufficient_evidence"
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "stale_active",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 1,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        null
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_ENGINE",
+      "mode": "undated_job",
+      "companies": 1,
+      "qualified": [],
+      "persistencePlans": 0,
+      "calls": [
+        "apify_linkedin_job_search",
+        "apify_linkedin_company_details"
+      ],
+      "modelCalls": 1,
+      "decisions": [
+        {
+          "company_key": "https://www.linkedin.com/company/audit-example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown",
+            "hiring": "unknown"
+          }
+        }
+      ],
+      "evaluator": [
+        null
+      ],
+      "coherent": true,
+      "restoredQualified": [],
+      "terminal": {
+        "terminal": "search_exhausted",
+        "deliverable": "company",
+        "delivered": 0,
+        "requested": 1,
+        "quota": {
+          "contactReady": 0,
+          "requested": 1
+        }
+      },
+      "notice": "0 of 1 leads saved. I looked at 0 companies, shortlisted 0, and confirmed hiring at 0. 1 company was checked against your requirements: 0 qualified, 1 pending (a requirement is not yet established). No credits were used."
+    },
+    {
+      "lane": "INDEPENDENT_PROJECTION",
+      "mode": "pass",
+      "evaluator": "qualified",
+      "canonical": [
+        {
+          "company_key": "https://www.linkedin.com/company/example",
+          "bucket": "strong_opportunity",
+          "label": "strong_opportunity",
+          "hard_checks": {
+            "industry": "pass"
+          }
+        }
+      ],
+      "rowCount": 1,
+      "summary": {
+        "discovered": 1,
+        "qualified": 1,
+        "pending": 0,
+        "ineligible": 0,
+        "screened_out": 0,
+        "undecided": 0
+      },
+      "workbench": {
+        "discovered": 1,
+        "screened_out": 0,
+        "investigating": 0,
+        "identity_unresolved": 0,
+        "pending": 0,
+        "exact_match": 0,
+        "strong_opportunity": 1,
+        "worth_considering": 0,
+        "low_priority": 0,
+        "ineligible": 0
+      },
+      "rows": [
+        {
+          "key": "domain:example.invalid",
+          "company_key": "https://www.linkedin.com/company/example",
+          "plan": {
+            "workspaceId": "audit-workspace",
+            "account": {
+              "name": "Example",
+              "domain": "example.invalid",
+              "linkedinUrl": "https://www.linkedin.com/company/example",
+              "description": null
+            },
+            "contact": null,
+            "leadCandidate": {
+              "lead_type": "account",
+              "reason": null,
+              "next_action": "find_decision_maker",
+              "raw": {
+                "compound": true,
+                "row_kind": "company",
+                "workbench_stage": "company_qualified",
+                "verdict": "QUALIFIED",
+                "pending_reason": "no_decision_maker_returned",
+                "company_name": "Example",
+                "company_domain": "example.invalid",
+                "company_linkedin_url": "https://www.linkedin.com/company/example",
+                "company_identity_key": "domain:example.invalid",
+                "company_resolution_status": "verified",
+                "company_brain_status": "qualified",
+                "company_type_status": null,
+                "job_evidence": null,
+                "hiring_signal_title": null,
+                "hiring_signal_url": null,
+                "hiring_signal_date": null,
+                "decision_maker_status": "not_required",
+                "contact_status": "needs_contact",
+                "quota_eligible": true,
+                "qualification_basis": "p5_canonical_eligibility",
+                "canonical_decision": {
+                  "qualified": true,
+                  "bucket": "strong_opportunity",
+                  "label": "strong_opportunity",
+                  "hard_checks": {
+                    "industry": "pass"
+                  }
+                },
+                "quota_basis": "qualified_companies_mission"
+              }
+            },
+            "verdict": "NEEDS_REVIEW",
+            "persistable": true,
+            "persistenceReason": "company_row_persistable:company_qualified",
+            "contactBlocked": true,
+            "blockReasons": [
+              "no_verified_decision_maker",
+              "contact_not_requested"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "lane": "INDEPENDENT_PROJECTION",
+      "mode": "fail",
+      "evaluator": "not_qualified",
+      "canonical": [
+        {
+          "company_key": "https://www.linkedin.com/company/example",
+          "bucket": "ineligible",
+          "label": null,
+          "hard_checks": {
+            "industry": "fail"
+          }
+        }
+      ],
+      "rowCount": 0,
+      "summary": {
+        "discovered": 1,
+        "qualified": 0,
+        "pending": 0,
+        "ineligible": 1,
+        "screened_out": 0,
+        "undecided": 0
+      },
+      "workbench": {
+        "discovered": 1,
+        "screened_out": 0,
+        "investigating": 0,
+        "identity_unresolved": 0,
+        "pending": 0,
+        "exact_match": 0,
+        "strong_opportunity": 0,
+        "worth_considering": 0,
+        "low_priority": 0,
+        "ineligible": 1
+      },
+      "rows": []
+    },
+    {
+      "lane": "INDEPENDENT_PROJECTION",
+      "mode": "unknown",
+      "evaluator": "insufficient_evidence",
+      "canonical": [
+        {
+          "company_key": "https://www.linkedin.com/company/example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown"
+          }
+        }
+      ],
+      "rowCount": 0,
+      "summary": {
+        "discovered": 1,
+        "qualified": 0,
+        "pending": 1,
+        "ineligible": 0,
+        "screened_out": 0,
+        "undecided": 0
+      },
+      "workbench": {
+        "discovered": 1,
+        "screened_out": 0,
+        "investigating": 0,
+        "identity_unresolved": 0,
+        "pending": 1,
+        "exact_match": 0,
+        "strong_opportunity": 0,
+        "worth_considering": 0,
+        "low_priority": 0,
+        "ineligible": 0
+      },
+      "rows": []
+    },
+    {
+      "lane": "INDEPENDENT_PROJECTION",
+      "mode": "missing",
+      "evaluator": "insufficient_evidence",
+      "canonical": [
+        {
+          "company_key": "https://www.linkedin.com/company/example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown"
+          }
+        }
+      ],
+      "rowCount": 0,
+      "summary": {
+        "discovered": 1,
+        "qualified": 0,
+        "pending": 1,
+        "ineligible": 0,
+        "screened_out": 0,
+        "undecided": 0
+      },
+      "workbench": {
+        "discovered": 1,
+        "screened_out": 0,
+        "investigating": 0,
+        "identity_unresolved": 0,
+        "pending": 1,
+        "exact_match": 0,
+        "strong_opportunity": 0,
+        "worth_considering": 0,
+        "low_priority": 0,
+        "ineligible": 0
+      },
+      "rows": []
+    },
+    {
+      "lane": "INDEPENDENT_PROJECTION",
+      "mode": "timeout",
+      "evaluator": "insufficient_evidence",
+      "canonical": [
+        {
+          "company_key": "https://www.linkedin.com/company/example",
+          "bucket": "pending",
+          "label": null,
+          "hard_checks": {
+            "industry": "unknown"
+          }
+        }
+      ],
+      "rowCount": 0,
+      "summary": {
+        "discovered": 1,
+        "qualified": 0,
+        "pending": 1,
+        "ineligible": 0,
+        "screened_out": 0,
+        "undecided": 0
+      },
+      "workbench": {
+        "discovered": 1,
+        "screened_out": 0,
+        "investigating": 0,
+        "identity_unresolved": 0,
+        "pending": 1,
+        "exact_match": 0,
+        "strong_opportunity": 0,
+        "worth_considering": 0,
+        "low_priority": 0,
+        "ineligible": 0
+      },
+      "rows": []
+    },
+    {
+      "lane": "INDEPENDENT_PROJECTION",
+      "id": "G09",
+      "actual": {
+        "qualified": 1,
+        "persistencePlans": 1,
+        "summary": 1
+      },
+      "decision": [
+        {
+          "company_key": "https://www.linkedin.com/company/example",
+          "bucket": "strong_opportunity",
+          "label": "strong_opportunity",
+          "hard_checks": {
+            "industry": "pass"
+          }
+        }
+      ],
+      "rows": [
+        {
+          "key": "domain:example.invalid",
+          "company_key": "https://www.linkedin.com/company/example",
+          "plan": {
+            "workspaceId": "audit-workspace",
+            "account": {
+              "name": "Example",
+              "domain": "example.invalid",
+              "linkedinUrl": "https://www.linkedin.com/company/example",
+              "description": null
+            },
+            "contact": null,
+            "leadCandidate": {
+              "lead_type": "account",
+              "reason": null,
+              "next_action": "find_decision_maker",
+              "raw": {
+                "compound": true,
+                "row_kind": "company",
+                "workbench_stage": "company_qualified",
+                "verdict": "QUALIFIED",
+                "pending_reason": "no_decision_maker_returned",
+                "company_name": "Example",
+                "company_domain": "example.invalid",
+                "company_linkedin_url": "https://www.linkedin.com/company/example",
+                "company_identity_key": "domain:example.invalid",
+                "company_resolution_status": "verified",
+                "company_brain_status": "rejected",
+                "company_type_status": null,
+                "job_evidence": null,
+                "hiring_signal_title": null,
+                "hiring_signal_url": null,
+                "hiring_signal_date": null,
+                "decision_maker_status": "not_required",
+                "contact_status": "needs_contact",
+                "quota_eligible": true,
+                "qualification_basis": "p5_canonical_eligibility",
+                "canonical_decision": {
+                  "qualified": true,
+                  "bucket": "strong_opportunity",
+                  "label": "strong_opportunity",
+                  "hard_checks": {
+                    "industry": "pass"
+                  }
+                },
+                "quota_basis": "qualified_companies_mission"
+              }
+            },
+            "verdict": "NEEDS_REVIEW",
+            "persistable": true,
+            "persistenceReason": "company_row_persistable:company_qualified",
+            "contactBlocked": true,
+            "blockReasons": [
+              "no_verified_decision_maker",
+              "contact_not_requested"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
