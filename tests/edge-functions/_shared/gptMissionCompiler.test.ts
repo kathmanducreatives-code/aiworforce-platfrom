@@ -180,7 +180,7 @@ Deno.test("6. it calls OpenAI on LUNA, with the mission schema and the GPT-5 bod
       return Promise.resolve({
         ok: true, status: 200,
         text: () => Promise.resolve(JSON.stringify({
-          choices: [{ message: { content: '{"requested_opportunity_count":10}' } }],
+          choices: [{ finish_reason: "stop", message: { content: '{"requested_opportunity_count":10}' } }],
         })),
       });
     },

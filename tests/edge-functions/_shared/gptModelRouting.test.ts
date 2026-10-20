@@ -42,7 +42,7 @@ const captureFetch = (sink: { body?: Record<string, unknown> }) =>
       ok: true,
       status: 200,
       text: () => Promise.resolve(JSON.stringify({
-        choices: [{ message: { content: JSON.stringify({ ok: true }) } }],
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ ok: true }) } }],
       })),
     });
   };
