@@ -231,11 +231,15 @@ jobs:
           echo "::add-mask::$pw"
           docker run -d --name contract-pg -e POSTGRES_PASSWORD="$pw" \
             -p 127.0.0.1:5432:5432 "$POSTGRES_IMAGE" >/dev/null
-          for _ in $(seq 1 60); do
-            docker exec contract-pg pg_isready -U postgres -q && break
+          # Over TCP: the image's entrypoint first runs a temporary init server
+          # on the Unix socket only, which answers pg_isready and then shuts
+          # down (seen in CI: "rejecting connections"). Only the final server
+          # listens on 127.0.0.1.
+          for _ in $(seq 1 90); do
+            docker exec contract-pg pg_isready -h 127.0.0.1 -U postgres -q && break
             sleep 1
           done
-          docker exec contract-pg pg_isready -U postgres
+          docker exec contract-pg pg_isready -h 127.0.0.1 -U postgres
           echo "PG_ADMIN_URL=postgres://postgres:$pw@127.0.0.1:5432/postgres" >> "$GITHUB_ENV"
 
       - name: Fetch the pinned PostgREST (checksum verified)
@@ -292,11 +296,15 @@ jobs:
           echo "::add-mask::$pw"
           docker run -d --name contract-pg -e POSTGRES_PASSWORD="$pw" \
             -p 127.0.0.1:5432:5432 "$POSTGRES_IMAGE" >/dev/null
-          for _ in $(seq 1 60); do
-            docker exec contract-pg pg_isready -U postgres -q && break
+          # Over TCP: the image's entrypoint first runs a temporary init server
+          # on the Unix socket only, which answers pg_isready and then shuts
+          # down (seen in CI: "rejecting connections"). Only the final server
+          # listens on 127.0.0.1.
+          for _ in $(seq 1 90); do
+            docker exec contract-pg pg_isready -h 127.0.0.1 -U postgres -q && break
             sleep 1
           done
-          docker exec contract-pg pg_isready -U postgres
+          docker exec contract-pg pg_isready -h 127.0.0.1 -U postgres
           echo "PG_ADMIN_URL=postgres://postgres:$pw@127.0.0.1:5432/postgres" >> "$GITHUB_ENV"
 
       - name: Fetch the pinned PostgREST (checksum verified)
