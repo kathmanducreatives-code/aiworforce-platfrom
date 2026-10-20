@@ -48,7 +48,7 @@ import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts"
 import type { CriterionVerdict } from "./missionEvaluation.ts";
 import type { QualificationHold } from "./qualificationHold.ts";
 import { geographyContradicts } from "./leadEligiblePool.ts";
-import { matchBusinessModel } from "./businessModelMatch.ts";
+import { isControlledPhrase, matchBusinessModel } from "./businessModelMatch.ts";
 import {
   decideHasRaised, decideRecentlyFunded, fundingKindOf, fundingPresenceOf, normalizeRoundType, requiredStagesOf, stageRequirement,
 } from "./fundingStageClaim.ts";
@@ -567,6 +567,11 @@ function checkKnownCompanies(
       evidence_ids: ids, provenance: provenanceOf(item) };
 }
 
+/** Q3 — an industry / business-model criterion the controlled vocabulary cannot read. */
+function interpretive(c: MissionCriterion): boolean {
+  return (c.dimension === "industry" || c.dimension === "business_model") && !isControlledPhrase(c.value);
+}
+
 /**
  * ANY-OF GROUPS (RC02). Hard criteria that carry the same `any_of` alternatives
  * ("AI or developer-tools", "Series A or Series B") are ONE requirement:
@@ -630,6 +635,21 @@ export function evaluateEligibility(
     const check = checkCriterion(c.dimension === "geography" && !c.geography_scope && verdict?.geography_scope
       ? { ...c, geography_scope: verdict.geography_scope } : c, graph);
     if (!verdicts || check.result === "fail") return check;
+    // Q3 — AN INDUSTRY THE VOCABULARY CANNOT READ. A mandatory industry or
+    // business model outside the controlled vocabulary ("recruiting agencies",
+    // "manufacturers") can never be answered by the evidence graph, so it used
+    // to stay unknown forever and no such ICP could qualify (Codex routing
+    // audit H05). There, and only there, the evaluator's per-criterion verdict
+    // answers it — when it carries receipts the strict parser already checked:
+    // verbatim, this company's own, fresh, verified, and from a COMPANY-OWNED
+    // source (description, industry label, own website, cohort record). No
+    // receipt, no answer: model confidence never substitutes for evidence. A
+    // value the vocabulary CAN read keeps the rule below: verdicts only lower.
+    if (check.result === "unknown" && interpretive(c) && verdict && verdict.result !== "unknown" && verdict.evidence.length > 0) {
+      return { ...check, result: verdict.result,
+        reason: `${verdict.reason} (the evaluator's reading of the company's own cited words; ${String(c.value)} is outside the controlled vocabulary)`,
+        evidence_ids: verdict.evidence.map((e) => e.evidence_id), provenance: null };
+    }
     if (verdict?.result === "pass") return check; // never upgrades missing facts
     return { ...check, result: verdict?.result === "fail" ? "fail" as const : "unknown" as const,
       reason: verdict?.reason ?? "the evaluator did not establish this criterion",

@@ -242,6 +242,11 @@ export interface CriterionVerdict {
   evidence: Array<{ evidence_id: string; excerpt: string }>;
 }
 
+/** Evidence types that describe the company itself (Q3): the only receipts for industry or business model. */
+const COMPANY_OWNED_TYPES: ReadonlySet<string> = new Set([
+  "company_description", "company_industry", "web_page", "yc_company_record",
+]);
+
 export function evaluationCriteria(input: Pick<MissionEvaluationInput, "mission">): readonly MissionCriterion[] {
   return Array.isArray(input.mission.criteria) ? input.mission.criteria as MissionCriterion[] : [];
 }
@@ -1165,6 +1170,12 @@ export function parseMissionEvaluationStrict(
         item.verification_state === "conflicting" || item.freshness === "stale" ||
         (item.evidence_type === "company_description" && item.verification_state !== "verified") ||
         (c.dimension === "hiring" && !["job_posting", "yc_job"].includes(item.evidence_type)) ||
+        // Q3 — WHAT A COMPANY IS comes from the company's own record or words:
+        // its verified description, its provider industry label, its own
+        // website, its cohort record. A job posting describes a role, and a
+        // news item describes an event; neither is the company's business.
+        ((c.dimension === "industry" || c.dimension === "business_model") &&
+          !COMPANY_OWNED_TYPES.has(item.evidence_type)) ||
         // Q2 — A WINDOWED REQUIREMENT NEEDS A DATED EVENT INSIDE THE WINDOW
         // (audit G05–G07, G14). A fetch date is not an event date, so a page
         // with no `occurred_at` cannot prove "in the last 30 days". Hiring and
