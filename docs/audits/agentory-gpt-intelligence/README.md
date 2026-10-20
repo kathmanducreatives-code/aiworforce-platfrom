@@ -33,6 +33,21 @@ behavior. The integration kernel document and some model-routing comments
 describe older architectures; executable call sites take precedence over those
 comments.
 
+Before publication, additional Q3 work was inspected: draft #129 at
+`4e738a1fc522cd52b9c816d098a460f854f5b108` contains test-only compiler contracts
+and the
+[Q3 design](https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/4e738a1fc522cd52b9c816d098a460f854f5b108/docs/launch/qualification-acceptance/q3-design.md);
+its
+[Q1–Q4 acceptance index](https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/4e738a1fc522cd52b9c816d098a460f854f5b108/docs/launch/qualification-acceptance/README.md)
+also defines the final native persistence/replay matrix. These designs were
+read, not rerun or treated as deployed. Draft #127 (`abb12c83`) and #128
+(`5d831405`) now contain agency-routing/interpretive-industry work; their
+metadata was inspected, but their implementation was not independently tested
+here. Thus H05 below is a measured **integration/Q2** failure, not a claim about
+those newer drafts. R1's post-Q work should evaluate and extend the accepted Q3
+contract for diverse language, not create a parallel implementation of its
+already planned fixes.
+
 Fresh offline receipts:
 
 - The existing 40-scenario routing harness was rerun separately on all four
