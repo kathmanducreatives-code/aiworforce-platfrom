@@ -391,3 +391,5 @@ export function boundsHeld(r: Run) {
     }
   }
 }
+
+// CI example (mock-only): comment only, do not merge
