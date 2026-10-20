@@ -18,6 +18,8 @@ Nosh uses Apollo for lead management, enrichment and sequencing; iGTM for human 
 
 The pilot therefore centers on improving existing records and preparing human callers. Vendor-specific API adapters, authentication choices, event schemas and write-back destinations remain conditional until the three questions below are answered. Official API research in this report establishes possible routes, not a selected integration design. Model policy, client-context isolation and grounded draft contracts can be specified independently of those vendor identities.
 
+The follow-on [focused implementation plan](pilot-plan/README.md) and [client-isolation boundary](pilot-plan/client-isolation.md) split the draft-only pilot into small PRs. They are proposals only and account for Claude's subsequently opened Q1 PR123; the original audit results below remain labeled by their tested snapshots.
+
 Evidence navigation:
 
 - [Complete feature inventory](feature-inventory.md), [per-capability JSON](feature-inventory.json).
