@@ -536,3 +536,5 @@ export function evaluateEligibility(
     .filter((d): d is EvidenceDimension => !!d))];
   return { version: ELIGIBILITY_VERSION, eligibility, checks, hard_checks, disproven, gaps };
 }
+
+// CI example (qualification): comment only, do not merge
