@@ -68,6 +68,9 @@ export async function runPilotModelProbe(
     throw new PilotRefusal("pilot_model_task_unavailable", 404);
   }
   const task = structuredClone(tasks[0]);
+  if (task.status !== "ready") {
+    throw new PilotRefusal("pilot_model_task_not_ready", 409);
+  }
   // P1 verifies precisely this selection-bearing snapshot; it is not a new signature.
   const snapshotStore = {
     ...store,

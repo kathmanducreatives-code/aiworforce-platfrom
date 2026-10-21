@@ -135,3 +135,24 @@ Deno.test("P4 malformed or expanded task scope rejected before admission", async
   assertEquals(f.calls.length, 0);
   assertEquals(f.accounting.reserveCalls, 0);
 });
+
+Deno.test("P4 cancelled, completed, paused or otherwise non-ready signed tasks cannot dispatch", async () => {
+  for (
+    const status of [
+      "cancelled",
+      "canceled",
+      "done",
+      "completed",
+      "failed",
+      "paused",
+      "running",
+      "unknown",
+    ]
+  ) {
+    const f = await modelFixture();
+    task(f.p1).status = status;
+    await assertRejects(() => runPilotModelProbe(f.scope, f.deps));
+    assertEquals(f.calls.length, 0);
+    assertEquals(f.accounting.started.size, 0);
+  }
+});

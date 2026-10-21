@@ -84,7 +84,7 @@ A signed task payload contains this exact selection object (IDs are synthetic):
 P4 **reads** it; it does not create/update/bind tasks. Tests insert it into a
 synthetic task before using the real P1 HMAC binding. Scope is exactly three
 UUIDs; unknown fields, forged/changed payloads, another actor's task and
-cross-workspace selection refuse. P1 verifies the exact captured task snapshot
+cross-workspace selection refuse. Only signed tasks currently in `ready` state may run the offline probe; cancelled, terminal, paused and unknown states refuse before admission. P1 verifies the exact captured task snapshot
 via its existing `forTask` mechanism. Current task/enrollment/model policy and
 membership are rechecked before dispatch and release. Native atomicity is still
 a gate; separate application reads cannot prove transactional isolation.
@@ -242,9 +242,9 @@ No hosted database/customer access, paid call, deploy, merge, send or A7 was use
 
 ## Local verification receipt
 
-- **77 new typed backend tests pass** against the base transport; the same 77
+- **78 new typed backend tests pass** against the base transport; the same 78
   pass against actual #131 via the import-map compatibility run.
-- **176 unchanged P1–P3 backend regressions pass** (combined focused total 253).
+- **176 unchanged P1–P3 backend regressions pass** (combined focused total 254).
 - **26 typed frontend tests pass**, including 2 new P4 and all 24 P1–P3 UI cases.
 - The new adapter type-checks; focused Deno lint, frontend type/lint ratchets and
   production build pass without new debt (existing chunk-size advisory remains).
