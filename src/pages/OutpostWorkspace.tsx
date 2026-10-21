@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { invokeFunction } from '@/lib/agentoryApi';
 import { StaleClientSelection, WorkspaceSelection, type PilotResource } from '@/lib/workspaceSelection';
+import ExistingLeadImport from '@/components/leads/pilot/ExistingLeadImport';
 import ClientWorkspaceSelector from '@/components/workspace/ClientWorkspaceSelector';
 
 function SessionWorkspace({ userId, token }: { userId: string; token: string }) {
@@ -19,6 +20,9 @@ function SessionWorkspace({ userId, token }: { userId: string; token: string }) 
     document.addEventListener('visibilitychange', refresh);
     return () => { document.removeEventListener('visibilitychange', refresh); controller.stop(); };
   }, [controller, token]);
+  const selected = state.selected;
+  const revision = state.revision;
+  const csvCurrent = useCallback(() => { const s = controller.snapshot(); return !!selected && s.selected === selected && s.revision === revision && !!s.context && !s.loading; }, [controller, selected, revision]);
   return <main className="relative mx-auto grid max-w-3xl gap-6 p-8">
     <header className="grid gap-3"><h1 className="text-2xl font-semibold">Outbound Outpost · client preparation</h1>
       <p className="text-sm text-muted-foreground">Select one client for Company Brain, explicitly chosen memory and existing pilot tasks. This preparation workspace does not execute tasks.</p>
@@ -28,6 +32,7 @@ function SessionWorkspace({ userId, token }: { userId: string; token: string }) 
     {state.loading && <p role="status">Validating client context…</p>}
     {state.error && <p role="alert">{state.error}</p>}
     {state.selected && <PreparationForm key={`${state.selected.workspace_id}:${state.selected.client_binding_id}:${state.revision}`} controller={controller} loading={state.loading} />}
+    {import.meta.env.VITE_OUTPOST_PILOT_CSV_PREVIEW_ENABLED === 'true' && state.selected && state.context && !state.loading && <ExistingLeadImport key={`${state.selected.workspace_id}:${state.selected.client_binding_id}:${state.revision}`} scope={state.selected} current={csvCurrent} />}
     {state.context && <section><h2 className="font-semibold">Validated client context</h2><pre className="max-h-[36rem] overflow-auto whitespace-pre-wrap break-words rounded border p-4 text-xs">{JSON.stringify(state.context, null, 2)}</pre></section>}
     <a className="underline" href="/dashboard">Leave client preparation</a>
   </main>;
