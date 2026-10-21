@@ -1,3 +1,4 @@
+import { useMatch } from 'react-router-dom';
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { getCurrentWorkspaceId } from '@/lib/orchestration';
@@ -42,6 +43,7 @@ async function resolveWithRetry(): Promise<string | null> {
 
 export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
+  const pilotRoute = !!useMatch('/outpost');
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -51,6 +53,12 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
   const retry = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
+    // The isolated pilot route never resolves/provisions a first membership.
+    // It obtains explicit scope from the server's P1-authorized choice list.
+    if (pilotRoute) {
+      setWorkspaceId(null); setError(null); setLoading(false);
+      return;
+    }
     if (authLoading) {
       setLoading(true);
       return;
@@ -84,12 +92,12 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading, tick]);
+  }, [user, authLoading, tick, pilotRoute]);
 
   // Re-resolve when auth state settles (covers initial token-refresh races).
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (!pilotRoute && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
         if (!inFlight.current && !workspaceId) setTick((t) => t + 1);
       }
       if (event === 'SIGNED_OUT') {
@@ -98,7 +106,7 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
       }
     });
     return () => subscription.unsubscribe();
-  }, [workspaceId]);
+  }, [workspaceId, pilotRoute]);
 
   return (
     <WorkspaceContext.Provider value={{ workspaceId, loading, error, retry }}>

@@ -107,13 +107,16 @@ export async function loadConversationMemory(args: {
         : Promise.resolve({ data: [] as any[] }),
     ]);
 
-    // 3) outreach_drafts (recent)
-    const { data: drafts } = await admin
-      .from("outreach_drafts")
-      .select("id, channel, subject, body, status, created_at")
-      .eq("workspace_id", workspace_id)
-      .order("created_at", { ascending: false })
-      .limit(10);
+    // Draft text is memory only when associated with a lead actually selected
+    // for this conversation. No fresh-conversation/workspace-wide fallback.
+    const leadIds = lead_candidates.map((lead) => lead.id);
+    const { data: drafts } = leadIds.length
+      ? await admin.from("outreach_drafts")
+        .select("id, lead_candidate_id, channel, subject, body, status, created_at")
+        .eq("workspace_id", workspace_id)
+        .in("lead_candidate_id", leadIds)
+        .order("created_at", { ascending: false }).limit(10)
+      : { data: [] };
 
     // 4) saved_outputs (recent, this conversation if available)
     let soQuery = admin
@@ -129,7 +132,7 @@ export async function loadConversationMemory(args: {
       lead_candidates,
       accounts: (accountsRes.data ?? []) as any,
       contacts: (contactsRes.data ?? []) as any,
-      outreach_drafts: (drafts ?? []).map((d: any) => ({
+      outreach_drafts: (drafts ?? []).filter((d: { lead_candidate_id: string }) => leadIds.includes(d.lead_candidate_id)).map((d: any) => ({
         id: d.id,
         channel: d.channel ?? null,
         subject: d.subject ?? null,
@@ -145,8 +148,7 @@ export async function loadConversationMemory(args: {
       last_plan_id,
       // has_any_memory drives the no-memory outreach guard, so it must reflect
       // ONLY conversation-scoped memory. lead_candidates and saved_outputs are
-      // filtered by conversation_id (when provided); outreach_drafts has no
-      // conversation_id column and is loaded workspace-wide, so it must NOT
+      // filtered by conversation_id (when provided); draft association alone must NOT
       // decide fresh-vs-not — otherwise any prior draft anywhere in the
       // workspace makes every fresh conversation look like it has memory.
       has_any_memory:

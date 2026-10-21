@@ -69,6 +69,8 @@ const Workflows = lazy(() => import("./pages/Workflows"));
 // import PortalEarnings from "./pages/portal/PortalEarnings";
 // import PortalProfile from "./pages/portal/PortalProfile";
 
+const OutpostWorkspace = lazy(() => import("./pages/OutpostWorkspace"));
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -77,6 +79,7 @@ const App = () => (
       <TooltipProvider>
         <AppErrorBoundary>
           <AuthProvider>
+            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <WorkspaceProvider>
               <ClientProvider>
                 <ClientThemeProvider>
@@ -90,13 +93,14 @@ const App = () => (
                       <VerificationPanel />
                     </AppErrorBoundary>
                   )}
-                <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+
                   <div className="relative min-h-screen w-full">
                     <AuthenticatedBackground />
                     {import.meta.env.DEV && <PreviewDiagnostics />}
                   <RouteErrorBoundary>
                   <Suspense fallback={<div className="min-h-screen bg-background" />}>
                   <Routes>
+                    <Route path="/outpost" element={<OutpostWorkspace />} />
 
                     {/* Public Routes */}
                     <Route path="/" element={<Landing />} />
@@ -263,10 +267,10 @@ const App = () => (
                   </RouteErrorBoundary>
                 </div>
 
-              </BrowserRouter>
             </ClientThemeProvider>
           </ClientProvider>
           </WorkspaceProvider>
+          </BrowserRouter>
         </AuthProvider>
         </AppErrorBoundary>
       </TooltipProvider>
