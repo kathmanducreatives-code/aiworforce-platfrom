@@ -52,7 +52,7 @@
 // injected by the binding.
 
 import type { QualificationContext, BrainAuthority } from "./missionQualificationContext.ts";
-import type { MissionCriterion } from "./missionCriteria.ts";
+import { anyOfGroupKey, type MissionCriterion } from "./missionCriteria.ts";
 import { eventWithinWindow } from "./candidateObservation.ts";
 import {
   findEvidence, hardFactsForPrompt, registryForPrompt,
@@ -1207,7 +1207,7 @@ export function parseMissionEvaluationStrict(
   });
   const groups = new Map<string, CriterionVerdict[]>();
   for (const c of criteria.filter((c) => c.kind === "hard" && judged(c))) {
-    const key = c.any_of?.length ? `${c.dimension}:${JSON.stringify([...c.any_of].sort())}` : c.id;
+    const key = anyOfGroupKey(c) ?? c.id;
     const v = criterion_verdicts.find((v) => v.criterion_id === c.id)!;
     groups.set(key, [...(groups.get(key) ?? []), v]);
   }

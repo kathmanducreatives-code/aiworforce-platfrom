@@ -38,7 +38,7 @@ Measured on `a542b2f1`:
 - **Codex qualification audit:** 64 pass / 4 fail (G08, G08b, agency, pure G09).
 - **A7 contracts:** S02 is the only required failure; S03b is a known gap.
 
-## Status on Q3a-2 (stacked on Q3b-1, #133)
+## Status on Q3a-3/Q3b-3 (stacked on Q3a-2, #135): Q3 complete
 
 | Scenario | Status |
 |---|---|
@@ -48,9 +48,10 @@ Measured on `a542b2f1`:
 | plain "startups" (no must/only) | a disclosed **target**: describes the population, never gates. "only startups" / "must be a startup" is mandatory and enforced |
 | **H05** agencies | **pass** (#127, #128) |
 | **C01**, L08 founder clause necessity, **C04** per-clause windows, **H04** team growth | **pass** (Q3a-2) |
-| **C02** cross-signal OR | **known gap** (Q3a-3/Q3b-3) |
+| **C02** cross-signal OR | **pass** (Q3a-3/Q3b-3): compiled as one `any_of` across signals, decided as one group, routed hiring-led |
 
-- **Codex routing audit:** 83 pass / 2 fail (C02 runtime and compiler). 5 of 40 qualified: Q3a-2 removed the three wrong qualifications C01, L08 and C04, each of which ignored a mandatory founder clause.
+- **Codex routing audit:** 85 pass / 0 fail. 6 of 40 qualified: Q3a-2 removed the three wrong qualifications (C01, L08, C04), and C02 now qualifies on hiring alone, with nothing bought for funding.
+- **Q3 contracts:** no known gaps.
 - **Codex qualification audit:** 67 pass / 1 fail (the pure G09 helper, open with Codex).
 - **A7 contracts:** no known gaps.
 

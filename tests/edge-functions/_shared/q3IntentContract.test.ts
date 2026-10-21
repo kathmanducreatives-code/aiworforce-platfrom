@@ -19,9 +19,7 @@ import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/e
 import type { EvidenceItem } from "../../../supabase/functions/_shared/candidateObservation.ts";
 
 /** Ids whose fix has not landed. Each runs only under Q3_ASSERT_GAPS=1. */
-const KNOWN_GAPS = new Set([
-  "C02-or",
-]);
+const KNOWN_GAPS = new Set<string>([]);
 const gap = (id: string) => ({ ignore: KNOWN_GAPS.has(id) && Deno.env.get("Q3_ASSERT_GAPS") !== "1" });
 
 /** The reviewed A7 proposal (tests/db-contract/lib/discoveryScenario.ts), inlined: that module needs a database. */

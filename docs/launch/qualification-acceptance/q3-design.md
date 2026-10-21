@@ -1,6 +1,6 @@
 # Q3: intent preservation, implementation boundaries
 
-**Q3a-1 (#132), Q3b-1 (#133) and Q3a-2 are implemented**; C02 (Q3a-3/Q3b-3) is not yet. Every rule below is generic (it reads the customer's own words and the compiled structure) and adds no industry, title or scenario list. The red proofs are in `tests/edge-functions/_shared/q3IntentContract.test.ts`, each paired with a passing control.
+**All of Q3 is implemented**: Q3a-1 (#132), Q3b-1 (#133), Q3a-2 (#135) and Q3a-3/Q3b-3 (C02). Every rule below is generic (it reads the customer's own words and the compiled structure) and adds no industry, title or scenario list. The red proofs are in `tests/edge-functions/_shared/q3IntentContract.test.ts`, each paired with a passing control.
 
 ## Q3a-1: compile-time fidelity (do first: it removes the phantom requirements G08 enforcement would otherwise block on)
 
@@ -25,7 +25,7 @@ As implemented in Q3a-2: the existing clause machinery (`SIGNAL_CUE`, `signalCla
 - **Compile:** clauses joined by "or" across **different** signal dimensions become one requirement: each member criterion carries `any_of` naming the alternative dimensions (`missionCriteria.ts`, `leadMissionCompiler.ts` carry-through). AND keeps two hard criteria.
 - **Decide (Q3b-3):** `anyOfResolved` groups by `dimension + any_of` today, so it must group by the shared `any_of` across dimensions (`candidateEligibility.ts`).
 - **Route (Q3b-3):** discovery must not suppress the hiring-led route when funding is only an alternative (`leadCapabilityGraph.ts` ~751).
-- **Until all three land,** feasibility must refuse or clarify a cross-signal OR rather than silently treat it as AND.
+- **As implemented:** cross-signal members carry `any_of: ["signal:<kind>", …]`; `anyOfGroupKey` is the one grouping rule eligibility and the evaluator's parser share. Two kinds are alternatives when the request's text between their cues says "or" and not "and", and only mandatory, unhedged members join. The hiring-led entry means a company proving only the funding alternative isn't discovered through postings; it's found only when another route surfaces it.
 
 ## Q3b-1: enforce unsupported mandatory criteria (G08), after Q3a-1
 

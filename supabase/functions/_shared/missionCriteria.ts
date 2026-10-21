@@ -1409,7 +1409,63 @@ export function deriveMissionCriteria(
       rationale: "evidence the system has no vocabulary or source for",
     });
   }
+  // ── CROSS-SIGNAL OR (Q3, Codex routing audit C02) ──
+  //
+  // "hiring Account Executives OR having raised funding" is ONE requirement
+  // either signal satisfies. Read as two, it rejected every company that had
+  // only one of them. The mandatory signal criteria the request joins by "or"
+  // carry the same `any_of` (`signal:<kind>`), and `anyOfGroupKey` makes them
+  // one group wherever a decision is made. AND keeps them two requirements; a
+  // member the request hedged is not part of the requirement at all.
+  for (const group of crossSignalAlternatives(query,
+    out.filter((c) => c.kind === "hard" && SIGNAL_CUE[c.dimension as CanonicalSignalKind]).map((c) => c.dimension as CanonicalSignalKind))) {
+    const members = out.filter((c) => c.kind === "hard" && group.includes(c.dimension as CanonicalSignalKind));
+    if (new Set(members.map((c) => c.dimension)).size < 2) continue;
+    const anyOf = group.map((k) => `signal:${k}`);
+    for (const c of members) c.any_of = anyOf;
+  }
   return out;
+}
+
+/**
+ * The signal kinds a request joins by "or", in groups ("hiring … OR raised
+ * funding" → [["hiring", "funding"]]). Two kinds are alternatives when the text
+ * between the cue of one and the cue of the next says "or" and not "and": a
+ * conjunction of the request's own, read only between signals it actually
+ * states. One kind's alternatives ("Series A or Series B") are its own any_of.
+ */
+export function crossSignalAlternatives(query: string, kinds: readonly CanonicalSignalKind[]): CanonicalSignalKind[][] {
+  const t = query.toLowerCase();
+  const hits = [...new Set(kinds)].flatMap((k) => {
+    const cue = SIGNAL_CUE[k];
+    return cue ? [...t.matchAll(new RegExp(cue.source, "g"))].map((m) => ({ k, start: m.index!, end: m.index! + m[0].length })) : [];
+  }).sort((a, b) => a.start - b.start);
+  const parent = new Map<CanonicalSignalKind, CanonicalSignalKind>();
+  const find = (k: CanonicalSignalKind): CanonicalSignalKind => (parent.get(k) ?? k) === k ? k : find(parent.get(k)!);
+  const joined = new Set<CanonicalSignalKind>();
+  for (let i = 0; i + 1 < hits.length; i++) {
+    const a = hits[i], b = hits[i + 1];
+    if (a.k === b.k || b.start < a.end) continue;
+    const between = t.slice(a.end, b.start);
+    if (!/\bor\b/.test(between) || /\band\b|\bas well as\b|\bplus\b/.test(between)) continue;
+    parent.set(find(b.k), find(a.k));
+    joined.add(a.k).add(b.k);
+  }
+  const groups = new Map<CanonicalSignalKind, CanonicalSignalKind[]>();
+  for (const k of joined) groups.set(find(k), [...(groups.get(find(k)) ?? []), k]);
+  return [...groups.values()].map((g) => g.sort());
+}
+
+/**
+ * The ONE key that makes hard criteria a single any-of requirement, used by
+ * every decision (eligibility and the evaluator's verdict): alternatives of one
+ * dimension ("AI or developer-tools") group within it; cross-signal
+ * alternatives (`signal:<kind>`) group across dimensions. Null: an ordinary AND.
+ */
+export function anyOfGroupKey(c: Pick<MissionCriterion, "kind" | "dimension" | "any_of">): string | null {
+  if (c.kind !== "hard" || (c.any_of?.length ?? 0) < 2) return null;
+  const sorted = [...c.any_of!].sort().join("|");
+  return c.any_of!.every((a) => a.startsWith("signal:")) ? `signals|${sorted}` : `${c.dimension}|${sorted}`;
 }
 
 /** Attach freshly derived criteria (after a Company Brain merge, say). */

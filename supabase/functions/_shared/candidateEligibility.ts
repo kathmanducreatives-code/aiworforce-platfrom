@@ -44,7 +44,7 @@
 
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import { eventWithinWindow, type EvidenceDimension, type EvidenceItem } from "./candidateObservation.ts";
-import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts";
+import { anyOfGroupKey, type CriterionDimension, type MissionCriterion } from "./missionCriteria.ts";
 import type { CriterionVerdict } from "./missionEvaluation.ts";
 import type { QualificationHold } from "./qualificationHold.ts";
 import { geographyContradicts } from "./leadEligiblePool.ts";
@@ -599,10 +599,7 @@ function interpretive(c: MissionCriterion): boolean {
  * for genuine ANDs ("B2B SaaS" → b2b saas + saas).
  */
 function anyOfResolved(criteria: readonly MissionCriterion[], checks: CriterionCheck[]): CriterionCheck[] {
-  const groupOf = (i: number) => {
-    const c = criteria[i];
-    return c.kind === "hard" && (c.any_of?.length ?? 0) > 1 ? `${c.dimension}|${[...c.any_of!].sort().join("|")}` : null;
-  };
+  const groupOf = (i: number) => anyOfGroupKey(criteria[i]);
   const groups = new Map<string, number[]>();
   checks.forEach((_, i) => { const g = groupOf(i); if (g) groups.set(g, [...(groups.get(g) ?? []), i]); });
   if (groups.size === 0) return checks;
@@ -614,7 +611,8 @@ function anyOfResolved(criteria: readonly MissionCriterion[], checks: CriterionC
       for (const i of members) {
         if (checks[i].result === "pass") continue;
         out[i] = { ...checks[i], result: "pass", evidence_ids: p.evidence_ids, provenance: p.provenance,
-          reason: `answered by the alternative ${String(criteria[passing].value)}: ${p.reason}` };
+          reason: `answered by the alternative ${criteria[passing].dimension === criteria[i].dimension
+            ? String(criteria[passing].value) : criteria[passing].label}: ${p.reason}` };
       }
     } else if (!members.every((i) => checks[i].result === "fail")) {
       for (const i of members) if (checks[i].result === "fail") out[i] = null;
