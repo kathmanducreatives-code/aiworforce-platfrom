@@ -232,7 +232,7 @@ async function withStubbedFetch(fn: () => Promise<unknown>): Promise<WireCall[]>
     calls.push({ url: String(url), model: JSON.parse(String(init.body)).model });
     return Promise.resolve(
       new Response(
-        JSON.stringify({ choices: [{ message: { content: "{}" } }] }),
+        JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "{}" } }] }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
     );

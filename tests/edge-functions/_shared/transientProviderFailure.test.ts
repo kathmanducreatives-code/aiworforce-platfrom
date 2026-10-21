@@ -50,7 +50,7 @@ const TPM_BODY = JSON.stringify({
 });
 
 const OK_BODY = JSON.stringify({
-  choices: [{ message: { content: JSON.stringify({ steps: [], reasoning: "fine" }) } }],
+  choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ steps: [], reasoning: "fine" }) } }],
 });
 
 interface Attempt { status: number; body: string; headers?: Record<string, string> }
@@ -186,7 +186,7 @@ Deno.test("a transport throw is retried on the same terms", async () => {
 
 Deno.test("a bad ANSWER is not retried — there is nothing transient about it", async () => {
   const f = scriptedFetch([
-    { status: 200, body: JSON.stringify({ choices: [{ message: { content: "" } }] }) },
+    { status: 200, body: JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "" } }] }) },
   ]);
   const r = await gptStructured(REQUEST, f.deps);
   assert(!r.ok);
@@ -225,7 +225,7 @@ Deno.test("planner: a 429 THROWS — the repair round is not spent on a rate lim
 
 Deno.test("planner: a BAD ANSWER still returns null, so the repair round survives", async () => {
   const f = scriptedFetch([
-    { status: 200, body: JSON.stringify({ choices: [{ message: { content: "" } }] }) },
+    { status: 200, body: JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "" } }] }) },
   ]);
   const plan = makeGptExecutionPlanner(f.deps);
   assertEquals(await plan(plannerInput), null,

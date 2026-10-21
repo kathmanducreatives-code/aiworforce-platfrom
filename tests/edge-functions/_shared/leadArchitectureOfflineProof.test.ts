@@ -126,7 +126,7 @@ async function offline(
     calls.push({ model: JSON.parse(String(init.body)).model });
     return Promise.resolve(
       new Response(
-        JSON.stringify({ choices: [{ message: { content: JSON.stringify(body) } }] }),
+        JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(body) } }] }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
     );

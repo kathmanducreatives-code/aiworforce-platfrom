@@ -21,7 +21,7 @@ const KEY = () => "sk-test-not-a-real-key";
 const reply = (body: unknown, extra: Record<string, unknown> = {}) => ({
   ok: true, status: 200,
   text: () => Promise.resolve(JSON.stringify({
-    choices: [{ message: { content: JSON.stringify(body), ...extra } }],
+    choices: [{ finish_reason: "stop", message: { content: JSON.stringify(body), ...extra } }],
   })),
 });
 
@@ -92,7 +92,7 @@ Deno.test("6. a refusal is distinguished from a failure", async () => {
     fetch: () => Promise.resolve({
       ok: true, status: 200,
       text: () => Promise.resolve(JSON.stringify({
-        choices: [{ message: { content: null, refusal: "I can't help with that" } }],
+        choices: [{ finish_reason: "stop", message: { content: null, refusal: "I can't help with that" } }],
       })),
     }),
   });
@@ -105,7 +105,7 @@ Deno.test("7. empty and unparseable content are separate codes", async () => {
     readEnv: KEY,
     fetch: () => Promise.resolve({
       ok: true, status: 200,
-      text: () => Promise.resolve(JSON.stringify({ choices: [{ message: { content: "  " } }] })),
+      text: () => Promise.resolve(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "  " } }] })),
     }),
   });
   assert(!empty.ok); assertEquals(empty.code, "empty_response");
@@ -114,7 +114,7 @@ Deno.test("7. empty and unparseable content are separate codes", async () => {
     readEnv: KEY,
     fetch: () => Promise.resolve({
       ok: true, status: 200,
-      text: () => Promise.resolve(JSON.stringify({ choices: [{ message: { content: "{oops" } }] })),
+      text: () => Promise.resolve(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "{oops" } }] })),
     }),
   });
   assert(!bad.ok); assertEquals(bad.code, "unparseable_json");

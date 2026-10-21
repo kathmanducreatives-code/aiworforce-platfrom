@@ -120,16 +120,31 @@ export function readModelFailure(
   };
 }
 
+/** Completion failures must not buy a compiler/planner repair or escalation. */
+export const TERMINAL_COMPLETION_FAILURE_CODES = [
+  "incomplete_response", "unexpected_completion",
+] as const;
+
+export function isTerminalCompletionFailure(code: string): boolean {
+  return (TERMINAL_COMPLETION_FAILURE_CODES as readonly string[]).includes(code);
+}
+
+/** The engine catches this before entering its invalid-plan repair branch. */
+export class TerminalModelCompletionError extends Error {
+  readonly retryable = false;
+  constructor(readonly code: string, detail: string) {
+    super(`model completion failed (${code}): ${detail}`);
+    this.name = "TerminalModelCompletionError";
+  }
+}
+
 /**
- * Codes that mean a human has to do something before any retry can work.
- *
- * Kept next to the reader because the reason for naming a failure precisely is
- * to be able to answer this question about it. Everything here is terminal for
- * the run: no amount of waiting, re-prompting or re-planning clears an empty
- * balance or a missing key.
+ * Failures terminal for this compilation attempt sequence. Credentials/quota
+ * need human intervention; incomplete/unexpected completions must not buy a
+ * repair or escalation. A separately authorized future run is a new decision.
  */
 const UNRECOVERABLE = new Set(["quota_exhausted", "no_api_key"]);
 
 export function isUnrecoverableModelFailure(code: string): boolean {
-  return UNRECOVERABLE.has(code);
+  return UNRECOVERABLE.has(code) || isTerminalCompletionFailure(code);
 }

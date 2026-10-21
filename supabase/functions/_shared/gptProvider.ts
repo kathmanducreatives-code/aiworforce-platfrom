@@ -199,7 +199,8 @@ export type GptFailureCode =
   | typeof PROVIDER_FAILURE_CODES[number]
   | "empty_response"
   | "unparseable_json"
-  | "schema_refused";
+  | "schema_refused"
+  | typeof TERMINAL_COMPLETION_FAILURE_CODES[number];
 
 export function isProviderFailure(code: GptFailureCode): boolean {
   return (PROVIDER_FAILURE_CODES as readonly string[]).includes(code);
@@ -258,6 +259,7 @@ export interface GptDeps {
   onModelCall?: (t: ModelCallTelemetry, ok: boolean) => void;
 }
 
+import { TERMINAL_COMPLETION_FAILURE_CODES } from "./modelFailureContract.ts";
 import {
   readModelUsage, buildModelTelemetry, type ModelCallTelemetry,
 } from "./modelCostModel.ts";
@@ -569,66 +571,64 @@ export async function gptStructured<T>(
   let envelope: unknown = null;
   try { envelope = JSON.parse(raw); } catch { /* handled below */ }
   const usage = readModelUsage(envelope);
-  const telemetry = buildModelTelemetry({
-    role: req.purpose,
-    model,
-    // gpt-4.1 takes no effort parameter; the GPT-5 models require one. Null
-    // means "not applicable", never "default".
-    reasoning_effort: req.reasoningEffort ?? null,
-    usage,
-    latency_ms: elapsed(),
-  });
-  log("gpt_call_telemetry", telemetry);
-  deps.onModelCall?.(telemetry, true);
-
-  let content: string | undefined;
-  try {
-    const parsed = JSON.parse(raw) as {
-      choices?: Array<{ message?: { content?: string; refusal?: string | null } }>;
-    };
-    const choice = parsed.choices?.[0]?.message;
-    // A REFUSAL IS NOT AN EMPTY ANSWER. The model declining is a distinct
-    // outcome from it failing, and a caller may reasonably treat them
-    // differently — one is worth retrying with a different prompt, the other
-    // is not.
-    if (choice?.refusal) {
-      return {
-        ok: false, code: "schema_refused",
-        detail: redact(`the model refused: ${String(choice.refusal).slice(0, 200)}`, key),
-        latency_ms: elapsed(), retryable: false, attempts,
-      };
-    }
-    content = choice?.content ?? undefined;
-  } catch {
-    return {
-      ok: false, code: "unparseable_json", detail: "the API envelope was not JSON",
-      latency_ms: elapsed(), retryable: false, attempts,
-    };
-  }
-
-  if (!content || !content.trim()) {
-    return {
-      ok: false, code: "empty_response", detail: "the model returned no content",
-      latency_ms: elapsed(), retryable: false, attempts,
-    };
-  }
-
-  try {
-    const value = JSON.parse(content) as T;
-    log("gpt_call_ok", {
-      purpose: req.purpose, model, tier: req.tier ?? "reasoning",
-      routing_reason: req.routing_reason ?? null, latency_ms: elapsed(),
+  // Settle exactly once after validation, including rejected completions. A
+  // failed completion consumed tokens; its usage must never be refunded.
+  const settle = (result: GptResult<T>): GptResult<T> => {
+    const telemetry = buildModelTelemetry({
+      role: req.purpose, model,
+      reasoning_effort: req.reasoningEffort ?? null,
+      usage, latency_ms: elapsed(),
+      fallback_reason: result.ok ? null : result.code,
     });
-    return { ok: true, value, model, latency_ms: elapsed(), telemetry };
-  } catch {
-    // `strict` should make this unreachable. It is handled anyway, because
-    // "unreachable" is a claim about a provider we do not control.
-    return {
-      ok: false, code: "unparseable_json",
-      detail: "the content field was not valid JSON despite a strict schema",
-      latency_ms: elapsed(), retryable: false, attempts,
-    };
+    log("gpt_call_telemetry", telemetry);
+    deps.onModelCall?.(telemetry, result.ok);
+    return result.ok ? { ...result, telemetry } : result;
+  };
+  const reject = (code: GptFailureCode, detail: string): GptResult<T> => settle({
+    ok: false, code, detail, latency_ms: elapsed(), retryable: false, attempts,
+  });
+
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) {
+    return reject("unparseable_json", "the API envelope was not a JSON object");
   }
+  const parsed = envelope as {
+    choices?: Array<{
+      finish_reason?: unknown;
+      message?: { content?: unknown; refusal?: unknown };
+    }>;
+  };
+  const choice = parsed.choices?.[0];
+  const message = choice?.message;
+  // Preserve refusal as a distinct outcome, even when no text was returned.
+  if (message?.refusal) {
+    return reject("schema_refused",
+      redact(`the model refused: ${String(message.refusal).slice(0, 200)}`, key));
+  }
+  // JSON syntax does not establish completion. These text-only requests may
+  // succeed ONLY on an explicit stop, never on a partial or tool response.
+  if (choice?.finish_reason !== "stop") {
+    return reject(choice?.finish_reason === "length" ? "incomplete_response" : "unexpected_completion",
+      // Do not echo arbitrary provider metadata (or tool arguments) into logs.
+      choice?.finish_reason === "length"
+        ? "the model reached its output limit before completing"
+        : "the API did not report successful text completion");
+  }
+  const content = message?.content;
+  if (typeof content !== "string" || !content.trim()) {
+    return reject("empty_response", "the model returned no text content");
+  }
+
+  let value: T;
+  try {
+    value = JSON.parse(content) as T;
+  } catch {
+    return reject("unparseable_json", "the content field was not valid JSON despite a strict schema");
+  }
+  log("gpt_call_ok", {
+    purpose: req.purpose, model, tier: req.tier ?? "reasoning",
+    routing_reason: req.routing_reason ?? null, latency_ms: elapsed(),
+  });
+  return settle({ ok: true, value, model, latency_ms: elapsed() });
 }
 
 /** Is the lead workflow's model available at all? For preflight, not for routing. */
