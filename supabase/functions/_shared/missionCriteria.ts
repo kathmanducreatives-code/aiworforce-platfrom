@@ -729,6 +729,15 @@ function signalDetail(k: CanonicalSignalKind, s: Partial<MissionSignal>, subkind
 const SIGNAL_CUE: Partial<Record<CanonicalSignalKind, RegExp>> = {
   hiring: /\b(?:hiring|recruit(?:ing|s)?|open\s+(?:\w+\s+){0,2}(?:roles?|positions?|jobs?|openings?)|job openings?|to hire)\b/,
   funding: /\b(?:fund(?:ed|ing|raise|raising)?|rais(?:ed|e|es|ing)|round|series [a-e]\b|seed)\b/,
+  // Q3 (Codex routing audit C01, L08, C04): without a cue, a social clause's own
+  // "must" and "in the last 30 days" were never read as its own — "whose founder
+  // must have discussed …" compiled as a preference on another clause's window.
+  social_activity:
+    /\b(?:comment(?:ed|ing|s)?|discuss(?:ed|es|ing)?|post(?:ed|ing|s)?|talk(?:ed|ing|s)?\s+about|wr(?:ote|iting|ites)\s+about|shar(?:ed|ing|es)|mention(?:ed|ing|s)?|engag(?:ed|ing|es)\s+with)\b/,
+  // Q3 (H04): "must be rapidly expanding its sales team" is a requirement on
+  // team growth; with no cue its "must" was never read as its own.
+  headcount_growth:
+    /\b(?:growing|expanding|scaling|increasing)\b(?:\s+[\w-]+){0,3}?\s+(?:headcount|teams?|workforce)\b|\bheadcount\b|\bhiring spree\b/,
 };
 const REQUIREMENT_MODAL =
   /\b(must(?:\s+(?:currently|already|actively|still))?(?:\s+(?:be|have))?|required to|requires?|needs? to|has to|have to|only|strictly)\b/;

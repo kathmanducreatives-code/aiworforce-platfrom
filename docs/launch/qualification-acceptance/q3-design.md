@@ -1,6 +1,6 @@
 # Q3: intent preservation, implementation boundaries
 
-**Q3a-1 (#132) and Q3b-1 are implemented**; the rest is not yet. Every rule below is generic (it reads the customer's own words and the compiled structure) and adds no industry, title or scenario list. The red proofs are in `tests/edge-functions/_shared/q3IntentContract.test.ts`, each paired with a passing control.
+**Q3a-1 (#132), Q3b-1 (#133) and Q3a-2 are implemented**; C02 (Q3a-3/Q3b-3) is not yet. Every rule below is generic (it reads the customer's own words and the compiled structure) and adds no industry, title or scenario list. The red proofs are in `tests/edge-functions/_shared/q3IntentContract.test.ts`, each paired with a passing control.
 
 ## Q3a-1: compile-time fidelity (do first: it removes the phantom requirements G08 enforcement would otherwise block on)
 
@@ -17,6 +17,8 @@
 | **C01 / L08-necessity** | `missionCriteria.ts` ~729 (`SIGNAL_CUE` covers hiring and funding cues only) and ~843 (`requirementElevation` reads phrase position and preceding modal, so a modal inside the founder clause is lost) | split the request into clauses at its own conjunctions (and/or/comma/"whose"/"which") and read each signal's necessity (must, required, needs to, has to, only vs ideally, preferably, bonus) **inside its own clause** | "ideally" founder clause → target |
 | **C04-windows** | `missionCriteria.ts` ~353 (`windowDaysByKind` / `SIGNAL_CUE`): the nearest explicit window is claimed by hiring, and social falls back to its default | bind each time expression to the clause it appears in, then to that clause's signal. A clause without a window keeps its default | 7-day hiring and 90-day funding |
 | **H04-growth** | `signalKinds.ts` ~225: the headcount reader matches "expanding its team" but not "expanding its **sales** team", so the expansion reader claims it | allow one modifier word between the possessive and "team(s)" (a generic slot, not a department list), so team growth reads as headcount growth. Headcount proof stays unsupported where it is unsupported (refused, never qualified on one posting) | "expanding into Germany" stays expansion |
+
+As implemented in Q3a-2: the existing clause machinery (`SIGNAL_CUE`, `signalClause`, `requirementElevation`, `windowDaysByKind`) already split clauses and read modals and windows per clause, but only for kinds with a cue word, and only hiring and funding had one. Social activity and headcount growth now have cues, so their own "must" and their own window are read from their own clause. The team-growth readers (`signalKinds.ts`, `missionSignalDescriptor.ts`) accept one modifier word before "team(s)" that no preposition can fill.
 
 ## Q3a-3 / Q3b-3: cross-signal OR (C02)
 

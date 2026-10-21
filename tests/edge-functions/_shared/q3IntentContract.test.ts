@@ -20,7 +20,7 @@ import type { EvidenceItem } from "../../../supabase/functions/_shared/candidate
 
 /** Ids whose fix has not landed. Each runs only under Q3_ASSERT_GAPS=1. */
 const KNOWN_GAPS = new Set([
-  "C01-necessity", "L08-necessity", "C02-or", "C04-windows", "H04-growth",
+  "C02-or",
 ]);
 const gap = (id: string) => ({ ignore: KNOWN_GAPS.has(id) && Deno.env.get("Q3_ASSERT_GAPS") !== "1" });
 
@@ -209,4 +209,26 @@ Deno.test("Q3 growth control: 'expanding into Germany' stays expansion", () => {
   const q = "Find 1 B2B software company expanding into Germany within the last 30 days.";
   const m = compiledMission(q, routingProposal(["expanding into Germany"]));
   assert(m.required_signals.some((x) => x.type === "expansion"));
+});
+
+// ═══════════════════════ Q3a-2 adversarial controls: each clause owns its words ══
+
+Deno.test("Q3 necessity control: another clause's 'must' never makes the founder clause mandatory", () => {
+  const q = "Find 1 B2B software company that must be hiring Account Executives, and whose founder has discussed outbound problems on LinkedIn.";
+  const cs = criteriaOf(q, routingProposal(["hiring Account Executives", "founder comments about outbound problems"], FOUNDER_CAPS, ["hiring", "multi_signal"]));
+  assertEquals([dim(cs, "hiring")?.kind, dim(cs, "social_activity")?.kind], ["hard", "target"]);
+});
+
+Deno.test("Q3 windows control: a founder clause's window never becomes hiring's", () => {
+  const q = "Find 1 B2B software company hiring Account Executives AND whose founder must have commented on outbound in the last 30 days.";
+  const cs = criteriaOf(q, routingProposal(["hiring Account Executives", "founder comments about outbound"], FOUNDER_CAPS, ["hiring", "multi_signal"]));
+  assertEquals(dim(cs, "social_activity")?.time_window?.days, 30);
+  assert(dim(cs, "hiring")?.time_window?.source !== "user_explicit", "hiring keeps its own default, labelled as one");
+});
+
+Deno.test("Q3 growth controls: a named team is headcount growth; a customer base is not", () => {
+  const team = compiledMission("Find 1 B2B software company expanding its marketing teams.", routingProposal(["expanding marketing teams"]));
+  assert(team.required_signals.some((x) => x.type === "headcount_change"), JSON.stringify(team.required_signals.map((x) => x.type)));
+  const base = compiledMission("Find 1 B2B software company growing its customer base.", routingProposal(["growing customer base"]));
+  assert(!base.required_signals.some((x) => x.type === "headcount_change"), JSON.stringify(base.required_signals.map((x) => x.type)));
 });
