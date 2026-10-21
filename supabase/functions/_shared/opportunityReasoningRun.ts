@@ -26,7 +26,9 @@ export function candidatesToReason(
   const out: ReasonerCandidate[] = [];
   for (const c of candidates) {
     if (c.screened_out || !c.identity_resolved) continue;
-    const eligibility = evaluateEligibility(criteria, c.graph);
+    // The canonical decision, verdicts and holds included (Q1): the reasoner
+    // only ever sees candidates the decision itself calls eligible.
+    const eligibility = evaluateEligibility(criteria, c.graph, c.criterion_verdicts, c.holds);
     if (eligibility.eligibility !== "eligible") continue;
     const ceiling = computeCeiling({ criteria, graph: c.graph, eligibility, anchor });
     if (!ceiling.ceiling) continue;

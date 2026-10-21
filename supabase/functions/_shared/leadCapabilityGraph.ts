@@ -36,6 +36,7 @@ import { cohortRefusalFor } from "./leadDiscoveryStrategy.ts";
 import { capabilityRunnable, PRODUCTION_READINESS, type ReadinessPolicy, type RouteMode } from "./routeReadiness.ts";
 import { hiringActorCard } from "./hiringActorCatalog.ts";
 import { verifiedAfterEligibility } from "./claimPlan.ts";
+import { crossSignalAlternatives } from "./missionCriteria.ts";
 
 export const CAPABILITY_GRAPH_VERSION = "lead-capability-graph-v1" as const;
 
@@ -757,7 +758,14 @@ export function hiringLedMission(m: LeadMissionV1): boolean {
   // A FUNDING requirement is proven only by funding discovery (datahyena rounds
   // are the evidence). Entering through the posting would leave it unprovable,
   // so that mission keeps its funding entry and verifies hiring afterwards.
-  if (m.required_signals.some((s) => s.type === "funding")) return false;
+  //
+  // Not when funding is only an ALTERNATIVE to the hiring ("hiring AEs OR
+  // raised funding", Q3 C02): a company proving the hiring already satisfies
+  // the request, so the posting is the right entry, and funding is never
+  // bought for it (`anyOfResolved`).
+  if (m.required_signals.some((s) => s.type === "funding") &&
+    !crossSignalAlternatives(String(m.original_user_query ?? ""), ["hiring", "funding"])
+      .some((g) => g.includes("hiring") && g.includes("funding"))) return false;
   const cohortFirst = (m.directives?.source_strategy ?? [])[0] === "startup_cohort_first";
   if (cohortFirst || namesCohort(m)) return false;
   return true;

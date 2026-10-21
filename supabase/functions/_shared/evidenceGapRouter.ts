@@ -282,7 +282,7 @@ function judgeRoutes(
 
 /** The gaps on one candidate's unknown hard checks. */
 export function evidenceGapsFor(
-  checks: ReadonlyArray<{ criterion_id: string; dimension: string; result: string; reason: string }>,
+  checks: ReadonlyArray<{ criterion_id: string; dimension: string; result: string; reason: string; blocked?: string }>,
   graph: CompanyEvidenceGraph,
   registry: readonly ClaimDefinition[] = CLAIM_REGISTRY,
   /** Route actors a claim verifier has already answered through for this company. */
@@ -293,6 +293,15 @@ export function evidenceGapsFor(
   unaffordable: ReadonlySet<string> = new Set(),
 ): EvidenceGap[] {
   return checks.filter((c) => c.result === "unknown").map((c) => {
+    // Q1 — a check NO purchase can close (an unsupported mandatory requirement,
+    // or a hold another authority placed): blocked, never routed, whatever a
+    // claim definition for its dimension might otherwise offer.
+    if (c.blocked) {
+      return {
+        criterion_id: c.criterion_id, dimension: c.dimension, claim: null, missing: c.reason,
+        next: "blocked" as const, route: null, considered: [],
+      };
+    }
     const def = claimFor(c.dimension, registry);
     const considered = judgeRoutes(def, graph, attempted, policy, unaffordable);
     // CHEAPEST FIRST among the routes that can actually answer it.

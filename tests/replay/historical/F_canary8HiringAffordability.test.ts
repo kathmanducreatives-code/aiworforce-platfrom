@@ -121,3 +121,18 @@ Deno.test("[historical] F replay is idempotent: the same checkpoint replayed twi
     new Set(again.unaffordable_routes ?? []));
   assert(!canStillQualify(gaps), "hiring is answered (no posting) — nothing left to buy for LlamaIndex");
 });
+
+// ── Q3: THE SAME CANARY UNDER TODAY'S COMPILER ──────────────────────────────
+
+Deno.test("[historical] F STRICT HQ (Q3): under today's compiler, 'US' is a headquarters requirement — none of these records proves one, so nothing is bought", async () => {
+  const r = await replayVerificationAt(fx, S1, { verifiers: "hiring", strictScope: true });
+  for (const c of r.criteria.filter((x) => x.dimension === "geography" && x.kind === "hard")) assertEquals(c.geography_scope, "headquarters");
+  assertEquals(r.provider.calls.length, 0, "no job search for a company whose headquarters is not established");
+  const view = canonicalView(r, r.mission, fx.provenance.task_id, "general_company_discovery", true);
+  const counts = view.counts as { exact_match: number; strong_opportunity: number; worth_considering: number; low_priority: number };
+  assertEquals(counts.exact_match + counts.strong_opportunity + counts.worth_considering + counts.low_priority, 0, "no candidate is counted as qualified");
+  for (const lead of view.leads.filter((l) => l.bucket === "pending")) {
+    const geo = lead.hard_check_details.find((d) => d.dimension === "geography");
+    if (geo) assertEquals(geo.result, "unknown", `${lead.company.name}: kept pending on headquarters, not rejected`);
+  }
+});

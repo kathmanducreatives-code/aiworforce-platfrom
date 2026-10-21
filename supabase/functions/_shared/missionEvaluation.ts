@@ -52,6 +52,8 @@
 // injected by the binding.
 
 import type { QualificationContext, BrainAuthority } from "./missionQualificationContext.ts";
+import { anyOfGroupKey, type MissionCriterion } from "./missionCriteria.ts";
+import { eventWithinWindow } from "./candidateObservation.ts";
 import {
   findEvidence, hardFactsForPrompt, registryForPrompt,
   type EvidenceItem, type EvidenceRegistry,
@@ -212,6 +214,7 @@ export interface RequirementFailure {
 }
 
 export interface MissionEvaluation {
+  criterion_verdicts?: CriterionVerdict[];
   version: typeof MISSION_EVALUATION_VERSION;
   decision: EvaluationDecision;
   mission_fit: MissionFit;
@@ -228,6 +231,31 @@ export interface MissionEvaluation {
   evidence_quality: EvidenceQuality;
   unknown_fields: string[];
   next_action: string | null;
+}
+
+/** Model interpretation, bound to a compiled criterion and checked receipts. */
+export interface CriterionVerdict {
+  criterion_id: string;
+  geography_scope?: "headquarters" | "presence";
+  result: "pass" | "fail" | "unknown";
+  reason: string;
+  evidence: Array<{ evidence_id: string; excerpt: string }>;
+}
+
+/** Evidence types that describe the company itself (Q3): the only receipts for industry or business model. */
+const COMPANY_OWNED_TYPES: ReadonlySet<string> = new Set([
+  "company_description", "company_industry", "web_page", "yc_company_record",
+]);
+
+/**
+ * The criteria the evaluator answers: every supported one, and every MANDATORY
+ * one even when no structured source can establish it (Q3, audit G08) — the
+ * customer's own requirement is never silently dropped from the verdict.
+ */
+const judged = (c: MissionCriterion) => c.status === "ok" || c.kind === "hard";
+
+export function evaluationCriteria(input: Pick<MissionEvaluationInput, "mission">): readonly MissionCriterion[] {
+  return Array.isArray(input.mission.criteria) ? input.mission.criteria as MissionCriterion[] : [];
 }
 
 /** How much of the model's answer survived validation. */
@@ -353,6 +381,8 @@ export function buildMissionEvaluationInput(i: {
     schema_version: MISSION_EVALUATION_INPUT_VERSION,
     instruction: MISSION_EVALUATION_PROMPT,
     mission: {
+      criteria: i.ctx.criteria?.map(({ id, kind, dimension, value, label, status, geography_scope, any_of, time_window }) =>
+        ({ id, kind, dimension, value, label, status, geography_scope, any_of, time_window })),
       original_user_query: ctx.original_user_query,
       target_entity: ctx.target_entity,
       verticals: ctx.verticals,
@@ -497,6 +527,13 @@ export const EVIDENCE_POLICY: string = [
 
 export const MISSION_EVALUATION_PROMPT = [
   "Decide whether this company satisfies the user's Mission.",
+  "Return criterion_verdicts for EVERY mission.criteria id: {criterion_id, result:'pass'|'fail'|'unknown', reason, evidence:[{evidence_id,excerpt}]}.",
+  "For geography verdicts include geography_scope:'headquarters'|'presence'. Preserve compiled scope; if absent, interpret the original request explicitly. Never substitute an office for requested HQ.",
+  "An exclusion criterion ('Excluding: X') passes when the company's own words show it is not X and fails when they show it is X.",
+  "Interpret roles and company intent contextually. Modifiers may preserve a role; a related role is not automatically equivalent.",
+  "Headquarters and market/office presence are distinct. A job description is not the company's own business description.",
+  "A mandatory criterion fails only on cited contradiction; missing proof is unknown. Preferences may rank but never veto.",
+  "Never let a confident explanation override a failed or unknown mandatory criterion. Every PASS/FAIL needs verbatim evidence.",
   "",
   "THE MISSION IS THE QUESTION. The `mission` object is the user's request as it",
   "was compiled. Judge against `hard_constraints`, `required_signal_terms`,",
@@ -536,6 +573,7 @@ export const MISSION_EVALUATION_PROMPT = [
   "Return ONLY this JSON:",
   '{"mission_fit":"pass|review|fail","icp_fit":"strong|plausible|weak",',
   '"hiring_fit":"verified|plausible|absent","confidence":0.0,"match_score":0,',
+  '"criterion_verdicts":[{"criterion_id":"","result":"pass|fail|unknown","geography_scope":null,"reason":"","evidence":[{"evidence_id":"","excerpt":""}]}],',
   '"matched_requirements":[{"requirement":"","evidence_id":"","excerpt":"","support":"verified|supported"}],',
   '"failed_requirements":[{"requirement":"","evidence_id":null,"why":""}],',
   '"reasoning":"","rejection_reasons":[],',
@@ -564,6 +602,7 @@ export const MISSION_EVALUATION_PROMPT = [
  * reason to accept the old evidence that was already found wanting.
  */
 export const MISSION_REEVALUATION_PROMPT = [
+  "Return every mission.criteria id in criterion_verdicts, preserving mandatory versus preferred conditions. Each PASS/FAIL needs cited verbatim evidence. For geography include headquarters versus presence scope. An exclusion ('Excluding: X') passes when the company is shown not to be X and fails when it is shown to be X. Missing proof stays unknown.",
   "You are taking a SECOND look at one company, because new evidence arrived.",
   "",
   "WHAT IS ALREADY SETTLED. `established_requirements` lists requirements a",
@@ -590,6 +629,7 @@ export const MISSION_REEVALUATION_PROMPT = [
   "Return ONLY this JSON:",
   '{"mission_fit":"pass|review|fail","icp_fit":"strong|plausible|weak",',
   '"hiring_fit":"verified|plausible|absent","confidence":0.0,"match_score":0,',
+  '"criterion_verdicts":[{"criterion_id":"","result":"pass|fail|unknown","geography_scope":null,"reason":"","evidence":[{"evidence_id":"","excerpt":""}]}],',
   '"matched_requirements":[{"requirement":"","evidence_id":"","excerpt":"","support":"verified|supported"}],',
   '"failed_requirements":[{"requirement":"","evidence_id":null,"why":""}],',
   '"reasoning":"","rejection_reasons":[],',
@@ -668,6 +708,42 @@ export function buildMissionReevaluationInput(i: {
  * A requirement the second pass CONTRADICTS is a different matter: that is new
  * information and it wins.
  */
+/**
+ * Q1 — THE SECOND LOOK, PER CRITERION.
+ *
+ * `mergeReevaluation` used to take `criterion_verdicts` from the second pass
+ * wholesale (`...next`), so a criterion the first pass FAILED with cited
+ * evidence could come back PASS on a more generous reading of the same
+ * evidence — and a re-evaluation without criteria erased them altogether.
+ *
+ *   second pass absent        → the first pass stands
+ *   one side lacks a row       → the other side's row
+ *   first FAIL, second not FAIL → the second only when it cites NEW evidence
+ *                                 (`isNewEvidence`; omitted ⇒ not held back,
+ *                                 as for requirements above)
+ *   otherwise                  → the second pass (it may always lower)
+ */
+export function mergeCriterionVerdicts(
+  prior: readonly CriterionVerdict[] | undefined,
+  next: readonly CriterionVerdict[] | undefined,
+  isNewEvidence?: (evidenceId: string) => boolean,
+): CriterionVerdict[] {
+  if (!next) return [...(prior ?? [])];
+  if (!prior) return [...next];
+  const before = new Map(prior.map((v) => [v.criterion_id, v]));
+  const out: CriterionVerdict[] = [];
+  for (const v of next) {
+    const p = before.get(v.criterion_id);
+    before.delete(v.criterion_id);
+    if (p?.result === "fail" && v.result !== "fail" && isNewEvidence &&
+      !v.evidence.some((e) => isNewEvidence(e.evidence_id))) {
+      out.push({ ...p, reason: `${p.reason} (a second look cited no new evidence)` });
+    } else out.push(v);
+  }
+  for (const p of before.values()) out.push(p);
+  return out;
+}
+
 export function mergeReevaluation(
   prior: MissionEvaluation, next: MissionEvaluation,
   /** Maps an evidence_id to its page, when the registry knows one. */
@@ -770,6 +846,11 @@ export function mergeReevaluation(
 
   return {
     ...next,
+    // Q1 — per criterion, not wholesale: a second look replaces a FAIL only
+    // with a verdict that cites evidence the first pass did not have.
+    ...(prior.criterion_verdicts || next.criterion_verdicts
+      ? { criterion_verdicts: mergeCriterionVerdicts(prior.criterion_verdicts, next.criterion_verdicts, isNewEvidence) }
+      : {}),
     matched_requirements: kept,
     unknown_fields: stillOpen,
     // The decision follows the merged picture, not the second pass alone: a
@@ -931,10 +1012,14 @@ export function anchorCitation(
  */
 export function parseMissionEvaluationStrict(
   raw: unknown, registry: EvidenceRegistry,
+  criteria: readonly MissionCriterion[] = [],
 ): ParsedMissionEvaluation {
   const o = typeof raw === "string" ? safeJson(raw) : raw;
   const fail = (why: string): ParsedMissionEvaluation => ({
-    evaluation: { ...FALLBACK_INSUFFICIENT },
+    evaluation: { ...FALLBACK_INSUFFICIENT,
+      ...(criteria.length ? { criterion_verdicts: criteria.filter(judged).map((c) => ({
+        criterion_id: c.id, result: "unknown" as const, reason: why, evidence: [],
+      })) } : {}) },
     parse_status: "invalid_insufficient_evidence",
     raw_shape: {
       received_keys: o && typeof o === "object" ? Object.keys(o as object) : [],
@@ -1060,7 +1145,7 @@ export function parseMissionEvaluationStrict(
     repaired.push("mission_fit:pass_without_verified_citation");
   }
 
-  const reasoning = typeof r.reasoning === "string" ? r.reasoning : "";
+  let reasoning = typeof r.reasoning === "string" ? r.reasoning : "";
   const rejection_reasons = strArr(r.rejection_reasons, "rejection_reasons");
   const unknown_fields = strArr(r.unknown_fields, "unknown_fields");
   const next_action = typeof r.next_action === "string" && r.next_action.trim()
@@ -1076,6 +1161,67 @@ export function parseMissionEvaluationStrict(
   // Asking the model for both `mission_fit` and `decision` invites them to
   // disagree, and then something has to pick. There is only one rule and it
   // lives here.
+  const rawVerdicts = Array.isArray(r.criterion_verdicts) ? r.criterion_verdicts : [];
+  const criterion_verdicts: CriterionVerdict[] = criteria.filter(judged).map((c) => {
+    const rows = rawVerdicts.filter((v) => v && typeof v === "object" && v.criterion_id === c.id);
+    const v = rows.length === 1 ? rows[0] : null;
+    const evidence: CriterionVerdict["evidence"] = [];
+    let invalid = false;
+    for (const receipt of Array.isArray(v?.evidence) ? v.evidence : []) {
+      const id = typeof receipt?.evidence_id === "string" ? receipt.evidence_id : "";
+      const excerpt = typeof receipt?.excerpt === "string" ? receipt.excerpt : "";
+      const item = findEvidence(registry, id);
+      // Criterion receipts are exact: never re-anchor a verdict to another kind
+      // of evidence. That could turn a job quote into a company-description fact.
+      if (!item || item.company_key !== registry.company_key || !excerpt.trim() ||
+        !containsExcerpt(item.source_text, excerpt) || item.verification_state === "invalid" ||
+        item.verification_state === "conflicting" || item.freshness === "stale" ||
+        (item.evidence_type === "company_description" && item.verification_state !== "verified") ||
+        (c.dimension === "hiring" && !["job_posting", "yc_job"].includes(item.evidence_type)) ||
+        // Q3 — WHAT A COMPANY IS comes from the company's own record or words:
+        // its verified description, its provider industry label, its own
+        // website, its cohort record. A job posting describes a role, and a
+        // news item describes an event; neither is the company's business.
+        // Q4 — and so does what a company is NOT ("excluding recruiting agencies").
+        ((c.dimension === "industry" || c.dimension === "business_model" || c.dimension === "exclusion") &&
+          !COMPANY_OWNED_TYPES.has(item.evidence_type)) ||
+        // Q3 — a mandatory requirement no structured source establishes ("exactly
+        // 23 employees", "seed-stage" with no funding verifier, "startup") is
+        // answered only by the company's own record or words, as above.
+        (c.status !== "ok" && !COMPANY_OWNED_TYPES.has(item.evidence_type)) ||
+        // Q2 — A WINDOWED REQUIREMENT NEEDS A DATED EVENT INSIDE THE WINDOW
+        // (audit G05–G07, G14). A fetch date is not an event date, so a page
+        // with no `occurred_at` cannot prove "in the last 30 days". Hiring and
+        // funding keep their own dated rules (the open-role verifier's window,
+        // `decideRecentlyFunded`).
+        (c.time_window?.days && c.dimension !== "hiring" && c.dimension !== "funding" &&
+          !eventWithinWindow(item.occurred_at, c.time_window.days).inside)) {
+        invalid = true;
+      } else evidence.push({ evidence_id: id, excerpt });
+    }
+    const geography_scope = v?.geography_scope === "headquarters" || v?.geography_scope === "presence" ? v.geography_scope : undefined;
+    if (c.dimension === "geography" && (!geography_scope || (c.geography_scope && geography_scope !== c.geography_scope))) invalid = true;
+    const result = !invalid && evidence.length > 0 && ["pass", "fail"].includes(v?.result)
+      ? v.result as "pass" | "fail" : "unknown";
+    return { criterion_id: c.id, result, evidence, ...(geography_scope ? { geography_scope } : {}),
+      reason: (result !== "unknown" || (v?.result === "unknown" && !invalid)) && typeof v?.reason === "string" && v.reason.trim()
+        ? v.reason : "criterion evidence is missing or unusable" };
+  });
+  const groups = new Map<string, CriterionVerdict[]>();
+  for (const c of criteria.filter((c) => c.kind === "hard" && judged(c))) {
+    const key = anyOfGroupKey(c) ?? c.id;
+    const v = criterion_verdicts.find((v) => v.criterion_id === c.id)!;
+    groups.set(key, [...(groups.get(key) ?? []), v]);
+  }
+  const groupResults = [...groups.values()].map((vs) => vs.some((v) => v.result === "pass")
+    ? "pass" : vs.every((v) => v.result === "fail") ? "fail" : "unknown");
+  if (groupResults.some((v) => v !== "pass")) {
+    mission_fit = groupResults.includes("fail") ? "fail" : "review";
+    const unsupported = [...groups.values()].filter((vs) => !vs.some((v) => v.result === "pass")).flat();
+    reasoning = `Mandatory criteria not established: ${unsupported.map((v) => `${v.criterion_id}: ${v.result} (${v.reason})`).join("; ")}`;
+    unknown_fields.push(...unsupported.filter((v) => v.result === "unknown").map((v) => v.criterion_id));
+    repaired.push("mandatory_criterion_not_passed");
+  }
   const decision: EvaluationDecision =
     mission_fit === "pass" ? "qualified"
       : mission_fit === "fail" ? "not_qualified"
@@ -1087,6 +1233,7 @@ export function parseMissionEvaluationStrict(
       decision, mission_fit, icp_fit, hiring_fit,
       confidence, match_score,
       matched_requirements: sufficient, failed_requirements,
+      ...(criteria.length ? { criterion_verdicts } : {}),
       reasoning, rejection_reasons, evidence_quality, unknown_fields, next_action,
     },
     parse_status: repaired.length === 0 && dropped.length === 0 ? "valid" : "repaired",

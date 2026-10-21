@@ -43,7 +43,7 @@ Deno.test("an ONLY seed-stage hiring request shows hard, signal, window and unpr
   });
   const s = criteriaSectionsOf(c)!;
   assert(s, "sections present on the payload");
-  assert(s.hard.some((l) => l.startsWith("Geography: United States")));
+  assert(s.hard.some((l) => l.startsWith("Headquarters: United States")));
   assert(s.hard.some((l) => l.includes("seed")));
   assert(s.opportunity_signals.some((l) => l.startsWith("Hiring")));
   assert(s.time_windows.some((l) => l.startsWith("Hiring: last 30 days")));

@@ -324,7 +324,9 @@ const EVENT_MARKERS: ReadonlyArray<readonly [SignalEvent, RegExp]> = Object.free
   ["comment", /\bcomment(?:ed|s|ing)?\b|\breplied to\b|\bengag(?:ed|ing|ement) with\b/],
   ["post", POST_MARKER_RE],
   ["funding", /\bfund(?:ed|ing)\b|\braised\b|\bseries [a-e]\b|\bpre-?seed\b|\bseed round\b/],
-  ["headcount_change", /\bheadcount\b|\bteam growth\b|\bgrowing (?:their|the) (?:team|headcount)\b|\bgtm growth\b|\bheadcount growth\b/],
+  // Q3 H04: one modifier word may name the team ("expanding its sales team"),
+  // a generic slot that a preposition never fills ("expanding into Germany").
+  ["headcount_change", /\bheadcount\b|\bteam growth\b|\b(?:growing|expanding|scaling|increasing) (?:(?:their|its|the|our) )?(?:(?!into\b|in\b|to\b|across\b)[a-z][\w-]* )?(?:team|teams|headcount|workforce)\b|\bgtm growth\b|\bheadcount growth\b/],
   ["product_launch", /\bproduct launch\w*\b|\bnew product\b|\b(?:just|recently) launched\b|\blaunch(?:ed|ing) an? \w+/],
   ["leadership_change", /\bnew (?:ceo|cto|cfo|coo|cmo|vp|head of|exec\w*)\b|\bjust hired an? \w+|\bappointed\b|\bleadership change\b/],
   ["expansion", /\bexpan(?:d|ding|sion)\w*\b|\bopening (?:an? )?(?:office|location)\b|\bentering\b|\bnew market\b/],

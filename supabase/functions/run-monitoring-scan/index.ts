@@ -32,7 +32,7 @@ import { makeGptDiscoveryPlanner } from "../_shared/gptDiscoveryPlanner.ts";
 import {
   buildMissionEvaluationBinding,
 } from "../_shared/missionEvaluationBinding.ts";
-import { parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
+import { evaluationCriteria, parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
 import { writeSignalEventV2 } from "../_shared/signalsV2Writer.ts";
 import { isSignalsV2Enabled } from "../_shared/signalsV2Flag.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
@@ -303,7 +303,7 @@ Deno.serve(async (req) => {
                 evalCalls++;
                 const raw = await evalBinding.evaluateMission!(
                   input as unknown as Record<string, unknown>);
-                const parsed = parseMissionEvaluationStrict(raw, registry);
+                const parsed = parseMissionEvaluationStrict(raw, registry, evaluationCriteria(input));
                 console.log("[monitoring][mission-evaluation]", {
                   company_key, parse_status: parsed.parse_status,
                   decision: parsed.evaluation.decision,

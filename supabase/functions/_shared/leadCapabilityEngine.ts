@@ -182,7 +182,8 @@ import {
   advance, evaluateCompanyFit, newCompanyRecord, projectFunnel,
   type CompanyFitResult, type CompanyRecordState, type FunnelCounts,
 } from "./companyFirstStages.ts";
-import { missionTargetsIntermediaries } from "./companyAggregatorEvidence.ts";
+import { discoveryAgencyRejection, missionTargetsIntermediaries } from "./companyAggregatorEvidence.ts";
+import { qualificationHoldsOf, restoredHolds, type QualificationHold } from "./qualificationHold.ts";
 import { mergeDiscoveryActorInput } from "./discoveryInputMerge.ts";
 import { authorityForEvidence, authorityRecord, statusForAuthority } from "./evidenceAuthority.ts";
 import {
@@ -1829,6 +1830,13 @@ export interface EngineCompany {
   /** The evaluator's structured answer. Null until qualification runs. */
   mission_evaluation: MissionEvaluation | null;
   /**
+   * Q1 — holds restored from a checkpoint (`qualificationHold.ts`). The fields
+   * a fresh hold is read from (`decision_source`, `record.stage_reason`, `fit`)
+   * are not part of the checkpoint, so without this a resumed slice could label
+   * a company the first slice held.
+   */
+  qualification_holds?: QualificationHold[];
+  /**
    * THE QUALIFICATION DECISION, held explicitly.
    *
    * Deliberately NOT read back off `record.stage`. `advance` only moves forward
@@ -2654,8 +2662,19 @@ export async function runCapabilityPlan(
   // and a Mission asking for companies hiring software engineers qualified none
   // of a hundred (TEST run cf6cce3d): its own required signal was classified
   // `technical`, and `technical` could not produce a qualifying tier.
+  // ── IS THE EXCLUDED CATEGORY THE REQUESTED ONE? ─────────────────────────
+  //
+  // A property of the MISSION, resolved once for the whole run: job discovery's
+  // agency admission (Q3, H05) and the company-fit gate read the same answer,
+  // so two stages of one run can never disagree about it.
+  const targetsIntermediaries = missionTargetsIntermediaries({
+    mission_verticals: opts.mission?.company_profile?.verticals ?? [],
+  });
   const qualificationCtx = buildQualificationContext(opts.mission,
-    { criteriaAuthority: opts.specMode === "enforce" });
+    // Q1 — the SAME criteria the canonical decision reads (`canonicalDecisions`
+    // derives them under `opts.readiness`), so the evaluator answers the
+    // requirements that decide, with the same ids and statuses.
+    { criteriaAuthority: opts.specMode === "enforce", readiness: opts.readiness });
   log("qualification_context", qualificationContextSummary(qualificationCtx));
 
   // ── WHAT A SECOND LOOK NEEDS, BUILT ONCE FOR THE WHOLE RUN ──────────────
@@ -2803,7 +2822,8 @@ export async function runCapabilityPlan(
     // bucket would let a verdict cite the wrong one.
     expansion_evidence: c.signal_evidence["expansion"] ?? [],
     launch_evidence: c.signal_evidence["product_launch"] ?? [],
-    yc_description: c.company.description ?? null,
+    yc_description: ["apify_yc_companies_memo23", "apify_yc_companies_solidcode"].includes(c.company.raw_ref?.actor_key ?? "")
+      ? c.company.description ?? null : null,
     // A FAILED PROVIDER IS RECORDED AS A FAILURE. Reading it as "nothing
     // found" would let an outage look like a company that is not hiring —
     // the one inference this whole stage exists to forbid.
@@ -6143,7 +6163,8 @@ export async function runCapabilityPlan(
             // asked for (Query B: "Assistant Manager" for a sales search), so a
             // posting proves only the hiring the mission named.
             const requestedHiring = requestedHiringFromSignals(
-              (opts.mission?.required_signals ?? []).filter(isHiringSignal));
+              (opts.mission?.required_signals ?? []).filter(isHiringSignal),
+              opts.mission?.directives?.disallowed_broadening?.includes("role") === true);
             const discoveryInput = {
               maxItems: Math.min(maxCandidates, JOB_DISCOVERY_LIMITS.maxItems),
               ...boundedJobDiscoveryInput(sel.input),
@@ -6164,7 +6185,7 @@ export async function runCapabilityPlan(
                 dropped.set("posting_closed", (dropped.get("posting_closed") ?? 0) + 1);
                 continue;
               }
-              const agency = jobEmployerAgencyReason(r);
+              const agency = discoveryAgencyRejection(jobEmployerAgencyReason(r), targetsIntermediaries);
               if (agency) {
                 dropped.set(`staffing_agency(${agency})`, (dropped.get(`staffing_agency(${agency})`) ?? 0) + 1);
                 continue;
@@ -8799,9 +8820,8 @@ export async function runCapabilityPlan(
       // Resolved once for the whole eligible set, like the bounds above, and for
       // the same reason: it is a property of the MISSION, not of a company, and
       // computing it per company would invite two answers in one run.
-      const targetsIntermediaries = missionTargetsIntermediaries({
-        mission_verticals: opts.mission.company_profile?.verticals ?? [],
-      });
+      // Resolved ONCE for the run (`targetsIntermediaries`, above): discovery
+      // admission and this gate read the same answer (Q3, H05).
       if (targetsIntermediaries.targets) {
         // Worth a line of its own: it suspends a hard gate, and an operator
         // reading a run that returned staffing firms must be able to see that
@@ -9509,6 +9529,9 @@ export async function runCapabilityPlan(
         // `mission_evaluation_observability`. Silence reported as silence.
         c.decision_source = "insufficient_evidence";
         c.mission_evaluation = notEvaluated("no evaluator was available for this run");
+        // An enabled evaluator that failed to answer cannot be bypassed by
+        // the broader facts the earlier batch happened to establish.
+        if (deps.evaluateMission) c.mission_evaluation.criterion_verdicts = [];
         c.evaluation_path = "model_unavailable";
         // The Brain still runs, with no semantic assessment, so the deterministic
         // gate record exists for a reviewer. It cannot QUALIFY without one — see
@@ -10634,6 +10657,8 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       // could ever qualify.
       mission_evaluation: (c.mission_evaluation ?? null) as unknown as
         Record<string, unknown> | null,
+      // Q1 — the holds this slice decided, so a resumed slice decides the same.
+      qualification_holds: qualificationHoldsOf(c) as unknown as Record<string, unknown>[],
     },
     updated_at: new Date().toISOString(),
   };
@@ -10854,6 +10879,7 @@ export function restoreWorkingSet(
     // as "ICP fit could not be established".
     c.mission_evaluation = (s.mission_evaluation ?? null) as unknown as
       EngineCompany["mission_evaluation"];
+    c.qualification_holds = restoredHolds(s.qualification_holds);
     // A company already carried to a terminal outcome must not re-enter the
     // frontier; `shortlisted` stays the derived view of that.
     c.shortlisted = wasInvestigated(c.investigation_state);
@@ -11846,6 +11872,10 @@ export function missionCandidatesFrom(
       investigated: c.investigation_state === "investigated" || c.verdict !== null ||
         c.brain !== null || c.hiring_assessment !== null,
       graph,
+      criterion_verdicts: c.mission_evaluation?.criterion_verdicts,
+      // Q1 — the evaluator's aggregate answer and the engine's own holds reach
+      // the canonical decision; before, only the per-criterion rows did (G09).
+      holds: qualificationHoldsOf(c),
       next_action: null,
       attempted_routes: attemptedRoutesOf(c),
       unaffordable_routes: unaffordableRoutes(c.completed_operations),
@@ -11921,7 +11951,7 @@ export function canonicallyWorkableKeys(
   const criteria = deriveMissionCriteria(opts.mission, readiness);
   const out = new Set<string>();
   for (const c of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
-    const eligibility = evaluateEligibility(criteria, c.graph);
+    const eligibility = evaluateEligibility(criteria, c.graph, c.criterion_verdicts, c.holds);
     const bucket = bucketOf(c, eligibility, null);
     if (bucket === "investigating" || bucket === "identity_unresolved") {
       out.add(c.company_key);

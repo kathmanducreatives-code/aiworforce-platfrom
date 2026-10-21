@@ -363,6 +363,12 @@ export function verifyGroundedResult(i: VerifyInput): GroundedVerification {
             : "invalid"}`);
         return false;
       }
+      // A discovered description remains useful context, but resolved identity
+      // does not prove who supplied its text. Do not promote it via a model quote.
+      if (item.evidence_type === "company_description" && item.verification_state !== "verified") {
+        reject(c, "invalid_evidence_state", `${id} lacks verified company-description provenance`);
+        return false;
+      }
       items.push(item);
     }
 

@@ -43,10 +43,12 @@
 // GPT is not consulted and cannot appeal. Pure.
 
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
-import type { EvidenceDimension, EvidenceItem } from "./candidateObservation.ts";
-import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts";
+import { eventWithinWindow, type EvidenceDimension, type EvidenceItem } from "./candidateObservation.ts";
+import { anyOfGroupKey, type CriterionDimension, type MissionCriterion } from "./missionCriteria.ts";
+import type { CriterionVerdict } from "./missionEvaluation.ts";
+import type { QualificationHold } from "./qualificationHold.ts";
 import { geographyContradicts } from "./leadEligiblePool.ts";
-import { matchBusinessModel } from "./businessModelMatch.ts";
+import { isControlledPhrase, matchBusinessModel } from "./businessModelMatch.ts";
 import {
   decideHasRaised, decideRecentlyFunded, fundingKindOf, fundingPresenceOf, normalizeRoundType, requiredStagesOf, stageRequirement,
 } from "./fundingStageClaim.ts";
@@ -107,6 +109,14 @@ export interface CriterionCheck {
   evidence_ids: string[];
   /** The item the answer rests on. Null when nothing answered it. */
   provenance: CheckProvenance | null;
+  /**
+   * Set when NO purchase can close this check: a hold another authority placed
+   * on the company (`hold:<code>`, Q1), equally authoritative sources that
+   * disagree (`conflict:<dimension>`, Q2), or a requirement no route can
+   * establish (`unproven:<claim>`, Q2). The gap router reports it blocked,
+   * so a candidate carrying one is never bought more evidence.
+   */
+  blocked?: string;
 }
 
 export interface EligibilityResult {
@@ -119,6 +129,8 @@ export interface EligibilityResult {
   disproven: string[];
   /** Hard dimensions still unknown: exactly what evidence completion should buy. */
   gaps: EvidenceDimension[];
+  /** Q1 — holds that kept an otherwise eligible candidate pending (`qualificationHold.ts`). */
+  held: QualificationHold[];
 }
 
 const text = (v: unknown): string => String(v ?? "").trim().toLowerCase();
@@ -141,10 +153,58 @@ function currentItem(graph: CompanyEvidenceGraph, dim: EvidenceDimension): Evide
 }
 
 /**
+ * Q2 — WHEN EQUALLY AUTHORITATIVE SOURCES DISAGREE, NOTHING IS DECIDED.
+ *
+ * The graph keeps every fresh item that disagrees with the one it picked
+ * (`conflicting`), but a check used to read `current` only — and `current` is
+ * chosen by method, status, confidence, recency and finally evidence ID, so
+ * which of two equally authoritative answers won could depend on arrival order
+ * (audit G01: two company records, US vs Canadian HQ; G02: 11–50 vs 201–500).
+ *
+ * The rule is generic: a fresh, PROVEN item of the same method as `current`
+ * is re-checked against this criterion; when any would give a different
+ * result, the check is `unknown` and BLOCKED (buying the same kind of source
+ * again cannot settle it). Disagreement that does not change THIS criterion's
+ * answer is not material and decides nothing. A weaker item (plausible, or a
+ * lower method) never overturns a stronger one — that ordering is the graph's.
+ * HQ and office presence are compared within the criterion's own scope.
+ */
+const CONFLICT_DIMENSIONS: ReadonlySet<CriterionDimension> = new Set<CriterionDimension>(["geography", "company_size"]);
+
+export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph): CriterionCheck {
+  const check = checkAgainst(c, graph);
+  const dim = CRITERION_EVIDENCE_DIMENSION[c.dimension];
+  if (!dim || !CONFLICT_DIMENSIONS.has(c.dimension) || check.result === "unknown") return check;
+  const claim = graph.claims.find((x) => x.dimension === dim);
+  const current = claim?.current;
+  if (!claim || !current) return check;
+  for (const other of claim.conflicting) {
+    if (other.status !== "proven" || other.method !== current.method) continue;
+    const alone: CompanyEvidenceGraph = {
+      ...graph,
+      claims: graph.claims.map((x) => x.dimension === dim ? { ...x, current: other, supporting: [], conflicting: [] } : x),
+    };
+    const theirs = checkAgainst(c, alone);
+    // An item that cannot answer this criterion (unknown — e.g. a location
+    // copy with no HQ authority) does not DISPUTE it: only a definite, different
+    // answer is a material conflict.
+    if (theirs.result !== "unknown" && theirs.result !== check.result) {
+      return {
+        ...check, result: "unknown", evidence_ids: [current.evidence_id, other.evidence_id],
+        reason: `equally authoritative sources disagree: ${current.source.actor} says ${check.result} (${check.reason}), ` +
+          `${other.source.actor} says ${theirs.result} (${theirs.reason})`,
+        blocked: `conflict:${dim}`,
+      };
+    }
+  }
+  return check;
+}
+
+/**
  * One criterion against the evidence. `unknown` whenever the evidence cannot
  * answer it — never a guess, and never a rejection by absence.
  */
-export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph): CriterionCheck {
+function checkAgainst(c: MissionCriterion, graph: CompanyEvidenceGraph): CriterionCheck {
   const base = { criterion_id: c.id, dimension: c.dimension, kind: c.kind };
   // ── A SELECTION, CHECKED AGAINST WHO THE COMPANY TURNED OUT TO BE ────────
   //
@@ -159,12 +219,16 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
   // a company that resolved to something the user did not supply fails, and
   // one whose identity is not resolved yet stays unknown until it is.
   if (c.dimension === "known_companies") return checkKnownCompanies(c, graph, base);
+  if (excludedTypes(c)) return checkExcludedTypes(c, excludedTypes(c)!, graph, base);
   const dim = CRITERION_EVIDENCE_DIMENSION[c.dimension];
   if (!dim) {
     return { ...base, result: "unknown", reason: `no evidence dimension answers ${c.dimension}`, evidence_ids: [], provenance: null };
   }
   if (c.dimension === "industry" || c.dimension === "business_model") return checkBusinessModel(c, graph, base);
-  const item = currentItem(graph, dim);
+  const current = currentItem(graph, dim);
+  const item = c.dimension === "geography" && c.geography_scope === "presence" && current?.geography_presence
+    ? { ...current, value: current.geography_presence.value, status: current.geography_presence.status,
+      authority: current.geography_presence.authority } : current;
   if (!item || item.status === "unknown") {
     const stale = graph.claims.find((x) => x.dimension === dim)?.stale.length ?? 0;
     return {
@@ -174,6 +238,21 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
   }
   const ids = [item.evidence_id];
   const provenance = provenanceOf(item);
+  // HEADQUARTERS NEEDS PROVEN HQ AUTHORITY — from the item speaking for the
+  // dimension or from a proven item AGREEING with it (Q3). The same location
+  // can reach the graph twice: as the company record's observation, which
+  // carries the HQ authority, and as the registry's `company_location`, which
+  // does not. Which of two equal items is `current` must not decide whether HQ
+  // is established; a DISAGREEING item never lends its authority.
+  const hqAuthority = (e: EvidenceItem | null | undefined) =>
+    !!e && e.status === "proven" && e.authority?.claim === "headquarters" && e.authority.level === "proven";
+  // A DISPROVEN location fails whatever the scope: the headquarters question
+  // only arises for a location that is not already ruled out (below).
+  if (c.dimension === "geography" && c.geography_scope === "headquarters" && item.status !== "disproven" && !(item.status === "proven" &&
+    (hqAuthority(item) || (graph.claims.find((x) => x.dimension === dim)?.supporting ?? []).some(hqAuthority)))) {
+    return { ...base, result: "unknown", reason: "headquarters is not explicitly established",
+      evidence_ids: ids, provenance };
+  }
   // P6 — A DECIDED FUNDING-STAGE CLAIM ANSWERS THE STAGE CRITERION DIRECTLY.
   // `fundingStageClaim.ts` already ordered the verified rounds; re-reading its
   // verdict as a string would only reintroduce the substring test it replaces.
@@ -303,12 +382,48 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
       if (found !== null && wanted.length > 0 && !wanted.some((w) => found.includes(w))) {
         return { ...base, result: "unknown", reason: `an open role was found, but not in ${wanted.join(" / ")}`, evidence_ids: ids, provenance };
       }
+      // ── Q2 — "THE FIRST HIRE IN THE FUNCTION" IS PART OF THE REQUIREMENT ───
+      //
+      // The compiler keeps the user's own first-hire words on the hiring
+      // qualifier (`first_in_function`); this check used to ignore them, so an
+      // ordinary sales posting satisfied "must be hiring its FIRST sales
+      // representative" (Codex routing audit H03). The engine already records
+      // first-in-function evidence (`team_composition`, from the posting's own
+      // words or a team lookup): supported → pass, contradicted → fail,
+      // otherwise unknown. Unknown is BLOCKED: the open-role verifier would
+      // only re-buy the opening that is already proven.
+      const firstHire = (c.value as { qualifier?: { first_in_function?: unknown } } | null)?.qualifier?.first_in_function;
+      if (firstHire) {
+        const team = currentItem(graph, "team_composition");
+        const said = (team?.value as { first_in_function?: unknown } | null)?.first_in_function;
+        if (team && team.status === "proven" && said === "supported") {
+          return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}, and it is the first hire in the function (${team.source.actor})`,
+            evidence_ids: [...ids, team.evidence_id], provenance };
+        }
+        if (team && (team.status === "disproven" || said === "contradicted")) {
+          return { ...base, result: "fail", reason: `an open role is proven, but it is not the first hire in the function (${team.source.actor})`,
+            evidence_ids: [...ids, team.evidence_id], provenance };
+        }
+        return { ...base, result: "unknown", reason: "an open role is proven, but that it is the first hire in the function is not established",
+          evidence_ids: ids, provenance, blocked: "unproven:first_in_function" };
+      }
       return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}`, evidence_ids: ids, provenance };
     }
     default: {
       // Signal dimensions: presence of a fresh, proven item satisfies them.
       if (!proven) return { ...base, result: "unknown", reason: `${dim} is reported, not proven`, evidence_ids: ids, provenance };
       if (item.value === false) return { ...base, result: "fail", reason: `${dim} is false`, evidence_ids: ids, provenance };
+      // Q2 — THE CUSTOMER'S WINDOW, ON THE EVENT'S OWN DATE (audit G14). The
+      // graph's validity (`EVIDENCE_VALIDITY_DAYS`, 180 days for expansion) says
+      // how long a fact stays usable in general; a criterion that asked for
+      // "in the last 7 days" is judged against the event's date, and an item
+      // that does not carry one cannot pass it. Hiring and funding keep their
+      // own dated rules above.
+      if (c.time_window?.days) {
+        const w = eventWithinWindow(item.occurred_at, c.time_window.days);
+        if (!w.inside) return { ...base, result: "unknown", reason: `${dim} is proven, but ${w.reason}`, evidence_ids: ids, provenance };
+        return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}, ${w.reason}`, evidence_ids: ids, provenance };
+      }
       return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}`, evidence_ids: ids, provenance };
     }
   }
@@ -466,6 +581,46 @@ function checkKnownCompanies(
       evidence_ids: ids, provenance: provenanceOf(item) };
 }
 
+/** The company types an exclusion criterion names, or null for any other criterion. */
+function excludedTypes(c: MissionCriterion): string[] | null {
+  const v = c.value as { field?: unknown; value?: unknown } | null;
+  if (c.dimension !== "exclusion" || v?.field !== "excluded_company_types") return null;
+  const values = (Array.isArray(v.value) ? v.value : [v.value]).map((x) => String(x ?? "").trim()).filter(Boolean);
+  return values.length ? values : null;
+}
+
+/**
+ * Q4 — AN EXCLUDED COMPANY TYPE IS THE INDUSTRY IT NAMES, INVERTED.
+ *
+ * "Excluding recruiting agencies" is answered by the same controlled vocabulary
+ * as an industry: proven evidence that the company IS one of the types fails
+ * it; proven evidence that rules out every type passes it; anything else stays
+ * unknown — an exclusion is never passed by silence. A type outside the
+ * vocabulary is answered, as an interpretive industry is (H05), only by a
+ * receipt-backed verdict from the company's own words.
+ */
+function checkExcludedTypes(
+  c: MissionCriterion, values: readonly string[], graph: CompanyEvidenceGraph,
+  base: Pick<CriterionCheck, "criterion_id" | "dimension" | "kind">,
+): CriterionCheck {
+  const reads = values.map((v) => checkBusinessModel({ ...c, dimension: "industry", value: v }, graph, base));
+  const is = reads.findIndex((r) => r.result === "pass");
+  if (is >= 0) {
+    return { ...reads[is], ...base, result: "fail", reason: `${reads[is].reason}, which the request excludes` };
+  }
+  if (reads.every((r) => r.result === "fail")) {
+    return { ...reads[0], ...base, result: "pass", reason: `${reads[0].reason} — not ${values.join(" or ")}` };
+  }
+  return { ...base, result: "unknown", evidence_ids: [], provenance: null,
+    reason: `nothing established yet shows the company is not ${values.join(" or ")}` };
+}
+
+/** Q3 — an industry / business-model criterion the controlled vocabulary cannot read. */
+function interpretive(c: MissionCriterion): boolean {
+  if (excludedTypes(c)) return excludedTypes(c)!.some((v) => !isControlledPhrase(v));
+  return (c.dimension === "industry" || c.dimension === "business_model") && !isControlledPhrase(c.value);
+}
+
 /**
  * ANY-OF GROUPS (RC02). Hard criteria that carry the same `any_of` alternatives
  * ("AI or developer-tools", "Series A or Series B") are ONE requirement:
@@ -480,10 +635,7 @@ function checkKnownCompanies(
  * for genuine ANDs ("B2B SaaS" → b2b saas + saas).
  */
 function anyOfResolved(criteria: readonly MissionCriterion[], checks: CriterionCheck[]): CriterionCheck[] {
-  const groupOf = (i: number) => {
-    const c = criteria[i];
-    return c.kind === "hard" && (c.any_of?.length ?? 0) > 1 ? `${c.dimension}|${[...c.any_of!].sort().join("|")}` : null;
-  };
+  const groupOf = (i: number) => anyOfGroupKey(criteria[i]);
   const groups = new Map<string, number[]>();
   checks.forEach((_, i) => { const g = groupOf(i); if (g) groups.set(g, [...(groups.get(g) ?? []), i]); });
   if (groups.size === 0) return checks;
@@ -495,7 +647,8 @@ function anyOfResolved(criteria: readonly MissionCriterion[], checks: CriterionC
       for (const i of members) {
         if (checks[i].result === "pass") continue;
         out[i] = { ...checks[i], result: "pass", evidence_ids: p.evidence_ids, provenance: p.provenance,
-          reason: `answered by the alternative ${String(criteria[passing].value)}: ${p.reason}` };
+          reason: `answered by the alternative ${criteria[passing].dimension === criteria[i].dimension
+            ? String(criteria[passing].value) : criteria[passing].label}: ${p.reason}` };
       }
     } else if (!members.every((i) => checks[i].result === "fail")) {
       for (const i of members) if (checks[i].result === "fail") out[i] = null;
@@ -505,15 +658,91 @@ function anyOfResolved(criteria: readonly MissionCriterion[], checks: CriterionC
 }
 
 /**
- * The candidate's eligibility. Hard criteria decide it; everything else is
- * checked for the record and cannot change the outcome.
+ * The candidate's eligibility — THE canonical qualification decision (Q1).
+ * Hard criteria decide it; everything else is checked for the record and
+ * cannot change the outcome.
+ *
+ *   - The evaluator's per-criterion verdicts can only lower a check (#113).
+ *   - A `hold` (`qualificationHold.ts`) can only stop an otherwise ELIGIBLE
+ *     candidate: it becomes pending with a blocked `qualification_hold` check.
  */
 export function evaluateEligibility(
   criteria: readonly MissionCriterion[], graph: CompanyEvidenceGraph,
+  verdicts?: readonly CriterionVerdict[],
+  holds: readonly QualificationHold[] = [],
 ): EligibilityResult {
-  const usable = criteria.filter((c) => c.status === "ok");
-  const checks = anyOfResolved(usable, usable.map((c) => checkCriterion(c, graph)));
+  // Q3 — A MANDATORY REQUIREMENT IS ENFORCED WHETHER OR NOT A SOURCE CAN
+  // ESTABLISH IT (audit G08, G08b). Before, a hard criterion no current source
+  // can prove (`unprovable_today`: "exactly 23 employees", a round stage with
+  // no funding verifier, the noun "startup") was dropped here, so a company
+  // qualified without it. Now it is read like any other: evidence already in
+  // the graph may pass or rule it out, and a receipt-backed evaluator verdict
+  // from the company's own words may answer it. Otherwise it is an open check
+  // that is BLOCKED: the company stays pending, nothing is bought for it, and
+  // it is never counted. A non-hard criterion with that status still never
+  // decides anything (a preference only ranks). Q3a-1 first stopped the
+  // compiler inventing such requirements.
+  const usable = criteria.filter((c) => c.status === "ok" || c.kind === "hard");
+  const checks = anyOfResolved(usable, usable.map((c) => {
+    const rows = verdicts?.filter((v) => v.criterion_id === c.id) ?? [];
+    const verdict = rows.length === 1 ? rows[0] : null;
+    const graphCheck = checkCriterion(c.dimension === "geography" && !c.geography_scope && verdict?.geography_scope
+      ? { ...c, geography_scope: verdict.geography_scope } : c, graph);
+    const unsupported = c.status !== "ok";
+    if (unsupported && graphCheck.result === "unknown" && verdict && verdict.result !== "unknown" && verdict.evidence.length > 0) {
+      return { ...graphCheck, result: verdict.result,
+        reason: `${verdict.reason} (the evaluator's reading of the company's own cited words; no structured source establishes ${c.label})`,
+        evidence_ids: verdict.evidence.map((e) => e.evidence_id), provenance: null };
+    }
+    const check: CriterionCheck = unsupported && graphCheck.result === "unknown"
+      ? { ...graphCheck, reason: `no current source can establish ${c.label}; it stays open until the company's own cited words do`,
+        blocked: `unsupported:${c.dimension}` }
+      : graphCheck;
+    if (!verdicts || check.result === "fail") return check;
+    if (unsupported && verdict?.result !== "fail") return check;
+    // Q3 — AN INDUSTRY THE VOCABULARY CANNOT READ. A mandatory industry or
+    // business model outside the controlled vocabulary ("recruiting agencies",
+    // "manufacturers") can never be answered by the evidence graph, so it used
+    // to stay unknown forever and no such ICP could qualify (Codex routing
+    // audit H05). There, and only there, the evaluator's per-criterion verdict
+    // answers it — when it carries receipts the strict parser already checked:
+    // verbatim, this company's own, fresh, verified, and from a COMPANY-OWNED
+    // source (description, industry label, own website, cohort record). No
+    // receipt, no answer: model confidence never substitutes for evidence. A
+    // value the vocabulary CAN read keeps the rule below: verdicts only lower.
+    if (check.result === "unknown" && interpretive(c) && verdict && verdict.result !== "unknown" && verdict.evidence.length > 0) {
+      return { ...check, result: verdict.result,
+        reason: `${verdict.reason} (the evaluator's reading of the company's own cited words; ${excludedTypes(c)?.join(" or ") ?? String(c.value)} is outside the controlled vocabulary)`,
+        evidence_ids: verdict.evidence.map((e) => e.evidence_id), provenance: null };
+    }
+    if (verdict?.result === "pass") return check; // never upgrades missing facts
+    return { ...check, result: verdict?.result === "fail" ? "fail" as const : "unknown" as const,
+      reason: verdict?.reason ?? "the evaluator did not establish this criterion",
+      evidence_ids: verdict?.evidence.map((e) => e.evidence_id) ?? [] };
+  }));
   const hard = checks.filter((c) => c.kind === "hard");
+  const disproven = hard.filter((h) => h.result === "fail").map((h) => h.criterion_id);
+  const unknown = hard.filter((h) => h.result === "unknown");
+  let eligibility: Eligibility = disproven.length > 0
+    ? "ineligible"
+    : unknown.length > 0
+    ? "pending"
+    : "eligible";
+  // A HOLD STOPS ONLY WHAT WOULD OTHERWISE QUALIFY. Pending and ineligible
+  // candidates already say why; adding a blocked check there would also stop
+  // the ordinary purchase that could still answer their open questions.
+  const held = eligibility === "eligible" ? [...holds] : [];
+  if (held.length > 0) {
+    eligibility = "pending";
+    for (const h of held) {
+      const check: CriterionCheck = {
+        criterion_id: `qualification_hold:${h.code}`, dimension: "qualification_hold" as CriterionDimension,
+        kind: "hard", result: "unknown", reason: h.reason, evidence_ids: [], provenance: null, blocked: `hold:${h.code}`,
+      };
+      checks.push(check);
+      hard.push(check);
+    }
+  }
   const hard_checks: Record<string, CheckResult> = {};
   for (const h of hard) {
     // Worst result wins when two hard criteria share a dimension.
@@ -524,15 +753,9 @@ export function evaluateEligibility(
       ? "unknown"
       : "pass";
   }
-  const disproven = hard.filter((h) => h.result === "fail").map((h) => h.criterion_id);
-  const unknown = hard.filter((h) => h.result === "unknown");
-  const eligibility: Eligibility = disproven.length > 0
-    ? "ineligible"
-    : unknown.length > 0
-    ? "pending"
-    : "eligible";
-  const gaps = [...new Set(unknown
+  // Only what a purchase could close is a gap.
+  const gaps = [...new Set(hard.filter((h) => h.result === "unknown" && !h.blocked)
     .map((h) => CRITERION_EVIDENCE_DIMENSION[h.dimension])
     .filter((d): d is EvidenceDimension => !!d))];
-  return { version: ELIGIBILITY_VERSION, eligibility, checks, hard_checks, disproven, gaps };
+  return { version: ELIGIBILITY_VERSION, eligibility, checks, hard_checks, disproven, gaps, held };
 }

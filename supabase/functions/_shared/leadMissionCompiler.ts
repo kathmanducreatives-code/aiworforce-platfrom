@@ -56,7 +56,7 @@ import {
 } from "./leadRuntimeIdentity.ts";
 import {
   LEAD_MISSION_VERSION, mergeCompanyBrainIntoMission,
-  parseLeadMissionDeterministic, validateLeadMission,
+  parseLeadMissionDeterministic, validateLeadMission, hedgedLocations, negatedLocations, sameLocation,
   EXECUTION_PREFERENCES,
   REQUESTED_OUTPUTS, MISSION_STRATEGIES, isMissionStrategy, canonicalSignalType, isHiringSignal,
   type BrainMergeInput, type MissionStrategy, type ExecutionPreference, type LeadMissionV1,
@@ -148,6 +148,7 @@ export interface GptMissionProposal {
   no_broadening_requested: boolean;
   /** The geography was STATED by the user, not inferred from workspace context. */
   geography_is_hard: boolean;
+  geography_scope?: "headquarters" | "presence";
   /**
    * Actions the request forbids in its own words — "do not send outreach", "do
    * not invent contacts". Distinct from `excluded_signals`, which is about what
@@ -529,6 +530,7 @@ export function buildMissionCompilerPayload(
       required_signal_terms: "string[] — the user's own role/signal words, verbatim",
       no_broadening_requested: "boolean",
       geography_is_hard: "boolean",
+      geography_scope: "headquarters|presence|null — interpret the user's location intent: headquarters requires explicit HQ proof; an office or market presence is not HQ",
       prohibitions: "string[] — actions the request forbids",
       output_intent: REQUESTED_OUTPUTS,
       strategies: MISSION_STRATEGIES,
@@ -719,6 +721,8 @@ export function parseMissionProposal(raw: unknown, userText = ""): ParsedProposa
       required_signal_terms: strArray(c.required_signal_terms),
       no_broadening_requested: c.no_broadening_requested === true,
       geography_is_hard: c.geography_is_hard === true,
+      ...(c.geography_scope === "headquarters" || c.geography_scope === "presence"
+        ? { geography_scope: c.geography_scope } : {}),
       prohibitions: strArray(c.prohibitions),
       // Dropped AND NAMED here, not silently filtered. `validateLeadMission`
       // has the same guard, but by the time it runs an unknown value has
@@ -1099,12 +1103,23 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   // a preference (`deriveMissionCriteria` makes it a target).
   const locationProvenance = mission.field_provenance?.["company_profile.locations"];
   const brainLocations = locationProvenance === "company_brain" || locationProvenance === "company_brain_policy";
-  if (mission.company_profile.locations.length > 0 && !brainLocations) {
+  //
+  // Q4 — NOR A LOCATION THE REQUEST ONLY HOPES FOR. "…, ideally in the US" is a
+  // preference however the proposal or the marker table read it: it ranks
+  // (`deriveMissionCriteria` makes it a target) and never rejects a company.
+  const hedged = hedgedLocations(query, mission.company_profile.locations);
+  // Nor one it names only to exclude ("not based in the US").
+  const negated = negatedLocations(query, mission.company_profile.locations);
+  const statedLocations = mission.company_profile.locations
+    .filter((l) => !sameLocation(l, hedged) && !sameLocation(l, negated));
+  if (statedLocations.length > 0 && !brainLocations) {
     hard["company_profile.locations"] = {
       operator: "in",
-      value: [...mission.company_profile.locations],
+      value: statedLocations,
       reason: "stated explicitly in the user's query",
     };
+  } else if ((hedged.length > 0 || negated.length > 0) && !brainLocations) {
+    delete hard["company_profile.locations"];
   }
   const soft: Record<string, unknown> = { ...mission.soft_preferences };
   for (const sp of p?.soft_preferences ?? []) {
@@ -1112,6 +1127,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   }
 
   mission = { ...mission, hard_constraints: hard, soft_preferences: soft, directives };
+  if ((hedged.length > 0 || negated.length > 0) && statedLocations.length === 0) delete mission.geography_is_hard;
 
   // ── P1: THE MEANING, MADE EXPLICIT — AND THE CARRIERS KEPT HONEST ─────────
   //
@@ -1400,6 +1416,7 @@ function proposalToMissionCandidate(
     company_profile: {
       verticals: p.company_types,
       locations: p.geographies,
+      ...(p.geography_scope ? { geography_scope: p.geography_scope } : {}),
       business_models: [],
       stages: [],
       employee_range: {

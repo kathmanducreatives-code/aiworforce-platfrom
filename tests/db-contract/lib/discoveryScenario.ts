@@ -16,6 +16,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { mintJwt, REST_URL, sql, uuid } from "./harness.ts";
 import { seedSmokeMission } from "./smokeMission.ts";
+import { mockCriterionVerdicts } from "./criterionFixture.ts";
 import { createAdmissionFetch, missionAdmission } from "../../../supabase/functions/_shared/smokeAdmission.ts";
 import { createLeadMissionRunner } from "../../../worker/leadMissionRunner.ts";
 import { createExecutionDeadline } from "../../../supabase/functions/_shared/leadExecutionFinalizer.ts";
@@ -124,12 +125,19 @@ function citations(ev: Ev[], model: Model) {
   }
   return {
     business: cite(find(ev, /^company_description$/, /\b(software|platform)\b.*\b(teams|companies|businesses|customers)\b/i)),
-    location: cite(find(ev, /headquarter/, /United States/), /United States/),
+    // The registry files a company's location as `company_location` (#113 cites it
+    // per criterion); a `headquarter` type alone never matched, so this cited nothing.
+    location: cite(find(ev, /headquarter|^company_location$/, /United States/), /United States/),
     size: cite(find(ev, /^company_size_band$/, /11-50 employees/), /11-50 employees/),
     hiring: cite(find(ev, /job|posting|hiring/, /Account Executive/), /Account Executive/),
   };
 }
-function evaluatorAnswer(input: unknown, model: Model) {
+/**
+ * `aggregate` (Q1): the evaluator's OVERALL answer, independent of its
+ * per-criterion rows. "fail" / "review" keep every row PASS with real receipts
+ * and contradict them in `mission_fit` — the audit's G09 shape.
+ */
+function evaluatorAnswer(input: unknown, model: Model, aggregate?: "fail" | "review") {
   const c = citations(evidenceIn(input), model);
   const req: Array<[string, { evidence_id: string; excerpt: string } | null]> = [
     ["B2B software company", c.business], ["located in the United States", c.location],
@@ -137,11 +145,17 @@ function evaluatorAnswer(input: unknown, model: Model) {
   ];
   const missing = req.filter(([, x]) => !x).map(([r]) => r);
   return {
-    mission_fit: missing.length === 0 ? "pass" : "review", icp_fit: "plausible",
+    mission_fit: aggregate ?? (missing.length === 0 ? "pass" : "review"), icp_fit: "plausible",
     hiring_fit: c.hiring ? "verified" : "absent", confidence: 0.8, match_score: missing.length === 0 ? 80 : 0,
+    // One verdict per compiled criterion, citing the SAME receipts as above (#113's
+    // evaluator contract). The credulous model's receipts stay irrelevant on purpose:
+    // production must refuse them; nothing here decides eligibility.
+    criterion_verdicts: mockCriterionVerdicts(input, c),
     matched_requirements: req.filter(([, x]) => x).map(([requirement, x]) => ({ requirement, ...x!, support: "verified" })),
     failed_requirements: [], reasoning: missing.length ? `not established: ${missing.join("; ")}` : "every requirement cited",
-    rejection_reasons: [], evidence_quality: missing.length ? "weak" : "moderate", unknown_fields: missing, next_action: null,
+    rejection_reasons: aggregate === "fail" ? ["the overall fit is wrong for this mission"] : [],
+    evidence_quality: missing.length ? "weak" : "moderate", unknown_fields: missing, next_action: null,
+    ...(aggregate ? { reasoning: `overall ${aggregate}, although every requirement is cited` } : {}),
   };
 }
 function groundedResult(company_key: string, ev: Ev[], model: Model) {
@@ -166,11 +180,15 @@ function groundedResult(company_key: string, ev: Ev[], model: Model) {
 // ── THE SCENARIO ─────────────────────────────────────────────────────────────
 export interface Scenario {
   label: string;
+  /** The customer's request (Q4: varied requests through the same real path). Default: the A7 mission. */
+  goal?: string;
   /** Job-search dataset rows (default: one qualifying posting). */
   jobs?: Json[];
   /** The company-details record for a requested LinkedIn URL (default: the posting's own company). */
   details?: (url: string) => Json | null;
   model?: Model;
+  /** The evaluator's overall answer, contradicting its PASS rows (Q1, audit G09). */
+  aggregate?: "fail" | "review";
   /** Override the compiler's proposal (S22: semantically wrong criteria). */
   proposal?: Json;
   jobsStartStatus?: number;
@@ -190,6 +208,7 @@ export interface Run {
 
 export async function runScenario(s: Scenario): Promise<Run> {
   const model = s.model ?? "honest";
+  const missionGoal = s.goal ?? MISSION;
   const originalFetch = globalThis.fetch;
   const key = await mintJwt("service_role");
   const localFetch: typeof fetch = (u, i) => {
@@ -219,7 +238,7 @@ export async function runScenario(s: Scenario): Promise<Run> {
   const user = uuid(), plan = uuid();
   await sql`insert into auth.users (id, email) values (${user}, ${"scenario-" + user + "@example.invalid"})`;
   await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${m.ws}, 'scout', 'Offline Scout', 'Find and verify the requested company using source evidence.', 'research')`;
-  await sql`insert into public.task_plans (id, workspace_id, user_id, user_instruction, status) values (${plan}, ${m.ws}, ${user}, ${MISSION}, 'running')`;
+  await sql`insert into public.task_plans (id, workspace_id, user_id, user_instruction, status) values (${plan}, ${m.ws}, ${user}, ${missionGoal}, 'running')`;
   await sql`insert into public.workspace_credit_balances (workspace_id, balance_credits) values (${m.ws}, 10)`;
 
   const base = company("qualified");
@@ -248,7 +267,7 @@ export async function runScenario(s: Scenario): Promise<Run> {
       const answer = name === "lead_mission_proposal" ? (s.proposal ?? PROPOSAL)
         : name === "lead_execution_plan" ? EXECUTION_PLAN
         : system.startsWith("You assess several companies") ? { results: (userMsg?.companies ?? []).map((co: Json) => groundedResult(co.company_key, evidenceIn(co.evidence), model)) }
-        : system.startsWith("Decide whether this company satisfies") ? evaluatorAnswer(userMsg, model)
+        : system.startsWith("Decide whether this company satisfies") ? evaluatorAnswer(userMsg, model, s.aggregate)
         : system.startsWith("You interpret supplied company evidence") ? groundedResult(String(userMsg?.company_key ?? ""), evidenceIn(userMsg), model)
         : {};
       return Promise.resolve(new Response(JSON.stringify({
@@ -289,16 +308,16 @@ export async function runScenario(s: Scenario): Promise<Run> {
     const compilerCalls = new ModelCallCollector();
     const binding = buildMissionCompilerBinding({ workspaceId: m.ws, onModelCall: compilerCalls.sink });
     const raw = await missionAdmission.run({ queueId: m.queueId, workerId: m.workerId, taskId: m.taskId, generation: m.generation },
-      () => binding.proposeMission!({ originalUserQuery: MISSION, requestedCount: 1 }));
+      () => binding.proposeMission!({ originalUserQuery: missionGoal, requestedCount: 1 }));
     assert(raw, JSON.stringify({ compiler_failure: binding.lastModelFailure() }));
     await compilerCalls.drain(createLedgerWriter(client as never), { workspace_id: m.ws, task_id: m.taskId, plan_id: plan, logical_call_key: "offline:mission_compilation" });
-    const c = compileLeadMission({ originalUserQuery: MISSION, proposal: raw, requestedCount: 1 });
+    const c = compileLeadMission({ originalUserQuery: missionGoal, proposal: raw, requestedCount: 1 });
     const mission = { ...c.final_mission, mission_parser_source: c.parser_source,
       lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION, planner_runtime: runtimeIdentity("planner", "offline-rehearsal") };
     trace.compiled_mission = mission;
     compiled = true;
     globalThis.fetch = gate;
-    const request = { plan_id: plan, step_index: 0, agent_slug: "scout", workspace_id: m.ws, user_id: user, instruction: MISSION,
+    const request = { plan_id: plan, step_index: 0, agent_slug: "scout", workspace_id: m.ws, user_id: user, instruction: missionGoal,
       requested_lead_count: 1, workflow_kind: "qualified_lead_sourcing", execution_mode: "company_first", tool_needed: "source_with_apify",
       lead_mission: mission, tool_input: { lead_mission: mission, source_type: "jobs" }, run_budget: { provider_usd: 0.20, max_candidates: 3 } };
     await sql`update public.tasks set status = 'complete' where id = ${m.taskId}`;

@@ -47,7 +47,7 @@
 
 import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import {
-  canonicalSignalType, containsPhrase, isHiringSignal,
+  canonicalSignalType, containsPhrase, hedgedLocations, isHiringSignal, sameLocation,
   type FieldProvenance, type LeadMissionV1, type MissionSignal,
 } from "./leadMission.ts";
 import { isControlledPhrase } from "./businessModelMatch.ts";
@@ -112,6 +112,7 @@ export interface MissionCriterion {
    * claim (`fundingStageClaim.stageRequirement`). Absent: an ordinary criterion.
    */
   any_of?: string[];
+  geography_scope?: "headquarters" | "presence";
 }
 
 export interface CanonicalSignalRecord {
@@ -728,6 +729,15 @@ function signalDetail(k: CanonicalSignalKind, s: Partial<MissionSignal>, subkind
 const SIGNAL_CUE: Partial<Record<CanonicalSignalKind, RegExp>> = {
   hiring: /\b(?:hiring|recruit(?:ing|s)?|open\s+(?:\w+\s+){0,2}(?:roles?|positions?|jobs?|openings?)|job openings?|to hire)\b/,
   funding: /\b(?:fund(?:ed|ing|raise|raising)?|rais(?:ed|e|es|ing)|round|series [a-e]\b|seed)\b/,
+  // Q3 (Codex routing audit C01, L08, C04): without a cue, a social clause's own
+  // "must" and "in the last 30 days" were never read as its own — "whose founder
+  // must have discussed …" compiled as a preference on another clause's window.
+  social_activity:
+    /\b(?:comment(?:ed|ing|s)?|discuss(?:ed|es|ing)?|post(?:ed|ing|s)?|talk(?:ed|ing|s)?\s+about|wr(?:ote|iting|ites)\s+about|shar(?:ed|ing|es)|mention(?:ed|ing|s)?|engag(?:ed|ing|es)\s+with)\b/,
+  // Q3 (H04): "must be rapidly expanding its sales team" is a requirement on
+  // team growth; with no cue its "must" was never read as its own.
+  headcount_growth:
+    /\b(?:growing|expanding|scaling|increasing)\b(?:\s+[\w-]+){0,3}?\s+(?:headcount|teams?|workforce)\b|\bheadcount\b|\bhiring spree\b/,
 };
 const REQUIREMENT_MODAL =
   /\b(must(?:\s+(?:currently|already|actively|still))?(?:\s+(?:be|have))?|required to|requires?|needs? to|has to|have to|only|strictly)\b/;
@@ -858,6 +868,28 @@ export function requirementElevation(kind: CanonicalSignalKind, phrase: string, 
   return idx > 0 ? q.slice(Math.max(0, idx - 30), idx).match(/\b(must(?: currently)?(?: be)?|only|required to|strictly)\b[^.]*$/) : null;
 }
 
+/**
+ * Q3 — the geography scope the customer's own words state. PRESENCE when they
+ * speak of an office, presence, operations, a team or a location IN the place;
+ * HEADQUARTERS otherwise. Read only from the request, never from a rewrite.
+ * ("50 employees in the US" states a size, not a presence, so headcount words
+ * are not presence words.)
+ */
+/** The company-kind noun itself — "startup(s)", "start-up(s)" — as the customer wrote it. */
+const STARTUP_NOUN = /\bstart-?ups?\b/i;
+/**
+ * Q3 — the company kind made MANDATORY by the customer's own words: "only …
+ * startups", "must be a startup", "strictly early-stage startups". The modal
+ * must govern the noun inside the same clause.
+ */
+const STARTUP_REQUIRED =
+  /\b(only|must(?:\s+currently)?(?:\s+be)?|strictly|exclusively|required\s+to\s+be|ha(?:s|ve)\s+to\s+be|needs?\s+to\s+be)\b[^.,;]{0,40}?\bstart-?ups?\b/i;
+
+export function scopeFromWords(query: string): "headquarters" | "presence" {
+  return /\b(?:offices?|presence|operations|operating|operates|branch(?:es)?|locations?|teams?)\s+(?:in|across|throughout)\b/i.test(query)
+    ? "presence" : "headquarters";
+}
+
 export function deriveMissionCriteria(
   mission: LeadMissionV1,
   /**
@@ -945,7 +977,17 @@ export function deriveMissionCriteria(
     // "AI or developer-tools", "New York or California": alternatives of ONE
     // requirement (RC02). Only values the request itself joins by "or".
     const ors = orAlternatives(values, query);
+    const hedged = dimension === "geography" ? hedgedLocations(query, values) : [];
     for (const v of values) {
+      // Q4 — A HEDGED LOCATION RANKS AND NEVER REJECTS. "…, ideally in the US"
+      // is the customer's own word for a preference, whatever a carrier says.
+      if (hedged.length && sameLocation(v, hedged)) {
+        push({
+          kind: "target", dimension, value: v, label: `${label} preference: ${v}`, source: "user_explicit",
+          user_phrase: inQuery(v) ? v : "", rationale: "stated as a preference (\"ideally\"); can rank, never reject",
+        });
+        continue;
+      }
       const source = sourceFromProvenance(prov[field], inQuery(v));
       const split = source === "user_explicit" && !inQuery(v) ? QUALIFIED.exec(v.trim()) : null;
       const head = split?.[1]?.trim() ?? "";
@@ -983,6 +1025,26 @@ export function deriveMissionCriteria(
   profileList("industry", "company_profile.verticals", cp.verticals ?? [], "Industry");
   profileList("business_model", "company_profile.business_models", cp.business_models ?? [], "Business model");
   profileList("geography", "company_profile.locations", cp.locations ?? [], "Geography");
+  // ── Q3 — A HARD GEOGRAPHY IS ALWAYS COMPILED WITH A SCOPE (A7 S02, S03b) ──
+  //
+  // The scope reached a criterion only from the model's proposal; when that was
+  // null the RUNTIME evaluator's answer chose it, and a model reading "US
+  // company" as office presence qualified a Canadian-HQ company with a US office.
+  // The scope is fixed here, from the customer's own words, where the intent is:
+  // the proposal's scope when it gives one; otherwise PRESENCE when the request
+  // itself speaks of an office / presence / operations in the place; otherwise
+  // HEADQUARTERS — "a US company" is a company headquartered in the US. A
+  // compiled scope is never replaced by an evaluator's (#113 refuses a verdict
+  // whose scope disagrees).
+  const geographyScope = cp.geography_scope ?? scopeFromWords(query);
+  for (const c of out) {
+    if (c.dimension !== "geography") continue;
+    const scope = cp.geography_scope ?? (c.kind === "hard" ? geographyScope : undefined);
+    if (scope) {
+      c.geography_scope = scope;
+      if (scope === "headquarters") c.label = `Headquarters: ${String(c.value)}`;
+    }
+  }
 
   // ── Company Brain refinements of what the user closed: targets, never hard ──
   const REFINED: Record<string, [CriterionDimension, string]> = {
@@ -1015,6 +1077,14 @@ export function deriveMissionCriteria(
     // Brain rung is pushed exactly as before.
     if (stageIntent?.kind === "hard" && slug(stageIntent.value) === slug(st)) continue;
     const source = sourceFromProvenance(prov["company_profile.stages"], true);
+    // Q3 — NO COMPANY KIND THE CUSTOMER DID NOT STATE. The deterministic parser
+    // files stage and cohort words ("seed-stage", "Series A", "early stage",
+    // "YC") under the company kind "startup" for ROUTING, with
+    // explicit-request provenance — so "must be seed-stage" compiled a
+    // MANDATORY, user_explicit "Company kind: startup" nothing can prove. The
+    // stage word is already its own criterion (`stageIntent`); the company kind
+    // is a criterion only when the request itself says "startup".
+    if (st === "startup" && source === "user_explicit" && !STARTUP_NOUN.test(query)) continue;
     if (st === "startup") {
       // The noun ("startups") is the company kind; a stage word, when the
       // sentence has one, is pushed separately below.
@@ -1027,12 +1097,23 @@ export function deriveMissionCriteria(
       // canary d1eff17a surfaced 0 of 36 for a fact nothing could establish.
       // Disclosed on the card under "will not be established", exactly as the
       // stage word "seed" already is, instead of quietly rejecting everyone.
+      //
+      // MANDATORY ONLY WHEN SAID TO BE (Q3, audit G08). Every mandatory
+      // requirement is now enforced, so an unprovable one keeps a company
+      // pending unless its own words establish it. "Find B2B SaaS startups"
+      // describes the population, and is disclosed and ranks as a target;
+      // "only startups" / "must be a startup" makes it a requirement, enforced.
+      const required = source === "user_explicit" ? query.match(STARTUP_REQUIRED) : null;
       push({
-        kind: source === "company_brain_preference" ? "target" : "hard",
+        kind: source === "company_brain_policy" || required ? "hard" : "target",
         dimension: "company_stage", value: "startup", label: "Company kind: startup",
         source, user_phrase: source === "user_explicit" ? "startup" : "",
+        ...(required ? { elevated_by: (/^(?:only|strictly|exclusively)$/i.test(required[1])
+          ? required[1].toLowerCase() : "must") as MissionCriterion["elevated_by"] } : {}),
         rationale: source === "company_brain_preference"
-          ? "your Company Brain's ICP" : "the company kind in the request",
+          ? "your Company Brain's ICP"
+          : required ? `"${required[0]}" makes it a requirement`
+          : "the company kind in the request, stated as a description, so a target",
         status: "unprovable_today",
       });
       continue;
@@ -1338,7 +1419,63 @@ export function deriveMissionCriteria(
       rationale: "evidence the system has no vocabulary or source for",
     });
   }
+  // ── CROSS-SIGNAL OR (Q3, Codex routing audit C02) ──
+  //
+  // "hiring Account Executives OR having raised funding" is ONE requirement
+  // either signal satisfies. Read as two, it rejected every company that had
+  // only one of them. The mandatory signal criteria the request joins by "or"
+  // carry the same `any_of` (`signal:<kind>`), and `anyOfGroupKey` makes them
+  // one group wherever a decision is made. AND keeps them two requirements; a
+  // member the request hedged is not part of the requirement at all.
+  for (const group of crossSignalAlternatives(query,
+    out.filter((c) => c.kind === "hard" && SIGNAL_CUE[c.dimension as CanonicalSignalKind]).map((c) => c.dimension as CanonicalSignalKind))) {
+    const members = out.filter((c) => c.kind === "hard" && group.includes(c.dimension as CanonicalSignalKind));
+    if (new Set(members.map((c) => c.dimension)).size < 2) continue;
+    const anyOf = group.map((k) => `signal:${k}`);
+    for (const c of members) c.any_of = anyOf;
+  }
   return out;
+}
+
+/**
+ * The signal kinds a request joins by "or", in groups ("hiring … OR raised
+ * funding" → [["hiring", "funding"]]). Two kinds are alternatives when the text
+ * between the cue of one and the cue of the next says "or" and not "and": a
+ * conjunction of the request's own, read only between signals it actually
+ * states. One kind's alternatives ("Series A or Series B") are its own any_of.
+ */
+export function crossSignalAlternatives(query: string, kinds: readonly CanonicalSignalKind[]): CanonicalSignalKind[][] {
+  const t = query.toLowerCase();
+  const hits = [...new Set(kinds)].flatMap((k) => {
+    const cue = SIGNAL_CUE[k];
+    return cue ? [...t.matchAll(new RegExp(cue.source, "g"))].map((m) => ({ k, start: m.index!, end: m.index! + m[0].length })) : [];
+  }).sort((a, b) => a.start - b.start);
+  const parent = new Map<CanonicalSignalKind, CanonicalSignalKind>();
+  const find = (k: CanonicalSignalKind): CanonicalSignalKind => (parent.get(k) ?? k) === k ? k : find(parent.get(k)!);
+  const joined = new Set<CanonicalSignalKind>();
+  for (let i = 0; i + 1 < hits.length; i++) {
+    const a = hits[i], b = hits[i + 1];
+    if (a.k === b.k || b.start < a.end) continue;
+    const between = t.slice(a.end, b.start);
+    if (!/\bor\b/.test(between) || /\band\b|\bas well as\b|\bplus\b/.test(between)) continue;
+    parent.set(find(b.k), find(a.k));
+    joined.add(a.k).add(b.k);
+  }
+  const groups = new Map<CanonicalSignalKind, CanonicalSignalKind[]>();
+  for (const k of joined) groups.set(find(k), [...(groups.get(find(k)) ?? []), k]);
+  return [...groups.values()].map((g) => g.sort());
+}
+
+/**
+ * The ONE key that makes hard criteria a single any-of requirement, used by
+ * every decision (eligibility and the evaluator's verdict): alternatives of one
+ * dimension ("AI or developer-tools") group within it; cross-signal
+ * alternatives (`signal:<kind>`) group across dimensions. Null: an ordinary AND.
+ */
+export function anyOfGroupKey(c: Pick<MissionCriterion, "kind" | "dimension" | "any_of">): string | null {
+  if (c.kind !== "hard" || (c.any_of?.length ?? 0) < 2) return null;
+  const sorted = [...c.any_of!].sort().join("|");
+  return c.any_of!.every((a) => a.startsWith("signal:")) ? `signals|${sorted}` : `${c.dimension}|${sorted}`;
 }
 
 /** Attach freshly derived criteria (after a Company Brain merge, say). */

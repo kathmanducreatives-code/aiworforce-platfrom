@@ -102,8 +102,10 @@ Deno.test("A4. exactly ONE live evaluator call site exists in run-agent", async 
 Deno.test("A5. the engine has exactly one evaluator call site of its own", async () => {
   const src = stripComments(
     await readSource("_shared/leadCapabilityEngine.ts"));
-  assertEquals((src.match(/deps\.evaluateMission/g) ?? []).length, 2,
-    "one presence check and one invocation — no second, competing path");
+  assertEquals((src.match(/deps\.evaluateMission/g) ?? []).length, 3,
+    "two availability checks and one invocation");
+  assertEquals((src.match(/deps\.evaluateMission!\(/g) ?? []).length, 1,
+    "one actual invocation — no second, competing path");
 });
 
 Deno.test("A6. run-agent constructs and wires the Stage 2 triage binding", async () => {

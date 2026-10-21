@@ -532,6 +532,26 @@ export function assessRequestFeasibility(
       }];
   }
 
+  // ── Q3: A MANDATORY REQUIREMENT NO CURRENT SOURCE ESTABLISHES (audit G08) ──
+  //
+  // Eligibility now enforces it: a company is counted only when evidence or its
+  // own cited words establish it, and nothing is bought for it. The customer is
+  // told so at approval, by name. Disclosed, never blocking (as the stage above):
+  // the company's own words can still answer it. A stated size no band proves
+  // is asked about below instead, and a funding stage is already graded above.
+  for (const c of deriveMissionCriteria(mission, policy)) {
+    if (c.kind !== "hard" || c.status === "ok" || c.dimension === "company_size") continue;
+    if (c.dimension === "company_stage" && stageValue && c.value !== "startup") continue;
+    (report.constraints ??= []).push({
+      requirement: c.id, status: "unsupported",
+      message:
+        `"${c.label}" is a requirement you stated, and no current source establishes it. ` +
+        `A company is counted only when its own record or words establish it; until then it stays ` +
+        `pending, and nothing is bought to check it.`,
+      detail: { constraint: c.dimension, value: c.value, criterion_status: c.status },
+    });
+  }
+
   // ── decide what BLOCKS ───────────────────────────────────────────────────
   //
   // Narrow on purpose. A gap is a thing to disclose; only two states make the

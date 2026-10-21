@@ -85,6 +85,11 @@ export const MISSION_PROPOSAL_PROPERTIES = {
     "this is ['AI', 'startup'] — never a house ICP the request did not mention.",
   ),
   geographies: strings("Places named in the request, e.g. ['United States']."),
+  geography_scope: {
+    type: ["string", "null"] as const,
+    enum: ["headquarters", "presence", null],
+    description: "Interpret the location requirement: explicit HQ versus offices/market presence. Null if unstated or mixed; retain individual scope in criterion evaluation. Never infer headquarters from presence.",
+  },
   employee_range: employeeRange(
     "Company size IF the request states one. Both null when it does not — do " +
     "not supply a default range.",

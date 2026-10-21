@@ -44,6 +44,8 @@
 
 import { criteriaExecutionPolicy, hardConstraintsBackedByCriteria, rejectingAxes } from "./criteriaExecutionPolicy.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
+import { deriveMissionCriteria, type MissionCriterion } from "./missionCriteria.ts";
+import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import {
   classifyRoleFamily, roleFamilyAliases, type RoleFamily,
 } from "./roleFamilies.ts";
@@ -176,6 +178,7 @@ export interface MissionOwnedAxes {
 }
 
 export interface QualificationContext {
+  criteria?: readonly MissionCriterion[];
   version: typeof QUALIFICATION_CONTEXT_VERSION;
   original_user_query: string;
   target_entity: string;
@@ -215,7 +218,7 @@ export function buildQualificationContext(
    * or size the Company Brain filled, or a constraint the model inferred, ranks
    * and never rejects. Off (default): today's field-presence rule.
    */
-  opts: { criteriaAuthority?: boolean } = {},
+  opts: { criteriaAuthority?: boolean; readiness?: ReadinessPolicy } = {},
 ): QualificationContext {
   const profile = rec((mission as unknown as Record<string, unknown>).company_profile);
   const verticals = strs(profile.verticals);
@@ -302,6 +305,8 @@ export function buildQualificationContext(
 
   return {
     version: QUALIFICATION_CONTEXT_VERSION,
+    // Q1 — under the run's readiness, as the canonical decision derives them.
+    criteria: deriveMissionCriteria(mission, opts.readiness ?? PRODUCTION_READINESS),
     original_user_query: String(
       (mission as unknown as Record<string, unknown>).original_user_query ?? ""),
     target_entity: lc((mission as unknown as Record<string, unknown>).target_entity) || "company",

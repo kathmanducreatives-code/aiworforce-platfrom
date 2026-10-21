@@ -1,3 +1,4 @@
+import { mockCriterionVerdicts } from "./lib/criterionFixture.ts";
 // The offline smoke rehearsal carried past the execution planner. Derived from
 // Codex's independent harness (PR #95, tests/db-contract/offlineSmokeMission
 // .contract.test.ts at 2f48cb0f): actual compiler, worker, handler, SQL
@@ -154,6 +155,7 @@ function evaluatorAnswer(input: unknown) {
   ];
   const missing = req.filter(([, x]) => !x).map(([r]) => r);
   return {
+    criterion_verdicts: mockCriterionVerdicts(input, c),
     mission_fit: missing.length === 0 ? "pass" : "review", icp_fit: "plausible",
     hiring_fit: c.hiring ? "verified" : "absent", confidence: 0.8, match_score: missing.length === 0 ? 80 : 0,
     matched_requirements: req.filter(([, x]) => x).map(([requirement, x]) => ({ requirement, ...x!, support: "verified" })),
