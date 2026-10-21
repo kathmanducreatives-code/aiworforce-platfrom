@@ -172,3 +172,137 @@ Deno.test("preference control: a stated location stays hard beside a hedged one"
   assertEquals(byDim(criteria, "geography").map((c) => [c.kind, c.value]).sort(), [["hard", "Canada"], ["target", "United States"]]);
   assertEquals(hc(mission, "company_profile.locations")?.value, ["Canada"]);
 });
+
+// ═════════════════════════════════ A CUE GOVERNS ONLY THE TYPE IT INTRODUCES ══
+//
+// The first cut let each exclusion cue govern everything up to the next
+// punctuation mark, so a requested industry later in the clause became an
+// exclusion. A cue now governs only the company-type phrase it directly
+// introduces, and "no more than", "not yet", "not necessarily", "without a
+// <thing>" and "doesn't use" never exclude a company type.
+
+const excludedOf = (m: LeadMissionV1) => (hc(m, "excluded_company_types")?.value ?? []) as string[];
+
+Deno.test("scope: 'no more than 50 employees in fintech' requires fintech and excludes nothing", () => {
+  const request = "Find 1 company with no more than 50 employees in fintech hiring Account Executives.";
+  const { mission, criteria } = compile(request, { company_types: ["fintech"] });
+  assertEquals(byDim(criteria, "industry").map((c) => [c.kind, c.value]), [["hard", "fintech"]]);
+  assertEquals(byDim(criteria, "exclusion"), []);
+  assertEquals(excludedOf(mission), []);
+  assertEquals(parseLeadMissionDeterministic(request).company_profile.verticals, ["fintech"]);
+});
+
+Deno.test("scope: 'without a sales team in fintech' requires fintech and excludes nothing", () => {
+  const request = "Find 1 B2B software company without a sales team in fintech.";
+  const { criteria } = compile(request, { company_types: ["B2B software", "fintech"] });
+  assert(byDim(criteria, "industry").some((c) => c.kind === "hard" && c.value === "fintech"));
+  assertEquals(byDim(criteria, "exclusion"), []);
+  const m = parseLeadMissionDeterministic(request);
+  assertEquals([m.company_profile.verticals, m.hard_constraints], [["fintech"], {}]);
+});
+
+Deno.test("scope: 'not a recruiting agency but a B2B software company' excludes only the agency", () => {
+  const { mission, criteria } = compile("Find 1 company hiring Account Executives that is not a recruiting agency but a B2B software company.");
+  assertEquals(mission.company_profile.verticals, ["B2B software"]);
+  assertEquals(byDim(criteria, "industry").map((c) => [c.kind, c.value]), [["hard", "B2B software"]]);
+  assertEquals(excludedOf(mission), ["recruiting agencies"]);
+  assertFalse(requiresRecruiting(criteria));
+});
+
+Deno.test("scope: a connective ends the excluded phrase — what follows it stays required", () => {
+  for (const tail of ["and fintech", "with a fintech focus", "in fintech", "that sells to fintech", "who serve fintech", "which is fintech"]) {
+    const request = `Find 1 company hiring Account Executives, not a recruiting agency ${tail}.`;
+    const { mission, criteria } = compile(request, { company_types: ["fintech"] });
+    assertEquals(excludedOf(mission), ["recruiting agencies"], tail);
+    assertFalse(excludedOf(mission).includes("fintech"), tail);
+    assertFalse(requiresRecruiting(criteria), tail);
+  }
+});
+
+Deno.test("scope: quantifiers, adverbs and verbs after a negation never exclude a company type", () => {
+  for (const request of [
+    "Find 1 fintech company with no more than 50 employees hiring Account Executives.",
+    "Find 1 fintech company with no fewer than 10 employees hiring Account Executives.",
+    "Find 1 fintech company not yet profitable hiring Account Executives.",
+    "Find 1 company, not necessarily fintech, hiring Account Executives.",
+    "Find 1 fintech company that doesn't use Salesforce hiring Account Executives.",
+    "Find 1 fintech company that does not use Salesforce, hiring Account Executives.",
+    "Find 1 fintech startup without a fintech partner hiring Account Executives.",
+    "Find 1 fintech company without a SaaS product hiring Account Executives.",
+  ]) {
+    const { mission, criteria } = compile(request, { company_types: ["fintech"] });
+    assertEquals(byDim(criteria, "exclusion"), [], request);
+    assertEquals(excludedOf(mission), [], request);
+    assertEquals(parseLeadMissionDeterministic(request).hard_constraints, {}, request);
+  }
+});
+
+Deno.test("scope: every direct form still excludes the type it introduces", () => {
+  for (const [phrase, type] of [
+    ["excluding recruiting agencies", "recruiting agencies"],
+    ["except fintech companies", "fintech"],
+    ["other than fintech", "fintech"],
+    ["not a recruiting agency", "recruiting agencies"],
+    ["not an ecommerce company", "ecommerce"],
+    ["no fintech", "fintech"],
+    ["no recruiting agencies", "recruiting agencies"],
+    ["without recruiting agencies", "recruiting agencies"],
+    ["but not healthtech startups", "healthtech"],
+  ]) {
+    const { mission, criteria } = compile(`Find 1 B2B software company hiring Account Executives, ${phrase}.`);
+    assertEquals(excludedOf(mission), [type], phrase);
+    assertEquals(mission.company_profile.verticals, ["B2B software"], phrase);
+    assertEquals(byDim(criteria, "exclusion").length, 1, phrase);
+  }
+});
+
+Deno.test("scope: 'no agencies or consultancies' excludes both", () => {
+  const request = "Find 1 B2B software company hiring Account Executives, no agencies or consultancies.";
+  const { mission, criteria } = compile(request);
+  assertEquals(excludedOf(mission), ["agencies", "consultancies"]);
+  assertEquals(mission.company_profile.verticals, ["B2B software"]);
+  assertEquals(byDim(criteria, "exclusion").length, 1);
+  assertEquals(hc(parseLeadMissionDeterministic(request), "excluded_company_types")?.value, ["agencies", "consultancies"]);
+});
+
+Deno.test("scope control: an exclusion-only type is never a requirement when stated plainly", () => {
+  const m = parseLeadMissionDeterministic("Find 1 marketing agency hiring Account Executives.");
+  assertEquals([m.company_profile.verticals, m.hard_constraints], [[], {}]);
+});
+
+// ── a location named only to exclude it ──
+
+Deno.test("geography: 'not based in the US' compiles no US requirement and records the gap", () => {
+  for (const tail of ["not based in the US", "not located in the US", "not yet in the US", "outside the US", "excluding the US", "no US companies"]) {
+    const request = `Find 1 B2B software company hiring Account Executives, ${tail}.`;
+    const { mission, criteria } = compile(request, { geographies: ["United States"], geography_is_hard: true });
+    assertEquals(byDim(criteria, "geography"), [], tail);
+    assertEquals(hc(mission, "company_profile.locations"), undefined, tail);
+    assertFalse(mission.geography_is_hard === true, tail);
+    assert(byDim(criteria, "unrepresentable_evidence").some((c) => /excluded location \(United States\)/.test(String(c.value))), tail);
+    assertEquals(parseLeadMissionDeterministic(request).company_profile.locations, [], tail);
+  }
+});
+
+Deno.test("geography: 'not necessarily in the US' is a preference, never a hard geography", () => {
+  const { mission, criteria } = compile("Find 1 B2B software company hiring Account Executives, not necessarily in the US.", US_HEDGED);
+  assertEquals(byDim(criteria, "geography").map((c) => [c.kind, c.value]), [["target", "United States"]]);
+  assertEquals(hc(mission, "company_profile.locations"), undefined);
+});
+
+Deno.test("geography control: a stated location beside an excluded one stays hard", () => {
+  const { mission, criteria } = compile("Find 1 B2B software company in Canada hiring Account Executives, not based in the US.",
+    { geographies: ["Canada", "United States"], geography_is_hard: true });
+  assertEquals(byDim(criteria, "geography").map((c) => [c.kind, c.value]), [["hard", "Canada"]]);
+  assertEquals(hc(mission, "company_profile.locations")?.value, ["Canada"]);
+});
+
+Deno.test("geography control: a negation that governs no place leaves the stated location hard", () => {
+  for (const request of [
+    "Find 1 company in the US that is not a recruiting agency, hiring Account Executives.",
+    "Find 1 company with no more than 50 employees in the US hiring Account Executives.",
+  ]) {
+    const { criteria } = compile(request, { geographies: ["United States"] });
+    assertEquals(byDim(criteria, "geography").map((c) => [c.kind, c.value]), [["hard", "United States"]], request);
+  }
+});
