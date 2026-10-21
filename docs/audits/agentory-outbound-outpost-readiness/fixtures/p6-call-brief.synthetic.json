@@ -1,0 +1,154 @@
+{
+  "receipt_kind": "OFFLINE_SYNTHETIC_PROJECTION_NOT_LIVE_VERIFIED",
+  "customer_data": false,
+  "provider_calls": 0,
+  "mocked_transport_attempts": 1,
+  "review_status": "unreviewed_draft",
+  "dispatch_allowed": false,
+  "company": [
+    {
+      "value": "Buyer Demo",
+      "field": "company_name",
+      "classification": "supplied_claim",
+      "source_id": "csv",
+      "location": {
+        "csv_rows": [
+          2,
+          3
+        ],
+        "column": "Company",
+        "start": null,
+        "end": null
+      },
+      "event_at": null,
+      "collected_at": null,
+      "semantic_support": "not_evaluated"
+    }
+  ],
+  "client_context": [
+    {
+      "id": "B8",
+      "path": "positioning.offer",
+      "value": "PRIVATE_A_pipeline_support",
+      "classification": "reviewed_client_context"
+    }
+  ],
+  "verified_facts": [],
+  "grounded_buying_signals": [],
+  "evidence_for_review": [
+    {
+      "value": "We are not looking for new tools",
+      "field": "source_excerpt",
+      "classification": "supplied_claim",
+      "source_id": "website",
+      "location": {
+        "csv_rows": [],
+        "column": null,
+        "start": 0,
+        "end": 32
+      },
+      "event_at": "2020-01-01T00:00:00Z",
+      "collected_at": "2026-10-20T00:00:00Z",
+      "semantic_support": "not_evaluated"
+    }
+  ],
+  "talking_points": [
+    {
+      "mode": "plausible_fit_not_buyer_fact",
+      "source": {
+        "value": "We are not looking for new tools",
+        "field": "source_excerpt",
+        "classification": "supplied_claim",
+        "source_id": "website",
+        "location": {
+          "csv_rows": [],
+          "column": null,
+          "start": 0,
+          "end": 32
+        },
+        "event_at": "2020-01-01T00:00:00Z",
+        "collected_at": "2026-10-20T00:00:00Z",
+        "semantic_support": "not_evaluated"
+      },
+      "reviewed_offer": "PRIVATE_A_pipeline_support",
+      "question": "Could the reviewed offer be relevant to your current priorities?"
+    }
+  ],
+  "questions": [
+    {
+      "text": "Is the quoted information still accurate and current?",
+      "buyer_premise": {
+        "value": "We are not looking for new tools",
+        "field": "source_excerpt",
+        "classification": "supplied_claim",
+        "source_id": "website",
+        "location": {
+          "csv_rows": [],
+          "column": null,
+          "start": 0,
+          "end": 32
+        },
+        "event_at": "2020-01-01T00:00:00Z",
+        "collected_at": "2026-10-20T00:00:00Z",
+        "semantic_support": "not_evaluated"
+      },
+      "client_context": null
+    },
+    {
+      "text": "Is this reviewed client topic relevant to your current priorities?",
+      "buyer_premise": null,
+      "client_context": "PRIVATE_A_pipeline_support"
+    }
+  ],
+  "missing_information": [
+    {
+      "id": "U1",
+      "reason": "canonical_verification_unavailable"
+    },
+    {
+      "id": "U2",
+      "reason": "collection_time_missing:csv"
+    },
+    {
+      "id": "U3",
+      "reason": "current_employment_unverified"
+    },
+    {
+      "id": "U4",
+      "reason": "funding_hiring_technology_and_business_problems_not_verified"
+    },
+    {
+      "id": "U5",
+      "reason": "no_verified_buying_signals"
+    },
+    {
+      "id": "U6",
+      "reason": "semantic_support_not_evaluated"
+    },
+    {
+      "id": "U7",
+      "reason": "source_updated_time_is_not_event_time:csv"
+    },
+    {
+      "id": "U8",
+      "reason": "supplied_employer_and_contact_unverified"
+    }
+  ],
+  "do_not_claim": [
+    "Current hiring, funding, technologies, buyer problems, founder status, employment or buying intent are not verified.",
+    "Supplied quotations may be old, negative, incomplete or contradictory; confirm them with the human contact.",
+    "No qualification decision or outreach approval is supplied by this brief."
+  ],
+  "source_lineage": {
+    "file_hash": "99a211a6018363de5782651416baa230bddc463647724ffee5598750de70304b",
+    "normalized_hash": "cfd8d5d3dd33e66fbcc05498728e95e9d9ccb647ce5f6274bf82916a89ddb300",
+    "source_rows": [
+      2,
+      3
+    ],
+    "apollo_account_id": "same-account",
+    "apollo_contact_id": null,
+    "imported_row_id": null,
+    "source_origin": "declared_unverified_export"
+  }
+}
