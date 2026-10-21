@@ -108,8 +108,7 @@ captured synthetic authorization header; receipts omit keys, references and raw
 prompts. Metadata echoing the key is discarded. A/B parallel tests use different
 keys and task receipts without changing process environment.
 
-Only `https://api.openai.com/v1/chat/completions`, selected model, bounded output
-and the fixed no-tool probe are admitted. The selected ID is verified in the
+Endpoint ownership remains exclusively in gptStructured: P4 exposes no URL override, and captured-request tests require `https://api.openai.com/v1/chat/completions`, including when an environment loopback override is supplied. Selected model, bounded output and the fixed no-tool probe are checked before dispatch. The selected ID is verified in the
 actual request produced by gptStructured, not only in a setting. Receipt model
 must equal that ID. **Dated snapshot/alias responses are currently refused**;
 account validation must approve exact request/response identity pairs before
@@ -242,12 +241,18 @@ No hosted database/customer access, paid call, deploy, merge, send or A7 was use
 
 ## Local verification receipt
 
-- **78 new typed backend tests pass** against the base transport; the same 78
+- **79 new typed backend tests pass** against the base transport; the same 79
   pass against actual #131 via the import-map compatibility run.
-- **176 unchanged P1–P3 backend regressions pass** (combined focused total 254).
+- **176 unchanged P1–P3 backend regressions pass** (combined focused total 255).
 - **26 typed frontend tests pass**, including 2 new P4 and all 24 P1–P3 UI cases.
 - The new adapter type-checks; focused Deno lint, frontend type/lint ratchets and
   production build pass without new debt (existing chunk-size advisory remains).
 - Fast GitHub CI receipt is recorded on the draft PR. Native model policy/RLS,
   transactional accounting, process-crash recovery and live OpenAI acceptance
   remain NOT TESTED; no passing mock is labeled live verification.
+
+CI initially flagged a duplicate provider-host literal in the wrapper's endpoint
+assertion. The correction removes that second endpoint definition, leaves
+endpoint ownership in gptProvider and tests the actual captured URL/key against
+environment overrides. `oneProviderSeam.test.ts` and its allowlist are unchanged;
+the architecture guard passes without adding a new provider seam or exception.

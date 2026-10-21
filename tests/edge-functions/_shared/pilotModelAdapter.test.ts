@@ -226,3 +226,15 @@ Deno.test("P4 missing request receipt or an unapproved dated model alias cannot 
     assertEquals(f.calls.length, 1);
   }
 });
+
+Deno.test("P4 endpoint is owned by existing gptProvider; global/loopback URL overrides cannot change dispatch", async () => {
+  const f = await modelFixture();
+  f.settings.OPENAI_BASE_URL = "http://localhost:9999";
+  f.settings.OPENAI_API_KEY = "wrong-global-key";
+  await runPilotModelProbe(f.scope, f.deps);
+  assertEquals(f.calls[0].url, "https://api.openai.com/v1/chat/completions");
+  assertEquals(
+    (f.calls[0].init.headers as Record<string, string>).Authorization,
+    "Bearer synthetic-key-A",
+  );
+});

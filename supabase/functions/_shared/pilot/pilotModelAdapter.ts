@@ -211,9 +211,9 @@ export async function runPilotModelProbe(
         }
         entered = true;
         await check();
+        // Endpoint ownership stays in gptProvider; readEnv above exposes no URL override.
         const request = JSON.parse(String(init.body));
         if (
-          url !== "https://api.openai.com/v1/chat/completions" ||
           request.model !== selection.model ||
           request.max_tokens !== policy.max_output_tokens ||
           request.messages?.length !== 2 || request.tools
