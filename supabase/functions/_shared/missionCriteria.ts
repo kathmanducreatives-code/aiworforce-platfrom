@@ -868,6 +868,13 @@ export function requirementElevation(kind: CanonicalSignalKind, phrase: string, 
  */
 /** The company-kind noun itself — "startup(s)", "start-up(s)" — as the customer wrote it. */
 const STARTUP_NOUN = /\bstart-?ups?\b/i;
+/**
+ * Q3 — the company kind made MANDATORY by the customer's own words: "only …
+ * startups", "must be a startup", "strictly early-stage startups". The modal
+ * must govern the noun inside the same clause.
+ */
+const STARTUP_REQUIRED =
+  /\b(only|must(?:\s+currently)?(?:\s+be)?|strictly|exclusively|required\s+to\s+be|ha(?:s|ve)\s+to\s+be|needs?\s+to\s+be)\b[^.,;]{0,40}?\bstart-?ups?\b/i;
 
 export function scopeFromWords(query: string): "headquarters" | "presence" {
   return /\b(?:offices?|presence|operations|operating|operates|branch(?:es)?|locations?|teams?)\s+(?:in|across|throughout)\b/i.test(query)
@@ -1071,12 +1078,23 @@ export function deriveMissionCriteria(
       // canary d1eff17a surfaced 0 of 36 for a fact nothing could establish.
       // Disclosed on the card under "will not be established", exactly as the
       // stage word "seed" already is, instead of quietly rejecting everyone.
+      //
+      // MANDATORY ONLY WHEN SAID TO BE (Q3, audit G08). Every mandatory
+      // requirement is now enforced, so an unprovable one keeps a company
+      // pending unless its own words establish it. "Find B2B SaaS startups"
+      // describes the population, and is disclosed and ranks as a target;
+      // "only startups" / "must be a startup" makes it a requirement, enforced.
+      const required = source === "user_explicit" ? query.match(STARTUP_REQUIRED) : null;
       push({
-        kind: source === "company_brain_preference" ? "target" : "hard",
+        kind: source === "company_brain_policy" || required ? "hard" : "target",
         dimension: "company_stage", value: "startup", label: "Company kind: startup",
         source, user_phrase: source === "user_explicit" ? "startup" : "",
+        ...(required ? { elevated_by: (/^(?:only|strictly|exclusively)$/i.test(required[1])
+          ? required[1].toLowerCase() : "must") as MissionCriterion["elevated_by"] } : {}),
         rationale: source === "company_brain_preference"
-          ? "your Company Brain's ICP" : "the company kind in the request",
+          ? "your Company Brain's ICP"
+          : required ? `"${required[0]}" makes it a requirement`
+          : "the company kind in the request, stated as a description, so a target",
         status: "unprovable_today",
       });
       continue;

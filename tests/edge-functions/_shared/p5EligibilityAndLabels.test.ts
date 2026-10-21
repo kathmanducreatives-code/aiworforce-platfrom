@@ -66,8 +66,8 @@ const proposal = {
   preferred_source_strategy: [], evaluation_instructions: "", founder_unlock_recommended: false, confidence: 0.85, unknowns: [],
 };
 const MISSION = compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission;
-// Hard: industry b2b saas + saas, geography United States, company_stage startup.
-// Target: hiring (the anchor), and "seed" — provable since the funding pair
+// Hard: industry b2b saas + saas, geography United States.
+// Target: "Company kind: startup" (the noun as a description, Q3), hiring (the anchor), and "seed" — provable since the funding pair
 // became READY (2026-09-23), so it is a target like any other: a candidate is
 // an Exact Match only once its stage is proven too (`seedProven`).
 const CRITERIA = deriveMissionCriteria(MISSION);
@@ -482,18 +482,30 @@ Deno.test("a reasoner answer about a company that is not in the batch is discard
 
 // ── P5.2 ────────────────────────────────────────────────────────────────────
 
-Deno.test("P5.2: an unprovable hard criterion is disclosed, not enforced — it cannot strand every candidate", () => {
+Deno.test("P5.2 / Q3: the noun 'startup' is a disclosed description; it never strands every candidate", () => {
+  // "Find 1 seed-stage B2B SaaS startup" describes the population: no source
+  // proves "startup", so it is disclosed, and as a target it never gates.
   const kind = CRITERIA.find((c) => c.label === "Company kind: startup")!;
-  assertEquals([kind.kind, kind.status], ["hard", "unprovable_today"]);
-  // It reaches the user as a stated limitation, in the same section as "seed".
+  assertEquals([kind.kind, kind.status, kind.source], ["target", "unprovable_today", "user_explicit"]);
   const unsupported = criteriaSections(MISSION).unsupported.join(" | ");
-  assert(/Company kind: startup \(hard\) — no current source proves it/.test(unsupported), unsupported);
-
-  // And it no longer decides eligibility: geography + industry proven ⇒ eligible.
+  assert(/Company kind: startup \(target\) — no current source proves it/.test(unsupported), unsupported);
   const g = graphOf([...hardProven(), ...firstHireProven()]);
   const e = evaluateEligibility(CRITERIA, g);
   assertEquals(e.eligibility, "eligible");
   assertFalse(e.gaps.includes("company_stage"));
+});
+
+Deno.test("Q3 G08: 'must be a startup' is a requirement — enforced, blocked, and never bought", () => {
+  const stated = deriveMissionCriteria(compileLeadMission({
+    originalUserQuery: "Find 1 B2B SaaS company in the US that must be a startup and appears to be hiring its first growth marketer.",
+    proposal }).final_mission);
+  const kind = stated.find((c) => c.label === "Company kind: startup")!;
+  assertEquals([kind.kind, kind.status, kind.elevated_by], ["hard", "unprovable_today", "must"]);
+  const e = evaluateEligibility(stated, graphOf([...hardProven(), ...firstHireProven()]));
+  assertEquals(e.eligibility, "pending", "everything else proven is not enough");
+  const check = e.checks.find((c) => c.criterion_id === kind.id)!;
+  assertEquals([check.result, check.blocked], ["unknown", "unsupported:company_stage"]);
+  assertFalse(e.gaps.includes("company_stage"), "nothing can be bought to answer it");
 });
 
 Deno.test("P5.2: a business model the company's own words prove satisfies the industry criterion", () => {
@@ -570,7 +582,7 @@ Deno.test("P5.2: the view derives criteria from the mission, so an approved card
   // that and stranded all 19 candidates.
   const stale = JSON.parse(JSON.stringify(MISSION)) as typeof MISSION & { criteria: MissionCriterion[] };
   stale.criteria = deriveMissionCriteria(MISSION).map((c) =>
-    c.label === "Company kind: startup" ? { ...c, status: "ok" as const } : c);
+    c.label === "Company kind: startup" ? { ...c, kind: "hard" as const, status: "ok" as const } : c);
 
   const fresh = deriveMissionCriteria(stale);
   assertEquals(fresh.find((c) => c.label === "Company kind: startup")!.status, "unprovable_today",

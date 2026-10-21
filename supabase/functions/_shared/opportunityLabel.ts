@@ -112,14 +112,14 @@ export function computeCeiling(i: CeilingInput): CeilingResult {
   // company proving US, 11–50, a Series A in window and a sales role in window
   // fell to Low Priority. The anchor is a stand-in for "something fresh is
   // proven"; a candidate that proved every hard requirement the user stated has
-  // that. Not when any hard criterion is unenforceable (disclosed, never proven),
-  // and not when the anchor is itself a target or signal the mission asked for —
+  // that. Every hard criterion is enforced, so an unsupported one is among the
+  // passing checks only when the company's own words established it (Q3). Not when the anchor is itself a target or signal the mission asked for —
   // that one still has to be proven.
   const hardStated = i.criteria.filter((c) => c.kind === "hard");
   const anchorAskedFor = usable.some((c) => c.kind !== "hard" &&
     (c.dimension === i.anchor || (!!anchorDim && CRITERION_EVIDENCE_DIMENSION[c.dimension] === anchorDim)));
   const every_hard_proven = i.eligibility.eligibility === "eligible" &&
-    hardStated.length > 0 && hardStated.every((c) => c.status === "ok") &&
+    hardStated.length > 0 &&
     i.eligibility.checks.filter((x) => x.kind === "hard").every((x) => x.result === "pass");
   const anchor_met = anchor_proven || (every_hard_proven && !anchorAskedFor);
 

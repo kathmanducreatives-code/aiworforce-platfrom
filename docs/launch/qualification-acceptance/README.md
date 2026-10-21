@@ -38,6 +38,21 @@ Measured on `a542b2f1`:
 - **Codex qualification audit:** 64 pass / 4 fail (G08, G08b, agency, pure G09).
 - **A7 contracts:** S02 is the only required failure; S03b is a known gap.
 
+## Status on Q3b-1 (stacked on Q3a-1, #132)
+
+| Scenario | Status |
+|---|---|
+| **S02**, S03b (unscoped "US" is headquarters) | **pass** (Q3a-1) |
+| phantom "startup" from "seed-stage" | **pass** (Q3a-1) |
+| **G08** unsupported mandatory enforced, **G08b** stated size kept | **pass** (Q3b-1). The requirement is blocked, never bought and never counted, unless evidence rules it out or the company's own cited words answer it. Feasibility names it at approval |
+| plain "startups" (no must/only) | a disclosed **target**: describes the population, never gates. "only startups" / "must be a startup" is mandatory and enforced |
+| **H05** agencies | **pass** (#127, #128) |
+| **C01**, L08, **C02**, **C04**, **H04** | **known gap** (Q3a-2, Q3a-3/Q3b-3) |
+
+- **Codex routing audit:** 77 pass / 8 fail (C01, C02, C04, L08 runtime; C01, C02, C04, H04 compiler); 8 of 40 qualified, as on Q3a-1.
+- **Codex qualification audit:** 67 pass / 1 fail (the pure G09 helper, open with Codex).
+- **A7 contracts:** no known gaps.
+
 ## Q4 acceptance matrix (to run once Q3 lands)
 
 Each case runs through the A7 contract lane (real persistence) or the routing lane (all reducers), with a positive and a negative control:

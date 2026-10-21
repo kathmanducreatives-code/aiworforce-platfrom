@@ -20,7 +20,6 @@ import type { EvidenceItem } from "../../../supabase/functions/_shared/candidate
 
 /** Ids whose fix has not landed. Each runs only under Q3_ASSERT_GAPS=1. */
 const KNOWN_GAPS = new Set([
-  "G08-unsupported", "G08b-exact-size",
   "C01-necessity", "L08-necessity", "C02-or", "C04-windows", "H04-growth",
 ]);
 const gap = (id: string) => ({ ignore: KNOWN_GAPS.has(id) && Deno.env.get("Q3_ASSERT_GAPS") !== "1" });

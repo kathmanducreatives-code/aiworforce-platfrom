@@ -1,6 +1,6 @@
 # Q3: intent preservation, implementation boundaries
 
-**Not implemented yet.** Implementation waits for Codex's explicit confirmation on #123 that it isn't editing these files. Every rule below is generic (it reads the customer's own words and the compiled structure) and adds no industry, title or scenario list. The red proofs are in `tests/edge-functions/_shared/q3IntentContract.test.ts`, each paired with a passing control.
+**Q3a-1 (#132) and Q3b-1 are implemented**; the rest is not yet. Every rule below is generic (it reads the customer's own words and the compiled structure) and adds no industry, title or scenario list. The red proofs are in `tests/edge-functions/_shared/q3IntentContract.test.ts`, each paired with a passing control.
 
 ## Q3a-1: compile-time fidelity (do first: it removes the phantom requirements G08 enforcement would otherwise block on)
 
@@ -28,6 +28,8 @@
 ## Q3b-1: enforce unsupported mandatory criteria (G08), after Q3a-1
 
 `candidateEligibility.ts`: every **hard** criterion is read whatever its status. One no structured source can establish is answered only by a receipt-backed evaluator verdict (the same rule as #128). Otherwise it's an `unknown` check that is **blocked**: pending, never routed for purchase, never PASS. `requestFeasibility.ts` tells the customer at approval which mandatory requirement no current source can establish.
+
+As implemented: evidence already in the graph may still rule it out (a 201–500 band rules out "20–100 employees"); a declared band never settles an exact count either way. The evaluator's receipts for it must come from a company-owned source. The noun "startup" is mandatory only when the request says so ("only startups", "must be a startup"); a plain "startups" is a disclosed target, so it describes the population without stranding every candidate (canary d1eff17a).
 
 ## Order and verification
 

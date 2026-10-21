@@ -637,17 +637,35 @@ export function evaluateEligibility(
   verdicts?: readonly CriterionVerdict[],
   holds: readonly QualificationHold[] = [],
 ): EligibilityResult {
-  // Unsupported mandatory criteria (`unprovable_today`) are still disclosed,
-  // not enforced (P5.2): enforcing them waits for Q3, which first stops the
-  // compiler inventing them ("seed-stage" → "Company kind: startup") — audit
-  // G08/G08b stay visible known gaps until then.
-  const usable = criteria.filter((c) => c.status === "ok");
+  // Q3 — A MANDATORY REQUIREMENT IS ENFORCED WHETHER OR NOT A SOURCE CAN
+  // ESTABLISH IT (audit G08, G08b). Before, a hard criterion no current source
+  // can prove (`unprovable_today`: "exactly 23 employees", a round stage with
+  // no funding verifier, the noun "startup") was dropped here, so a company
+  // qualified without it. Now it is read like any other: evidence already in
+  // the graph may pass or rule it out, and a receipt-backed evaluator verdict
+  // from the company's own words may answer it. Otherwise it is an open check
+  // that is BLOCKED: the company stays pending, nothing is bought for it, and
+  // it is never counted. A non-hard criterion with that status still never
+  // decides anything (a preference only ranks). Q3a-1 first stopped the
+  // compiler inventing such requirements.
+  const usable = criteria.filter((c) => c.status === "ok" || c.kind === "hard");
   const checks = anyOfResolved(usable, usable.map((c) => {
     const rows = verdicts?.filter((v) => v.criterion_id === c.id) ?? [];
     const verdict = rows.length === 1 ? rows[0] : null;
-    const check = checkCriterion(c.dimension === "geography" && !c.geography_scope && verdict?.geography_scope
+    const graphCheck = checkCriterion(c.dimension === "geography" && !c.geography_scope && verdict?.geography_scope
       ? { ...c, geography_scope: verdict.geography_scope } : c, graph);
+    const unsupported = c.status !== "ok";
+    if (unsupported && graphCheck.result === "unknown" && verdict && verdict.result !== "unknown" && verdict.evidence.length > 0) {
+      return { ...graphCheck, result: verdict.result,
+        reason: `${verdict.reason} (the evaluator's reading of the company's own cited words; no structured source establishes ${c.label})`,
+        evidence_ids: verdict.evidence.map((e) => e.evidence_id), provenance: null };
+    }
+    const check: CriterionCheck = unsupported && graphCheck.result === "unknown"
+      ? { ...graphCheck, reason: `no current source can establish ${c.label}; it stays open until the company's own cited words do`,
+        blocked: `unsupported:${c.dimension}` }
+      : graphCheck;
     if (!verdicts || check.result === "fail") return check;
+    if (unsupported && verdict?.result !== "fail") return check;
     // Q3 — AN INDUSTRY THE VOCABULARY CANNOT READ. A mandatory industry or
     // business model outside the controlled vocabulary ("recruiting agencies",
     // "manufacturers") can never be answered by the evidence graph, so it used

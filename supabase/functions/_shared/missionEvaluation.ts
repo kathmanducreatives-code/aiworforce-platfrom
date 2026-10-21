@@ -247,6 +247,13 @@ const COMPANY_OWNED_TYPES: ReadonlySet<string> = new Set([
   "company_description", "company_industry", "web_page", "yc_company_record",
 ]);
 
+/**
+ * The criteria the evaluator answers: every supported one, and every MANDATORY
+ * one even when no structured source can establish it (Q3, audit G08) — the
+ * customer's own requirement is never silently dropped from the verdict.
+ */
+const judged = (c: MissionCriterion) => c.status === "ok" || c.kind === "hard";
+
 export function evaluationCriteria(input: Pick<MissionEvaluationInput, "mission">): readonly MissionCriterion[] {
   return Array.isArray(input.mission.criteria) ? input.mission.criteria as MissionCriterion[] : [];
 }
@@ -1009,7 +1016,7 @@ export function parseMissionEvaluationStrict(
   const o = typeof raw === "string" ? safeJson(raw) : raw;
   const fail = (why: string): ParsedMissionEvaluation => ({
     evaluation: { ...FALLBACK_INSUFFICIENT,
-      ...(criteria.length ? { criterion_verdicts: criteria.filter((c) => c.status === "ok").map((c) => ({
+      ...(criteria.length ? { criterion_verdicts: criteria.filter(judged).map((c) => ({
         criterion_id: c.id, result: "unknown" as const, reason: why, evidence: [],
       })) } : {}) },
     parse_status: "invalid_insufficient_evidence",
@@ -1154,7 +1161,7 @@ export function parseMissionEvaluationStrict(
   // disagree, and then something has to pick. There is only one rule and it
   // lives here.
   const rawVerdicts = Array.isArray(r.criterion_verdicts) ? r.criterion_verdicts : [];
-  const criterion_verdicts: CriterionVerdict[] = criteria.filter((c) => c.status === "ok").map((c) => {
+  const criterion_verdicts: CriterionVerdict[] = criteria.filter(judged).map((c) => {
     const rows = rawVerdicts.filter((v) => v && typeof v === "object" && v.criterion_id === c.id);
     const v = rows.length === 1 ? rows[0] : null;
     const evidence: CriterionVerdict["evidence"] = [];
@@ -1176,6 +1183,10 @@ export function parseMissionEvaluationStrict(
         // news item describes an event; neither is the company's business.
         ((c.dimension === "industry" || c.dimension === "business_model") &&
           !COMPANY_OWNED_TYPES.has(item.evidence_type)) ||
+        // Q3 — a mandatory requirement no structured source establishes ("exactly
+        // 23 employees", "seed-stage" with no funding verifier, "startup") is
+        // answered only by the company's own record or words, as above.
+        (c.status !== "ok" && !COMPANY_OWNED_TYPES.has(item.evidence_type)) ||
         // Q2 — A WINDOWED REQUIREMENT NEEDS A DATED EVENT INSIDE THE WINDOW
         // (audit G05–G07, G14). A fetch date is not an event date, so a page
         // with no `occurred_at` cannot prove "in the last 30 days". Hiring and
@@ -1195,7 +1206,7 @@ export function parseMissionEvaluationStrict(
         ? v.reason : "criterion evidence is missing or unusable" };
   });
   const groups = new Map<string, CriterionVerdict[]>();
-  for (const c of criteria.filter((c) => c.kind === "hard" && c.status === "ok")) {
+  for (const c of criteria.filter((c) => c.kind === "hard" && judged(c))) {
     const key = c.any_of?.length ? `${c.dimension}:${JSON.stringify([...c.any_of].sort())}` : c.id;
     const v = criterion_verdicts.find((v) => v.criterion_id === c.id)!;
     groups.set(key, [...(groups.get(key) ?? []), v]);
