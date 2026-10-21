@@ -14,7 +14,7 @@ export interface ModelAdmission {
   policy_hash: string;
   policy: PilotModelPolicy;
   reserve_usd: number;
-  // One probe per signed task. This is NOT permission to reset the existing mission counter.
+  // One model attempt per signed task (probe OR brief). This is NOT permission to reset the existing mission counter.
   max_task_attempts: 1;
   runtime_attempt_ceiling: 4;
   workspace_ceiling_usd: number;

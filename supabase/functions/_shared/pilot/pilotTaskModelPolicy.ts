@@ -9,7 +9,7 @@ export interface PilotModelSelection {
   credential_id: string;
   policy_version: number;
   task_kind: "call_brief";
-  schema: "pilot_model_probe_v1";
+  schema: "pilot_model_probe_v1" | "call_brief_v1";
 }
 export interface PilotModelPolicy {
   workspace_id: string;
@@ -45,7 +45,11 @@ export function modelSelection(raw: unknown): PilotModelSelection {
   const entry = PILOT_MODEL_REGISTRY.find((e) =>
     e.provider === v.provider && e.model === v.model && e.implemented
   );
-  if (!entry || v.task_kind !== "call_brief" || v.schema !== entry.schema) {
+  if (
+    !entry || v.task_kind !== "call_brief" ||
+    !("schemas" in entry &&
+      (entry.schemas as readonly unknown[]).includes(v.schema))
+  ) {
     throw new PilotRefusal("unsupported_pilot_model", 400);
   }
   if (

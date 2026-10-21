@@ -42,7 +42,7 @@ export interface PilotModelDeps extends PilotContextDeps {
 }
 const safeId = (v: unknown) =>
   typeof v === "string" && /^[a-zA-Z0-9_.:-]{1,160}$/.test(v) ? v : null;
-export async function runPilotModelProbe(
+export async function authorizePilotModelContext(
   scope: { workspace_id: string; client_binding_id: string; task_id: string },
   deps: PilotModelDeps,
 ) {
@@ -129,6 +129,46 @@ export async function runPilotModelProbe(
     await access.recheck();
   };
   await check();
+  return {
+    e,
+    store,
+    task,
+    selection,
+    policy,
+    credential,
+    binding_hash,
+    policy_hash,
+    check,
+  };
+}
+export interface PilotStructuredTask<T> {
+  purpose: "outpost_model_probe" | "outpost_call_brief";
+  schema: {
+    name: "pilot_model_probe_v1" | "call_brief_v1";
+    schema: Record<string, unknown>;
+  };
+  system: string;
+  user: string;
+  validate: (value: unknown) => T;
+}
+// Same admission, credential, transport and settlement path for both fixed pilot contracts.
+// Never exposed as a browser-selected prompt/schema or a live endpoint.
+export async function runPilotModelTask<T>(
+  scope: { workspace_id: string; client_binding_id: string; task_id: string },
+  deps: PilotModelDeps,
+  request: PilotStructuredTask<T>,
+) {
+  const { e, selection, policy, credential, binding_hash, policy_hash, check } =
+    await authorizePilotModelContext(scope, deps);
+  if (
+    request.schema.name !== selection.schema ||
+    request.purpose !==
+      (selection.schema === "call_brief_v1"
+        ? "outpost_call_brief"
+        : "outpost_model_probe")
+  ) {
+    throw new PilotRefusal("pilot_model_schema_mismatch", 409);
+  }
   let key: string | null;
   try {
     key = await deps.resolveCredential({
@@ -167,37 +207,24 @@ export async function runPilotModelProbe(
   let receipt: PilotModelReceipt | null = null,
     admitted = false,
     entered = false;
-  const probeSchema = {
-    name: "pilot_model_probe_v1",
-    schema: {
-      type: "object",
-      additionalProperties: false,
-      properties: { ready: { type: "boolean" } },
-      required: ["ready"],
-    },
-  };
-  // Fixed, synthetic schema/transport probe only. P6 caller briefs/prompts are not implemented.
-  const system =
-    "Return only the requested readiness JSON. This is a synthetic transport probe.";
-  const user =
-    "Report ready=true. Do not perform research, contact anyone or invoke tools.";
+  const { schema, system, user } = request;
   // Worst-case UTF-8 bytes upper-bound text tokens; reserve substantial schema/message overhead.
   if (
-    new TextEncoder().encode(system + user + JSON.stringify(probeSchema))
+    new TextEncoder().encode(system + user + JSON.stringify(schema))
           .length + 1024 > policy.max_input_tokens
   ) throw new PilotRefusal("pilot_model_input_limit", 413);
   let httpOk = false, validEnvelope = false;
   const started = Date.now();
   let result:
-    | Awaited<ReturnType<typeof gptStructured<{ ready: boolean }>>>
+    | Awaited<ReturnType<typeof gptStructured<unknown>>>
     | null = null;
   try {
-    result = await gptStructured<{ ready: boolean }>({
-      purpose: "outpost_model_probe",
+    result = await gptStructured<unknown>({
+      purpose: request.purpose,
       model: selection.model,
       system,
       user,
-      schema: probeSchema,
+      schema,
       maxTokens: policy.max_output_tokens,
       temperature: 0,
     }, {
@@ -330,12 +357,14 @@ export async function runPilotModelProbe(
       saved.usage.output_tokens! > policy.max_output_tokens ||
       saved.estimated_cost_usd! > reserve_usd)
   ) code = "pilot_model_usage_exceeds_reservation";
-  if (
-    result?.ok && !code &&
-    (!result.value || typeof result.value !== "object" ||
-      Array.isArray(result.value) || Object.keys(result.value).length !== 1 ||
-      typeof result.value.ready !== "boolean")
-  ) code = "pilot_model_schema_invalid";
+  let value: T | undefined;
+  if (result?.ok && !code) {
+    try {
+      value = request.validate(result.value);
+    } catch {
+      code = "pilot_model_schema_invalid";
+    }
+  }
   if (!result) code = "pilot_model_transport_failed";
   saved.status = code ? "failed" : "succeeded";
   saved.failure_code = code;
@@ -349,5 +378,38 @@ export async function runPilotModelProbe(
   if (code || !result?.ok) {
     throw new PilotRefusal(code ?? "pilot_model_transport_failed", 409);
   }
-  return { value: result.value, receipt: saved };
+  return { value: value!, receipt: saved };
+}
+
+// Backwards-compatible P4 synthetic probe. Selection policy still determines the only adapter.
+export function runPilotModelProbe(
+  scope: { workspace_id: string; client_binding_id: string; task_id: string },
+  deps: PilotModelDeps,
+) {
+  return runPilotModelTask(scope, deps, {
+    purpose: "outpost_model_probe",
+    schema: {
+      name: "pilot_model_probe_v1",
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { ready: { type: "boolean" } },
+        required: ["ready"],
+      },
+    },
+    system:
+      "Return only the requested readiness JSON. This is a synthetic transport probe.",
+    user:
+      "Report ready=true. Do not perform research, contact anyone or invoke tools.",
+    validate: (v) => {
+      if (
+        !v || typeof v !== "object" || Array.isArray(v) ||
+        Object.keys(v).length !== 1 ||
+        typeof (v as { ready: unknown }).ready !== "boolean"
+      ) {
+        throw new PilotRefusal("pilot_model_schema_invalid", 409);
+      }
+      return v as { ready: boolean };
+    },
+  });
 }

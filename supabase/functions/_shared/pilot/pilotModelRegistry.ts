@@ -6,6 +6,7 @@ export const PILOT_MODEL_REGISTRY = Object.freeze(
       model: "gpt-4.1-mini",
       adapter: "gptStructured",
       schema: "pilot_model_probe_v1",
+      schemas: ["pilot_model_probe_v1", "call_brief_v1"],
       implemented: true,
       enabled: false,
       reason:
