@@ -11,6 +11,7 @@ Each acceptance scenario, the lane that tests it, and where it stands on the sta
 | **Q2 contracts** | conflicts, event-dated windows, ownership, first hire | `deno test … tests/edge-functions/_shared/qualificationEvidenceIntegrity.test.ts` |
 | **Q3 contracts** (this PR) | compiler intent: frozen scope, no phantom requirements, unsupported mandatory, exact size | `Q3_ASSERT_GAPS=1 deno test --allow-read --allow-env tests/edge-functions/_shared/q3IntentContract.test.ts` |
 | **Codex qualification audit** (`da4b9c83`) | parser, canonical, Workbench and native engine adversarial cases | copy the three `independentQualification*` tests from `da4b9c83`, then `AUDIT_ASSERT_GAPS=1 deno test --allow-read --allow-env …` |
+| **Q4 acceptance matrix** | the 10 groups below, end to end through every reducer, asserting each downstream flag | `Q4_ASSERT_GAPS=1 deno test --allow-read --allow-env --no-check tests/edge-functions/_shared/q4AcceptanceMatrix.test.ts` |
 | **Codex routing audit** (`aca94e6b`) | 40 customer requests through compiler, graph, plan, engine, decisions, persistence plans, notice and terminal | in a checkout of `aca94e6b`: `ROUTING_AUDIT_SOURCE_ROOT=<branch checkout> ROUTING_ASSERT_EXPECTATIONS=1 deno test --allow-read --allow-env tests/edge-functions/_shared/independentRoutingAudit.test.ts` |
 
 ## Status on Q2 (#125 @ `a542b2f1`)
@@ -55,7 +56,30 @@ Measured on `a542b2f1`:
 - **Codex qualification audit:** 67 pass / 1 fail (the pure G09 helper, open with Codex).
 - **A7 contracts:** no known gaps.
 
-## Q4 acceptance matrix (to run once Q3 lands)
+## Q4 acceptance matrix
+
+**Implemented in `tests/edge-functions/_shared/q4AcceptanceMatrix.test.ts`** (harness: `q4/acceptanceHarness.ts`). It runs in the edge lane, offline: the real compiler, graph, feasibility, engine, claim-verification phase (funding, business model, open role), evaluator parser, canonical decision, Workbench, persistence plan, notice and terminal, sliced and resumed as production runs them. Only the external answers are synthetic.
+
+Every case asserts the canonical decision and, through `assertConsistent`: Workbench count, persisted rows, notice count and text, terminal state, canonical labels and buckets, and a resume that reaches the same decision while buying and evaluating nothing. Cases also assert the raw verdicts, hard checks and provider calls that matter to them.
+
+| Group | Positive control | Negative controls | Status |
+|---|---|---|---|
+| 1. SaaS hiring | AE posted 2 days ago; first-hire posting | SDR when the role may not broaden; ordinary opening for "first" (blocked, nothing bought); stale, closed, undated, another employer's | **pass** |
+| 2. Agencies | own internal hiring | client posting it advertises | **pass** |
+| 3. Expansion | dated announcement inside the window (decision layer) | outside the window; undated page; the request refused before any Actor (no executable route) | **pass** |
+| 4. Funding | round inside 90 days; venture Series A; "Seed or Series A" with a Seed | round 200 days ago; a grant for "venture"; a later Series B | **pass** |
+| 5. Social | n/a: no executable social route | social-only refused before any Actor; a mixed mission keeps its mandatory founder clause (pending) | **pass** |
+| 6. AND/OR | "hiring OR funding" on hiring alone (no funding bought); AND with both | AND with hiring only (pending) | **pass** |
+| 6. exclusions | | **known gap Q4-EXCLUSION-INVERTED:** "excluding recruiting agencies" compiles a hard requirement to *be* one, and drops "B2B software" | **known gap** |
+| 6. preferences | | **known gap Q4-PREFERENCE-HARD:** "ideally in the US" compiles a hard geography, so a preference rejects | **known gap** |
+| 7. Contradictions | US HQ on the company record | Canadian HQ on the record against a US-HQ request (the evaluator's PASS doesn't outrank it); a record resolving to another company | **pass** |
+| 8. Windows | 7-day hiring, 3-day posting | 10-day posting; 7d hiring and 30d social each keep their own window | **pass** |
+| 9. Unsupported providers | | job search unavailable: refused, no substitute purchase; evaluator FAIL holds an all-PASS company; evaluator timeout qualifies nothing | **pass** |
+| 10. Interrupted | a slice that runs out of time after discovery resumes and qualifies | each purchase made once; a further resume changes nothing | **pass** |
+
+Both known gaps already exist on `launch/hardening` (`5d867037`); they're compiler defects older than Q1–Q3. The matrix keeps them red under `Q4_ASSERT_GAPS=1`.
+
+### Original plan (kept for reference)
 
 Each case runs through the A7 contract lane (real persistence) or the routing lane (all reducers), with a positive and a negative control:
 
