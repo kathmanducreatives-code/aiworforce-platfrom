@@ -529,6 +529,7 @@ export const MISSION_EVALUATION_PROMPT = [
   "Decide whether this company satisfies the user's Mission.",
   "Return criterion_verdicts for EVERY mission.criteria id: {criterion_id, result:'pass'|'fail'|'unknown', reason, evidence:[{evidence_id,excerpt}]}.",
   "For geography verdicts include geography_scope:'headquarters'|'presence'. Preserve compiled scope; if absent, interpret the original request explicitly. Never substitute an office for requested HQ.",
+  "An exclusion criterion ('Excluding: X') passes when the company's own words show it is not X and fails when they show it is X.",
   "Interpret roles and company intent contextually. Modifiers may preserve a role; a related role is not automatically equivalent.",
   "Headquarters and market/office presence are distinct. A job description is not the company's own business description.",
   "A mandatory criterion fails only on cited contradiction; missing proof is unknown. Preferences may rank but never veto.",
@@ -601,7 +602,7 @@ export const MISSION_EVALUATION_PROMPT = [
  * reason to accept the old evidence that was already found wanting.
  */
 export const MISSION_REEVALUATION_PROMPT = [
-  "Return every mission.criteria id in criterion_verdicts, preserving mandatory versus preferred conditions. Each PASS/FAIL needs cited verbatim evidence. For geography include headquarters versus presence scope. Missing proof stays unknown.",
+  "Return every mission.criteria id in criterion_verdicts, preserving mandatory versus preferred conditions. Each PASS/FAIL needs cited verbatim evidence. For geography include headquarters versus presence scope. An exclusion ('Excluding: X') passes when the company is shown not to be X and fails when it is shown to be X. Missing proof stays unknown.",
   "You are taking a SECOND look at one company, because new evidence arrived.",
   "",
   "WHAT IS ALREADY SETTLED. `established_requirements` lists requirements a",
@@ -1181,7 +1182,8 @@ export function parseMissionEvaluationStrict(
         // its verified description, its provider industry label, its own
         // website, its cohort record. A job posting describes a role, and a
         // news item describes an event; neither is the company's business.
-        ((c.dimension === "industry" || c.dimension === "business_model") &&
+        // Q4 — and so does what a company is NOT ("excluding recruiting agencies").
+        ((c.dimension === "industry" || c.dimension === "business_model" || c.dimension === "exclusion") &&
           !COMPANY_OWNED_TYPES.has(item.evidence_type)) ||
         // Q3 — a mandatory requirement no structured source establishes ("exactly
         // 23 employees", "seed-stage" with no funding verifier, "startup") is

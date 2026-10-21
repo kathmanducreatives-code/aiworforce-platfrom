@@ -219,6 +219,7 @@ function checkAgainst(c: MissionCriterion, graph: CompanyEvidenceGraph): Criteri
   // a company that resolved to something the user did not supply fails, and
   // one whose identity is not resolved yet stays unknown until it is.
   if (c.dimension === "known_companies") return checkKnownCompanies(c, graph, base);
+  if (excludedTypes(c)) return checkExcludedTypes(c, excludedTypes(c)!, graph, base);
   const dim = CRITERION_EVIDENCE_DIMENSION[c.dimension];
   if (!dim) {
     return { ...base, result: "unknown", reason: `no evidence dimension answers ${c.dimension}`, evidence_ids: [], provenance: null };
@@ -580,8 +581,43 @@ function checkKnownCompanies(
       evidence_ids: ids, provenance: provenanceOf(item) };
 }
 
+/** The company types an exclusion criterion names, or null for any other criterion. */
+function excludedTypes(c: MissionCriterion): string[] | null {
+  const v = c.value as { field?: unknown; value?: unknown } | null;
+  if (c.dimension !== "exclusion" || v?.field !== "excluded_company_types") return null;
+  const values = (Array.isArray(v.value) ? v.value : [v.value]).map((x) => String(x ?? "").trim()).filter(Boolean);
+  return values.length ? values : null;
+}
+
+/**
+ * Q4 — AN EXCLUDED COMPANY TYPE IS THE INDUSTRY IT NAMES, INVERTED.
+ *
+ * "Excluding recruiting agencies" is answered by the same controlled vocabulary
+ * as an industry: proven evidence that the company IS one of the types fails
+ * it; proven evidence that rules out every type passes it; anything else stays
+ * unknown — an exclusion is never passed by silence. A type outside the
+ * vocabulary is answered, as an interpretive industry is (H05), only by a
+ * receipt-backed verdict from the company's own words.
+ */
+function checkExcludedTypes(
+  c: MissionCriterion, values: readonly string[], graph: CompanyEvidenceGraph,
+  base: Pick<CriterionCheck, "criterion_id" | "dimension" | "kind">,
+): CriterionCheck {
+  const reads = values.map((v) => checkBusinessModel({ ...c, dimension: "industry", value: v }, graph, base));
+  const is = reads.findIndex((r) => r.result === "pass");
+  if (is >= 0) {
+    return { ...reads[is], ...base, result: "fail", reason: `${reads[is].reason}, which the request excludes` };
+  }
+  if (reads.every((r) => r.result === "fail")) {
+    return { ...reads[0], ...base, result: "pass", reason: `${reads[0].reason} — not ${values.join(" or ")}` };
+  }
+  return { ...base, result: "unknown", evidence_ids: [], provenance: null,
+    reason: `nothing established yet shows the company is not ${values.join(" or ")}` };
+}
+
 /** Q3 — an industry / business-model criterion the controlled vocabulary cannot read. */
 function interpretive(c: MissionCriterion): boolean {
+  if (excludedTypes(c)) return excludedTypes(c)!.some((v) => !isControlledPhrase(v));
   return (c.dimension === "industry" || c.dimension === "business_model") && !isControlledPhrase(c.value);
 }
 
@@ -676,7 +712,7 @@ export function evaluateEligibility(
     // value the vocabulary CAN read keeps the rule below: verdicts only lower.
     if (check.result === "unknown" && interpretive(c) && verdict && verdict.result !== "unknown" && verdict.evidence.length > 0) {
       return { ...check, result: verdict.result,
-        reason: `${verdict.reason} (the evaluator's reading of the company's own cited words; ${String(c.value)} is outside the controlled vocabulary)`,
+        reason: `${verdict.reason} (the evaluator's reading of the company's own cited words; ${excludedTypes(c)?.join(" or ") ?? String(c.value)} is outside the controlled vocabulary)`,
         evidence_ids: verdict.evidence.map((e) => e.evidence_id), provenance: null };
     }
     if (verdict?.result === "pass") return check; // never upgrades missing facts

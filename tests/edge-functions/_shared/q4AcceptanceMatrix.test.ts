@@ -9,7 +9,9 @@
 //
 // KNOWN GAPS are real defects this matrix found, kept visible: ignored by
 // default, red with `Q4_ASSERT_GAPS=1`, the same convention as the A7 and Q3
-// lanes. Both are older than the Q1–Q3 stack (present on launch/hardening).
+// lanes. The first two it found (Q4-EXCLUSION-INVERTED, Q4-PREFERENCE-HARD,
+// both older than the Q1–Q3 stack) are fixed, with their controls in
+// q4ExclusionAndPreference.test.ts; their cases below now run by default.
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { type AcceptanceCase, type AcceptanceFlags, KEY, runAcceptanceCase } from "./q4/acceptanceHarness.ts";
 import { evaluateEligibility } from "../../../supabase/functions/_shared/candidateEligibility.ts";
@@ -21,14 +23,7 @@ import { buildCompanyEvidence } from "../../../supabase/functions/_shared/leadCo
 import { normalizeLinkedInCompanyEnriched } from "../../../supabase/functions/_shared/hiringActorNormalizers.ts";
 
 /** Defects the matrix found whose fix has not landed. */
-const KNOWN_GAPS = new Set([
-  // "…excluding recruiting agencies" compiles a HARD requirement to BE a
-  // recruiting agency (and drops the stated "B2B software").
-  "Q4-EXCLUSION-INVERTED",
-  // "…ideally in the US" compiles a HARD geography although the proposal says
-  // it is not hard, so a preference rejects a company.
-  "Q4-PREFERENCE-HARD",
-]);
+const KNOWN_GAPS = new Set<string>([]);
 const gap = (id: string) => ({ ignore: KNOWN_GAPS.has(id) && Deno.env.get("Q4_ASSERT_GAPS") !== "1" });
 
 const AE = "Find 1 B2B software company hiring Account Executives within the last 30 days.";
@@ -239,11 +234,17 @@ Deno.test("Q4.6 AND: hiring with no funding record stays pending; both proven qu
   await accept({ id: "6-and-both", request: AND, ...MIXED, rounds: [{ type: "Series A", daysAgo: 20 }] }, 1);
 });
 
+const EXCLUDING = "Find 1 B2B software company hiring Account Executives within the last 30 days, excluding recruiting agencies.";
+
 Deno.test("Q4.6 exclusion: 'excluding recruiting agencies' never qualifies a recruiting agency", gap("Q4-EXCLUSION-INVERTED"), async () => {
-  const f = await runAcceptanceCase({ id: "6-exclusion", request: "Find 1 B2B software company hiring Account Executives within the last 30 days, excluding recruiting agencies.",
-    signal: ["hiring Account Executives"], company: AGENCY });
+  const f = await runAcceptanceCase({ id: "6-exclusion", request: EXCLUDING, signal: ["hiring Account Executives"], company: AGENCY });
   assertFalse(f.criteria.some((c) => c.kind === "hard" && /recruit/i.test(String(c.value))), "an exclusion is never a requirement");
   assertEquals(f.qualifiedKeys.length, 0);
+});
+
+Deno.test("Q4.6 exclusion: a B2B software company under the exclusion qualifies — the stated industry kept, the exclusion answered", async () => {
+  const f = await accept({ id: "6-exclusion-software", request: EXCLUDING, signal: ["hiring Account Executives"] }, 1);
+  assertEquals([hard(f, "industry"), hard(f, "exclusion"), hard(f, "hiring")], ["pass", "pass", "pass"]);
 });
 
 Deno.test("Q4.6 exclusion control: without the exclusion, the stated industry still decides", async () => {

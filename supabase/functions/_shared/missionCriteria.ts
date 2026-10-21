@@ -47,7 +47,7 @@
 
 import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import {
-  canonicalSignalType, containsPhrase, isHiringSignal,
+  canonicalSignalType, containsPhrase, hedgedLocations, isHiringSignal, sameLocation,
   type FieldProvenance, type LeadMissionV1, type MissionSignal,
 } from "./leadMission.ts";
 import { isControlledPhrase } from "./businessModelMatch.ts";
@@ -977,7 +977,17 @@ export function deriveMissionCriteria(
     // "AI or developer-tools", "New York or California": alternatives of ONE
     // requirement (RC02). Only values the request itself joins by "or".
     const ors = orAlternatives(values, query);
+    const hedged = dimension === "geography" ? hedgedLocations(query, values) : [];
     for (const v of values) {
+      // Q4 — A HEDGED LOCATION RANKS AND NEVER REJECTS. "…, ideally in the US"
+      // is the customer's own word for a preference, whatever a carrier says.
+      if (hedged.length && sameLocation(v, hedged)) {
+        push({
+          kind: "target", dimension, value: v, label: `${label} preference: ${v}`, source: "user_explicit",
+          user_phrase: inQuery(v) ? v : "", rationale: "stated as a preference (\"ideally\"); can rank, never reject",
+        });
+        continue;
+      }
       const source = sourceFromProvenance(prov[field], inQuery(v));
       const split = source === "user_explicit" && !inQuery(v) ? QUALIFIED.exec(v.trim()) : null;
       const head = split?.[1]?.trim() ?? "";

@@ -183,7 +183,7 @@ function fundingRows(actor: string, c: AcceptanceCase): Json[] {
 function evaluatorRaw(input: Json, registry: Json, c: AcceptanceCase): Json {
   const find = (t: string) => registry.items.find((x: Json) => x.evidence_type === t);
   const desc = find("company_description"), job = find("job_posting"), loc = find("company_location");
-  const byDim = (d: string) => d === "hiring" ? job : d === "industry" || d === "business_model" ? desc : d === "geography" ? loc : null;
+  const byDim = (d: string) => d === "hiring" ? job : d === "industry" || d === "business_model" || d === "exclusion" ? desc : d === "geography" ? loc : null;
   const cite = (e: Json | null | undefined) => e ? [{ evidence_id: e.evidence_id, excerpt: e.source_text }] : [];
   const criteria = input.mission.criteria ?? [];
   return {

@@ -56,7 +56,7 @@ import {
 } from "./leadRuntimeIdentity.ts";
 import {
   LEAD_MISSION_VERSION, mergeCompanyBrainIntoMission,
-  parseLeadMissionDeterministic, validateLeadMission,
+  parseLeadMissionDeterministic, validateLeadMission, hedgedLocations, sameLocation,
   EXECUTION_PREFERENCES,
   REQUESTED_OUTPUTS, MISSION_STRATEGIES, isMissionStrategy, canonicalSignalType, isHiringSignal,
   type BrainMergeInput, type MissionStrategy, type ExecutionPreference, type LeadMissionV1,
@@ -1103,12 +1103,20 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   // a preference (`deriveMissionCriteria` makes it a target).
   const locationProvenance = mission.field_provenance?.["company_profile.locations"];
   const brainLocations = locationProvenance === "company_brain" || locationProvenance === "company_brain_policy";
-  if (mission.company_profile.locations.length > 0 && !brainLocations) {
+  //
+  // Q4 — NOR A LOCATION THE REQUEST ONLY HOPES FOR. "…, ideally in the US" is a
+  // preference however the proposal or the marker table read it: it ranks
+  // (`deriveMissionCriteria` makes it a target) and never rejects a company.
+  const hedged = hedgedLocations(query, mission.company_profile.locations);
+  const statedLocations = mission.company_profile.locations.filter((l) => !sameLocation(l, hedged));
+  if (statedLocations.length > 0 && !brainLocations) {
     hard["company_profile.locations"] = {
       operator: "in",
-      value: [...mission.company_profile.locations],
+      value: statedLocations,
       reason: "stated explicitly in the user's query",
     };
+  } else if (hedged.length > 0 && !brainLocations) {
+    delete hard["company_profile.locations"];
   }
   const soft: Record<string, unknown> = { ...mission.soft_preferences };
   for (const sp of p?.soft_preferences ?? []) {
@@ -1116,6 +1124,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   }
 
   mission = { ...mission, hard_constraints: hard, soft_preferences: soft, directives };
+  if (hedged.length > 0 && statedLocations.length === 0) delete mission.geography_is_hard;
 
   // ── P1: THE MEANING, MADE EXPLICIT — AND THE CARRIERS KEPT HONEST ─────────
   //

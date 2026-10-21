@@ -750,6 +750,98 @@ function allMatches(t: string, table: ReadonlyArray<[RegExp, string]>): string[]
   return [...new Set(out)];
 }
 
+// ── WHAT THE SENTENCE EXCLUDES, AND WHAT IT ONLY HOPES FOR (Q4) ─────────────
+//
+// The marker tables above were read over the whole sentence, so the words a
+// cue governs counted as stated requirements: "B2B software …, excluding
+// recruiting agencies" compiled a HARD `industry: recruiting agencies` (and the
+// model's "B2B software" lost to it), and "…, ideally in the US" a HARD
+// geography. A cue governs its own clause: an exclusion cue the words after it
+// up to the next clause break; a hedge before its phrase ("ideally",
+// "preferably", "bonus if") the words after it, and one after its phrase
+// ("preferred", "a plus", "if possible") the words before it in its clause.
+const EXCLUSION_CUE = /\b(?:excluding|exclude[sd]?|except(?:\s+for)?|other than|without|but not|not|no)\b/g;
+const HEDGE_BEFORE = /\b(?:ideally|preferably|bonus if|bonus points if|nice to have|prefer(?:ring)?)\b/g;
+const HEDGE_AFTER = /\b(?:preferred|a plus|a bonus|if possible|would be nice|nice to have)\b/g;
+const SPAN_BREAK = /[,;.!?()]/;
+
+/** Words a cue governs, and the rest of the sentence with them blanked out. */
+export interface GovernedText { inside: string; outside: string }
+
+function governed(text: string, before: RegExp, after?: RegExp): GovernedText {
+  const t = String(text ?? "").toLowerCase();
+  const ranges: Array<[number, number]> = [];
+  for (const m of t.matchAll(before)) {
+    const from = m.index! + m[0].length;
+    const stop = t.slice(from).search(SPAN_BREAK);
+    ranges.push([m.index!, stop < 0 ? t.length : from + stop]);
+  }
+  for (const m of after ? t.matchAll(after) : []) {
+    let start = 0;
+    for (let i = m.index! - 1; i >= 0; i--) if (SPAN_BREAK.test(t[i])) { start = i + 1; break; }
+    ranges.push([start, m.index! + m[0].length]);
+  }
+  let outside = t;
+  for (const [a, b] of ranges) outside = outside.slice(0, a) + " ".repeat(b - a) + outside.slice(b);
+  return { inside: ranges.map(([a, b]) => t.slice(a, b)).join(" | "), outside };
+}
+
+/** The words an exclusion cue ("excluding", "not", "other than" …) governs. */
+export function exclusionGoverned(query: string): GovernedText {
+  return governed(query, EXCLUSION_CUE);
+}
+
+/** The words a hedge ("ideally", "preferably", "… preferred") governs. */
+export function hedgeGoverned(query: string): GovernedText {
+  return governed(query, HEDGE_BEFORE, HEDGE_AFTER);
+}
+
+const hasPhrase = (text: string, phrase: string) => {
+  const p = String(phrase ?? "").trim().toLowerCase();
+  return p.length > 0 && new RegExp(`(?:^|[^a-z0-9])${escapeRe(p)}(?:$|[^a-z0-9])`).test(text);
+};
+
+/**
+ * A value the request names ONLY under the cue — never also as a plain
+ * statement elsewhere in the sentence. Read through `table` when it knows the
+ * value, so "the US" and a proposal's "United States" are the same place.
+ */
+function onlyGoverned(value: string, g: GovernedText, table: ReadonlyArray<[RegExp, string]>): boolean {
+  const canon = allMatches(String(value ?? "").toLowerCase(), table);
+  if (canon.length === 0) return hasPhrase(g.inside, value) && !hasPhrase(g.outside, value);
+  const inside = allMatches(g.inside, table), outside = allMatches(g.outside, table);
+  return canon.every((c) => inside.includes(c) && !outside.includes(c));
+}
+
+/** Company types the request names only to exclude them ("excluding recruiting agencies"). */
+export function excludedCompanyTypes(query: string, proposed: readonly string[] = []): string[] {
+  const g = exclusionGoverned(query);
+  const outside = allMatches(g.outside, VERTICAL_MARKERS);
+  const out = allMatches(g.inside, VERTICAL_MARKERS).filter((v) => !outside.includes(v));
+  for (const p of proposed) if (onlyGoverned(p, g, VERTICAL_MARKERS)) out.push(p.toLowerCase());
+  return [...new Set(out)];
+}
+
+/** The hard constraint an exclusion compiles to: it can rule a company out, never in. */
+export function excludedCompanyTypesConstraint(values: readonly string[]) {
+  return { operator: "not_in", value: [...values], reason: "excluded in the user's own words" };
+}
+
+/** Locations the request states only as a preference ("ideally in the US"). */
+export function hedgedLocations(query: string, proposed: readonly string[] = []): string[] {
+  const g = hedgeGoverned(query);
+  const outside = allMatches(g.outside, GEO_MARKERS);
+  const out = allMatches(g.inside, GEO_MARKERS).filter((v) => !outside.includes(v));
+  for (const p of proposed) if (onlyGoverned(p, g, GEO_MARKERS)) out.push(p);
+  return [...new Set(out)];
+}
+
+/** True when `value` is one of `values`, read through the geography table. */
+export function sameLocation(value: string, values: readonly string[]): boolean {
+  const canon = (v: string) => allMatches(String(v).toLowerCase(), GEO_MARKERS)[0] ?? String(v).toLowerCase();
+  return values.some((v) => canon(v) === canon(value));
+}
+
 /**
  * Explicit counts only. An absent count is a system default, not a guess.
  *
@@ -837,8 +929,10 @@ export function parseLeadMissionDeterministic(
   const t = q.toLowerCase();
   const prov: Record<string, FieldProvenance> = {};
 
-  const verticals = allMatches(t, VERTICAL_MARKERS);
+  // Q4 — a company type named under an exclusion cue is excluded, never required.
+  const verticals = allMatches(exclusionGoverned(t).outside, VERTICAL_MARKERS);
   if (verticals.length) prov["company_profile.verticals"] = "explicit_user_request";
+  const excludedTypes = excludedCompanyTypes(q);
 
   const isStartup = STAGE_MARKERS.some((m) => t.includes(m));
   const stages = isStartup ? ["startup"] : [];
@@ -920,7 +1014,9 @@ export function parseLeadMissionDeterministic(
       }
     }
   }
-  const locations = allMatches(companyText, GEO_MARKERS);
+  // Q4 — a location the request only hopes for ("ideally in the US") is not
+  // the company's stated location; the compiled criterion ranks on it instead.
+  const locations = allMatches(hedgeGoverned(companyText).outside, GEO_MARKERS);
   if (locations.length) prov["company_profile.locations"] = "explicit_user_request";
 
   if (signals.length) prov["required_signals"] = "explicit_user_request";
@@ -1042,7 +1138,7 @@ export function parseLeadMissionDeterministic(
     // a discarded requirement cannot be reported as a satisfied one.
     ...(unrepresented.length ? { unrepresented_requirements: unrepresented } : {}),
     decision_makers: { roles, current_employment_required: roles.length > 0 },
-    hard_constraints: {},
+    hard_constraints: excludedTypes.length ? { excluded_company_types: excludedCompanyTypesConstraint(excludedTypes) } : {},
     soft_preferences: {},
     required_capabilities: [],
     prohibited_capabilities: [],
@@ -1186,6 +1282,7 @@ export function validateLeadMission(
   const dm = (c.decision_makers ?? {}) as Record<string, any>;
   const dmRoles = strArray(dm.roles);
 
+  const excluded = excludedCompanyTypes(ctx.originalUserQuery, strArray(cp.verticals));
   const prov: Record<string, FieldProvenance> = { ...base.field_provenance };
   // Anything the model supplied that the deterministic pass did NOT already
   // attribute to the user is model inference, and is marked as such.
@@ -1221,12 +1318,18 @@ export function validateLeadMission(
       // sibling term the model stated more precisely, the model's term is
       // dropped and the compiler emits `company_types_overridden_by_user_words`
       // (leadMissionR1Contract.test.ts pins persona-01 as exactly that).
+      //
+      // Q4 — and a type the request names only to exclude it ("excluding
+      // recruiting agencies") is never a vertical, whoever proposed it.
       verticals: base.company_profile.verticals.length
-        ? base.company_profile.verticals : strArray(cp.verticals),
+        ? base.company_profile.verticals : strArray(cp.verticals).filter((v) => !excluded.includes(v.toLowerCase())),
       stages: base.company_profile.stages.length
         ? base.company_profile.stages : strArray(cp.stages),
+      // Q4 — a location the request only hopes for is kept beside the stated
+      // ones (it ranks), and is never what the stated ones override.
       locations: base.company_profile.locations.length
-        ? base.company_profile.locations : strArray(cp.locations),
+        ? [...new Set([...base.company_profile.locations, ...hedgedLocations(ctx.originalUserQuery, strArray(cp.locations))])]
+        : strArray(cp.locations).length ? strArray(cp.locations) : hedgedLocations(ctx.originalUserQuery),
       ...(cp.geography_scope === "headquarters" || cp.geography_scope === "presence"
         ? { geography_scope: cp.geography_scope } : {}),
       ...(employee_range ? { employee_range } : {}),
@@ -1246,7 +1349,10 @@ export function validateLeadMission(
       current_employment_required: dm.current_employment_required !== false &&
         (dmRoles.length > 0 || base.decision_makers.roles.length > 0),
     },
-    hard_constraints: (c.hard_constraints && typeof c.hard_constraints === "object") ? c.hard_constraints : {},
+    hard_constraints: {
+      ...((c.hard_constraints && typeof c.hard_constraints === "object") ? c.hard_constraints : {}),
+      ...(excluded.length ? { excluded_company_types: excludedCompanyTypesConstraint(excluded) } : {}),
+    },
     soft_preferences: (c.soft_preferences && typeof c.soft_preferences === "object") ? c.soft_preferences : {},
     required_capabilities,
     prohibited_capabilities,
