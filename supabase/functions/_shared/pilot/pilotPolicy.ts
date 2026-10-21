@@ -47,11 +47,7 @@ function exact(o: Record<string, unknown>, keys: string[]): void {
     throw new Error("unknown field");
   }
 }
-export function loadPilotEnrollment(
-  read: EnvRead,
-  workspace: string,
-  client: string,
-): PilotEnrollment {
+export function loadPilotEnrollments(read: EnvRead): PilotEnrollment[] {
   if (read(PILOT_ENABLED_ENV) !== "true") {
     throw new PilotRefusal("pilot_disabled", 503);
   }
@@ -115,17 +111,24 @@ export function loadPilotEnrollment(
       }
       return p as unknown as PilotEnrollment;
     });
-    const entry = entries.find((p) =>
-      p.workspace_id === workspace && p.client_binding_id === client
-    );
-    if (!entry) throw new PilotRefusal("pilot_scope_unavailable", 403);
-    return structuredClone(entry);
+    return structuredClone(entries);
   } catch (e) {
     if (e instanceof PilotRefusal && e.code === "pilot_scope_unavailable") {
       throw e;
     }
     throw new PilotRefusal("pilot_policy_invalid", 503);
   }
+}
+export function loadPilotEnrollment(
+  read: EnvRead,
+  workspace: string,
+  client: string,
+): PilotEnrollment {
+  const entry = loadPilotEnrollments(read).find((p) =>
+    p.workspace_id === workspace && p.client_binding_id === client
+  );
+  if (!entry) throw new PilotRefusal("pilot_scope_unavailable", 403);
+  return entry;
 }
 export function pilotSigningKey(read: EnvRead): string {
   const value = read(PILOT_SIGNING_ENV);
