@@ -4835,6 +4835,21 @@ export async function runCapabilityPlan(
       // The refusal above is deliberate and must not be swallowed by the guard
       // that catches provider trouble.
       if (e instanceof ExecutionPlanBlockedError) throw e;
+      // A PLANNER THAT CANNOT BE REACHED BY CONFIGURATION (no API key, quota
+      // exhausted: `retryable: false`) is not a crash. It is refused before any
+      // paid work, with a code that says what to supply, and retrying changes
+      // nothing until it is supplied (the finalizer records it as `blocked`).
+      const unavailable = e as { name?: unknown; retryable?: unknown; code?: unknown };
+      if (unavailable?.name === "GptPlannerUnavailableError" && unavailable.retryable === false) {
+        state.terminal_reason = "execution_plan_blocked";
+        state.fallback_reason = "execution_planner_unavailable";
+        log("execution_planner_unavailable", { code: String(unavailable.code ?? "unknown") });
+        throw new ExecutionPlanBlockedError([{
+          code: "execution_planner_unavailable",
+          message: `the execution planner is not configured (${String(unavailable.code ?? "unknown")}): ${String(e).slice(0, 240)}`,
+          severity: "block",
+        }]);
+      }
       // A THROWN PLANNER — a timeout, a transport error — is the same fact as a
       // planner that answered unusably: it was asked and did not decide.
       state.terminal_reason = "execution_plan_blocked";

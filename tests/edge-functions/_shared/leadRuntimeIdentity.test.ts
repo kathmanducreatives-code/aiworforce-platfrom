@@ -124,3 +124,34 @@ Deno.test("6. the supported set includes the current contract", () => {
   assert(SUPPORTED_CONTRACT_VERSIONS.includes(LEAD_INTELLIGENCE_CONTRACT_VERSION),
     "an executor must understand the contract it itself emits");
 });
+
+// ── THE IDENTITY NAMES THE BUILD THAT IS RUNNING (provider-disabled dry run, 2026-10-22) ──
+// `buildInfo.ts` is regenerated only by a legacy script and still named
+// 046b61b0 on 8b0e2b6b. The canonical stamp (buildStamp.ts: the deploy stamp,
+// Railway's SHA, or the local run's) is what /health and every surface report,
+// so the planner and executor identities must report it too. Reporting only:
+// compatibility is decided by the contract version, which is unchanged.
+Deno.test("7. the runtime identity reports the canonical build stamp, not the stale legacy file", () => {
+  const sha = "8b0e2b6bdb20d6fe30542da39f0170d514d52746";
+  const prior = Deno.env.get("AGENTORY_LOCAL_GIT_SHA");
+  Deno.env.set("AGENTORY_LOCAL_GIT_SHA", sha);
+  try {
+    const id = runtimeIdentity("planner", "test");
+    assertEquals([id.git_sha, id.git_short], [sha, sha.slice(0, 8)]);
+    assertEquals(checkContractCompatibility(id.lead_intelligence_contract_version, sha).ok, true);
+    assertEquals((checkContractCompatibility(id.lead_intelligence_contract_version, sha) as { same_build: boolean }).same_build, true);
+  } finally {
+    if (prior === undefined) Deno.env.delete("AGENTORY_LOCAL_GIT_SHA"); else Deno.env.set("AGENTORY_LOCAL_GIT_SHA", prior);
+  }
+});
+
+Deno.test("8. a short or missing stamp falls back to the legacy file, still a full SHA", () => {
+  const prior = Deno.env.get("AGENTORY_LOCAL_GIT_SHA");
+  Deno.env.set("AGENTORY_LOCAL_GIT_SHA", "8b0e2b6");
+  try {
+    const id = runtimeIdentity("planner", "test");
+    assert(/^[0-9a-f]{40}$/.test(id.git_sha) || id.git_sha === "local", id.git_sha);
+  } finally {
+    if (prior === undefined) Deno.env.delete("AGENTORY_LOCAL_GIT_SHA"); else Deno.env.set("AGENTORY_LOCAL_GIT_SHA", prior);
+  }
+});
