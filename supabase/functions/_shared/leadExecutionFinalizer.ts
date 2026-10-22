@@ -81,6 +81,9 @@ export type TerminalReason =
   | "quota_met"
   | "run_cancelled";
 
+/** Refusal codes that mean "not configured", never "something crashed". */
+const CONFIGURATION_REFUSALS: ReadonlySet<string> = new Set(["execution_planner_unavailable"]);
+
 /** Statuses that mean the run genuinely finished its work. Never overwritten. */
 const SUCCESSFUL: ReadonlySet<TerminalStatus> = new Set<TerminalStatus>(["completed"]);
 
@@ -668,6 +671,18 @@ export function decideTerminalRecord(
         // nothing until whatever the block names is supplied.
         resumable: false,
       };
+    }
+
+    // ── A PLANNER THAT IS NOT CONFIGURED IS A REFUSAL TOO ─────────────────
+    //
+    // A missing model key (or exhausted quota) stops the run at planning,
+    // before any paid work. The provider-disabled hosted dry run (2026-10-22)
+    // recorded it as `unhandled_exception`, which reads as a crash. It is
+    // blocked for a named reason, and not resumable: nothing changes until the
+    // configuration does.
+    if (blocked_by && blocked_by.length > 0 && blocked_by.every((b) => CONFIGURATION_REFUSALS.has(b.code))) {
+      return { ...base, status: "blocked", reason: "refused_before_execution",
+        detail: String(ctx.error).slice(0, 500), blocked_by, resumable: false };
     }
 
     return { ...base, status: "failed", reason: "unhandled_exception",
