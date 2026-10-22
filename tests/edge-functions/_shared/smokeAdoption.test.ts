@@ -63,7 +63,7 @@ Deno.test("adoption: the answer itself must be complete and well-formed", async 
   }
 });
 
-Deno.test("adoption: the operation row must be this start's purchase, of this task, bought no later than now", async () => {
+Deno.test("adoption: the operation row must be this start's purchase, of this task, bought by an earlier generation", async () => {
   const cases: Array<[string, unknown, string]> = [
     ["unreadable row", new Error("boom"), "operation_unreadable"],
     ["no row", null, "operation_missing"],
@@ -72,6 +72,7 @@ Deno.test("adoption: the operation row must be this start's purchase, of this ta
     ["another payload fingerprint", { ...ROW, payload_hash: "b".repeat(64) }, "operation_identity"],
     ["another task", { ...ROW, task_id: "task-2" }, "task"],
     ["a later generation", { ...ROW, generation: 3 }, "generation"],
+    ["the same generation (the slice that bought it already holds the run)", { ...ROW, generation: 2 }, "generation"],
     ["no generation", { ...ROW, generation: null }, "generation"],
     ["a conflicting run id", { ...ROW, provider_run_id: "run-other" }, "run_conflict"],
     ["a run id no longer recorded", { ...ROW, provider_run_id: null }, "run_conflict"],
@@ -80,8 +81,8 @@ Deno.test("adoption: the operation row must be this start's purchase, of this ta
   for (const [why, row, reason] of cases) {
     assertEquals(await verifiedAdoption(rowDb(row), BIND, ADOPT), { ok: false, reason }, why);
   }
-  // The same generation (a replay within the slice that bought it) is still the same purchase.
-  assert((await verifiedAdoption(rowDb({ ...ROW, generation: 2 }), BIND, ADOPT)).ok);
+  // Any earlier generation is a dead slice's purchase.
+  assert((await verifiedAdoption(rowDb({ ...ROW, generation: 0 }), BIND, ADOPT)).ok);
 });
 
 Deno.test("adoption: the response is Apify's own start shape, identity only, and marked adopted", async () => {
