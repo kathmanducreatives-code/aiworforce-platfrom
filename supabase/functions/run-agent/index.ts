@@ -31,6 +31,7 @@ import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
+import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { renderContentBrain, type RecentContent } from "../_shared/contentBrainContext.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
@@ -521,7 +522,8 @@ type CompanyBrain = Record<string, unknown> | null;
 // hardcoded null here silently suppressed the entire brain block for every
 // agent (Scout/Aria/Penn/Hawk/Scribe) — the active brain never reached them.
 function renderBrainForAgent(brain: CompanyBrain, onboardingCompleted?: boolean | null): string {
-  return renderCompanyBrainBlock(brain as Record<string, unknown>, onboardingCompleted);
+  // Provider readiness is read live — it is no longer stored in the Brain.
+  return renderCompanyBrainBlock(brain as Record<string, unknown>, onboardingCompleted, { integrationStatus: buildIntegrationStatus() });
 }
 
 

@@ -27,6 +27,8 @@ export interface CompanyBrainRow {
   profile: BrainProfile;
   onboarding_completed: boolean;
   onboarding_completed_at: string | null;
+  /** Row version (set by a database trigger on every update). Edits are built on it. */
+  updated_at: string | null;
 }
 
 /** Stable, workspace-scoped key. One workspace's cache can never serve another. */
@@ -59,7 +61,7 @@ export function useCompanyBrain() {
     queryFn: async (): Promise<CompanyBrainRow> => {
       const { data: row, error } = await supabase
         .from('company_brain')
-        .select('profile, onboarding_completed, onboarding_completed_at')
+        .select('profile, onboarding_completed, onboarding_completed_at, updated_at')
         .eq('workspace_id', workspaceId!)
         .maybeSingle();
       // Surfaced rather than swallowed: the old code ignored `error` entirely
@@ -69,6 +71,7 @@ export function useCompanyBrain() {
         profile: (row?.profile ?? {}) as BrainProfile,
         onboarding_completed: !!row?.onboarding_completed,
         onboarding_completed_at: row?.onboarding_completed_at ?? null,
+        updated_at: row?.updated_at ?? null,
       };
     },
   });

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { supabase } from '@/integrations/supabase/client';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
@@ -13,7 +12,8 @@ import { deriveSellerIdentityState, sellerIdentityBanner } from '@/lib/companyBr
 import CompanyBrainEditDrawer, { type SectionKey as DrawerSectionKey } from '@/components/company-brain/CompanyBrainEditDrawer';
 import RestartOnboardingModal from '@/components/company-brain/RestartOnboardingModal';
 
-import { mergeProfilePatch, toSavedBrainView, type BrainProfile } from '@/lib/companyBrainView';
+import { toSavedBrainView, type BrainProfile } from '@/lib/companyBrainView';
+import { saveCompanyBrainPatch } from '@/lib/companyBrainSave';
 import { type SectionKey } from '@/lib/companyBrainSections';
 
 export default function CompanyBrainDashboard() {
@@ -35,14 +35,16 @@ export default function CompanyBrainDashboard() {
     ? new Date(data.onboarding_completed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
 
+  // Edits go through the authorized backend save (the one write path), built on
+  // the version this page loaded. A failure throws so the editor keeps the edit.
   async function saveSection(section: SectionKey, patch: BrainProfile) {
-    if (!workspaceId) { toast.error('No workspace'); return; }
-    const merged = mergeProfilePatch(raw, patch);
-    const { error } = await supabase
-      .from('company_brain')
-      .update({ profile: merged as any })
-      .eq('workspace_id', workspaceId);
-    if (error) { toast.error('Save failed', { description: error.message }); return; }
+    if (!workspaceId) { toast.error('No workspace'); throw new Error('no_workspace'); }
+    const result = await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: data?.updated_at ?? null });
+    if (!result.ok) {
+      toast.error(result.conflict ? 'Company Brain was changed elsewhere' : 'Save failed', { description: result.message });
+      if (result.conflict) refresh();
+      throw new Error(result.conflict ? 'stale' : 'save_failed');
+    }
     toast.success('Section saved');
     setSavedFlash(section);
     setTimeout(() => setSavedFlash((s) => (s === section ? null : s)), 1600);
@@ -105,7 +107,7 @@ export default function CompanyBrainDashboard() {
         brain={brain}
         onOpenChange={(v) => { if (!v) setOpenSection(null); }}
         onSave={(patch) => saveSection(openSection as SectionKey, patch)}
-        serverUpdatedAt={data?.onboarding_completed_at ?? null}
+        serverUpdatedAt={data?.updated_at ?? null}
       />
 
       <RestartOnboardingModal

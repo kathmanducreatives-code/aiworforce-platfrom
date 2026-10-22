@@ -18,6 +18,7 @@ import {
   resolveLocalProviderMode, mockResearchDeps, LOCAL_PROVIDER_MODE_ENV,
   type LocalProviderMode,
 } from "../_shared/companyBrainResearch/localProviderMode.ts";
+import { planBrainUpdate } from "../_shared/companyBrainUpdate.ts";
 import { enrichCompanyFromLinkedIn } from "../_shared/companyBrainResearch/companyLinkedIn.ts";
 import { generateBrainDraft, type DraftInput } from "../_shared/companyBrainResearch/generateBrainDraft.ts";
 import type { FirecrawlPage, ResearchDeps, ResearchSourceType, ResearchProvider } from "../_shared/companyBrainResearch/types.ts";
@@ -396,6 +397,44 @@ Deno.serve(async (req) => {
         error_message: r.ok ? undefined : r.error,
       });
       return json({ ok: r.ok, draft: safeDraft, source_role, stripped_seller_fields, refresh_diff, error: r.error });
+    }
+
+    // ---------------- edit an existing Brain (Company Brain page, Signals) ------
+    //
+    // THE one write path for edits. Same authorization as everything above (JWT
+    // + workspace membership). Structured data is authoritative: the legacy
+    // `icp` mirror and the radar's derived copies are reconciled on every save,
+    // so the agent prompt, the lead compiler and the page read the same Brain
+    // and a cleared value stops applying (planBrainUpdate). The version check
+    // is atomic: the write only lands on the row version the plan was built
+    // from, so a change in between returns 409 instead of being overwritten.
+    if (action === "update") {
+      const { data: row } = await admin
+        .from("company_brain").select("profile, updated_at, onboarding_completed")
+        .eq("workspace_id", workspace_id).maybeSingle();
+      const current = row as { profile?: AnyObj; updated_at?: string; onboarding_completed?: boolean } | null;
+      const plan = planBrainUpdate({
+        existing: current ? (current.profile ?? {}) : null,
+        currentUpdatedAt: current?.updated_at ?? null,
+        expectedUpdatedAt: body.expected_updated_at,
+        patch: body.patch,
+        alreadyActive: current?.onboarding_completed === true,
+      });
+      if (!plan.ok) {
+        const status = plan.reason === "stale" ? 409 : plan.reason === "brain_not_found" ? 404 : 400;
+        return json({ ok: false, rejected_reason: plan.reason, detail: plan.detail ?? null, current_updated_at: current?.updated_at ?? null }, status);
+      }
+      const { data: written, error } = await admin
+        .from("company_brain")
+        .update({ profile: plan.profile, updated_at: new Date().toISOString() })
+        .eq("workspace_id", workspace_id)
+        .eq("updated_at", current!.updated_at!)
+        .select("profile, updated_at");
+      if (error) throw error;
+      if (!written?.length) {
+        return json({ ok: false, rejected_reason: "stale", detail: "changed during save", current_updated_at: null }, 409);
+      }
+      return json({ ok: true, profile: written[0].profile, updated_at: written[0].updated_at, applied_paths: plan.applied_paths });
     }
 
     // ---------------- Step 4/5: save draft, then activate -------------------

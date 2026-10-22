@@ -112,6 +112,7 @@ import { getSourceCapability } from "../_shared/sourceCapabilities.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, resolveCompanyContactTarget, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
+import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { leadIntentFromMission, planJobsActorInput, type LeadIntent, type BrainLite } from "../_shared/leadIntent.ts";
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
 import { routeQualifiedLead, qualifiedLeadRouteFromMission, normalizeCompanyVertical, inferCompanyStage, contractJobTitles } from "../_shared/qualifiedLeadRouting.ts";
@@ -1912,7 +1913,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       if (!profile || !hasUsableBrain(profile, data?.onboarding_completed === true)) {
         return null;
       }
-      return buildCompanyBrainContext(profile) || null;
+      return buildCompanyBrainContext(profile, { integrationStatus: buildIntegrationStatus() }) || null;
     } catch { return null; }
   })();
   const readEnvSafe = (k: string): string | undefined => {
@@ -3505,7 +3506,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     .maybeSingle();
   const brainProfile = (cbRow?.profile ?? null) as Record<string, unknown> | null;
   const brainReady = hasUsableBrain(brainProfile, cbRow?.onboarding_completed === true);
-  const brainCtx = brainReady ? buildCompanyBrainContext(brainProfile) : "";
+  const brainCtx = brainReady ? buildCompanyBrainContext(brainProfile, { integrationStatus: buildIntegrationStatus() }) : "";
 
   // Personalized reply: a single Gemini call seeded with the compact brain
   // context + a category-specific instruction. Falls back to a static string
