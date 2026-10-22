@@ -5,7 +5,9 @@
 #   2. build without the held credit re-arm migration: the credit tests fail;
 #   3. build without, or with one guard removed from, the held smoke admission
 #      (migration, transport gate, poll loop, Codex review R1–R7 fixes): a
-#      named admission test fails.
+#      named admission test fails;
+#   4. build without, or with one evidence guard removed from, the held reaper
+#      fix: a confirmed purchase is refunded, or foreign evidence is charged.
 #
 #   PG_ADMIN_URL=… POSTGREST_BIN=… tests/db-contract/mutation.sh
 #
@@ -82,8 +84,9 @@ runner_ts="$root/worker/leadMissionRunner.ts"
 clock_ts="$root/supabase/functions/_shared/missionWallClock.ts"
 plan_ts="$root/supabase/functions/_shared/smokeAdmissionRefusal.ts"
 planner_ts="$root/supabase/functions/_shared/gptExecutionPlanner.ts"
+reaper_sql="$root/supabase/migrations-held/20261022120000_credits_reaper_charges_confirmed_purchase.sql"
 restore_list=()
-for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts"; do
+for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$reaper_sql"; do
   cp "$f" "$f.mutation-backup"; restore_list+=("$f")
 done
 trap 'cp "$backup" "$real"; for f in "${restore_list[@]}"; do mv -f "$f.mutation-backup" "$f"; done; rm -f "$backup" "$out"' EXIT
@@ -342,6 +345,41 @@ prove_killed "settlement judged at arrival, not send time (Codex P2)" "$tools_ts
 prove_killed "smoke planner shown every authorised actor (Codex P1)" "$planner_ts" \
   "    const payload = approved ? smokePlannerPayload(i.payload, approved) : i.payload;" "    const payload = i.payload;" \
   "$planner_tests" "smoke planner: the execution-planner request for the smoke's mission fits the Luna template"
+
+# ── PROOFS: the reaper charges a confirmed purchase ────────────────────────
+# Without the held reaper fix a confirmed purchase is refunded; each guard on
+# its evidence (workspace, task, record kind, a real run id, the credit kind)
+# and its charge cap is required by a named test.
+reaper_tests="$root/tests/db-contract/creditReaper.contract.test.ts"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261022120000_credits_reaper_charges_confirmed_purchase.sql \
+  "$root/tests/db-contract/run.sh" "$reaper_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "reaper: a confirmed purchase whose worker died before settling is charged, not refunded ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: reaper tests without the held reaper fix" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the held reaper fix a confirmed purchase is refunded"
+ran=$((ran + 1))
+fi
+prove_killed "reaper evidence not bound to the workspace" "$reaper_sql" \
+  "          where e.workspace_id = v_txn.workspace_id
+            and e.logical_call_key" "          where e.logical_call_key" \
+  "$reaper_tests" "reaper: evidence is bound to the workspace — another workspace's run id under the same key confirms nothing"
+prove_killed "reaper evidence not bound to the task" "$reaper_sql" \
+  "            and e.task_id is not distinct from v_txn.task_id
+" "" \
+  "$reaper_tests" "reaper: evidence is bound to the task — another task's run id under the same key confirms nothing"
+prove_killed "reaper takes a blank run id as evidence" "$reaper_sql" \
+  "and length(btrim(coalesce(e.provider_run_id, ''))) > 0)" "and e.provider_run_id is not null)" \
+  "$reaper_tests" "reaper: a stage_result row or a blank run id is not evidence of a purchase"
+prove_killed "reaper charges a non-provider reservation" "$reaper_sql" \
+  "    if v_txn.kind in ('provider_call', 'monitoring_call') and exists (" "    if exists (" \
+  "$reaper_tests" "reaper: a non-provider reservation is never charged by ledger evidence"
+prove_killed "reaper charges the whole quoted hold" "$reaper_sql" \
+  "v_txn.id, least(v_txn.reserved_credits, 1), 'charged'," "v_txn.id, v_txn.reserved_credits, 'charged'," \
+  "$reaper_tests" "reaper: never charges more than the live settle would — a quoted hold is charged the per-call credit"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
