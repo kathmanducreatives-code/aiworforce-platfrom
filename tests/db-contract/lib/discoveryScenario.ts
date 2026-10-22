@@ -226,6 +226,78 @@ export interface Run {
   vendorRequests: Array<{ method: string; path: string; body: unknown }>; modelStages: string[];
 }
 
+/**
+ * THE SCRIPTED VENDORS — OpenAI and Apify answered from the scenario, nothing
+ * else reachable. Shared by the in-process scenarios below and the
+ * real-process rehearsal (tests/realprocess/), which installs it in a real
+ * worker process. `interruptAt` sees each Apify request's kill point; true
+ * leaves that request hanging forever.
+ */
+export function vendorResponder(s: Scenario, o: {
+  trace: Json; vendorRequests: Run["vendorRequests"]; isCompiled: () => boolean;
+  interruptAt?: (at: string | null, worker: string | null) => boolean;
+}): (url: URL, init: RequestInit | undefined, worker: string | null) => Promise<Response> {
+  const model = s.model ?? "honest";
+  const base = company("qualified");
+  const jobs = s.jobs ?? [job("ae", base)];
+  const detailsFor = s.details ?? ((url: string) => jobs.map((j) => j.company).find((c) => c.linkedinUrl === url) ?? null);
+  let detailsUrl: string | null = null;
+  let models = 0;
+  return (url, init, worker) => {
+    const body = typeof init?.body === "string" ? (() => { try { return JSON.parse(init.body as string); } catch { return init.body; } })() : null;
+    o.trace.requests.push({ method: init?.method ?? "GET", host: url.hostname, path: url.pathname, query: [...url.searchParams].filter(([k]) => k !== "token"),
+      bytes: new TextEncoder().encode(String(init?.body ?? "")).length });
+    if (url.hostname === "api.openai.com") {
+      models++;
+      const name = body?.response_format?.json_schema?.name ?? null;
+      const system = String(body?.messages?.[0]?.content ?? "");
+      o.trace.model_stages.push(name ?? system.slice(0, 40));
+      if (o.isCompiled() && s.modelTimeout) {
+        return Promise.reject(new DOMException("offline model timeout", "TimeoutError"));
+      }
+      const userMsg = (() => { try { return JSON.parse(String(body?.messages?.at(-1)?.content ?? "")); } catch { return null; } })();
+      const answer = name === "lead_mission_proposal" ? (s.proposal ?? PROPOSAL)
+        : name === "lead_execution_plan" ? EXECUTION_PLAN
+        : system.startsWith("You assess several companies") ? { results: (userMsg?.companies ?? []).map((co: Json) => groundedResult(co.company_key, evidenceIn(co.evidence), model)) }
+        : system.startsWith("Decide whether this company satisfies") ? evaluatorAnswer(userMsg, model, s.aggregate)
+        : system.startsWith("You interpret supplied company evidence") ? groundedResult(String(userMsg?.company_key ?? ""), evidenceIn(userMsg), model)
+        : {};
+      return Promise.resolve(new Response(JSON.stringify({
+        id: `fake-${models}`, model: body?.model, choices: [{ message: { content: JSON.stringify(answer) }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 1000, completion_tokens: 400, total_tokens: 1400 },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    assertEquals(url.hostname, "api.apify.com", `unexpected vendor ${url.hostname}`);
+    o.vendorRequests.push({ method: init?.method ?? "GET", path: url.pathname.replace(/^\/v2\//, ""), body });
+    const kind = url.pathname.includes("linkedin-company") || url.pathname.includes("details") ? "details" : "jobs";
+    const method = init?.method ?? "GET";
+    const at = method === "POST" ? `${kind}_post` : url.pathname.includes("/actor-runs/run-jobs") ? "jobs_status" : null;
+    if (o.interruptAt?.(at, worker)) return new Promise<Response>(() => {});
+    const json = (b: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } }));
+    if ((init?.method ?? "GET") === "POST") {
+      const refused = kind === "jobs" ? s.jobsStartStatus : s.detailsStartStatus;
+      if (refused) return json({ error: { type: "offline", message: "offline: Apify refused the run" } }, refused);
+      if (kind === "details") detailsUrl = (body as Json)?.companies?.[0] ?? null;
+      return json({ data: { id: `run-${kind}`, defaultDatasetId: `dataset-${kind}`, status: "RUNNING" } }, 201);
+    }
+    if (url.pathname.includes("/actor-runs/")) {
+      const run = url.pathname.split("/").at(-1)!;
+      if (run === "run-jobs" && s.jobsStatus === "unreadable") return json({ error: "offline status unavailable" }, 500);
+      if (run === "run-jobs" && s.jobsStatus === "running") return json({ data: { id: run, defaultDatasetId: "dataset-jobs", status: "RUNNING" } });
+      if (run === "run-jobs" && s.jobsStatus === "failed") return json({ data: { id: run, defaultDatasetId: "dataset-jobs", status: "FAILED" } });
+      return json({ data: { id: run, defaultDatasetId: run.replace("run-", "dataset-"), status: "SUCCEEDED",
+        finishedAt: new Date(Date.now() - 1000).toISOString(), usageTotalUsd: run === "run-jobs" ? 0.004 : 0.00405 } });
+    }
+    assert(url.pathname.includes("/datasets/"), url.pathname);
+    if (url.pathname.includes("dataset-details")) {
+      const rec = detailsUrl ? detailsFor(detailsUrl) : null;
+      return json(rec ? [structuredClone(rec)] : []);
+    }
+    if (s.jobsDatasetRaw !== undefined) return Promise.resolve(new Response(s.jobsDatasetRaw, { status: 200, headers: { "content-type": "application/json" } }));
+    return json(structuredClone(jobs));
+  };
+}
+
 export async function runScenario(s: Scenario): Promise<Run> {
   const model = s.model ?? "honest";
   const missionGoal = s.goal ?? MISSION;
@@ -266,13 +338,19 @@ export async function runScenario(s: Scenario): Promise<Run> {
   const detailsFor = s.details ?? ((url: string) => jobs.map((j) => j.company).find((c) => c.linkedinUrl === url) ?? null);
   const trace: Json = { label: s.label, model, requests: [], admissions: [], model_stages: [], errors: [] };
   const vendorRequests: Run["vendorRequests"] = [];
-  let detailsUrl: string | null = null;
   let compiled = false;
-  let models = 0;
   // The worker id whose process is "dead" (`s.interrupt`); its requests never settle.
   let deadWorker: string | null = null;
   let onKilled: () => void = () => {};
   const killed = new Promise<void>((r) => onKilled = r);
+  const vendor = vendorResponder(s, { trace, vendorRequests, isCompiled: () => compiled,
+    interruptAt: (at, worker) => {
+      if (!(s.interrupt && trace.killed_at === undefined && at === s.interrupt && worker !== null)) return false;
+      deadWorker = worker;
+      trace.killed_at = at;
+      onKilled();
+      return true;
+    } });
   const fakeTransport: typeof fetch = (u, init) => {
     const url = new URL(u instanceof Request ? u.url : String(u));
     const worker = missionAdmission.getStore()?.workerId ?? null;
@@ -290,62 +368,7 @@ export async function runScenario(s: Scenario): Promise<Run> {
       }
       return localFetch(u, init);
     }
-    const body = typeof init?.body === "string" ? (() => { try { return JSON.parse(init.body as string); } catch { return init.body; } })() : null;
-    trace.requests.push({ method: init?.method ?? "GET", host: url.hostname, path: url.pathname, query: [...url.searchParams].filter(([k]) => k !== "token"),
-      bytes: new TextEncoder().encode(String(init?.body ?? "")).length });
-    if (url.hostname === "api.openai.com") {
-      models++;
-      const name = body?.response_format?.json_schema?.name ?? null;
-      const system = String(body?.messages?.[0]?.content ?? "");
-      trace.model_stages.push(name ?? system.slice(0, 40));
-      if (compiled && s.modelTimeout) {
-        return Promise.reject(new DOMException("offline model timeout", "TimeoutError"));
-      }
-      const userMsg = (() => { try { return JSON.parse(String(body?.messages?.at(-1)?.content ?? "")); } catch { return null; } })();
-      const answer = name === "lead_mission_proposal" ? (s.proposal ?? PROPOSAL)
-        : name === "lead_execution_plan" ? EXECUTION_PLAN
-        : system.startsWith("You assess several companies") ? { results: (userMsg?.companies ?? []).map((co: Json) => groundedResult(co.company_key, evidenceIn(co.evidence), model)) }
-        : system.startsWith("Decide whether this company satisfies") ? evaluatorAnswer(userMsg, model, s.aggregate)
-        : system.startsWith("You interpret supplied company evidence") ? groundedResult(String(userMsg?.company_key ?? ""), evidenceIn(userMsg), model)
-        : {};
-      return Promise.resolve(new Response(JSON.stringify({
-        id: `fake-${models}`, model: body?.model, choices: [{ message: { content: JSON.stringify(answer) }, finish_reason: "stop" }],
-        usage: { prompt_tokens: 1000, completion_tokens: 400, total_tokens: 1400 },
-      }), { status: 200, headers: { "content-type": "application/json" } }));
-    }
-    assertEquals(url.hostname, "api.apify.com", `unexpected vendor ${url.hostname}`);
-    vendorRequests.push({ method: init?.method ?? "GET", path: url.pathname.replace(/^\/v2\//, ""), body });
-    const kind = url.pathname.includes("linkedin-company") || url.pathname.includes("details") ? "details" : "jobs";
-    const method = init?.method ?? "GET";
-    const at = method === "POST" ? `${kind}_post` : url.pathname.includes("/actor-runs/run-jobs") ? "jobs_status" : null;
-    if (s.interrupt && trace.killed_at === undefined && at === s.interrupt && worker !== null) {
-      deadWorker = worker;
-      trace.killed_at = at;
-      onKilled();
-      return new Promise<Response>(() => {});
-    }
-    const json = (b: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } }));
-    if ((init?.method ?? "GET") === "POST") {
-      const refused = kind === "jobs" ? s.jobsStartStatus : s.detailsStartStatus;
-      if (refused) return json({ error: { type: "offline", message: "offline: Apify refused the run" } }, refused);
-      if (kind === "details") detailsUrl = (body as Json)?.companies?.[0] ?? null;
-      return json({ data: { id: `run-${kind}`, defaultDatasetId: `dataset-${kind}`, status: "RUNNING" } }, 201);
-    }
-    if (url.pathname.includes("/actor-runs/")) {
-      const run = url.pathname.split("/").at(-1)!;
-      if (run === "run-jobs" && s.jobsStatus === "unreadable") return json({ error: "offline status unavailable" }, 500);
-      if (run === "run-jobs" && s.jobsStatus === "running") return json({ data: { id: run, defaultDatasetId: "dataset-jobs", status: "RUNNING" } });
-      if (run === "run-jobs" && s.jobsStatus === "failed") return json({ data: { id: run, defaultDatasetId: "dataset-jobs", status: "FAILED" } });
-      return json({ data: { id: run, defaultDatasetId: run.replace("run-", "dataset-"), status: "SUCCEEDED",
-        finishedAt: new Date(Date.now() - 1000).toISOString(), usageTotalUsd: run === "run-jobs" ? 0.004 : 0.00405 } });
-    }
-    assert(url.pathname.includes("/datasets/"), url.pathname);
-    if (url.pathname.includes("dataset-details")) {
-      const rec = detailsUrl ? detailsFor(detailsUrl) : null;
-      return json(rec ? [structuredClone(rec)] : []);
-    }
-    if (s.jobsDatasetRaw !== undefined) return Promise.resolve(new Response(s.jobsDatasetRaw, { status: 200, headers: { "content-type": "application/json" } }));
-    return json(structuredClone(jobs));
+    return vendor(url, init, worker);
   };
   const gate = createAdmissionFetch({ db: client as never, ownApi: REST_URL, baseFetch: fakeTransport,
     log: (message, data) => trace.admissions.push({ message, data }) });
