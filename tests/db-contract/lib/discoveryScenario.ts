@@ -193,8 +193,8 @@ export interface Scenario {
   proposal?: Json;
   jobsStartStatus?: number;
   detailsStartStatus?: number;
-  /** Job-search status reads: `ok`, `unreadable` (HTTP 500), `running` (never finishes). */
-  jobsStatus?: "ok" | "unreadable" | "running";
+  /** Job-search status reads: `ok`, `unreadable` (HTTP 500), `running` (never finishes), `failed` (the run FAILED). */
+  jobsStatus?: "ok" | "unreadable" | "running" | "failed";
   /** Raw job-search dataset body (S18: malformed). */
   jobsDatasetRaw?: string;
   /** Every runtime model request after compilation times out (S21). */
@@ -207,9 +207,18 @@ export interface Scenario {
    *   `jobs_post`    the job-search start (its answer never arrives);
    *   `jobs_status`  the first status read of the job search — the run id is
    *                  already recorded, and no checkpoint has been written yet;
-   *   `details_post` the company-details start, after discovery checkpointed.
+   *   `details_post` the company-details start, after discovery checkpointed;
+   *   `jobs_run_id_write` the execution ledger's write of the job search's run
+   *                  id (`onRunStarted`): the vendor started the run and the
+   *                  admission ledger recorded its receipt, but
+   *                  `lead_execution_calls.provider_run_id` is never saved.
    */
-  interrupt?: "jobs_post" | "jobs_status" | "details_post";
+  interrupt?: "jobs_post" | "jobs_status" | "details_post" | "jobs_run_id_write";
+  /**
+   * With `interrupt`: runs after the first worker is dead and before the second
+   * worker claims the row (an operator, a reaper or a tamper between the two).
+   */
+  beforeResume?: (c: { m: Json; taskId: string }) => Promise<void>;
 }
 export interface Run {
   trace: Json; operations: Json[]; leads: Json[]; credits: Json[]; tasks: Json[]; refused: string[];
@@ -268,7 +277,19 @@ export async function runScenario(s: Scenario): Promise<Run> {
     const url = new URL(u instanceof Request ? u.url : String(u));
     const worker = missionAdmission.getStore()?.workerId ?? null;
     if (deadWorker !== null && worker === deadWorker) return new Promise<Response>(() => {});
-    if (url.origin === new URL(REST_URL).origin) return localFetch(u, init);
+    if (url.origin === new URL(REST_URL).origin) {
+      // The kill between the purchase and its ledger record: the PATCH that
+      // would save the job search's run id on its execution-ledger row.
+      if (s.interrupt === "jobs_run_id_write" && trace.killed_at === undefined && worker !== null
+          && (init?.method ?? "GET") === "PATCH" && url.pathname.endsWith("/lead_execution_calls")
+          && typeof init?.body === "string" && init.body.includes('"provider_run_id":"run-jobs"')) {
+        deadWorker = worker;
+        trace.killed_at = "jobs_run_id_write";
+        onKilled();
+        return new Promise<Response>(() => {});
+      }
+      return localFetch(u, init);
+    }
     const body = typeof init?.body === "string" ? (() => { try { return JSON.parse(init.body as string); } catch { return init.body; } })() : null;
     trace.requests.push({ method: init?.method ?? "GET", host: url.hostname, path: url.pathname, query: [...url.searchParams].filter(([k]) => k !== "token"),
       bytes: new TextEncoder().encode(String(init?.body ?? "")).length });
@@ -314,6 +335,7 @@ export async function runScenario(s: Scenario): Promise<Run> {
       const run = url.pathname.split("/").at(-1)!;
       if (run === "run-jobs" && s.jobsStatus === "unreadable") return json({ error: "offline status unavailable" }, 500);
       if (run === "run-jobs" && s.jobsStatus === "running") return json({ data: { id: run, defaultDatasetId: "dataset-jobs", status: "RUNNING" } });
+      if (run === "run-jobs" && s.jobsStatus === "failed") return json({ data: { id: run, defaultDatasetId: "dataset-jobs", status: "FAILED" } });
       return json({ data: { id: run, defaultDatasetId: run.replace("run-", "dataset-"), status: "SUCCEEDED",
         finishedAt: new Date(Date.now() - 1000).toISOString(), usageTotalUsd: run === "run-jobs" ? 0.004 : 0.00405 } });
     }
@@ -381,6 +403,10 @@ export async function runScenario(s: Scenario): Promise<Run> {
     } else {
       const ended = await Promise.race([first.then(() => true), killed.then(() => false)]);
       assert(!ended, `the first worker finished before reaching ${s.interrupt}`);
+      if (s.beforeResume) {
+        const [bound] = await sql`select task_id from public.lead_mission_queue where id = ${m.queueId}`;
+        await s.beforeResume({ m, taskId: bound.task_id });
+      }
       // The dead worker's queue lease lapses and a second worker claims the row,
       // as claim_next_lead_mission does: same row, its bound task and lineage.
       const second = uuid();
