@@ -522,12 +522,14 @@ export interface AdoptionBinding {
 export type VerifiedAdoption = { ok: true; runId: string; datasetId: string } | { ok: false; reason: string };
 
 /**
- * Is this `adopt` answer the run THIS start already bought? Every field is
- * checked twice: the answer must name the operation asked for and well-formed
- * run and dataset ids, and the operation row, read again, must be the same
- * Apify purchase (kind, actor, payload fingerprint) of the same task, bought
- * at this generation or an earlier one, naming the same run and dataset. Any
- * read error, missing field or mismatch is a refusal, never an adoption.
+ * Is this `adopt` answer the run a DEAD slice of this start already bought?
+ * Every field is checked twice: the answer must name the operation asked for
+ * and well-formed run and dataset ids, and the operation row, read again, must
+ * be the same Apify purchase (kind, actor, payload fingerprint) of the same
+ * task, bought by an EARLIER generation, naming the same run and dataset. A
+ * replay within the generation that bought it is not a recovery (that slice
+ * already holds the run) and keeps the 503. Any read error, missing field or
+ * mismatch is a refusal, never an adoption.
  */
 export async function verifiedAdoption(
   db: AdmissionDb, b: AdoptionBinding, d: Record<string, unknown>,
@@ -552,7 +554,7 @@ export async function verifiedAdoption(
     return { ok: false, reason: "operation_identity" };
   }
   if (row.task_id !== b.taskId) return { ok: false, reason: "task" };
-  if (typeof row.generation !== "number" || row.generation > b.generation) return { ok: false, reason: "generation" };
+  if (typeof row.generation !== "number" || row.generation >= b.generation) return { ok: false, reason: "generation" };
   if (row.provider_run_id !== runId) return { ok: false, reason: "run_conflict" };
   if (row.provider_dataset_id !== datasetId) return { ok: false, reason: "dataset_conflict" };
   return { ok: true, runId, datasetId };

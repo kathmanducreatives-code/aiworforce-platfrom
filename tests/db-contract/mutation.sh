@@ -312,20 +312,20 @@ prove_killed "SAF-008 bodyless purchase skips mandatory fields" "$gate_ts" \
 adopt_tests="$root/tests/db-contract/killResumeAdoption.contract.test.ts"
 adopt_unit="$root/tests/edge-functions/_shared/smokeAdoption.test.ts"
 prove_killed "adoption: a verified adopt still answered 503" "$gate_ts" \
-  '    if (decision.decision === "adopt" && c.kind === "provider" && c.captures === "apify_run") {' '    if (false) {' \
+  '        return adoptedRunResponse(adopted.runId, adopted.datasetId);' '        return refusal("adopt", adopted.runId);' \
   "$adopt_tests" "adoption: killed before the run id reached the execution ledger — the next worker adopts the paid run, reads it and finishes; one purchase, one charge"
 prove_killed "adoption: evidence not bound to the task" "$gate_ts" \
   '  if (row.task_id !== b.taskId) return { ok: false, reason: "task" };' '' \
   "$adopt_tests" "adoption fails closed: the recorded purchase belongs to another task"
-prove_killed "adoption: dataset id not required or checked" "$gate_ts" \
-  '  if (typeof datasetId !== "string" || !RUN_REF_RE.test(datasetId)) return { ok: false, reason: "dataset_id" };' '' \
-  "$adopt_tests" "adoption fails closed: the recorded run has no dataset id"
-prove_killed "adoption: a later generation's purchase adopted" "$gate_ts" \
-  ' || row.generation > b.generation) return' ') return' \
-  "$adopt_unit" "adoption: the operation row must be this start's purchase, of this task, bought no later than now"
+prove_killed "adoption: dataset id format not checked" "$gate_ts" \
+  '  if (typeof datasetId !== "string" || !RUN_REF_RE.test(datasetId)) return' '  if (typeof datasetId !== "string") return' \
+  "$adopt_tests" "adoption fails closed: a malformed dataset id is never read or adopted"
+prove_killed "adoption: a same- or later-generation purchase adopted" "$gate_ts" \
+  ' || row.generation >= b.generation) return' ') return' \
+  "$adopt_unit" "adoption: the operation row must be this start's purchase, of this task, bought by an earlier generation"
 prove_killed "adoption: a conflicting run id adopted" "$gate_ts" \
   '  if (row.provider_run_id !== runId) return { ok: false, reason: "run_conflict" };' '' \
-  "$adopt_unit" "adoption: the operation row must be this start's purchase, of this task, bought no later than now"
+  "$adopt_unit" "adoption: the operation row must be this start's purchase, of this task, bought by an earlier generation"
 prove_killed "adoption: another operation's answer adopted" "$gate_ts" \
   '  if (d.operation_key !== b.key) return { ok: false, reason: "operation_key" };' '' \
   "$adopt_unit" "adoption: the answer itself must be complete and well-formed"
