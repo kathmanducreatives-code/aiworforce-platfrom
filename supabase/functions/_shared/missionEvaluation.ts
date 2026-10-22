@@ -54,6 +54,8 @@
 import type { QualificationContext, BrainAuthority } from "./missionQualificationContext.ts";
 import { anyOfGroupKey, type MissionCriterion } from "./missionCriteria.ts";
 import { eventWithinWindow } from "./candidateObservation.ts";
+import { isControlledPhrase } from "./businessModelMatch.ts";
+import { receiptStance } from "./receiptStance.ts";
 import {
   findEvidence, hardFactsForPrompt, registryForPrompt,
   type EvidenceItem, type EvidenceRegistry,
@@ -253,6 +255,34 @@ const COMPANY_OWNED_TYPES: ReadonlySet<string> = new Set([
  * customer's own requirement is never silently dropped from the verdict.
  */
 const judged = (c: MissionCriterion) => c.status === "ok" || c.kind === "hard";
+
+/**
+ * E01 — the criteria whose evaluator PASS can RAISE a result, and the words that
+ * name each requirement. Everywhere else a verdict can only lower a check, so
+ * a misread quote cannot qualify a company there.
+ *   - an industry or business model outside the controlled vocabulary (Q3b, H05);
+ *   - a mandatory requirement no structured source establishes (Q3b-1, G08);
+ *   - an excluded company type outside the vocabulary (Q4); its PASS means "is NOT".
+ */
+function raisingRequirement(c: MissionCriterion): { terms: string[]; excludes: boolean } | null {
+  if (c.dimension === "exclusion") {
+    const v = c.value as { field?: unknown; value?: unknown } | null;
+    if (v?.field !== "excluded_company_types") return null;
+    const types = (Array.isArray(v.value) ? v.value : [v.value]).map((x) => String(x ?? "").trim()).filter(Boolean);
+    return types.some((t) => !isControlledPhrase(t)) ? { terms: types, excludes: true } : null;
+  }
+  if ((c.dimension === "industry" || c.dimension === "business_model") && !isControlledPhrase(c.value)) {
+    return { terms: [String(c.value ?? "")], excludes: false };
+  }
+  if (c.kind === "hard" && c.status !== "ok") {
+    const v = c.value as { min?: unknown; max?: unknown } | string | null;
+    const terms = typeof v === "string" ? [v]
+      : v && typeof v === "object" ? [v.min, v.max].filter((n) => n != null).map(String)
+      : [c.label.replace(/^[^:]*:\s*/, "")];
+    return { terms, excludes: false };
+  }
+  return null;
+}
 
 export function evaluationCriteria(input: Pick<MissionEvaluationInput, "mission">): readonly MissionCriterion[] {
   return Array.isArray(input.mission.criteria) ? input.mission.criteria as MissionCriterion[] : [];
@@ -1167,6 +1197,7 @@ export function parseMissionEvaluationStrict(
     const v = rows.length === 1 ? rows[0] : null;
     const evidence: CriterionVerdict["evidence"] = [];
     let invalid = false;
+    const raising = v?.result === "pass" ? raisingRequirement(c) : null;
     for (const receipt of Array.isArray(v?.evidence) ? v.evidence : []) {
       const id = typeof receipt?.evidence_id === "string" ? receipt.evidence_id : "";
       const excerpt = typeof receipt?.excerpt === "string" ? receipt.excerpt : "";
@@ -1195,7 +1226,15 @@ export function parseMissionEvaluationStrict(
         // funding keep their own dated rules (the open-role verifier's window,
         // `decideRecentlyFunded`).
         (c.time_window?.days && c.dimension !== "hiring" && c.dimension !== "funding" &&
-          !eventWithinWindow(item.occurred_at, c.time_window.days).inside)) {
+          !eventWithinWindow(item.occurred_at, c.time_window.days).inside) ||
+        // E01 — A GENUINE QUOTE MUST ALSO SAY IT. Where this PASS would raise the
+        // result, the cited sentence must be a current self-description naming
+        // the requirement — not a negation, an audience, a past or planned
+        // state, or a sentence about something else. For an excluded type the
+        // PASS means "is not", so only a sentence affirming the type refuses it.
+        (raising && (raising.excludes
+          ? receiptStance(raising.terms, String(item.source_text ?? ""), excerpt) === "affirms"
+          : receiptStance(raising.terms, String(item.source_text ?? ""), excerpt) !== "affirms"))) {
         invalid = true;
       } else evidence.push({ evidence_id: id, excerpt });
     }
