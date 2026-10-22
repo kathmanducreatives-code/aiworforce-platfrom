@@ -1,0 +1,222 @@
+{
+  "integration": {
+    "sha": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+    "runtime_scenarios": 40,
+    "status_counts": {
+      "NOT SUPPORTED": 10,
+      "FAIL": 12,
+      "PASS": 13,
+      "BLOCKED": 3,
+      "NOT TESTED": 2
+    },
+    "semantic_assertions": [
+      {
+        "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+        "id": "C01",
+        "name": "mandatory founder discussion",
+        "actual": "target",
+        "expected": "hard",
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+        "id": "C04",
+        "name": "separate 7-day hiring / 30-day social windows",
+        "actual": [
+          7,
+          90
+        ],
+        "expected": [
+          7,
+          30
+        ],
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+        "id": "H04",
+        "name": "sales-team growth is not geographic expansion",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+        "id": "C02",
+        "name": "cross-signal OR represented as alternatives",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      }
+    ],
+    "characterization": [
+      "ok | 85 passed | 0 failed"
+    ],
+    "raw_log_sha256": "e4dc8b9627dae1f37b1298b2b903db9cc8c5ecdcd3dbbf980833711ff84d86f0"
+  },
+  "pr113": {
+    "sha": "671edf35da4b4271ffcbd849ffece856ebd1057f",
+    "runtime_scenarios": 40,
+    "status_counts": {
+      "NOT SUPPORTED": 10,
+      "FAIL": 7,
+      "PASS": 18,
+      "BLOCKED": 3,
+      "NOT TESTED": 2
+    },
+    "semantic_assertions": [
+      {
+        "tested_commit": "671edf35da4b4271ffcbd849ffece856ebd1057f",
+        "id": "C01",
+        "name": "mandatory founder discussion",
+        "actual": "target",
+        "expected": "hard",
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "671edf35da4b4271ffcbd849ffece856ebd1057f",
+        "id": "C04",
+        "name": "separate 7-day hiring / 30-day social windows",
+        "actual": [
+          7,
+          90
+        ],
+        "expected": [
+          7,
+          30
+        ],
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "671edf35da4b4271ffcbd849ffece856ebd1057f",
+        "id": "H04",
+        "name": "sales-team growth is not geographic expansion",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "671edf35da4b4271ffcbd849ffece856ebd1057f",
+        "id": "C02",
+        "name": "cross-signal OR represented as alternatives",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      }
+    ],
+    "characterization": [
+      "ok | 85 passed | 0 failed"
+    ],
+    "raw_log_sha256": "e99dcd5647149b4ad1e590e3c202121f31c307aae186f16b1724bdb87e508df5"
+  },
+  "pr123": {
+    "sha": "2d0a6327978ba5605d12f6e2315af3df78041ccc",
+    "runtime_scenarios": 40,
+    "status_counts": {
+      "NOT SUPPORTED": 10,
+      "FAIL": 6,
+      "PASS": 19,
+      "BLOCKED": 3,
+      "NOT TESTED": 2
+    },
+    "semantic_assertions": [
+      {
+        "tested_commit": "2d0a6327978ba5605d12f6e2315af3df78041ccc",
+        "id": "C01",
+        "name": "mandatory founder discussion",
+        "actual": "target",
+        "expected": "hard",
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "2d0a6327978ba5605d12f6e2315af3df78041ccc",
+        "id": "C04",
+        "name": "separate 7-day hiring / 30-day social windows",
+        "actual": [
+          7,
+          90
+        ],
+        "expected": [
+          7,
+          30
+        ],
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "2d0a6327978ba5605d12f6e2315af3df78041ccc",
+        "id": "H04",
+        "name": "sales-team growth is not geographic expansion",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "2d0a6327978ba5605d12f6e2315af3df78041ccc",
+        "id": "C02",
+        "name": "cross-signal OR represented as alternatives",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      }
+    ],
+    "characterization": [
+      "ok | 85 passed | 0 failed"
+    ],
+    "raw_log_sha256": "982d6a2f8803f6e42be9edbe8d62e40ea29728ca3f4128927b146abcaefbc307"
+  },
+  "pr125": {
+    "sha": "a542b2f1e768e48d3ee794145b982d910d8253c7",
+    "runtime_scenarios": 40,
+    "status_counts": {
+      "NOT SUPPORTED": 10,
+      "FAIL": 5,
+      "PASS": 20,
+      "BLOCKED": 3,
+      "NOT TESTED": 2
+    },
+    "semantic_assertions": [
+      {
+        "tested_commit": "a542b2f1e768e48d3ee794145b982d910d8253c7",
+        "id": "C01",
+        "name": "mandatory founder discussion",
+        "actual": "target",
+        "expected": "hard",
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "a542b2f1e768e48d3ee794145b982d910d8253c7",
+        "id": "C04",
+        "name": "separate 7-day hiring / 30-day social windows",
+        "actual": [
+          7,
+          90
+        ],
+        "expected": [
+          7,
+          30
+        ],
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "a542b2f1e768e48d3ee794145b982d910d8253c7",
+        "id": "H04",
+        "name": "sales-team growth is not geographic expansion",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      },
+      {
+        "tested_commit": "a542b2f1e768e48d3ee794145b982d910d8253c7",
+        "id": "C02",
+        "name": "cross-signal OR represented as alternatives",
+        "actual": false,
+        "expected": true,
+        "status": "FAIL"
+      }
+    ],
+    "characterization": [
+      "ok | 85 passed | 0 failed"
+    ],
+    "raw_log_sha256": "00d24243170a2a9e44e0638def075b181d4547d93d081eb77b0abddace6e9258"
+  }
+}
