@@ -40,7 +40,9 @@ export function sourcePacketView(packet: unknown, scope: PacketViewScope) {
   const p = scoped(packet, true), brain = scoped(p.brain), e = row(p.evidence);
   if (
     !scope.workspace_id || !scope.client_binding_id || !scope.task_id ||
-    p.version !== "pilot_context_packet_v1" ||
+    !(p.version === "pilot_context_packet_v1" ||
+      p.version === "pilot_context_packet_v2" &&
+        row(p.approval).version === "pilot_context_v2") ||
     e.qualification_evaluated !== false || e.canonical_decision !== null ||
     list(e.verified_facts).length ||
     Object.keys(row(p.capabilities)).length !== 5 ||
