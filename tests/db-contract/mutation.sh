@@ -321,6 +321,25 @@ prove_killed "smoke planner shown every authorised actor (Codex P1)" "$planner_t
   "    const payload = approved ? smokePlannerPayload(i.payload, approved) : i.payload;" "    const payload = i.payload;" \
   "$planner_tests" "smoke planner: the execution-planner request for the smoke's mission fits the Luna template"
 
+# ── PROOF: no self-service membership ──────────────────────────────────────
+# Build WITHOUT 20261022120000_close_workspace_self_join and require the
+# membership test to fail on the self-join itself. The migration is one proof,
+# not one per statement: each policy change is backed by a grant revoke, so
+# removing either alone still refuses the write (defence in depth, by design).
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261022120000_close_workspace_self_join.sql \
+  "$root/tests/db-contract/run.sh" "$root/tests/db-contract/workspaceMembership.contract.test.ts" >"$out" 2>&1
+status=$?
+set -e
+sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -E '\.\.\. (ok|FAILED)|passed \||^omitted ' || true
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "a signed-in non-member cannot join another workspace, as owner or otherwise ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: membership tests without the self-join migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the migration an outsider joins another workspace as owner"
+ran=$((ran + 1))
+fi
+
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
 if [ -n "${MUTATION_TALLY_FILE:-}" ]; then
