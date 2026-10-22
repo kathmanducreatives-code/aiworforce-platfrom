@@ -25,6 +25,7 @@ import {
   evidenceFromRegistry,
 } from "../../../supabase/functions/_shared/evidenceGraph.ts";
 import { evaluateEligibility } from "../../../supabase/functions/_shared/candidateEligibility.ts";
+import { qualificationHoldsOf } from "../../../supabase/functions/_shared/qualificationHold.ts";
 import {
   buildWorkbenchMissionView,
   candidateDecision,
@@ -157,12 +158,15 @@ function outcome(
   reg = r,
 ) {
   const parsed = parseMissionEvaluationStrict(raw, reg, criteria);
+  // Production carries evaluator holds into canonical and Workbench decisions.
+  const holds = qualificationHoldsOf({ mission_evaluation: parsed.evaluation } as never);
   const canonical = evaluateEligibility(
     criteria,
     graph,
     parsed.evaluation.criterion_verdicts,
+    holds,
   );
-  const c = candidate(graph, parsed.evaluation.criterion_verdicts);
+  const c = { ...candidate(graph, parsed.evaluation.criterion_verdicts), holds };
   const decision = candidateDecision({ criteria, candidate: c, anchor: null });
   const view = buildWorkbenchMissionView({
     mission: { requested_count: 1, execution_limit: 1, anchor: null },
@@ -522,7 +526,9 @@ Deno.test("audit G09 parsed aggregate FAIL overridden by canonical factual PASS"
   gap("G09", {
     eligibility: x.canonical.eligibility,
     surfaced: !!x.decision.label,
-  }, { eligibility: "ineligible", surfaced: false });
+  // An unsupported aggregate FAIL is HELD (pending, unlabelled), never
+  // qualified; INELIGIBLE needs an evidence-backed failed mandatory criterion.
+  }, { eligibility: "pending", surfaced: false });
 });
 Deno.test("audit G10 current registry item with foreign company_key is refused", () => {
   const reg = registry();
