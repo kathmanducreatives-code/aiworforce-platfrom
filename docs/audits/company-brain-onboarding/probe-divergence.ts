@@ -1,4 +1,4 @@
-// OFFLINE PROBE (audit evidence, not committed): does an edit made on the Company
+// OFFLINE PROBE (audit evidence; reproduces the "before" state on launch/hardening): does an edit made on the Company
 // Brain page reach (a) the lead compiler and (b) the <company_brain> block every
 // run-agent prompt gets? Uses the real production modules; no network.
 const root = Deno.args[0];
@@ -24,9 +24,8 @@ const afterPageEdit = { ...afterOnboarding, target_customer: { ...afterOnboardin
 const afterClear = { ...afterOnboarding, target_customer: { ...afterOnboarding.target_customer, industries: [] } };
 
 const compiled = (p: unknown) => {
-  const c = compileCompanyBrainContext({ workspace_id: "ws", profile: p }) as Record<string, unknown>;
-  const icp = (c.icp ?? c) as Record<string, unknown>;
-  return JSON.stringify(icp.industries ?? icp.target_industries ?? (c as any).industries ?? "(see keys: " + Object.keys(c).slice(0, 12).join(",") + ")");
+  const c = compileCompanyBrainContext({ workspace_id: "ws", profile: p }) as { icp: { industries: string[] } };
+  return JSON.stringify(c.icp.industries);
 };
 const icpLine = (p: unknown) => (renderCompanyBrainBlock(p, true).split("\n").find((l: string) => l.startsWith("ICP:")) ?? "(no ICP line)");
 for (const [label, p] of [["after onboarding", afterOnboarding], ["after page edit → Logistics", afterPageEdit], ["after page clears industries", afterClear]] as const) {
