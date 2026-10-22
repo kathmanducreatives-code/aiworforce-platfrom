@@ -36,18 +36,26 @@ const STOP = new Set([
   "businesses", "type", "types", "size", "employees", "employee", "stage",
 ]);
 
-/** The requirement's content words, as 5-character stems ("recruiting agencies" → recru, agenc). */
+/**
+ * The requirement's content words: 5-character stems for words ("recruiting
+ * agencies" → recru, agenc), WHOLE short tokens for acronyms ("HR", "EV",
+ * "3D" → =hr, =ev, =3d), and bare numbers for counts ("23").
+ */
 export function requirementStems(terms: readonly string[]): string[] {
   const out = new Set<string>();
   for (const t of terms) {
     for (const w of String(t ?? "").toLowerCase().split(/[^a-z0-9]+/)) {
+      if (!w || STOP.has(w)) continue;
       if (/^\d+$/.test(w)) { out.add(w); continue; }
-      if (w.length < 3 || STOP.has(w)) continue;
+      if (w.length <= 2) { out.add(`=${w}`); continue; }
       out.add(w.slice(0, 5));
     }
   }
   return [...out];
 }
+
+/** A headcount noun: a bare number is a company size only beside one ("23 employees", "team of 23"). */
+const HEADCOUNT = /^(?:employees?|people|persons?|staff|staffers|team|teammates|members?|engineers|fte|ftes|headcount|strong)$/;
 
 const NEGATION = /\b(?:not|no|never|nor|neither|without|isn'?t|aren'?t|wasn'?t|weren'?t|no\s+longer)\b/;
 const NOT_ONLY = /\bnot\s+(?:only|just|merely)\b/;
@@ -73,7 +81,11 @@ export function receiptStance(terms: readonly string[], source: string, excerpt:
   const stems = requirementStems(terms);
   const sentence = sentenceOf(source, excerpt).toLowerCase();
   const words = sentence.split(/[^a-z0-9']+/).filter(Boolean);
-  const hit = words.findIndex((w) => stems.some((s) => /^\d+$/.test(s) ? w === s : w.startsWith(s)));
+  const matches = (w: string, i: number) => stems.some((s) =>
+    s.startsWith("=") ? w === s.slice(1)
+    : /^\d+$/.test(s) ? w === s && words.slice(Math.max(0, i - 3), i + 4).some((x) => HEADCOUNT.test(x))
+    : w.startsWith(s));
+  const hit = words.findIndex(matches);
   if (stems.length === 0 || hit < 0) return "irrelevant";
   if (NOT_CURRENT.test(sentence)) return "not_current";
   // The five words before the requirement are the clause that governs it.

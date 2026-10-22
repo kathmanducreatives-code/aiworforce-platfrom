@@ -39,6 +39,18 @@ Deno.test("stance: 'not only' is not a negation; a later clause is not the gover
   assertEquals(receiptStance(["startup"], "Co is a seed-stage startup with no debt.", "a seed-stage startup"), "affirms");
 });
 
+Deno.test("stance: acronyms are whole words, so a short industry name can still be established", () => {
+  assertEquals(requirementStems(["HR tech"]), ["=hr", "tech"]);
+  assertEquals(receiptStance(["VR"], "Acme is a VR studio for training.", "a VR studio"), "affirms");
+  assertEquals(receiptStance(["PR agencies"], "Acme is a PR agency in Austin.", "a PR agency"), "affirms");
+  assertEquals(receiptStance(["VR"], "Acme builds CRM software.", "CRM software"), "irrelevant", "a short token is never a prefix");
+});
+
+Deno.test("stance: a number is a company size only beside a headcount noun", () => {
+  assertEquals(receiptStance(["23"], "Acme has over 23 years of experience.", "over 23 years"), "irrelevant");
+  assertEquals(receiptStance(["23"], "We are 23 employees in Boston.", "23 employees"), "affirms");
+});
+
 Deno.test("stance: exact counts are read as numbers, and the cited sentence is the unit", () => {
   assertEquals(requirementStems(["23"]), ["23"]);
   assertEquals(receiptStance(["23"], "Our team of 23 people builds software. We plan to grow to 40.", "team of 23"), "affirms");
