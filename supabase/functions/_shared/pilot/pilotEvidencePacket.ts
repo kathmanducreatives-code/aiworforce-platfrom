@@ -226,6 +226,7 @@ export async function buildEvidencePacket(
   input: ApprovedPacketInputs,
   asOf: string,
   sellerDomain: string,
+  ordering: "insertion_v1" | "canonical_v2" = "insertion_v1",
 ) {
   const approved = await validateInputs(input, scope, asOf),
     c = approved.csv,
@@ -322,6 +323,11 @@ export async function buildEvidencePacket(
   if (!n.source_updated_at) unknowns.add("source_timestamp_missing:csv");
   else unknowns.add("source_updated_time_is_not_event_time:csv");
   if (facts.length > 64) refuse("snapshot_fact_limit");
+  // V2 is explicit in the signed context approval. Keep historical V1 byte/order
+  // semantics intact; never silently rebase an existing model's F1/F2 references.
+  if (ordering === "canonical_v2") {
+    facts.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  }
   return boundedJson({
     identity,
     target,

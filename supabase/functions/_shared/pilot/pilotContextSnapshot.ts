@@ -134,7 +134,7 @@ export function reviewBrainSnapshot(
   }, 64000) as BrainReview;
 }
 export interface SnapshotApproval {
-  version: "pilot_context_v1";
+  version: "pilot_context_v1" | "pilot_context_v2";
   brain_hash: string;
   inputs_hash: string;
   approved_sections: string[];
@@ -150,7 +150,7 @@ function approvalOf(v: unknown): SnapshotApproval {
     "as_of",
   ]);
   if (
-    a.version !== "pilot_context_v1" ||
+    (a.version !== "pilot_context_v1" && a.version !== "pilot_context_v2") ||
     ![a.brain_hash, a.inputs_hash].every((h) =>
       typeof h === "string" && /^[a-f0-9]{64}$/.test(h)
     ) || !Array.isArray(a.approved_sections) ||
@@ -160,7 +160,7 @@ function approvalOf(v: unknown): SnapshotApproval {
   return a as unknown as SnapshotApproval;
 }
 export interface FrozenPilotPacket extends PacketScope {
-  version: "pilot_context_packet_v1";
+  version: "pilot_context_packet_v1" | "pilot_context_packet_v2";
   actor_id: string;
   binding_hash: string;
   enrollment_hash: string;
@@ -236,10 +236,13 @@ async function materialize(
     normalized,
     approval.as_of,
     sellerDomain,
+    approval.version === "pilot_context_v2" ? "canonical_v2" : "insertion_v1",
   );
   const packet = boundedJson({
     ...scope,
-    version: "pilot_context_packet_v1" as const,
+    version: approval.version === "pilot_context_v2"
+      ? "pilot_context_packet_v2" as const
+      : "pilot_context_packet_v1" as const,
     actor_id: actor,
     binding_hash,
     enrollment_hash,
@@ -331,7 +334,10 @@ export async function freezePilotContext(
   const saved = await deps.snapshots.read(scope);
   if (saved) {
     if (
-      saved.version !== "pilot_context_packet_v1" ||
+      saved.version !==
+        (approval.version === "pilot_context_v2"
+          ? "pilot_context_packet_v2"
+          : "pilot_context_packet_v1") ||
       saved.workspace_id !== scope.workspace_id ||
       saved.client_binding_id !== scope.client_binding_id ||
       saved.task_id !== scope.task_id || saved.actor_id !== deps.user_id ||

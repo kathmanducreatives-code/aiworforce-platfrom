@@ -88,8 +88,18 @@ export class SyntheticReviewStore implements PilotExportStore {
     return structuredClone(receipt);
   }
 }
-export async function reviewFixture(which: "A" | "B" = "A") {
-  const x = await briefFixture(which),
+export async function reviewFixture(
+  which: "A" | "B" = "A",
+  contextVersion = "pilot_context_v1",
+  beforeCapture?: Parameters<typeof briefFixture>[4],
+) {
+  const x = await briefFixture(
+      which,
+      {},
+      "normal",
+      contextVersion,
+      beforeCapture,
+    ),
     draft = await runCallBrief(x.scope, x.deps),
     events = new SyntheticReviewStore();
   const policy = {

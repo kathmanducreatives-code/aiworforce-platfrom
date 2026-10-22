@@ -19,7 +19,13 @@ export interface BriefCatalog {
 }
 export function buildBriefCatalog(packet: FrozenPilotPacket): BriefCatalog {
   if (
-    packet.version !== "pilot_context_packet_v1" ||
+    !["pilot_context_v1", "pilot_context_v2"].includes(
+      packet.approval.version,
+    ) ||
+    packet.version !==
+      (packet.approval.version === "pilot_context_v2"
+        ? "pilot_context_packet_v2"
+        : "pilot_context_packet_v1") ||
     packet.evidence.canonical_decision !== null ||
     packet.evidence.qualification_evaluated !== false ||
     packet.evidence.verified_facts.length

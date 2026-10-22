@@ -128,7 +128,11 @@ export class MemorySnapshots implements PilotSnapshotStore {
     return structuredClone(this.packets.get(k)!);
   }
 }
-export async function snapshotFixture(selectedScope = scope, userId = UA) {
+export async function snapshotFixture(
+  selectedScope = scope,
+  userId = UA,
+  version: unknown = "pilot_context_v1",
+) {
   const f = fixture();
   const row = f.n.tables.company_brain.find((r) =>
     r.workspace_id === selectedScope.workspace_id
@@ -165,7 +169,7 @@ export async function snapshotFixture(selectedScope = scope, userId = UA) {
   t.payload = {
     ...t.payload as Record<string, unknown>,
     pilot_context: {
-      version: "pilot_context_v1",
+      version,
       brain_hash: await digest(brain),
       inputs_hash: await digest(approvedInputs),
       approved_sections: brain.approved_sections,

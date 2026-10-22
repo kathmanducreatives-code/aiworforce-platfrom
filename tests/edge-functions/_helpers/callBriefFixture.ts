@@ -9,6 +9,7 @@ import {
   CB,
   CRED_A,
   CRED_B,
+  type Fixture,
   fixture,
   task,
   TASK_A,
@@ -78,6 +79,8 @@ export async function briefFixture(
     | "conflict"
     | "stale"
     | "misleading_excerpt" = "normal",
+  contextVersion = "pilot_context_v1",
+  beforeCapture?: (f: Fixture, scope: PacketScope) => Promise<void>,
 ) {
   const f = fixture(),
     scope = {
@@ -87,6 +90,7 @@ export async function briefFixture(
     },
     user = which === "A" ? UA : UB,
     credential = which === "A" ? CRED_A : CRED_B;
+  await beforeCapture?.(f, scope);
   const row = f.n.tables.company_brain.find((r) =>
     r.workspace_id === scope.workspace_id
   )!;
@@ -137,7 +141,7 @@ export async function briefFixture(
     ...task(f, scope.task_id).payload as Record<string, unknown>,
     pilot_model: selection,
     pilot_context: {
-      version: "pilot_context_v1",
+      version: contextVersion,
       brain_hash: await digest(brain),
       inputs_hash: await digest(approved),
       approved_sections: brain.approved_sections,
