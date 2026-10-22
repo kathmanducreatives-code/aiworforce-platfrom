@@ -34,7 +34,8 @@ import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
 import { renderContentBrain, type RecentContent } from "../_shared/contentBrainContext.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
-import { loadV2OwnedTaskIds } from "../_shared/leadMissionV2Request.ts";
+import { loadV2OwnedTaskIds, loadV2OwnedTaskIdsStrict } from "../_shared/leadMissionV2Request.ts";
+import { decideFirstSliceReentry, type ReentryRow, takeReentryGeneration } from "../_shared/firstSliceReentry.ts";
 import {
   isDirectLeadActionAttempt,
   validateDirectLeadActionRequest,
@@ -1339,7 +1340,32 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
       }, 409);
     }
   }
-  if (resume_task_id) {
+  // ── THE QUEUE'S FIRST SLICE DIED BEFORE ITS FIRST CHECKPOINT ─────────────
+  //
+  // The queue bound this task before any paid boundary and resumes nothing
+  // else, so the refusal below (`no_checkpoint`) would be final: the mission
+  // could never run again. It runs as a first slice on the same task, under a
+  // new generation; see firstSliceReentry.ts for why that buys nothing twice.
+  let reentryGeneration: number | null = null;
+  if (resume_task_id && inProcess.continuationOwner === "v2_queue") {
+    const { data: row } = await supabase
+      .from("tasks").select("id, workspace_id, status, result, payload, checkpoint_version")
+      .eq("id", resume_task_id).maybeSingle();
+    const owned = row ? await loadV2OwnedTaskIdsStrict(supabase as never, [resume_task_id]) : null;
+    const reentry = decideFirstSliceReentry(row as ReentryRow | null, workspace_id, resume_task_id, owned?.has(resume_task_id) ?? false);
+    if (reentry.ok) {
+      reentryGeneration = await takeReentryGeneration(supabase as never, resume_task_id, workspace_id, reentry.from);
+      console.log("[run-agent][first-slice-reentry]", {
+        task_id: resume_task_id, from_generation: reentry.from, generation: reentryGeneration,
+        taken: reentryGeneration !== null,
+      });
+      if (reentryGeneration !== null) {
+        task = { id: resume_task_id };
+        resumedTaskResult = ((row as { result?: Record<string, unknown> | null }).result ?? {}) as Record<string, unknown>;
+      }
+    }
+  }
+  if (resume_task_id && reentryGeneration === null) {
     const { data: existing } = await supabase
       .from("tasks").select("id, workspace_id, status, result, payload")
       .eq("id", resume_task_id).maybeSingle();
@@ -1558,7 +1584,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
   // it in SQL (`fencedTaskUpdate`): a newer claim bumps it, so a stale
   // generation's writes change zero rows.
   const sliceFence: SliceFence = {
-    generation: await resolveSliceGeneration(supabase as never, task.id, heldClaim?.checkpointVersion ?? null),
+    generation: await resolveSliceGeneration(supabase as never, task.id, heldClaim?.checkpointVersion ?? reentryGeneration),
   };
   guardFence = sliceFence;
   // ── A SUPERSEDED SLICE STOPS BUYING ──────────────────────────────────────
