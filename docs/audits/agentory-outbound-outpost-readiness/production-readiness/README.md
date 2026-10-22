@@ -91,10 +91,10 @@ proofs count as FAIL for customer readiness, even if a narrower local test passe
 | ID | Phase / criterion | Type | Current evidence / verdict |
 | --- | --- | --- | --- |
 | B0 | reviewed stack, dependency/owner map, one-client invariant | docs | PASS phase 0 |
-| S1 | one immutable client per workspace; private composite task/client ownership | migration + native tests | FAIL pending this security slice's receipt |
-| S2 | anon/viewer/foreign/shared-member direct-API isolation; effective grants | migration + actual PostgREST | FAIL pending native proof |
-| S3 | current owner/admin membership, live original session, expiry, deleted/revoked session and malformed claims | migration + auth integration | FAIL pending native proof; GoTrue/browser proof still separate |
-| S4 | immutable public task ownership or permanent invalidation after reassignment; native relational parents | migration + backend coordination | FAIL; existing id-only FKs insufficient |
+| S1 | one immutable client per workspace; private composite task/client ownership | migration + native tests | PASS native identity foundation; not enabled |
+| S2 | anon/viewer/foreign/shared-member direct-API isolation; effective grants | migration + actual PostgREST | private PASS; **public task API FAIL**, native viewer probe HTTP 200/1 row |
+| S3 | current owner/admin membership, live original session, expiry, deleted/revoked session and malformed claims | migration + auth integration | DB predicates PASS; GoTrue/browser/epoch integration still FAIL |
+| S4 | immutable public task ownership or permanent invalidation after reassignment; native relational parents | migration + backend coordination | scoped native owner guard PASS; owner acceptance and broader artifact parents still gates |
 | S5 | role-aware Brain writer/RLS and workspace-filtered login/context | migration + Brain application | FAIL; Brain-owner handoff |
 | D1 | frozen Brain/source V2 JSONB roundtrip, insert-once, no recapture | migration + adapter | FAIL native; P8 offline PASS |
 | D2 | atomic drafts/revisions/edits/approvals/revocation/operations, exact CSV versions | migration + adapter | FAIL native; P7 offline PASS |
@@ -124,3 +124,6 @@ Local disposable SQL and mocks are authorized by the current request. No hosted
 migration, merge, deployment, paid call, real data, communication, or cross-owner
 implementation without coordination. Schema proposals remain held; no active
 migration runner picks them up. A native RLS pass is not production readiness.
+
+Phase 1's exact proof scope, defect/root cause, remaining public-API bypass and
+rollback are in [the native-security receipt](phase-1-native-security.md).

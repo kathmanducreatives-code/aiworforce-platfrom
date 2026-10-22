@@ -1,0 +1,64 @@
+name: Outpost native identity foundation (not pilot acceptance)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/outpost-native-security.yml'
+      - 'tests/outpost-native/**'
+      - 'supabase/functions/_shared/pilot/**'
+      - 'supabase/functions/_shared/workspaceAccessGuard.ts'
+      - 'supabase/migrations/**'
+      - 'supabase/migrations-held/20261022140824_outpost_native_identity_security.sql'
+      - 'docs/audits/agentory-outbound-outpost-readiness/production-readiness/native-security-rollback.sql'
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  identity-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.8.2
+      - name: Pinned offline-contract PostgREST
+        env:
+          POSTGREST_VERSION: v12.2.3
+          POSTGREST_SHA256: 9f71269e61ac3a940281e93ff415760f5957e430e475ba4c3889f3ede7d5527c
+        run: |
+          dir="$RUNNER_TEMP/outpost-postgrest"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/postgrest.tar.xz" "https://github.com/PostgREST/postgrest/releases/download/$POSTGREST_VERSION/postgrest-$POSTGREST_VERSION-linux-static-x64.tar.xz"
+          echo "$POSTGREST_SHA256  $dir/postgrest.tar.xz" | sha256sum -c -
+          tar -xJf "$dir/postgrest.tar.xz" -C "$dir"
+          echo "POSTGREST_BIN=$dir/postgrest" >> "$GITHUB_ENV"
+      - name: Native grants, ownership, session predicates, direct API and rollback
+        run: tests/outpost-native/run.sh | tee /tmp/outpost-native.log
+      - name: Ownership guard mutation must fail its native contracts
+        run: |
+          if OUTPOST_NATIVE_OMIT_OWNER_GUARD=1 tests/outpost-native/run.sh > /tmp/outpost-native-mutant.log 2>&1; then
+            echo '::error::Removing the ownership guard did not fail the native contracts'
+            exit 1
+          fi
+          grep -q 'task mutation and restoration cannot revive.*FAILED' /tmp/outpost-native-mutant.log
+          grep -q 'parent capture locks serialize concurrent ownership mutation.*FAILED' /tmp/outpost-native-mutant.log
+          echo 'Native mutation caught the missing ownership guard; this is not customer readiness.'
+      - name: Public task readiness audit (known owner blocker)
+        id: public-task-readiness
+        continue-on-error: true
+        run: OUTPOST_NATIVE_PUBLIC_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-public-audit.log
+      - name: Readiness is separate from identity foundation
+        if: always()
+        run: |
+          echo 'Identity foundation tests are not customer-pilot acceptance. P1–P8 stay disabled.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Public-task audit outcome: ${{ steps.public-task-readiness.outcome }}. Native persistence, shared permissions and executor/recovery gates remain open.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve proof logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: outpost-native-identity-proofs
+          path: /tmp/outpost-native*.log
+          retention-days: 7
