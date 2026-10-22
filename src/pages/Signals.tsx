@@ -235,6 +235,7 @@ export default function Signals() {
         onOpenChange={setEditRadarOpen}
         workspaceId={workspaceId}
         brainProfile={(brainData?.profile as Record<string, any> | null) ?? null}
+        brainUpdatedAt={brainData?.updated_at ?? null}
         onSaved={() => {
           void refreshBrain();
           toast.success('Radar preferences saved');

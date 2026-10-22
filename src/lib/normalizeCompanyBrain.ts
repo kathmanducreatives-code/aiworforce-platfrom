@@ -205,8 +205,13 @@ function normalizeDisqualifiers(v: unknown, legacyIcpDisq: unknown): Disqualifie
   const domains = asStringArray(o.domains);
   const keywords = asStringArray(o.keywords);
   const titles = asStringArray(o.titles);
-  // Legacy: icp.disqualifiers used to be a flat string[] of industries.
-  if (industries.length === 0 && legacyIcpDisq != null) {
+  // Legacy: icp.disqualifiers used to be a flat string[] of industries. It is a
+  // fallback only while the structured buckets hold NOTHING. Once any bucket has
+  // a value the structured data is authoritative — otherwise clearing the
+  // industry exclusions resurrected the legacy mirror, which flattens every
+  // bucket, as industry exclusions.
+  const structuredEmpty = !industries.length && !company_types.length && !domains.length && !keywords.length && !titles.length;
+  if (structuredEmpty && legacyIcpDisq != null) {
     const legacy = asStringArray(legacyIcpDisq);
     return { industries: legacy, company_types, domains, keywords, titles };
   }

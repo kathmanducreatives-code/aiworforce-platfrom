@@ -213,6 +213,9 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
       setBackgroundUpdate(false);
       setSaved(true);
       setTimeout(() => setSaved(false), reduce ? 0 : 1400);
+    } catch {
+      // The page has already said why. The edit stays in the editor (and its
+      // local draft), so nothing typed is lost to a conflict or a failed save.
     } finally {
       setBusy(false);
     }

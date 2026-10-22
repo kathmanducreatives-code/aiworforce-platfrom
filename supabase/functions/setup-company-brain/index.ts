@@ -124,14 +124,33 @@ Deno.serve(async (req) => {
       .from("company_brain").select("profile").eq("workspace_id", workspace_id).maybeSingle();
     return ((data?.profile as AnyObj) ?? {});
   }
+  // COMPARE-AND-SWAP. This writes the whole profile, so a plain read-modify-
+  // write could revert an edit saved between the read and the write. The write
+  // only lands on the version it read; on a race it re-reads and re-applies the
+  // patch (a small top-level merge), and gives up loudly after a few tries.
   async function saveProfile(patch: AnyObj, extra: AnyObj = {}) {
-    const current = await loadProfile();
-    const merged = { ...current, ...patch };
-    const { error } = await admin.from("company_brain").upsert({
-      workspace_id, profile: merged, updated_at: new Date().toISOString(), ...extra,
-    }, { onConflict: "workspace_id" });
-    if (error) throw error;
-    return merged;
+    return saveProfileWith((current) => ({ ...current, ...patch }), extra);
+  }
+  async function saveProfileWith(merge: (current: AnyObj) => AnyObj, extra: AnyObj = {}) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data: row } = await admin
+        .from("company_brain").select("profile, updated_at").eq("workspace_id", workspace_id).maybeSingle();
+      const merged = merge((row?.profile as AnyObj) ?? {});
+      if (!row) {
+        const { error } = await admin.from("company_brain").insert({
+          workspace_id, profile: merged, updated_at: new Date().toISOString(), ...extra,
+        });
+        if (!error) return merged;
+        continue; // a concurrent insert won; retry as an update
+      }
+      const { data: written, error } = await admin.from("company_brain")
+        .update({ profile: merged, updated_at: new Date().toISOString(), ...extra })
+        .eq("workspace_id", workspace_id).eq("updated_at", row.updated_at)
+        .select("workspace_id");
+      if (error) throw error;
+      if (written?.length) return merged;
+    }
+    throw new Error("company_brain changed concurrently; retry");
   }
 
   try {
@@ -145,9 +164,13 @@ Deno.serve(async (req) => {
 
     if (action === "save_structured") {
       // Shallow-merge nested groups. Never invent values; absent keys stay empty.
+      // Targeting (`icp`, `competitors`) is NOT writable here: those legacy
+      // blocks are mirrors of the structured Brain, maintained by the one edit
+      // path (generate-company-brain-draft `update`). Writing them here is how a
+      // second, divergent copy of the ICP came to exist.
       const allowed: (keyof StructuredBrainPatch)[] = [
-        "founder", "company", "icp", "goals", "gtm", "positioning",
-        "brand_voice", "competitors", "approval_rules",
+        "founder", "company", "goals", "gtm", "positioning",
+        "brand_voice", "approval_rules",
         "workflow_preferences", "integration_status", "onboarding_meta",
       ];
       const patch: StructuredBrainPatch = {};
@@ -155,12 +178,7 @@ Deno.serve(async (req) => {
         const v = (body as AnyObj)[k];
         if (v && typeof v === "object") (patch as AnyObj)[k] = v;
       }
-      const current = await loadProfile();
-      const merged = mergeProfile(current, patch);
-      const { error } = await admin.from("company_brain").upsert({
-        workspace_id, profile: merged, updated_at: new Date().toISOString(),
-      }, { onConflict: "workspace_id" });
-      if (error) throw error;
+      const merged = await saveProfileWith((current) => mergeProfile(current, patch));
       return json({ ok: true, profile: merged });
     }
 

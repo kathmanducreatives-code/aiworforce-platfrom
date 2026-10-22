@@ -98,9 +98,12 @@ Deno.test("5. every writer of the brain refreshes what reads it", () => {
   const dashboard = Deno.readTextFileSync(
     new URL("src/pages/CompanyBrainDashboard.tsx", ROOT),
   );
+  // The settings editor writes through the one authorized save path
+  // (generate-company-brain-draft `update`), never the row directly — see
+  // tests/edge-functions/companyBrainWritePaths.test.ts.
   assert(
-    /\.from\('company_brain'\)[\s\S]{0,200}\.update\(/.test(dashboard),
-    "the settings editor is expected to write the row",
+    /saveCompanyBrainPatch\(/.test(dashboard),
+    "the settings editor is expected to write the row through the shared save",
   );
   assert(
     /refresh\(\)/.test(dashboard),
