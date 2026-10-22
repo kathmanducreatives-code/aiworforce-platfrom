@@ -12,7 +12,7 @@ Phase 0–8 below is distinct from the historical P1–P8 feature implementation
 
 | Phase | Status | Branch / PR | Validation | Remaining blockers |
 | --- | --- | --- | --- | --- |
-| 0 — architecture/readiness audit | COMPLETE (roadmap awaiting review) | `codex/nosh-readiness-master-plan`; documentation PR linked below | repository/PR/CI/interface audit; documentation checks in phase receipt | User review; DEC-01 and owner contracts are planned dependencies, not assumed approvals |
+| 0 — architecture/readiness audit | COMPLETE (roadmap awaiting review) | `codex/nosh-readiness-master-plan`; draft #152, stacked on #151 | repository/PR/CI/interface audit; documentation checks in phase receipt | User review; DEC-01 and owner contracts are planned dependencies, not assumed approvals |
 | 1 — native security | PARTIAL; new work NOT APPROVED | historical foundation `codex/outpost-native-security`, #151, `001fa9db9a1a07266dfc700b0d7a21fbc322c7df` | 42 native identity passed; 2 intended ownership-mutant failures; public-task viewer probe FAIL; standard/full CI FAIL | SEC-01..04; CI-01; DEC-01; AUTH-01/EXEC-01; real GoTrue/session proof; native public API/Edge ownership |
 | 2 — transactional persistence | PENDING / NOT APPROVED | no implementation PR yet; P3/P5/P6/P7 interfaces are not persistence | offline contracts only; no native durable import/snapshot/review/approval adapter | Phase 1; DATA-01/02; REPLAY-01; original-task lifecycle and shared receipt contract |
 | 3 — legacy executor containment | PENDING / NOT APPROVED | owner #145/#149/#150 are dependencies, not pilot containment completion | no complete pilot route-by-route native acceptance | Phase 1/2; backend EXEC-01; Brain context seam |
@@ -32,8 +32,10 @@ subject to owner coordination; it does not resolve DEC-01 or approve external ac
 - Documentation branch: `codex/nosh-readiness-master-plan`.
 - Worktree: `/Users/prasidha/Downloads/screeningpilot-main/nosh-readiness-master-plan`.
 - Base: #151 `001fa9db9a1a07266dfc700b0d7a21fbc322c7df`.
-- Documentation publication SHA/PR: use the branch's Git history and the draft PR
-  linked in the final phase receipt; no self-referential commit SHA is fabricated.
+- Documentation PR: [#152](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/152),
+  stacked on #151. Initial plan commit: `6bb7adcb` (full SHA in Git history).
+  The final publication commit is recorded in the PR phase receipt, avoiding a
+  self-referential commit hash in this file.
 - Current launch: `8b0e2b6bdb20d6fe30542da39f0170d514d52746`.
 - Historical implementation PR/heads and bases: MASTER_PLAN section 2.
 - Do not edit the dirty Claude checkout
@@ -71,9 +73,11 @@ per-phase twelve fields, blocker/test ledger, first implementation task,
 continuation/approval protocol, and release/rollback boundaries. The new two-client
 same-workspace requirement is explicitly unresolved rather than dropped.
 
-**Validation:** documentation-only checks verify relative links, existing code
-paths, all nine phase sections/twelve fields, blocker coverage, and whitespace.
-Exact command/results and draft PR/head are reported with this phase publication.
+**Validation: PASS.** Python read-only checks: nine phases × twelve required fields,
+nine tracker rows, nineteen blocker gates, four relative links and balanced code
+fences. Verified exact existing/owner/proposed file distinctions. Staged diff
+contains only these two Markdown files; `git diff --cached --check` passed.
+Draft #152 is the reviewable deliverable; final head is recorded in its receipt.
 Runtime claims below are historical receipts, not reexecuted Phase 0 results.
 
 **Result:** Phase 0 COMPLETE; roadmap review pending. No customer-pilot PASS.
