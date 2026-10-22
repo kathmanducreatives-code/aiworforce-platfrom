@@ -304,6 +304,28 @@ prove_killed "R2 uncertain crawl start refunded (Codex P2)" "$tools_ts" \
 prove_killed "SAF-008 bodyless purchase skips mandatory fields" "$gate_ts" \
   "  if (hasBody || limits.pin_body || mandatory || limits.max_array_items) {" "  if (hasBody || limits.pin_body || limits.max_array_items) {" \
   "$gate_tests" "SAF-008: an absent or empty body never bypasses the quote's mandatory fields"
+# Verified adoption of a run a dead slice bought (smokeAdmission.ts
+# `verifiedAdoption`): the gate wiring and each binding of the evidence.
+adopt_tests="$root/tests/db-contract/killResumeAdoption.contract.test.ts"
+adopt_unit="$root/tests/edge-functions/_shared/smokeAdoption.test.ts"
+prove_killed "adoption: a verified adopt still answered 503" "$gate_ts" \
+  '        return adoptedRunResponse(adopted.runId, adopted.datasetId);' '        return refusal("adopt", adopted.runId);' \
+  "$adopt_tests" "adoption: killed before the run id reached the execution ledger — the next worker adopts the paid run, reads it and finishes; one purchase, one charge"
+prove_killed "adoption: evidence not bound to the task" "$gate_ts" \
+  '  if (row.task_id !== b.taskId) return { ok: false, reason: "task" };' '' \
+  "$adopt_tests" "adoption fails closed: the recorded purchase belongs to another task"
+prove_killed "adoption: dataset id format not checked" "$gate_ts" \
+  '  if (typeof datasetId !== "string" || !RUN_REF_RE.test(datasetId)) return' '  if (typeof datasetId !== "string") return' \
+  "$adopt_tests" "adoption fails closed: a malformed dataset id is never read or adopted"
+prove_killed "adoption: a same- or later-generation purchase adopted" "$gate_ts" \
+  ' || row.generation >= b.generation) return' ') return' \
+  "$adopt_unit" "adoption: the operation row must be this start's purchase, of this task, bought by an earlier generation"
+prove_killed "adoption: a conflicting run id adopted" "$gate_ts" \
+  '  if (row.provider_run_id !== runId) return { ok: false, reason: "run_conflict" };' '' \
+  "$adopt_unit" "adoption: the operation row must be this start's purchase, of this task, bought by an earlier generation"
+prove_killed "adoption: another operation's answer adopted" "$gate_ts" \
+  '  if (d.operation_key !== b.key) return { ok: false, reason: "operation_key" };' '' \
+  "$adopt_unit" "adoption: the answer itself must be complete and well-formed"
 # The opt-in mission wall clock (from codex/smoke-execution-guards).
 prove_killed "wall clock: expired mission still reaches the handler" "$runner_ts" \
   "if (d.enforceMissionWallClock && (expiry === null || now() >= expiry)) {" "if (false) {" \
