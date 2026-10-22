@@ -410,6 +410,7 @@ Deno.test("P7 UI-controller workflow uses real server decisions and exports no u
   }]);
   await c.approve(true);
   const bytes = await c.exportCsv();
+  assertEquals(await c.exportCsv(), bytes);
   assert(
     new TextDecoder().decode(bytes.bytes).includes("human_supplied_unverified"),
   );

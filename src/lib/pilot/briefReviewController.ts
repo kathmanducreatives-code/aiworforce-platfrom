@@ -213,7 +213,8 @@ export class BriefReviewController {
       actor_id: pending.actor_id,
     }, pending.items);
     this.current(epoch);
-    this.pendingExport = null;
+    // Repeat explicit downloads reuse this exact operation; the server still reauthorizes
+    // every request. Inspect/edit/approval changes clear it; no CSV bytes are cached.
     return out;
   }
 }
