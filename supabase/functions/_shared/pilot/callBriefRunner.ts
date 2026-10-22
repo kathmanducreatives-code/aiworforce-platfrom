@@ -1,5 +1,6 @@
 import {
   authorizePilotModelContext,
+  type PilotModelContextDeps,
   type PilotModelDeps,
   runPilotModelTask,
 } from "./pilotModelAdapter.ts";
@@ -30,10 +31,16 @@ function immutable<T>(v: T): T {
   }
   return v;
 }
-export async function runCallBrief(
+export interface CallBriefReadDeps extends PilotModelContextDeps {
+  snapshots: Pick<PilotSnapshotStore, "read">;
+  briefs: Pick<CallBriefStore, "read">;
+}
+// Review callers receive no transport, credential resolver, accounting writer or source loader.
+async function accessCallBrief(
   scope: PacketScope,
-  deps: CallBriefDeps,
-): Promise<CallBriefDraft> {
+  deps: CallBriefReadDeps,
+  generation: CallBriefDeps | null,
+) {
   if (deps.mode !== "offline_fixture") refuse("pilot_call_brief_disabled");
   // One source of identity/dependencies for P1, P4 and P5; no caller-supplied packet/context override.
   const store = deps.store?.() ?? createPilotScopeStore(deps),
@@ -48,8 +55,19 @@ export async function runCallBrief(
       env: deps.env,
       user_id: deps.user_id,
       scopeStore: store,
-      snapshots: deps.snapshots,
-      loadApprovedInputs: deps.loadApprovedInputs,
+      snapshots: generation ? generation.snapshots : {
+        read: async (s) => {
+          const saved = await deps.snapshots.read(s);
+          if (!saved) refuse("brief_review_snapshot_missing");
+          return saved;
+        },
+        insertOnce: () =>
+          Promise.reject(new Error("brief_review_snapshot_write_forbidden")),
+      },
+      loadApprovedInputs: generation
+        ? generation.loadApprovedInputs
+        : () =>
+          Promise.reject(new Error("brief_review_source_reload_forbidden")),
     });
   const packet = await frozen(),
     catalog = buildBriefCatalog(packet),
@@ -150,17 +168,34 @@ export async function runCallBrief(
       refuse("brief_saved_integrity_failure");
     }
     await check();
-    return immutable(structuredClone(expected));
+    return { draft: immutable(structuredClone(expected)), packet, catalog };
   }
-  const result = await runPilotModelTask(scope, modelDeps, {
+  if (!generation) refuse("brief_review_draft_missing");
+  const result = await runPilotModelTask(scope, {
+    ...generation,
+    store: () => store,
+  }, {
     ...prompt,
     validate: (v) => validateBriefChoice(v, catalog),
   });
   // No generation/repair/fallback loop. A lost/uncertain attempt remains consumed in the P4 store.
   await check();
   const draft = await materialize(result.value, result.receipt);
-  const inserted = await deps.briefs.insertOnce(draft, fence);
+  const inserted = await generation.briefs.insertOnce(draft, fence);
   if (canonical(inserted) !== canonical(draft)) refuse("brief_commit_mismatch");
   await check();
-  return immutable(structuredClone(draft));
+  return { draft: immutable(structuredClone(draft)), packet, catalog };
+}
+
+export async function runCallBrief(
+  scope: PacketScope,
+  deps: CallBriefDeps,
+): Promise<CallBriefDraft> {
+  return (await accessCallBrief(scope, deps, deps)).draft;
+}
+export function readCallBriefForReview(
+  scope: PacketScope,
+  deps: CallBriefReadDeps,
+) {
+  return accessCallBrief(scope, deps, null);
 }
