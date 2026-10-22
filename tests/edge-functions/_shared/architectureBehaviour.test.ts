@@ -498,3 +498,33 @@ Deno.test("12. the model router runs Luna first and reserves Terra for repair", 
     assertEquals(escalationRoute(stage, "any reason"), null, "there is no third rung");
   }
 });
+
+Deno.test("8d. an UNCONFIGURED planner (no key) is a named refusal, not a crash; a transient one is unchanged", async () => {
+  // Provider-disabled hosted dry run (2026-10-22): no OpenAI key was recorded
+  // as `failed / unhandled_exception`, which reads as a defect.
+  const { GptPlannerUnavailableError } = await import("../../../supabase/functions/_shared/gptExecutionPlanner.ts");
+  const { decideTerminalRecord } = await import("../../../supabase/functions/_shared/leadExecutionFinalizer.ts");
+  const run = async (err: Error) => {
+    const h = newHarness();
+    const m = mission();
+    let caught: unknown = null;
+    try {
+      await runCapabilityPlan({
+        planDiscovery: stubDiscoverySelector(),
+        planExecution: () => Promise.reject(err),
+        ...deps({ [MEMO23]: [row(1, 3)] }, h),
+      } as never, { mission: m, plan: buildCapabilityGraph(m), maxCandidates: 20 } as never);
+    } catch (e) { caught = e; }
+    assert(caught instanceof ExecutionPlanBlockedError, String(caught));
+    assertEquals(h.allCalls, [], "nothing is bought either way");
+    return { codes: caught.violations.map((v) => v.code), record: decideTerminalRecord({}, { elapsedMs: 1, error: caught }) };
+  };
+
+  const missing = await run(new GptPlannerUnavailableError("no_api_key" as never, "OPENAI_API_KEY is not set", false));
+  assertEquals(missing.codes, ["execution_planner_unavailable"]);
+  assertEquals([missing.record.status, missing.record.reason, missing.record.resumable], ["blocked", "refused_before_execution", false]);
+
+  const transient = await run(new GptPlannerUnavailableError("rate_limited" as never, "429", true));
+  assertEquals(transient.codes, ["execution_planner_failed"]);
+  assertEquals([transient.record.status, transient.record.reason], ["failed", "unhandled_exception"], "a retryable outage is not reclassified");
+});
