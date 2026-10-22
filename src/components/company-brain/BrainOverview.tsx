@@ -1,9 +1,22 @@
-import type { ReactNode } from 'react';
-import { ArrowUpRight, Brain, ChevronDown, Pencil, RotateCcw } from 'lucide-react';
+import { useMemo, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  ArrowRight, ArrowUpRight, CheckCircle2, ChevronDown, Globe, Linkedin, Pencil, Plus, RotateCcw, Sparkles,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { FLOW_SECTIONS, HEALTH_LABEL, deriveHealth, type SectionKey } from '@/lib/companyBrainSections';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
+import { FLOW_SECTIONS, deriveHealth, type SectionHealth, type SectionKey } from '@/lib/companyBrainSections';
+import {
+  CONFIDENCE_LABEL, SECTION_TAB, brainSources, buildIcpSentences, deriveNextSteps, formatSource, joinValues, monogram,
+  type IcpPhrase, type TabKey,
+} from '@/lib/companyBrainInsights';
+import type { SaveFields } from '@/lib/companyBrainPatch';
 import type { CompanyBrainV2 } from '@/lib/normalizeCompanyBrain';
+import { HealthBadge, InlineChips } from './InlineEdit';
+import { CompanyContextCard, MarketPanel, MomentsPanel, RulesPanel, VoicePanel } from './BrainSectionPanels';
 import './brain-overview.css';
 
 interface Props {
@@ -11,73 +24,312 @@ interface Props {
   active: boolean;
   activatedAt: string | null;
   saved: SectionKey | null;
+  /** A background read is in flight (the page stays usable). */
+  syncing?: boolean;
   onEdit: (section: SectionKey) => void;
-  /** Re-run onboarding. Absent for a client Brain (onboarding is the agency's). */
-  onRestart?: () => void;
-  /** The Brain switcher (agency ↔ clients), when the user has a choice. */
-  scopeSwitcher?: ReactNode;
-  /** Set when this is a client's Brain. */
-  clientName?: string | null;
+  onRestart: () => void;
+  onSaveFields: SaveFields;
 }
-const clean = (values: string[]) => [...new Set(values.map(v => v.trim()).filter(Boolean))];
 
-export function BrainOverview({ brain, active, activatedAt, saved, onEdit, onRestart, scopeSwitcher, clientName }: Props) {
-  const health = deriveHealth(brain);
-  const configured = FLOW_SECTIONS.filter(s => health[s.drawerKey] === 'configured').length;
-  const t = brain.target_customer;
-  const size = t.company_size.label || (t.company_size.min || t.company_size.max ? `${t.company_size.min ?? 0}–${t.company_size.max ?? '∞'} employees` : '');
-  const targeting = clean([...t.industries, ...t.business_models, ...t.funding_stage, size, ...t.geography, ...t.must_have]);
-  const buyers = clean(brain.buyer_personas);
-  const signals = clean([...brain.triggers, ...brain.jobs_to_watch]);
-  const rules = clean([...brain.qualification_rules.required_evidence, ...brain.qualification_rules.reject_if, ...Object.values(t.disqualifiers).flat()]);
-  const messaging = clean([brain.positioning.promise, brain.brand_voice.tone, ...brain.content_angles]);
-  const summaries: Record<string, { values: string[]; footer: string }> = {
-    targeting: { values: targeting, footer: `${targeting.length} targeting criteria defined` },
-    buyers: { values: buyers, footer: `${buyers.length} buyer roles defined` },
-    signals: { values: signals, footer: `${signals.length} signals & roles defined` },
-    disqualifiers: { values: rules, footer: `${rules.length} qualification rules defined` },
-    messaging: { values: messaging, footer: `${clean(brain.content_angles).length} content angles defined` },
+const TABS: { key: TabKey; label: string; sections: SectionKey[] }[] = [
+  { key: 'overview', label: 'Overview', sections: ['company'] },
+  { key: 'market', label: 'Who we sell to', sections: ['targeting', 'buyers'] },
+  { key: 'moments', label: 'Buying moments', sections: ['signals'] },
+  { key: 'rules', label: 'Qualification', sections: ['disqualifiers'] },
+  { key: 'voice', label: 'Voice & positioning', sections: ['messaging'] },
+];
+const isTab = (v: string | null): v is TabKey => TABS.some((t) => t.key === v);
+
+const COVERAGE_LABEL: Record<SectionKey, string> = {
+  company: 'Company identity', targeting: 'Target market', buyers: 'Buyer profile',
+  signals: 'Buying moments', disqualifiers: 'Qualification', messaging: 'Messaging',
+};
+
+const uniq = (values: string[]) => [...new Set(values.map((v) => v.trim()).filter(Boolean))];
+
+export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEdit, onRestart, onSaveFields }: Props) {
+  const [params, setParams] = useSearchParams();
+  const tab: TabKey = isTab(params.get('tab')) ? (params.get('tab') as TabKey) : 'overview';
+  const setTab = (next: string) => {
+    const p = new URLSearchParams(params);
+    if (next === 'overview') p.delete('tab'); else p.set('tab', next);
+    setParams(p, { replace: true });
   };
-  return <>
-    <header className="brain-overview-header">
-      <div>{scopeSwitcher && <div className="mb-3">{scopeSwitcher}</div>}
-        <p className="text-[10px] font-medium uppercase tracking-[.18em] text-primary">{clientName ? 'Client Brain' : 'Company Brain'}</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{clientName ? <>{clientName}<span className="text-muted-foreground/60">’s go-to-market intelligence</span></> : 'Your go-to-market intelligence system'}</h1>
-        <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">{clientName ? 'Everything here applies to this client only — its targeting, buyers, signals and voice. It never mixes with your company or other clients.' : 'Turn your company knowledge into focused outreach, better qualification, and higher-converting conversations.'}</p>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" className="gap-2"><Pencil size={14} />Edit ICP<ChevronDown size={14} /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => onEdit('company')}>Company identity</DropdownMenuItem>{FLOW_SECTIONS.map(s => <DropdownMenuItem key={s.drawerKey} onSelect={() => onEdit(s.drawerKey)}>{s.number} · {s.title}</DropdownMenuItem>)}</DropdownMenuContent>
-        </DropdownMenu>
-        {onRestart && <Button size="sm" variant="outline" onClick={onRestart} className="gap-2"><RotateCcw size={14} />Refresh</Button>}
-      </div>
-    </header>
-    <div className="brain-overview-grid">
-      <section className="brain-overview-core brain-overview-card" aria-label="Company Brain overview">
-        <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium">{clientName ? 'Client Brain' : 'Company Brain'}</span><span className={`brain-overview-status ${active ? 'is-configured' : ''}`}>{active ? 'Active' : 'Setup needed'}</span></div>
-        <div className="my-4 flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/5 text-primary"><Brain size={19} /></span><button onClick={() => onEdit('company')} className="truncate text-sm font-medium text-foreground/85 hover:text-primary" title="Edit company identity">{brain.company.name || (clientName ? 'Add the client’s company' : 'Add your company')} <ArrowUpRight className="inline h-3 w-3" /></button></div>
-        <h2 className="text-lg font-semibold tracking-tight">All the pieces work together</h2>
-        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Your company knowledge powers every outreach, signal, qualification decision, and interaction across Agentory.</p>
-        <div className="mt-auto grid grid-cols-2 gap-3 border-t border-foreground/[.07] pt-3">
-          <div><p className="text-xl font-semibold tracking-tight">{configured}<span className="text-muted-foreground/60"> / 5</span></p><p className="mt-1 text-[10px] text-muted-foreground">Modules configured</p></div>
-          <div><p className="text-sm font-medium text-primary">{active && configured === 5 ? 'Ready' : 'Needs review'}</p><p className="mt-1 text-[10px] text-muted-foreground">{active && configured === 5 ? 'Powering your GTM' : 'Complete your context'}</p></div>
+  const health = useMemo(() => deriveHealth(brain), [brain]);
+  const panelProps = { brain, health, saved, onEdit, onSaveFields };
+
+  return (
+    <div className="brain-page">
+      <header className="brain-header">
+        <div className="min-w-0">
+          <p className="brain-eyebrow">Company Brain</p>
+          <h1 className="brain-title">Your go-to-market intelligence</h1>
+          <p className="brain-lede">Everything your AI team knows about who you sell to, when to reach out, and how to sound. Click anything to change it.</p>
         </div>
-        {activatedAt && <p className="mt-2 text-[10px] text-muted-foreground/70">Activated {activatedAt}</p>}
-      </section>
-      {FLOW_SECTIONS.map(section => {
-        const summary = summaries[section.drawerKey];
-        const state = health[section.drawerKey];
-        return <button type="button" key={section.drawerKey} onClick={() => onEdit(section.drawerKey)} className={`brain-overview-card brain-overview-section brain-overview-${section.drawerKey}`} aria-label={`Edit ${section.title}`}>
-          <div className="flex items-start justify-between gap-2"><span className="text-lg font-medium tracking-tight text-primary/80">{section.number}</span><span className={`brain-overview-status ${state === 'configured' ? 'is-configured' : ''}`}>{saved === section.drawerKey ? 'Saved' : HEALTH_LABEL[state]}</span></div>
-          <h2 className="mt-2 text-base font-semibold tracking-tight">{section.title}</h2>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{section.question}</p>
-          <div className="brain-overview-values">
-            {summary.values.length ? summary.values.slice(0, 2).map(value => <span key={value} className="brain-overview-value" title={value}>{value}</span>) : <span className="text-xs text-muted-foreground/60">Add details to guide your workforce.</span>}
-            {summary.values.length > 2 && <span className="text-[10px] text-muted-foreground">+{summary.values.length - 2} more</span>}
-          </div>
-          <div className="mt-auto flex items-center justify-between gap-2 border-t border-foreground/[.07] pt-3 text-[10px] text-muted-foreground"><span>{summary.footer}</span><ArrowUpRight size={14} className="shrink-0" /></div>
-        </button>;
-      })}
+        <div className="flex shrink-0 items-center gap-2">
+          {syncing && <span className="brain-sync" aria-live="polite">Syncing…</span>}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button size="sm" variant="outline" className="gap-2"><Pencil size={14} />Edit section<ChevronDown size={14} /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => onEdit('company')}>Company identity</DropdownMenuItem>
+              {FLOW_SECTIONS.map((s) => <DropdownMenuItem key={s.drawerKey} onSelect={() => onEdit(s.drawerKey)}>{s.number} · {s.title}</DropdownMenuItem>)}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button size="sm" variant="ghost" onClick={onRestart} className="gap-2"><RotateCcw size={14} />Re-run setup</Button>
+        </div>
+      </header>
+
+      <IdentityCard brain={brain} health={health} active={active} activatedAt={activatedAt} saved={saved === 'company'} onEdit={onEdit} />
+
+      <Tabs value={tab} onValueChange={setTab} className="brain-tabs">
+        <div className="brain-tablist-scroll">
+          <TabsList className="brain-tablist" aria-label="Company Brain sections">
+            {TABS.map((t) => {
+              const attention = t.sections.some((s) => health[s] !== 'configured');
+              return (
+                <TabsTrigger key={t.key} value={t.key} className="brain-tab">
+                  {t.label}
+                  {attention && <span className="brain-tab-dot" aria-label="needs attention" />}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </div>
+
+        <TabsContent value="overview" className="brain-panel"><OverviewPanel {...panelProps} onOpenTab={setTab} /></TabsContent>
+        <TabsContent value="market" className="brain-panel"><MarketPanel {...panelProps} /></TabsContent>
+        <TabsContent value="moments" className="brain-panel"><MomentsPanel {...panelProps} /></TabsContent>
+        <TabsContent value="rules" className="brain-panel"><RulesPanel {...panelProps} /></TabsContent>
+        <TabsContent value="voice" className="brain-panel"><VoicePanel {...panelProps} /></TabsContent>
+      </Tabs>
     </div>
-  </>;
+  );
+}
+
+// ── Identity ──────────────────────────────────────────────────────────────
+
+function ReadinessRing({ ready, total }: { ready: number; total: number }) {
+  const r = 26;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg className="brain-ring" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label={`${ready} of ${total} areas ready`}>
+      <circle cx="32" cy="32" r={r} className="brain-ring-track" />
+      <circle cx="32" cy="32" r={r} className="brain-ring-value" strokeDasharray={c} strokeDashoffset={c * (1 - ready / total)} />
+      <text x="32" y="36" textAnchor="middle" className="brain-ring-label">{ready}/{total}</text>
+    </svg>
+  );
+}
+
+function IdentityCard({ brain, health, active, activatedAt, saved, onEdit }: {
+  brain: CompanyBrainV2; health: Record<SectionKey, SectionHealth>; active: boolean; activatedAt: string | null;
+  saved: boolean; onEdit: (s: SectionKey) => void;
+}) {
+  const c = brain.company;
+  const site = c.website_url ? formatSource(c.website_url) : null;
+  const meta = uniq([c.category, c.business_model, c.stage, c.location, c.team_size ? `${c.team_size} people` : '']);
+  const keys = Object.keys(health) as SectionKey[];
+  const ready = keys.filter((k) => health[k] === 'configured').length;
+
+  return (
+    <section className={cn('brain-card brain-identity', saved && 'is-saved')} aria-label="Company identity">
+      <div className="brain-identity-main">
+        <span className="brain-monogram" aria-hidden>{monogram(c.name)}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className="brain-company-name">{c.name || 'Your company'}</h2>
+            {site && (site.href
+              ? <a className="brain-site" href={site.href} target="_blank" rel="noopener noreferrer">{site.label}<ArrowUpRight size={12} aria-hidden /></a>
+              : <span className="brain-site">{site.label}</span>)}
+            <button type="button" className="brain-icon-btn" onClick={() => onEdit('company')} aria-label="Edit company identity"><Pencil size={13} /></button>
+          </div>
+          {meta.length > 0 && <p className="brain-company-meta">{meta.join(' · ')}</p>}
+          {brain.positioning.promise
+            ? <p className="brain-promise">“{brain.positioning.promise}”</p>
+            : c.description && <p className="brain-company-desc">{c.description}</p>}
+        </div>
+      </div>
+      <div className="brain-identity-side">
+        <ReadinessRing ready={ready} total={keys.length} />
+        <div className="min-w-0">
+          <p className="brain-ready-title">{ready === keys.length ? 'Ready for your team' : `${keys.length - ready} area${keys.length - ready === 1 ? '' : 's'} to finish`}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <span className={cn('brain-status', active ? 'is-positive' : 'is-caution')}>{active ? 'Active' : 'Setup needed'}</span>
+            <span className="brain-status">{CONFIDENCE_LABEL[brain.brain_confidence]}</span>
+          </div>
+          {activatedAt && <p className="brain-meta-line">Activated {activatedAt}</p>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Overview ──────────────────────────────────────────────────────────────
+
+interface PanelProps {
+  brain: CompanyBrainV2;
+  health: Record<SectionKey, SectionHealth>;
+  saved: SectionKey | null;
+  onEdit: (s: SectionKey) => void;
+  onSaveFields: SaveFields;
+}
+
+function OverviewPanel({ brain, health, saved, onEdit, onSaveFields, onOpenTab }: PanelProps & { onOpenTab: (t: TabKey) => void }) {
+  const steps = useMemo(() => deriveNextSteps(brain), [brain]);
+  const sentences = useMemo(() => buildIcpSentences(brain), [brain]);
+  const sources = useMemo(() => brainSources(brain), [brain]);
+  const notes = uniq(brain.evidence.confidence_notes);
+  const t = brain.target_customer;
+  const tiles: Record<string, string[]> = {
+    targeting: uniq([...t.industries, ...t.business_models, ...t.geography]),
+    buyers: uniq(brain.buyer_personas),
+    signals: uniq([...brain.triggers, ...brain.jobs_to_watch]),
+    disqualifiers: uniq([...brain.qualification_rules.required_evidence, ...brain.qualification_rules.reject_if, ...t.disqualifiers.industries]),
+    messaging: uniq([...brain.content_angles, ...brain.brand_voice.tags]),
+  };
+
+  return (
+    <div className="brain-overview-layout">
+      <section className={cn('brain-card brain-icp', saved === 'targeting' && 'is-saved')} aria-labelledby="brain-icp-title">
+        <div className="brain-card-head">
+          <div>
+            <p className="brain-kicker">Your ideal customer</p>
+            <h3 id="brain-icp-title" className="brain-card-title">In one paragraph</h3>
+          </div>
+          <span className="brain-card-hint"><Sparkles size={12} aria-hidden />Click a highlighted phrase to change it</span>
+        </div>
+        <div className="brain-icp-text">
+          {sentences.map((sentence, i) => (
+            <p key={i}>{sentence.map((p, j) => <Phrase key={j} phrase={p} onEdit={onEdit} onSaveFields={onSaveFields} />)}</p>
+          ))}
+        </div>
+      </section>
+
+      <section className="brain-card brain-steps" aria-labelledby="brain-steps-title">
+        <p className="brain-kicker">Make it sharper</p>
+        <h3 id="brain-steps-title" className="brain-card-title">{steps.some((s) => s.kind === 'gap') ? 'Next best improvements' : 'Suggested refinements'}</h3>
+        {steps.length === 0 ? (
+          <>
+            <div className="brain-steps-done"><CheckCircle2 size={18} aria-hidden /><p>Everything is in place. Your team has what it needs.</p></div>
+            <ul className="brain-coverage" aria-label="Coverage">
+              {(Object.keys(health) as SectionKey[]).map((k) => (
+                <li key={k}><span>{COVERAGE_LABEL[k]}</span><HealthBadge state={health[k]} /></li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <ol className="brain-step-list">
+            {steps.slice(0, 4).map((s) => (
+              <li key={s.title}>
+                <button type="button" className="brain-step" data-kind={s.kind}
+                  onClick={() => (s.section === 'company' ? onEdit('company') : onOpenTab(SECTION_TAB[s.section]))}>
+                  <span className="brain-step-mark" aria-hidden />
+                  <span className="min-w-0 flex-1">
+                    <span className="brain-step-title">{s.title}</span>
+                    <span className="brain-step-detail">{s.detail}</span>
+                  </span>
+                  <ArrowRight size={14} className="brain-step-arrow" aria-hidden />
+                </button>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <div className="brain-tiles" role="list" aria-label="Brain modules">
+        {FLOW_SECTIONS.map((s) => {
+          const values = tiles[s.drawerKey] ?? [];
+          const state = health[s.drawerKey];
+          return (
+            <button type="button" role="listitem" key={s.drawerKey} onClick={() => onOpenTab(SECTION_TAB[s.drawerKey])}
+              className={cn('brain-card brain-tile', saved === s.drawerKey && 'is-saved')} aria-label={`Open ${s.title}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="brain-tile-num">{s.number}</span>
+                <HealthBadge state={state} />
+              </div>
+              <h4 className="brain-tile-title">{s.title}</h4>
+              <p className="brain-tile-question">{s.question}</p>
+              <div className="brain-tile-values">
+                {values.length
+                  ? values.slice(0, 3).map((v) => <span key={v} className="brain-chip is-static" title={v}><span className="truncate">{v}</span></span>)
+                  : <span className="brain-field-empty">Nothing here yet</span>}
+                {values.length > 3 && <span className="brain-more">+{values.length - 3}</span>}
+              </div>
+              <span className="brain-tile-open">Open<ArrowRight size={12} aria-hidden /></span>
+            </button>
+          );
+        })}
+      </div>
+
+      <CompanyContextCard brain={brain} saved={saved} onSaveFields={onSaveFields} />
+
+      <section className="brain-card brain-sources" aria-labelledby="brain-sources-title">
+        <div className="brain-card-head">
+          <div>
+            <p className="brain-kicker">Where this came from</p>
+            <h3 id="brain-sources-title" className="brain-card-title">
+              {sources.length ? `Built from ${sources.length} source${sources.length === 1 ? '' : 's'}` : 'No sources recorded'}
+            </h3>
+          </div>
+          <span className="brain-status">{CONFIDENCE_LABEL[brain.brain_confidence]}</span>
+        </div>
+        <div className="brain-sources-grid">
+          <div>
+            {sources.length === 0
+              ? <p className="brain-field-empty">No sources were recorded when this brain was set up.</p>
+              : (
+                <ul className="brain-source-list">
+                  {sources.map((s) => (
+                    <li key={s.label}>
+                      {s.kind === 'linkedin' ? <Linkedin size={13} aria-hidden /> : <Globe size={13} aria-hidden />}
+                      {s.href
+                        ? <a href={s.href} target="_blank" rel="noopener noreferrer" className="brain-source-link">{s.label}</a>
+                        : <span className="truncate">{s.label}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </div>
+          {notes.length > 0 && (
+            <div>
+              <p className="brain-field-label">What we noticed</p>
+              <ul className="brain-notes">{notes.map((n) => <li key={n}>{n}</li>)}</ul>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Phrase({ phrase, onEdit, onSaveFields }: {
+  phrase: IcpPhrase; onEdit: (s: SectionKey) => void; onSaveFields: SaveFields;
+}): ReactNode {
+  if (phrase.kind === 'text') return <>{phrase.text === '.' ? '' : ' '}{phrase.text}</>;
+  const filled = phrase.values.length > 0;
+  const content = filled ? joinValues(phrase.values, phrase.joiner) : <><Plus size={12} aria-hidden />{phrase.label}</>;
+  const cls = cn('brain-slot', !filled && 'is-empty');
+
+  if (!phrase.ref) {
+    return <>{' '}<button type="button" className={cls} onClick={() => onEdit(phrase.section)} aria-label={`Edit ${phrase.label}`}>{content}</button></>;
+  }
+  const ref = phrase.ref;
+  return (
+    <>
+      {' '}
+      <Popover>
+        <PopoverTrigger asChild>
+          <button type="button" className={cls} aria-label={`Edit ${phrase.label}`}>{content}</button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="brain-popover">
+          <p className="brain-field-label">{phrase.label}</p>
+          <InlineChips
+            bare autoAdd={!filled}
+            label={phrase.label}
+            values={phrase.values}
+            onCommit={(next) => onSaveFields(ref.section, { [ref.field]: next })}
+          />
+        </PopoverContent>
+      </Popover>
+    </>
+  );
 }
