@@ -29,7 +29,9 @@
 // the model transports report their own 409 codes and do not retry it. The body
 // names the decision, so the poll loops can stop waiting (`isAdmissionRefusal`).
 // The one exception: a replay of a purchase that may already exist answers 503
-// (still unsent), so it stays UNCERTAIN everywhere — see `refusal`.
+// (still unsent), so it stays UNCERTAIN everywhere — see `refusal`. An Apify
+// run start whose run the gate VERIFIES (`verifiedAdoption`) is answered with
+// that run instead, still unsent — see `adoptedRunResponse`.
 //
 // ── THE PRICE IS NEVER THE WORKER'S ─────────────────────────────────────────
 //
@@ -497,6 +499,78 @@ export interface MissionAdmissionContext {
 
 export const missionAdmission = new AsyncLocalStorage<MissionAdmissionContext>();
 
+// ── ADOPTION OF A RUN ALREADY BOUGHT ─────────────────────────────────────────
+//
+// A worker can die after Apify started (and billed) a run, and after the gate
+// recorded its receipt, but before the execution ledger saved the run id. The
+// next slice replays the start, and the gate answers `adopt` with the run and
+// dataset ids. Answered 503, that left the run unread, the mission
+// `budget_exhausted` and the credit held until the reaper refunded it.
+//
+// The gate answers a VERIFIED adoption with the run itself, exactly as Apify's
+// own start response names it, so the existing transport records the run id,
+// reads its status and dataset through admitted polls, and settles the credit
+// as started. Nothing is sent: the request that would have bought it again is
+// never made. Anything less than full verification keeps the 503.
+
+/** Apify run and dataset ids: one path segment, no separators to smuggle. */
+const RUN_REF_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+export interface AdoptionBinding {
+  authorizationId: string; key: string; actor: string; payloadHash: string; taskId: string; generation: number;
+}
+export type VerifiedAdoption = { ok: true; runId: string; datasetId: string } | { ok: false; reason: string };
+
+/**
+ * Is this `adopt` answer the run THIS start already bought? Every field is
+ * checked twice: the answer must name the operation asked for and well-formed
+ * run and dataset ids, and the operation row, read again, must be the same
+ * Apify purchase (kind, actor, payload fingerprint) of the same task, bought
+ * at this generation or an earlier one, naming the same run and dataset. Any
+ * read error, missing field or mismatch is a refusal, never an adoption.
+ */
+export async function verifiedAdoption(
+  db: AdmissionDb, b: AdoptionBinding, d: Record<string, unknown>,
+): Promise<VerifiedAdoption> {
+  if (d.decision !== "adopt") return { ok: false, reason: "not_adopt" };
+  if (d.operation_key !== b.key) return { ok: false, reason: "operation_key" };
+  const runId = d.provider_run_id, datasetId = d.provider_dataset_id;
+  if (typeof runId !== "string" || !RUN_REF_RE.test(runId)) return { ok: false, reason: "run_id" };
+  if (typeof datasetId !== "string" || !RUN_REF_RE.test(datasetId)) return { ok: false, reason: "dataset_id" };
+  let row: Record<string, unknown> | null;
+  try {
+    const { data, error } = await withTimeout(db.from("discovery_smoke_operations")
+      .select("operation_key, kind, actor, payload_hash, task_id, generation, provider_run_id, provider_dataset_id")
+      .eq("authorization_id", b.authorizationId).eq("operation_key", b.key).maybeSingle(), ADMISSION_RPC_TIMEOUT_MS);
+    if (error) return { ok: false, reason: "operation_unreadable" };
+    row = data as Record<string, unknown> | null;
+  } catch {
+    return { ok: false, reason: "operation_unreadable" };
+  }
+  if (!row) return { ok: false, reason: "operation_missing" };
+  if (row.kind !== "provider" || row.actor !== b.actor || row.payload_hash !== b.payloadHash) {
+    return { ok: false, reason: "operation_identity" };
+  }
+  if (row.task_id !== b.taskId) return { ok: false, reason: "task" };
+  if (typeof row.generation !== "number" || row.generation > b.generation) return { ok: false, reason: "generation" };
+  if (row.provider_run_id !== runId) return { ok: false, reason: "run_conflict" };
+  if (row.provider_dataset_id !== datasetId) return { ok: false, reason: "dataset_conflict" };
+  return { ok: true, runId, datasetId };
+}
+
+/**
+ * The adopted run, in the shape of Apify's own start response
+ * (`{ data: { id, defaultDatasetId } }`, 201). It states identity only: no
+ * status, so the transport reads the run's real status through an admitted
+ * poll before it reads anything else.
+ */
+export function adoptedRunResponse(runId: string, datasetId: string): Response {
+  return new Response(JSON.stringify({ data: { id: runId, defaultDatasetId: datasetId } }), {
+    status: 201,
+    headers: { "content-type": "application/json", "x-agentory-admission": "adopted" },
+  });
+}
+
 // ── REFUSALS ─────────────────────────────────────────────────────────────────
 
 /**
@@ -672,6 +746,16 @@ export function createAdmissionFetch(d: AdmissionGateDeps): typeof fetch {
       queueId: ctx.queueId, workerId: ctx.workerId, taskId: ctx.taskId, generation: ctx.generation,
       key, kind: c.kind, actor: actor!, templateId: tpl.id, payloadHash: hash, parentKey: parent?.operation_key ?? null,
     });
+    if (decision.decision === "adopt" && c.kind === "provider" && c.captures === "apify_run") {
+      const adopted = await verifiedAdoption(d.db, {
+        authorizationId: auth.id, key, actor: actor!, payloadHash: hash, taskId: ctx.taskId, generation: ctx.generation,
+      }, decision as Record<string, unknown>);
+      if (adopted.ok) {
+        log("[smoke-admission] adopted", { key, run_id: adopted.runId, dataset_id: adopted.datasetId, queue: ctx.queueId });
+        return adoptedRunResponse(adopted.runId, adopted.datasetId);
+      }
+      log("[smoke-admission] adoption not verified", { key, reason: adopted.reason, queue: ctx.queueId });
+    }
     if (decision.decision !== "admitted") {
       if (CLOSING.has(decision.decision)) ctx.closedReason = decision.decision;
       return refuse(decision.decision, decision);
