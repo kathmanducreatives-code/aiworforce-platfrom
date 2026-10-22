@@ -24,6 +24,7 @@ or mutate; the gate requires every shard's tally to account for every proof.
 | `lineageQueue.contract.test.ts` | Lineage lease acquire / refuse / release / version conflict / terminal (`lineageLease.ts`); the worker's D4 lineage read, verbatim from `worker/main.ts`, through `mapTaskOutcome`; continuation claims refused on cancelled/terminal lineages and released (`continuationClaim.ts`); the V2 queue: claim, heartbeat, bind, a stranger's heartbeat refused, lease-expiry reclaim, a stale release refused, a clean continuation refunded (`releaseQueuedMission`), a terminal release never reclaimed. |
 | `ledgerSpend.contract.test.ts` | The ledger writer (spec identity columns, same-key attempt escalation, finalize); D2's `readPriorPurchases` (adopt by run id, uncertain, refusals, workspace / record-kind scoping); the durable spend floor (`readLineageSpendFloor`, re-reads excluded); `credits_reserve` / `credits_finalize` through `creditAuthorization.ts` (one reservation per key, replay, settle, refund, refusal). |
 | `creditRearm.contract.test.ts` | Credit keys through `creditAuthorization.ts`: a key refunded (`not_charged`) or reaper-`released` and then really bought is re-armed, balance-checked and charged; a refused re-arm leaves the row as it was; concurrent re-arms hold once; the reaper's window runs from the re-arm; charged and in-flight keys still replay. Needs the held billing fix (step 5 below). |
+| `creditReaper.contract.test.ts` | The stale reaper with evidence from the production ledger writer: a reservation whose provider call names a run id (same workspace, task and logical call) is charged at the live per-call credit, not refunded; unused and uncertain reservations are released as before; foreign, blank or stage-result evidence confirms nothing; a late settle, a second pass and a recovering worker charge once. Needs the held reaper fix (step 5 below). |
 | `schemaCompat.contract.test.ts` | Every literal `.from(…).select(…)` in run-agent, the worker and `_shared/` — projection, filter columns and `or` filters — executed against the migrated schema; every literal `.rpc(…, {…})` checked against the function's real arguments; the Lead V2 RPC signatures pinned. Non-literal selects are listed, not silently skipped. Includes a self-test that the sweep catches a bad column. |
 | `mutation.sh` | Two proofs. (1) Copies `mutants/fencedTaskWrite.pre-d1-fix.ts` (the pre-fix module, verbatim) over the real one and **requires** the fenced-write contract to fail on the write itself. (2) Builds the database without the held billing fix (`DB_CONTRACT_OMIT_HELD`) and **requires** the credit re-arm test to fail on the uncharged purchase. |
 
@@ -53,8 +54,9 @@ Both scripts refuse a non-localhost URL.
    `20261011120000_lead_mission_v2_productive_continuation_no_backoff`.
    **Applied to this disposable database only.** They are not approved for
    production (`supabase/migrations-held/README.md`).
-5. The held billing fix `20261015130000_credits_rearm_settled_key`, which
-   re-arms refunded credit keys. Same rule: this database only. It needs billing
+5. The held billing fixes `20261015130000_credits_rearm_settled_key`, which
+   re-arms refunded credit keys, and `20261022120000_credits_reaper_charges_confirmed_purchase`,
+   which charges a stale reservation whose provider run is confirmed. Same rule: this database only. It needs billing
    sign-off before any hosted project.
 
 ## Shims (explicit, and the only ones)
