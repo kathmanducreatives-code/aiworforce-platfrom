@@ -21,12 +21,16 @@ cid="$(docker run --rm -d --name "$name" --label agentory.disposable=outpost-nat
   -e "POSTGRES_PASSWORD=$pw" -p 127.0.0.1::5432 postgres:17.6)"
 pg_port="$(docker port "$cid" 5432/tcp | sed 's/127.0.0.1://')"
 case "$pg_port" in ''|*[!0-9]*) echo 'invalid loopback database port' >&2; exit 2;; esac
+db_url="postgres://postgres:$pw@127.0.0.1:$pg_port/postgres"
+ready=0
 for _ in $(seq 1 60); do
-  docker exec "$cid" pg_isready -U postgres >/dev/null 2>&1 && break
+  # A container-local socket can answer during initdb's temporary server, which
+  # then shuts down. Require the final server on the actual published TCP path.
+  if psql "$db_url" -XAtqc 'select 1' >/dev/null 2>&1; then ready=1; break; fi
   sleep 0.5
 done
-db_url="postgres://postgres:$pw@127.0.0.1:$pg_port/postgres"
-"$root/tests/db-contract/bootstrap.sh" "$db_url" >"$log" 2>&1 || { tail -20 "$log" >&2; exit 1; }
+if [ "$ready" -ne 1 ]; then docker logs "$cid" 2>&1 | tail -20 >&2; exit 1; fi
+"$root/tests/db-contract/bootstrap.sh" "$db_url" >"$log" 2>&1 || { tail -20 "$log" >&2; docker logs "$cid" 2>&1 | tail -10 >&2; exit 1; }
 psql "$db_url" -X -q -v ON_ERROR_STOP=1 --single-transaction \
   -f "$root/tests/outpost-native/auth-sessions.fixture.sql"
 native_sql="$root/supabase/migrations-held/20261022140824_outpost_native_identity_security.sql"
