@@ -42,9 +42,13 @@ export interface PilotModelDeps extends PilotContextDeps {
 }
 const safeId = (v: unknown) =>
   typeof v === "string" && /^[a-zA-Z0-9_.:-]{1,160}$/.test(v) ? v : null;
+export type PilotModelContextDeps = Pick<
+  PilotModelDeps,
+  "mode" | "env" | "fetch" | "user_id" | "store" | "loadPolicy" | "signal"
+>;
 export async function authorizePilotModelContext(
   scope: { workspace_id: string; client_binding_id: string; task_id: string },
-  deps: PilotModelDeps,
+  deps: PilotModelContextDeps,
 ) {
   if (deps.mode !== "offline_fixture") {
     throw new PilotRefusal("pilot_model_execution_disabled", 503);

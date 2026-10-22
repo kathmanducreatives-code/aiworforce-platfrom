@@ -1,0 +1,32 @@
+{
+  "receipt_kind": "OFFLINE_SYNTHETIC_NOT_LIVE_VERIFIED",
+  "customer_data": false,
+  "paid_calls": 0,
+  "additional_model_attempts_during_P7": 0,
+  "manifest": {
+    "workspace_id": "00000000-0000-4000-8000-000000000001",
+    "client_binding_id": "00000000-0000-4000-8000-000000000011",
+    "actor_id": "00000000-0000-4000-8000-000000000021",
+    "operation_id": "00000000-0000-4000-8000-000000005003",
+    "version": "pilot_manual_csv_v1",
+    "destination_id": "00000000-0000-4000-8000-000000000901",
+    "prepared_at": "2026-10-22T00:00:00.000Z",
+    "status": "prepared_for_manual_download",
+    "file_name": "outpost-reviewed-75a1739265dd6c00.csv",
+    "mime_type": "text/csv;charset=utf-8",
+    "file_hash": "75a1739265dd6c004cb38c9203f3e0bd18b1bad080dbdcb2e5cbce203d8a4acd",
+    "byte_length": 14110,
+    "rows": [
+      {
+        "task_id": "00000000-0000-4000-8000-000000000301",
+        "revision_hash": "b206e517feaa8b2767434e5a7a6b9865eb44040d5052379d1ff1012f09c48ec5",
+        "approval_hash": "8cdef9e3cec6f05c09b9d8260476b5f565c2f4ca91452c334c72fd03092395c6",
+        "root_draft_hash": "641a68c541f1cafb727193ff5a6fc9f3762db671a411302ad42c98c6fedd2e4a",
+        "packet_hash": "85f8e59605e27fb70a97abd86925f2deb691dba9cf19027b49be55d5573ff91b"
+      }
+    ],
+    "escaped_cells": [],
+    "dispatch_allowed": false,
+    "remote_update_performed": false
+  }
+}
