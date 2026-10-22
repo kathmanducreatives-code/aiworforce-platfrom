@@ -199,6 +199,17 @@ export interface Scenario {
   jobsDatasetRaw?: string;
   /** Every runtime model request after compilation times out (S21). */
   modelTimeout?: boolean;
+  /**
+   * KILL THE FIRST WORKER HARD at this vendor request, then let a second worker
+   * re-claim the queue row and run it (a SIGKILL, offline). From that request
+   * on, every request the first worker makes — database and vendor alike —
+   * never settles, so it can neither write nor buy again:
+   *   `jobs_post`    the job-search start (its answer never arrives);
+   *   `jobs_status`  the first status read of the job search — the run id is
+   *                  already recorded, and no checkpoint has been written yet;
+   *   `details_post` the company-details start, after discovery checkpointed.
+   */
+  interrupt?: "jobs_post" | "jobs_status" | "details_post";
 }
 export interface Run {
   trace: Json; operations: Json[]; leads: Json[]; credits: Json[]; tasks: Json[]; refused: string[];
@@ -249,8 +260,14 @@ export async function runScenario(s: Scenario): Promise<Run> {
   let detailsUrl: string | null = null;
   let compiled = false;
   let models = 0;
+  // The worker id whose process is "dead" (`s.interrupt`); its requests never settle.
+  let deadWorker: string | null = null;
+  let onKilled: () => void = () => {};
+  const killed = new Promise<void>((r) => onKilled = r);
   const fakeTransport: typeof fetch = (u, init) => {
     const url = new URL(u instanceof Request ? u.url : String(u));
+    const worker = missionAdmission.getStore()?.workerId ?? null;
+    if (deadWorker !== null && worker === deadWorker) return new Promise<Response>(() => {});
     if (url.origin === new URL(REST_URL).origin) return localFetch(u, init);
     const body = typeof init?.body === "string" ? (() => { try { return JSON.parse(init.body as string); } catch { return init.body; } })() : null;
     trace.requests.push({ method: init?.method ?? "GET", host: url.hostname, path: url.pathname, query: [...url.searchParams].filter(([k]) => k !== "token"),
@@ -278,6 +295,14 @@ export async function runScenario(s: Scenario): Promise<Run> {
     assertEquals(url.hostname, "api.apify.com", `unexpected vendor ${url.hostname}`);
     vendorRequests.push({ method: init?.method ?? "GET", path: url.pathname.replace(/^\/v2\//, ""), body });
     const kind = url.pathname.includes("linkedin-company") || url.pathname.includes("details") ? "details" : "jobs";
+    const method = init?.method ?? "GET";
+    const at = method === "POST" ? `${kind}_post` : url.pathname.includes("/actor-runs/run-jobs") ? "jobs_status" : null;
+    if (s.interrupt && trace.killed_at === undefined && at === s.interrupt && worker !== null) {
+      deadWorker = worker;
+      trace.killed_at = at;
+      onKilled();
+      return new Promise<Response>(() => {});
+    }
     const json = (b: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } }));
     if ((init?.method ?? "GET") === "POST") {
       const refused = kind === "jobs" ? s.jobsStartStatus : s.detailsStartStatus;
@@ -325,16 +350,16 @@ export async function runScenario(s: Scenario): Promise<Run> {
     await sql`update public.discovery_smoke_authorizations a set criteria_hash = encode(sha256(convert_to(q.request::text, 'UTF8')), 'hex')
                 from public.lead_mission_queue q where q.id = a.queue_id and a.id = ${m.authorizationId}`;
     const { handleRunAgent } = await import("../../../supabase/functions/run-agent/index.ts");
-    const runner = createLeadMissionRunner({
+    const makeRunner = (workerId: string) => createLeadMissionRunner({
       handler: async (req, opts) => {
         const r = await handleRunAgent(req, opts);
         trace.handler ??= { status: r.status, body: await r.clone().json() };
         return r;
       },
       enforceMissionWallClock: true, serviceRoleKey: key, functionsBaseUrl: `${REST_URL}/functions/v1/`,
-      admission: { workerId: m.workerId }, createDeadline: (budgetMs) => createExecutionDeadline({ budgetMs }),
+      admission: { workerId }, createDeadline: (budgetMs) => createExecutionDeadline({ budgetMs }),
       bind: async (queueId, taskId, lineageId) => {
-        const { data, error } = await client.rpc("bind_lead_mission_execution", { p_queue_id: queueId, p_worker_id: m.workerId, p_task_id: taskId, p_lineage_id: lineageId });
+        const { data, error } = await client.rpc("bind_lead_mission_execution", { p_queue_id: queueId, p_worker_id: workerId, p_task_id: taskId, p_lineage_id: lineageId });
         assertEquals(error, null);
         trace.task_id = taskId;
         return (Array.isArray(data) ? data[0] : data)?.bound === true;
@@ -349,8 +374,25 @@ export async function runScenario(s: Scenario): Promise<Run> {
       },
     });
     const [q] = await sql`select created_at from public.lead_mission_queue where id = ${m.queueId}`;
-    trace.runner = await runner.run({ queueId: m.queueId, workspaceId: m.ws, request, taskId: null, lineageId: null, attempts: 1, isResume: false,
+    const first = makeRunner(m.workerId).run({ queueId: m.queueId, workspaceId: m.ws, request, taskId: null, lineageId: null, attempts: 1, isResume: false,
       heldUntil: null, enqueuedAt: new Date(q.created_at).toISOString() }, { executionBudgetMs: 150000, signal: new AbortController().signal });
+    if (!s.interrupt) {
+      trace.runner = await first;
+    } else {
+      const ended = await Promise.race([first.then(() => true), killed.then(() => false)]);
+      assert(!ended, `the first worker finished before reaching ${s.interrupt}`);
+      // The dead worker's queue lease lapses and a second worker claims the row,
+      // as claim_next_lead_mission does: same row, its bound task and lineage.
+      const second = uuid();
+      const [b] = await sql`update public.lead_mission_queue set claimed_by = ${second}, lease_expires_at = now() + interval '3 minutes',
+                              attempts = attempts + 1, status = 'running'
+                            where id = ${m.queueId} returning task_id, lineage_id, attempts`;
+      trace.resumed_from = { task_id: b.task_id, lineage_id: b.lineage_id,
+        checkpointed: (await sql`select result ? 'company_first_state' as c from public.tasks where id = ${b.task_id}`)[0]?.c ?? null };
+      trace.runner = await makeRunner(second).run({ queueId: m.queueId, workspaceId: m.ws, request, taskId: b.task_id, lineageId: b.lineage_id,
+        attempts: b.attempts, isResume: true, heldUntil: null, enqueuedAt: new Date(q.created_at).toISOString() },
+        { executionBudgetMs: 150000, signal: new AbortController().signal });
+    }
 
     const operations = await sql`select kind, actor, committed_microusd, reported_microusd, report_source, provider_run_id, operation_key
       from public.discovery_smoke_operations where authorization_id = ${m.authorizationId} order by admitted_at`;
