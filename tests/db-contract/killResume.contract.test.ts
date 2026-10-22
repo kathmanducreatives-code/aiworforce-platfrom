@@ -40,20 +40,27 @@ Deno.test("kill after the first paid start, before the first checkpoint: the nex
   assert(r.trace.runner?.terminal === true, `the resumed run ended: ${JSON.stringify(r.trace.runner)}`);
   assertEquals(r.trace.handler?.status, 200, `run-agent accepted the resume: ${JSON.stringify(r.trace.handler?.body)}`);
   assertEquals((await lineageOf(r.trace.resumed_from.task_id))?.generation, 2, "a second generation ran on the same lineage");
-  // The run id was recorded before the kill. The replayed start is answered
-  // `adopt` and is never sent again; the run id and its committed maximum stay.
+  // The run id was recorded before the kill. The re-entered slice adopts that
+  // run by id from the ledger and reads its dataset: the start is never sent
+  // again, so the gate is not even asked; the run id and its committed maximum stay.
   assertEquals(posts(r, "linkedin-job-search"), 1, "the job search is bought once");
   const jobs = r.of("provider").filter((o) => o.actor.includes("linkedin-job-search"));
   assertEquals(jobs.map((o) => o.provider_run_id), ["run-jobs"]);
-  assert(r.refused.includes("adopt"), `the replay was recognised: ${JSON.stringify(r.refused)}`);
+  assert(r.outcome.attempts.some((a: string) => a.startsWith("adopted run run-jobs") && a.includes("without a second charge")),
+    `the dead slice's run was adopted: ${JSON.stringify(r.outcome.attempts)}`);
+  assert(!r.refused.includes("adopt") && !r.refused.includes("uncertain"), `no replayed start reached the gate: ${JSON.stringify(r.refused)}`);
   assert(!Object.values(r.outcome.credits).includes("refunded"), `nothing refunded: ${JSON.stringify(r.outcome.credits)}`);
+  assertEquals(r.outcome.credits.apify_linkedin_job_search, "charged", "its credit is charged once, by the adoption's settlement");
+  // Every provider purchase stays listed for the operator to reconcile against the vendor.
   const open = (await unreconciled(r.m.queueId)) as Json[];
-  assertEquals(open.map((o) => [o.actor, o.state]), [["apify:harvestapi~linkedin-job-search", "open"]], "the purchase is listed as open liability");
-  // KNOWN LIMIT, not this fix: the gate answers an adopted start 503 instead of
-  // reading the adopted run, so the resumed slice ends partial, truthfully, and
-  // does not qualify from the dead slice's search. Pinned so a change is seen.
-  assertEquals(r.outcome.terminal, ["budget_exhausted"]);
-  assertEquals(r.outcome.qualified, []);
+  assertEquals(open.filter((o) => o.actor === "apify:harvestapi~linkedin-job-search").length, 1, "one job-search liability, not two");
+  // THE DEAD SLICE'S PURCHASE IS USED, NOT ONLY NOT RE-BOUGHT. The re-entered
+  // slice adopts the recorded run by id and reads its dataset, so the mission
+  // qualifies from the search it already paid for (before: `budget_exhausted`,
+  // nothing qualified, the dataset stranded).
+  assertEquals(r.outcome.terminal, r.outcome.terminal.length ? [r.outcome.terminal[0]] : [], "one terminal verdict");
+  assert(!["budget_exhausted"].includes(r.outcome.terminal[0]), `not stranded: ${JSON.stringify(r.outcome)}`);
+  assertEquals(r.outcome.qualified.length, 1, `qualified from the adopted search: ${JSON.stringify(r.outcome)}`);
   boundsHeld(r);
 });
 

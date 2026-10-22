@@ -4298,7 +4298,30 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 const restored =
                   readCapabilityExecutionState(body as Record<string, unknown>) ??
                   readCapabilityExecutionState(resumedTaskResult);
-                if (!restored) return restored;
+                // ── A RE-ENTERED FIRST SLICE ADOPTS WHAT THE DEAD ONE BOUGHT ──
+                //
+                // A first slice killed before its first checkpoint left no
+                // state, so the runs the ledger recovered above were dropped
+                // here and the engine asked for the same purchase again. The
+                // gate answered `adopt` as 503 (never sent, rightly), and the
+                // mission ended `budget_exhausted` beside a dataset it had paid
+                // for (killResume.contract, 2026-10-22).
+                //
+                // Only the recovered runs are offered. The seed carries no
+                // `mission_hash`, so `stateMatchesMission` rejects it and the
+                // engine starts a fresh state — nothing else is restored — while
+                // adoption, which reads `opts.state`, matches by exact provider +
+                // input fingerprint as on any resume. Same task + workspace gate.
+                if (!restored) {
+                  if (reentryGeneration === null) return restored;
+                  const pendingSeed = mergePendingRuns([], recoveredPendingRuns, resolvedRunIds);
+                  if (pendingSeed.length === 0 && recoveredCompletedRuns.length === 0) return restored;
+                  return {
+                    version: CAPABILITY_EXECUTION_STATE_VERSION,
+                    completed_capabilities: [], pending_capabilities: [], failed_capabilities: [],
+                    provider_attempts: [], pending_runs: pendingSeed, completed_runs: recoveredCompletedRuns,
+                  } as unknown as NonNullable<typeof restored>;
+                }
                 // ── NOTHING TO ADD IS NOT NOTHING TO DO ──────────────────
                 //
                 // This short-circuited on `recoveredPendingRuns.length === 0`
