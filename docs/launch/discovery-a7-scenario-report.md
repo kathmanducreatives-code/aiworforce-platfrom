@@ -92,9 +92,11 @@ actor, a vendor cap on every start, ≤ $0.05 model, ≤ $0.20 provider, ≤ $0.
 | S32 | stale worker on a completed mission | heartbeat refused, release refused, never re-claimed, outcome unchanged | PASS (new) |
 | S33 | completed, but dashboard retrieval fails | not reachable offline: hosted RLS and browser rendering | NOT TESTED |
 | S34 | open liabilities at the end | both purchases listed by `smoke-reconciliation.sql`; a new authorization refused (`unreconciled`); credits charged once each | PASS (new) |
+| S36 | worker SIGKILLed between a paid start and its execution-ledger run id | `killResumeAdoption` (11 contracts) and the real-process rehearsal (`tests/realprocess/`): the next generation adopts the run through a verified gate answer, reads it once, `completed`, 1 qualified, credits charged once, nothing refunded or held. Tampered or incomplete evidence (no run or dataset id, malformed or foreign dataset, another task, expired authorization, stale generation, another worker) keeps the unsent 503 | PASS (new, 2026-10-22) |
+| S37 | stale reaper after a confirmed purchase whose worker died | `creditReaper` (12 contracts, held fix `20261022120000`): charged at the live per-call credit, not refunded; unused and uncertain holds still released | PASS (new, 2026-10-22; held) |
 | S35 | recovery migration absent vs present | `leadMissionExhaustedLease` with `DB_CONTRACT_OMIT_HELD`: 3 fail without it, all pass with it (#108) | COVERED |
 
-**Totals (35 scenarios):** PASS 23 · COVERED 7 · FIXED 1 (S25) ·
+**Totals (35 scenarios, before S36–S37):** PASS 23 · COVERED 7 · FIXED 1 (S25) ·
 FAIL 2 (S10, S13) · FIXED by #109 1 (S07) · NOT TESTED 1 (S33). One further failing **variant**:
 S03b (S03 itself passes).
 
@@ -141,6 +143,49 @@ Run on the exact SHA to be dispatched. All must pass, with no known-gap skips:
 - **Real time and processes:** wall-clock behaviour under real latency, real
   process kills, GitHub runner start-up and the readiness gap before enqueue.
 
+## Crash recovery and credit accounting (2026-10-22)
+
+Two draft fixes close the accounting gaps that remained after #145 and #150. The evidence is offline: Postgres 17.11, PostgREST 12.2.3, scripted OpenAI and Apify, and nothing hosted.
+
+- **P1, the reaper, PR #153 (held SQL).** The 30-minute reaper released a stale reservation even when the execution ledger already named the provider run. It now charges that reservation at the live per-call credit when the run is confirmed: same workspace, task and logical call, with a non-blank run id. Unused and uncertain reservations are released exactly as before (#88). Proven by 12 contracts and 6 mutation proofs. The rollback was exercised on a real database.
+- **P2, adoption through the gate, PR P2_PR (stacked on #150).** A worker killed after the gate recorded a purchase, but before the execution ledger saved its run id, left a run the next slice could not use. The mission ended `budget_exhausted` next to a paid dataset, and the credit stayed held until the reaper refunded it. The gate now answers a fully verified `adopt` for an Apify start with the run itself, in Apify's start shape: operation, actor, payload, task, an earlier generation, and the same run and dataset. Nothing is sent. Anything less keeps the 503. Proven by 11 contracts, unit tests and 6 mutation proofs.
+- **Real processes.** Two `worker/main.ts` processes with a real SIGKILL and a real 30 s lease expiry. In the P2 window and in the #150 control, the second process finishes the mission with:
+  - one purchase per actor;
+  - credits charged once (10 → 8, 0 held);
+  - one qualified lead, no duplicates;
+  - lineage generation 2;
+  - no forbidden host;
+  - a no-op delayed reaper;
+  - no unresolved liability after the operator's reconciliation.
+
+  Before P2, the same run ended `budget_exhausted` with the credit held (9/1).
+
+What this proves for A7:
+- a worker crash at any point from the paid start onward neither buys twice nor strands what was bought, under smoke admission;
+- credits match purchases once the held billing fixes (`20261015130000`, `20261022120000`) are applied.
+
+What it does not prove:
+- that the held SQL is installed on the test project (it is not, and needs billing sign-off);
+- recovery outside smoke admission (no gate, so the purchase-claims proposal still applies);
+- real vendor or model behaviour;
+- reaper behaviour if no worker resumes within 30 minutes of a crash in the P2 window (the credit is released; the USD liability stays open).
+
+Found while testing, and not fixed here:
+- a resumed slice whose authorization expired ends `unhandled_exception` instead of a clean stop (nothing sent);
+- a quoted unlock (`find_decision_makers`, 2 credits) is settled at 1 credit by `runTool`.
+
+Results:
+
+| Tree | DB contract | Edge | Infra | Replay Lab | Mutation | Real process |
+|---|---|---|---|---|---|---|
+| `launch/hardening` 8b0e2b6 | 226 / 0 | 8844 / 0 | 187 / 0 | SAFE | 64 proofs | — |
+| P1 (#153) | 238 / 0 | 8844 / 0 | 191 / 0 | SAFE | 70 / 70 | — |
+| #150 be625f4 | 229 / 0 | 8848 / 0 | 187 / 0 | SAFE | — | control passes |
+| P2 (this branch) | 240 / 0 | 8853 / 0 | 187 / 0 | SAFE | 70 / 70 | 2 / 2 |
+| #144 + #145 + #149 + #150 + P1 + P2 | 252 / 0 | 8866 / 0 | 191 / 0 | SAFE | — | 2 / 2 |
+
+UI 657/0, Node UI 5/0, and the type-check, tsc and eslint ratchets pass on every tree. On the pinned PostgREST 12.2.3 the earlier local-only `fencedWrite` failure (PostgREST 16.4) does not occur. The Q1–Q4 qualification and E01 contracts (`a7Qualification`, `qualificationAuthority`, `qualificationHardening`) pass in the combined tree (the known false-qualification gaps stay skipped by default, as on the base).
+
 ## GO / NO-GO
 
 **NO-GO.** Offline blockers:
@@ -149,6 +194,8 @@ Run on the exact SHA to be dispatched. All must pass, with no known-gap skips:
 - this PR's S25 fix unmerged.
 
 (S07 is resolved: #109 merged on 2026-10-20.)
+
+Crash recovery and credits (2026-10-22): S36 and S37 pass offline. Accounting additionally requires the held billing fixes `20261015130000` and `20261022120000` to be approved and installed on the test project, or the reaper risk explicitly accepted.
 
 External prerequisites:
 - Apify account restriction lifted;
