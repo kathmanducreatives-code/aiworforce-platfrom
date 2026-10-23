@@ -209,3 +209,83 @@ Deno.test("real process (PR #150 control): SIGKILL at the first status read, run
   assert(r.summary.adopted_from_ledger >= 1, "adopted from the ledger");
   await recoveredOnce(r);
 });
+
+// ── THE ZERO-APIFY REAL-GPT PROCEDURE, END TO END (model scripted) ─────────
+//
+// Exactly what the operator will run on TEST: prepare the kickoff (compile,
+// interpretation check, one SQL transaction), run that transaction, let a real
+// worker process claim and run it, then judge the evidence document.
+Deno.test("real process: the zero-Apify real-GPT kickoff — prepared, run by a real worker, judged PASS", opts, async () => {
+  const { prepareKickoff } = await import("../../scripts/test-project/real-gpt/prepareKickoff.ts");
+  const { judgeRealGptRun, overall } = await import("../../scripts/test-project/real-gpt/realGptJudge.ts");
+  const evidenceSql = Deno.readTextFileSync(new URL("scripts/test-project/real-gpt/real-gpt-evidence.sql", ROOT));
+  const key = await mintJwt("service_role");
+  await reconcilePriorLiability();
+  // The TEST workspace's standing state: a user, the Scout agent, 10 credits, no Company Brain.
+  const ws = await (await import("../db-contract/lib/harness.ts")).seedWorkspace();
+  const user = uuid();
+  await sql`insert into auth.users (id, email) values (${user}, ${"real-gpt-" + user + "@example.invalid"})`;
+  await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${ws}, 'scout', 'Offline Scout', 'Find and verify the requested company using source evidence.', 'research')`;
+  await sql`insert into public.workspace_credit_balances (workspace_id, balance_credits) values (${ws}, 10)`;
+
+  const vendor = vendorResponder({ label: "kickoff-compile" }, { trace: { requests: [], model_stages: [] }, vendorRequests: [], isCompiled: () => false });
+  const original = globalThis.fetch;
+  // The preparer's own compile gate, in front of the scripted model, as the CLI installs it.
+  const { lunaOnlyFetch } = await import("../../scripts/test-project/real-gpt/prepareKickoff.ts");
+  const gate = lunaOnlyFetch(((u: RequestInfo | URL, i?: RequestInit) => {
+    const url = new URL(u instanceof Request ? u.url : String(u));
+    assertEquals(url.hostname, "api.openai.com", "only the compilation leaves the preparer");
+    return vendor(url, i, null);
+  }) as typeof fetch);
+  globalThis.fetch = gate.fetch;
+  Deno.env.set("OPENAI_API_KEY", "fake-openai-no-network");
+  Deno.env.set("LEAD_STRATEGIST_PROVIDER", "openai");
+  const queueId = uuid();
+  let k;
+  try {
+    k = await prepareKickoff({
+      workspace_id: ws, user_id: user, queue_id: queueId, plan_id: uuid(), pricing_version: "rehearsal-v1",
+      catalog: CATALOG.approved_quotes,
+      prices: { jobs_maximum_microusd: 5000, details_maximum_microusd: SYNTHETIC_DETAILS_MAXIMUM,
+        observed_at: new Date(Date.now() - 60_000).toISOString(), source: "synthetic offline fixture; not an approved vendor quote" },
+      compile: (mission, onModelCall) =>
+        buildMissionCompilerBinding({ workspaceId: ws, onModelCall }).proposeMission!({ originalUserQuery: mission, requestedCount: 1 }),
+    });
+  } finally {
+    globalThis.fetch = original;
+  }
+  assertEquals(k.interpretation.filter((v) => v.result !== "PASS"), [], "the interpretation passes before anything is queued");
+  assertEquals([gate.sent.length, gate.refused], [1, []], "one Luna compilation inside the bounds, nothing refused");
+  assertEquals(k.compile_ledger_rows.length, 1, "the compilation's model call is recorded");
+  assertEquals(k.authorization.actor_limits, { [JOBS]: 0, [DETAILS]: 0 });
+
+  // The reviewed transaction, run exactly as the operator runs it: psql, one transaction, stop on error.
+  const kickoffFile = Deno.makeTempFileSync({ prefix: "kickoff-", suffix: ".sql" });
+  Deno.writeTextFileSync(kickoffFile, k.sql);
+  const psql = await new Deno.Command("psql", {
+    args: [Deno.env.get("DB_CONTRACT_PG_URL")!, "-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", kickoffFile], stdout: "piped", stderr: "piped",
+  }).output();
+  assertEquals(psql.code, 0, new TextDecoder().decode(psql.stderr));
+  const [q0] = await sql`select status from public.lead_mission_queue where id = ${queueId}`;
+  assertEquals(q0.status, "queued");
+
+  const events = Deno.makeTempFileSync({ prefix: "real-gpt-events-", suffix: ".jsonl" });
+  const w = startWorker("real-gpt", ws, key, events, null);
+  const final = await waitFor("the real-GPT run to end", 240_000, async () => {
+    const [q] = await sql`select status from public.lead_mission_queue where id = ${queueId}`;
+    return ["complete", "failed", "cancelled"].includes(q.status) ? q : null;
+  });
+  w.child.kill("SIGTERM");
+  await w.child.status;
+  await w.flushed;
+  const ev = readEvents(events);
+  assertEquals(ev.filter((e) => e.type === "forbidden"), [], "no forbidden external call");
+  assertEquals(ev.filter((e) => e.type === "vendor" && e.host === "api.apify.com"), [], "no request reached Apify");
+
+  const [row] = [...await sql.unsafe(evidenceSql.replace(":'queue_id'", `'${queueId}'`))] as Array<Record<string, unknown>>;
+  const verdicts = judgeRealGptRun(Object.values(row)[0] as Record<string, unknown>);
+  console.log("REAL_GPT_JUDGE", JSON.stringify({ queue: final.status, verdicts: verdicts.map((v) => `${v.result} ${v.id}`) }));
+  assertEquals(verdicts.filter((v) => v.result === "FAIL"), [], "every automatic criterion passes");
+  assertEquals(overall(verdicts), "PASS");
+  await reconcilePriorLiability();
+});

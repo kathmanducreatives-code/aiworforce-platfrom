@@ -227,6 +227,8 @@ export interface Scenario {
    * planning only; no paid provider.
    */
   modelOnly?: boolean;
+  /** Run with no Apify token at all (a second barrier beside zero starts). */
+  withoutApifyToken?: boolean;
 }
 export interface Run {
   trace: Json; operations: Json[]; leads: Json[]; credits: Json[]; tasks: Json[]; refused: string[];
@@ -328,7 +330,9 @@ export async function runScenario(s: Scenario): Promise<Run> {
   };
   const saved = new Map(Object.keys(env).map((k) => [k, Deno.env.get(k)]));
   for (const [k, v] of Object.entries(env)) Deno.env.set(k, v);
-  for (const k of ["ANTHROPIC_API_KEY", "FIRECRAWL_API_KEY", "FIRECRAWL_USD_PER_CREDIT"]) { saved.set(k, Deno.env.get(k)); Deno.env.delete(k); }
+  for (const k of ["ANTHROPIC_API_KEY", "FIRECRAWL_API_KEY", "FIRECRAWL_USD_PER_CREDIT", ...(s.withoutApifyToken ? ["APIFY_API_TOKEN"] : [])]) {
+    saved.set(k, Deno.env.get(k)); Deno.env.delete(k);
+  }
 
   const evidence = { observed_at: new Date(Date.now() - 60_000).toISOString(), source: "synthetic offline fixture; not an approved vendor quote", liability_bound_ref: "offline rehearsal" };
   const p = CATALOG.approved_quotes as Json;
