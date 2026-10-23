@@ -219,8 +219,7 @@ Deno.test("reaper: the window still holds — a young confirmed reservation is l
   assertEquals(await balances(ws), { balance: 4, reserved: 1 });
 });
 
-Deno.test("reaper: never charges more than the live settle would — a quoted hold is charged the per-call credit", opts, async () => {
-  assertEquals(CREDITS_PER_PROVIDER_CALL, 1, "the SQL mirrors this constant; change both together");
+Deno.test("reaper: charges exactly what the live settle would — a quoted hold is charged in full, an unquoted one 1 credit", opts, async () => {
   const ws = await workspaceWith(10);
   const task = await seedTask(ws);
   const key = `${task}:unlock-${uuid()}`;
@@ -232,9 +231,18 @@ Deno.test("reaper: never charges more than the live settle would — a quoted ho
   await reap();
   const t = await txn(ws, key);
   assertEquals(t.status, "charged");
-  assertEquals(t.actual_credits, CREDITS_PER_PROVIDER_CALL);
-  assertEquals(t.refunded_credits, 2);
-  assertEquals(await balances(ws), { balance: 9, reserved: 0 });
+  assertEquals(t.actual_credits, 3, "the quoted price the live settle charges (fix/quoted-unlock-settle)");
+  assertEquals(t.refunded_credits, 0);
+  assertEquals(await balances(ws), { balance: 7, reserved: 0 });
+
+  // An unquoted provider call reserved, and is charged, the flat per-call credit.
+  const k2 = `${task}:jobs-${uuid()}`;
+  const a2 = await authorize(ws, k2, task);
+  await ledgerCall(ws, task, k2, "run-flat");
+  await age(a2.transaction_id);
+  await reap();
+  assertEquals((await txn(ws, k2)).actual_credits, CREDITS_PER_PROVIDER_CALL);
+  assertEquals(await balances(ws), { balance: 6, reserved: 0 });
 });
 
 Deno.test("reaper: a non-provider reservation is never charged by ledger evidence", opts, async () => {

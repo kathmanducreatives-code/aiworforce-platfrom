@@ -177,7 +177,9 @@ customer was not charged for a purchase that exists.
 The reaper now asks the execution ledger first. A provider-call row of the
 same workspace, task and logical call (`logical_call_key` = the credit's
 `idempotency_key`) that names a run id **confirms** the purchase: it is settled
-`charged` at the live settle's per-call credit (1, capped at the hold). An
+`charged` at what it reserved, which is what the live settle charges (1 credit,
+or the quoted unlock price once `fix/quoted-unlock-settle` is deployed — apply
+this migration only after it). An
 uncertain start (a ledger row with no run id) and an unused reservation (no
 row) are released exactly as before; the uncertain-start policy (#88) is
 unchanged. Settlement goes through `credits_finalize`, so a late live settle, a

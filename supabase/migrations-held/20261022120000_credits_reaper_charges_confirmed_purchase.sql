@@ -30,8 +30,10 @@
 --
 --   * CONFIRMED: settled `charged`, exactly as `settleProviderCall` would have
 --     settled it had the worker lived (`creditSettlementFor`: a run id means
---     started). The charge is the live path's: CREDITS_PER_PROVIDER_CALL (1),
---     capped at what was reserved; the rest is refunded by `credits_finalize`.
+--     started). The charge is the live path's: what the call reserved, which
+--     is CREDITS_PER_PROVIDER_CALL (1) or the Workbench's quoted price
+--     (runTool settles a started call at its reserved amount; this requires
+--     fix/quoted-unlock-settle to be deployed first).
 --   * UNCERTAIN (a ledger row with no run id: the start answer was lost) and
 --     UNUSED (no ledger row): released, exactly as before. Uncertain starts keep
 --     the approved policy (#88, discovery-smoke-admission.md item 7): held until
@@ -74,7 +76,7 @@ begin
             and length(btrim(coalesce(e.provider_run_id, ''))) > 0) then
       -- CONFIRMED: the provider named the run. Charged as the live settle would.
       perform public.credits_finalize(
-        v_txn.id, least(v_txn.reserved_credits, 1), 'charged',
+        v_txn.id, v_txn.reserved_credits, 'charged',
         'stale reservation charged by reaper: provider run confirmed');
     else
       perform public.credits_finalize(
