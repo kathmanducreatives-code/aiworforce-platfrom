@@ -11,6 +11,7 @@ import type { SectionHealth, SectionKey } from '@/lib/companyBrainSections';
 import type { CompanyBrainV2 } from '@/lib/normalizeCompanyBrain';
 import type { SaveFields } from '@/lib/companyBrainPatch';
 import { HealthBadge, InlineChips, InlineText, type ChipTone } from './InlineEdit';
+import { useBrainEditable } from './brainEditable';
 
 interface PanelProps {
   brain: CompanyBrainV2;
@@ -54,6 +55,7 @@ export function MarketPanel({ brain, health, saved, onEdit, onSaveFields }: Pane
   const t = brain.target_customer;
   const f = { section: 'targeting' as const, onSaveFields };
   const size = companySizeLabel(brain);
+  const editable = useBrainEditable();
   return (
     <div className="brain-stack">
       <SectionCard section="targeting" kicker="01 · Target market" title="Companies worth researching"
@@ -65,10 +67,12 @@ export function MarketPanel({ brain, health, saved, onEdit, onSaveFields }: Pane
           <Field {...f} field="funding_stage" label="Funding stages" values={t.funding_stage} />
           <div className="brain-field">
             <div className="brain-field-head"><span className="brain-field-label">Company size</span></div>
-            <button type="button" className={cn('brain-text-view', !size && 'is-empty')} onClick={() => onEdit('targeting')}>
-              <span className="min-w-0 flex-1">{size || 'Set an employee range'}</span>
-              <Pencil size={13} className="brain-text-pencil" aria-hidden /><span className="sr-only">Edit company size</span>
-            </button>
+            {editable ? (
+              <button type="button" className={cn('brain-text-view', !size && 'is-empty')} onClick={() => onEdit('targeting')}>
+                <span className="min-w-0 flex-1">{size || 'Set an employee range'}</span>
+                <Pencil size={13} className="brain-text-pencil" aria-hidden /><span className="sr-only">Edit company size</span>
+              </button>
+            ) : <p className={cn('brain-text-view is-static', !size && 'is-empty')}>{size || 'Not set'}</p>}
           </div>
         </div>
         <div className="brain-divider" />
@@ -165,6 +169,7 @@ export function RulesPanel({ brain, health, saved, onSaveFields }: PanelProps) {
 }
 
 function MoveMenu({ value, from, onMove }: { value: string; from: LaneField; onMove: (v: string, from: LaneField, to: LaneField) => Promise<boolean> }) {
+  if (!useBrainEditable()) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

@@ -17,11 +17,15 @@ import { SECTION_META, type SectionKey } from '@/lib/companyBrainSections';
 import { buildFieldPatch, type SectionState } from '@/lib/companyBrainPatch';
 import { saveCompanyBrainPatch } from '@/lib/companyBrainSave';
 import { describeUnsaved, keepUnsaved, type UnsavedEdit } from '@/lib/companyBrainUnsaved';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
+import { BrainEditableContext } from '@/components/company-brain/brainEditable';
 
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
   const { workspaceId } = useWorkspace();
   const { data, loading, isRefreshing, error, refresh } = useCompanyBrain();
+  // Viewers get a read-only page (Phase 3a). The server refuses their writes regardless.
+  const { canEditBrain } = useWorkspaceRole();
   const [openSection, setOpenSection] = useState<DrawerSectionKey | null>(null);
   const [restartOpen, setRestartOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState<SectionKey | null>(null);
@@ -194,7 +198,7 @@ export default function CompanyBrainDashboard() {
         )}
 
         {error && <div role="alert" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 p-4 text-sm"><span>Company Brain could not refresh. Please try again.</span><Button size="sm" variant="outline" onClick={() => refresh()}>Retry</Button></div>}
-        {(!error || data) && <BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} syncing={isRefreshing} onEdit={setOpenSection} onRestart={() => setRestartOpen(true)} onSaveFields={saveFields} />}
+        {(!error || data) && <BrainEditableContext.Provider value={canEditBrain}><BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} syncing={isRefreshing} onEdit={setOpenSection} onRestart={() => setRestartOpen(true)} onSaveFields={saveFields} /></BrainEditableContext.Provider>}
       </div>
 
       <CompanyBrainEditDrawer

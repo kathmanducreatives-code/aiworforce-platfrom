@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useBrainEditable } from './brainEditable';
 import { cn } from '@/lib/utils';
 import { FLOW_SECTIONS, deriveHealth, type SectionHealth, type SectionKey } from '@/lib/companyBrainSections';
 import {
@@ -48,6 +49,7 @@ const COVERAGE_LABEL: Record<SectionKey, string> = {
 const uniq = (values: string[]) => [...new Set(values.map((v) => v.trim()).filter(Boolean))];
 
 export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEdit, onRestart, onSaveFields }: Props) {
+  const editable = useBrainEditable();
   const [params, setParams] = useSearchParams();
   const tab: TabKey = isTab(params.get('tab')) ? (params.get('tab') as TabKey) : 'overview';
   const { ref: tabScroll, edges } = useScrollEdges<HTMLDivElement>(tab);
@@ -65,18 +67,19 @@ export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEd
         <div className="min-w-0">
           <p className="brain-eyebrow">Company Brain</p>
           <h1 className="brain-title">Your go-to-market intelligence</h1>
-          <p className="brain-lede">Everything your AI team knows about who you sell to, when to reach out, and how to sound. Click anything to change it.</p>
+          <p className="brain-lede">Everything your AI team knows about who you sell to, when to reach out, and how to sound.{editable ? ' Click anything to change it.' : ''}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {syncing && <span className="brain-sync" aria-live="polite">Syncing…</span>}
-          <DropdownMenu>
+          {!editable && <span className="brain-viewonly">View only · an owner, admin or editor can change it</span>}
+          {editable && <><DropdownMenu>
             <DropdownMenuTrigger asChild><Button size="sm" variant="outline" className="gap-2"><Pencil size={14} />Edit section<ChevronDown size={14} /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => onEdit('company')}>Company identity</DropdownMenuItem>
               {FLOW_SECTIONS.map((s) => <DropdownMenuItem key={s.drawerKey} onSelect={() => onEdit(s.drawerKey)}>{s.number} · {s.title}</DropdownMenuItem>)}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" variant="ghost" onClick={onRestart} className="gap-2"><RotateCcw size={14} />Re-run setup</Button>
+          <Button size="sm" variant="ghost" onClick={onRestart} className="gap-2"><RotateCcw size={14} />Re-run setup</Button></>}
         </div>
       </header>
 
@@ -125,6 +128,7 @@ function IdentityCard({ brain, health, active, activatedAt, saved, onEdit }: {
   brain: CompanyBrainV2; health: Record<SectionKey, SectionHealth>; active: boolean; activatedAt: string | null;
   saved: boolean; onEdit: (s: SectionKey) => void;
 }) {
+  const editable = useBrainEditable();
   const c = brain.company;
   const site = c.website_url ? formatSource(c.website_url) : null;
   const meta = uniq([c.category, c.business_model, c.stage, c.location, c.team_size ? `${c.team_size} people` : '']);
@@ -141,7 +145,7 @@ function IdentityCard({ brain, health, active, activatedAt, saved, onEdit }: {
             {site && (site.href
               ? <a className="brain-site" href={site.href} target="_blank" rel="noopener noreferrer">{site.label}<ArrowUpRight size={12} aria-hidden /></a>
               : <span className="brain-site">{site.label}</span>)}
-            <button type="button" className="brain-icon-btn" onClick={() => onEdit('company')} aria-label="Edit company identity"><Pencil size={13} /></button>
+            {editable && <button type="button" className="brain-icon-btn" onClick={() => onEdit('company')} aria-label="Edit company identity"><Pencil size={13} /></button>}
           </div>
           {meta.length > 0 && <p className="brain-company-meta">{meta.join(' · ')}</p>}
           {brain.positioning.promise
@@ -175,6 +179,7 @@ interface PanelProps {
 }
 
 function OverviewPanel({ brain, health, saved, onEdit, onSaveFields, onOpenTab }: PanelProps & { onOpenTab: (t: TabKey) => void }) {
+  const editable = useBrainEditable();
   const steps = useMemo(() => deriveNextSteps(brain), [brain]);
   const sentences = useMemo(() => buildIcpSentences(brain), [brain]);
   const sources = useMemo(() => brainSources(brain), [brain]);
@@ -196,7 +201,7 @@ function OverviewPanel({ brain, health, saved, onEdit, onSaveFields, onOpenTab }
             <p className="brain-kicker">Your ideal customer</p>
             <h3 id="brain-icp-title" className="brain-card-title">In one paragraph</h3>
           </div>
-          <span className="brain-card-hint"><Sparkles size={12} aria-hidden />Click a highlighted phrase to change it</span>
+          {editable && <span className="brain-card-hint"><Sparkles size={12} aria-hidden />Click a highlighted phrase to change it</span>}
         </div>
         <div className="brain-icp-text">
           {sentences.map((sentence, i) => (
@@ -221,7 +226,7 @@ function OverviewPanel({ brain, health, saved, onEdit, onSaveFields, onOpenTab }
           <ol className="brain-step-list">
             {steps.slice(0, 4).map((s) => (
               <li key={s.title}>
-                <button type="button" className="brain-step" data-kind={s.kind}
+                <button type="button" className="brain-step" data-kind={s.kind} disabled={!editable && s.section === 'company'}
                   onClick={() => (s.section === 'company' ? onEdit('company') : onOpenTab(SECTION_TAB[s.section]))}>
                   <span className="brain-step-mark" aria-hidden />
                   <span className="min-w-0 flex-1">
@@ -305,10 +310,12 @@ function OverviewPanel({ brain, health, saved, onEdit, onSaveFields, onOpenTab }
 function Phrase({ phrase, onEdit, onSaveFields }: {
   phrase: IcpPhrase; onEdit: (s: SectionKey) => void; onSaveFields: SaveFields;
 }): ReactNode {
+  const editable = useBrainEditable();
   if (phrase.kind === 'text') return <>{phrase.text === '.' ? '' : ' '}{phrase.text}</>;
   const filled = phrase.values.length > 0;
   const content = filled ? joinValues(phrase.values, phrase.joiner) : <><Plus size={12} aria-hidden />{phrase.label}</>;
   const cls = cn('brain-slot', !filled && 'is-empty');
+  if (!editable) return <>{' '}<span className={cn(cls, 'is-static')}>{filled ? joinValues(phrase.values, phrase.joiner) : 'not set'}</span></>;
 
   if (!phrase.ref) {
     return <>{' '}<button type="button" className={cls} onClick={() => onEdit(phrase.section)} aria-label={`Edit ${phrase.label}`}>{content}</button></>;

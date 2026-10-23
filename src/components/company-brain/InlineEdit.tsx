@@ -8,6 +8,7 @@ import { Check, Pencil, Plus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { monogram } from '@/lib/companyBrainInsights';
 import { HEALTH_LABEL, type SectionHealth } from '@/lib/companyBrainSections';
+import { useBrainEditable } from './brainEditable';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -61,7 +62,8 @@ export function InlineChips({
   addLabel = 'Add', emptyText, bare, autoAdd, actions,
 }: ChipsProps) {
   const { state, run } = useSaveState();
-  const [adding, setAdding] = useState(!!autoAdd);
+  const editable = useBrainEditable();
+  const [adding, setAdding] = useState(!!autoAdd && editable);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -80,7 +82,7 @@ export function InlineChips({
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setDraft(''); setAdding(false); }
   }
 
-  const addControl = adding ? (
+  const addControl = !editable ? null : adding ? (
     <input
       ref={inputRef}
       value={draft}
@@ -115,7 +117,7 @@ export function InlineChips({
             <span key={v} className="brain-chip">
               <span className="truncate">{v}</span>
               {actions?.(v)}
-              <button type="button" className="brain-chip-x" onClick={() => remove(v)} aria-label={`Remove ${v}`}><X size={11} /></button>
+              {editable && <button type="button" className="brain-chip-x" onClick={() => remove(v)} aria-label={`Remove ${v}`}><X size={11} /></button>}
             </span>
           ))}
           {addControl}
@@ -129,10 +131,10 @@ export function InlineChips({
               <span className="brain-row-mark" aria-hidden />
               <span className="min-w-0 flex-1">{v}</span>
               {actions?.(v)}
-              <button type="button" className="brain-chip-x" onClick={() => remove(v)} aria-label={`Remove ${v}`}><X size={12} /></button>
+              {editable && <button type="button" className="brain-chip-x" onClick={() => remove(v)} aria-label={`Remove ${v}`}><X size={12} /></button>}
             </li>
           ))}
-          <li>{addControl}</li>
+          {addControl && <li>{addControl}</li>}
         </ul>
       )}
 
@@ -142,10 +144,10 @@ export function InlineChips({
             <div key={v} className="brain-person">
               <span className="brain-person-avatar" aria-hidden>{monogram(v)}</span>
               <span className="min-w-0 flex-1 truncate">{v}</span>
-              <button type="button" className="brain-chip-x" onClick={() => remove(v)} aria-label={`Remove ${v}`}><X size={12} /></button>
+              {editable && <button type="button" className="brain-chip-x" onClick={() => remove(v)} aria-label={`Remove ${v}`}><X size={12} /></button>}
             </div>
           ))}
-          <div className="brain-person is-add">{addControl}</div>
+          {addControl && <div className="brain-person is-add">{addControl}</div>}
         </div>
       )}
 
@@ -165,6 +167,7 @@ interface TextProps {
 
 export function InlineText({ label, value, onCommit, placeholder, size = 'body' }: TextProps) {
   const { state, run } = useSaveState();
+  const editable = useBrainEditable();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -189,7 +192,9 @@ export function InlineText({ label, value, onCommit, placeholder, size = 'body' 
         <span className="brain-field-label">{label}</span>
         <SaveStatus state={state} />
       </div>
-      {editing ? (
+      {!editable ? (
+        <p className={cn('brain-text-view is-static', size === 'statement' && 'is-statement', !value && 'is-empty')}>{value || placeholder}</p>
+      ) : editing ? (
         <div className="brain-text-edit">
           <textarea
             ref={ref}

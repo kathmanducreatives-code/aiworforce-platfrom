@@ -278,3 +278,11 @@ a.brain-site:hover { color: rgb(var(--ag-text)); }
   .brain-card, .brain-chip, .brain-row, .brain-person, .brain-panel, .brain-ring-value { animation: none !important; transition: none !important; }
   .brain-tile:hover { transform: none; }
 }
+
+/* Read-only (viewer) — Phase 3a. Same look as the editable values, no affordances. */
+.brain-viewonly { font-size: 12px; color: hsl(var(--muted-foreground)); border: 1px solid hsl(var(--border)); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+.brain-text-view.is-static { cursor: default; }
+.brain-slot.is-static { cursor: default; background-image: none; }
+.brain-slot.is-static:hover { background-color: transparent; }
+.brain-slot.is-static.is-empty { font-style: italic; }
+.brain-step:disabled { cursor: default; opacity: .75; }
