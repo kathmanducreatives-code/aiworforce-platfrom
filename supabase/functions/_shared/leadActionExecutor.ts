@@ -12,7 +12,7 @@ import {
   runCompanyEnrichment, runGenerateOutreach,
   type LeadRecord, type FirecrawlFn, type PeopleSearchInput,
 } from "./leadActionRunner.ts";
-import { researchUnlockHash } from "./paidCallInputHash.ts";
+import { decisionMakerUnlockHash, researchUnlockHash } from "./paidCallInputHash.ts";
 import type { PeopleSearchContact } from "./decisionMakers.ts";
 import {
   runContactEnrichment, type ResolvedPerson,
@@ -261,7 +261,10 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         lead as unknown as LeadRecordLike,
         { workspace_id: ctx.workspace_id },
         {
-          provider: makePeopleSearchProvider(ctx.runTool, ctx.toolCtx),
+          // ONE ROW, ONE CHARGE: this lead's stages share one key, so the
+          // quoted price is reserved once per row and the fallback replays it.
+          provider: makePeopleSearchProvider(ctx.runTool, ctx.toolCtx,
+            lead.lead_candidate_id ? decisionMakerUnlockHash(String(lead.lead_candidate_id)) : null),
           lookupContacts: async (workspaceId) => {
             const { data } = await ctx.admin.from("contacts").select("id, linkedin_url").eq("workspace_id", workspaceId);
             return (data ?? []) as Array<{ id: string; linkedin_url: string | null }>;
