@@ -219,6 +219,14 @@ export interface Scenario {
    * worker claims the row (an operator, a reaper or a tamper between the two).
    */
   beforeResume?: (c: { m: Json; taskId: string }) => Promise<void>;
+  /**
+   * The first, real-GPT-only hosted step: the catalog's templates as usual (so
+   * the planner is shown exactly the approved actors and its request fits the
+   * model template), but every actor's start limit is 0, so the gate refuses
+   * each Apify start (`actor_limit`) before it is sent. Compilation and
+   * planning only; no paid provider.
+   */
+  modelOnly?: boolean;
 }
 export interface Run {
   trace: Json; operations: Json[]; leads: Json[]; credits: Json[]; tasks: Json[]; refused: string[];
@@ -326,7 +334,7 @@ export async function runScenario(s: Scenario): Promise<Run> {
   const p = CATALOG.approved_quotes as Json;
   const fill = (t: Json) => ({ ...t, ...evidence });
   const quotes = { jobs: fill(p.jobs), model: fill(p.luna), reads: fill(p.reads), details: { ...fill(p.details), maximum_microusd: SYNTHETIC_DETAILS_MAXIMUM } };
-  const m = await seedSmokeMission({ quotes, actorLimits: { [JOBS]: 1, [DETAILS]: 1 } });
+  const m = await seedSmokeMission({ quotes, actorLimits: s.modelOnly ? { [JOBS]: 0, [DETAILS]: 0 } : { [JOBS]: 1, [DETAILS]: 1 } });
   const user = uuid(), plan = uuid();
   await sql`insert into auth.users (id, email) values (${user}, ${"scenario-" + user + "@example.invalid"})`;
   await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${m.ws}, 'scout', 'Offline Scout', 'Find and verify the requested company using source evidence.', 'research')`;
