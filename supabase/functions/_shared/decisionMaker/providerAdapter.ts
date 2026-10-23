@@ -124,9 +124,11 @@ export function planToToolInput(plan: PeopleSearchPlan): Record<string, unknown>
 export function makePeopleSearchProvider(
   runTool: RunToolLike,
   toolCtx: unknown,
+  /** The row's billing unit (`decisionMakerUnlockHash`): every stage for this lead shares one credit. */
+  billingKey?: string | null,
 ): (plan: PeopleSearchPlan) => Promise<ProviderResponse> {
   return async (plan: PeopleSearchPlan): Promise<ProviderResponse> => {
-    const result = await runProviderPlan(plan, runTool, toolCtx);
+    const result = await runProviderPlan(plan, runTool, toolCtx, billingKey ?? null);
     return {
       status: result.status,
       profiles: result.profiles as Record<string, unknown>[],
@@ -141,10 +143,14 @@ export async function runProviderPlan(
   plan: PeopleSearchPlan,
   runTool: RunToolLike,
   toolCtx: unknown,
+  billingKey: string | null = null,
 ): Promise<AdapterResult> {
   let res: ToolResultLike;
   try {
-    res = await runTool("source_with_apify", planToToolInput(plan), toolCtx);
+    // A billing key only: these inputs are not compiled passthrough, so the
+    // outbound-hash check (`compiled_actor_input`) does not apply to them.
+    const input = billingKey ? { ...planToToolInput(plan), compiled_input_hash: billingKey } : planToToolInput(plan);
+    res = await runTool("source_with_apify", input, toolCtx);
   } catch (_e) {
     // A thrown tool is an infrastructure failure, not an empty result. The
     // exception itself is deliberately not propagated or logged verbatim.
