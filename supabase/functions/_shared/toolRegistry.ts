@@ -2064,6 +2064,9 @@ export async function runTool(
         db: ctx.admin as unknown as CreditDb,
         transaction_id: auth.transaction_id,
         started: settlement.started,
+        // THE QUOTED PRICE, AS RESERVED. Without it a started unlock was
+        // charged the flat default (1) and refunded the rest of its quote.
+        ...(quoted != null ? { amount: quoted } : {}),
         reason: result.ok ? "provider_call_succeeded" : String(result.error ?? "failed"),
       });
       console.log("[credits][settlement]", {
