@@ -11,7 +11,7 @@
 // fail. Every attack is judged by what landed (direct SQL), not by its status.
 //
 // Positive controls: provisioning still creates the caller's workspace, and a
-// member still reads their workspace and membership and edits their own Brain,
+// member still reads their workspace, membership and own Brain,
 // so "refused" cannot pass because the API is broken.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -132,7 +132,7 @@ Deno.test("the anonymous key writes neither table", opts, async () => {
   assertEquals(await workspaceRow(ws), before);
 });
 
-Deno.test("positive control: provisioning, own-workspace reads and own-Brain edits still work", opts, async () => {
+Deno.test("positive control: provisioning and own-workspace, membership and Brain reads still work", opts, async () => {
   const newcomer = await user();
   const browser = await browserAs("authenticated", newcomer);
 
@@ -149,11 +149,13 @@ Deno.test("positive control: provisioning, own-workspace reads and own-Brain edi
   assertEquals(wsRead.error, null);
   assertEquals(wsRead.data?.length, 1, "and their own workspace");
 
-  const edit = await browser.from("company_brain").update({ profile: { company: { name: "Mine" } } })
-    .eq("workspace_id", ws).select("workspace_id");
-  assertEquals(edit.error, null);
-  assertEquals(edit.data?.length, 1, "and still edits their own Brain (membership gate intact)");
-  assertEquals(await brainName(ws), "Mine");
+  // The membership gate is proven by a READ: company_brain's select policy is
+  // the same has_workspace_access check. (Browser WRITES to the Brain are
+  // removed for every role by Company Brain Phase 3a; edits go through the
+  // backend, so this control deliberately does not depend on them.)
+  const brainRead = await browser.from("company_brain").select("workspace_id").eq("workspace_id", ws);
+  assertEquals(brainRead.error, null);
+  assertEquals(brainRead.data?.length, 1, "and reads their own Brain (membership gate intact)");
 
   const { ws: other } = await victim();
   const otherRead = await browser.from("workspaces").select("id").eq("id", other);
