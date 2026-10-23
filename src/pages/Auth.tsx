@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 
+import { getCurrentWorkspaceId } from '@/lib/orchestration';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, MailCheck } from 'lucide-react';
 
@@ -14,11 +15,14 @@ type Mode = 'signin' | 'signup' | 'forgot';
 
 async function destinationForUser(userId: string): Promise<string> {
   try {
-    // Wait briefly for the workspace provision trigger to land.
+    // The Brain of the workspace the app will open (Phase 3b) — not whichever
+    // Brain row happens to come back first for a user in several workspaces.
+    const workspaceId = await getCurrentWorkspaceId();
+    if (!workspaceId) return '/onboarding/company-brain';
     const { data } = await supabase
       .from('company_brain')
       .select('onboarding_completed')
-      .limit(1)
+      .eq('workspace_id', workspaceId)
       .maybeSingle();
     return data?.onboarding_completed ? '/dashboard' : '/onboarding/company-brain';
   } catch {
