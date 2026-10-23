@@ -124,6 +124,7 @@ checks the refusals with a stub `psql`.
 | 41 | `20260929120000_lock_down_definer_rpcs.sql` |
 | 42 | `20260929130000_revoke_anon_writes_on_workspace_tables.sql` |
 | 43 | `20260929140000_beta_access_requests.sql` |
+| 44 | `20261022120000_close_workspace_self_join.sql` |
 
 **Step C: the held Lead V2 queue chain (needed by the worker)**
 
