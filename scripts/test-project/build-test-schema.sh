@@ -18,7 +18,7 @@
 #
 # Applies, in the order tests/db-contract/bootstrap.sh proves in CI:
 #   A  the held baseline, B  every shipped migration, C  the held Lead V2 chain,
-#   D  (opt-in) the held billing fix, E  (opt-in) the held smoke admission.
+#   D  (opt-in) the held billing fixes (re-arm, then reaper), E  (opt-in) the held smoke admission.
 #   F  (explicit test-only opt-in) permanent no-Company-Brain guard, before seeding.
 #
 # CRON SAFETY. Two shipped migrations schedule `net.http_post` to the literal
@@ -65,6 +65,8 @@ held_v2=(
   20261019120000_lead_mission_v2_exhausted_lease_terminal.sql
 )
 billing_fix="$held/20261015130000_credits_rearm_settled_key.sql"
+# The reaper fix depends on the re-arm fix (it reads `rearmed_at`): same flag, applied right after it.
+reaper_fix="$held/20261022120000_credits_reaper_charges_confirmed_purchase.sql"
 admission="$held/20261015140000_discovery_smoke_admission.sql"
 no_brain="$root/scripts/test-project/sql/20261017120000_discovery_test_no_company_brain.sql"
 # Every file is checked before anything connects, so a build never stops half-way on a missing one.
@@ -73,6 +75,8 @@ for f in "$held/20260816120000_baseline_schema.sql" "${held_v2[@]/#/$held/}" "$d
 done
 [ $with_billing -eq 0 ] || [ -f "$billing_fix" ] \
   || refuse "--with-held-billing-fix needs ${billing_fix#$root/} (its PR is not merged here)"
+[ $with_billing -eq 0 ] || [ -f "$reaper_fix" ] \
+  || refuse "--with-held-billing-fix needs ${reaper_fix#$root/} (its PR is not merged here)"
 [ $with_admission -eq 0 ] || [ -f "$admission" ] \
   || refuse "--with-held-admission needs ${admission#$root/} (its PR is not merged here)"
 [ $with_no_brain -eq 0 ] || {
@@ -103,7 +107,7 @@ apply() {
 apply "$held/20260816120000_baseline_schema.sql"
 for f in $(ls "$root/supabase/migrations/"*.sql | sort); do apply "$f"; done
 for f in "${held_v2[@]}"; do apply "$held/$f"; done
-if [ $with_billing -eq 1 ]; then apply "$billing_fix"; fi
+if [ $with_billing -eq 1 ]; then apply "$billing_fix"; apply "$reaper_fix"; fi
 if [ $with_admission -eq 1 ]; then apply "$admission"; fi
 if [ $with_no_brain -eq 1 ]; then apply "$no_brain"; fi
 

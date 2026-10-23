@@ -165,6 +165,37 @@ claims, concurrency): either can be applied without the others.
 Rollback, verbatim to the baseline functions:
 `rollback/20261015130000_credits_rearm_settled_key.down.sql`.
 
+## `20261022120000_credits_reaper_charges_confirmed_purchase.sql`
+
+Billing. `credits_release_stale` refunded every reservation still `reserved`
+after 30 minutes, including one whose provider run had **already been bought**:
+a worker killed after the start answered, but before `runTool` settled, leaves
+the run id in `lead_execution_calls` and the credit unsettled. A slice that
+later adopts that run reserves nothing new, so the release was final, and the
+customer was not charged for a purchase that exists.
+
+The reaper now asks the execution ledger first. A provider-call row of the
+same workspace, task and logical call (`logical_call_key` = the credit's
+`idempotency_key`) that names a run id **confirms** the purchase: it is settled
+`charged` at what it reserved, which is what the live settle charges (1 credit,
+or the quoted unlock price once `fix/quoted-unlock-settle` is deployed — apply
+this migration only after it). An
+uncertain start (a ledger row with no run id) and an unused reservation (no
+row) are released exactly as before; the uncertain-start policy (#88) is
+unchanged. Settlement goes through `credits_finalize`, so a late live settle, a
+second reaper pass or a recovering worker replays and never charges twice.
+
+**Not approved for any hosted project.** It needs billing sign-off.
+**Depends on `20261015130000_credits_rearm_settled_key.sql`** (its window reads
+`rearmed_at`). Applied only by `tests/db-contract/bootstrap.sh` to the lane's
+throwaway database. `tests/db-contract/creditReaper.contract.test.ts` proves
+the behaviour, and `tests/db-contract/mutation.sh` proves those tests fail
+without it or with any one evidence guard removed.
+
+Rollback, verbatim to the re-arm migration's reaper (run it before the re-arm
+rollback when rolling both back):
+`rollback/20261022120000_credits_reaper_charges_confirmed_purchase.down.sql`.
+
 ## `20261015140000_discovery_smoke_admission.sql`
 
 Durable admission for **one** controlled Discovery smoke mission (at most
