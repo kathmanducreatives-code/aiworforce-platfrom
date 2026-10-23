@@ -55,7 +55,7 @@ continues through the existing native claim/fenced-write functions.
 - `tests/edge-functions/pilotTaskRegistration.test.ts`.
 - `tests/outpost-native/{task-lifecycle,registration-auth}.test.ts` and `lib/taskRegistration.ts`.
 - `tests/outpost-native/{run.sh,fixture.ts,api-security.test.ts}`: real database/auth fixtures and exact shared dependency composition.
-- `tests/outpost-native/{mutate-registration-verifier,integrate-brain-owner}.sh`.
+- `tests/outpost-native/{mutate-registration-verifier,integrate-brain-owner,test-bind-collision}.sh`.
 - `.github/workflows/outpost-native-security.yml`: required native/GoTrue/mutation/owner-source gates; historical red controls retained separately.
 - This report, JSON receipt, client contract and authoritative plan/progress tracker.
 
@@ -206,3 +206,24 @@ then leaves previous access restrictions intact. Native test rolls back/reapplie
 successfully on empty state. No CASCADE, scope rewrites, permission revival or data
 loss rollback is allowed. Before any future populated rollback: disable writers
 and executor admission and design an owner-reviewed forward recovery operation.
+
+### CI harness correction (same Phase 1 PR)
+
+Initial implementation head `b182e4816a556bc83f21c7a55af1b6df7a8c5e7d` passed the
+[full CI gate](https://github.com/kathmanducreatives-code/aiworforce-platfrom/actions/runs/39976500624),
+including all three database and eight mutation shards. Its separate
+[native workflow](https://github.com/kathmanducreatives-code/aiworforce-platfrom/actions/runs/39976500587)
+failed at the last owner-integration launch: PostgREST could not bind a randomly
+guessed port (`Address in use`). No security assertion was weakened or skipped.
+
+The test harness now requests a kernel-selected free port, then allows **at most
+three process launches and only after a bind-address collision, before any test**.
+Other startup failures/timeouts fail immediately. It never retries an assertion,
+Auth operation, model call or provider operation. A test-only invoker RPC returns
+a per-disposable-database nonce, so a foreign HTTP 200 is insufficient readiness.
+No deployed migration/function is added. `test-bind-collision.sh` occupies the
+first port with a real unrelated HTTP200 listener during all five owner native
+lanes. The required workflow uses that regression path. PostgREST12 and16 bind
+error wording is handled explicitly; no broad crash retry. Final-head collision
+proof **PASS locally across all five native lanes**; final-head CI outcome is
+recorded in the publication receipt.

@@ -1,4 +1,4 @@
-# AUTH-01 / EXEC-01 client boundary contract — A1–A7 agreed with A7 amendment, DDL pending
+# AUTH-01 / EXEC-01 client boundary contract — A1–A6 accepted; A7 amendment pending; DDL pending
 
 **Target selected by user: one agency workspace, multiple isolated client accounts,
 with separate Company Brain per client. Canonical parent/grant/Brain shape agreed with Brain Claude; grant-generation

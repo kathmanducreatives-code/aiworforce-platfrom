@@ -346,3 +346,10 @@ Backend pre-effect/immutable executable lifecycle handoff is still outstanding.
 do not start Phase 2. Later durable recovery/browser acceptance remains planned,
 not quietly implemented. P1–P8 disabled; A7 NO-GO. No hosted migrations/writes,
 deployment, paid calls, real records, sends, merges or customer activation.
+
+CI follow-up in this successor: implementation head `b182e481` passed full CI
+(all database/mutation shards), but dedicated native CI hit a pre-test random REST
+port collision. Owned harness fix uses kernel-chosen ports, bounded bind-only
+startup recovery and own-database nonce readiness. The required owner-integration
+lane now forces a real occupied HTTP200 listener. No security assertion or model/
+provider retry changed. See final-head receipt for the rerun, not the earlier head.

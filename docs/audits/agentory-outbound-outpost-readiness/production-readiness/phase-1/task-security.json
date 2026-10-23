@@ -61,7 +61,13 @@
     },
     "new_modules_native_typecheck": "PASS",
     "new_six_file_lint": "PASS",
-    "shell_parse": "PASS"
+    "shell_parse": "PASS",
+    "real_bind_collision": {
+      "status": "PASS",
+      "native_lanes": 5,
+      "foreign_listener": "real loopback HTTP200, wrong database nonce",
+      "test_or_provider_retries": 0
+    }
   },
   "owner_composition": {
     "method": "git archive exact owner tree; check/apply independent workspace diff; overlay owned pilot files; disposable database only; no merge or owner branch modification",
@@ -119,5 +125,13 @@
     "merges": false,
     "deployments": false,
     "sends": false
+  },
+  "initial_ci": {
+    "head": "b182e4816a556bc83f21c7a55af1b6df7a8c5e7d",
+    "full_ci_gate": "PASS",
+    "run": 39976500624,
+    "native_workflow": 39976500587,
+    "native_result": "FAIL: pre-test REST port already in use at final owner native lane",
+    "correction": "Kernel-selected port, at most three bind-only launches, own-database nonce readiness and required real-occupied-port regression. No assertion/model/provider retries."
   }
 }

@@ -71,9 +71,9 @@ jobs:
         run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" tests/outpost-native/mutate-registration-verifier.sh | tee /tmp/outpost-native-p1-registration-mutant.log
       - name: Prepare exact Company Brain and workspace-selection owner sources
         run: git fetch --no-tags --depth=1 origin 60be04712c41193da213a95c1918f7f4f9a4e645 cc83eb7ee3edf68192378ef68805a71b125edc59 8b0e2b6bdb20d6fe30542da39f0170d514d52746
-      - name: Integrated Brain owner source and pilot native security acceptance
+      - name: Integrated Brain owner security with real REST bind collisions
         id: owner-security
-        run: tests/outpost-native/integrate-brain-owner.sh | tee /tmp/outpost-native-owner-integration.log
+        run: tests/outpost-native/test-bind-collision.sh | tee /tmp/outpost-native-owner-integration.log
       - name: Historical surface without Brain 169 (expected shared dependency failure)
         id: integrated-surface-readiness
         continue-on-error: true

@@ -135,17 +135,47 @@ fi
 psql "$db_url" -X -q -c "alter role authenticator with login password '$auth_pw'"
 # Intentionally expose the private schema IN THIS TEST ONLY: prove RLS still
 # denies foreign rows/writes even after a mistaken PostgREST exposure setting.
-rest_port="$(( 30000 + RANDOM % 20000 ))"
-PGRST_DB_URI="postgres://authenticator:$auth_pw@127.0.0.1:$pg_port/postgres" \
-PGRST_DB_SCHEMAS=public,outpost_private PGRST_DB_ANON_ROLE=anon \
-PGRST_JWT_SECRET="$jwt_secret" PGRST_DB_POOL=4 PGRST_DB_MAX_ROWS=1000 \
-PGRST_DB_EXTRA_SEARCH_PATH=public,extensions PGRST_SERVER_HOST=127.0.0.1 \
-PGRST_SERVER_PORT="$rest_port" "$bin" >"$log" 2>&1 &
-rest_pid=$!
-for _ in $(seq 1 60); do
-  kill -0 "$rest_pid" 2>/dev/null || { cat "$log" >&2; exit 1; }
-  curl -fsS -o /dev/null "http://127.0.0.1:$rest_port/" 2>/dev/null && break
-  sleep 0.5
+# Kernel-selected ports avoid occupied random guesses. A concurrent listener may
+# still win after the probe closes: retry ONLY bind failures, at most 3 launches,
+# before any test runs. Never retry an assertion, Auth request or database effect.
+free_rest_port() {
+  python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()'
+}
+rest_port="${OUTPOST_NATIVE_FIRST_REST_PORT:-$(free_rest_port)}"
+case "$rest_port" in ''|*[!0-9]*) echo 'invalid loopback REST port' >&2; exit 2;; esac
+# A response from some other HTTP server is not readiness. A test-only invoker
+# function returns this disposable database's nonce; it exposes no application
+# data and is never part of a migration or a hosted schema.
+probe_nonce="$(openssl rand -hex 24)"
+psql "$db_url" -X -q -v ON_ERROR_STOP=1 -c "create function public.outpost_test_instance() returns text language sql immutable security invoker set search_path='' as 'select ''$probe_nonce''::text'"
+start_postgrest() {
+  PGRST_DB_URI="postgres://authenticator:$auth_pw@127.0.0.1:$pg_port/postgres" \
+  PGRST_DB_SCHEMAS=public,outpost_private PGRST_DB_ANON_ROLE=anon \
+  PGRST_JWT_SECRET="$jwt_secret" PGRST_DB_POOL=4 PGRST_DB_MAX_ROWS=1000 \
+  PGRST_DB_EXTRA_SEARCH_PATH=public,extensions PGRST_SERVER_HOST=127.0.0.1 \
+  PGRST_SERVER_PORT="$rest_port" "$bin" >"$log" 2>&1 &
+  rest_pid=$!
+  for _ in $(seq 1 60); do
+    kill -0 "$rest_pid" 2>/dev/null || return 1
+    if [ "$(curl -fsS -H 'Accept: application/json' "http://127.0.0.1:$rest_port/rpc/outpost_test_instance" 2>/dev/null)" = "\"$probe_nonce\"" ]; then
+      kill -0 "$rest_pid" 2>/dev/null && return 0
+      return 1
+    fi
+    sleep 0.5
+  done
+  return 2
+}
+for attempt in 1 2 3; do
+  if start_postgrest; then break; else startup_rc=$?; fi
+  # Reap before another launch. Do not hide crashes/schema failures/timeouts.
+  if [ "$startup_rc" -eq 1 ]; then wait "$rest_pid" 2>/dev/null || true; rest_pid=""; fi
+  if [ "$startup_rc" -eq 1 ] && grep -Eq 'Address( already)? in use' "$log" && [ "$attempt" -lt 3 ]; then
+    echo 'Local REST bind collision; choosing a new port before tests' >&2
+    rest_port="$(free_rest_port)"
+    continue
+  fi
+  cat "$log" >&2
+  exit 1
 done
 echo "Disposable PostgreSQL 17.6 + $("$bin" --version); private-schema exposure is test-only"
 set +e
