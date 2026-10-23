@@ -192,16 +192,26 @@ Deno.test({
     await sql`insert into public.workspace_members(workspace_id,user_id,role) values (${w},${x.ua},'owner')`;
     await sql`insert into public.tasks(id,workspace_id,user_id,status,payload) values (${id},${w},${x.ua},'ready','{}')`;
     await sql`insert into public.company_brain(workspace_id,profile) values (${w},'{}')`;
-    for (const token of [(await jwt(x.ua, x.sa)).token, x.service]) {
+    for (
+      const [actor, token] of [["owner", (await jwt(x.ua, x.sa)).token], [
+        "service",
+        x.service,
+      ]]
+    ) {
       assertEquals(
         (await publicApi(token, `tasks?id=eq.${id}`, "PATCH", {
-          payload: { legitimate: true },
+          payload: { legitimate: actor },
         })).status,
         204,
       );
       assertEquals(
+        (await sql`select payload from public.tasks where id=${id}`)[0].payload,
+        { legitimate: actor },
+        "HTTP 204 alone cannot prove the task write landed",
+      );
+      assertEquals(
         (await publicApi(token, `company_brain?workspace_id=eq.${w}`, "PATCH", {
-          profile: { legitimate: true },
+          profile: { legitimate: actor },
         })).status,
         204,
       );
@@ -209,7 +219,7 @@ Deno.test({
         (await sql`select profile from public.company_brain where workspace_id=${w}`)[
           0
         ].profile,
-        { legitimate: true },
+        { legitimate: actor },
       );
     }
   },
