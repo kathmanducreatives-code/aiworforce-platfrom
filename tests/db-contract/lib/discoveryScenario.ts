@@ -219,6 +219,16 @@ export interface Scenario {
    * worker claims the row (an operator, a reaper or a tamper between the two).
    */
   beforeResume?: (c: { m: Json; taskId: string }) => Promise<void>;
+  /**
+   * The first, real-GPT-only hosted step: the catalog's templates as usual (so
+   * the planner is shown exactly the approved actors and its request fits the
+   * model template), but every actor's start limit is 0, so the gate refuses
+   * each Apify start (`actor_limit`) before it is sent. Compilation and
+   * planning only; no paid provider.
+   */
+  modelOnly?: boolean;
+  /** Run with no Apify token at all (a second barrier beside zero starts). */
+  withoutApifyToken?: boolean;
 }
 export interface Run {
   trace: Json; operations: Json[]; leads: Json[]; credits: Json[]; tasks: Json[]; refused: string[];
@@ -320,13 +330,15 @@ export async function runScenario(s: Scenario): Promise<Run> {
   };
   const saved = new Map(Object.keys(env).map((k) => [k, Deno.env.get(k)]));
   for (const [k, v] of Object.entries(env)) Deno.env.set(k, v);
-  for (const k of ["ANTHROPIC_API_KEY", "FIRECRAWL_API_KEY", "FIRECRAWL_USD_PER_CREDIT"]) { saved.set(k, Deno.env.get(k)); Deno.env.delete(k); }
+  for (const k of ["ANTHROPIC_API_KEY", "FIRECRAWL_API_KEY", "FIRECRAWL_USD_PER_CREDIT", ...(s.withoutApifyToken ? ["APIFY_API_TOKEN"] : [])]) {
+    saved.set(k, Deno.env.get(k)); Deno.env.delete(k);
+  }
 
   const evidence = { observed_at: new Date(Date.now() - 60_000).toISOString(), source: "synthetic offline fixture; not an approved vendor quote", liability_bound_ref: "offline rehearsal" };
   const p = CATALOG.approved_quotes as Json;
   const fill = (t: Json) => ({ ...t, ...evidence });
   const quotes = { jobs: fill(p.jobs), model: fill(p.luna), reads: fill(p.reads), details: { ...fill(p.details), maximum_microusd: SYNTHETIC_DETAILS_MAXIMUM } };
-  const m = await seedSmokeMission({ quotes, actorLimits: { [JOBS]: 1, [DETAILS]: 1 } });
+  const m = await seedSmokeMission({ quotes, actorLimits: s.modelOnly ? { [JOBS]: 0, [DETAILS]: 0 } : { [JOBS]: 1, [DETAILS]: 1 } });
   const user = uuid(), plan = uuid();
   await sql`insert into auth.users (id, email) values (${user}, ${"scenario-" + user + "@example.invalid"})`;
   await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${m.ws}, 'scout', 'Offline Scout', 'Find and verify the requested company using source evidence.', 'research')`;
