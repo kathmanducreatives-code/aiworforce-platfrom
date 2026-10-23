@@ -286,3 +286,10 @@ a.brain-site:hover { color: rgb(var(--ag-text)); }
 .brain-slot.is-static:hover { background-color: transparent; }
 .brain-slot.is-static.is-empty { font-style: italic; }
 .brain-step:disabled { cursor: default; opacity: .75; }
+
+/* Empty Brain (never started): one clear way in. */
+.brain-empty { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 24px; border-radius: 16px;
+  border: 1px solid rgb(var(--ag-emerald) / .28); background: linear-gradient(135deg, rgb(var(--ag-emerald) / .10), transparent 60%); }
+.brain-empty-title { font-size: 18px; font-weight: 600; margin-top: 4px; }
+.brain-empty-text { margin-top: 6px; max-width: 62ch; color: hsl(var(--muted-foreground)); font-size: 14px; line-height: 1.55; }
+@media (max-width: 800px) { .brain-empty { flex-direction: column; align-items: flex-start; padding: 18px; } }

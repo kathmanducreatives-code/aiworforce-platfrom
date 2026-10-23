@@ -15,6 +15,7 @@ import RestartOnboardingModal from '@/components/company-brain/RestartOnboarding
 import { mergeProfilePatch, toSavedBrainView, type BrainProfile } from '@/lib/companyBrainView';
 import { SECTION_META, type SectionKey } from '@/lib/companyBrainSections';
 import { buildFieldPatch, type SectionState } from '@/lib/companyBrainPatch';
+import { isEmptyBrain } from '@/lib/companyBrainInsights';
 import { saveCompanyBrainPatch } from '@/lib/companyBrainSave';
 import { describeUnsaved, keepUnsaved, type UnsavedEdit } from '@/lib/companyBrainUnsaved';
 import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
@@ -64,6 +65,8 @@ export default function CompanyBrainDashboard() {
   // Seller-identity state for the diagnostic banner (nested vs hidden legacy flat).
   const identityState = useMemo(() => deriveSellerIdentityState(data?.profile), [data?.profile]);
   const identityBanner = useMemo(() => sellerIdentityBanner(identityState), [identityState]);
+  // A Brain nobody has started gets a setup prompt, not identity diagnostics.
+  const brainEmpty = useMemo(() => isEmptyBrain(brain, !!data?.onboarding_completed), [brain, data?.onboarding_completed]);
 
   const lastUpdated = data?.onboarding_completed_at
     ? new Date(data.onboarding_completed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
@@ -165,7 +168,7 @@ export default function CompanyBrainDashboard() {
             disagrees with the nested identity generation now uses — the state
             that blocks outreach backend-side. Reads the same profile the page
             already loaded; exposes no raw JSON. */}
-        {identityBanner && (
+        {identityBanner && !brainEmpty && (
           <div
             role="alert"
             className={
@@ -198,7 +201,7 @@ export default function CompanyBrainDashboard() {
         )}
 
         {error && <div role="alert" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 p-4 text-sm"><span>Company Brain could not refresh. Please try again.</span><Button size="sm" variant="outline" onClick={() => refresh()}>Retry</Button></div>}
-        {(!error || data) && <BrainEditableContext.Provider value={canEditBrain}><BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} syncing={isRefreshing} onEdit={setOpenSection} onRestart={() => setRestartOpen(true)} onSaveFields={saveFields} /></BrainEditableContext.Provider>}
+        {(!error || data) && <BrainEditableContext.Provider value={canEditBrain}><BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} syncing={isRefreshing} onEdit={setOpenSection} onRestart={() => setRestartOpen(true)} onStartSetup={() => navigate('/onboarding/company-brain')} onSaveFields={saveFields} /></BrainEditableContext.Provider>}
       </div>
 
       <CompanyBrainEditDrawer

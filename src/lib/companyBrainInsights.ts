@@ -201,3 +201,19 @@ export function monogram(name: string): string {
   const letters = words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0];
   return letters.toUpperCase();
 }
+
+/**
+ * A Brain nobody has started: not activated and holding nothing at all — no
+ * company identity, no targeting, buyers, signals, exclusions or messaging. The
+ * page greets it with a setup prompt instead of a grid of empty fields and
+ * identity warnings. One filled value means someone started: no prompt.
+ */
+export function isEmptyBrain(brain: CompanyBrainV2, active: boolean): boolean {
+  if (active) return false;
+  const c = brain.company, t = brain.target_customer, d = t.disqualifiers;
+  const text = [c.name, c.description, c.website_url, c.business_model, brain.positioning.promise];
+  const lists = [t.industries, t.business_models, t.geography, t.must_have, t.nice_to_have, t.funding_stage,
+    d.industries, d.company_types, d.keywords, d.titles, d.domains,
+    brain.buyer_personas, brain.pain_points, brain.triggers, brain.jobs_to_watch, brain.competitors, brain.content_angles];
+  return text.every((v) => !v?.trim()) && lists.every((l) => !l?.length);
+}

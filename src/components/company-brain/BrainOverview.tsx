@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  ArrowRight, ArrowUpRight, CheckCircle2, ChevronDown, Globe, Linkedin, Pencil, Plus, RotateCcw, Sparkles,
+  ArrowRight, ArrowUpRight, Building2, CheckCircle2, ChevronDown, Globe, Linkedin, Pencil, Plus, RotateCcw, Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -11,7 +11,7 @@ import { useBrainEditable } from './brainEditable';
 import { cn } from '@/lib/utils';
 import { FLOW_SECTIONS, deriveHealth, type SectionHealth, type SectionKey } from '@/lib/companyBrainSections';
 import {
-  CONFIDENCE_LABEL, SECTION_TAB, brainSources, buildIcpSentences, deriveNextSteps, formatSource, joinValues, monogram,
+  CONFIDENCE_LABEL, SECTION_TAB, brainSources, buildIcpSentences, deriveNextSteps, formatSource, isEmptyBrain, joinValues, monogram,
   type IcpPhrase, type TabKey,
 } from '@/lib/companyBrainInsights';
 import type { SaveFields } from '@/lib/companyBrainPatch';
@@ -29,6 +29,8 @@ interface Props {
   syncing?: boolean;
   onEdit: (section: SectionKey) => void;
   onRestart: () => void;
+  /** Open guided setup directly (a Brain that was never activated has nothing to restart). */
+  onStartSetup: () => void;
   onSaveFields: SaveFields;
 }
 
@@ -48,7 +50,7 @@ const COVERAGE_LABEL: Record<SectionKey, string> = {
 
 const uniq = (values: string[]) => [...new Set(values.map((v) => v.trim()).filter(Boolean))];
 
-export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEdit, onRestart, onSaveFields }: Props) {
+export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEdit, onRestart, onStartSetup, onSaveFields }: Props) {
   const editable = useBrainEditable();
   const [params, setParams] = useSearchParams();
   const tab: TabKey = isTab(params.get('tab')) ? (params.get('tab') as TabKey) : 'overview';
@@ -59,6 +61,7 @@ export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEd
     setParams(p, { replace: true });
   };
   const health = useMemo(() => deriveHealth(brain), [brain]);
+  const empty = useMemo(() => isEmptyBrain(brain, active), [brain, active]);
   const panelProps = { brain, health, saved, onEdit, onSaveFields };
 
   return (
@@ -79,11 +82,26 @@ export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEd
               {FLOW_SECTIONS.map((s) => <DropdownMenuItem key={s.drawerKey} onSelect={() => onEdit(s.drawerKey)}>{s.number} · {s.title}</DropdownMenuItem>)}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" variant="ghost" onClick={onRestart} className="gap-2"><RotateCcw size={14} />Re-run setup</Button></>}
+          <Button size="sm" variant="ghost" onClick={active ? onRestart : onStartSetup} className="gap-2"><RotateCcw size={14} />{active ? 'Re-run setup' : empty ? 'Start setup' : 'Continue setup'}</Button></>}
         </div>
       </header>
 
       <IdentityCard brain={brain} health={health} active={active} activatedAt={activatedAt} saved={saved === 'company'} onEdit={onEdit} />
+
+      {empty && (
+        <section className="brain-empty" aria-labelledby="brain-empty-title">
+          <div className="min-w-0">
+            <p className="brain-eyebrow">Get started</p>
+            <h2 id="brain-empty-title" className="brain-empty-title">Teach your AI team about your company</h2>
+            <p className="brain-empty-text">
+              {editable
+                ? 'A guided setup takes about five minutes: your company, who you sell to, when to reach out and who to skip. Or fill in any section below by hand.'
+                : 'This Company Brain hasn’t been set up yet. An owner, admin or editor can start the guided setup.'}
+            </p>
+          </div>
+          {editable && <Button onClick={onStartSetup} className="shrink-0">Start guided setup</Button>}
+        </section>
+      )}
 
       <Tabs value={tab} onValueChange={setTab} className="brain-tabs">
         <div ref={tabScroll} className="brain-tablist-scroll" data-more-start={edges.start || undefined} data-more-end={edges.end || undefined}>
@@ -138,7 +156,7 @@ function IdentityCard({ brain, health, active, activatedAt, saved, onEdit }: {
   return (
     <section className={cn('brain-card brain-identity', saved && 'is-saved')} aria-label="Company identity">
       <div className="brain-identity-main">
-        <span className="brain-monogram" aria-hidden>{monogram(c.name)}</span>
+        <span className="brain-monogram" aria-hidden>{c.name.trim() ? monogram(c.name) : <Building2 size={18} />}</span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h2 className="brain-company-name">{c.name || 'Your company'}</h2>
