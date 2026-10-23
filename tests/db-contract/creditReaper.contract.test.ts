@@ -257,3 +257,26 @@ Deno.test("reaper: a non-provider reservation is never charged by ledger evidenc
   await reap();
   assertEquals((await txn(ws, key)).status, "released", "only provider and monitoring calls are settled by the ledger");
 });
+
+Deno.test("impact query: measures, read-only, what the reaper fix changes at its first tick", opts, async () => {
+  const impactSql = Deno.readTextFileSync(new URL("../../scripts/test-project/held-billing-impact.sql", import.meta.url));
+  const run = async () => Object.fromEntries(([...await sql.unsafe(impactSql.replace(":days", "30"))] as Array<Record<string, unknown>>)
+    .map((r) => [r.effect as string, [Number(r.transactions), Number(r.credits)]]));
+  const before = await run();
+  const ws = await workspaceWith(5);
+  const task = await seedTask(ws);
+  const kc = `${task}:jobs-${uuid()}`, ku = `${task}:jobs-${uuid()}`;
+  const c = await authorize(ws, kc, task);
+  const u = await authorize(ws, ku, task);
+  await ledgerCall(ws, task, kc, "run-impact");
+  await age(c.transaction_id);
+  await age(u.transaction_id);
+  const after = await run();
+  const delta = (k: string) => [after[k][0] - before[k][0], after[k][1] - before[k][1]];
+  assertEquals(delta("reaper: charged at the first tick after install"), [1, 1]);
+  assertEquals(delta("reaper: still released at the first tick (unchanged)"), [1, 1]);
+  // Read-only: nothing it measured was settled.
+  assertEquals((await txn(ws, kc)).status, "reserved");
+  await reap();
+  assertEquals([(await txn(ws, kc)).status, (await txn(ws, ku)).status], ["charged", "released"], "the reaper then does what the query predicted");
+});
