@@ -83,7 +83,7 @@ try {
   );
   assertEquals(signout.status, 204);
   const revoked = await invoke(session.access_token, "resume_task");
-  const secure = differentSession !== 200 && revoked !== 200;
+  const secure = differentSession === 403 && [401, 403].includes(revoked);
   console.log(
     JSON.stringify(
       {

@@ -14,7 +14,7 @@ Phase 0–8 below is distinct from the historical P1–P8 feature implementation
 | Phase | Status | Branch / PR | Validation | Remaining blockers |
 | --- | --- | --- | --- | --- |
 | 0 — architecture/readiness audit | COMPLETE / reviewed; Phase 1 authorized | `codex/nosh-readiness-master-plan`; draft #152, stacked on #151 | repository/PR/CI/interface audit; documentation checks in phase receipt | DEC-01 target chosen in Phase 1 approval; shared contract still open |
-| 1 — native security | PARTIAL / BLOCKED on shared owner contracts; overall FAIL | `codex/nosh-phase1-security`, separate successor draft on #152; historical #151 preserved | scanner/parser 18/0; infra 196/0; edge 9194/0; native 46/0; real GoTrue private predicate 5/0; public and actual handler audits FAIL | SEC-01/02/03/04/05; agreed multi-client Brain/roles/parent contract; owner-delivered public membership/Brain/task/Edge corrections; complete same-workspace acceptance |
+| 1 — native security | PARTIAL / BLOCKED on shared owner contracts; overall FAIL | `codex/nosh-phase1-security`, draft #155 on #152; historical #151 preserved | scanner/parser 18/0; infra 196/0; edge 9194/0; native 46/0; real GoTrue private predicate 5/0; public and actual handler audits FAIL | SEC-01/02/03/04/05; agreed multi-client Brain/roles/parent contract; owner-delivered public membership/Brain/task/Edge corrections; complete same-workspace acceptance |
 | 2 — transactional persistence | PENDING / NOT APPROVED | no implementation PR yet; P3/P5/P6/P7 interfaces are not persistence | offline contracts only; no native durable import/snapshot/review/approval adapter | Phase 1; DATA-01/02; REPLAY-01; original-task lifecycle and shared receipt contract |
 | 3 — legacy executor containment | PENDING / NOT APPROVED | owner #145/#149/#150 are dependencies, not pilot containment completion | no complete pilot route-by-route native acceptance | Phase 1/2; backend EXEC-01; Brain context seam |
 | 4 — recovery/spending | PENDING / NOT APPROVED | owner #150 plus future FIN-01 successor | mocked P4/P8 safeguards; no native pilot shared-ledger recovery proof | Phase 2/3; FIN-01/02; MODEL-01; no competing ledger |
@@ -192,7 +192,9 @@ Append, never overwrite historical proof:
 ## Phase 1 receipt — independent implementation complete; full phase FAIL
 
 Base #152 `32097823562b5282972047f86beb0b826e4e663c`; isolated
-`codex/nosh-phase1-security`. Exact PR/head/CI receipts recorded at publication.
+`codex/nosh-phase1-security`. Draft [#155](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/155),
+initial implementation commit `8b89e2cb6c7cd7b3e762de5a909dfc7c556d793e`.
+Exact final head/CI receipts are in its publication comment (no self-referential hash).
 
 **Implemented:** schema-aware RLS scanner repair without allow-list or removed
 security checks; nine parser adversaries; native editor/member/admin role tests;
@@ -202,8 +204,8 @@ write/membership/Brain and actual handler session reproductions; client contract
 No shared runtime/schema/Brain/executor/ledger/qualification files changed.
 
 **Passed:** scanner+parser 18/0, full infra 196/0, edge 9,194/0, native identity/roles
-46/0, actual GoTrue private predicate 5/0; ownership guard mutant produces the two
-required failures; Deno check/lint, shell and whitespace checks passed. GitHub
+46/0, actual GoTrue private predicate 5/0; ownership guard mutant: 43 passed / 2 required failures / 1 ignored
+(rollback-reapply omitted only on the mutant); Deno check/lint, shell and whitespace checks passed. GitHub
 CI status is reported at the exact publication head; no historical red head is
 retroactively relabeled green.
 

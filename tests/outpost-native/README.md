@@ -80,3 +80,9 @@ is purged except destruction of the wholly disposable test cluster.
 No shared schema/policy correction or multi-client support is implied by these
 extensions. See the current Phase 1 receipt and client contract under
 `docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/`.
+- `OUTPOST_NATIVE_CONTEXT_AUDIT=1 tests/outpost-native/run.sh` runs actual
+  `handlePilotContext` with real GoTrue authentication and native P1 store, adapting
+  only the local gateway URL. Current expected exit 1: a different login session
+  for the original actor resumes successfully (200), even though private native
+  binding RLS denies it. Revoked original session is 401, foreign workspace 403.
+  Successful denial must be an explicit authorization status, not arbitrary 5xx.

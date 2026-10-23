@@ -50,8 +50,10 @@ Do not advance to Phase 2 or call passing foundation CI customer readiness.
 | DEC-01/AUTH-01 | two isolated client accounts under one agency workspace | not implemented; existing one-client constraint and workspace-only Brain remain | cross-cutting client parent/role/Brain/memory/API contract must precede changing native uniqueness or selection logic |
 
 Exact baseline policies: `supabase/migrations-held/20260816120000_baseline_schema.sql`
-`has_workspace_access`, `tasks_workspace_member_access`,
-`company_brain_member_update`, `members_self_insert`. These defects are reproduced
+`has_workspace_access` line 747, `tasks_workspace_member_access` line 10659,
+`company_brain_member_update` line 9661, `members_self_insert` line 10140.
+Application gap: `pilotContext.ts` line 115, `pilotScope.ts` line 216 and
+service-backed `pilotScopeStore.ts` reads (unchanged from the pinned baseline). These defects are reproduced
 in fresh local databases built from the repository; no deployed exploit or target
 catalog access is claimed. A schema proposal or role-aware frontend is not a fix.
 
@@ -79,6 +81,30 @@ OUTPOST_NATIVE_CONTEXT_AUDIT=1 tests/outpost-native/run.sh
 - [Proposed client contract](CLIENT_CONTRACT.md): accepted product direction and
   exact shared ownership/API/DDL prerequisites. No shared DDL applied here.
 
+## Exact changed files
+
+```text
+.github/workflows/outpost-native-security.yml
+docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/CLIENT_CONTRACT.md
+docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/README.md
+docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/context-session.json
+docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/native-surfaces.json
+docs/plans/nosh-pilot-production-readiness/MASTER_PLAN.md
+docs/plans/nosh-pilot-production-readiness/PROGRESS.md
+tests/infra/lib/rlsRelations.ts
+tests/infra/rlsCoversEveryTable.test.ts
+tests/infra/rlsRelations.test.ts
+tests/outpost-native/README.md
+tests/outpost-native/context-audit.ts
+tests/outpost-native/fixture.ts
+tests/outpost-native/identity.test.ts
+tests/outpost-native/lib/auth.ts
+tests/outpost-native/public-task-audit.ts
+tests/outpost-native/run.sh
+tests/outpost-native/session-security.test.ts
+tests/outpost-native/surface-audit.ts
+```
+
 ## Validation
 
 | Suite | Result | Scope |
@@ -97,7 +123,12 @@ OUTPOST_NATIVE_CONTEXT_AUDIT=1 tests/outpost-native/run.sh
 | multi-client positive same workspace | BLOCKED | shared contract/schema not agreed/implemented; not substituted with negative enrollment test |
 | real complete browser/client security | NOT TESTED / BLOCKED | native/client contracts and later integration prerequisites |
 
-GitHub CI links/exact candidate head are in the draft PR receipt. A green ordinary
+Draft PR: [#155](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/155).
+GitHub CI links/exact candidate head are in its publication receipt. Initial CI
+proved 46/0 identity tests but failed Auth setup after attaching a second network
+changed the published port on Linux. The corrected runner creates Postgres on
+the intended Auth network before TCP readiness; local Auth 5/0 reverified.
+This is test infrastructure, not a change to customer authorization behavior. A green ordinary
 CI or foundation job does not overrule the failed readiness audits. Existing #151
 and #152 remain historical red heads; this successor carries the scanner fix
 without rewriting their branches.

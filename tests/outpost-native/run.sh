@@ -19,8 +19,19 @@ cleanup() {
   if [ -n "$mutant_sql" ]; then rm -f "$mutant_sql"; fi
 }
 trap cleanup EXIT
-cid="$(docker run --rm -d --name "$name" --label agentory.disposable=outpost-native \
-  -e "POSTGRES_PASSWORD=$pw" -p 127.0.0.1::5432 postgres:17.6)"
+start_postgres() {
+  docker run --rm -d --name "$name" --label agentory.disposable=outpost-native \
+    -e "POSTGRES_PASSWORD=$pw" -p 127.0.0.1::5432 "$@" postgres:17.6
+}
+if [ "${OUTPOST_NATIVE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" = 1 ]; then
+  auth_network="${name}-auth"
+  docker network create --label agentory.disposable=outpost-native "$auth_network" >/dev/null
+  # Attach at creation: a later network connect can change the selected bridge
+  # and invalidate the published localhost mapping on Linux runners.
+  cid="$(start_postgres --network "$auth_network")"
+else
+  cid="$(start_postgres)"
+fi
 pg_port="$(docker port "$cid" 5432/tcp | sed 's/127.0.0.1://')"
 case "$pg_port" in ''|*[!0-9]*) echo 'invalid loopback database port' >&2; exit 2;; esac
 db_url="postgres://postgres:$pw@127.0.0.1:$pg_port/postgres"
@@ -34,9 +45,6 @@ done
 if [ "$ready" -ne 1 ]; then docker logs "$cid" 2>&1 | tail -20 >&2; exit 1; fi
 # Optional actual GoTrue catalog/session lane. No managed-auth fixture in this mode.
 if [ "${OUTPOST_NATIVE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" = 1 ]; then
-  auth_network="${name}-auth"
-  docker network create --label agentory.disposable=outpost-native "$auth_network" >/dev/null
-  docker network connect "$auth_network" "$cid"
   psql "$db_url" -X -q -v ON_ERROR_STOP=1 -c 'create schema auth'
   auth_cid="$(docker run -d --name "${name}-auth" --network "$auth_network" \
     --label agentory.disposable=outpost-native -p 127.0.0.1::9999 \

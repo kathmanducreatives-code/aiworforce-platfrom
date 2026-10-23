@@ -28,9 +28,10 @@ try {
     undefined,
     "public",
   );
-  const secure = legacyRead.status === 403 ||
-    (legacyRead.status === 200 && Array.isArray(legacyRead.body) &&
-      legacyRead.body.length === 0);
+  const deniedRead = (r: typeof legacyRead) =>
+    r.status === 403 ||
+    (r.status === 200 && Array.isArray(r.body) && r.body.length === 0);
+  const secure = deniedRead(legacyRead) && deniedRead(privateRead);
   console.log(
     JSON.stringify(
       {
