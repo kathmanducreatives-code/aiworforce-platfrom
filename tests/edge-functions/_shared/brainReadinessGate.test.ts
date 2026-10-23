@@ -90,11 +90,13 @@ Deno.test("G-6 decision 2: generated content is a draft until a person approves 
 Deno.test("G-7 pilot-chat: V2 gates on readiness and gives a usable Brain as context; off, the old gate is untouched", () => {
   const src = read("supabase/functions/pilot-chat/index.ts");
   assert(/const readinessV2 = brainReadinessV2Enabled\(/.test(src));
-  assert(/if \(readinessV2\) \{\s*const gate = readinessGate\(understood\.request\.objective, planCompose\(understood\.request\)\?\.kind \?\? null, brainReadiness\)/.test(src),
+  assert(/if \(readinessV2\) \{[\s\S]{0,300}const gate = readinessGate\(understood\.request\.objective, planCompose\(understood\.request\)\?\.kind \?\? null, readinessNow\)/.test(src),
     "the gate asks the capability this request needs");
   assert(/\} else if \(shouldGateObjective\(understood\.request\.objective,\s*\{ onboarding_completed: brainOnboardedForGate \}\)\) \{\s*return await replyAndReturn\(ONBOARDING_GATE_REPLY/.test(src),
     "flag off: the original gate and reply");
-  assert(/const contextAllowed = readinessV2 \? brainReadiness\.state !== "draft" : brainOnboardedForGate;/.test(src));
+  assert(/if \(readinessV2\) brainReadiness = companyBrainReadiness\(/.test(src), "readiness is computed only with the switch on");
+  assert(/let brainReadiness: BrainReadiness \| null = null;/.test(src), "off: nothing is computed");
+  assert(/const contextAllowed = brainReadiness \? brainReadiness\.state !== "draft" : brainOnboardedForGate;/.test(src));
   assert(/const brainContextAllowed = readinessV2\s*\?\s*companyBrainReadiness\(/.test(src), "the reply layer uses the same rule");
 });
 

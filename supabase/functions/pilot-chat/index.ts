@@ -1899,7 +1899,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   let brainOnboardedForGate = false;
   // Roadmap Phase 2, behind BRAIN_READINESS_V2: what this Brain can power yet.
   const readinessV2 = brainReadinessV2Enabled((k) => { try { return Deno.env.get(k); } catch { return undefined; } });
-  let brainReadiness: BrainReadiness = companyBrainReadiness(normalizeCompanyBrain({}), false);
+  // Computed only with the switch on, so the switch off changes nothing at all.
+  let brainReadiness: BrainReadiness | null = null;
   /**
    * What the request asked to WRITE, if anything — read once, above, and reused
    * by the memory follow-up section so it does not have to ask again.
@@ -1915,10 +1916,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       const profile = (data?.profile ?? null) as Record<string, unknown> | null;
       brainProfileForMission = profile;
       brainOnboardedForGate = data?.onboarding_completed === true;
-      brainReadiness = companyBrainReadiness(normalizeCompanyBrain(profile ?? {}), brainOnboardedForGate);
+      if (readinessV2) brainReadiness = companyBrainReadiness(normalizeCompanyBrain(profile ?? {}), brainOnboardedForGate);
       // V2: a usable (not yet activated) Brain is context too — a request its
       // readiness allows must not run without it.
-      const contextAllowed = readinessV2 ? brainReadiness.state !== "draft" : brainOnboardedForGate;
+      const contextAllowed = brainReadiness ? brainReadiness.state !== "draft" : brainOnboardedForGate;
       if (!profile || !hasUsableBrain(profile, contextAllowed)) {
         return null;
       }
@@ -2643,12 +2644,14 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // and before this. So nothing here needs an exemption for it, and adding
       // one would be dead code pretending to be a safeguard.
       if (readinessV2) {
-        const gate = readinessGate(understood.request.objective, planCompose(understood.request)?.kind ?? null, brainReadiness);
+        // Assigned inside the context loader above (a closure), hence the explicit type.
+        const readinessNow = (brainReadiness as BrainReadiness | null) ?? companyBrainReadiness(normalizeCompanyBrain({}), false);
+        const gate = readinessGate(understood.request.objective, planCompose(understood.request)?.kind ?? null, readinessNow);
         if (gate.gated) {
           return await replyAndReturn(gate.reply, {
             gated: "brain_not_ready",
             clarification: true,
-            chat_brain: { route: brainRoute.kind, objective: understood.request.objective, capability: gate.capability, readiness: brainReadiness.state },
+            chat_brain: { route: brainRoute.kind, objective: understood.request.objective, capability: gate.capability, readiness: readinessNow.state },
           });
         }
       } else if (shouldGateObjective(understood.request.objective,
