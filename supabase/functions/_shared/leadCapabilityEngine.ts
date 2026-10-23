@@ -4840,6 +4840,25 @@ export async function runCapabilityPlan(
       // paid work, with a code that says what to supply, and retrying changes
       // nothing until it is supplied (the finalizer records it as `blocked`).
       const unavailable = e as { name?: unknown; retryable?: unknown; code?: unknown };
+      // A MISSION ADMISSION REFUSAL IS NOT MISSING CONFIGURATION. Under smoke
+      // admission the gate answers a refused model request with its own
+      // synthetic 409 (smokeAdmission.ts `refusal`): the authorization stopped
+      // or expired, the slice lost its lease or generation. The planner sees an
+      // HTTP error, and reporting it as "not configured" sends an operator to
+      // chase a key that is fine. Named for what it is; refused all the same.
+      const admission = unavailable?.name === "GptPlannerUnavailableError"
+        ? /"type":"mission_admission_refused","decision":"([a-z_]+)"/.exec(String(e))
+        : null;
+      if (admission) {
+        state.terminal_reason = "execution_plan_blocked";
+        state.fallback_reason = "execution_admission_refused";
+        log("execution_admission_refused", { decision: admission[1] });
+        throw new ExecutionPlanBlockedError([{
+          code: "execution_admission_refused",
+          message: `mission admission refused the execution planner (${admission[1]}); nothing was sent`,
+          severity: "block",
+        }]);
+      }
       if (unavailable?.name === "GptPlannerUnavailableError" && unavailable.retryable === false) {
         state.terminal_reason = "execution_plan_blocked";
         state.fallback_reason = "execution_planner_unavailable";

@@ -528,3 +528,42 @@ Deno.test("8d. an UNCONFIGURED planner (no key) is a named refusal, not a crash;
   assertEquals(transient.codes, ["execution_planner_failed"]);
   assertEquals([transient.record.status, transient.record.reason], ["failed", "unhandled_exception"], "a retryable outage is not reclassified");
 });
+
+Deno.test("8e. a smoke ADMISSION refusal of the planner is named as such, never as missing configuration", async () => {
+  // Contract repro (killResumeAdoption, expired authorization): the gate's
+  // synthetic 409 `stopped` reached the planner as an HTTP error and was
+  // finalized as "the execution planner is not configured (http_error)".
+  const { GptPlannerUnavailableError } = await import("../../../supabase/functions/_shared/gptExecutionPlanner.ts");
+  const { decideTerminalRecord } = await import("../../../supabase/functions/_shared/leadExecutionFinalizer.ts");
+  const refusalBody = JSON.stringify({ error: { type: "mission_admission_refused", decision: "stopped", detail: null, purchase_may_exist: false } });
+  const h = newHarness();
+  const m = mission();
+  let caught: unknown = null;
+  try {
+    await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
+      planExecution: () => Promise.reject(new GptPlannerUnavailableError("http_error" as never, `OpenAI returned HTTP 409: ${refusalBody}`, false)),
+      ...deps({ [MEMO23]: [row(1, 3)] }, h),
+    } as never, { mission: m, plan: buildCapabilityGraph(m), maxCandidates: 20 } as never);
+  } catch (e) { caught = e; }
+  assert(caught instanceof ExecutionPlanBlockedError, String(caught));
+  assertEquals(h.allCalls, [], "nothing is bought");
+  assertEquals(caught.violations.map((v) => v.code), ["execution_admission_refused"]);
+  assert(caught.violations[0].message.includes("(stopped)"), caught.violations[0].message);
+  assert(!caught.violations[0].message.includes("not configured"));
+  const record = decideTerminalRecord({}, { elapsedMs: 1, error: caught });
+  assertEquals([record.status, record.reason, record.resumable], ["blocked", "refused_before_execution", false]);
+
+  // A vendor's own HTTP 409 (not our gate's body) keeps the configuration reading.
+  const h2 = newHarness();
+  let other: unknown = null;
+  try {
+    await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
+      planExecution: () => Promise.reject(new GptPlannerUnavailableError("http_error" as never, `OpenAI returned HTTP 409: {"error":"conflict"}`, false)),
+      ...deps({ [MEMO23]: [row(1, 3)] }, h2),
+    } as never, { mission: m, plan: buildCapabilityGraph(m), maxCandidates: 20 } as never);
+  } catch (e) { other = e; }
+  assert(other instanceof ExecutionPlanBlockedError);
+  assertEquals(other.violations.map((v) => v.code), ["execution_planner_unavailable"]);
+});
