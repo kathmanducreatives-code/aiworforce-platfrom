@@ -58,3 +58,10 @@ Deno.test("credit reaper: the rollback restores the re-arm migration's reaper by
   assertEquals(definition(DOWN, "credits_release_stale"), definition(REARM_UP, "credits_release_stale"));
   assert(DOWN.includes("grant execute on function public.credits_release_stale(interval) to service_role;"));
 });
+
+Deno.test("credit reaper: a TEST build with the held billing fixes applies the reaper right after the re-arm, never alone", () => {
+  const build = read("scripts/test-project/build-test-schema.sh");
+  assert(build.includes(`reaper_fix="$held/${NAME}.sql"`));
+  assert(build.includes('if [ $with_billing -eq 1 ]; then apply "$billing_fix"; apply "$reaper_fix"; fi'),
+    "same opt-in flag, in dependency order");
+});
