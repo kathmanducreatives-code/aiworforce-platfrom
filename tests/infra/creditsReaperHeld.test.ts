@@ -50,7 +50,7 @@ Deno.test("credit reaper: evidence is the execution ledger's run id, bound to wo
     "e.record_kind = 'provider_call'",
     "length(btrim(coalesce(e.provider_run_id, ''))) > 0",
     "v_txn.kind in ('provider_call', 'monitoring_call')",
-    "least(v_txn.reserved_credits, 1), 'charged'",
+    "v_txn.reserved_credits, 'charged'",
   ]) assert(UP.includes(guard), guard);
 });
 

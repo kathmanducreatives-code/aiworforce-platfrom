@@ -355,9 +355,9 @@ prove_killed "reaper takes a blank run id as evidence" "$reaper_sql" \
 prove_killed "reaper charges a non-provider reservation" "$reaper_sql" \
   "    if v_txn.kind in ('provider_call', 'monitoring_call') and exists (" "    if exists (" \
   "$reaper_tests" "reaper: a non-provider reservation is never charged by ledger evidence"
-prove_killed "reaper charges the whole quoted hold" "$reaper_sql" \
-  "v_txn.id, least(v_txn.reserved_credits, 1), 'charged'," "v_txn.id, v_txn.reserved_credits, 'charged'," \
-  "$reaper_tests" "reaper: never charges more than the live settle would — a quoted hold is charged the per-call credit"
+prove_killed "reaper charges the flat credit, not the quoted hold" "$reaper_sql" \
+  "v_txn.id, v_txn.reserved_credits, 'charged'," "v_txn.id, least(v_txn.reserved_credits, 1), 'charged'," \
+  "$reaper_tests" "reaper: charges exactly what the live settle would — a quoted hold is charged in full, an unquoted one 1 credit"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
