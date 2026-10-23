@@ -16,6 +16,8 @@ on:
       - 'supabase/migrations/**'
       - 'supabase/migrations-held/20261022140824_outpost_native_identity_security.sql'
       - 'supabase/migrations-held/20261023061143_outpost_pilot_api_authorization.sql'
+      - 'supabase/migrations-held/20261023101216_outpost_pilot_task_registration_lifecycle.sql'
+      - 'docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/native-task-rollback.sql'
       - 'docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/native-access-rollback.sql'
       - 'docs/audits/agentory-outbound-outpost-readiness/production-readiness/native-security-rollback.sql'
   workflow_dispatch:
@@ -53,12 +55,31 @@ jobs:
           echo "5fb203974a2f79b8d94f3988aec8807c96fb2dae3de17486ecdd803a33970311  $RUNNER_TEMP/outpost-membership-159.sql" | sha256sum -c -
       - name: Integrated owner membership and pilot API native acceptance
         run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" tests/outpost-native/run.sh | tee /tmp/outpost-native-integrated.log
-      - name: Integrated surface audit (shared nonpilot Brain role blocker)
+      - name: Integrated verified registration, lifecycle and API security
+        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_LIFECYCLE=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-task-lifecycle.log
+      - name: Actual GoTrue original-session registration and cancellation
+        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_LIFECYCLE_AUTH=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-registration-auth.log
+      - name: Lifecycle guard mutation must fail real payload and legacy writer contracts
+        run: |
+          if OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_LIFECYCLE=1 OUTPOST_NATIVE_OMIT_LIFECYCLE_GUARD=1 tests/outpost-native/run.sh > /tmp/outpost-native-lifecycle-mutant.log 2>&1; then
+            echo '::error::Missing pilot lifecycle guard survived native tests'
+            exit 1
+          fi
+          grep -q 'payload mutation and restoration cannot revive native authorization.*FAILED' /tmp/outpost-native-lifecycle-mutant.log
+          grep -q 'service legacy claim and fenced output writes cannot mutate a pilot task.*FAILED' /tmp/outpost-native-lifecycle-mutant.log
+      - name: Original P1 verification omission must fail forged registration tests
+        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" tests/outpost-native/mutate-registration-verifier.sh | tee /tmp/outpost-native-p1-registration-mutant.log
+      - name: Prepare exact Company Brain and workspace-selection owner sources
+        run: git fetch --no-tags --depth=1 origin 60be04712c41193da213a95c1918f7f4f9a4e645 cc83eb7ee3edf68192378ef68805a71b125edc59 8b0e2b6bdb20d6fe30542da39f0170d514d52746
+      - name: Integrated Brain owner security with real REST bind collisions
+        id: owner-security
+        run: tests/outpost-native/test-bind-collision.sh | tee /tmp/outpost-native-owner-integration.log
+      - name: Historical surface without Brain 169 (expected shared dependency failure)
         id: integrated-surface-readiness
         continue-on-error: true
-        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_SURFACE_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-integrated-surface.log
+        run: OUTPOST_NATIVE_TASK_GUARDS=1 OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_SURFACE_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-integrated-surface.log
       - name: Actual local GoTrue session, refresh, logout and revocation
-        run: OUTPOST_NATIVE_AUTH=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-auth.log
+        run: OUTPOST_NATIVE_TASK_GUARDS=1 OUTPOST_NATIVE_AUTH=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-auth.log
       - name: Ownership guard mutation must fail its native contracts
         run: |
           if OUTPOST_NATIVE_OMIT_OWNER_GUARD=1 tests/outpost-native/run.sh > /tmp/outpost-native-mutant.log 2>&1; then
@@ -84,13 +105,13 @@ jobs:
         run: OUTPOST_NATIVE_SURFACE_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-surface-audit.log
       - name: Actual pilot handler original-session acceptance
         id: context-readiness
-        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_CONTEXT_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-context-audit.log
+        run: OUTPOST_NATIVE_TASK_GUARDS=1 OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_CONTEXT_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-context-audit.log
       - name: Readiness is separate from identity foundation
         if: always()
         run: |
           echo 'Identity foundation tests are not customer-pilot acceptance. P1–P8 stay disabled.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Public-task audit outcome: ${{ steps.public-task-readiness.outcome }}. Native persistence, shared permissions and executor/recovery gates remain open.' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Integrated surface audit outcome: ${{ steps.integrated-surface-readiness.outcome }}. Shared nonpilot Brain role writes remain a Phase 1 blocker.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Historical surface without Brain 169: ${{ steps.integrated-surface-readiness.outcome }}. Required exact owner-source integration: ${{ steps.owner-security.outcome }}. Agency-client grants and complete legacy pre-effect guards remain Phase 1 blockers.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Public-surface audit outcome: ${{ steps.public-surface-readiness.outcome }}. Known public permission failures block Phase 1/customer acceptance.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Context-session audit outcome: ${{ steps.context-readiness.outcome }}. Original-session handler integration is a required security gate.' >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve proof logs

@@ -392,6 +392,7 @@ export class PilotAccess {
     taskId: string,
     refs: ResourceRef[],
     key: string,
+    originSession?: string,
   ): Promise<void> {
     await this.records([{ kind: "task", id: taskId }, ...refs]);
     await this.brain();
@@ -420,6 +421,18 @@ export class PilotAccess {
         throw new PilotRefusal("task_scope_mismatch", 409);
       }
       return;
+    }
+    if (originSession !== undefined) {
+      if (!validId(originSession)) {
+        throw new PilotRefusal("invalid_task_session", 400);
+      }
+      if (
+        payload.pilot_origin_session_id != null &&
+        payload.pilot_origin_session_id !== originSession
+      ) throw new PilotRefusal("task_scope_mismatch", 409);
+      // Server-derived original session is covered by the EXISTING payload hash.
+      // No new signing authority or envelope version. Existing callers unchanged.
+      payload.pilot_origin_session_id = originSession;
     }
     const claims: TaskClaims = {
       version: 1,

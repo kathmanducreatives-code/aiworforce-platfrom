@@ -3,7 +3,8 @@
 **Customer pilot readiness: FAIL. P1–P8 disabled. A7 NO-GO.**
 
 Last audit: 2026-10-23 Asia/Kathmandu; Phase 1 approved in user message following #152.
-Readiness remains FAIL; owned access fixes are implemented below; shared contracts remain required.
+Readiness remains FAIL; owned access and native task protections are implemented below.
+Exact Brain #169/#170 composition passes locally; client-grant/lifecycle contracts remain required.
 Read [MASTER_PLAN.md](MASTER_PLAN.md) before resuming. This tracker supersedes
 historical phase-number status in `docs/audits/.../production-readiness/`; those
 files remain immutable receipts of narrower previous work. Production-readiness
@@ -14,7 +15,7 @@ Phase 0–8 below is distinct from the historical P1–P8 feature implementation
 | Phase | Status | Branch / PR | Validation | Remaining blockers |
 | --- | --- | --- | --- | --- |
 | 0 — architecture/readiness audit | COMPLETE / reviewed; Phase 1 authorized | `codex/nosh-readiness-master-plan`; draft #152, stacked on #151 | repository/PR/CI/interface audit; documentation checks in phase receipt | DEC-01 target chosen in Phase 1 approval; shared contract still open |
-| 1 — native security | PARTIAL / owned pilot corrections PASS, overall FAIL | `codex/nosh-phase1-access-fixes` on #155; #151/#155 preserved | integrated native 68/0 with exact #159 SQL; actual context-session PASS; edge 9203/0; infra 196/0; UI 722+5/0; GoTrue 5/0 | shared nonpilot Brain role writes; same-workspace multi-client parent/Brain/permissions contract; legacy service routes and original-task registration/lifecycle; complete integrated acceptance |
+| 1 — native security | PARTIAL / owned protections PASS locally, overall FAIL | `codex/nosh-phase1-task-lifecycle` on #166; previous PRs preserved | native task/API 68/0; real registration Auth 8/0; exact #169/#170 owner-source composition PASS; final-head CI in successor receipt | canonical same-workspace client/grant/Brain implementation and A7 generation/locks; descendant/legacy pre-effect guards; complete integrated acceptance |
 | 2 — transactional persistence | PENDING / NOT APPROVED | no implementation PR yet; P3/P5/P6/P7 interfaces are not persistence | offline contracts only; no native durable import/snapshot/review/approval adapter | Phase 1; DATA-01/02; REPLAY-01; original-task lifecycle and shared receipt contract |
 | 3 — legacy executor containment | PENDING / NOT APPROVED | owner #145/#149/#150 are dependencies, not pilot containment completion | no complete pilot route-by-route native acceptance | Phase 1/2; backend EXEC-01; Brain context seam |
 | 4 — recovery/spending | PENDING / NOT APPROVED | owner #150 plus future FIN-01 successor | mocked P4/P8 safeguards; no native pilot shared-ledger recovery proof | Phase 2/3; FIN-01/02; MODEL-01; no competing ledger |
@@ -37,7 +38,7 @@ requires separate approval after Phase 1 is actually complete.
 
 ## Active worktree and immutable resume points
 
-- Active Phase 1 branch: `codex/nosh-phase1-access-fixes` (successor on #155).
+- Active Phase 1 branch: `codex/nosh-phase1-task-lifecycle` (successor on #166 `4344dec0e224d9766b3919c91a61b8066d17e16f`).
 - Worktree: `/Users/prasidha/Downloads/screeningpilot-main/nosh-phase1-access-fixes`.
 - Phase 1 base: #152 `32097823562b5282972047f86beb0b826e4e663c`; exact new head/PR is in its publication receipt.
 - Historical #151 base: `001fa9db9a1a07266dfc700b0d7a21fbc322c7df`.
@@ -118,8 +119,8 @@ Phase 1; do not allow-list the schema, remove held migrations, or mute the test.
 
 | ID | Decision / contract | Owner | Status / next action |
 | --- | --- | --- | --- |
-| DEC-01 | one agency workspace with multiple isolated client accounts | user direction; Brain/backend contract | TARGET RESOLVED by Phase 1 user approval. Shared client parent/roles/Brain/memory/session contract OPEN; proposed CLIENT_CONTRACT.md posted; no shared schema change or assumed positive acceptance. |
-| AUTH-01 | role-aware Brain/context/direct API/session and revoke locking | Company Brain Claude | OPEN; #147 requests include confirmed viewer Brain PATCH, arbitrary foreign membership owner self-insert and actual handler new-session resume. No incoming contract agreement found. |
+| DEC-01 | one agency workspace with multiple isolated client accounts | user direction; Brain/backend contract | TARGET RESOLVED. Canonical client_accounts/client_access_grants/client_company_brain agreed with A7 amendment; exact generation/locking delivery pending. No shared client DDL or fabricated same-workspace acceptance. |
+| AUTH-01 | role-aware Brain/context/direct API/session and revoke locking | Company Brain Claude | PARTIAL: exact #159/#169/#170 composition passes; A1–A6 agreed, A7 amended; grant-generation/lock detail and canonical client schema/API delivery pending. Actual complete post-model transactional revocation proof still required. |
 | EXEC-01 | scoped public task policy/owner guard, immutable inputs versus lifecycle versions, all entry guards | Backend Claude | OPEN; use #150/#145 discussion; no shared file edits without coordination |
 | FIN-01 | stable model operation key, durable reserve/settle/accepted output, shared ledger | Backend Claude | OPEN; #150 adopts purchased provider runs but still may rerun model planning; no pilot ledger |
 | QUAL-01/E01 | read-only canonical seam and semantic support prompt/stance | Backend Claude | independent owner work #144; no changes in this docs PR; no second semantic evaluator or qualification authority |
@@ -288,3 +289,67 @@ No owner branch, qualification, shared ledger or Brain writer edits.
 
 Next action is the remaining **Phase 1** shared integration and native security
 acceptance, not Phase 2. P1–P8 disabled, A7 NO-GO, no hosted changes/deploy/paid calls.
+
+## Phase 1 task-security continuation — 2026-10-23
+
+Active successor `codex/nosh-phase1-task-lifecycle` on #166 `4344dec0`.
+Full behavior/security review, exact file list, native matrix, reproduction,
+dependency SHAs and held rollback:
+[TASK_SECURITY.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/TASK_SECURITY.md).
+Machine-readable `task-security.json` accompanies it. Exact final commit and CI
+are recorded in the successor publication receipt, not self-referential docs.
+
+**New owned fixes:** unserved/default-off native prepare/register/cancel handler;
+original P1 signer and verifier under one locked transaction; original Auth session
+stamped into existing signed payload; private no-app-grant native registration;
+immutable bound task/service claim/checkpoint/output fence; terminal cancellation;
+OLD+NEW marker protection; replay/abort/rollback/concurrency limits. No task/lead
+creation, actual execution, durable packets/reviews/model recovery or Phase 2 work.
+
+**Native evidence:** 46 lifecycle +22 API tests (68/0), actual registration GoTrue
+8/0, original native GoTrue 5/0, historical #166 baseline 68/0, actual context-
+session original/refresh/service positives and wrong-session/demotion/revocation
+refusals. P1 omission catches forged MAC/altered payload; lifecycle omission catches
+six expected failures (61 pass/6 fail/one empty rollback omitted only mutant).
+Normal tests ignore none. Final edge/infra/type/CI results are in publication receipt.
+
+**Shared fix now delivered and tested:** exact source #169 `60be0471` (including
+#147/#160) + #170 `cc83eb7e` independent diff + pinned #159 SQL + owned guards in a
+fresh temporary tree, not an owner-branch merge. Owner pure role/workspace tests
+13/0, native task/API 68/0, real Auth8/0, context-session and broad-surface audits
+PASS, unchanged owner Brain native4/0. Viewer Brain PATCH now403/unchanged even
+outside pilot; legitimate reads/provisioning/server writes remain. Enrolled pilot
+Brain service writes intentionally stay frozen. Historical earlier FAIL receipts
+are preserved; CI requires this exact owner-source composition to pass. This is
+not a deployed or full live-handler/concurrent-revoke verification.
+
+**Coordination:** [A1–A7 reply](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/166#issuecomment-6367855590)
+agrees canonical client parent/composite binding/explicit grants for every role/
+audited self-grants/versioned client Brain/one explicit-intent API. A7 amended for
+live session and current authorization at final native write, terminal grant
+generations and membership reduction visibility. Await owner confirmation of exact
+generation/lock representation and delivery; no shared client DDL before that.
+Backend pre-effect/immutable executable lifecycle handoff is still outstanding.
+
+**Exact remaining Phase 1 blockers:**
+
+1. Brain-owned client schema/API and final A7 locks/generations, then owned pilot
+   same-client FK/descendant adapter and two-client **same-workspace** native tests.
+2. Complete Backend-owned legacy/service pre-effect authorization and executable
+   immutable-input/lifecycle contract. Database write denial is not pre-model or
+   pre-purchase containment; no new engine/ledger is introduced.
+3. Integrated table/view/RPC/Edge child-path isolation and legitimate invitation/
+   nonpilot flows with concurrent revocation/regrant/session changes at the exact
+   combined candidate. Existing privileged service reads remain a risk.
+
+**Overall Phase 1 FAIL.** Continue these Phase 1 integrations when owners deliver;
+do not start Phase 2. Later durable recovery/browser acceptance remains planned,
+not quietly implemented. P1–P8 disabled; A7 NO-GO. No hosted migrations/writes,
+deployment, paid calls, real records, sends, merges or customer activation.
+
+CI follow-up in this successor: implementation head `b182e481` passed full CI
+(all database/mutation shards), but dedicated native CI hit a pre-test random REST
+port collision. Owned harness fix uses kernel-chosen ports, bounded bind-only
+startup recovery and own-database nonce readiness. The required owner-integration
+lane now forces a real occupied HTTP200 listener. No security assertion or model/
+provider retry changed. See final-head receipt for the rerun, not the earlier head.
