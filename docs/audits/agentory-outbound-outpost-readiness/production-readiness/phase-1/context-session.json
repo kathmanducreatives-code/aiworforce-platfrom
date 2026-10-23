@@ -1,0 +1,16 @@
+{
+  "version": "phase1_context_session_audit_v1",
+  "actual_handler": "handlePilotContext",
+  "auth": "actual GoTrue v2.197.0",
+  "native_store": true,
+  "original_resume": 200,
+  "foreign_workspace": 403,
+  "new_session_same_actor_resume": 200,
+  "revoked_original_session_resume": 401,
+  "verdict": "FAIL",
+  "customer_pilot_ready": false,
+  "command": "OUTPOST_NATIVE_CONTEXT_AUDIT=1 tests/outpost-native/run.sh",
+  "exit_code": 1,
+  "baseline": "32097823562b5282972047f86beb0b826e4e663c",
+  "boundary": "disposable real Auth/DB/handler; local gateway URL routing only"
+}

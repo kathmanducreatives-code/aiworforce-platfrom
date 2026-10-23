@@ -521,4 +521,24 @@ Deno.test({
     );
   },
 });
+for (
+  const [role, allowed] of [["admin", true], ["editor", false], [
+    "member",
+    false,
+  ], ["OWNER", false]] as const
+) {
+  Deno.test({
+    ...opts,
+    name: `native: original actor role ${role} ${
+      allowed ? "retains" : "does not gain"
+    } private task authority`,
+    fn: async () => {
+      const x = await fixture(), auth = await jwt(x.ua, x.sa);
+      await sql`update public.workspace_members set role=${role} where workspace_id=${x.a} and user_id=${x.ua}`;
+      const r = await api(auth.token, `task_bindings?task_id=eq.${x.ta}`);
+      assertEquals(r.status, 200);
+      assertEquals(r.body.length, allowed ? 1 : 0);
+    },
+  });
+}
 Deno.test({ ...opts, name: "native: close owned SQL pool", fn: closeHarness });

@@ -1,0 +1,1358 @@
+{
+  "version": "phase1_native_surface_receipt_v1",
+  "baseline": "32097823562b5282972047f86beb0b826e4e663c",
+  "migration_sha256": "167560e70089fb74c712870c9bbf82be4126be87ea46d119af3ec5a29e5b22d6",
+  "environment": "owned disposable PostgreSQL 17.6 + PostgREST 16.4; synthetic JWT/session/data; NOT hosted",
+  "command": "OUTPOST_NATIVE_SURFACE_AUDIT=1 tests/outpost-native/run.sh",
+  "exit_code": 1,
+  "customer_readiness": "FAIL",
+  "relation_count": 17,
+  "policy_count": 45,
+  "grant_count": 275,
+  "limits": [
+    "Catalog source-text routine inventory is not a complete dynamic SQL or Edge route audit.",
+    "None of these seventeen legacy public relations has client_binding_id.",
+    "No shared policy/schema correction applied pending owner contract."
+  ],
+  "relations": [
+    {
+      "table": "public.accounts",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id"
+      ],
+      "ownership_constraints": [
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE",
+        "UNIQUE (workspace_id, name)"
+      ]
+    },
+    {
+      "table": "public.agents",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id"
+      ],
+      "ownership_constraints": [
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE"
+      ]
+    },
+    {
+      "table": "public.approvals",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id",
+        "task_id",
+        "user_id",
+        "plan_id"
+      ],
+      "ownership_constraints": [
+        "FOREIGN KEY (agent_id) REFERENCES agents(id)",
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (task_id) REFERENCES tasks(id)",
+        "FOREIGN KEY (task_plan_id) REFERENCES task_plans(id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE"
+      ]
+    },
+    {
+      "table": "public.company_brain",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id"
+      ],
+      "ownership_constraints": [
+        "PRIMARY KEY (workspace_id)",
+        "FOREIGN KEY (updated_by) REFERENCES auth.users(id) ON DELETE SET NULL",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE"
+      ]
+    },
+    {
+      "table": "public.contacts",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id",
+        "account_id"
+      ],
+      "ownership_constraints": [
+        "FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL",
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE",
+        "UNIQUE (workspace_id, linkedin_url)"
+      ]
+    },
+    {
+      "table": "public.conversations",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "user_id",
+        "workspace_id"
+      ],
+      "ownership_constraints": [
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE SET NULL"
+      ]
+    },
+    {
+      "table": "public.lead_candidates",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id",
+        "conversation_id",
+        "plan_id",
+        "account_id",
+        "contact_id"
+      ],
+      "ownership_constraints": [
+        "FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL",
+        "FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL",
+        "FOREIGN KEY (evidence_id) REFERENCES lead_evidence(id) ON DELETE SET NULL",
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (signal_id) REFERENCES signals(id) ON DELETE SET NULL",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE"
+      ]
+    },
+    {
+      "table": "public.lead_evidence",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id",
+        "contact_id",
+        "account_id"
+      ],
+      "ownership_constraints": [
+        "FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL",
+        "FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL",
+        "FOREIGN KEY (lead_candidate_id) REFERENCES lead_candidates(id) ON DELETE SET NULL",
+        "FOREIGN KEY (legacy_signal_id) REFERENCES signals(id) ON DELETE SET NULL",
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE"
+      ]
+    },
+    {
+      "table": "public.lead_lineages",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "lineage_id",
+        "workspace_id"
+      ],
+      "ownership_constraints": [
+        "PRIMARY KEY (lineage_id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE"
+      ]
+    },
+    {
+      "table": "public.messages",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "conversation_id"
+      ],
+      "ownership_constraints": [
+        "FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE",
+        "PRIMARY KEY (id)"
+      ]
+    },
+    {
+      "table": "public.outreach_drafts",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id",
+        "account_id",
+        "contact_id"
+      ],
+      "ownership_constraints": [
+        "FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL",
+        "FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL",
+        "FOREIGN KEY (lead_candidate_id) REFERENCES lead_candidates(id) ON DELETE SET NULL",
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE"
+      ]
+    },
+    {
+      "table": "public.saved_outputs",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id",
+        "conversation_id",
+        "plan_id",
+        "task_id"
+      ],
+      "ownership_constraints": [
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE"
+      ]
+    },
+    {
+      "table": "public.signals",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id",
+        "conversation_id",
+        "plan_id",
+        "task_id"
+      ],
+      "ownership_constraints": [
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE"
+      ]
+    },
+    {
+      "table": "public.task_plans",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id",
+        "user_id"
+      ],
+      "ownership_constraints": [
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE"
+      ]
+    },
+    {
+      "table": "public.tasks",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id",
+        "plan_id",
+        "user_id",
+        "lineage_id"
+      ],
+      "ownership_constraints": [
+        "FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE",
+        "FOREIGN KEY (lineage_id) REFERENCES lead_lineages(lineage_id)",
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (task_plan_id) REFERENCES task_plans(id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE"
+      ]
+    },
+    {
+      "table": "public.tool_calls",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id",
+        "plan_id",
+        "task_id"
+      ],
+      "ownership_constraints": [
+        "PRIMARY KEY (id)"
+      ]
+    },
+    {
+      "table": "public.workspace_members",
+      "rls": true,
+      "forced": false,
+      "scope_columns": [
+        "workspace_id",
+        "user_id"
+      ],
+      "ownership_constraints": [
+        "PRIMARY KEY (id)",
+        "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE",
+        "UNIQUE (workspace_id, user_id)"
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "tablename": "accounts",
+      "policyname": "accounts members delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "accounts",
+      "policyname": "accounts members insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "accounts",
+      "policyname": "accounts members read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "accounts",
+      "policyname": "accounts members update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "agents",
+      "policyname": "agents_workspace_member_access",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "ALL",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "approvals",
+      "policyname": "approvals_workspace_member_access",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "ALL",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "company_brain",
+      "policyname": "company_brain_member_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "company_brain",
+      "policyname": "company_brain_member_select",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "company_brain",
+      "policyname": "company_brain_member_update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "contacts",
+      "policyname": "contacts members delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "contacts",
+      "policyname": "contacts members insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "contacts",
+      "policyname": "contacts members read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "contacts",
+      "policyname": "contacts members update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "conversations",
+      "policyname": "conversations_owner_delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "DELETE",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "tablename": "conversations",
+      "policyname": "conversations_owner_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "tablename": "conversations",
+      "policyname": "conversations_owner_select",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "tablename": "conversations",
+      "policyname": "conversations_owner_update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(user_id = auth.uid())",
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "tablename": "lead_candidates",
+      "policyname": "lc members delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "lead_candidates",
+      "policyname": "lc members insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "lead_candidates",
+      "policyname": "lc members read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "lead_candidates",
+      "policyname": "lc members update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "lead_evidence",
+      "policyname": "lead_evidence members delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "lead_evidence",
+      "policyname": "lead_evidence members insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "lead_evidence",
+      "policyname": "lead_evidence members read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "lead_evidence",
+      "policyname": "lead_evidence members update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "messages",
+      "policyname": "messages_via_conversation_delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "DELETE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM conversations c\n  WHERE ((c.id = messages.conversation_id) AND (c.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "tablename": "messages",
+      "policyname": "messages_via_conversation_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(EXISTS ( SELECT 1\n   FROM conversations c\n  WHERE ((c.id = messages.conversation_id) AND (c.user_id = auth.uid()))))"
+    },
+    {
+      "tablename": "messages",
+      "policyname": "messages_via_conversation_select",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM conversations c\n  WHERE ((c.id = messages.conversation_id) AND (c.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "tablename": "outreach_drafts",
+      "policyname": "od members delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "outreach_drafts",
+      "policyname": "od members insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "outreach_drafts",
+      "policyname": "od members read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "outreach_drafts",
+      "policyname": "od members update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "saved_outputs",
+      "policyname": "so members delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "saved_outputs",
+      "policyname": "so members insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "saved_outputs",
+      "policyname": "so members read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "saved_outputs",
+      "policyname": "so members update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "signals",
+      "policyname": "signals members delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "signals",
+      "policyname": "signals members insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "signals",
+      "policyname": "signals members read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "signals",
+      "policyname": "signals members update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "task_plans",
+      "policyname": "task_plans_workspace_member_access",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "ALL",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "tasks",
+      "policyname": "tasks_workspace_member_access",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "ALL",
+      "qual": "has_workspace_access(auth.uid(), workspace_id)",
+      "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+    },
+    {
+      "tablename": "tool_calls",
+      "policyname": "LOCAL_TEST tool_calls member select",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM workspace_members wm\n  WHERE ((wm.workspace_id = tool_calls.workspace_id) AND (wm.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "tablename": "workspace_members",
+      "policyname": "members_self_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "tablename": "workspace_members",
+      "policyname": "members_self_select",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    }
+  ],
+  "effective_table_grants": {
+    "accounts": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "agents": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "approvals": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "company_brain": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "contacts": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "conversations": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "lead_candidates": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "lead_evidence": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "lead_lineages": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "messages": {
+      "anon": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "outreach_drafts": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "saved_outputs": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "signals": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "task_plans": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "tasks": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "tool_calls": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    },
+    "workspace_members": {
+      "anon": [
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER"
+      ],
+      "authenticated": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "UPDATE"
+      ],
+      "service_role": [
+        "DELETE",
+        "INSERT",
+        "REFERENCES",
+        "SELECT",
+        "TRIGGER",
+        "TRUNCATE",
+        "UPDATE"
+      ]
+    }
+  },
+  "function_candidates": [
+    {
+      "schema": "outpost_private",
+      "name": "capture_task_parent",
+      "definer": true,
+      "anon_execute": false,
+      "user_execute": false
+    },
+    {
+      "schema": "outpost_private",
+      "name": "current_member_session",
+      "definer": true,
+      "anon_execute": false,
+      "user_execute": true
+    },
+    {
+      "schema": "outpost_private",
+      "name": "task_is_current",
+      "definer": true,
+      "anon_execute": false,
+      "user_execute": true
+    },
+    {
+      "schema": "public",
+      "name": "acquire_lineage_lease",
+      "definer": false,
+      "anon_execute": true,
+      "user_execute": true
+    },
+    {
+      "schema": "public",
+      "name": "admit_discovery_smoke",
+      "definer": true,
+      "anon_execute": false,
+      "user_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "cancel_lineage",
+      "definer": false,
+      "anon_execute": true,
+      "user_execute": true
+    },
+    {
+      "schema": "public",
+      "name": "claim_next_lead_mission",
+      "definer": false,
+      "anon_execute": false,
+      "user_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "claim_sourcing_continuation",
+      "definer": false,
+      "anon_execute": true,
+      "user_execute": true
+    },
+    {
+      "schema": "public",
+      "name": "dev_table_counts",
+      "definer": true,
+      "anon_execute": false,
+      "user_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "has_workspace_access",
+      "definer": true,
+      "anon_execute": true,
+      "user_execute": true
+    },
+    {
+      "schema": "public",
+      "name": "heartbeat_lead_mission",
+      "definer": false,
+      "anon_execute": false,
+      "user_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "provision_workspace_for_user",
+      "definer": true,
+      "anon_execute": true,
+      "user_execute": true
+    },
+    {
+      "schema": "public",
+      "name": "release_lineage_lease",
+      "definer": false,
+      "anon_execute": true,
+      "user_execute": true
+    },
+    {
+      "schema": "public",
+      "name": "release_sourcing_continuation",
+      "definer": false,
+      "anon_execute": true,
+      "user_execute": true
+    },
+    {
+      "schema": "public",
+      "name": "renew_lineage_lease",
+      "definer": false,
+      "anon_execute": false,
+      "user_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "seed_agents_for_workspace",
+      "definer": true,
+      "anon_execute": false,
+      "user_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "tasks_sweep_stuck_runs",
+      "definer": true,
+      "anon_execute": false,
+      "user_execute": false
+    }
+  ],
+  "dependent_views": [
+    {
+      "name": "lead_results",
+      "options": [
+        "security_invoker=true"
+      ],
+      "parent": "lead_candidates"
+    },
+    {
+      "name": "signal_feed",
+      "options": [
+        "security_invoker=true"
+      ],
+      "parent": "signals"
+    }
+  ],
+  "probes": [
+    {
+      "role": "owner",
+      "route": "public.tasks SELECT",
+      "status": 200,
+      "visible_rows": 1
+    },
+    {
+      "role": "viewer",
+      "route": "public.tasks SELECT",
+      "status": 200,
+      "visible_rows": 1
+    },
+    {
+      "role": "anon",
+      "route": "public.tasks SELECT",
+      "status": 200,
+      "visible_rows": 0
+    },
+    {
+      "role": "viewer",
+      "route": "public.tasks PATCH",
+      "status": 204,
+      "changed": true
+    },
+    {
+      "role": "viewer",
+      "route": "workspace_members self-insert foreign owner",
+      "status": 201,
+      "foreign_rows_before": 0,
+      "foreign_rows_after": 1
+    },
+    {
+      "role": "viewer",
+      "route": "public.company_brain PATCH",
+      "status": 204,
+      "changed": true
+    }
+  ]
+}
