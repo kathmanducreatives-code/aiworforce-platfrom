@@ -62,3 +62,18 @@ export function paidCallInputHash(toolName: string, input: Record<string, unknow
 export function researchUnlockHash(leadId: string): string {
   return hashInput({ unit: "research_company", lead: leadId }, "research_company");
 }
+
+/**
+ * THE DECISION-MAKER UNLOCK'S BILLING UNIT: one company (lead row) per action.
+ *
+ * `find_decision_makers` is quoted per row (the Workbench cell shows its
+ * price). Its people searches carry no hash of their own, so every search in
+ * one action shared ONE key (`<task>:person_resolution:no-hash`): an action
+ * over N rows reserved and charged the quoted price once in total. Keyed per
+ * lead, each row's searches (the company-page stage and its domain fallback)
+ * share one key: the first reserves the quoted price, the fallback replays it.
+ * A row is charged once, as the button says; a later action is charged again.
+ */
+export function decisionMakerUnlockHash(leadId: string): string {
+  return hashInput({ unit: "find_decision_makers", lead: leadId }, "find_decision_makers");
+}

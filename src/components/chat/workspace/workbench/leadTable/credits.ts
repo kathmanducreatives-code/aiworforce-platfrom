@@ -5,6 +5,7 @@ import type { LeadResultPanelAction } from '@/lib/chatActions';
 import {
   isExplicitlyQualified, type QualificationRecord,
 } from '../../../../../lib/qualifiedLead/qualification';
+import { priceFor } from '../../../../../lib/credits/pricing';
 
 /**
  * Local-only credit estimates. NO ledger writes — these are presented to the
@@ -12,8 +13,10 @@ import {
  */
 export function estimateCredits(action: LeadResultPanelAction, rows: LeadTableRow[]): number {
   switch (action) {
+    // THE PRICE THE ROW BUTTON SHOWS, per row (`creditPricing`): the backend
+    // reserves exactly this once per row (`decisionMakerUnlockHash`).
     case 'find_contacts':
-      return rows.filter((r) => r.contact_status === 'needs_contact').length;
+      return rows.filter((r) => r.contact_status === 'needs_contact').length * priceFor('find_decision_makers');
     // ── ONLY ROWS WITH SOMEBODY TO ENRICH ──────────────────────────────────
     //
     // Contact enrichment takes a person, so a row where nobody has been
