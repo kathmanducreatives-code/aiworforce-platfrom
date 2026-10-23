@@ -14,7 +14,8 @@ import { api, denied, fixture, jwt, opts, signing } from "./fixture.ts";
 
 Deno.test({
   ...opts,
-  ignore: Deno.env.get("OUTPOST_NATIVE_OMIT_OWNER_GUARD") === "1",
+  ignore: Deno.env.get("OUTPOST_NATIVE_OMIT_OWNER_GUARD") === "1" ||
+    Deno.env.get("OUTPOST_NATIVE_OMIT_TASK_READ_GUARD") === "1",
   name:
     "native: empty rollback removes only pilot objects and reapplies atomically",
   fn: async () => {
@@ -26,6 +27,13 @@ Deno.test({
           import.meta.url,
         ),
       );
+      const accessDown = await Deno.readTextFile(
+        new URL(
+          "../../docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/native-access-rollback.sql",
+          import.meta.url,
+        ),
+      );
+      await c.unsafe(accessDown);
       await c.unsafe(down);
       assertEquals(
         (await c`select to_regnamespace('outpost_private')::text n`)[0].n,
@@ -48,6 +56,13 @@ Deno.test({
         ),
       );
       await c.unsafe(`begin;\n${up}\ncommit;`);
+      const accessUp = await Deno.readTextFile(
+        new URL(
+          "../../supabase/migrations-held/20261023061143_outpost_pilot_api_authorization.sql",
+          import.meta.url,
+        ),
+      );
+      await c.unsafe(`begin;\n${accessUp}\ncommit;`);
     } finally {
       await c`rollback`;
       c.release();

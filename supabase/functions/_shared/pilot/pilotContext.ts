@@ -1,3 +1,4 @@
+import { guardPilotStore } from "./pilotNativeAccess.ts";
 // P2 preparation only. Every read/binding goes through P1; no business executor.
 import {
   type AuthDeps,
@@ -72,11 +73,18 @@ export async function handlePilotContext(
       throw new PilotRefusal("bound_task_required", 403);
     }
     const key = pilotSigningKey(deps.env);
-    const store = deps.store?.() ?? createPilotScopeStore(deps);
+    const baseStore = deps.store?.() ?? createPilotScopeStore(deps);
     if (action === "list_workspaces") {
       const choices = [];
       for (const enrollment of loadPilotEnrollments(deps.env)) {
         try {
+          const store = guardPilotStore(
+            baseStore,
+            deps,
+            token,
+            enrollment,
+            null,
+          );
           const access = await PilotAccess.forUser(store, enrollment, user!);
           // Only disclose minimal choices after current membership and Brain checks.
           choices.push({
@@ -98,6 +106,13 @@ export async function handlePilotContext(
       deps.env,
       body.workspace_id,
       body.client_binding_id,
+    );
+    const store = guardPilotStore(
+      baseStore,
+      deps,
+      token,
+      enrollment,
+      typeof body.task_id === "string" ? body.task_id : null,
     );
     const refs = resourceRefs(body.resources);
     if (action !== "read_context" && !validId(body.task_id)) {

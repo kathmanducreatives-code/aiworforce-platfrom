@@ -1,3 +1,4 @@
+import { guardPilotStore } from "./pilotNativeAccess.ts";
 // P3 preview only: no commit action, persistence store, task binding, or executor.
 import { authenticateUser, defaultAuthDeps } from "../requestAuth.ts";
 import { type PilotContextDeps } from "./pilotContext.ts";
@@ -87,7 +88,13 @@ export async function handlePilotImport(
       body.workspace_id,
       body.client_binding_id,
     );
-    const store = deps.store?.() ?? createPilotScopeStore(deps);
+    const store = guardPilotStore(
+      deps.store?.() ?? createPilotScopeStore(deps),
+      deps,
+      auth.token,
+      enrollment,
+      null,
+    );
     const access = await PilotAccess.forUser(store, enrollment, auth.userId);
     if (typeof body.csv !== "string") {
       throw new PilotRefusal("invalid_request", 400);

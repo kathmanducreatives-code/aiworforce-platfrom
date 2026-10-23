@@ -9,7 +9,7 @@ auth_pw="$(openssl rand -hex 24)"
 jwt_secret="$(openssl rand -hex 32)"
 cid=""; rest_pid=""; auth_cid=""; auth_network=""; auth_url=""
 log="$(mktemp)"
-mutant_sql=""
+mutant_sql=""; access_mutant_sql=""
 cleanup() {
   if [ -n "$rest_pid" ]; then kill "$rest_pid" 2>/dev/null || true; wait "$rest_pid" 2>/dev/null || true; fi
   if [ -n "$auth_cid" ]; then docker rm -f "$auth_cid" >/dev/null 2>&1 || true; fi
@@ -17,6 +17,7 @@ cleanup() {
   if [ -n "$auth_network" ]; then docker network rm "$auth_network" >/dev/null 2>&1 || true; fi
   rm -f "$log"
   if [ -n "$mutant_sql" ]; then rm -f "$mutant_sql"; fi
+  if [ -n "$access_mutant_sql" ]; then rm -f "$access_mutant_sql"; fi
 }
 trap cleanup EXIT
 start_postgres() {
@@ -46,6 +47,8 @@ if [ "$ready" -ne 1 ]; then docker logs "$cid" 2>&1 | tail -20 >&2; exit 1; fi
 # Optional actual GoTrue catalog/session lane. No managed-auth fixture in this mode.
 if [ "${OUTPOST_NATIVE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" = 1 ]; then
   psql "$db_url" -X -q -v ON_ERROR_STOP=1 -c 'create schema auth'
+  # Official GHCR mirror has the identical pinned OCI index/platform digests;
+  # ECR returned Data limit exceeded on CI. No mutable tag or test bypass.
   auth_cid="$(docker run -d --name "${name}-auth" --network "$auth_network" \
     --label agentory.disposable=outpost-native -p 127.0.0.1::9999 \
     -e GOTRUE_API_HOST=0.0.0.0 -e PORT=9999 -e API_EXTERNAL_URL=http://127.0.0.1:9999 \
@@ -56,7 +59,7 @@ if [ "${OUTPOST_NATIVE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}"
     -e GOTRUE_JWT_ADMIN_ROLES=service_role -e GOTRUE_EXTERNAL_EMAIL_ENABLED=true \
     -e GOTRUE_MAILER_AUTOCONFIRM=true -e GOTRUE_DISABLE_SIGNUP=false \
     -e GOTRUE_EXTERNAL_PHONE_ENABLED=false \
-    public.ecr.aws/supabase/gotrue:v2.197.0@sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b)"
+    ghcr.io/supabase/gotrue:v2.197.0@sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b)"
   auth_port="$(docker port "$auth_cid" 9999/tcp | sed 's/127.0.0.1://')" || { docker logs "$auth_cid" 2>&1 | tail -12 | sed -E 's#postgres://[^ ]*#[redacted-db-url]#g'; exit 1; }
   case "$auth_port" in ''|*[!0-9]*) echo 'invalid loopback auth port' >&2; exit 2;; esac
   auth_url="http://127.0.0.1:$auth_port"
@@ -76,6 +79,16 @@ if [ "${OUTPOST_NATIVE_AUTH:-0}" != 1 ] && [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}
   psql "$db_url" -X -q -v ON_ERROR_STOP=1 --single-transaction \
     -f "$root/tests/outpost-native/auth-sessions.fixture.sql"
 fi
+# Optional exact owner dependency, never a hosted target or arbitrary SQL override.
+# CI prepares this file from pinned #159; offline runs supply the same local file.
+if [ -n "${OUTPOST_NATIVE_MEMBERSHIP_SQL:-}" ]; then
+  checksum="$(shasum -a 256 "$OUTPOST_NATIVE_MEMBERSHIP_SQL" | cut -d ' ' -f 1)"
+  if [ "$checksum" != 5fb203974a2f79b8d94f3988aec8807c96fb2dae3de17486ecdd803a33970311 ]; then
+    echo 'membership dependency checksum mismatch' >&2; exit 2
+  fi
+  psql "$db_url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$OUTPOST_NATIVE_MEMBERSHIP_SQL"
+  echo 'Owner dependency #159 exact SQL applied to this disposable database only'
+fi
 native_sql="$root/supabase/migrations-held/20261022140824_outpost_native_identity_security.sql"
 if [ "${OUTPOST_NATIVE_OMIT_OWNER_GUARD:-0}" = 1 ]; then
   mutant_sql="$(mktemp)"
@@ -84,6 +97,14 @@ if [ "${OUTPOST_NATIVE_OMIT_OWNER_GUARD:-0}" = 1 ]; then
   echo 'MUTANT: bound-task ownership guard intentionally removed (negative control)'
 fi
 psql "$db_url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$native_sql"
+access_sql="$root/supabase/migrations-held/20261023061143_outpost_pilot_api_authorization.sql"
+if [ "${OUTPOST_NATIVE_OMIT_TASK_READ_GUARD:-0}" = 1 ]; then
+  access_mutant_sql="$(mktemp)"
+  sed '/^create policy outpost_bound_task_read /,+1d' "$access_sql" > "$access_mutant_sql"
+  access_sql="$access_mutant_sql"
+  echo 'MUTANT: public pilot task read guard intentionally removed'
+fi
+psql "$db_url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$access_sql"
 psql "$db_url" -X -q -c "alter role authenticator with login password '$auth_pw'"
 # Intentionally expose the private schema IN THIS TEST ONLY: prove RLS still
 # denies foreign rows/writes even after a mistaken PostgREST exposure setting.
@@ -121,9 +142,9 @@ elif [ "${OUTPOST_NATIVE_PUBLIC_AUDIT:-0}" = 1 ]; then
     --allow-net=127.0.0.1,localhost --no-prompt "$root/tests/outpost-native/public-task-audit.ts"
 else
   DB_CONTRACT_REST_URL="http://127.0.0.1:$rest_port" DB_CONTRACT_JWT_SECRET="$jwt_secret" \
-  DB_CONTRACT_PG_URL="$db_url" OUTPOST_NATIVE_OMIT_OWNER_GUARD="${OUTPOST_NATIVE_OMIT_OWNER_GUARD:-0}" \
+  DB_CONTRACT_PG_URL="$db_url" OUTPOST_NATIVE_MEMBERSHIP_SQL="${OUTPOST_NATIVE_MEMBERSHIP_SQL:-}" OUTPOST_NATIVE_OMIT_TASK_READ_GUARD="${OUTPOST_NATIVE_OMIT_TASK_READ_GUARD:-0}" OUTPOST_NATIVE_OMIT_OWNER_GUARD="${OUTPOST_NATIVE_OMIT_OWNER_GUARD:-0}" \
     deno test --node-modules-dir=none --allow-read --allow-env \
-    --allow-net=127.0.0.1,localhost --no-prompt "$root/tests/outpost-native/identity.test.ts"
+    --allow-net=127.0.0.1,localhost --no-prompt "$root/tests/outpost-native/identity.test.ts" "$root/tests/outpost-native/api-security.test.ts"
 fi
 status=$?
 set -e

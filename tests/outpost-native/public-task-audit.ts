@@ -1,4 +1,4 @@
-// Intentionally FAILS until the coordinated public-table authorization gap closes.
+// Required owned pilot-task access acceptance; shared membership remains separate.
 // Run through the disposable runner with OUTPOST_NATIVE_PUBLIC_AUDIT=1.
 // deno-lint-ignore no-import-prefix
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
@@ -47,7 +47,7 @@ try {
         verdict: secure ? "PASS" : "FAIL",
         customer_pilot_ready: false,
         owner_dependency:
-          "existing public tasks permissions / legacy containment; no shared policy rewrite in this slice",
+          "global membership hotfix and service-role legacy containment remain separate gates",
       },
       null,
       2,
