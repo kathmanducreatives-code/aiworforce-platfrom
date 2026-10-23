@@ -5,5 +5,5 @@
 # their event files; the lane's own runner grants neither.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-DB_CONTRACT_EXTRA_DENO_FLAGS="--allow-run=$(readlink -f "$(command -v deno)") --allow-write" \
+DB_CONTRACT_EXTRA_DENO_FLAGS="--allow-run=$(readlink -f "$(command -v deno)"),$(command -v psql) --allow-write" \
   exec "$root/tests/db-contract/run.sh" "$root/tests/realprocess/workerKill.rehearsal.ts"
