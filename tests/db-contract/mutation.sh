@@ -321,6 +321,24 @@ prove_killed "smoke planner shown every authorised actor (Codex P1)" "$planner_t
   "    const payload = approved ? smokePlannerPayload(i.payload, approved) : i.payload;" "    const payload = i.payload;" \
   "$planner_tests" "smoke planner: the execution-planner request for the smoke's mission fits the Luna template"
 
+# ── PROOF: the browser never writes the Company Brain (roadmap Phase 3a) ───
+# Build WITHOUT 20261023120000_company_brain_server_writes_only and require the
+# server-writes test to fail on a member's browser write — the viewer PATCH
+# that returned 204 and persisted before the migration.
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261023120000_company_brain_server_writes_only.sql \
+  "$root/tests/db-contract/run.sh" "$root/tests/db-contract/companyBrainServerWrites.contract.test.ts" >"$out" 2>&1
+status=$?
+set -e
+sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -E '\.\.\. (ok|FAILED)|passed \||^omitted ' || true
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "no member — viewer, editor, admin or owner — writes the Brain from the browser ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: Brain server-writes tests without the migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the migration a viewer rewrites the Company Brain from the browser"
+ran=$((ran + 1))
+fi
+
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
 if [ -n "${MUTATION_TALLY_FILE:-}" ]; then
