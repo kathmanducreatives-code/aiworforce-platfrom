@@ -1,4 +1,4 @@
-# AUTH-01 / EXEC-01 client boundary contract — proposed for owner agreement
+# AUTH-01 / EXEC-01 client boundary contract — v1 interface, shared DDL pending
 
 **Target selected by user: one agency workspace, multiple isolated client accounts,
 with separate Company Brain per client. Contract implementation blocked pending
@@ -94,8 +94,12 @@ relevant permissions; task SELECT alone is not a finished security boundary.
 - Audit views/RPCs/service paths independently. BYPASSRLS remains privileged;
   restrictive authenticated policies do not constrain a service-role executor.
 
-No public restrictive policy or replacement membership/Brain schema is applied
-here. Explicit owner contract is required before that shared implementation.
+Owned successor `codex/nosh-phase1-access-fixes` now implements additive **held**
+pilot task restrictions and enrolled Brain read/write containment plus the P1
+native API adapter; see [ACCESS_FIXES.md](ACCESS_FIXES.md). These run only against
+disposable databases. The exact owner #159 membership SQL is an optional pinned
+local dependency, not duplicated here. Canonical multi-client Brain/parent/role
+schema is still pending explicit owner agreement; no shared client DDL changed.
 
 ## Mandatory red-to-green acceptance
 
@@ -123,3 +127,21 @@ Local rollback tests must preserve populated identity/history and model liabilit
 disable access/writer/admission before application rollback. Empty-only rollback
 may remove just the new objects. Never restore a stale permission/approval state,
 CASCADE client data or refund uncertain work as a recovery shortcut.
+
+## v1 implementation boundary and outstanding owner acknowledgment
+
+The user-selected product and interface requirements above are the fixed direction,
+not another tenancy choice. `client_binding_id` denotes the client organization,
+never a prospective lead/company from Apollo. Every task/data descendant must use
+both workspace and that client; client access is a restriction of the existing
+role system. There is no agency-Brain fallback, default client or implicit delegation.
+The canonical parent/table and client-grant representation remain owner decisions;
+this document does not fabricate an owner agreement from silence. Do not ship
+multi-client schema or weaken current uniqueness before those decisions and their
+positive native tests. #159 closes browser membership writes; it provides no new
+invitation/client-grant writer. Existing provisioning remains the supported positive
+control; invitations require the owner's role-checked path and native tests.
+
+The immediate successor supplies narrower native containment and actual original-
+session handler proof while those shared deliverables are pending. It does not
+start Phase 2 or treat containment as the complete multi-client implementation.

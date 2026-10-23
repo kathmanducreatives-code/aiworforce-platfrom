@@ -1,0 +1,99 @@
+{
+  "version": "phase1_access_corrections_v1",
+  "tested_base": "103f708a9f865df667b65ad64b662c6ddf435c2a",
+  "branch": "codex/nosh-phase1-access-fixes",
+  "scope": "disposable_native_only",
+  "customer_pilot_ready": false,
+  "phase1": "FAIL",
+  "phase2_started": false,
+  "owner_membership_dependency": {
+    "pr": 159,
+    "commit": "572dca5c8d9c7f121731456801a035cfb6186b1e",
+    "sql_sha256": "5fb203974a2f79b8d94f3988aec8807c96fb2dae3de17486ecdd803a33970311",
+    "production": "owner-provided metadata receipt reviewed; not independently queried"
+  },
+  "integrated_native": {
+    "passed": 68,
+    "failed": 0
+  },
+  "actual_context_handler": {
+    "version": "phase1_context_session_audit_v1",
+    "actual_handler": "handlePilotContext",
+    "auth": "actual GoTrue v2.197.0",
+    "native_store": true,
+    "original_resume": 200,
+    "same_session_refresh_resume": 200,
+    "service_original_resume": 200,
+    "demoted_actor_resume": 403,
+    "service_demoted_actor_resume": 403,
+    "service_revoked_session_resume": 403,
+    "foreign_workspace": 403,
+    "new_session_same_actor_resume": 403,
+    "revoked_original_session_resume": 401,
+    "verdict": "PASS",
+    "customer_pilot_ready": false
+  },
+  "integrated_surface": {
+    "scope": "disposable_native_only",
+    "verdict": "FAIL",
+    "customer_pilot_ready": false,
+    "probes": [
+      {
+        "role": "owner",
+        "route": "public.tasks SELECT",
+        "status": 200,
+        "visible_rows": 1
+      },
+      {
+        "role": "viewer",
+        "route": "public.tasks SELECT",
+        "status": 200,
+        "visible_rows": 0
+      },
+      {
+        "role": "anon",
+        "route": "public.tasks SELECT",
+        "status": 200,
+        "visible_rows": 0
+      },
+      {
+        "role": "viewer",
+        "route": "public.tasks PATCH",
+        "status": 204,
+        "changed": false
+      },
+      {
+        "role": "viewer",
+        "route": "workspace_members self-insert foreign owner",
+        "status": 403,
+        "foreign_rows_before": 0,
+        "foreign_rows_after": 0
+      },
+      {
+        "role": "viewer",
+        "route": "public.company_brain PATCH",
+        "status": 204,
+        "changed": false
+      },
+      {
+        "role": "viewer",
+        "route": "nonpilot public.company_brain PATCH (shared owner dependency)",
+        "status": 204,
+        "changed": true
+      }
+    ]
+  },
+  "offline_regression": {
+    "edge": 9203,
+    "infra": 196,
+    "frontend_deno": 722,
+    "frontend_node": 5,
+    "actual_gotrue": 5
+  },
+  "limitations": [
+    "nonpilot viewer Brain PATCH still changes row",
+    "same-workspace multi-client contract and native descendants not implemented",
+    "service legacy paths and registration/lifecycle remain shared dependencies",
+    "no hosted verification or activation"
+  ]
+}

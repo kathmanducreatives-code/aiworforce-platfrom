@@ -2,7 +2,11 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 // Evidence-only audit. Exits nonzero if a supported route exposes protected tasks.
 // No hosted URL accepted by the harness; all mutations affect disposable fixtures.
-import { closeHarness, sql } from "../db-contract/lib/harness.ts";
+import {
+  closeHarness,
+  seedWorkspace,
+  sql,
+} from "../db-contract/lib/harness.ts";
 import { api, fixture, jwt } from "./fixture.ts";
 const resources = [
   "tasks",
@@ -145,9 +149,33 @@ try {
     status: brainWrite.status,
     changed: brainChanged,
   });
+  // Shared Brain writer role policy is still owned by Brain Claude. Pilot
+  // containment must not conceal the same viewer defect in ordinary workspaces.
+  const ordinary = await seedWorkspace();
+  await sql`insert into public.workspace_members(workspace_id,user_id,role) values (${ordinary},${x.viewer},'viewer')`;
+  await sql`insert into public.company_brain(workspace_id,profile) values (${ordinary},'{}')`;
+  const ordinaryWrite = await api(
+    viewer.token,
+    `company_brain?workspace_id=eq.${ordinary}`,
+    "PATCH",
+    { profile: { unauthorized_viewer: true } },
+    "public",
+  );
+  const ordinaryChanged =
+    (await sql`select profile from public.company_brain where workspace_id=${ordinary}`)[
+      0
+    ].profile.unauthorized_viewer === true;
+  probes.push({
+    role: "viewer",
+    route: "nonpilot public.company_brain PATCH (shared owner dependency)",
+    status: ordinaryWrite.status,
+    changed: ordinaryChanged,
+  });
   const leak = probes.some((p) =>
     p.role === "viewer" &&
-    (p.visible_rows === 1 || p.changed === true || p.foreign_rows_after === 1)
+    (p.visible_rows === 1 || p.changed === true || p.foreign_rows_after === 1 ||
+      (p.route === "workspace_members self-insert foreign owner" &&
+        p.status === 201))
   );
   console.log(
     JSON.stringify(

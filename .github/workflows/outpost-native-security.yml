@@ -8,9 +8,15 @@ on:
       - 'tests/infra/rlsRelations.test.ts'
       - 'tests/infra/lib/rlsRelations.ts'
       - 'supabase/functions/_shared/pilot/**'
+      - 'supabase/functions/pilot-scope/**'
+      - 'supabase/functions/pilot-context/**'
+      - 'supabase/functions/pilot-import/**'
+      - 'tests/edge-functions/pilot*.test.ts'
       - 'supabase/functions/_shared/workspaceAccessGuard.ts'
       - 'supabase/migrations/**'
       - 'supabase/migrations-held/20261022140824_outpost_native_identity_security.sql'
+      - 'supabase/migrations-held/20261023061143_outpost_pilot_api_authorization.sql'
+      - 'docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/native-access-rollback.sql'
       - 'docs/audits/agentory-outbound-outpost-readiness/production-readiness/native-security-rollback.sql'
   workflow_dispatch:
 permissions:
@@ -40,6 +46,16 @@ jobs:
           echo "POSTGREST_BIN=$dir/postgrest" >> "$GITHUB_ENV"
       - name: Native grants, ownership, session predicates, direct API and rollback
         run: tests/outpost-native/run.sh | tee /tmp/outpost-native.log
+      - name: Prepare exact owner membership dependency (PR 159, no hosted operation)
+        run: |
+          git fetch --no-tags --depth=1 origin 572dca5c8d9c7f121731456801a035cfb6186b1e
+          git show 572dca5c8d9c7f121731456801a035cfb6186b1e:supabase/migrations/20261022120000_close_workspace_self_join.sql > "$RUNNER_TEMP/outpost-membership-159.sql"
+          echo "5fb203974a2f79b8d94f3988aec8807c96fb2dae3de17486ecdd803a33970311  $RUNNER_TEMP/outpost-membership-159.sql" | sha256sum -c -
+      - name: Integrated owner membership and pilot API native acceptance
+        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" tests/outpost-native/run.sh | tee /tmp/outpost-native-integrated.log
+      - name: Integrated surface audit (shared nonpilot Brain role blocker)
+        continue-on-error: true
+        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_SURFACE_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-integrated-surface.log
       - name: Actual local GoTrue session, refresh, logout and revocation
         run: OUTPOST_NATIVE_AUTH=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-auth.log
       - name: Ownership guard mutation must fail its native contracts
@@ -51,18 +67,23 @@ jobs:
           grep -q 'task mutation and restoration cannot revive.*FAILED' /tmp/outpost-native-mutant.log
           grep -q 'parent capture locks serialize concurrent ownership mutation.*FAILED' /tmp/outpost-native-mutant.log
           echo 'Native mutation caught the missing ownership guard; this is not customer readiness.'
-      - name: Public task readiness audit (known owner blocker)
+      - name: Public task read guard mutation must fail native API tests
+        run: |
+          if OUTPOST_NATIVE_OMIT_TASK_READ_GUARD=1 tests/outpost-native/run.sh > /tmp/outpost-native-read-mutant.log 2>&1; then
+            echo '::error::Removing public task read protection survived native contracts'
+            exit 1
+          fi
+          grep -q 'viewer task and Brain reads use original authorized principal.*FAILED' /tmp/outpost-native-read-mutant.log
+      - name: Public pilot task access acceptance
         id: public-task-readiness
-        continue-on-error: true
         run: OUTPOST_NATIVE_PUBLIC_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-public-audit.log
       - name: Public task, Brain and membership native audit (known owner blockers)
         id: public-surface-readiness
         continue-on-error: true
         run: OUTPOST_NATIVE_SURFACE_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-surface-audit.log
-      - name: Actual pilot handler session audit (known native adapter blocker)
+      - name: Actual pilot handler original-session acceptance
         id: context-readiness
-        continue-on-error: true
-        run: OUTPOST_NATIVE_CONTEXT_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-context-audit.log
+        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_CONTEXT_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-context-audit.log
       - name: Readiness is separate from identity foundation
         if: always()
         run: |

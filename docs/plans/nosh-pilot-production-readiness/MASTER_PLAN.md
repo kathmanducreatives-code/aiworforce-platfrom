@@ -1,6 +1,6 @@
 # Nosh pilot: implementation and production-readiness master plan
 
-**Phase 0 complete; Phase 1 authorized, PARTIAL/BLOCKED. Customer readiness: FAIL.**
+**Phase 0 complete; Phase 1 authorized, owned access fixes implemented, overall FAIL.**
 
 Audit date: 2026-10-23 (Asia/Kathmandu); GitHub state refreshed at
 2026-10-22T18:38Z. P1–P8 remain disabled. A7 remains NO-GO.
@@ -832,3 +832,24 @@ Phase 1 cannot be called complete until DEC-01's shared client contract and AUTH
 real session/direct API proofs pass and all required CI is green. Every later
 phase remains unapproved. The next receipt must clearly distinguish completed
 local work, owner-blocked work and forbidden external actions.
+
+## Phase 1 access correction update (2026-10-23)
+
+Successor `codex/nosh-phase1-access-fixes` is stacked on #155; full implementation,
+native receipts, remaining owner handoffs and held rollback are documented in
+[ACCESS_FIXES.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/ACCESS_FIXES.md).
+SEC-01's owned public task read/write correction and actual original-session API
+adapter now pass native controls; enrolled Brain app-role writes are frozen.
+This replaces the immediate owned implementation backlog, not the complete
+Phase 1 acceptance definition. SEC-02/03/04/DEC-01 still need shared canonical
+client/Brain roles, full route coverage and registration/lifecycle/concurrency.
+
+SEC-05 owner #159 now exists with exact local integration proof and owner-reported
+production catalog receipt. No duplicate membership implementation or hosted
+application by Codex. Verify the target's catalog/history before any future release;
+manual installation is not inferred from a GitHub deployment or missing migration
+history. The integrated surface probe still FAILS on nonpilot viewer Brain PATCH,
+which is an AUTH-01 owner delivery. One agency workspace/multiple isolated client
+accounts remains the target; no fallback/default client or uniqueness removal.
+
+No phase scope changed: Phase 2 remains unapproved, P1–P8 disabled, A7 NO-GO.

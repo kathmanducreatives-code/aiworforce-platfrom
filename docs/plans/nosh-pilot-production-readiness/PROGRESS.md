@@ -3,7 +3,7 @@
 **Customer pilot readiness: FAIL. P1–P8 disabled. A7 NO-GO.**
 
 Last audit: 2026-10-23 Asia/Kathmandu; Phase 1 approved in user message following #152.
-Readiness remains FAIL; owner coordination is a required prerequisite, not routine reapproval.
+Readiness remains FAIL; owned access fixes are implemented below; shared contracts remain required.
 Read [MASTER_PLAN.md](MASTER_PLAN.md) before resuming. This tracker supersedes
 historical phase-number status in `docs/audits/.../production-readiness/`; those
 files remain immutable receipts of narrower previous work. Production-readiness
@@ -14,7 +14,7 @@ Phase 0–8 below is distinct from the historical P1–P8 feature implementation
 | Phase | Status | Branch / PR | Validation | Remaining blockers |
 | --- | --- | --- | --- | --- |
 | 0 — architecture/readiness audit | COMPLETE / reviewed; Phase 1 authorized | `codex/nosh-readiness-master-plan`; draft #152, stacked on #151 | repository/PR/CI/interface audit; documentation checks in phase receipt | DEC-01 target chosen in Phase 1 approval; shared contract still open |
-| 1 — native security | PARTIAL / BLOCKED on shared owner contracts; overall FAIL | `codex/nosh-phase1-security`, draft #155 on #152; historical #151 preserved | scanner/parser 18/0; infra 196/0; edge 9194/0; native 46/0; real GoTrue private predicate 5/0; public and actual handler audits FAIL | SEC-01/02/03/04/05; agreed multi-client Brain/roles/parent contract; owner-delivered public membership/Brain/task/Edge corrections; complete same-workspace acceptance |
+| 1 — native security | PARTIAL / owned pilot corrections PASS, overall FAIL | `codex/nosh-phase1-access-fixes` on #155; #151/#155 preserved | integrated native 68/0 with exact #159 SQL; actual context-session PASS; edge 9203/0; infra 196/0; UI 722+5/0; GoTrue 5/0 | shared nonpilot Brain role writes; same-workspace multi-client parent/Brain/permissions contract; legacy service routes and original-task registration/lifecycle; complete integrated acceptance |
 | 2 — transactional persistence | PENDING / NOT APPROVED | no implementation PR yet; P3/P5/P6/P7 interfaces are not persistence | offline contracts only; no native durable import/snapshot/review/approval adapter | Phase 1; DATA-01/02; REPLAY-01; original-task lifecycle and shared receipt contract |
 | 3 — legacy executor containment | PENDING / NOT APPROVED | owner #145/#149/#150 are dependencies, not pilot containment completion | no complete pilot route-by-route native acceptance | Phase 1/2; backend EXEC-01; Brain context seam |
 | 4 — recovery/spending | PENDING / NOT APPROVED | owner #150 plus future FIN-01 successor | mocked P4/P8 safeguards; no native pilot shared-ledger recovery proof | Phase 2/3; FIN-01/02; MODEL-01; no competing ledger |
@@ -24,7 +24,7 @@ Phase 0–8 below is distinct from the historical P1–P8 feature implementation
 | 8 — release/customer readiness | BLOCKED / NOT APPROVED | no release candidate | no real-model or Nosh acceptance receipt | Phase 7; QUALITY-01; owner compatibility; separate merge/deploy/paid/data/activation approval |
 
 **Current phase is Phase 1 and is already authorized.** All independent safe
-work in this draft is completed/tested, but shared fixes are blocked pending
+work in the access-fix successor is implemented/tested; shared fixes depend on
 AUTH-01/EXEC-01 coordination as explicitly required by the user. No routine
 technical decision is being returned for permission. The user selected one agency
 workspace with multiple isolated client accounts and separate client Brain;
@@ -37,8 +37,8 @@ requires separate approval after Phase 1 is actually complete.
 
 ## Active worktree and immutable resume points
 
-- Active Phase 1 branch: `codex/nosh-phase1-security`.
-- Worktree: `/Users/prasidha/Downloads/screeningpilot-main/nosh-phase1-security`.
+- Active Phase 1 branch: `codex/nosh-phase1-access-fixes` (successor on #155).
+- Worktree: `/Users/prasidha/Downloads/screeningpilot-main/nosh-phase1-access-fixes`.
 - Phase 1 base: #152 `32097823562b5282972047f86beb0b826e4e663c`; exact new head/PR is in its publication receipt.
 - Historical #151 base: `001fa9db9a1a07266dfc700b0d7a21fbc322c7df`.
 - Documentation PR: [#152](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/152),
@@ -248,3 +248,43 @@ acceptance before requesting Phase 2. Phase 2 is not started/approved.
 No hosted/production changes, new application migrations, merge, deployment, real
 customer import, paid calls, outreach, credential/billing modification or feature
 activation. Existing local Supabase stacks unchanged. P1–P8 disabled; A7 NO-GO.
+
+## Phase 1 access-correction continuation — 2026-10-23
+
+This continuation implements the owned pilot/API corrections rather than stopping
+at #155's red audits. Full receipt and exact reproduction commands:
+[ACCESS_FIXES.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/ACCESS_FIXES.md),
+with machine-readable `access-fixes.json` alongside it. Publication head and CI
+are recorded in the successor draft PR. No Phase 2 work started.
+
+**Closed locally in the owned integrated candidate:** pilot viewer public-task
+read, browser task mutation/marker replacement, enrolled Brain app-role raw writes,
+and original-session bypass in exposed P1/P2/P3 store access. Original owner/admin,
+refresh and validated bound-service positives remain; unrelated nonpilot owner/
+service operations pass. Missing native registration/API fails closed. All enrolled
+Brain writes intentionally frozen pending approved writer; not an editable pilot.
+
+**Shared membership update:** owner #159 `572dca5c8d9c7f121731456801a035cfb6186b1e`
+now provides the hotfix. Exact unchanged SQL is SHA-pinned and consumed only in
+our local/CI disposable integrated lane. Native self-join denied, provisioning and
+idempotency pass. Owner reports manual production/TEST application with catalog
+receipt; reviewed, not independently queried. Do not apply it again blindly.
+
+**Validation:** integrated native 68/0; actual GoTrue 5/0; actual handler original/
+refresh/service 200 and wrong-session/demotion/revocation denied; edge 9203/0;
+infra 196/0; frontend Deno 722/0 and Node 5/0; edge/worker check, frontend type/lint
+ratchets and build pass. Guard mutation tests produce the expected named failures.
+Public task and handler acceptance are required CI steps now; broad-surface red
+evidence remains explicit. See successor CI receipt for exact final-head results.
+
+**Still FAIL:** integrated native surface audit proves nonpilot viewer Brain PATCH
+204 with changed row. Brain owner must deliver role-aware canonical table/handler
+writes, including service-backed pre-model authorization. Agency multi-client
+interface direction is recorded in CLIENT_CONTRACT v1, but canonical parent/
+client-grant/Brain-version DDL awaits owner acknowledgment and positive same-
+workspace acceptance. Shared executor containment and trusted native task
+registration/lifecycle/revocation contract remain unimplemented in this slice.
+No owner branch, qualification, shared ledger or Brain writer edits.
+
+Next action is the remaining **Phase 1** shared integration and native security
+acceptance, not Phase 2. P1–P8 disabled, A7 NO-GO, no hosted changes/deploy/paid calls.

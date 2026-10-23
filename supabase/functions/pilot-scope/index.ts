@@ -1,3 +1,4 @@
+import { guardPilotStore } from "../_shared/pilot/pilotNativeAccess.ts";
 import { bodyOf, CORS, json } from "../_shared/pilot/pilotHttp.ts";
 // P1 authorization front door only. No import/research/model/export executor.
 import { withBuildStamp } from "../_shared/buildStamp.ts";
@@ -70,7 +71,13 @@ export async function handlePilotScope(
       body.client_binding_id,
     );
     const key = pilotSigningKey(deps.env);
-    const store = deps.store?.() ?? createPilotScopeStore(deps);
+    const store = guardPilotStore(
+      deps.store?.() ?? createPilotScopeStore(deps),
+      deps,
+      token,
+      enrollment,
+      typeof body.task_id === "string" ? body.task_id : null,
+    );
     const refs = body.resources === undefined
       ? []
       : resourceRefs(body.resources);

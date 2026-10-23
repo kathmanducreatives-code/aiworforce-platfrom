@@ -215,6 +215,31 @@ export function fixture() {
       ? input
       : new Request(String(input), init);
     const u = new URL(req.url);
+    if (
+      req.method === "POST" &&
+      u.pathname === "/rest/v1/rpc/outpost_pilot_access"
+    ) {
+      n.log.push(`NATIVE ${u.pathname}`);
+      const args = await req.json();
+      const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+      const user = ({ "jwt-A": UA, "jwt-B": UB, "jwt-both": BOTH } as Record<
+        string,
+        string
+      >)[token ?? ""];
+      const allowed = policy.workspaces.some((w) =>
+        w.workspace_id === args.p_workspace &&
+        w.client_binding_id === args.p_client && w.version === args.p_version
+      ) &&
+        (token === n.env("SUPABASE_SERVICE_ROLE_KEY")
+          ? !!args.p_task
+          : !!tables.workspace_members.find((m) =>
+            m.workspace_id === args.p_workspace && m.user_id === user &&
+            ["owner", "admin"].includes(String(m.role))
+          ));
+      return new Response(JSON.stringify(allowed), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     if (req.method === "PATCH" && u.pathname === "/rest/v1/tasks") {
       n.log.push(`CAS ${u.pathname}`);
       if (writeError) {

@@ -2,7 +2,12 @@
 // the absent local Supabase gateway; it does not fabricate provider/DB/Auth results.
 // deno-lint-ignore-file no-import-prefix
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { closeHarness, mintJwt, REST_URL } from "../db-contract/lib/harness.ts";
+import {
+  closeHarness,
+  mintJwt,
+  REST_URL,
+  sql,
+} from "../db-contract/lib/harness.ts";
 import { handlePilotContext } from "../../supabase/functions/_shared/pilot/pilotContext.ts";
 import { signing } from "./fixture.ts";
 import { auth, authUrl, login, password } from "./lib/auth.ts";
@@ -31,6 +36,9 @@ try {
         ? input.href
         : input.url;
       const prefix = REST_URL + "/auth/v1";
+      if (u.startsWith(REST_URL + "/rest/v1/rpc/outpost_pilot_access")) {
+        return fetch(u.replace(REST_URL + "/rest/v1", REST_URL), init);
+      }
       if (!u.startsWith(prefix)) {
         throw new Error("context audit forbids non-Auth HTTP");
       }
@@ -64,6 +72,25 @@ try {
     200,
     "actual original actor and signed native task positive control",
   );
+  const serviceOriginal = await invoke(x.service, "resume_task");
+  assertEquals(
+    serviceOriginal,
+    200,
+    "service retains validated original task authority",
+  );
+  const refresh = await auth("/token?grant_type=refresh_token", {
+    refresh_token: session.refresh_token,
+  });
+  assertEquals(refresh.status, 200);
+  const refreshed = JSON.parse(refresh.body);
+  const refreshedResume = await invoke(refreshed.access_token, "resume_task");
+  assertEquals(refreshedResume, 200, "same-session refresh remains valid");
+  await sql`update public.workspace_members set role='viewer' where workspace_id=${x.a} and user_id=${x.ua}`;
+  const demoted = await invoke(refreshed.access_token, "resume_task");
+  const serviceDemoted = await invoke(x.service, "resume_task");
+  assertEquals(demoted, 403);
+  assertEquals(serviceDemoted, 403);
+  await sql`update public.workspace_members set role='owner' where workspace_id=${x.a} and user_id=${x.ua}`;
   const foreign = await invoke(session.access_token, "read_context", x.b, x.cb);
   assertEquals(foreign, 403, "native foreign workspace must be denied");
   const signin = await auth("/token?grant_type=password", {
@@ -83,6 +110,8 @@ try {
   );
   assertEquals(signout.status, 204);
   const revoked = await invoke(session.access_token, "resume_task");
+  const serviceRevoked = await invoke(x.service, "resume_task");
+  assertEquals(serviceRevoked, 403);
   const secure = differentSession === 403 && [401, 403].includes(revoked);
   console.log(
     JSON.stringify(
@@ -92,6 +121,11 @@ try {
         auth: "actual GoTrue v2.197.0",
         native_store: true,
         original_resume: original,
+        same_session_refresh_resume: refreshedResume,
+        service_original_resume: serviceOriginal,
+        demoted_actor_resume: demoted,
+        service_demoted_actor_resume: serviceDemoted,
+        service_revoked_session_resume: serviceRevoked,
         foreign_workspace: foreign,
         new_session_same_actor_resume: differentSession,
         revoked_original_session_resume: revoked,
