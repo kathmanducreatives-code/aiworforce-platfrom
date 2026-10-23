@@ -47,6 +47,8 @@ if [ "$ready" -ne 1 ]; then docker logs "$cid" 2>&1 | tail -20 >&2; exit 1; fi
 # Optional actual GoTrue catalog/session lane. No managed-auth fixture in this mode.
 if [ "${OUTPOST_NATIVE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" = 1 ]; then
   psql "$db_url" -X -q -v ON_ERROR_STOP=1 -c 'create schema auth'
+  # Official GHCR mirror has the identical pinned OCI index/platform digests;
+  # ECR returned Data limit exceeded on CI. No mutable tag or test bypass.
   auth_cid="$(docker run -d --name "${name}-auth" --network "$auth_network" \
     --label agentory.disposable=outpost-native -p 127.0.0.1::9999 \
     -e GOTRUE_API_HOST=0.0.0.0 -e PORT=9999 -e API_EXTERNAL_URL=http://127.0.0.1:9999 \
@@ -57,7 +59,7 @@ if [ "${OUTPOST_NATIVE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}"
     -e GOTRUE_JWT_ADMIN_ROLES=service_role -e GOTRUE_EXTERNAL_EMAIL_ENABLED=true \
     -e GOTRUE_MAILER_AUTOCONFIRM=true -e GOTRUE_DISABLE_SIGNUP=false \
     -e GOTRUE_EXTERNAL_PHONE_ENABLED=false \
-    public.ecr.aws/supabase/gotrue:v2.197.0@sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b)"
+    ghcr.io/supabase/gotrue:v2.197.0@sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b)"
   auth_port="$(docker port "$auth_cid" 9999/tcp | sed 's/127.0.0.1://')" || { docker logs "$auth_cid" 2>&1 | tail -12 | sed -E 's#postgres://[^ ]*#[redacted-db-url]#g'; exit 1; }
   case "$auth_port" in ''|*[!0-9]*) echo 'invalid loopback auth port' >&2; exit 2;; esac
   auth_url="http://127.0.0.1:$auth_port"

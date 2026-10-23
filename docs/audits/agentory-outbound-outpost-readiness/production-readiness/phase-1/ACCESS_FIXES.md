@@ -35,7 +35,9 @@ workflow or remove uniqueness to simulate multi-client support.
 ## Reproduction and test receipts
 
 All databases and credentials generated locally; PostgreSQL 17.6, local PostgREST
-16.4, actual GoTrue v2.197.0 pinned image. CI pins PostgREST 12.2.3 and Deno 2.8.2.
+16.4, actual GoTrue v2.197.0 pinned image. CI pins PostgREST 12.2.3 and Deno 2.8.2. The official GHCR GoTrue mirror
+uses the identical OCI index and amd64/arm64 digests; ECR download returned
+`toomanyrequests: Data limit exceeded` in the first CI run. No Auth test was skipped.
 No hosted URL/customer data/paid provider is used. The baseline is the owned stack;
 "integrated" adds only the exact unchanged #159 membership SQL, not all open PRs.
 
