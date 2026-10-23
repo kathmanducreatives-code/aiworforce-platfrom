@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   ArrowRight, ArrowUpRight, CheckCircle2, ChevronDown, Globe, Linkedin, Pencil, Plus, RotateCcw, Sparkles,
@@ -50,6 +50,7 @@ const uniq = (values: string[]) => [...new Set(values.map((v) => v.trim()).filte
 export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEdit, onRestart, onSaveFields }: Props) {
   const [params, setParams] = useSearchParams();
   const tab: TabKey = isTab(params.get('tab')) ? (params.get('tab') as TabKey) : 'overview';
+  const { ref: tabScroll, edges } = useScrollEdges<HTMLDivElement>(tab);
   const setTab = (next: string) => {
     const p = new URLSearchParams(params);
     if (next === 'overview') p.delete('tab'); else p.set('tab', next);
@@ -82,7 +83,7 @@ export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEd
       <IdentityCard brain={brain} health={health} active={active} activatedAt={activatedAt} saved={saved === 'company'} onEdit={onEdit} />
 
       <Tabs value={tab} onValueChange={setTab} className="brain-tabs">
-        <div className="brain-tablist-scroll">
+        <div ref={tabScroll} className="brain-tablist-scroll" data-more-start={edges.start || undefined} data-more-end={edges.end || undefined}>
           <TabsList className="brain-tablist" aria-label="Company Brain sections">
             {TABS.map((t) => {
               const attention = t.sections.some((s) => health[s] !== 'configured');
@@ -332,4 +333,29 @@ function Phrase({ phrase, onEdit, onSaveFields }: {
       </Popover>
     </>
   );
+}
+
+
+/**
+ * On narrow screens the tab bar scrolls sideways. Report which edges have more
+ * tabs past them (for a fade that says so), and keep the selected tab in view.
+ */
+function useScrollEdges<T extends HTMLElement>(selected: string) {
+  const ref = useRef<T>(null);
+  const [edges, setEdges] = useState({ start: false, end: false });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setEdges({ start: el.scrollLeft > 2, end: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    return () => { el.removeEventListener('scroll', update); ro?.disconnect(); };
+  }, []);
+  useEffect(() => {
+    const active = ref.current?.querySelector<HTMLElement>('[data-state="active"]');
+    active?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [selected]);
+  return { ref, edges };
 }

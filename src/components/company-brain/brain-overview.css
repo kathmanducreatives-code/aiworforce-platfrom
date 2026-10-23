@@ -72,6 +72,10 @@ a.brain-site:hover { color: rgb(var(--ag-text)); }
 .brain-tabs { display: flex; flex-direction: column; gap: 16px; }
 .brain-tablist-scroll { overflow-x: auto; scrollbar-width: none; margin: 0 -4px; padding: 0 4px; }
 .brain-tablist-scroll::-webkit-scrollbar { display: none; }
+/* A soft fade on an edge that has more tabs past it (narrow screens). */
+.brain-tablist-scroll[data-more-end] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
+.brain-tablist-scroll[data-more-start] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent); }
+.brain-tablist-scroll[data-more-start][data-more-end] { -webkit-mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
 .brain-tablist { height: 40px; width: max-content; }
 .brain-tab { position: relative; gap: 7px; font-size: 13px; }
 .brain-tab-dot { width: 6px; height: 6px; border-radius: 999px; background: rgb(251 191 36); }
