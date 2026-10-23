@@ -186,7 +186,7 @@ for (const kind of ["owner", "viewer", "service"]) {
 Deno.test({
   ...opts,
   name:
-    "native API: nonpilot owner and service task/Brain writes remain legitimate",
+    "native API: nonpilot task writes and approved Brain paths remain legitimate",
   fn: async () => {
     const x = await fixture(), w = await seedWorkspace(), id = uuid();
     await sql`insert into public.workspace_members(workspace_id,user_id,role) values (${w},${x.ua},'owner')`;
@@ -213,13 +213,17 @@ Deno.test({
         (await publicApi(token, `company_brain?workspace_id=eq.${w}`, "PATCH", {
           profile: { legitimate: actor },
         })).status,
-        204,
+        Deno.env.get("OUTPOST_NATIVE_BRAIN_SQL") && actor === "owner"
+          ? 403
+          : 204,
       );
       assertEquals(
         (await sql`select profile from public.company_brain where workspace_id=${w}`)[
           0
         ].profile,
-        { legitimate: actor },
+        Deno.env.get("OUTPOST_NATIVE_BRAIN_SQL") && actor === "owner"
+          ? {}
+          : { legitimate: actor },
       );
     }
   },
@@ -394,7 +398,7 @@ Deno.test({
       (await publicApi(token, `company_brain?workspace_id=eq.${ws}`, "PATCH", {
         profile: { legitimate: true },
       })).status,
-      204,
+      Deno.env.get("OUTPOST_NATIVE_BRAIN_SQL") ? 403 : 204,
     );
   },
 });

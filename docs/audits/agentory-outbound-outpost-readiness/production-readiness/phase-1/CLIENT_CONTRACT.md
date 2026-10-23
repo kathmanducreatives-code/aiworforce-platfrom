@@ -1,8 +1,8 @@
-# AUTH-01 / EXEC-01 client boundary contract — v1 interface, shared DDL pending
+# AUTH-01 / EXEC-01 client boundary contract — A1–A7 agreed with A7 amendment, DDL pending
 
 **Target selected by user: one agency workspace, multiple isolated client accounts,
-with separate Company Brain per client. Contract implementation blocked pending
-Company Brain/backend coordination. P1–P8 disabled. Customer readiness FAIL.**
+with separate Company Brain per client. Canonical parent/grant/Brain shape agreed with Brain Claude; grant-generation
+representation and lock-order confirmation/delivery still pending. P1–P8 disabled. Customer readiness FAIL.**
 
 This resolves the product direction in DEC-01; the remaining issue is the shared
 schema/API contract, not a request for the user to repeat the tenancy decision.
@@ -128,7 +128,7 @@ disable access/writer/admission before application rollback. Empty-only rollback
 may remove just the new objects. Never restore a stale permission/approval state,
 CASCADE client data or refund uncertain work as a recovery shortcut.
 
-## v1 implementation boundary and outstanding owner acknowledgment
+## Historical v1 proposal boundary (superseded by A1–A7 below)
 
 The user-selected product and interface requirements above are the fixed direction,
 not another tenancy choice. `client_binding_id` denotes the client organization,
@@ -145,3 +145,38 @@ control; invitations require the owner's role-checked path and native tests.
 The immediate successor supplies narrower native containment and actual original-
 session handler proof while those shared deliverables are pending. It does not
 start Phase 2 or treat containment as the complete multi-client implementation.
+
+## Current A1–A7 contract — 2026-10-23
+
+Brain owner's request: [#166 A1–A7](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/166#issuecomment-6367251628).
+Our reply: [#166 agreement and A7 amendment](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/166#issuecomment-6367855590).
+The product direction and agreed schema names are settled. Do not ask the user
+again or treat unanswered earlier comments above as the current status.
+
+| Item | Agreed contract / remaining exact owner action |
+| --- | --- |
+| A1 | Canonical `public.client_accounts`; immutable id/workspace, composite unique `(workspace_id,id)`, parent workspace RESTRICT, active/archive, no default/prospect/legacy-theming registry reuse |
+| A2 | `outpost_private.clients.client_binding_id = client_accounts.id`, same-workspace composite FK; retain current uniqueness/full-row fence until separately tested successor |
+| A3 | `client_access_grants`: current workspace role AND explicit active grant for every role including owner/admin; no extra scope enum in v1; operation role checks remain, Brain editor is not pilot operator |
+| A4 | Owner/admin audited native grant/revoke writer; no browser DML; authenticated `granted_by`, active same-workspace client/member and live session. Self-grant permitted and audited; no task delegation/approval implied |
+| A5 | Separate `client_company_brain`, same-workspace composite key, native version CAS, all writes including activation/approval bump version; no browser writes |
+| A6 | One `brainScope` API, server-declared agency/client intent; a client task with null client fails, no fallback; frozen tasks pin workspace/client/Brain version |
+| A7 | Final native transaction locks/rechecks membership, active client, grant and live Auth session/expiry after external/model work; consistent revoke/archive lock order. No global epoch needed if these conditions hold. Frozen consumers require immutable grant generation (or identity + monotonic revision), terminal revoke and observable permission reductions. **Owner must confirm exact representation/lock order before pilot FK successor.** |
+
+Canonical roles are owner/admin/editor/viewer with unknown values treated as
+viewer. Owner's #169 normalizes case; existing pilot/native predicates remain
+strict lowercase owner/admin. Do not silently broaden them; canonical stored role
+normalization and regression compatibility must be reconciled explicitly.
+
+Brain Claude owns the canonical parent/grants/Brain DDL/API. Codex owns the pilot
+binding/descendant adapters after delivery; Backend owns executable lifecycle and
+all legacy service pre-effect guards. No shared schema changed here. No owner
+acknowledgement of A7's final generation/lock details or delivered client DDL is
+invented; same-workspace positive native tests remain BLOCKED.
+
+Shared delivered agency fixes: #159 closes direct workspace/membership writes;
+#169 closes raw Brain browser writes and adds pre-model role checks; #170 supplies
+deterministic authorized workspace selection. Exact source composition and native
+positive/negative results: [TASK_SECURITY.md](TASK_SECURITY.md). These do not yet
+provide client grants, client-scoped descendants or the complete Brain write
+transaction/revocation guarantee required above.

@@ -9,7 +9,7 @@ auth_pw="$(openssl rand -hex 24)"
 jwt_secret="$(openssl rand -hex 32)"
 cid=""; rest_pid=""; auth_cid=""; auth_network=""; auth_url=""
 log="$(mktemp)"
-mutant_sql=""; access_mutant_sql=""
+mutant_sql=""; access_mutant_sql=""; lifecycle_mutant_sql=""
 cleanup() {
   if [ -n "$rest_pid" ]; then kill "$rest_pid" 2>/dev/null || true; wait "$rest_pid" 2>/dev/null || true; fi
   if [ -n "$auth_cid" ]; then docker rm -f "$auth_cid" >/dev/null 2>&1 || true; fi
@@ -18,13 +18,14 @@ cleanup() {
   rm -f "$log"
   if [ -n "$mutant_sql" ]; then rm -f "$mutant_sql"; fi
   if [ -n "$access_mutant_sql" ]; then rm -f "$access_mutant_sql"; fi
+  if [ -n "$lifecycle_mutant_sql" ]; then rm -f "$lifecycle_mutant_sql"; fi
 }
 trap cleanup EXIT
 start_postgres() {
   docker run --rm -d --name "$name" --label agentory.disposable=outpost-native \
     -e "POSTGRES_PASSWORD=$pw" -p 127.0.0.1::5432 "$@" postgres:17.6
 }
-if [ "${OUTPOST_NATIVE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" = 1 ]; then
+if [ "${OUTPOST_NATIVE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" = 1 ] || [ "${OUTPOST_NATIVE_LIFECYCLE_AUTH:-0}" = 1 ]; then
   auth_network="${name}-auth"
   docker network create --label agentory.disposable=outpost-native "$auth_network" >/dev/null
   # Attach at creation: a later network connect can change the selected bridge
@@ -45,7 +46,7 @@ for _ in $(seq 1 60); do
 done
 if [ "$ready" -ne 1 ]; then docker logs "$cid" 2>&1 | tail -20 >&2; exit 1; fi
 # Optional actual GoTrue catalog/session lane. No managed-auth fixture in this mode.
-if [ "${OUTPOST_NATIVE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" = 1 ]; then
+if [ "${OUTPOST_NATIVE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" = 1 ] || [ "${OUTPOST_NATIVE_LIFECYCLE_AUTH:-0}" = 1 ]; then
   psql "$db_url" -X -q -v ON_ERROR_STOP=1 -c 'create schema auth'
   # Official GHCR mirror has the identical pinned OCI index/platform digests;
   # ECR returned Data limit exceeded on CI. No mutable tag or test bypass.
@@ -75,7 +76,7 @@ if [ "${OUTPOST_NATIVE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}"
   fi
 fi
 "$root/tests/db-contract/bootstrap.sh" "$db_url" >"$log" 2>&1 || { tail -20 "$log" >&2; docker logs "$cid" 2>&1 | tail -10 >&2; exit 1; }
-if [ "${OUTPOST_NATIVE_AUTH:-0}" != 1 ] && [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" != 1 ]; then
+if [ "${OUTPOST_NATIVE_AUTH:-0}" != 1 ] && [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" != 1 ] && [ "${OUTPOST_NATIVE_LIFECYCLE_AUTH:-0}" != 1 ]; then
   psql "$db_url" -X -q -v ON_ERROR_STOP=1 --single-transaction \
     -f "$root/tests/outpost-native/auth-sessions.fixture.sql"
 fi
@@ -88,6 +89,22 @@ if [ -n "${OUTPOST_NATIVE_MEMBERSHIP_SQL:-}" ]; then
   fi
   psql "$db_url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$OUTPOST_NATIVE_MEMBERSHIP_SQL"
   echo 'Owner dependency #159 exact SQL applied to this disposable database only'
+fi
+if [ -n "${OUTPOST_NATIVE_BRAIN_SQL:-}" ]; then
+  checksum="$(shasum -a 256 "$OUTPOST_NATIVE_BRAIN_SQL" | cut -d ' ' -f 1)"
+  if [ "$checksum" != d490ead239fbffbbe9467a09eac314d1d1eee705ca231ff08ff5b2b2a34f7340 ]; then
+    echo 'Brain dependency checksum mismatch' >&2; exit 2
+  fi
+  active_brain="$root/supabase/migrations/20261023120000_company_brain_server_writes_only.sql"
+  if [ -f "$active_brain" ] && cmp -s "$active_brain" "$OUTPOST_NATIVE_BRAIN_SQL"; then
+    echo 'Owner dependency #169 exact SQL already applied by disposable bootstrap'
+  else
+    psql "$db_url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$OUTPOST_NATIVE_BRAIN_SQL"
+    echo 'Owner dependency #169 exact SQL applied to disposable database only'
+  fi
+  # Do not infer installed grants from a filename or a passing exit code.
+  locked="$(psql "$db_url" -XAtqc "select not has_table_privilege('authenticated','public.company_brain','UPDATE') and not has_table_privilege('anon','public.company_brain','INSERT')")"
+  if [ "$locked" != t ]; then echo 'Brain native grant preflight failed' >&2; exit 1; fi
 fi
 native_sql="$root/supabase/migrations-held/20261022140824_outpost_native_identity_security.sql"
 if [ "${OUTPOST_NATIVE_OMIT_OWNER_GUARD:-0}" = 1 ]; then
@@ -105,6 +122,16 @@ if [ "${OUTPOST_NATIVE_OMIT_TASK_READ_GUARD:-0}" = 1 ]; then
   echo 'MUTANT: public pilot task read guard intentionally removed'
 fi
 psql "$db_url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$access_sql"
+if [ "${OUTPOST_NATIVE_LIFECYCLE:-0}" = 1 ] || [ "${OUTPOST_NATIVE_LIFECYCLE_AUTH:-0}" = 1 ] || [ "${OUTPOST_NATIVE_TASK_GUARDS:-0}" = 1 ]; then
+  lifecycle_sql="$root/supabase/migrations-held/20261023101216_outpost_pilot_task_registration_lifecycle.sql"
+  if [ "${OUTPOST_NATIVE_OMIT_LIFECYCLE_GUARD:-0}" = 1 ]; then
+    lifecycle_mutant_sql="$(mktemp)"
+    sed '/-- MUTATION_LIFECYCLE_GUARD_BEGIN/,/-- MUTATION_LIFECYCLE_GUARD_END/d' "$lifecycle_sql" > "$lifecycle_mutant_sql"
+    lifecycle_sql="$lifecycle_mutant_sql"
+    echo 'MUTANT: pilot lifecycle guard intentionally removed'
+  fi
+  psql "$db_url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$lifecycle_sql"
+fi
 psql "$db_url" -X -q -c "alter role authenticator with login password '$auth_pw'"
 # Intentionally expose the private schema IN THIS TEST ONLY: prove RLS still
 # denies foreign rows/writes even after a mistaken PostgREST exposure setting.
@@ -122,7 +149,23 @@ for _ in $(seq 1 60); do
 done
 echo "Disposable PostgreSQL 17.6 + $("$bin" --version); private-schema exposure is test-only"
 set +e
-if [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" = 1 ]; then
+if [ -n "${OUTPOST_NATIVE_OWNER_BRAIN_CONTRACT:-}" ]; then
+  checksum="$(shasum -a 256 "$OUTPOST_NATIVE_OWNER_BRAIN_CONTRACT" | cut -d ' ' -f 1)"
+  if [ "$checksum" != b139086ca9ab87a3a4b19545660a9dfc5789242343903cc982642d0835de98c9 ]; then echo 'owner contract checksum mismatch' >&2; exit 2; fi
+  DB_CONTRACT_REST_URL="http://127.0.0.1:$rest_port" DB_CONTRACT_JWT_SECRET="$jwt_secret" \
+  DB_CONTRACT_PG_URL="$db_url" deno test --node-modules-dir=none --allow-read --allow-env \
+    --allow-net=127.0.0.1,localhost --no-prompt "$OUTPOST_NATIVE_OWNER_BRAIN_CONTRACT"
+elif [ "${OUTPOST_NATIVE_LIFECYCLE_AUTH:-0}" = 1 ]; then
+  DB_CONTRACT_REST_URL="http://127.0.0.1:$rest_port" DB_CONTRACT_JWT_SECRET="$jwt_secret" \
+  DB_CONTRACT_PG_URL="$db_url" OUTPOST_NATIVE_AUTH_URL="$auth_url" \
+    deno test --node-modules-dir=none --allow-read --allow-env \
+      --allow-net=127.0.0.1,localhost --no-prompt "$root/tests/outpost-native/registration-auth.test.ts"
+elif [ "${OUTPOST_NATIVE_LIFECYCLE:-0}" = 1 ]; then
+  DB_CONTRACT_REST_URL="http://127.0.0.1:$rest_port" DB_CONTRACT_JWT_SECRET="$jwt_secret" \
+  DB_CONTRACT_PG_URL="$db_url" OUTPOST_NATIVE_OMIT_LIFECYCLE_GUARD="${OUTPOST_NATIVE_OMIT_LIFECYCLE_GUARD:-0}" \
+    deno test --node-modules-dir=none --allow-read --allow-env \
+      --allow-net=127.0.0.1,localhost --no-prompt "$root/tests/outpost-native/task-lifecycle.test.ts" "$root/tests/outpost-native/api-security.test.ts"
+elif [ "${OUTPOST_NATIVE_CONTEXT_AUDIT:-0}" = 1 ]; then
   DB_CONTRACT_REST_URL="http://127.0.0.1:$rest_port" DB_CONTRACT_JWT_SECRET="$jwt_secret" \
   DB_CONTRACT_PG_URL="$db_url" OUTPOST_NATIVE_AUTH_URL="$auth_url" \
     deno run --node-modules-dir=none --allow-read --allow-env \

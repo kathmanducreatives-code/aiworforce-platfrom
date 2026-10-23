@@ -1,6 +1,6 @@
 # Nosh pilot: implementation and production-readiness master plan
 
-**Phase 0 complete; Phase 1 authorized, owned access fixes implemented, overall FAIL.**
+**Phase 0 complete; Phase 1 authorized, owned access/task fixes implemented, overall FAIL.**
 
 Audit date: 2026-10-23 (Asia/Kathmandu); GitHub state refreshed at
 2026-10-22T18:38Z. P1–P8 remain disabled. A7 remains NO-GO.
@@ -853,3 +853,43 @@ which is an AUTH-01 owner delivery. One agency workspace/multiple isolated clien
 accounts remains the target; no fallback/default client or uniqueness removal.
 
 No phase scope changed: Phase 2 remains unapproved, P1–P8 disabled, A7 NO-GO.
+
+## Phase 1 native task / owner integration update (2026-10-23)
+
+Successor `codex/nosh-phase1-task-lifecycle` on #166 adds a disabled, unserved
+transaction adapter, not a second authorization/qualification/execution engine.
+Existing P1 signs an already-existing task with its original Auth session and
+verifies the exact image while native task/member/session/resource locks are held.
+Register/replay and terminal cancellation are the only lifecycle operations;
+app-role claims, output/checkpoint changes, ownership/payload restoration and
+marker transitions into running states are denied. Native lost-response, abort,
+concurrency, real refresh/logout/new-login and mutation tests are required CI.
+Details/rollback: [TASK_SECURITY.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/TASK_SECURITY.md).
+
+The earlier nonpilot Brain viewer defect now passes with exact Brain #169
+`60be0471` + workspace #170 `cc83eb7e` + #159 SQL + owned guards in a disposable
+source/database composition. No owner branch merged/edited, no deployed version
+inferred. #169 intentionally denies all browser Brain writes; approved server
+and provisioning controls pass, while enrolled pilot Brain remains frozen.
+Actual post-model native authorization rechecks still need owner integration proof.
+
+DEC-01 direction is fixed. A1–A6 contract agreed and A7 amended with Brain Claude:
+`client_accounts` canonical parent; explicit role∧client grant for every role;
+separate versioned `client_company_brain`; one intent-aware API; no agency fallback.
+Terminal grant generation/revision and consistent final-transaction live session/
+member/client/grant locking await exact owner confirmation/delivery. See current
+[CLIENT_CONTRACT.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/CLIENT_CONTRACT.md).
+Do not implement parallel shared DDL or remove one-client uniqueness alone.
+
+Remaining Phase 1 implementation order:
+1. Receive Brain canonical client/grant/version API and A7 generation/lock contract.
+2. Implement owned pilot binding/descendant successor only against that contract;
+   prove two clients within one agency workspace including overlapping external IDs.
+3. Receive Backend pre-effect route guards and executable lifecycle contract;
+   prove service/legacy paths refuse before foreign context/model/purchase effects.
+4. Run complete role/session/revoke/regrant/alternative-route native matrix and
+   legitimate invitation/nonpilot controls at the exact combined candidate.
+5. Mark Phase 1 PASS only after all mandatory tests pass; then stop for Phase 2 approval.
+
+No Phase 2 work, model budget change, hosted migration, deployment, paid execution,
+customer access or activation. P1–P8 remain disabled and A7 NO-GO.

@@ -156,16 +156,27 @@ export async function fixture(owner?: { userId: string; sessionId: string }) {
       return fetch(url.replace(`${REST_URL}/rest/v1`, REST_URL), init);
     },
   });
-  const makeTask = async (e: PilotEnrollment, u: string) => {
+  const makeTask = async (
+    e: PilotEnrollment,
+    u: string,
+    originSession?: string,
+    initialResult?: Record<string, unknown>,
+  ) => {
     const id = uuid();
     await sql`insert into public.tasks(id,workspace_id,user_id,status,payload)
       values (${id},${e.workspace_id},${u},'ready',${
       sql.json({
         execution_mode: "pilot_draft_only",
+        ...(originSession ? { pilot_origin_session_id: originSession } : {}),
         apollo_account_id: "same-company-id",
         contact_email: "same@synthetic.example",
       })
     })`;
+    if (initialResult) {
+      await sql`update public.tasks set result=${
+        sql.json(initialResult as never)
+      } where id=${id}`;
+    }
     const access = await PilotAccess.forUser(store, e, u);
     await access.bindTask(id, [], signing);
     await PilotAccess.forTask(store, e, id, signing, u); // Actual original P1 HMAC verifier.
