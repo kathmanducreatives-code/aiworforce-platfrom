@@ -81,8 +81,14 @@ export type TerminalReason =
   | "quota_met"
   | "run_cancelled";
 
-/** Refusal codes that mean "not configured", never "something crashed". */
-const CONFIGURATION_REFUSALS: ReadonlySet<string> = new Set(["execution_planner_unavailable"]);
+/**
+ * Refusal codes that mean "not configured" or "not admitted", never "something
+ * crashed". Neither changes by retrying: a key must be supplied, or a new
+ * authorization granted.
+ */
+const CONFIGURATION_REFUSALS: ReadonlySet<string> = new Set([
+  "execution_planner_unavailable", "execution_admission_refused",
+]);
 
 /** Statuses that mean the run genuinely finished its work. Never overwritten. */
 const SUCCESSFUL: ReadonlySet<TerminalStatus> = new Set<TerminalStatus>(["completed"]);
