@@ -27,13 +27,10 @@ approval. Nothing here merges, deploys, migrates or buys from Apify.
 ## Prerequisites (all must hold)
 
 - The merged dispatch SHA with #144, #145, #149, #150, #153 (code only), #154, #157 and #158. #156 is not needed for this test.
-- ⛔ The worker deployed to TEST at that SHA. Environment:
-  - `DISCOVERY_SMOKE_ADMISSION=enforce`, `LEAD_V2_SMOKE_WALL_CLOCK=enforce`, `LEAD_V2_SMOKE_ORCHESTRATION=minimal`;
-  - `LINEAGE_LEASE_ENFORCED=true`, `LEAD_CREDIT_ENFORCEMENT=enforce`, `MODEL_SPEND_ENFORCEMENT=enforce`;
-  - `MODEL_SPEND_CEILING_USD=0.05`, `MODEL_SPEND_PERIOD_DAYS=1`, `LEAD_STRATEGIST_PROVIDER=openai`;
-  - `OPENAI_API_KEY` = the TEST project's key;
-  - `LEAD_V2_WORKER_WORKSPACES` = the TEST workspace only;
-  - **no `APIFY_API_TOKEN`**, and no Firecrawl, Anthropic or Lovable key.
+- The worker is **not deployed**: it is one bounded GitHub Actions session, `.github/workflows/discovery-test-worker.yml` (manual dispatch, Environment `discovery-test` behind a required reviewer). It already sets `DISCOVERY_SMOKE_ADMISSION=enforce`, `LEAD_V2_SMOKE_WALL_CLOCK=enforce`, `LEAD_V2_SMOKE_ORCHESTRATION=minimal`, `LEAD_CREDIT_ENFORCEMENT=enforce`, `MODEL_SPEND_ENFORCEMENT=enforce`, `MODEL_SPEND_CEILING_USD=0.05`, `MODEL_SPEND_PERIOD_DAYS=1`, `LEAD_STRATEGIST_PROVIDER=openai`, and `LEAD_V2_WORKER_WORKSPACES=${vars.TEST_WORKSPACE_ID}`.
+  - Environment `discovery-test`: vars `TEST_PROJECT_REF` and `TEST_WORKSPACE_ID`; secrets `TEST_SUPABASE_URL`, `TEST_SUPABASE_SERVICE_ROLE_KEY`, `TEST_SUPABASE_ANON_KEY` and `TEST_OPENAI_API_KEY`.
+  - **`TEST_APIFY_API_TOKEN` absent** (delete it, or never create it). The workflow does not require it, and an empty token makes every Apify start `apify_not_configured` at the tool layer.
+  - The worker's commit is the commit the workflow is dispatched on; the run page shows it. Dispatch it on the merged dispatch SHA.
 - OpenAI: a dedicated TEST project with a **hard** budget (not only an alert), `gpt-5.6-luna` enabled, and its price read within 24 h ($0.20 in, $0.02 cached, $1.20 out per 1M; cache writes $0.25).
 - Observed Apify prices for both templates, read within 24 h and written into the authorization. They are never charged here (0 starts), but `authorize_discovery_smoke` refuses a template without an observed maximum, and nothing is invented.
 - The billing migrations stay **held**. This test buys nothing; the preflight reports them as INFO.
@@ -53,8 +50,13 @@ psql "$TEST_DB_URL" -X -v workspace_id='<TEST_WORKSPACE_ID>' -f scripts/test-pro
 | P14 | model-call rows must name their model |
 | P05–P06 | INFO: billing migrations installed or not (decision) |
 
-Also confirm the worker's `/health` build stamp equals the dispatch SHA and its
-environment is as listed above. **Any FAIL: stop.**
+Also confirm a member of the test workspace exists to own the plan row (`--user`):
+
+```sql
+select m.user_id from public.workspace_members m where m.workspace_id = '<TEST_WORKSPACE_ID>' limit 1;
+```
+
+**Any FAIL: stop.**
 
 ## Step 2 — ⛔ Prepare the kickoff (the one model call outside the worker)
 
@@ -70,7 +72,9 @@ OPENAI_API_KEY=<TEST project key> deno run --allow-env --allow-net=api.openai.co
 - It prints I1–I8 and the compile's token counts and cost, and exits 1 if any interpretation check fails. **A misread mission is never queued.**
 - Review `kickoff.sql`: the plan row, the compile's ledger row, the queue row (`queued`), and `authorize_discovery_smoke(…, {"apify:harvestapi~linkedin-job-search": 0, "apify:harvestapi~linkedin-company": 0}, 300)`.
 
-## Step 3 — ⛔ Run the kickoff transaction (starts the 300 s clock)
+## Step 3 — ⛔ Start the worker, then run the kickoff transaction (starts the 300 s clock)
+
+Dispatch `discovery-test-worker.yml` on the dispatch SHA (`confirm_project_ref` = `TEST_PROJECT_REF`, `session_minutes` = 10). Once the job is running (the worker idles; nothing is queued):
 
 ```sh
 psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -f ./real-gpt-run/kickoff.sql     # as an administrator
