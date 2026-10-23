@@ -53,3 +53,18 @@ Deno.test({ name: "1.4-5 a legacy icp.company_size is still honoured (it is a TA
   const icp = compiled({ company: { team_size: "11-50" }, icp: { company_size: "200-1000 employees", industries: ["Fintech"] } });
   assertEquals([icp.company_size_min, icp.company_size_max], [200, 1000]);
 }});
+
+// C4 (found 2026-10-23 by the Phase 5 page agreement test): onboarding and the
+// #147 mirror write `icp.disqualifiers` as ALL five buckets flattened, and the
+// compiler reads that legacy list as excluded INDUSTRIES (companyBrainCompiler.ts
+// :222). A keyword, title or company-type exclusion therefore also excludes an
+// "industry" of that name in lead search and joins its negative terms.
+Deno.test({ name: "1.4-6 a keyword or title exclusion is not an excluded industry", ignore, fn() {
+  const p = {
+    schema_version: 2, company: { name: "Northwind" },
+    target_customer: { industries: ["Fintech"], disqualifiers: { industries: ["Agencies"], company_types: ["Reseller"], domains: [], keywords: ["crypto"], titles: ["Intern"] } },
+    icp: { industries: ["Fintech"], disqualifiers: ["Agencies", "Reseller", "crypto", "Intern"] }, // what the mirror writes
+  };
+  const ctx = compileCompanyBrainContext({ workspace_id: "ws", profile: p });
+  assertEquals(ctx.disqualifiers.industries.map((x: string) => x.toLowerCase()).sort(), ["agencies"]);
+}});
