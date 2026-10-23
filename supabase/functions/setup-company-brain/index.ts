@@ -2,6 +2,7 @@
 // Actions: save_basics | save_sources | analyze | generate_followups | save_followups | finalize
 // All AI/tool calls are server-side. Workspace membership enforced.
 
+import { canBrain, normalizeWorkspaceRole } from "../_shared/brainRole.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured, runTool } from "../_shared/toolRegistry.ts";
@@ -112,11 +113,16 @@ Deno.serve(async (req) => {
   const modelCalls = new ModelCallCollector(resolveRunBudget());
   if (!workspace_id) return json({ error: "missing_workspace_id" }, 400);
 
-  // Verify membership
+  // Verify membership, then the caller's ROLE (roadmap Phase 3a) — before any
+  // model call or write. Every action here writes or calls a model; `finalize`
+  // activates the Brain.
   const { data: member } = await admin
-    .from("workspace_members").select("workspace_id")
+    .from("workspace_members").select("workspace_id, role")
     .eq("workspace_id", workspace_id).eq("user_id", userId).maybeSingle();
   if (!member) return json({ error: "forbidden" }, 403);
+  const role = normalizeWorkspaceRole((member as { role?: unknown }).role);
+  const required = action === "finalize" ? "activate" : "edit";
+  if (!canBrain(role, required)) return json({ error: "brain_role_forbidden", role, required }, 403);
 
   // Helper: load current profile
   async function loadProfile(): Promise<AnyObj> {

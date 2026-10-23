@@ -22,6 +22,7 @@ import { planBrainUpdate } from "../_shared/companyBrainUpdate.ts";
 import { enrichCompanyFromLinkedIn } from "../_shared/companyBrainResearch/companyLinkedIn.ts";
 import { generateBrainDraft, type DraftInput } from "../_shared/companyBrainResearch/generateBrainDraft.ts";
 import type { FirecrawlPage, ResearchDeps, ResearchSourceType, ResearchProvider } from "../_shared/companyBrainResearch/types.ts";
+import { brainPermissionForAction, canBrain, normalizeWorkspaceRole } from "../_shared/brainRole.ts";
 import { applyBrainSave, type CompanyBrainV2Patch } from "../_shared/companyBrainV2Save.ts";
 import { resolveCanonicalSellerIdentity } from "../_shared/workbench/sellerIdentity.ts";
 import {
@@ -164,11 +165,16 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Workspace membership — the only authorization gate.
+  // Workspace membership, then the caller's ROLE (roadmap Phase 3a) — both
+  // before any model call or write. A viewer reads; it never researches,
+  // drafts, saves or activates.
   const { data: member } = await admin
-    .from("workspace_members").select("workspace_id")
+    .from("workspace_members").select("workspace_id, role")
     .eq("workspace_id", workspace_id).eq("user_id", userId).maybeSingle();
   if (!member) return json({ error: "forbidden" }, 403);
+  const role = normalizeWorkspaceRole((member as { role?: unknown }).role);
+  const required = brainPermissionForAction(action);
+  if (!canBrain(role, required)) return json({ error: "brain_role_forbidden", role, required }, 403);
 
   const { deps, apifyReady, firecrawlReady, llmReady, providerMode } = buildDeps();
 
