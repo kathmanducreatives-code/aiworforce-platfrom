@@ -13,9 +13,10 @@ import CompanyBrainEditDrawer, { type SectionKey as DrawerSectionKey } from '@/c
 import RestartOnboardingModal from '@/components/company-brain/RestartOnboardingModal';
 
 import { mergeProfilePatch, toSavedBrainView, type BrainProfile } from '@/lib/companyBrainView';
-import { type SectionKey } from '@/lib/companyBrainSections';
+import { SECTION_META, type SectionKey } from '@/lib/companyBrainSections';
 import { buildFieldPatch, type SectionState } from '@/lib/companyBrainPatch';
 import { saveCompanyBrainPatch } from '@/lib/companyBrainSave';
+import { describeUnsaved, keepUnsaved, type UnsavedEdit } from '@/lib/companyBrainUnsaved';
 
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
@@ -24,6 +25,9 @@ export default function CompanyBrainDashboard() {
   const [openSection, setOpenSection] = useState<DrawerSectionKey | null>(null);
   const [restartOpen, setRestartOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState<SectionKey | null>(null);
+  // Inline edits refused because the Brain changed elsewhere, kept so they can be re-applied.
+  const [unsaved, setUnsaved] = useState<UnsavedEdit[]>([]);
+  const lastFailureWasConflict = useRef(false);
 
   const serverView = useMemo(() => toSavedBrainView(data?.profile as BrainProfile | undefined), [data?.profile]);
 
@@ -89,6 +93,7 @@ export default function CompanyBrainDashboard() {
       const result = await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: version.current });
       if (!result.ok) {
         batchFailed.current = true;
+        lastFailureWasConflict.current = result.conflict === true;
         toast.error(result.conflict ? 'Company Brain was changed elsewhere' : 'Save failed', { description: result.message });
         return false;
       }
@@ -122,8 +127,17 @@ export default function CompanyBrainDashboard() {
     // made while another is still saving keeps it.
     const ok = await writePatch(buildFieldPatch(section, changes, toSavedBrainView(latestRaw.current).brain));
     if (ok) flash(section);
+    else if (lastFailureWasConflict.current) setUnsaved((list) => keepUnsaved(list, { section, changes }));
     return ok;
   }, [writePatch, flash]);
+
+  // Re-apply refused edits on top of the latest version: saveFields rebuilds each
+  // patch from the current copy, so the other change is kept.
+  const reapplyUnsaved = useCallback(async () => {
+    const edits = unsaved;
+    setUnsaved([]);
+    for (const e of edits) await saveFields(e.section, e.changes);
+  }, [unsaved, saveFields]);
 
   // `loading` is now "nothing cached AND a first read pending", so a background
   // refetch (or an auth-driven workspace re-resolve) no longer blanks the page
@@ -163,6 +177,19 @@ export default function CompanyBrainDashboard() {
               {identityState.status === 'conflict' ? 'Identity conflict' : identityState.status === 'legacy_detected' ? 'Legacy data detected' : 'Identity needs confirmation'}
             </div>
             <div className="mt-0.5">{identityBanner.message}</div>
+          </div>
+        )}
+
+        {unsaved.length > 0 && (
+          <div role="alert" className="brain-unsaved mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+            <div className="font-medium text-amber-700 dark:text-amber-300">Changed on another tab or device</div>
+            <div className="mt-0.5 text-muted-foreground">
+              Your edit to {describeUnsaved(unsaved, (k) => SECTION_META[k].title)} wasn&apos;t saved. The page now shows the latest version.
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" onClick={reapplyUnsaved} disabled={isRefreshing}>Apply my edit again</Button>
+              <Button size="sm" variant="ghost" onClick={() => setUnsaved([])}>Discard my edit</Button>
+            </div>
           </div>
         )}
 
