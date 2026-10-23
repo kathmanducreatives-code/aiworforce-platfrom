@@ -2,6 +2,8 @@
 // has completed Company Brain onboarding?
 // Pure function, no side effects, safe to import in tests.
 
+import type { BrainCapability, BrainReadiness } from "./companyBrainReadiness.ts";
+
 export type GateIntent = string;
 
 // Intents that require company context to produce specific, non-generic output.
@@ -60,3 +62,58 @@ export function shouldGateObjective(
 export const ONBOARDING_GATE_REPLY =
   "I can do that — but I need your Company Brain first so the output is specific to your business, not generic. " +
   "Share your website URL, or open onboarding to set up your company, ICP, and brand voice (2 minutes).";
+
+// ── ROADMAP PHASE 2: GATE ON WHAT THE BRAIN CAN POWER, NOT ON ONE FLAG ─────
+//
+// The gates above refuse everything that does work until onboarding is fully
+// activated. With BRAIN_READINESS_V2 on, a request is refused only when the
+// Brain lacks the context ITS capability needs (companyBrainReadiness), and the
+// reply says exactly what to add. Owner decisions (2026-10-23): lead search
+// runs before activation once industries plus buyers or must-haves exist;
+// content DRAFTS run with a description plus a pain point or content angle —
+// nothing is published without a person (content stays a draft until approved).
+// Outreach still needs a fully activated Brain. Mission admission, credits and
+// qualification are unchanged and still apply afterwards.
+
+
+/** Off unless explicitly enabled — the switch is the rollback. */
+export function brainReadinessV2Enabled(readEnv: (key: string) => string | undefined): boolean {
+  const v = (readEnv("BRAIN_READINESS_V2") ?? "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "on";
+}
+
+/** The capability a gated objective needs; null for objectives that only read or talk. */
+export function capabilityForObjective(
+  objective: string | null | undefined, composeKind: "outreach" | "content" | null | undefined,
+): BrainCapability | null {
+  if (objective === "source") return "lead_search";
+  if (objective === "research") return "signals";
+  if (objective === "compose") return composeKind === "content" ? "content" : "outreach";
+  return null;
+}
+
+const CAPABILITY_NAME: Record<BrainCapability, string> = {
+  read_only: "that", signals: "Signals research", lead_search: "lead search",
+  outreach: "outreach", content: "content drafts",
+};
+
+/** "To run lead search I need: your target industries; a buyer persona or a must-have trait. …" */
+export function readinessGateReply(capability: BrainCapability, readiness: BrainReadiness): string {
+  const needs = readiness.needs[capability].map((n) => n.label.charAt(0).toLowerCase() + n.label.slice(1));
+  return `I can do that, but ${CAPABILITY_NAME[capability]} needs a little more from your Company Brain first: ` +
+    `${needs.join("; ")}. Add ${needs.length > 1 ? "them" : "it"} on the Company Brain page and ask me again.`;
+}
+
+export type ReadinessGateDecision =
+  | { gated: false; capability: BrainCapability | null }
+  | { gated: true; capability: BrainCapability; reply: string };
+
+export function readinessGate(
+  objective: string | null | undefined,
+  composeKind: "outreach" | "content" | null | undefined,
+  readiness: BrainReadiness,
+): ReadinessGateDecision {
+  const capability = capabilityForObjective(objective, composeKind);
+  if (!capability || readiness.can[capability]) return { gated: false, capability };
+  return { gated: true, capability, reply: readinessGateReply(capability, readiness) };
+}

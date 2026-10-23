@@ -78,6 +78,13 @@ export interface RouteGuardState {
    * fail-open (render) rather than trapping a user behind a broken gate.
    */
   onboardingCompleted: boolean | null;
+  /**
+   * Roadmap Phase 2 (VITE_BRAIN_READINESS_V2): the Brain is not activated but is
+   * already `usable` for at least one capability (companyBrainReadiness). Such a
+   * workspace opens the app; each page then gates its own capability. Absent or
+   * false keeps the original rule: not activated → onboarding.
+   */
+  brainUsable?: boolean;
   pathname: string;
   search: string;
 }
@@ -93,7 +100,7 @@ export function decideRouteGuard(state: RouteGuardState): RouteGuardDecision {
 
   if (state.requireOnboarding) {
     if (state.onboardingLoading) return { type: 'loading' };
-    if (state.onboardingCompleted === false) {
+    if (state.onboardingCompleted === false && state.brainUsable !== true) {
       const next = safeReturnPath(state.pathname + state.search);
       return { type: 'redirect', to: withReturnPath('/onboarding/company-brain', next) };
     }

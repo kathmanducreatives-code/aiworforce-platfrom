@@ -2,6 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 import { decideRouteGuard } from '@/lib/routeGuard';
+import { brainUsableForRoutes } from '@/lib/brainReadinessFlag';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -23,6 +24,7 @@ const ProtectedRoute = ({ children, requireOnboarding = true }: ProtectedRoutePr
     requireOnboarding,
     onboardingLoading,
     onboardingCompleted: companyBrain ? companyBrain.onboarding_completed : null,
+    brainUsable: brainUsableForRoutes(companyBrain),
     pathname: location.pathname,
     search: location.search,
   });
