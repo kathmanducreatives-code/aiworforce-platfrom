@@ -77,21 +77,25 @@ export const denied = (r: { status: number }) =>
     `expected refusal, got ${r.status}`,
   );
 
-export async function fixture() {
+export async function fixture(owner?: { userId: string; sessionId: string }) {
   const a = await seedWorkspace(),
     b = await seedWorkspace(),
-    ua = uuid(),
+    ua = owner?.userId ?? uuid(),
     ub = uuid(),
     viewer = uuid(),
     shared = uuid();
   const ca = uuid(),
     cb = uuid(),
-    sa = uuid(),
+    sa = owner?.sessionId ?? uuid(),
     sb = uuid(),
     sv = uuid(),
     ss = uuid();
   for (const u of [ua, ub, viewer, shared]) {
-    await sql`insert into auth.users(id) values (${u})`;
+    if (owner && u === owner.userId) {
+      assert((await sql`select id from auth.users where id=${u}`).length === 1);
+    } else {
+      await sql`insert into auth.users(id) values (${u})`;
+    }
   }
   for (
     const [w, u, role] of [
@@ -105,7 +109,14 @@ export async function fixture() {
     await sql`insert into public.workspace_members(workspace_id,user_id,role) values (${w},${u},${role})`;
   }
   for (const [s, u] of [[sa, ua], [sb, ub], [sv, viewer], [ss, shared]]) {
-    await sql`insert into auth.sessions(id,user_id) values (${s},${u})`;
+    if (owner && s === owner.sessionId) {
+      assert(
+        (await sql`select id from auth.sessions where id=${s} and user_id=${u}`)
+          .length === 1,
+      );
+    } else {
+      await sql`insert into auth.sessions(id,user_id) values (${s},${u})`;
+    }
   }
   const enrollments: PilotEnrollment[] = [];
   for (const [w, c, label] of [[a, ca, "a"], [b, cb, "b"]]) {

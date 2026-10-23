@@ -52,3 +52,37 @@ security test and must become a required acceptance proof before enablement.
 Rollback SQL is in the production-readiness report. The suite proves empty-only
 rollback/reapply and refusal when identity records exist. No mutable audit data
 is purged except destruction of the wholly disposable test cluster.
+
+## Phase 1 extensions (still not customer acceptance)
+
+- `OUTPOST_NATIVE_AUTH=1 tests/outpost-native/run.sh` starts a separately owned,
+  digest-pinned GoTrue v2.197.0 container and uses its real migrations, issued
+  sessions/JWTs, refresh and logout. It does **not** install the synthetic
+  auth.sessions fixture in this mode. Tests assert the owner/session exists before
+  registration instead of manufacturing missing GoTrue rows. Four behavioral
+  tests plus harness cleanup verify the private predicate. This is not a full
+  application/session/permission PASS while public paths remain open.
+- GoTrue connects only to the fresh owned database on its own Docker network;
+  host APIs bind loopback. Auto-confirm/no-op mail, phone/provider integrations
+  disabled, no paid keys or customer data. Its local DB migration connection is
+  privileged for disposable setup; that does not prove production migration-role
+  privileges. The bridge is not an outbound network firewall; no paid/provider
+  client is loaded. Full egress containment remains a later integration gate.
+- `OUTPOST_NATIVE_SURFACE_AUDIT=1 tests/outpost-native/run.sh` emits real catalog
+  policies/constraints/grants and synthetic direct-API probes. Current exit **1**
+  proves task SELECT/PATCH, foreign membership self-insert and Brain PATCH defects.
+  Positive owner controls prevent an unavailable/deny-all API from counting as a
+  fix. Catalog function source matching is a candidate inventory, not proof of
+  complete dynamic-SQL/Edge containment.
+- New RLS scanner adversaries live in `tests/infra/rlsRelations.test.ts`; qualified
+  schema names remain distinct, and missing RLS in public or private still fails.
+
+No shared schema/policy correction or multi-client support is implied by these
+extensions. See the current Phase 1 receipt and client contract under
+`docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/`.
+- `OUTPOST_NATIVE_CONTEXT_AUDIT=1 tests/outpost-native/run.sh` runs actual
+  `handlePilotContext` with real GoTrue authentication and native P1 store, adapting
+  only the local gateway URL. Current expected exit 1: a different login session
+  for the original actor resumes successfully (200), even though private native
+  binding RLS denies it. Revoked original session is 401, foreign workspace 403.
+  Successful denial must be an explicit authorization status, not arbitrary 5xx.

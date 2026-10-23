@@ -2,7 +2,8 @@
 
 **Customer pilot readiness: FAIL. P1–P8 disabled. A7 NO-GO.**
 
-Last audit: 2026-10-23 Asia/Kathmandu (GitHub refresh 2026-10-22T18:38Z).
+Last audit: 2026-10-23 Asia/Kathmandu; Phase 1 approved in user message following #152.
+Readiness remains FAIL; owner coordination is a required prerequisite, not routine reapproval.
 Read [MASTER_PLAN.md](MASTER_PLAN.md) before resuming. This tracker supersedes
 historical phase-number status in `docs/audits/.../production-readiness/`; those
 files remain immutable receipts of narrower previous work. Production-readiness
@@ -12,8 +13,8 @@ Phase 0–8 below is distinct from the historical P1–P8 feature implementation
 
 | Phase | Status | Branch / PR | Validation | Remaining blockers |
 | --- | --- | --- | --- | --- |
-| 0 — architecture/readiness audit | COMPLETE (roadmap awaiting review) | `codex/nosh-readiness-master-plan`; draft #152, stacked on #151 | repository/PR/CI/interface audit; documentation checks in phase receipt | User review; DEC-01 and owner contracts are planned dependencies, not assumed approvals |
-| 1 — native security | PARTIAL; new work NOT APPROVED | historical foundation `codex/outpost-native-security`, #151, `001fa9db9a1a07266dfc700b0d7a21fbc322c7df` | 42 native identity passed; 2 intended ownership-mutant failures; public-task viewer probe FAIL; standard/full CI FAIL | SEC-01..04; CI-01; DEC-01; AUTH-01/EXEC-01; real GoTrue/session proof; native public API/Edge ownership |
+| 0 — architecture/readiness audit | COMPLETE / reviewed; Phase 1 authorized | `codex/nosh-readiness-master-plan`; draft #152, stacked on #151 | repository/PR/CI/interface audit; documentation checks in phase receipt | DEC-01 target chosen in Phase 1 approval; shared contract still open |
+| 1 — native security | PARTIAL / BLOCKED on shared owner contracts; overall FAIL | `codex/nosh-phase1-security`, draft #155 on #152; historical #151 preserved | scanner/parser 18/0; infra 196/0; edge 9194/0; native 46/0; real GoTrue private predicate 5/0; public and actual handler audits FAIL | SEC-01/02/03/04/05; agreed multi-client Brain/roles/parent contract; owner-delivered public membership/Brain/task/Edge corrections; complete same-workspace acceptance |
 | 2 — transactional persistence | PENDING / NOT APPROVED | no implementation PR yet; P3/P5/P6/P7 interfaces are not persistence | offline contracts only; no native durable import/snapshot/review/approval adapter | Phase 1; DATA-01/02; REPLAY-01; original-task lifecycle and shared receipt contract |
 | 3 — legacy executor containment | PENDING / NOT APPROVED | owner #145/#149/#150 are dependencies, not pilot containment completion | no complete pilot route-by-route native acceptance | Phase 1/2; backend EXEC-01; Brain context seam |
 | 4 — recovery/spending | PENDING / NOT APPROVED | owner #150 plus future FIN-01 successor | mocked P4/P8 safeguards; no native pilot shared-ledger recovery proof | Phase 2/3; FIN-01/02; MODEL-01; no competing ledger |
@@ -22,16 +23,24 @@ Phase 0–8 below is distinct from the historical P1–P8 feature implementation
 | 7 — hosted TEST | BLOCKED / NOT APPROVED | no executed hosted plan | no target-deployment/catalog/runtime receipt | Phase 6; named target preflight; specific hosted migration/deploy/synthetic-write approval |
 | 8 — release/customer readiness | BLOCKED / NOT APPROVED | no release candidate | no real-model or Nosh acceptance receipt | Phase 7; QUALITY-01; owner compatibility; separate merge/deploy/paid/data/activation approval |
 
-Next phase after user continuation: **Phase 1 — finish native security**, not Phase
-2. There is no authorization to begin Phase 1 implementation in the Phase 0
-request. “Proceed with the next phase” approves safe local work in Phase 1 only,
-subject to owner coordination; it does not resolve DEC-01 or approve external actions.
+**Current phase is Phase 1 and is already authorized.** All independent safe
+work in this draft is completed/tested, but shared fixes are blocked pending
+AUTH-01/EXEC-01 coordination as explicitly required by the user. No routine
+technical decision is being returned for permission. The user selected one agency
+workspace with multiple isolated client accounts and separate client Brain;
+DEC-01 product direction is resolved. Do not ask the user to choose again.
+
+Do not advance to Phase 2 while Phase 1 acceptance is FAIL. Resume the remaining
+Phase 1 shared fixes when the agreed owner contracts/patches arrive, then rerun
+native mandatory red-to-green and legitimate workflow controls. Phase 2 still
+requires separate approval after Phase 1 is actually complete.
 
 ## Active worktree and immutable resume points
 
-- Documentation branch: `codex/nosh-readiness-master-plan`.
-- Worktree: `/Users/prasidha/Downloads/screeningpilot-main/nosh-readiness-master-plan`.
-- Base: #151 `001fa9db9a1a07266dfc700b0d7a21fbc322c7df`.
+- Active Phase 1 branch: `codex/nosh-phase1-security`.
+- Worktree: `/Users/prasidha/Downloads/screeningpilot-main/nosh-phase1-security`.
+- Phase 1 base: #152 `32097823562b5282972047f86beb0b826e4e663c`; exact new head/PR is in its publication receipt.
+- Historical #151 base: `001fa9db9a1a07266dfc700b0d7a21fbc322c7df`.
 - Documentation PR: [#152](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/152),
   stacked on #151. Initial plan commit: `6bb7adcb` (full SHA in Git history).
   The final publication commit is recorded in the PR phase receipt, avoiding a
@@ -109,8 +118,8 @@ Phase 1; do not allow-list the schema, remove held migrations, or mute the test.
 
 | ID | Decision / contract | Owner | Status / next action |
 | --- | --- | --- | --- |
-| DEC-01 | one client/workspace versus requested two clients within workspace | user + Brain/backend | OPEN. Recommended smallest pilot remains separate client workspaces, but changing requested same-workspace positive test requires explicit user agreement. Otherwise scope client-owned Brain/memory/roles/credentials/storage and coordinated migration into Phases 1/2. |
-| AUTH-01 | role-aware Brain/context/direct API/session and revoke locking | Company Brain Claude | OPEN; use #147 discussion; current owner/admin-only pilot rule preserved; editor/viewer matrix must be agreed/tested |
+| DEC-01 | one agency workspace with multiple isolated client accounts | user direction; Brain/backend contract | TARGET RESOLVED by Phase 1 user approval. Shared client parent/roles/Brain/memory/session contract OPEN; proposed CLIENT_CONTRACT.md posted; no shared schema change or assumed positive acceptance. |
+| AUTH-01 | role-aware Brain/context/direct API/session and revoke locking | Company Brain Claude | OPEN; #147 requests include confirmed viewer Brain PATCH, arbitrary foreign membership owner self-insert and actual handler new-session resume. No incoming contract agreement found. |
 | EXEC-01 | scoped public task policy/owner guard, immutable inputs versus lifecycle versions, all entry guards | Backend Claude | OPEN; use #150/#145 discussion; no shared file edits without coordination |
 | FIN-01 | stable model operation key, durable reserve/settle/accepted output, shared ledger | Backend Claude | OPEN; #150 adopts purchased provider runs but still may rerun model planning; no pilot ledger |
 | QUAL-01/E01 | read-only canonical seam and semantic support prompt/stance | Backend Claude | independent owner work #144; no changes in this docs PR; no second semantic evaluator or qualification authority |
@@ -127,36 +136,37 @@ Existing outgoing handoffs:
 A posted comment is not owner consent. Link any new owner replies/deliveries and
 pin their commit/tests before changing this status.
 
-## Exact next-phase task list (not started)
+## Remaining Phase 1 closure tasks
 
-1. Refresh PRs, CI and owner replies; retain #151 as PARTIAL; open isolated Phase 1
-   branch only after phase approval.
-2. SEC-01: retain `OUTPOST_NATIVE_PUBLIC_AUDIT=1 tests/outpost-native/run.sh` as the
-   failing reproduction. Inventory effective public.tasks SELECT/ALL policies,
-   associated artifacts/views/RPCs and service-backed readers. Obtain narrow
-   owner-agreed policy/Edge authorization contract; fix viewer access while
-   proving intended owner/admin/nonpilot/service behavior.
-3. DEC-01: obtain tenancy decision before final schema/role scope. Preserve one-
-   client constraint in the meantime; do not claim two same-workspace clients work.
-4. CI-01: schema-qualified RLS parser correction with positive/missing-RLS/mutation
-   controls, no allow-list and no dropped tests.
-5. Complete native parent/grants/session/Brain/Edge route matrix and real disposable
-   GoTrue proofs under AUTH-01/EXEC-01; promote public probe to required acceptance.
-6. Run relevant local/CI tests, review held migrations/rollback, publish separate
-   security draft(s); record exact results and owner blockers; stop at Phase 1 end.
+1. Obtain AUTH-01/EXEC-01 owner replies to the posted client/public-policy/session
+   contracts; pin their exact branches/files and ownership to avoid overlap.
+2. Close SEC-01/02/05 together with legitimate onboarding/invitation/nonpilot
+   controls: viewer task reads/writes, Brain writes and arbitrary membership
+   self-enrollment must be denied natively and through alternative routes.
+3. Implement the owner-agreed multi-client parent/Brain/memory/role/version contract
+   and signed-task original-session adapter. User direction is already recorded;
+   do not ask them to choose tenancy again or remove uniqueness alone.
+4. Prove native/client ownership and real Edge handling across all listed paths,
+   sessions and allowed task lifecycle changes. Preserve existing P1 HMAC and
+   source/frozen context/model policies; do not introduce an alternative authority.
+5. Make the public surface/context audits required acceptance once fixed; run
+   red-to-green tests, full relevant CI and target mutations at exact combined SHA.
+6. Update phase status only when every mandatory security criterion passes.
+   Phase 2 needs user approval after actual Phase 1 completion.
 
-Do not begin persistence, provider calls or UI enablement to work around a blocked
-security contract. Later-phase owner interface discussions are preparation only,
-not authorization to implement those phases.
+Scanner CI-01 is fixed and covered in the successor draft. The independent native
+and GoTrue test additions are complete. Shared runtime/schema fixes are blocked
+under the user's explicit coordination-before-shared-schema instruction, not
+because routine local work needs permission.
 
 ## Approval ledger
 
 | Action | State |
 | --- | --- |
 | Phase 0 audit/docs/draft PR and GitHub coordination | AUTHORIZED |
-| New Phase 1 implementation | WAITING for roadmap review / user continuation |
+| Phase 1 safe local implementation/tests/draft PR | AUTHORIZED by explicit Phase 1 request; shared schema/permissions still require owner coordination |
 | Phase 2–6 implementation | NOT APPROVED; each needs its own continuation |
-| Disposable local SQL/tests | allowed within a subsequently approved implementation phase; none needed/performed for this docs phase |
+| Disposable local SQL/tests | AUTHORIZED for Phase 1; existing held/baseline SQL and isolated GoTrue migrations exercised in owned disposable containers only |
 | Hosted TEST preparation | future Phase 7 only after local gates; no execution approval |
 | Hosted migration/deployment/data writes/TEST activation | NOT AUTHORIZED; require named target/action approval |
 | Merge/rebase owner PRs or overwrite owner branch | NOT AUTHORIZED |
@@ -178,3 +188,63 @@ Append, never overwrite historical proof:
 - Owner decisions and handoffs; unresolved risks and customer verdict.
 - Complete/PARTIAL/BLOCKED; next objective and explicit additional approvals.
 - Stop awaiting user continuation; never implicitly promote code-written to done.
+
+## Phase 1 receipt — independent implementation complete; full phase FAIL
+
+Base #152 `32097823562b5282972047f86beb0b826e4e663c`; isolated
+`codex/nosh-phase1-security`. Draft [#155](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/155),
+initial implementation commit `8b89e2cb6c7cd7b3e762de5a909dfc7c556d793e`.
+Exact final head/CI receipts are in its publication comment (no self-referential hash).
+
+**Implemented:** schema-aware RLS scanner repair without allow-list or removed
+security checks; nine parser adversaries; native editor/member/admin role tests;
+digest-pinned actual GoTrue session lane; stricter public audit positive controls;
+native table/policy/grant/parent/view/routine inventory; deterministic public
+write/membership/Brain and actual handler session reproductions; client contract.
+No shared runtime/schema/Brain/executor/ledger/qualification files changed.
+
+**Passed:** scanner+parser 18/0, full infra 196/0, edge 9,194/0, native identity/roles
+46/0, actual GoTrue private predicate 5/0; ownership guard mutant: 43 passed / 2 required failures / 1 ignored
+(rollback-reapply omitted only on the mutant); Deno check/lint, shell and whitespace checks passed. GitHub
+CI status is reported at the exact publication head; no historical red head is
+retroactively relabeled green.
+
+**Failed:** native viewer public task SELECT (200/one row) and PATCH (204, data
+changed); viewer Brain PATCH (204, data changed); foreign-workspace owner
+self-insert (201, foreign task visibility 0→1); actual handlePilotContext resume
+with new session/same actor (200; private RLS correctly denies). Actual GoTrue
+logout does deny original token via the handler (401); foreign workspace is 403.
+Same-workspace multi-client positive workflow and full Edge/browser permission
+closure remain BLOCKED, not tested as successful using duplicate-enrollment denial.
+
+Evidence and exact source/roots:
+[Phase 1 receipt](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/README.md),
+[native JSON](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/native-surfaces.json),
+[handler/session JSON](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/context-session.json),
+[client contract](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/CLIENT_CONTRACT.md).
+
+Coordination before shared edits:
+[#147 contract](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/147#issuecomment-6357401702),
+[#150 contract](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/150#issuecomment-6357402131),
+[#147 escalation](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/147#issuecomment-6357465613),
+[#150 escalation](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/150#issuecomment-6357465931),
+[#147 session gap](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/147#issuecomment-6357559381),
+[#150 session gap](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/150#issuecomment-6357559673).
+No owner agreement/overlap handoff was received at last check. As required by the
+user and MASTER_PLAN, no coordinated shared SQL/permission/session/Brain change is
+implemented on silence. A proposed restrictive task policy is not claimed fixed.
+
+New read-only dependency inventory: #153 `c742af5db3aabd497d5ee3dcb621b2afb1fd0bbd`
+held credit reaper (billing approval required), and #154
+`551d84bf788a9195d7e3fd01914945bc130e0392` stacked on #150 (verified gate-run adoption).
+Neither delivers FIN-01 model replay identity. No overlapping accounting edits.
+
+**Remaining phase objective:** close owner-agreed client permissions, native public
+policies/ownership, membership onboarding/invitation and application signed-task
+session contract; required native red-to-green and authorized/nonpilot controls;
+positive two-client/same-workspace Brain/data isolation. Then complete Phase 1
+acceptance before requesting Phase 2. Phase 2 is not started/approved.
+
+No hosted/production changes, new application migrations, merge, deployment, real
+customer import, paid calls, outreach, credential/billing modification or feature
+activation. Existing local Supabase stacks unchanged. P1–P8 disabled; A7 NO-GO.

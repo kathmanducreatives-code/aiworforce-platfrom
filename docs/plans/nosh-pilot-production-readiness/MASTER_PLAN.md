@@ -1,6 +1,6 @@
 # Nosh pilot: implementation and production-readiness master plan
 
-**Phase 0 audit: complete. Roadmap approval: pending. Customer readiness: FAIL.**
+**Phase 0 complete; Phase 1 authorized, PARTIAL/BLOCKED. Customer readiness: FAIL.**
 
 Audit date: 2026-10-23 (Asia/Kathmandu); GitHub state refreshed at
 2026-10-22T18:38Z. P1–P8 remain disabled. A7 remains NO-GO.
@@ -78,6 +78,8 @@ That historical plan is not in the pilot implementation ancestry; read it from
 | Company Brain consistency | #147 | `2a6e1dcfac0ab93106c1439e3f06eaf33e6e04dd` | open draft / launch; Brain |
 | Worker operational fixes | #149 | `c704f9286e934cfc26680a5607141ce35d357065` | open draft / launch; backend |
 | Adopt purchased run | #150 | `be625f46a5e8c63759ccdfd6e7d8612bfdb8ae86` | open draft / **#145**, not standalone |
+| Confirmed-purchase credit reaper | #153 | `c742af5db3aabd497d5ee3dcb621b2afb1fd0bbd` | open draft / launch; held billing, backend approval required |
+| Adopt verified gate run | #154 | `551d84bf788a9195d7e3fd01914945bc130e0392` | open draft / **#150**; backend |
 
 No open PR in this table is established as deployed. #147's newer head changes
 audit typing relative to P8's tested `c9c4859f`; this is not combined deployment
@@ -185,29 +187,29 @@ tables. Client IDs imported from CSV cannot confer ownership.
 
 ### DEC-01 — client tenancy model (release-blocking)
 
-The new request explicitly requires **two clients sharing one workspace** in
-Phases 1 and 6. Existing P1/#151 permits **one client per workspace**, and Brain,
-memory, agent contexts and many public records are workspace-scoped. These are
-incompatible requirements, not two names for the same test.
+The user selected the target during Phase 1 approval: **one agency workspace
+containing multiple isolated client accounts, each with separate Company Brain**.
+DEC-01 product direction is resolved. Its shared schema/API contract (AUTH-01)
+remains blocked pending Company Brain/backend agreement; no request to repeat the
+choice is necessary.
 
-Current rejection of a second client is valid proof of the old boundary but does
-**not** satisfy the new positive two-client scenario. Keep that scenario BLOCKED.
-Before closing Phase 1, obtain the user's decision and Brain/backend contract:
+Existing P1/#151 still enforces one client/workspace. Removing its unique key alone
+would mix workspace-scoped Brain, memory, roles and other records. It must stay
+disabled and fail closed until the coordinated client domain is implemented.
+Current second-client rejection proves only the historical boundary and cannot
+satisfy required positive multi-client acceptance.
 
-1. **Recommended smallest pilot:** one client per workspace, shared agency operator
-   across workspaces. User explicitly revises the new same-workspace requirement;
-   retain second-client enrollment as a negative test, never silently substitute it.
-2. **If same-workspace support is required:** revise the coordinated client-domain
-   contract before DDL: Brain/version/facts, memory, imported rows, tasks, policy,
-   credential and destinations all require client ownership and client authorization
-   in addition to workspace membership. A workspace owner is not automatically
-   authorized for every client. Reuse existing role systems with an agreed client
-   grant representation; do not simply remove `unique(workspace_id)` or accept
-   arbitrary client IDs. Add native two-client positive isolation tests and a
-   backfill/default-deny plan. This expands Phase 1/2 and owner dependencies.
+The proposed coordinated contract is
+[CLIENT_CONTRACT.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/CLIENT_CONTRACT.md).
+It requires one canonical client parent, client-scoped use of existing roles,
+canonical Brain/version selection without agency/default fallback, native child
+ownership, client credentials/destinations, original task/session and explicit
+revocation fencing. Company Brain Claude owns its shared writer/reader/schema;
+Backend Claude owns task lifecycle/execution/ledger contracts. Codex must not
+independently introduce a competing registry/ACL/Brain implementation.
 
-No implementation in Phase 0, and no assumed answer. Phase 1 can inventory/test
-current leaks while this decision is pending; cannot finish or enable the pilot.
+No shared DDL or owner file changes before that contract. Native same-workspace
+positive tests remain BLOCKED; the requirement is retained through Phases 1/2/6.
 
 ### Owner interfaces and handoffs
 
@@ -238,11 +240,12 @@ integration. All rows are mandatory unless explicitly scoped to future automatio
 
 | ID | Severity / defect or gap | Owner / phase | Required proof (not just code) |
 | --- | --- | --- | --- |
-| DEC-01 | P0 conflicting client tenancy requirement | user + Brain/backend / 1 | explicit decision; matching positive/negative native and browser cases |
+| DEC-01 | P0 multi-client target selected, shared implementation contract unresolved | Brain/backend + Codex / 1 | user target recorded; agreed client contract plus positive same-workspace native/browser isolation |
 | SEC-01 | P0 viewer reads pilot payload via public.tasks | Codex + Brain/backend / 1 | existing `public-task-audit.ts` returns zero rows; direct writes/views/RPCs also denied; authorized/nonpilot controls pass |
 | SEC-02 | P0 broad membership Brain/context/memory/public artifact access | Brain + Codex / 1 | catalog plus API/Edge role matrix for every parent/child path and session; no sibling path bypass |
 | SEC-03 | P0 actual session/revocation and privilege assumptions unproven | Brain/backend + Codex / 1 | local GoTrue login/logout/refresh/expiry/demotion/multi-tab; compatible revoke transaction ordering |
 | SEC-04 | P0 task registration/lifecycle and immutable parent coverage incomplete | backend + Codex / 1–2 | trusted signed registration, relational ownership; A→B→A never revives; normal lifecycle updates survive only agreed version rules |
+| SEC-05 | P0 arbitrary foreign-workspace self-enrollment enables cross-workspace task reads | Brain owner + Codex / 1 | native self-insert owner refused; legitimate workspace creation/invitation and nonpilot controls pass |
 | CI-01 | P1 schema-qualified RLS source scanner regression | Codex, coordinate CI owner / 1 | schema-aware parser adversaries; private and public missing-RLS mutants caught; no allow-list/skip; #151 combined CI green |
 | DATA-01 | P0 no durable import or atomic creation of bound tasks | Codex / 2, wire 5 | native duplicate/conflict/concurrent/restart tests; exact input/client/source and all-or-nothing confirm |
 | DATA-02 | P0 snapshots/drafts/reviews/approvals are interfaces only | Codex / 2 | real insert-once/CAS/batch/crash tests; full lineage; no half-approval/export |
@@ -265,6 +268,8 @@ flowchart TD
   BASE[launch: T01 plus Q1-Q4] --> B147[147 Brain consistency and AUTH-01]
   BASE --> R145[145 first-slice recovery]
   R145 --> R150[150 adopt purchased runs]
+  R150 --> R154[154 adopt verified gate run]
+  BASE --> R153[153 held confirmed-purchase reaper]
   BASE --> R149[149 worker operations]
   BASE --> Q144[144 semantic support follow-up]
   OLD[P1-P8 then 151 held identity] --> P0[0 audit and roadmap]
@@ -276,6 +281,8 @@ flowchart TD
   R149 --> P3
   P3 --> P4[4 shared-ledger recovery and spending]
   P2 --> P4
+  R154 --> P4
+  R153 --> P4
   P4 --> P5[5 native import-to-export integration]
   P5 --> P6[6 full local acceptance at combined SHA]
   Q144 --> QG[Canonical evidence regression gate]
@@ -294,7 +301,9 @@ No phase after Phase 0 is wholly independent of those security contracts.
 **Review/integration order (proposal, no merge authorization):**
 
 1. Pin current launch with merged #131/#141; review #144 separately with its owner.
-2. Integrate owner-approved #145 **before #150**; #149 can be reviewed independently.
+2. Integrate owner-approved #145 **before #150 before #154**; #149 can be reviewed independently.
+   #153 is code-independent held billing SQL; separate billing approval remains
+   required. Neither #153 nor #154 fixes the model-planning replay key on its own.
    Resolve #147 vs #145/#150 `run-agent` changes in an isolated integration branch
    with both owners; require combined regressions, not last-writer-wins.
 3. Restack/reconcile pilot #124→#134→#139→#140→#142→#143→#146→#148→#151
@@ -350,7 +359,7 @@ No phase after Phase 0 is wholly independent of those security contracts.
 
 1. **Objective/value:** protect client information through actual public/private
    APIs, Edge handlers and sessions; retain intended legitimate/nonpilot access.
-2. **Outstanding:** SEC-01..04, CI-01, DEC-01; missing native GoTrue proof,
+2. **Outstanding:** SEC-01..05, CI-01, DEC-01; missing native GoTrue proof,
    membership-only Brain policies, session/lifecycle contract, private trusted
    registration and incomplete public child ownership. #151 alone is insufficient.
 3. **Exact areas:** `tests/outpost-native/{run.sh,fixture.ts,identity.test.ts,public-task-audit.ts}`;
@@ -370,7 +379,7 @@ No phase after Phase 0 is wholly independent of those security contracts.
      inventory **all** effective SELECT/ALL policies, grants, views, RPCs and
      service-backed readers of bound pilot tasks. Agree scoped policy/Edge contract
      with Brain/backend; do not replace workspace permissions independently.
-   - Resolve DEC-01 and role/delegation/session/lifecycle decisions. Until then
+   - Finalize DEC-01's shared client contract and role/delegation/session/lifecycle decisions. Until then
      retain one-client constraint and default-deny; do not pretend that finishes
      same-workspace acceptance.
    - Correct CI-01 with schema-qualified object parsing and parser adversaries;
@@ -806,7 +815,7 @@ manual download,” never “sent,” “Apollo updated” or “called.”
 
 ## 10. Exact next implementation task and completion gate
 
-After roadmap approval and “Proceed with the next phase,” resume **Phase 1**,
+Phase 1 has now been approved; after owner contract delivery resume **Phase 1**,
 not Phase 2. Create an isolated successor of the reviewed #151 foundation.
 
 First task: **SEC-01 public-task exposure**. Use the existing native
@@ -819,7 +828,7 @@ that probe to a required gate. Do not independently edit shared Brain/run-agent.
 CI-01 parser correction and native permission inventory are safe parallel work
 within that phase while owner contracts/DEC-01 wait; no test exclusions allowed.
 
-Phase 1 cannot be called complete until DEC-01 and AUTH-01/EXEC-01 are resolved,
+Phase 1 cannot be called complete until DEC-01's shared client contract and AUTH-01/EXEC-01 are resolved,
 real session/direct API proofs pass and all required CI is green. Every later
 phase remains unapproved. The next receipt must clearly distinguish completed
 local work, owner-blocked work and forbidden external actions.

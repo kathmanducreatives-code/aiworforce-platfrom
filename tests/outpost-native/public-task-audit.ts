@@ -1,9 +1,25 @@
 // Intentionally FAILS until the coordinated public-table authorization gap closes.
 // Run through the disposable runner with OUTPOST_NATIVE_PUBLIC_AUDIT=1.
+// deno-lint-ignore no-import-prefix
+import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { api, fixture, jwt } from "./fixture.ts";
 import { closeHarness } from "../db-contract/lib/harness.ts";
 try {
   const x = await fixture(), viewer = await jwt(x.viewer, x.sv);
+  const owner = await jwt(x.ua, x.sa);
+  const positive = await api(
+    owner.token,
+    `tasks?id=eq.${x.ta}&select=id`,
+    "GET",
+    undefined,
+    "public",
+  );
+  assertEquals(positive.status, 200);
+  assertEquals(
+    positive.body.length,
+    1,
+    "denying every task is not an authorization fix",
+  );
   const privateRead = await api(viewer.token, "task_bindings");
   const legacyRead = await api(
     viewer.token,
@@ -12,8 +28,10 @@ try {
     undefined,
     "public",
   );
-  const secure = legacyRead.status !== 200 || !Array.isArray(legacyRead.body) ||
-    legacyRead.body.length === 0;
+  const deniedRead = (r: typeof legacyRead) =>
+    r.status === 403 ||
+    (r.status === 200 && Array.isArray(r.body) && r.body.length === 0);
+  const secure = deniedRead(legacyRead) && deniedRead(privateRead);
   console.log(
     JSON.stringify(
       {
