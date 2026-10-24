@@ -74,10 +74,13 @@ Deno.test("OP-6 save_draft: progress makes the save versioned and conditional; s
   assert(/if \(setup && expectedUpdatedAt !== currentUpdatedAt\)/.test(block), "a versioned save must name the stored version");
   assert(/rejected_reason: "stale", current_updated_at: currentUpdatedAt, profile: existing \}, 409/.test(block),
     "a stale autosave gets the current copy back to merge against");
-  assert(/setup && currentUpdatedAt !== null\s*\?\s*admin\.from\("company_brain"\)\.update\(row\)\.eq\("workspace_id", workspace_id\)\.eq\("updated_at", currentUpdatedAt\)/.test(block),
-    "a versioned write lands only on the version read");
-  assert(block.includes('upsert(row, { onConflict: "workspace_id" })'), "an unversioned save keeps the original upsert");
-  assert(/if \(setup && !saved\.landed\) return staleDuringSave\(\)/.test(block), "a lost race is reported as stale");
+  // Through the AUTH-06 authorized writer (#169): CAS on the version read when
+  // versioned, the original upsert otherwise; never a direct table write.
+  assert(/const versioned = setup !== null && currentUpdatedAt !== null;/.test(block), "versioned only with progress and an existing row");
+  assert(/mode: versioned \? "cas" : "upsert", expectedUpdatedAt: versioned \? currentUpdatedAt : null/.test(block),
+    "a versioned write lands only on the version read; an unversioned save keeps the upsert");
+  assert(!/\.from\("company_brain"\)\s*\.(update|upsert|insert)\(/.test(block), "no direct Brain write");
+  assert(/if \(saved\.outcome === "stale"\) return staleDuringSave\(\)/.test(block), "a lost race is reported as stale");
   assert(/if \(result\.onboarding_completed\) result\.profile = withoutSetupProgress\(result\.profile\)/.test(block), "activation ends progress");
   assert(/ok: true, activated: result\.onboarding_completed, updated_at: saved\.updated_at/.test(block), "the new version is returned");
 });

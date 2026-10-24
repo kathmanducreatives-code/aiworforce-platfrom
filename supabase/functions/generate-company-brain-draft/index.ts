@@ -471,14 +471,12 @@ Deno.serve(async (req) => {
       // the upsert. Either way it is the AUTH-06 authorized writer, which
       // re-checks the caller's session, membership and role in the write's
       // own transaction.
-      const writeBrain = (permission: "edit" | "activate", profile: AnyObj, activate = false) => {
-        const versioned = setup !== null && currentUpdatedAt !== null;
-        return authorizedBrainWrite(admin, {
-          workspaceId: workspace_id, actorId: userId, sessionId, permission,
-          mode: versioned ? "cas" : "upsert", profile,
-          expectedUpdatedAt: versioned ? currentUpdatedAt : null, activate,
+      const versioned = setup !== null && currentUpdatedAt !== null;
+      const writeBrain = (w: { permission: "edit" | "activate"; profile: AnyObj; activate?: boolean }) =>
+        authorizedBrainWrite(admin, {
+          workspaceId: workspace_id, actorId: userId, sessionId, ...w,
+          mode: versioned ? "cas" : "upsert", expectedUpdatedAt: versioned ? currentUpdatedAt : null,
         });
-      };
       const staleDuringSave = () =>
         json({ ok: false, rejected_reason: "stale", detail: "changed during save", current_updated_at: null }, 409);
 
@@ -519,7 +517,7 @@ Deno.serve(async (req) => {
         // Refuse to mark a half-built Brain as ready — but keep the draft saved,
         // and hand back editable ai_inference suggestions for every missing slot
         // so the user confirms instead of inventing fields from scratch.
-        const blockedWrite = await writeBrain("activate", result.profile);
+        const blockedWrite = await writeBrain({ permission: "activate", profile: result.profile });
         if (blockedWrite.outcome === "stale") return staleDuringSave();
         if (blockedWrite.outcome !== "ok") { const r = brainWriteRefusal(blockedWrite.outcome); return json(r.body, r.status); }
         return json({
@@ -539,7 +537,10 @@ Deno.serve(async (req) => {
       if (result.onboarding_completed) result.profile = withoutSetupProgress(result.profile);
       // Activation sets onboarding_completed / onboarding_completed_at in the same
       // authorized write (owner/admin only); a draft save needs edit.
-      const saved = await writeBrain(action === "activate" ? "activate" : "edit", result.profile, result.onboarding_completed === true);
+      const saved = await writeBrain({
+        permission: action === "activate" ? "activate" : "edit",
+        profile: result.profile, activate: result.onboarding_completed === true,
+      });
       if (saved.outcome === "stale") return staleDuringSave();
       if (saved.outcome !== "ok") { const r = brainWriteRefusal(saved.outcome); return json(r.body, r.status); }
 
