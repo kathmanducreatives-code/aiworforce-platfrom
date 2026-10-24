@@ -1,0 +1,43 @@
+omitted 20261015130000_credits_rearm_settled_key.sql (mutation proof)
+a key refunded once (not_charged) and then really bought is charged ... FAILED (76ms)
+a reservation released by the stale reaper and then really bought is charged ... FAILED (13ms)
+enforcement: a refunded key is balance-checked again, never waved through ... FAILED (14ms)
+a charged key is still a replay: the same purchase is never charged twice ... ok (23ms)
+an in-flight reservation is still a replay: no second hold ... ok (8ms)
+concurrent re-arms of one refunded key hold the credit once ... FAILED (54ms)
+a re-armed reservation is not reaped by its original age ... FAILED (19ms)
+FAILED | 2 passed | 5 failed (223ms)
+mutant killed: without the re-arm migration a refunded key's purchase goes uncharged
+mutant killed: no deadline
+mutant killed: no generation fence
+mutant killed: an earlier authorization spends over open liability: admission recheck removed
+mutant killed: one actor's slow run spends another's reads: allocation ignored by the read plan
+mutant killed: a template missing allowed_kinds admits
+mutant killed: two templates for one kind and actor are authorized
+mutant killed: a live authorization's purchase is reconciled
+mutant killed: a padded reference is a different record
+mutant killed: no model attempt count
+mutant killed: no model USD cap
+mutant killed: gate passes requests with no mission
+mutant killed: smoke status read ignores the read reserve
+mutant killed: smoke start ignores the time left
+mutant killed: settled receipt not labelled
+mutant killed: legacy jobs actor keeps its customer shape in the smoke
+mutant killed: R3 remote media accepted
+mutant killed: R6 closure not rechecked
+mutant killed: R8 task row not fenced
+mutant killed: SAF-008 bodyless purchase skips mandatory fields
+mutant killed: adoption: dataset id format not checked
+mutant killed: adoption: another operation's answer adopted
+mutant killed: wall clock: far-future queue timestamp accepted
+mutant killed: without the held reaper fix a confirmed purchase is refunded
+mutant killed: reaper takes a blank run id as evidence
+omitted supabase/migrations/20261023120000_company_brain_server_writes_only.sql (mutation proof)
+no member — viewer, editor, admin or owner — writes the Brain from the browser ... FAILED (76ms)
+no one creates a Brain for a workspace from the browser — member, outsider or anon ... FAILED (16ms)
+reads are unchanged: every member role reads its Brain; an outsider and anon read nothing ... ok (41ms)
+the backend path (service role) still writes, and provisioning still creates the Brain ... ok (23ms)
+FAILED | 2 passed | 2 failed (169ms)
+mutant killed: without the migration a viewer rewrites the Company Brain from the browser
+mutant killed: Brain writer: role not checked at the write
+MUTATION_TALLY shard=1 shards=3 total=80 ran=27

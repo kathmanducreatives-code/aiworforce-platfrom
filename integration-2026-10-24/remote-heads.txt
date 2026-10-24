@@ -1,0 +1,19 @@
+remote heads at 2026-10-24T15:45:38Z:
+2ffc6b5f refs/heads/codex/nosh-phase1-brain-handler-audit
+70507ba0 refs/heads/codex/nosh-phase1-client-contract-gates
+0d7cd077 refs/heads/codex/nosh-phase1-task-lifecycle
+385173fe refs/heads/e01/receipt-support
+005d508a refs/heads/fix/admission-refusal-named
+551d84bf refs/heads/fix/adopt-verified-gate-run
+833affce refs/heads/fix/brain-role-aware-writes
+6223dd5f refs/heads/fix/credit-reaper-confirmed-purchase
+00a2772f refs/heads/fix/decision-maker-unlock-per-lead
+37b3b1ac refs/heads/fix/lead-v2-kill-before-checkpoint-resume
+7a1a43e7 refs/heads/fix/quoted-unlock-settle
+9630d8a9 refs/heads/fix/s18a-malformed-dataset-visible
+84490a2c refs/heads/fix/smoke-credit-reconciliation
+c704f928 refs/heads/fix/worker-ops-hygiene
+8b0e2b6b refs/heads/launch/hardening
+be625f46 refs/heads/p2/adopt-reuse
+f66be81a refs/heads/review/accounting-integration
+090d534d refs/heads/review/combined-144-145-149-150

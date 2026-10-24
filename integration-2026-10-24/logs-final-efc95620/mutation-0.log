@@ -1,0 +1,40 @@
+own generation, open row: the write lands and is reported written ... FAILED (51ms)
+stale generation: refused as fenced, the newer row is untouched ... FAILED (10ms)
+finalized row: an open-row write is fenced even on its own generation ... FAILED (8ms)
+unknown generation: the open-row fence alone still protects a finalized row ... FAILED (7ms)
+an empty result and a result without terminal_status are open ... FAILED (11ms)
+a follow-up to the slice's own verdict writes on its finalized row; a stale one is fenced ... ok (21ms)
+a missing task is fenced, not an error ... FAILED (4ms)
+a database error is reported as an error, never as fenced or written ... ok (6ms)
+resolveSliceGeneration: the claim's version, else the row's own, else null ... ok (7ms)
+end to end: a newer claim's generation fences the older slice's write (the D1 scenario) ... FAILED (18ms)
+documents the 42703 the first D1 version hit: `or` + a representation fails in PostgREST ... ok (5ms)
+FAILED | 4 passed | 7 failed (167ms)
+mutant killed: reverting the D1 fix fails the fenced-write contract
+mutant killed: no serialization lock
+mutant killed: a run bought with one read (no dataset read)
+mutant killed: no new smoke over unreconciled liability: gate removed
+mutant killed: ownership judged before the liability lock's wait
+mutant killed: a template missing a required key is authorized
+mutant killed: a priced read template is authorized
+mutant killed: an above-quote reconciliation lets another authorization spend
+mutant killed: NO_RUN closes a purchase that ran
+mutant killed: re-keyed payload buys again
+mutant killed: no provider USD cap
+mutant killed: worker may authorize
+mutant killed: vendor caps not pinned
+mutant killed: read plan refusal reads as a refund for a replay
+mutant killed: receipt read skipped
+mutant killed: billed-per-entry arrays unbounded
+mutant killed: R2 uncertain Firecrawl refunded
+mutant killed: R5 malformed admission trusted
+mutant killed: R8 queue row not fenced
+mutant killed: R2 uncertain crawl start refunded (Codex P2)
+mutant killed: adoption: evidence not bound to the task
+mutant killed: adoption: a conflicting run id adopted
+mutant killed: wall clock: deadline extended past 300 s
+mutant killed: smoke planner shown every authorised actor (Codex P1)
+mutant killed: reaper evidence not bound to the task
+mutant killed: reaper charges the flat credit, not the quoted hold
+mutant killed: Brain writer: no lock on the membership (a demotion overtakes the write)
+MUTATION_TALLY shard=0 shards=3 total=80 ran=27

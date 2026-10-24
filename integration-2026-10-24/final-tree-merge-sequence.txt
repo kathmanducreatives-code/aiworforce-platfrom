@@ -1,0 +1,13 @@
+efc95620 Merge remote-tracking branch 'origin/fix/smoke-credit-reconciliation' into HEAD
+2121a8d7 scratch: README rows (fix/adopt-verified-gate-run)
+230d0ac1 Merge remote-tracking branch 'origin/p2/adopt-reuse' into HEAD
+8cd90d56 Merge remote-tracking branch 'origin/fix/lead-v2-kill-before-checkpoint-resume' into HEAD
+72fb9f5e Merge remote-tracking branch 'origin/fix/admission-refusal-named' into HEAD
+e16f9e7b Merge remote-tracking branch 'origin/fix/worker-ops-hygiene' into HEAD
+51f0284f Merge remote-tracking branch 'origin/codex/nosh-phase1-client-contract-gates' into HEAD
+be48308c scratch: resolve mutation.sh (one restore list; keep all proofs)
+537ed83a Merge remote-tracking branches 'origin/fix/credit-reaper-confirmed-purchase' and 'origin/e01/receipt-support' into HEAD
+6223dd5f docs(billing): approval package for the two held billing migrations, with a read-only impact query
+61244ea3 chore(test-project): a TEST build with the held billing fixes applies the reaper after the re-arm
+fba05ffb fix(credits): the reaper charges a confirmed purchase what it reserved
+c742af5d fix(credits): the stale reaper charges a confirmed purchase instead of refunding it (held)

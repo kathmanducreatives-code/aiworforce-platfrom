@@ -1,0 +1,4 @@
+Check worker/main.ts
+Check supabase/functions/run-agent/index.ts
+Check supabase/functions/setup-company-brain/index.ts
+Check supabase/functions/generate-company-brain-draft/index.ts
