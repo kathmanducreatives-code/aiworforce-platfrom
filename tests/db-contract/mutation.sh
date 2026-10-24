@@ -82,8 +82,9 @@ runner_ts="$root/worker/leadMissionRunner.ts"
 clock_ts="$root/supabase/functions/_shared/missionWallClock.ts"
 plan_ts="$root/supabase/functions/_shared/smokeAdmissionRefusal.ts"
 planner_ts="$root/supabase/functions/_shared/gptExecutionPlanner.ts"
+brain_writer_sql="$root/supabase/migrations/20261024120000_company_brain_authorized_writer.sql"
 restore_list=()
-for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts"; do
+for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql"; do
   cp "$f" "$f.mutation-backup"; restore_list+=("$f")
 done
 trap 'cp "$backup" "$real"; for f in "${restore_list[@]}"; do mv -f "$f.mutation-backup" "$f"; done; rm -f "$backup" "$out"' EXIT
@@ -320,6 +321,41 @@ prove_killed "settlement judged at arrival, not send time (Codex P2)" "$tools_ts
 prove_killed "smoke planner shown every authorised actor (Codex P1)" "$planner_ts" \
   "    const payload = approved ? smokePlannerPayload(i.payload, approved) : i.payload;" "    const payload = i.payload;" \
   "$planner_tests" "smoke planner: the execution-planner request for the smoke's mission fits the Luna template"
+
+# ── PROOF: the browser never writes the Company Brain (roadmap Phase 3a) ───
+# Build WITHOUT 20261023120000_company_brain_server_writes_only and require the
+# server-writes test to fail on a member's browser write — the viewer PATCH
+# that returned 204 and persisted before the migration.
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261023120000_company_brain_server_writes_only.sql \
+  "$root/tests/db-contract/run.sh" "$root/tests/db-contract/companyBrainServerWrites.contract.test.ts" >"$out" 2>&1
+status=$?
+set -e
+sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -E '\.\.\. (ok|FAILED)|passed \||^omitted ' || true
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "no member — viewer, editor, admin or owner — writes the Brain from the browser ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: Brain server-writes tests without the migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the migration a viewer rewrites the Company Brain from the browser"
+ran=$((ran + 1))
+fi
+
+# ── PROOFS: the Company Brain writer re-authorizes under locks (AUTH-06) ────
+# Each mutant weakens one part of public.company_brain_authorized_write; a
+# named race or refusal test must then fail. The function is applied by the
+# bootstrap as a normal migration, so the mutant is what the database runs.
+brain_writer_tests="$root/tests/db-contract/companyBrainAuthorizedWrite.contract.test.ts"
+prove_killed "Brain writer: no lock on the session (a logout overtakes the write)" "$brain_writer_sql" \
+  "     and (s.not_after is null or s.not_after > v_now)
+   for share;" "     and (s.not_after is null or s.not_after > v_now);" \
+  "$brain_writer_tests" "race: logged out in flight → the write waits, then is refused"
+prove_killed "Brain writer: no lock on the membership (a demotion overtakes the write)" "$brain_writer_sql" \
+  "   where m.workspace_id = p_workspace_id and m.user_id = p_actor_id
+   for share;" "   where m.workspace_id = p_workspace_id and m.user_id = p_actor_id;" \
+  "$brain_writer_tests" "race: demoted to viewer in flight → the write waits, then is refused"
+prove_killed "Brain writer: role not checked at the write" "$brain_writer_sql" \
+  "            when 'edit' then v_role in ('owner', 'admin', 'editor')" "            when 'edit' then true" \
+  "$brain_writer_tests" "owner, admin and editor write; viewer, legacy roles and non-members are refused and change nothing"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"

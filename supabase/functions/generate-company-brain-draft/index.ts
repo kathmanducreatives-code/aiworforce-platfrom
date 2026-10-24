@@ -22,6 +22,8 @@ import { planBrainUpdate } from "../_shared/companyBrainUpdate.ts";
 import { enrichCompanyFromLinkedIn } from "../_shared/companyBrainResearch/companyLinkedIn.ts";
 import { generateBrainDraft, type DraftInput } from "../_shared/companyBrainResearch/generateBrainDraft.ts";
 import type { FirecrawlPage, ResearchDeps, ResearchSourceType, ResearchProvider } from "../_shared/companyBrainResearch/types.ts";
+import { brainPermissionForAction, canBrain, normalizeWorkspaceRole } from "../_shared/brainRole.ts";
+import { authorizedBrainWrite, brainWriteRefusal, sessionIdFromBearer } from "../_shared/brainWriter.ts";
 import { applyBrainSave, type CompanyBrainV2Patch } from "../_shared/companyBrainV2Save.ts";
 import { resolveCanonicalSellerIdentity } from "../_shared/workbench/sellerIdentity.ts";
 import {
@@ -164,11 +166,19 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Workspace membership — the only authorization gate.
+  // Workspace membership, then the caller's ROLE (roadmap Phase 3a) — both
+  // before any model call or write. A viewer reads; it never researches,
+  // drafts, saves or activates.
   const { data: member } = await admin
-    .from("workspace_members").select("workspace_id")
+    .from("workspace_members").select("workspace_id, role")
     .eq("workspace_id", workspace_id).eq("user_id", userId).maybeSingle();
   if (!member) return json({ error: "forbidden" }, 403);
+  const role = normalizeWorkspaceRole((member as { role?: unknown }).role);
+  const required = brainPermissionForAction(action);
+  if (!canBrain(role, required)) return json({ error: "brain_role_forbidden", role, required }, 403);
+  // Every Brain write re-checks this caller's live session, membership and role
+  // in the write's own transaction (_shared/brainWriter.ts, AUTH-06).
+  const sessionId = sessionIdFromBearer(authHeader);
 
   const { deps, apifyReady, firecrawlReady, llmReady, providerMode } = buildDeps();
 
@@ -424,17 +434,15 @@ Deno.serve(async (req) => {
         const status = plan.reason === "stale" ? 409 : plan.reason === "brain_not_found" ? 404 : 400;
         return json({ ok: false, rejected_reason: plan.reason, detail: plan.detail ?? null, current_updated_at: current?.updated_at ?? null }, status);
       }
-      const { data: written, error } = await admin
-        .from("company_brain")
-        .update({ profile: plan.profile, updated_at: new Date().toISOString() })
-        .eq("workspace_id", workspace_id)
-        .eq("updated_at", current!.updated_at!)
-        .select("profile, updated_at");
-      if (error) throw error;
-      if (!written?.length) {
+      const written = await authorizedBrainWrite(admin, {
+        workspaceId: workspace_id, actorId: userId, sessionId, permission: "edit",
+        mode: "cas", profile: plan.profile, expectedUpdatedAt: current!.updated_at!,
+      });
+      if (written.outcome === "stale") {
         return json({ ok: false, rejected_reason: "stale", detail: "changed during save", current_updated_at: null }, 409);
       }
-      return json({ ok: true, profile: written[0].profile, updated_at: written[0].updated_at, applied_paths: plan.applied_paths });
+      if (written.outcome !== "ok") { const r = brainWriteRefusal(written.outcome); return json(r.body, r.status); }
+      return json({ ok: true, profile: plan.profile, updated_at: written.updated_at, applied_paths: plan.applied_paths });
     }
 
     // ---------------- Step 4/5: save draft, then activate -------------------
@@ -483,9 +491,11 @@ Deno.serve(async (req) => {
         // Refuse to mark a half-built Brain as ready — but keep the draft saved,
         // and hand back editable ai_inference suggestions for every missing slot
         // so the user confirms instead of inventing fields from scratch.
-        await admin.from("company_brain").upsert({
-          workspace_id, profile: result.profile, updated_at: new Date().toISOString(),
-        }, { onConflict: "workspace_id" });
+        const blocked = await authorizedBrainWrite(admin, {
+          workspaceId: workspace_id, actorId: userId, sessionId, permission: "activate",
+          mode: "upsert", profile: result.profile,
+        });
+        if (blocked.outcome !== "ok" && blocked.outcome !== "stale") { const r = brainWriteRefusal(blocked.outcome); return json(r.body, r.status); }
         return json({
           ok: false, activated: false, blocked_reasons: result.blocked_reasons,
           completeness: result.completeness, profile: result.profile,
@@ -499,13 +509,14 @@ Deno.serve(async (req) => {
       // NOTE: `signal_preferences` is NOT a column on `company_brain` — it lives
       // inside `profile` (applyBrainSave puts it there on activation, which is
       // where Radar reads it). Only real columns may appear on this row.
-      const row: AnyObj = { workspace_id, profile: result.profile, updated_at: new Date().toISOString() };
-      if (result.onboarding_completed) {
-        row.onboarding_completed = true;
-        row.onboarding_completed_at = new Date().toISOString();
-      }
-      const { error } = await admin.from("company_brain").upsert(row, { onConflict: "workspace_id" });
-      if (error) throw error;
+      // Activation sets onboarding_completed / onboarding_completed_at in the same
+      // authorized write (owner/admin only); a draft save needs edit.
+      const saved = await authorizedBrainWrite(admin, {
+        workspaceId: workspace_id, actorId: userId, sessionId,
+        permission: action === "activate" ? "activate" : "edit",
+        mode: "upsert", profile: result.profile, activate: result.onboarding_completed === true,
+      });
+      if (saved.outcome !== "ok" && saved.outcome !== "stale") { const r = brainWriteRefusal(saved.outcome); return json(r.body, r.status); }
 
       if (result.onboarding_completed) {
         admin.from("activity_feed").insert({
