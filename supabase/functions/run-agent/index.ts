@@ -5,6 +5,7 @@
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
 import { withBuildStamp } from "../_shared/buildStamp.ts";
+import { type GuardDb, legacyExecutionGuard, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
 import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
 import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
 import { hiringSearchTitles } from "../_shared/hiringSearchVocabulary.ts";
@@ -34,7 +35,6 @@ import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
 import { renderContentBrain, type RecentContent } from "../_shared/contentBrainContext.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
-import { type GuardDb, legacyExecutionGuard, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
 import { loadV2OwnedTaskIds } from "../_shared/leadMissionV2Request.ts";
 import {
   isDirectLeadActionAttempt,
