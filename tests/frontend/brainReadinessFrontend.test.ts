@@ -76,10 +76,13 @@ Deno.test("F-5 onboarding autosave: behind the switch, never for an activated Br
   assert(/enrichment_consent: f\.enrichment_consent/.test(page), "a restore never sets consent");
   const hook = read("src/hooks/useOnboardingAutosave.ts");
   assert(/row\?\.onboarding_completed !== true/.test(hook), "an activated Brain is never draft-saved");
-  assert(/mergeStale\(base\.current!, mine, server\)/.test(hook), "a stale save is merged, not overwritten");
-  const save = read("src/lib/onboardingProgressSave.ts");
+  assert(/applyProgressSaveResult\(\{ version: version\.current, base: base\.current! \}, mine, r\)/.test(hook), "a stale save is merged, not overwritten");
+  assert(/mergeStale\(state\.base, mine, server\)/.test(read("src/lib/onboardingAutosave.ts")), "the merge is the three-way mergeStale");
+  const save = read("src/lib/brainProgressRequest.ts");
+  assert(/buildProgressSaveBody\(input\)/.test(read("src/lib/onboardingProgressSave.ts")), "the page sends the shared request");
   assert(/patch: \{\}/.test(save), "an autosave never writes Brain fields");
-  assert(/expected_updated_at: input\.expectedUpdatedAt/.test(save), "and always names the version it builds on");
+  assert(/body\.expected_updated_at = input\.expectedUpdatedAt;/.test(save), "and always names the version it builds on");
+  assert(/body\.expected_version = input\.expectedUpdatedAt === null \? null : Number\(input\.expectedUpdatedAt\)/.test(save), "a client save too");
 });
 
 Deno.test("F-6 switch off: the route guard decides exactly what it did before, for every state and Brain", () => {
@@ -97,8 +100,8 @@ Deno.test("F-6 switch off: the route guard decides exactly what it did before, f
 Deno.test("F-7 switch off: onboarding autosave never starts — no restore, no save, status 'off'", () => {
   const hook = read("src/hooks/useOnboardingAutosave.ts");
   assert(/const active = enabled && /.test(hook));
-  assert(/if \(!active \|\| resumed\.current === workspaceId\) return;/.test(hook), "no restore");
-  assert(/if \(!active \|\| resumed\.current !== workspaceId \|\| !base\.current\) return;/.test(hook), "no save");
+  assert(/if \(!active \|\| resumed\.current === scopeKey\) return;/.test(hook), "no restore");
+  assert(/if \(!active \|\| resumed\.current !== scopeKey \|\| !base\.current\) return;/.test(hook), "no save");
   assert(/return active \? status : 'off';/.test(hook));
   // The page's status line falls through to the original wording when the hook reports 'off'.
   const page = read("src/pages/OnboardingCompanyBrain.tsx");

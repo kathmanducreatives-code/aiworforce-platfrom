@@ -24,6 +24,8 @@ import { generateBrainDraft, type DraftInput } from "../_shared/companyBrainRese
 import type { FirecrawlPage, ResearchDeps, ResearchSourceType, ResearchProvider } from "../_shared/companyBrainResearch/types.ts";
 import { brainPermissionForAction, canBrain, normalizeWorkspaceRole } from "../_shared/brainRole.ts";
 import { authorizedBrainWrite, brainWriteRefusal, sessionIdFromBearer } from "../_shared/brainWriter.ts";
+import { clientBrainRefusal, clientBrainsEnabled, resolveBrainScope } from "../_shared/clientBrain.ts";
+import { handleClientBrainAction } from "../_shared/clientBrainSave.ts";
 import { applyBrainSave, type CompanyBrainV2Patch } from "../_shared/companyBrainV2Save.ts";
 import { parseSetupProgress, withSetupProgress, withoutSetupProgress } from "../_shared/onboardingProgress.ts";
 import { resolveCanonicalSellerIdentity } from "../_shared/workbench/sellerIdentity.ts";
@@ -180,6 +182,25 @@ Deno.serve(async (req) => {
   // Every Brain write re-checks this caller's live session, membership and role
   // in the write's own transaction (_shared/brainWriter.ts, AUTH-06).
   const sessionId = sessionIdFromBearer(authHeader);
+
+  // Phase 3c (held): which Brain this request is for — only what it asked for
+  // explicitly. No client → the agency Brain, exactly as before. A client
+  // request is never answered from the agency Brain: while client Brains are
+  // switched off it is refused, before any model, provider or Brain access.
+  const brainScope = resolveBrainScope(body);
+  if (!brainScope.ok) { const r = clientBrainRefusal(brainScope.outcome); return json(r.body, r.status); }
+  if (brainScope.scope.kind === "client") {
+    if (!clientBrainsEnabled((k) => Deno.env.get(k))) return json({ error: "client_brains_disabled" }, 409);
+    try {
+      const r = await handleClientBrainAction({
+        admin, action, body, workspaceId: workspace_id, clientId: brainScope.scope.clientId, actorId: userId, sessionId,
+      });
+      return json(r.body, r.status);
+    } catch (e) {
+      console.error("generate-company-brain-draft client scope error", e);
+      return json({ error: "internal_error" }, 500);
+    }
+  }
 
   const { deps, apifyReady, firecrawlReady, llmReady, providerMode } = buildDeps();
 

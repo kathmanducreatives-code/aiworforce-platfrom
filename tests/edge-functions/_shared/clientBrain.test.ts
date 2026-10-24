@@ -150,7 +150,7 @@ Deno.test("I2 (source): the client helper never names the agency Brain, and the 
   }
 });
 
-Deno.test("held (source): the client RPCs are called only from _shared/clientBrain.ts, and no deployed handler imports it yet", () => {
+Deno.test("held (source): the client RPCs are called only from _shared/clientBrain.ts; only the Brain handlers use it, behind the switch", () => {
   const callers: string[] = [];
   const importers: string[] = [];
   for (const f of walk(new URL("supabase/functions/", ROOT))) {
@@ -162,5 +162,20 @@ Deno.test("held (source): the client RPCs are called only from _shared/clientBra
       `${rel} writes a client table directly`);
   }
   assertEquals(callers, ["supabase/functions/_shared/clientBrain.ts"]);
-  assertEquals(importers, [], "switched off: no handler uses client Brains until Phase 3c is approved");
+  assertEquals(importers.sort(), [
+    "supabase/functions/_shared/clientBrainSave.ts",
+    "supabase/functions/generate-company-brain-draft/index.ts",
+    "supabase/functions/setup-company-brain/index.ts",
+  ]);
+  // generate-company-brain-draft: a client request is refused unless the switch
+  // is on, and it is resolved before any provider/model dependency is built.
+  const gen = read("supabase/functions/generate-company-brain-draft/index.ts");
+  const at = (needle: string) => { const i = gen.indexOf(needle); assert(i > 0, needle); return i; };
+  assert(at("const brainScope = resolveBrainScope(body);") > at("if (!canBrain(role, required))"), "after the role gate");
+  assert(at('if (!clientBrainsEnabled((k) => Deno.env.get(k))) return json({ error: "client_brains_disabled" }, 409);') < at("handleClientBrainAction({"));
+  assert(at("handleClientBrainAction({") < at("const { deps, apifyReady, firecrawlReady, llmReady, providerMode } = buildDeps();"), "before any provider dependency");
+  // setup-company-brain: the wizard never serves a client scope.
+  const setup = read("supabase/functions/setup-company-brain/index.ts");
+  assert(/if \(brainScope\.scope\.kind === "client"\) return json\(\{ error: "client_scope_not_supported", action \}, 400\);/.test(setup));
+  assert(!setup.includes("handleClientBrainAction"), "setup has no client path");
 });

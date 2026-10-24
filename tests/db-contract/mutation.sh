@@ -84,8 +84,11 @@ plan_ts="$root/supabase/functions/_shared/smokeAdmissionRefusal.ts"
 planner_ts="$root/supabase/functions/_shared/gptExecutionPlanner.ts"
 brain_writer_sql="$root/supabase/migrations/20261024120000_company_brain_authorized_writer.sql"
 client_sql="$root/supabase/migrations-held/20261024160000_client_company_brain.sql"
+autosave_ts="$root/src/lib/onboardingAutosave.ts"
+brain_draft_ts="$root/supabase/functions/generate-company-brain-draft/index.ts"
+client_save_ts="$root/supabase/functions/_shared/clientBrainSave.ts"
 restore_list=()
-for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$client_sql"; do
+for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts"; do
   cp "$f" "$f.mutation-backup"; restore_list+=("$f")
 done
 trap 'cp "$backup" "$real"; for f in "${restore_list[@]}"; do mv -f "$f.mutation-backup" "$f"; done; rm -f "$backup" "$out"' EXIT
@@ -426,6 +429,22 @@ prove_killed "client rule: a viewer edits" "$client_sql" \
 prove_killed "client RLS: every member enumerates every client (O1)" "$client_sql" \
   "  using (status = 'active' and public.client_access_is_active(workspace_id, id));" "  using (true);" \
   "$client_tests" "2. a user granted only client A reads and edits A, and can neither read, write nor list B"
+
+# End-to-end autosave (actual handler + page logic): the guards the E2E tests rely on.
+e2e_tests="$root/tests/db-contract/brainAutosaveEndToEnd.contract.test.ts"
+prove_killed "autosave: a stale answer without the server's copy is merged against nothing (typed text blanked)" "$autosave_ts" \
+  "  if (r.kind === 'stale' && (r.serverProfile === null || r.serverProfile === undefined)) {" \
+  "  if (false) {" \
+  "$e2e_tests" "4. two users autosave the same agency Brain from one version: no edit is lost, both orderings"
+prove_killed "handler: client Brains served while switched off" "$brain_draft_ts" \
+  '    if (!clientBrainsEnabled((k) => Deno.env.get(k))) return json({ error: "client_brains_disabled" }, 409);' "" \
+  "$e2e_tests" "switched off: a client request is refused before any Brain access — never served from the agency Brain"
+prove_killed "handler: the request's client is ignored (a client save lands on the agency Brain)" "$brain_draft_ts" \
+  "  const brainScope = resolveBrainScope(body);" "  const brainScope = resolveBrainScope({});" \
+  "$e2e_tests" "2. a user edits and autosaves an AUTHORIZED CLIENT Brain: first insert, then CAS on its version; the agency Brain is untouched"
+prove_killed "client save: the version the page built on is not checked (a stale save overwrites)" "$client_save_ts" \
+  "  if (expected !== currentVersion) {" "  if (false) {" \
+  "$e2e_tests" "6. a stale autosave is rejected without a write and without losing the user's unsaved text"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
