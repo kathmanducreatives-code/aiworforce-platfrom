@@ -5,8 +5,8 @@
 #
 # Applies, in order: the Supabase platform shim (sql/00_supabase_shim.sql),
 # the held schema baseline, every migration in supabase/migrations/, the held
-# Lead V2 queue migrations, the held billing fix, then the held smoke
-# admission. The held files are applied HERE ONLY — to a throwaway database
+# Lead V2 queue migrations, the held billing fix, the held smoke admission,
+# then the held Phase 3c client schema. The held files are applied HERE ONLY — to a throwaway database
 # this lane creates and destroys. They are not approved for production
 # (supabase/migrations-held/README.md) and nothing in this lane can reach
 # production: the URL must point at localhost, which is checked below.
@@ -35,6 +35,11 @@ held_billing=(
 held_admission=(
   20261015140000_discovery_smoke_admission.sql
 )
+# The held Company Brain Phase 3c client schema: canonical clients, grant
+# generations, one Brain per client (#174, proposal; not approved).
+held_client=(
+  20261024160000_client_company_brain.sql
+)
 # DB_CONTRACT_OMIT_HELD names ONE file to leave out: a held file, or a file in
 # supabase/migrations/ by its basename. It is for tests/db-contract/mutation.sh,
 # which proves the credit, admission and membership tests fail without their
@@ -51,7 +56,7 @@ for f in $(ls "$root/supabase/migrations/"*.sql | sort); do
   if [ "$(basename "$f")" = "$omit" ]; then echo "omitted ${f#$root/} (mutation proof)"; continue; fi
   apply "$f"
 done
-for f in "${held_v2[@]}" "${held_billing[@]}" "${held_admission[@]}"; do
+for f in "${held_v2[@]}" "${held_billing[@]}" "${held_admission[@]}" "${held_client[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done

@@ -83,8 +83,9 @@ clock_ts="$root/supabase/functions/_shared/missionWallClock.ts"
 plan_ts="$root/supabase/functions/_shared/smokeAdmissionRefusal.ts"
 planner_ts="$root/supabase/functions/_shared/gptExecutionPlanner.ts"
 brain_writer_sql="$root/supabase/migrations/20261024120000_company_brain_authorized_writer.sql"
+client_sql="$root/supabase/migrations-held/20261024160000_client_company_brain.sql"
 restore_list=()
-for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql"; do
+for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$client_sql"; do
   cp "$f" "$f.mutation-backup"; restore_list+=("$f")
 done
 trap 'cp "$backup" "$real"; for f in "${restore_list[@]}"; do mv -f "$f.mutation-backup" "$f"; done; rm -f "$backup" "$out"' EXIT
@@ -356,6 +357,75 @@ prove_killed "Brain writer: no lock on the membership (a demotion overtakes the 
 prove_killed "Brain writer: role not checked at the write" "$brain_writer_sql" \
   "            when 'edit' then v_role in ('owner', 'admin', 'editor')" "            when 'edit' then true" \
   "$brain_writer_tests" "owner, admin and editor write; viewer, legacy roles and non-members are refused and change nothing"
+
+# Phase 3c (held client schema): every lock and rule the client tests rely on.
+client_tests="$root/tests/db-contract/clientCompanyBrain.contract.test.ts"
+prove_killed "client writer: no lock on the session (a logout overtakes the write)" "$client_sql" \
+  "  perform 1 from auth.sessions s
+   where s.id = p_session_id and s.user_id = p_actor_id for share;
+  perform 1 from public.workspace_members m
+   where m.workspace_id = p_workspace_id and m.user_id = p_actor_id for share;
+  perform 1 from public.client_accounts c" \
+  "  perform 1 from public.workspace_members m
+   where m.workspace_id = p_workspace_id and m.user_id = p_actor_id for share;
+  perform 1 from public.client_accounts c" \
+  "$client_tests" "6c. race: logged out in flight → session_invalid; nothing written"
+prove_killed "client writer: no lock on the membership (a demotion overtakes the write)" "$client_sql" \
+  "  perform 1 from public.workspace_members m
+   where m.workspace_id = p_workspace_id and m.user_id = p_actor_id for share;
+  perform 1 from public.client_accounts c
+   where c.workspace_id = p_workspace_id and c.id = p_client_id for share;" \
+  "  perform 1 from public.client_accounts c
+   where c.workspace_id = p_workspace_id and c.id = p_client_id for share;" \
+  "$client_tests" "6. race: demoted to viewer in flight → waits, then forbidden_role; a pinned task is refused after demote→promote"
+# Archive takes the client row and revokes every grant row, so either of these
+# two locks alone already makes the writer wait; without both it does not.
+prove_killed "client writer: no lock on the client or its grant (an archive overtakes the write)" "$client_sql" \
+  "  perform 1 from public.client_accounts c
+   where c.workspace_id = p_workspace_id and c.id = p_client_id for share;
+  perform 1 from public.client_access_grants g
+   where g.workspace_id = p_workspace_id and g.client_id = p_client_id
+     and g.user_id = p_actor_id and g.revoked_at is null for share;" "" \
+  "$client_tests" "7. race: client archived in flight → waits, then client_archived; every grant revoked; archive is terminal"
+prove_killed "client rule: a revoked grant still authorizes" "$client_sql" \
+  "  elsif v_grant is null then
+    return 'no_grant';" "  elsif false then
+    return 'no_grant';" \
+  "$client_tests" "4. race: grant revoked in flight → the write waits on the lock, then is refused; nothing written"
+prove_killed "client rule: a task's pinned generation is not compared (regrant revives the old task)" "$client_sql" \
+  "if v_grant is null or v_grant <> p_pin_grant_id or v_gen <> p_pin_generation then return 'grant_changed'; end if;" \
+  "if v_grant is null then return 'grant_changed'; end if;" \
+  "$client_tests" "5. revoke → regrant: a new generation; a task pinned to the old one is refused, read and write"
+prove_killed "client rule: a task's pinned permission revision is not compared" "$client_sql" \
+  "if v_rev <> p_pin_revision then return 'permission_changed'; end if;" "" \
+  "$client_tests" "6. race: demoted to viewer in flight → waits, then forbidden_role; a pinned task is refused after demote→promote"
+prove_killed "permission revision not renewed on a role change" "$client_sql" \
+  "  if new.role is distinct from old.role then
+    new.permission_revision := nextval('public.workspace_member_permission_revision_seq');" \
+  "  if new.role is distinct from old.role then
+    new.permission_revision := old.permission_revision;" \
+  "$client_tests" "6. race: demoted to viewer in flight → waits, then forbidden_role; a pinned task is refused after demote→promote"
+prove_killed "membership removal leaves the user's grants active" "$client_sql" \
+  "     set revoked_at = clock_timestamp(), revoke_reason = 'membership_removed', revoked_by = null
+   where g.workspace_id = old.workspace_id and g.user_id = old.user_id and g.revoked_at is null;" \
+  "     set revoked_at = clock_timestamp(), revoke_reason = 'membership_removed', revoked_by = null
+   where false;" \
+  "$client_tests" "6b. race: membership removed in flight → not_member and every grant revoked; remove → rejoin → regrant refuses the old task"
+prove_killed "archive leaves the client's grants active" "$client_sql" \
+  "     set revoked_at = v_now, revoked_by = p_actor_id, revoke_reason = 'client_archived'
+   where g.workspace_id = p_workspace_id and g.client_id = p_client_id and g.revoked_at is null;" \
+  "     set revoked_at = v_now, revoked_by = p_actor_id, revoke_reason = 'client_archived'
+   where false;" \
+  "$client_tests" "7. race: client archived in flight → waits, then client_archived; every grant revoked; archive is terminal"
+prove_killed "client rule: a missing client falls through instead of client_context_required" "$client_sql" \
+  "  if p_client_id is null then return 'client_context_required'; end if;" "" \
+  "$client_tests" "8. a client request without a client is refused everywhere — never the agency Brain or a default client"
+prove_killed "client rule: a viewer edits" "$client_sql" \
+  "            when 'edit' then v_role in ('owner', 'admin', 'editor')" "            when 'edit' then true" \
+  "$client_tests" "2. a user granted only client A reads and edits A, and can neither read, write nor list B"
+prove_killed "client RLS: every member enumerates every client (O1)" "$client_sql" \
+  "  using (status = 'active' and public.client_access_is_active(workspace_id, id));" "  using (true);" \
+  "$client_tests" "2. a user granted only client A reads and edits A, and can neither read, write nor list B"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
