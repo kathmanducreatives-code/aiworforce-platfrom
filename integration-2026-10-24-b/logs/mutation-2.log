@@ -1,0 +1,31 @@
+mutant killed: without the held admission migration nothing is admitted
+mutant killed: OWN-01: contacts left out of the reference list
+mutant killed: no deadline
+mutant killed: guard: membership not re-checked for a service caller
+mutant killed: guard: orchestrate ignores the refusal
+mutant killed: no generation fence
+mutant killed: an earlier authorization spends over open liability: admission recheck removed
+mutant killed: one actor's slow run spends another's reads: allocation ignored by the read plan
+mutant killed: a template missing allowed_kinds admits
+mutant killed: two templates for one kind and actor are authorized
+mutant killed: a live authorization's purchase is reconciled
+mutant killed: a padded reference is a different record
+mutant killed: no model attempt count
+mutant killed: no model USD cap
+mutant killed: worker may authorize
+mutant killed: vendor caps not pinned
+mutant killed: read plan refusal reads as a refund for a replay
+mutant killed: receipt read skipped
+mutant killed: billed-per-entry arrays unbounded
+mutant killed: R2 uncertain Firecrawl refunded
+mutant killed: R5 malformed admission trusted
+mutant killed: R8 queue row not fenced
+mutant killed: R2 uncertain crawl start refunded (Codex P2)
+mutant killed: adoption: evidence not bound to the task
+mutant killed: adoption: a conflicting run id adopted
+mutant killed: wall clock: deadline extended past 300 s
+mutant killed: smoke planner shown every authorised actor (Codex P1)
+mutant killed: reaper evidence not bound to the task
+mutant killed: reaper charges the flat credit, not the quoted hold
+mutant killed: Brain writer: no lock on the membership (a demotion overtakes the write)
+MUTATION_TALLY shard=2 shards=3 total=91 ran=30

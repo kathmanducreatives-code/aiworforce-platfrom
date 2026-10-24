@@ -1,0 +1,19 @@
+PR heads at 2026-10-24T18:35:51Z:
+#144 e01/receipt-support 385173fe
+#149 fix/worker-ops-hygiene c704f928
+#157 fix/admission-refusal-named 005d508a
+#145 fix/lead-v2-kill-before-checkpoint-resume 37b3b1ac
+#150 p2/adopt-reuse be625f46
+#154 fix/adopt-verified-gate-run 551d84bf
+#158 fix/smoke-credit-reconciliation 84490a2c
+#153 fix/credit-reaper-confirmed-purchase 6223dd5f
+#169 fix/brain-role-aware-writes 833affce
+#171 codex/nosh-phase1-task-lifecycle 0d7cd077
+#172 codex/nosh-phase1-brain-handler-audit 2ffc6b5f
+#173 codex/nosh-phase1-client-contract-gates 70507ba0
+#175 fix/s18a-malformed-dataset-visible dbd73f06
+#177 fix/own01-lead-graph-same-workspace-parents 05e288e1
+#179 fix/legacy-pre-effect-guards c0199569
+#180 fix/lead-search-seller-fallbacks dd7cba84
+#181 fix/hiring-verifier-phase-clock 90bd993f
+#182 docs/test-acceptance-pack 50928cb4

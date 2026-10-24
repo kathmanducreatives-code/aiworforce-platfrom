@@ -1,0 +1,20 @@
+bed1b480 Merge remote-tracking branch 'origin/fix/own01-lead-graph-same-workspace-parents' into HEAD
+b57fa5a6 Merge remote-tracking branch 'origin/fix/legacy-pre-effect-guards' into HEAD
+4cd16b43 Merge remote-tracking branch 'origin/docs/test-acceptance-pack' into HEAD
+2f39f9b0 Merge remote-tracking branch 'origin/fix/lead-search-seller-fallbacks' into HEAD
+aa909ee1 Merge remote-tracking branch 'origin/fix/own01-lead-graph-same-workspace-parents' into HEAD
+529df3be Merge remote-tracking branch 'origin/fix/s18a-malformed-dataset-visible' into HEAD
+780eaf0d Merge remote-tracking branch 'origin/fix/hiring-verifier-phase-clock' into HEAD
+efc95620 Merge remote-tracking branch 'origin/fix/smoke-credit-reconciliation' into HEAD
+2121a8d7 scratch: README rows (fix/adopt-verified-gate-run)
+230d0ac1 Merge remote-tracking branch 'origin/p2/adopt-reuse' into HEAD
+8cd90d56 Merge remote-tracking branch 'origin/fix/lead-v2-kill-before-checkpoint-resume' into HEAD
+72fb9f5e Merge remote-tracking branch 'origin/fix/admission-refusal-named' into HEAD
+e16f9e7b Merge remote-tracking branch 'origin/fix/worker-ops-hygiene' into HEAD
+51f0284f Merge remote-tracking branch 'origin/codex/nosh-phase1-client-contract-gates' into HEAD
+be48308c scratch: resolve mutation.sh (one restore list; keep all proofs)
+537ed83a Merge remote-tracking branches 'origin/fix/credit-reaper-confirmed-purchase' and 'origin/e01/receipt-support' i
+6223dd5f docs(billing): approval package for the two held billing migrations, with a read-only impact query
+61244ea3 chore(test-project): a TEST build with the held billing fixes applies the reaper after the re-arm
+fba05ffb fix(credits): the reaper charges a confirmed purchase what it reserved
+c742af5d fix(credits): the stale reaper charges a confirmed purchase instead of refunding it (held)
