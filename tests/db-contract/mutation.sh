@@ -148,8 +148,8 @@ prove_killed "OWN-01: SET NULL nulls the whole key (workspace_id too)" "$own01_s
   "when 'set null' then format('set null (%I)', r.col)" "when 'set null' then 'set null'" \
   "$own01_tests" "positive controls: own parent, no parent, embed, delete behaviour"
 prove_killed "OWN-01: contacts left out of the reference list" "$own01_sql" \
-  "    ('contacts',              'account_id',        'accounts',        'set null'),
-" "" \
+  '    ["contacts",              "account_id",         "accounts",         "set null"],
+' "" \
   "$own01_tests" "OWN-01: a member cannot store a contact under another workspace's account (raw INSERT)"
 prove_killed "OWN-01: preflight does not abort on an existing mismatch" "$own01_sql" \
   "  if v_report <> '' then" "  if false then" \

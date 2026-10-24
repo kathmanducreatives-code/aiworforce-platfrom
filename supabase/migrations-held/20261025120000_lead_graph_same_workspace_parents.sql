@@ -50,6 +50,7 @@
 do $own01$
 declare
   r record;
+  v_refs jsonb;
   v_bad bigint;
   v_report text := '';
   v_name text;
@@ -59,37 +60,39 @@ begin
     raise exception 'OWN-01 needs PostgreSQL 15+ for ON DELETE SET NULL (column)';
   end if;
 
-  create temporary table own01_refs (child text, col text, parent text, on_delete text) on commit drop;
-  insert into own01_refs values
-    ('contacts',              'account_id',        'accounts',        'set null'),
-    ('engagement_events',     'account_id',        'accounts',        'set null'),
-    ('lead_candidates',       'account_id',        'accounts',        'set null'),
-    ('lead_enrichments',      'account_id',        'accounts',        'set null'),
-    ('lead_evidence',         'account_id',        'accounts',        'set null'),
-    ('outreach_drafts',       'account_id',        'accounts',        'set null'),
-    ('signal_events',         'account_id',        'accounts',        'set null'),
-    ('engagement_events',     'contact_id',        'contacts',        'set null'),
-    ('lead_candidates',       'contact_id',        'contacts',        'set null'),
-    ('lead_enrichments',      'contact_id',        'contacts',        'set null'),
-    ('lead_evidence',         'contact_id',        'contacts',        'set null'),
-    ('outreach_drafts',       'contact_id',        'contacts',        'set null'),
-    ('signal_events',         'contact_id',        'contacts',        'set null'),
-    ('engagement_events',     'lead_candidate_id', 'lead_candidates', 'set null'),
-    ('lead_enrichments',      'lead_candidate_id', 'lead_candidates', 'set null'),
-    ('lead_evidence',         'lead_candidate_id', 'lead_candidates', 'set null'),
-    ('outreach_drafts',       'lead_candidate_id', 'lead_candidates', 'set null'),
-    ('signal_events',         'lead_candidate_id', 'lead_candidates', 'set null'),
-    ('signal_reviews',        'lead_candidate_id', 'lead_candidates', 'cascade'),
-    ('lead_candidates',       'evidence_id',       'lead_evidence',   'set null'),
-    ('engagement_events',     'legacy_signal_id',  'signals',         'set null'),
-    ('lead_candidates',       'signal_id',         'signals',         'set null'),
-    ('lead_evidence',         'legacy_signal_id',  'signals',         'set null'),
-    ('signal_event_evidence', 'legacy_signal_id',  'signals',         'set null'),
-    ('signal_events',         'legacy_signal_id',  'signals',         'set null'),
-    ('signal_reviews',        'signal_id',         'signals',         'cascade');
+  -- The 26 references, as data: no table is created (a temporary table would
+  -- be one more relation for RLS audits to explain).
+  v_refs := '[
+    ["contacts",              "account_id",         "accounts",         "set null"],
+    ["engagement_events",     "account_id",         "accounts",         "set null"],
+    ["lead_candidates",       "account_id",         "accounts",         "set null"],
+    ["lead_enrichments",      "account_id",         "accounts",         "set null"],
+    ["lead_evidence",         "account_id",         "accounts",         "set null"],
+    ["outreach_drafts",       "account_id",         "accounts",         "set null"],
+    ["signal_events",         "account_id",         "accounts",         "set null"],
+    ["engagement_events",     "contact_id",         "contacts",         "set null"],
+    ["lead_candidates",       "contact_id",         "contacts",         "set null"],
+    ["lead_enrichments",      "contact_id",         "contacts",         "set null"],
+    ["lead_evidence",         "contact_id",         "contacts",         "set null"],
+    ["outreach_drafts",       "contact_id",         "contacts",         "set null"],
+    ["signal_events",         "contact_id",         "contacts",         "set null"],
+    ["engagement_events",     "lead_candidate_id",  "lead_candidates",  "set null"],
+    ["lead_enrichments",      "lead_candidate_id",  "lead_candidates",  "set null"],
+    ["lead_evidence",         "lead_candidate_id",  "lead_candidates",  "set null"],
+    ["outreach_drafts",       "lead_candidate_id",  "lead_candidates",  "set null"],
+    ["signal_events",         "lead_candidate_id",  "lead_candidates",  "set null"],
+    ["signal_reviews",        "lead_candidate_id",  "lead_candidates",  "cascade"],
+    ["lead_candidates",       "evidence_id",        "lead_evidence",    "set null"],
+    ["engagement_events",     "legacy_signal_id",   "signals",          "set null"],
+    ["lead_candidates",       "signal_id",          "signals",          "set null"],
+    ["lead_evidence",         "legacy_signal_id",   "signals",          "set null"],
+    ["signal_event_evidence", "legacy_signal_id",   "signals",          "set null"],
+    ["signal_events",         "legacy_signal_id",   "signals",          "set null"],
+    ["signal_reviews",        "signal_id",          "signals",          "cascade"]
+  ]'::jsonb;
 
   -- 1. PREFLIGHT. Abort on any existing mismatch: never reassign a parent.
-  for r in select * from own01_refs loop
+  for r in select x->>0 as child, x->>1 as col, x->>2 as parent, x->>3 as on_delete from jsonb_array_elements(v_refs) x loop
     execute format(
       'select count(*) from public.%I c join public.%I p on p.id = c.%I where c.workspace_id is distinct from p.workspace_id',
       r.child, r.parent, r.col) into v_bad;
@@ -102,7 +105,7 @@ begin
   end if;
 
   -- 2. Every parent is addressable by (workspace_id, id).
-  for r in select distinct parent from own01_refs loop
+  for r in select distinct x->>2 as parent from jsonb_array_elements(v_refs) x loop
     if not exists (select 1 from pg_constraint
                    where conrelid = format('public.%I', r.parent)::regclass
                      and conname = r.parent || '_workspace_id_id_key') then
@@ -112,7 +115,7 @@ begin
   end loop;
 
   -- 3. Replace each ID-only reference with the composite one, under its own name.
-  for r in select * from own01_refs loop
+  for r in select x->>0 as child, x->>1 as col, x->>2 as parent, x->>3 as on_delete from jsonb_array_elements(v_refs) x loop
     select attnum into v_child_att from pg_attribute
       where attrelid = format('public.%I', r.child)::regclass and attname = r.col and not attisdropped;
     select conname into v_name from pg_constraint
