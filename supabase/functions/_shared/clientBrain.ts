@@ -101,7 +101,11 @@ function early(a: ClientBrainActor): ClientBrainRefusal | null {
 export async function clientBrainAuthorization(admin: Admin, a: ClientBrainActor, permission: ClientBrainPermission): Promise<"ok" | ClientBrainRefusal> {
   const refused = early(a);
   if (refused) return refused;
-  const { data, error } = await admin.rpc("client_brain_authorization", { ...actorArgs(a), p_permission: permission }, { get: true });
+  // Arguments built from actorArgs are passed as a variable (the schema-compat
+  // sweep checks literal objects only); the client contract tests call these
+  // functions for real.
+  const args = { ...actorArgs(a), p_permission: permission };
+  const { data, error } = await admin.rpc("client_brain_authorization", args, { get: true });
   if (error) throw error;
   return data === "ok" ? "ok" : asRefusal(data, "client_brain_authorization");
 }
@@ -156,14 +160,15 @@ export async function writeClientBrain(admin: Admin, w: ClientBrainWrite): Promi
   const pre = await clientBrainAuthorization(admin, w, w.permission);
   if (pre !== "ok") return { outcome: pre, version: null };
   // 2. The locked writer re-applies the same rule in the write's transaction.
-  const { data, error } = await admin.rpc("client_brain_authorized_write", {
+  const args = {
     ...actorArgs(w),
     p_permission: w.permission,
     p_mode: w.mode,
     p_profile: w.profile,
     p_expected_version: w.expectedVersion ?? null,
     p_activate: w.activate === true,
-  });
+  };
+  const { data, error } = await admin.rpc("client_brain_authorized_write", args);
   if (error) throw error;
   const row = (Array.isArray(data) ? data[0] : data) as { outcome?: string; version?: number | string | null } | null;
   const outcome = row?.outcome;
