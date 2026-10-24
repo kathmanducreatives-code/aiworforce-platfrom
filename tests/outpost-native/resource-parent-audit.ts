@@ -13,8 +13,13 @@ import {
 import { api } from "./fixture.ts";
 import { authUrl, login } from "./lib/auth.ts";
 import { invoke, registrationDeps } from "./lib/taskRegistration.ts";
+import { nativeEffectFence } from "./lib/nativeEffectFence.ts";
+const originalFetch = globalThis.fetch;
+let effects: ReturnType<typeof nativeEffectFence> | undefined;
 try {
   const { x, session } = await login();
+  effects = nativeEffectFence([REST_URL, authUrl], originalFetch);
+  globalThis.fetch = effects.fetch;
   const ownAccount = uuid(), foreignAccount = uuid();
   await sql`insert into public.accounts(id,workspace_id,name,domain) values
     (${ownAccount},${x.a},'Synthetic overlap','shared.synthetic.example'),
@@ -126,7 +131,19 @@ try {
     });
   }
   const wrong = traces.find((r) => r.scenario === "foreign_parent")!;
+  const events = effects.snapshot();
+  assertEquals(
+    events.filter((e) => e.kind !== "local_request").length,
+    0,
+    "no blocked external, cancelled or late attempt may be hidden",
+  );
+  assert(events.length >= 5, "actual native/Auth requests must be observed");
   const report = {
+    network_effects: {
+      local_requests: events.length,
+      external_attempts: 0,
+      events,
+    },
     foreign_parent_visible: false,
     auth_requests: authRequests,
     traces,
@@ -143,5 +160,10 @@ try {
   console.log("RESOURCE_PARENT_JSON_END");
   Deno.exitCode = report.raw_parent_integrity === "FAIL" ? 1 : 0;
 } finally {
-  await closeHarness();
+  effects?.close();
+  try {
+    await closeHarness();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }

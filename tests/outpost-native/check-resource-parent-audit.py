@@ -7,6 +7,10 @@ raw=Path(sys.argv[1]).read_text()
 start=raw.index("RESOURCE_PARENT_JSON_BEGIN")+len("RESOURCE_PARENT_JSON_BEGIN")
 end=raw.index("RESOURCE_PARENT_JSON_END",start)
 r=json.loads(raw[start:end])
+assert r["network_effects"]["local_requests"]>=5
+assert r["network_effects"]["external_attempts"]==0
+assert len(r["network_effects"]["events"])==r["network_effects"]["local_requests"]
+assert all(e["kind"]=="local_request" for e in r["network_effects"]["events"])
 assert r["foreign_parent_visible"] is False and r["auth_requests"]==2
 assert len(r["traces"])==2
 own,foreign=r["traces"]

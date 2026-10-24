@@ -938,3 +938,29 @@ rewrite. No shared schema change before owner contract/overlap agreement.
 Full receipts, exact commands, scope limits and owner next actions:
 [CLIENT_BOUNDARY_GATES.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/CLIENT_BOUNDARY_GATES.md).
 Phase2 unstarted, P1–P8 disabled, A7 NO-GO; no hosted/paid/customer effects.
+
+## Phase 1 acceptance preparation on #173 (2026-10-24)
+
+Owner refresh still shows #16960be0471 and #150be625f46; no new implementation
+or final A7 contract is delivered. Existing #171/#172 preserved. Do not repeatedly
+re-investigate unchanged AUTH-06/OWN-01. Owner-specific delivery checklists request
+exact SHAs, native migration requirements, API/lock contracts and acceptance:
+[Brain](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6385018708),
+[Backend](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/150#issuecomment-6385018852).
+
+Independent test tooling on existing #173 now records protected external attempts,
+blocks unknown/nonlocal/other-port HTTP, prohibits redirects, records swallowed
+errors, aborts pending HTTP and denies late requests. No application permission,
+model/provider routing or ledger authority is added. Eight conformance tests pass;
+infra211/0; actual native Auth/REST/P1 path observes5 allowed local requests and
+zero external/late/invalid attempts. OWN-01 remains rawFAIL/P1-denialPASS.
+
+The complete per-invariant native execution matrix and incoming-patch order are
+[INTEGRATION_ACCEPTANCE.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/INTEGRATION_ACCEPTANCE.md).
+It distinguishes entry-time denial from authorization lost in flight, preserves
+already-started authorized accounting, requires positive controls and both revoke/
+write linearizations, and keeps same-workspace/client/grant/legacy tests BLOCKED
+until actual owner APIs arrive. These are planned tests, not synthetic successes.
+Phase1 FAIL; Phase2 unstarted; all pilot flags off; A7 NO-GO. No shared schema or
+implementation changes, new PR, hosted effects, paid calls, customer operations,
+merge or deploy.

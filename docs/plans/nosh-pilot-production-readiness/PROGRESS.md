@@ -2,7 +2,7 @@
 
 **Customer pilot readiness: FAIL. P1–P8 disabled. A7 NO-GO.**
 
-Last audit: 2026-10-23 Asia/Kathmandu; Phase 1 approved in user message following #152.
+Last continuation: 2026-10-24 Asia/Kathmandu; Phase 1 approved in user message following #152.
 Readiness remains FAIL; owned access and native task protections are implemented below.
 Exact Brain #169/#170 raw-table composition passes; actual Brain save handlers
 have confirmed in-flight authorization failures (AUTH-06). Client-grant/lifecycle contracts remain required.
@@ -427,3 +427,46 @@ before the new audits. Consume the complete log without grep-q; both original
 security failure assertions preserved. Targeted real P1 omission proof passes and
 restores the source file. Final-head publication receipt records the rerun; no
 runtime/security/budget changes and no historical failure relabeled green.
+
+## Phase 1 acceptance preparation — #173 continuation (2026-10-24)
+
+Continue on existing #173 `codex/nosh-phase1-client-contract-gates`, base head
+6e854c9d, rather than opening another PR. Owner heads unchanged; no fix arrived.
+Read current #169–#173 receipts and sent actionable owner checklists:
+[Brain](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6385018708),
+[Backend](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/150#issuecomment-6385018852).
+Brain owns all in-flight writer mutations plus final A7/canonical schema/API;
+Backend owns/assigns OWN-01 constraint and all legacy pre-effect/lifecycle delivery.
+Exact patch SHAs, migration requirements and compatibility controls requested.
+
+**Completed independently:** test-only native effect fence and conformance tests;
+real resource-parent/P1 path now records actual Auth/REST request effects and
+fails if an external/late/invalid attempt is hidden. Approved origins only,
+redirect refusal, cancellation/late-request handling, immutable/redacted evidence.
+This does not authorize a request, simulate a successful model, alter budgeting
+or prove every legacy route safe. Actual writer/ledger/queue assertions remain
+separate and required.
+
+**Results:** fence8/0; full infra211/0; new types/lint PASS. Native real GoTrue/
+PostgREST/PG/P1 instrumented path observes5 local requests,0 external attempts;
+valid parent persists/prepares; OWN-01 bad parent raw201 persists but P1 refuses404
+with no signature/binding. Native command exits1 for the known integrity defect,
+its evidence check passes. `effect-fence-native.json` preserves the complete trace.
+No manual rerun of unchanged Brain23; publication CI retains existing regression
+checks. Exact final-head CI is recorded in #173's publication receipt.
+
+**Prepared acceptance:**
+[INTEGRATION_ACCEPTANCE.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/INTEGRATION_ACCEPTANCE.md)
+covers workspace/client ownership, grants/regrant, client Brain, removal/demotion/
+logout in flight, original session/task lifecycle, legacy/direct/worker effects,
+retry/resume and concurrent lock ordering. It identifies actual executable suites,
+blocked APIs, deterministic barriers, positive controls and exact state/effect
+assertions; no fake canonical tables or model/provider functionality.
+
+**Still required:** delivered Brain fix→same23/0; final A7+canonical tables/API→
+actual same-workspace client/grant/Brain matrix and owned bridge/descendants;
+Backend OWN-01 and pre-effect/lifecycle patch→all entry/effect and retry proofs;
+one combined candidate→all mandatory native acceptance. Phase1 FAIL, Phase2
+unstarted, P1–P8 disabled, A7 NO-GO. No owner implementation edits or hosted/paid/
+customer/merge/deploy effects. Verification readiness improved; no security
+blocker is marked closed by this tooling alone.
