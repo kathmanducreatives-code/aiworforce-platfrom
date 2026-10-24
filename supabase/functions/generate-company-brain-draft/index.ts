@@ -25,6 +25,7 @@ import type { FirecrawlPage, ResearchDeps, ResearchSourceType, ResearchProvider 
 import { brainPermissionForAction, canBrain, normalizeWorkspaceRole } from "../_shared/brainRole.ts";
 import { authorizedBrainWrite, brainWriteRefusal, sessionIdFromBearer } from "../_shared/brainWriter.ts";
 import { applyBrainSave, type CompanyBrainV2Patch } from "../_shared/companyBrainV2Save.ts";
+import { parseSetupProgress, withSetupProgress, withoutSetupProgress } from "../_shared/onboardingProgress.ts";
 import { resolveCanonicalSellerIdentity } from "../_shared/workbench/sellerIdentity.ts";
 import {
   classifyWebsiteSourceRole,
@@ -449,11 +450,37 @@ Deno.serve(async (req) => {
     if (action === "save_draft" || action === "activate") {
       const patch = (body.patch ?? {}) as CompanyBrainV2Patch;
 
+      // Phase 2 autosave: a save that carries `setup` (onboarding progress) is
+      // VERSIONED. It names the version it builds on and lands only if that is
+      // still the stored version, so two tabs or devices never overwrite each
+      // other. A save without `setup` behaves exactly as before.
+      const setup = body.setup === undefined ? null : parseSetupProgress(body.setup);
+      if (setup && !setup.ok) return json({ ok: false, rejected_reason: "invalid_setup", detail: setup.reason }, 400);
+
       // Load existing profile AND its version for the origin-aware save boundary.
       const { data: existingRow } = await admin
         .from("company_brain").select("profile, updated_at").eq("workspace_id", workspace_id).maybeSingle();
       const existing = (existingRow?.profile as AnyObj) ?? {};
       const currentUpdatedAt = (existingRow as { updated_at?: string } | null)?.updated_at ?? null;
+      const expectedUpdatedAt = typeof body.expected_updated_at === "string" ? body.expected_updated_at : null;
+      if (setup && expectedUpdatedAt !== currentUpdatedAt) {
+        // The client merges field by field against this copy and retries.
+        return json({ ok: false, rejected_reason: "stale", current_updated_at: currentUpdatedAt, profile: existing }, 409);
+      }
+      // Versioned writes replace only the version read; everything else keeps
+      // the upsert. Either way it is the AUTH-06 authorized writer, which
+      // re-checks the caller's session, membership and role in the write's
+      // own transaction.
+      const writeBrain = (permission: "edit" | "activate", profile: AnyObj, activate = false) => {
+        const versioned = setup !== null && currentUpdatedAt !== null;
+        return authorizedBrainWrite(admin, {
+          workspaceId: workspace_id, actorId: userId, sessionId, permission,
+          mode: versioned ? "cas" : "upsert", profile,
+          expectedUpdatedAt: versioned ? currentUpdatedAt : null, activate,
+        });
+      };
+      const staleDuringSave = () =>
+        json({ ok: false, rejected_reason: "stale", detail: "changed during save", current_updated_at: null }, 409);
 
       // THE save boundary. A save with no declared origin is treated as an
       // automated refresh (fill-empty only) — a generic save_draft can never
@@ -486,18 +513,17 @@ Deno.serve(async (req) => {
       }
 
       const result = applyBrainSave(existing, saveDecision.safe_patch as CompanyBrainV2Patch, { activate: action === "activate" });
+      if (setup) result.profile = withSetupProgress(result.profile, setup, new Date().toISOString());
 
       if (action === "activate" && !result.onboarding_completed) {
         // Refuse to mark a half-built Brain as ready — but keep the draft saved,
         // and hand back editable ai_inference suggestions for every missing slot
         // so the user confirms instead of inventing fields from scratch.
-        const blocked = await authorizedBrainWrite(admin, {
-          workspaceId: workspace_id, actorId: userId, sessionId, permission: "activate",
-          mode: "upsert", profile: result.profile,
-        });
-        if (blocked.outcome !== "ok" && blocked.outcome !== "stale") { const r = brainWriteRefusal(blocked.outcome); return json(r.body, r.status); }
+        const blockedWrite = await writeBrain("activate", result.profile);
+        if (blockedWrite.outcome === "stale") return staleDuringSave();
+        if (blockedWrite.outcome !== "ok") { const r = brainWriteRefusal(blockedWrite.outcome); return json(r.body, r.status); }
         return json({
-          ok: false, activated: false, blocked_reasons: result.blocked_reasons,
+          ok: false, activated: false, blocked_reasons: result.blocked_reasons, updated_at: blockedWrite.updated_at,
           completeness: result.completeness, profile: result.profile,
           suggested_fixes: buildActivationSuggestions(result.normalized, result.completeness),
           effective_origin: saveDecision.effective_origin,
@@ -509,14 +535,13 @@ Deno.serve(async (req) => {
       // NOTE: `signal_preferences` is NOT a column on `company_brain` — it lives
       // inside `profile` (applyBrainSave puts it there on activation, which is
       // where Radar reads it). Only real columns may appear on this row.
+      // Activation ends onboarding: its progress record is no longer needed.
+      if (result.onboarding_completed) result.profile = withoutSetupProgress(result.profile);
       // Activation sets onboarding_completed / onboarding_completed_at in the same
       // authorized write (owner/admin only); a draft save needs edit.
-      const saved = await authorizedBrainWrite(admin, {
-        workspaceId: workspace_id, actorId: userId, sessionId,
-        permission: action === "activate" ? "activate" : "edit",
-        mode: "upsert", profile: result.profile, activate: result.onboarding_completed === true,
-      });
-      if (saved.outcome !== "ok" && saved.outcome !== "stale") { const r = brainWriteRefusal(saved.outcome); return json(r.body, r.status); }
+      const saved = await writeBrain(action === "activate" ? "activate" : "edit", result.profile, result.onboarding_completed === true);
+      if (saved.outcome === "stale") return staleDuringSave();
+      if (saved.outcome !== "ok") { const r = brainWriteRefusal(saved.outcome); return json(r.body, r.status); }
 
       if (result.onboarding_completed) {
         admin.from("activity_feed").insert({
@@ -528,7 +553,7 @@ Deno.serve(async (req) => {
       }
 
       return json({
-        ok: true, activated: result.onboarding_completed,
+        ok: true, activated: result.onboarding_completed, updated_at: saved.updated_at,
         completeness: result.completeness, profile: result.profile,
         effective_origin: saveDecision.effective_origin,
         applied_paths: saveDecision.applied_paths,
