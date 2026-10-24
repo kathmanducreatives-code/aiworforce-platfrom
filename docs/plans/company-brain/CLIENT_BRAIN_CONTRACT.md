@@ -1,165 +1,170 @@
 # Canonical client, grant and client-Brain contract (Company Brain Phase 3c)
 
-**Status: PROPOSAL for approval. Not implemented, no migration exists.**
+**Status: v2 PROPOSAL for approval.** A held implementation exists for review (`feat/client-brain-3c`, `supabase/migrations-held/`). It is not in `supabase/migrations/`, not applied anywhere hosted and not called by any deployed handler.
 
-- **Agreed:** A1–A6 were agreed by Codex (#166).
-- **This document:** delivers the A7 amendment Codex asked for (grant generations, permission-reduction visibility, lock order) and the exact schema/API, so the Codex pilot FK successor and Backend descendant work can be built against one contract.
+- **Agreed:** A1–A6 by Codex (#166).
+- **v1 → v2:** incorporates Codex's independent review of v1 (#174, comment 6385838606):
+  - O1 and O2 are resolved with Codex's conservative rules, which Brain accepts;
+  - the lock and outcome details the implementation pinned down;
+  - the §6 evidence clarification.
+- **Still open:**
+  - O3 (Backend);
+  - O4 (Backend + Codex, new);
+  - owner approval of the whole contract.
 - **Owner decisions in force:**
-  - P3-D1: roles are owner/admin/editor/viewer.
-  - P3-D2: dedicated client tables.
+  - P3-D1: roles are owner/admin/editor/viewer;
+  - P3-D2: dedicated client tables;
   - P3-D3: an explicit client grant for **every** role, owner and admin included.
 
-## 1. Responsibility boundaries
+## 1. Responsibility boundaries (accepted by Codex)
 
 | Area | Owner | Not owned (must not be duplicated) |
 |---|---|---|
-| `public.client_accounts`, `public.client_access_grants`, `public.client_company_brain`, their RLS, grant/archive writer functions, `client_brain_*` read/write API, the AUTH-06 writer pattern | **Company Brain** | n/a |
-| `outpost_private.clients` → `client_accounts` composite FK successor, pilot adapters, same-workspace A/B native tests, one-client uniqueness until then | **Codex** | Brain does not edit pilot schema |
-| Descendant parent integrity (OWN-01: `contacts.account_id` → `accounts` across workspaces), `client_id` on descendants, legacy/service pre-effect guards, executable task lifecycle | **Backend** (+ Codex for native acceptance) | Brain does not edit contacts/accounts or executors |
+| `client_accounts`, `client_access_grants`, `client_company_brain`, their RLS, the grant hooks on `workspace_members`, grant/archive writers, the `client_brain_*` API, the AUTH-06 writer pattern | **Company Brain** | n/a |
+| `outpost_private.clients` → `client_accounts` composite FK successor, pilot adapters, independent native acceptance | **Codex** | Brain does not edit pilot schema |
+| OWN-01 descendant parent integrity, `client_id` on descendants, legacy/service pre-effect guards, the executable task lifecycle and how tasks consume pins, the membership removal/role writer routes | **Backend** (+ Codex for native acceptance) | Brain does not edit contacts/accounts, executors or member routes |
 
-## 2. Schema (exact; one held migration once approved)
+## 2. Schema
 
-```sql
--- A1: the one canonical client parent.
-create table public.client_accounts (
-  id            uuid primary key default gen_random_uuid(),
-  workspace_id  uuid not null references public.workspaces(id) on delete restrict,
-  name          text not null check (length(btrim(name)) between 1 and 200),
-  status        text not null default 'active' check (status in ('active', 'archived')),
-  created_by    uuid not null references auth.users(id),
-  created_at    timestamptz not null default now(),
-  archived_at   timestamptz,
-  archived_by   uuid references auth.users(id),
-  unique (workspace_id, id),                                   -- composite parent key for every child
-  check ((status = 'archived') = (archived_at is not null))    -- consistent archive timestamp
-);
--- Immutable identity: a trigger refuses any UPDATE of id/workspace_id/created_*,
--- and archived → active (archive is terminal; a new client is a new row).
+The exact DDL is `supabase/migrations-held/20261024160000_client_company_brain.sql`. Its essentials:
 
--- A3/A7: grants are append-only generations.
-create table public.client_access_grants (
-  id            uuid primary key default gen_random_uuid(),    -- stable grant identity
-  workspace_id  uuid not null,
-  client_id     uuid not null,
-  user_id       uuid not null references auth.users(id),
-  generation    integer not null check (generation >= 1),      -- 1, 2, 3 … per (client, user)
-  granted_by    uuid not null references auth.users(id),       -- the authenticated principal, never request data
-  granted_at    timestamptz not null default now(),
-  revoked_at    timestamptz,
-  revoked_by    uuid references auth.users(id),
-  revoke_reason text check (revoke_reason in ('revoked', 'membership_removed', 'client_archived')),
-  foreign key (workspace_id, client_id) references public.client_accounts (workspace_id, id) on delete restrict,
-  unique (workspace_id, client_id, user_id, generation),
-  check ((revoked_at is null) = (revoked_by is null and revoke_reason is null))
-);
-create unique index client_access_grants_one_active
-  on public.client_access_grants (workspace_id, client_id, user_id) where revoked_at is null;
--- Terminal revocation: a trigger refuses clearing revoked_at, changing it once
--- set, or changing any identity column. Re-grant = INSERT generation max+1;
--- an old generation can never be revived.
+**`client_accounts`**
+- Columns: `id`, `workspace_id → workspaces (restrict)`, `name` (1–200), `status` (`active` | `archived`), `created_by`, `archived_at`, `archived_by`.
+- `unique (workspace_id, id)`: the composite parent key for every child.
+- **Immutable identity:** a trigger refuses changes to `id`, `workspace_id`, `created_*`.
+- **Terminal archive:** `archived → active` is refused.
 
--- Permission-reduction visibility (A7): a monotonic revision on the membership.
-alter table public.workspace_members add column permission_revision bigint not null default 1;
--- Trigger: any UPDATE that changes role increments permission_revision.
--- DELETE needs no revision: the row's absence is the signal.
+**`client_access_grants`**
+- Append-only generations: `(workspace_id, client_id, user_id, generation)` unique, plus a unique partial index allowing one active row per (client, user).
+- Composite FK to `client_accounts`.
+- **No FK to the membership:** the history must outlive a removal.
+- A trigger refuses DELETE, any identity change, and any change after revocation; the only permitted update is active → revoked.
+- `revoke_reason` is one of `revoked` | `membership_removed` | `client_archived`.
+- `revoked_by` is required for `revoked`, and null when a membership removal has no actor (v2 change).
 
--- A5: the client's Company Brain (the agency Brain stays in company_brain).
-create table public.client_company_brain (
-  workspace_id            uuid not null,
-  client_id               uuid not null,
-  profile                 jsonb not null default '{}'::jsonb,
-  version                 bigint not null default 1,          -- every successful write +1 (incl. approval/activation)
-  updated_at              timestamptz not null default now(),
-  updated_by              uuid references auth.users(id),
-  onboarding_completed    boolean not null default false,
-  onboarding_completed_at timestamptz,
-  primary key (workspace_id, client_id),
-  foreign key (workspace_id, client_id) references public.client_accounts (workspace_id, id) on delete restrict
-);
-```
+**`workspace_members.permission_revision`** (Codex O2)
+- Values come from **one global sequence**. A trigger assigns a fresh value on every INSERT and every role change.
+- A trigger also blocks setting it by hand and blocks changing a membership's `id`/`workspace_id`/`user_id`.
+- Because the sequence never repeats, a remove → rejoin can never present an old revision, even though the row is new. This is the "durable membership incarnation" Codex asked for, without a second column.
 
-**RLS and grants:**
+**`client_company_brain`**
+- Columns: `(workspace_id, client_id)` PK with a composite FK, `profile`, `version` bigint (+1 on every write), `updated_by`, onboarding columns.
+- The agency Brain stays in `company_brain` and no client code touches it.
+
+**RLS and privileges**
 - RLS is on for all three tables.
-- **No browser INSERT/UPDATE/DELETE/TRUNCATE**, the same as `company_brain` after #169.
-- Browser SELECT:
-  - `client_accounts`: members see client ids and names (open question O1);
-  - `client_access_grants`: your own rows, plus all rows for owner/admin;
-  - `client_company_brain`: only via the role ∧ active-grant rule (§4).
-- Every write goes through the SECURITY DEFINER functions in §3 (fixed `search_path`, EXECUTE for `service_role` only).
+- No INSERT/UPDATE/DELETE/TRUNCATE for `anon`, `authenticated`, **or `service_role`**. Every write is a SECURITY DEFINER function (v2: service code cannot bypass the writers either).
+- Browser SELECT (O1, Codex's rule):
+  - `client_accounts`: only the active clients the member currently holds an active grant for. **No enumeration of ungranted clients by ordinary members.**
+  - `client_access_grants`: your own rows, while you are a member.
+  - `client_company_brain`: **none** (v2). Client Brains are read only through `client_brain_read`.
 
-## 3. Writer functions (all re-authorize in their own transaction, as AUTH-06)
+## 3. Functions (all `security definer`, `search_path = ''`, EXECUTE for `service_role` only)
 
-| Function | Who | Effect |
+| Function | Who | Effect / outcomes |
 |---|---|---|
-| `client_account_create(ws, actor, session, name)` | owner/admin | inserts an active client |
-| `client_account_archive(ws, client, actor, session)` | owner/admin | archives the client **and** revokes every active grant (`client_archived`) in the same transaction |
-| `client_access_grant(ws, client, target_user, actor, session)` | owner/admin; self-grant allowed and audited (A4) | the target must be a current same-workspace member and the client active; inserts generation max+1; `granted_by = actor` |
-| `client_access_revoke(ws, client, target_user, actor, session)` | owner/admin | sets `revoked_at` on the active generation (terminal) |
-| `workspace_member_remove(...)` / role change | the existing membership owner path | also revokes that user's active grants (`membership_removed`), in the same transaction; a role change bumps `permission_revision` (trigger) |
-| `client_brain_authorized_write(ws, client, actor, session, intent, permission, mode, profile, expected_version, pinned_grant_id?, pinned_generation?, pinned_revision?)` | role ∧ active grant | CAS on `version`; returns `ok` / `session_invalid` / `not_member` / `forbidden_role` / `no_grant` / `client_archived` / `grant_changed` / `permission_changed` / `stale` / `client_context_required` |
-| `client_brain_read(ws, client, actor, session, intent)` | role ∧ active grant | the profile and version; no fallback |
+| `client_brain_authorization(ws, client, actor, session, permission, intent, pins…)` STABLE | n/a | THE rule. Used as a GET pre-check, and re-run by the writer after its locks |
+| `client_brain_read(ws, client, actor, session, intent, pins…)` STABLE | read permission ∧ grant | One statement, one snapshot. A granted client with no Brain yet returns `ok` + null profile (never the agency's) |
+| `client_brain_pin(ws, client, actor, session, permission)` STABLE | as read | Returns `(grant_id, generation, permission_revision)` for a task to record |
+| `client_brain_authorized_write(ws, client, actor, session, permission, intent, mode, profile, expected_version, activate, pins…)` | edit: owner/admin/editor ∧ grant; activate: owner/admin ∧ grant | Locks 1→4, re-applies the rule, then `cas` on `version` or `insert`. No blind upsert. A concurrent edit is `stale` |
+| `client_account_create(ws, actor, session, name)` | owner/admin | Does **not** grant the creator (P3-D3) |
+| `client_account_archive(ws, client, actor, session)` | owner/admin | Archives and revokes every active grant (`client_archived`) in one transaction |
+| `client_access_grant(ws, client, target, actor, session)` | owner/admin. Self-grant is allowed, recorded with `granted_by = actor` (A4) | The target must be a current member, the client active. Inserts generation max+1, or returns `already_granted` |
+| `client_access_revoke(ws, client, target, actor, session)` | owner/admin | Terminal revoke of the active generation, or `not_granted` |
+| `client_account_manage_list(ws, actor, session)` STABLE | owner/admin | The **management listing** (O1): names, status and active-grant counts. Never a switcher, never data access |
+| `client_accounts_for_actor(ws, actor, session)` STABLE | any member | The **switcher**: only the actor's actively granted, active clients |
+
+**Membership hook (O3, see §7):** a trigger `AFTER DELETE ON workspace_members` terminally revokes that user's active grants (`membership_removed`) in the deleting transaction. It fires for **any** writer: a future member-remove route, a service path, direct SQL, a workspace cascade.
+
+**Refusal outcomes:** `session_invalid`, `not_member`, `forbidden_role`, `no_grant`, `client_archived`, `grant_changed`, `permission_changed`, `client_context_required`.
+- **No existence oracle (O1):** an unknown client, a client of another workspace, and a client the actor was never granted all return `no_grant`. `client_archived` is reported only to an actor who held a grant on that client.
+- **Interactive vs task (O2):**
+  - `intent = 'interactive'`: a user's own request; pins must be absent.
+  - `intent = 'task'`: **must** pass all three pins. A missing pin is an error, so a task consumer cannot omit them.
+  - A task is refused with `grant_changed` if its pinned grant is not the active one: revoked, or revoked then regranted.
+  - It is refused with `permission_changed` if the revision moved: any role change (demote → promote included), or a remove → rejoin.
 
 ## 4. Authorization rule and invariants
 
-**Effective right on client C** = a live session ∧ a current membership with a sufficient role ∧ client C active ∧ an active grant for (C, actor). Read: any role with a grant. Edit: owner/admin/editor with a grant. Activate: owner/admin with a grant.
+**Effective right on client C** = a live session ∧ a current membership with a sufficient role ∧ client C active ∧ an active grant for (C, actor). For a task, the pinned grant id + generation + permission revision must also be unchanged.
+- **Read:** any member role with a grant.
+- **Edit:** owner/admin/editor with a grant.
+- **Activate:** owner/admin with a grant.
 
-| # | Invariant |
-|---|---|
-| I1 | No fallback. `intent = 'client_task'` with a null `client_id` → `client_context_required`; never agency scope, the first or latest client, or membership order. |
-| I2 | The agency Brain (`company_brain`) is never returned for a client scope, and a client Brain never for an agency scope. |
-| I3 | Owner/admin get **no** implicit client data access (P3-D3); managing clients and grants is separate from reading them. |
-| I4 | Revocation is terminal per generation; re-grant creates a new generation; a consumer pinned to `(grant_id, generation)` is refused after revoke even if a newer generation exists (`grant_changed`). |
-| I5 | Permission reductions are observable: a consumer pinning `permission_revision` is refused if the revision moved (`permission_changed`); membership deletion → `not_member`. |
-| I6 | A pinned Brain `version` is **content**, never authorization (Codex A5); authorization is re-evaluated live at every read and at commit. |
-| I7 | Client archive denies all access immediately and revokes all its grants atomically. |
-| I8 | Every check runs in the writer's transaction under the lock order in §5; model/external work stays outside and is re-authorized at commit. |
-| I9 | Browser roles can neither write these tables nor call the writer functions. |
+| # | Invariant | Proven by (`tests/db-contract/clientCompanyBrain.contract.test.ts`) |
+|---|---|---|
+| I1 | No fallback: a null client gives `client_context_required`, never agency scope or a first/latest client | test 8; mutation proof |
+| I2 | The agency Brain is never returned or written for a client scope, nor a client Brain for the agency scope | test 10; source pin |
+| I3 | Owner/admin get no implicit client data access; management is separate | test 3 |
+| I4 | Revocation is terminal; a regrant is a new generation; an old pin is refused after regrant | test 5; mutation proof |
+| I5 | Permission reductions are observable through `permission_revision`; a removal revokes grants atomically | tests 6, 6b; mutation proofs |
+| I6 | `version` is content, never authorization | tests 9, 11 |
+| I7 | Archive denies everything immediately and revokes all its grants atomically | test 7; mutation proof |
+| I8 | Every check runs in the writer's transaction under the §5 lock order; model/external work stays outside and is re-authorized at commit | race tests 4, 6, 6b, 6c, 7; mutation proofs |
+| I9 | Browser roles, and the service role directly, cannot write these tables; browsers cannot call the functions | test 12 |
 
-## 5. Lock order (A7, one global order)
+## 5. Lock order
 
-Every consumer that needs a consistent decision takes these locks **in this order**, skipping the levels it doesn't use; every revocation writer locks only levels at or below its own:
+Consumers take these locks **in this order**, skipping levels they don't use, and never lock a lower level after a higher one:
 
 1. `auth.sessions` row: consumers FOR SHARE; GoTrue logout deletes.
-2. `public.workspace_members` row: consumers FOR SHARE; removal or role change takes the row lock.
-3. `public.client_accounts` row: consumers FOR SHARE; archive FOR UPDATE.
-4. `public.client_access_grants` active row: consumers FOR SHARE; revoke FOR UPDATE.
-5. The target data row, e.g. `client_company_brain`: FOR UPDATE / CAS.
+2. `workspace_members` row(s): consumers FOR SHARE.
+   - Grant/revoke lock the **actor and target** rows FOR NO KEY UPDATE, **in `user_id` order, in one statement**. Locking the target's row serializes generation allocation even when no grant row exists yet, and waits for any in-flight Brain write by that user. There is no share → update upgrade.
+   - Removal or role change takes the row lock.
+3. `client_accounts` row: consumers FOR SHARE; archive FOR UPDATE.
+4. `client_access_grants` active row: consumers FOR SHARE; revoke FOR UPDATE; the removal hook and archive update.
+5. `client_company_brain` row: CAS / insert.
 
-**No deadlock:**
-- Membership removal locks 2 then 4.
-- Archive locks 3 then 4.
-- Revoke locks 4.
-- Every chain follows the same direction, and none locks a lower number after a higher one.
+**Chains:**
+- Removal: 2 → 4.
+- Archive: 3 → 4.
+- Grant/revoke: 2 → 3 → 4.
+- Client Brain write: 1 → 2 → 3 → 4 → 5.
+- AUTH-06 agency write: 1 → 2 → `company_brain`.
 
-This is the pattern AUTH-06 already uses (levels 1, 2, 5) and has proven with held-revocation races.
+**Scope of the deadlock claim:** it covers only the Brain-owned writers above.
+- A native test drives grant, revoke, archive, removal and writes concurrently on overlapping rows, and finds no deadlock and no failed writer. That is evidence, not a proof of universal deadlock freedom.
+- The client and grant locks back each other up against archive (archive also revokes every grant row). The mutation proof therefore removes them together.
+- Codex's held pilot #171 registration locks task → enrollment → membership → session. That is not yet this order. Codex will align its successor once the shared writers are final.
 
-## 6. Acceptance (red before green, native)
+## 6. Acceptance and evidence
 
-**Two clients A and B in one agency workspace**, with different Brains and overlapping external ids.
+- **Native scenarios (all in the held test file, all passing):**
+  - two clients A and B in one workspace, with overlapping external ids;
+  - a user granted only A;
+  - owner/admin without grants, and an audited self-grant;
+  - revoke in flight; revoke → regrant (old pin refused); demote in flight; demote → promote (old pin refused); removal in flight with grants revoked; remove → rejoin → regrant (old pins refused); logout in flight; archive in flight;
+  - a missing client;
+  - cross-client and cross-workspace ids;
+  - agency vs client isolation, including agent context;
+  - two-writer CAS;
+  - no browser or direct service writes;
+  - concurrent grant serialization and mixed-traffic deadlock freedom.
+- **Mutation proofs:** 12 — every lock, rule and hook the races rely on.
+- **Held-revocation races:** the writer is **observed waiting on a lock in `pg_stat_activity`** (bounded deadline, a failure if never seen). This is an event, never a timeout taken as a pass (Codex LOCK-01).
+- **Two kinds of "nothing happened" evidence (Codex §6):**
+  - An **early refusal** (by the GET pre-check) sends **zero write requests** and changes no row.
+  - A refusal **at the locked writer** (a revocation that commits between the pre-check and the write) sends **one** RPC that changes **zero rows**.
+  - The tests assert each kind with its own evidence: the request log for the first, a fingerprint of every client, grant and Brain row, plus the agency Brain, for both. A request count never replaces the transaction evidence.
+- **Codex** supplies the pilot-side A/B native tests and independent verification. **Backend** supplies descendant-route acceptance (OWN-01 and the pre-effect guards) and task pin consumption.
 
-**Actors:**
-- owner and admin, each with no grant, a grant for A only, and grants for both;
-- editor and viewer with a grant for A;
-- a revoked user;
-- a regranted user;
-- a foreign member;
-- anon.
+## 7. Questions
 
-**What must hold:**
-- each actor gets exactly its effective right;
-- `client_context_required` with a null client;
-- the agency Brain is never returned for a client;
-- a held-revocation race on each of levels 1–4;
-- revoke → regrant (the old pin is refused);
-- archive (all access is refused);
-- CAS with two writers;
-- every refusal leaves SQL unchanged and makes zero write requests;
-- a mutation proof per lock and per rule.
-
-Codex supplies the pilot-side A/B native tests. Backend supplies descendant-route acceptance (OWN-01 and pre-effect guards).
-
-## 7. Open questions (need an answer before the migration is written)
-
-- **O1:** May members without a grant see client **names** (not data) in `client_accounts`? Proposal: yes, names only, so the switcher can show "no access".
-- **O2:** Should a role change revoke grants, or only bump `permission_revision`? Proposal: bump only; grants stay, and the role still gates edit/activate live.
-- **O3 (Backend):** confirm `workspace_member_remove` is the single membership writer the grant revoke hooks into. Today there is no browser membership writer at all (#159).
+- **O1 — resolved (Codex's conservative rule, accepted by Brain):** ungranted ordinary members see no client ids or names. Owner/admin get a separate, explicitly authorized management listing that never implies data access or becomes a context fallback.
+- **O2 — resolved (Codex's rule, accepted by Brain):**
+  - every role change renews `permission_revision`;
+  - active grants survive role changes, and the live role still gates actions;
+  - membership DELETE terminally revokes all active grants in the same transaction;
+  - delete → rejoin can never revive an old task: tasks must pin grant id, generation **and** revision, and the revision never repeats;
+  - covered by the demote → promote and remove → rejoin → regrant tests.
+- **O3 — open (Backend):**
+  - **Brain's finding:** on today's code there is **no membership removal or role-change writer**. The only membership writers are `provision_workspace_for_user` and `handle_new_user` (inserts), and #159 closes browser writes.
+  - The grant hooks are triggers, so they hold for any future writer.
+  - **Backend, please confirm or correct:**
+    - (a) where the member-remove and role-change routes will live, and that none uses `session_replication_role = replica` or another trigger-bypassing path;
+    - (b) that an immutable membership identity (remove and re-add instead of re-pointing a row) is acceptable;
+    - (c) that no service or admin route writes `workspace_members` outside these paths.
+- **O4 — new (Backend + Codex):** the rule requires the actor's **live session** for task intent too.
+  - So a stored client task resuming after the user logged out is refused (`session_invalid`).
+  - That matches #166's original-session binding. A resumed task must pass its original session id along with its pins.
+  - Confirm, or specify the durable task principal that replaces the session for background execution. Brain will not invent one.
