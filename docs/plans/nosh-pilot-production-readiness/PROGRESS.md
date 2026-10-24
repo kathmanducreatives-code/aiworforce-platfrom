@@ -2,7 +2,7 @@
 
 **Customer pilot readiness: FAIL. P1–P8 disabled. A7 NO-GO.**
 
-Last audit: 2026-10-23 Asia/Kathmandu; Phase 1 approved in user message following #152.
+Last continuation: 2026-10-24 Asia/Kathmandu; Phase 1 approved in user message following #152.
 Readiness remains FAIL; owned access and native task protections are implemented below.
 Exact Brain #169/#170 raw-table composition passes; actual Brain save handlers
 have confirmed in-flight authorization failures (AUTH-06). Client-grant/lifecycle contracts remain required.
@@ -16,7 +16,7 @@ Phase 0–8 below is distinct from the historical P1–P8 feature implementation
 | Phase | Status | Branch / PR | Validation | Remaining blockers |
 | --- | --- | --- | --- | --- |
 | 0 — architecture/readiness audit | COMPLETE / reviewed; Phase 1 authorized | `codex/nosh-readiness-master-plan`; draft #152, stacked on #151 | repository/PR/CI/interface audit; documentation checks in phase receipt | DEC-01 target chosen in Phase 1 approval; shared contract still open |
-| 1 — native security | PARTIAL / owned protections PASS locally, overall FAIL | `codex/nosh-phase1-task-lifecycle` on #166; previous PRs preserved | native task/API 68/0; real registration Auth 8/0; exact #169/#170 owner-source composition PASS; final-head CI in successor receipt | canonical same-workspace client/grant/Brain implementation and A7 generation/locks; descendant/legacy pre-effect guards; complete integrated acceptance |
+| 1 — native security | PARTIAL / owned protections PASS locally, overall FAIL | `codex/nosh-phase1-client-contract-gates` on #172; previous PRs preserved | previous owned native proofs pass; new checker7/0 and infra203/0; catalogBLOCKED; raw parentOWN-01FAIL and P1 denialPASS | AUTH-06 fix; canonical client/grant/Brain and A7; OWN-01/descendant constraints; legacy pre-effect guards; complete integrated acceptance |
 | 2 — transactional persistence | PENDING / NOT APPROVED | no implementation PR yet; P3/P5/P6/P7 interfaces are not persistence | offline contracts only; no native durable import/snapshot/review/approval adapter | Phase 1; DATA-01/02; REPLAY-01; original-task lifecycle and shared receipt contract |
 | 3 — legacy executor containment | PENDING / NOT APPROVED | owner #145/#149/#150 are dependencies, not pilot containment completion | no complete pilot route-by-route native acceptance | Phase 1/2; backend EXEC-01; Brain context seam |
 | 4 — recovery/spending | PENDING / NOT APPROVED | owner #150 plus future FIN-01 successor | mocked P4/P8 safeguards; no native pilot shared-ledger recovery proof | Phase 2/3; FIN-01/02; MODEL-01; no competing ledger |
@@ -39,7 +39,7 @@ requires separate approval after Phase 1 is actually complete.
 
 ## Active worktree and immutable resume points
 
-- Active Phase 1 branch: `codex/nosh-phase1-task-lifecycle` (successor on #166 `4344dec0e224d9766b3919c91a61b8066d17e16f`).
+- Active Phase 1 branch: `codex/nosh-phase1-client-contract-gates` (test/readiness successor on #172 `2ffc6b5f22b5ce2d71c965054c06f5c34cfffce9`; #169/#171/#172 unchanged).
 - Worktree: `/Users/prasidha/Downloads/screeningpilot-main/nosh-phase1-access-fixes`.
 - Phase 1 base: #152 `32097823562b5282972047f86beb0b826e4e663c`; exact new head/PR is in its publication receipt.
 - Historical #151 base: `001fa9db9a1a07266dfc700b0d7a21fbc322c7df`.
@@ -383,3 +383,90 @@ known failures and does **not** declare readiness. No tests are skipped.
 Phase1 remains FAIL for AUTH-06 plus canonical client/grant/Brain generation/lock
 contract, pilot same-client descendants and complete Backend pre-effect/lifecycle
 containment. Phase2 not started. P1–P8 off; A7 NO-GO; no hosted/paid/customer effects.
+
+## Phase 1 current-state continuation — 2026-10-24
+
+Isolated successor `codex/nosh-phase1-client-contract-gates` on #1722ffc6b5f.
+Re-read plans/Phase1 evidence, fetched origin, inspected #169/#171/#172 and open
+owner branches/comments. #169 still60be0471: AUTH-06 fix not delivered. #1710d7cd077
+and #1722ffc6b5f are open drafts, unchanged, full/native CI green. Read #172's
+completed CI40078697596:17 passing/6 failing security assertions and explicit
+readinessFAIL. No manual rerun or shared Brain implementation edits.
+
+**Independent native checks completed:**
+- Read-only catalog gate derives resources from actual P1 registry. Canonical
+  client_accounts/client_access_grants/client_company_brain absent; pilot canonical
+  FK absent;15 resources inventoried, direct canonical coverage0/15. BLOCKED/exit2,
+  same-workspace behavioral isolation NOT TESTED. No synthetic client DDL.
+- New OWN-01: actual signed-in A user cannot read B's prospect account but raw API
+  stores contact A→B (201, SQL mismatch). Existing P1 prepare404 with no signature
+  or binding; legitimate same-workspace control persists and prepares successfully.
+  Actual local GoTrue/PostgREST/PG/P1 transaction, zero provider/model effects.
+- Structural checker7/0; full infra203/0; type/lint/shell checks pass. Publication
+  CI and exact final commit are recorded in the successor PR receipt.
+
+Report/artifacts/commands:
+[CLIENT_BOUNDARY_GATES.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/CLIENT_BOUNDARY_GATES.md).
+OWN-01 requires shared native constraint/compatibility preflight and ownership
+coordination before a held migration; no production/shared schema edited here.
+
+Backend #150be625f46 unchanged; original signed client/session pre-effect and
+executable lifecycle delivery still missing. Source inspection is not zero-effect
+runtime proof. Handoff covers authoritative identity despite stripped markers,
+all service/direct/worker/resume routes and preservation of nonpilot/spending rules.
+
+**Phase1 FAIL.** Next: exact Brain fix→23/0 independent verification; final A7 and
+canonical schema/API delivery→owned composite bridge/descendant and same-workspace
+native tests; Backend guards→complete combined acceptance. Phase2 not started.
+All customer pilot flags off; A7 NO-GO. No merges/deployment/hosted writes or
+migrations, paid calls, real customer records or external actions.
+
+Publication follow-up: b630ee00 full standard CI40097155626 passes. Native
+40097155631 stopped at an existing mutation helper's sed/grep-q Broken pipe,
+before the new audits. Consume the complete log without grep-q; both original
+security failure assertions preserved. Targeted real P1 omission proof passes and
+restores the source file. Final-head publication receipt records the rerun; no
+runtime/security/budget changes and no historical failure relabeled green.
+
+## Phase 1 acceptance preparation — #173 continuation (2026-10-24)
+
+Continue on existing #173 `codex/nosh-phase1-client-contract-gates`, base head
+6e854c9d, rather than opening another PR. Owner heads unchanged; no fix arrived.
+Read current #169–#173 receipts and sent actionable owner checklists:
+[Brain](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6385018708),
+[Backend](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/150#issuecomment-6385018852).
+Brain owns all in-flight writer mutations plus final A7/canonical schema/API;
+Backend owns/assigns OWN-01 constraint and all legacy pre-effect/lifecycle delivery.
+Exact patch SHAs, migration requirements and compatibility controls requested.
+
+**Completed independently:** test-only native effect fence and conformance tests;
+real resource-parent/P1 path now records actual Auth/REST request effects and
+fails if an external/late/invalid attempt is hidden. Approved origins only,
+redirect refusal, cancellation/late-request handling, immutable/redacted evidence.
+This does not authorize a request, simulate a successful model, alter budgeting
+or prove every legacy route safe. Actual writer/ledger/queue assertions remain
+separate and required.
+
+**Results:** fence8/0; full infra211/0; new types/lint PASS. Native real GoTrue/
+PostgREST/PG/P1 instrumented path observes5 local requests,0 external attempts;
+valid parent persists/prepares; OWN-01 bad parent raw201 persists but P1 refuses404
+with no signature/binding. Native command exits1 for the known integrity defect,
+its evidence check passes. `effect-fence-native.json` preserves the complete trace.
+No manual rerun of unchanged Brain23; publication CI retains existing regression
+checks. Exact final-head CI is recorded in #173's publication receipt.
+
+**Prepared acceptance:**
+[INTEGRATION_ACCEPTANCE.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/INTEGRATION_ACCEPTANCE.md)
+covers workspace/client ownership, grants/regrant, client Brain, removal/demotion/
+logout in flight, original session/task lifecycle, legacy/direct/worker effects,
+retry/resume and concurrent lock ordering. It identifies actual executable suites,
+blocked APIs, deterministic barriers, positive controls and exact state/effect
+assertions; no fake canonical tables or model/provider functionality.
+
+**Still required:** delivered Brain fix→same23/0; final A7+canonical tables/API→
+actual same-workspace client/grant/Brain matrix and owned bridge/descendants;
+Backend OWN-01 and pre-effect/lifecycle patch→all entry/effect and retry proofs;
+one combined candidate→all mandatory native acceptance. Phase1 FAIL, Phase2
+unstarted, P1–P8 disabled, A7 NO-GO. No owner implementation edits or hosted/paid/
+customer/merge/deploy effects. Verification readiness improved; no security
+blocker is marked closed by this tooling alone.

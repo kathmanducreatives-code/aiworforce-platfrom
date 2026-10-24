@@ -36,6 +36,14 @@ export OUTPOST_NATIVE_BRAIN_SQL="$combined/supabase/migrations/20261023120000_co
 export OUTPOST_NATIVE_TASK_GUARDS=1
 cd "$combined"
 echo "SOURCE_MANIFEST pilot=$(git -C "$root" rev-parse HEAD) brain169=$brain workspace170=$workspace membership159=$membership"
+if [ "${OUTPOST_NATIVE_RESOURCE_PARENT_ONLY:-0}" = 1 ]; then
+  OUTPOST_NATIVE_RESOURCE_PARENT_AUDIT=1 tests/outpost-native/run.sh
+  exit
+fi
+if [ "${OUTPOST_NATIVE_CLIENT_CONTRACT_ONLY:-0}" = 1 ]; then
+  OUTPOST_NATIVE_CLIENT_CONTRACT_AUDIT=1 tests/outpost-native/run.sh
+  exit
+fi
 if [ "${OUTPOST_NATIVE_BRAIN_HANDLER_ONLY:-0}" = 1 ]; then
   OUTPOST_NATIVE_BRAIN_HANDLER_AUDIT=1 tests/outpost-native/run.sh
   exit

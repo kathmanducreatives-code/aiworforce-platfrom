@@ -14,6 +14,8 @@ if OUTPOST_NATIVE_LIFECYCLE=1 "$root/tests/outpost-native/run.sh" > "$log" 2>&1;
   echo 'P1 verifier omission survived registration contracts' >&2; exit 1
 fi
 # Unused P1 imports do not fail Deno type checking; these must be semantic failures.
-sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -q 'forged mac never captures a binding.*FAILED'
-sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -q 'forged payload never captures a binding.*FAILED'
+# Consume the full stream: grep -q closes early and makes sed fail with SIGPIPE
+# under pipefail on longer CI logs. Both exact failure assertions remain required.
+sed 's/\x1b\[[0-9;]*m//g' "$log" | grep 'forged mac never captures a binding.*FAILED' >/dev/null
+sed 's/\x1b\[[0-9;]*m//g' "$log" | grep 'forged payload never captures a binding.*FAILED' >/dev/null
 echo 'P1 verifier omission caught by real forged-MAC and altered-payload registration tests'

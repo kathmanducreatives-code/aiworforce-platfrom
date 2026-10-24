@@ -1,0 +1,105 @@
+{
+  "date": "2026-10-24",
+  "base_head": "6e854c9df99c4f90a2630c3fc82674926790d7d5",
+  "context": "uncommitted test-only #173 continuation; final-head CI receipt records replayed source identity",
+  "command": "OUTPOST_NATIVE_RESOURCE_PARENT_ONLY=1 tests/outpost-native/integrate-brain-owner.sh",
+  "expected_exit": 1,
+  "native_receipt": {
+    "network_effects": {
+      "local_requests": 5,
+      "external_attempts": 0,
+      "events": [
+        {
+          "kind": "local_request",
+          "method": "GET",
+          "origin": "http://127.0.0.1:51859"
+        },
+        {
+          "kind": "local_request",
+          "method": "POST",
+          "origin": "http://127.0.0.1:51859"
+        },
+        {
+          "kind": "local_request",
+          "method": "GET",
+          "origin": "http://127.0.0.1:51797"
+        },
+        {
+          "kind": "local_request",
+          "method": "POST",
+          "origin": "http://127.0.0.1:51859"
+        },
+        {
+          "kind": "local_request",
+          "method": "GET",
+          "origin": "http://127.0.0.1:51797"
+        }
+      ]
+    },
+    "foreign_parent_visible": false,
+    "auth_requests": 2,
+    "traces": [
+      {
+        "scenario": "own_parent",
+        "raw_api_status": 201,
+        "persisted_rows": 1,
+        "wrong_workspace_parent_persisted": false,
+        "unapproved_cross_scope_request_persisted": false,
+        "stored_parent_rows": [
+          {
+            "workspace_id": "48310c5d-5d89-4a1c-9cce-fb2f01bb69ef",
+            "account_id": "36038b3b-cc07-44fc-b73e-b2679d00b539",
+            "parent_workspace_id": "48310c5d-5d89-4a1c-9cce-fb2f01bb69ef"
+          }
+        ],
+        "pilot_prepare_status": 200,
+        "pilot_response": {
+          "workspace_id": "48310c5d-5d89-4a1c-9cce-fb2f01bb69ef",
+          "client_binding_id": "d6c2b235-fa4f-4b5f-874b-2161a084838b",
+          "version": 1,
+          "task_id": "25d1bf7f-2861-4541-a91f-e5140605443a",
+          "action": "prepare",
+          "result": "registered",
+          "mode": "draft_only"
+        },
+        "signed": true,
+        "binding_count": 1
+      },
+      {
+        "scenario": "foreign_parent",
+        "raw_api_status": 201,
+        "persisted_rows": 1,
+        "wrong_workspace_parent_persisted": true,
+        "unapproved_cross_scope_request_persisted": true,
+        "stored_parent_rows": [
+          {
+            "workspace_id": "48310c5d-5d89-4a1c-9cce-fb2f01bb69ef",
+            "account_id": "05daa4ed-5d19-4202-933e-df784b969e07",
+            "parent_workspace_id": "1dda016f-3645-46f5-8659-21c78f1b580d"
+          }
+        ],
+        "pilot_prepare_status": 404,
+        "pilot_response": {
+          "error": "resource_unavailable"
+        },
+        "signed": false,
+        "binding_count": 0
+      }
+    ],
+    "raw_parent_integrity": "FAIL",
+    "pilot_parent_integrity": "PASS",
+    "same_workspace_client_isolation": "NOT_TESTED",
+    "phase_1": "FAIL",
+    "customer_pilot_ready": false
+  },
+  "conformance_tests": {
+    "passed": 8,
+    "failed": 0
+  },
+  "infra_tests": {
+    "passed": 211,
+    "failed": 0
+  },
+  "phase_1": "FAIL",
+  "customer_pilot_ready": false
+}
