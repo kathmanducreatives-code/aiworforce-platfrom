@@ -36,6 +36,10 @@ export OUTPOST_NATIVE_BRAIN_SQL="$combined/supabase/migrations/20261023120000_co
 export OUTPOST_NATIVE_TASK_GUARDS=1
 cd "$combined"
 echo "SOURCE_MANIFEST pilot=$(git -C "$root" rev-parse HEAD) brain169=$brain workspace170=$workspace membership159=$membership"
+if [ "${OUTPOST_NATIVE_BRAIN_HANDLER_ONLY:-0}" = 1 ]; then
+  OUTPOST_NATIVE_BRAIN_HANDLER_AUDIT=1 tests/outpost-native/run.sh
+  exit
+fi
 deno test --node-modules-dir=none --allow-read --allow-env \
   tests/edge-functions/_shared/brainRole.test.ts tests/edge-functions/_shared/brainRoleParity.test.ts \
   tests/frontend/activeWorkspace.test.ts

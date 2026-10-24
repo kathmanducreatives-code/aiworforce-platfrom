@@ -4,7 +4,8 @@
 
 Last audit: 2026-10-23 Asia/Kathmandu; Phase 1 approved in user message following #152.
 Readiness remains FAIL; owned access and native task protections are implemented below.
-Exact Brain #169/#170 composition passes locally; client-grant/lifecycle contracts remain required.
+Exact Brain #169/#170 raw-table composition passes; actual Brain save handlers
+have confirmed in-flight authorization failures (AUTH-06). Client-grant/lifecycle contracts remain required.
 Read [MASTER_PLAN.md](MASTER_PLAN.md) before resuming. This tracker supersedes
 historical phase-number status in `docs/audits/.../production-readiness/`; those
 files remain immutable receipts of narrower previous work. Production-readiness
@@ -353,3 +354,32 @@ port collision. Owned harness fix uses kernel-chosen ports, bounded bind-only
 startup recovery and own-database nonce readiness. The required owner-integration
 lane now forces a real occupied HTTP200 listener. No security assertion or model/
 provider retry changed. See final-head receipt for the rerun, not the earlier head.
+
+## Phase 1 actual Brain handler continuation — 2026-10-24
+
+#171 is complete at `0d7cd07741aed8f20b824d90e45385629ff40412`; full CI39977607217
+and native CI39977607221 pass. [Final receipt](https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/171#issuecomment-6368455847).
+No new edits to #171 or Claude's implementation. New isolated test/docs successor
+`codex/nosh-phase1-brain-handler-audit` exercises unmodified exact #169 Edge handlers
+with real disposable GoTrue/PostgREST/SQL. No live provider/model call.
+
+**New verified AUTH-06 blocker:** `setup-company-brain/save_basics` and
+`generate-company-brain-draft/update` commit after membership removal, demotion to
+viewer or actual logout occurs between the initial authorization check and Brain
+read/write. All six cases return200 with changed SQL; tests require401/403 and no
+persisted edit. **17 controls PASS /6 deterministic failures**; valid owner/admin/
+editor writes land, viewer/member/foreign/already-revoked/logged-out requests deny.
+This supplements #169's correct raw-table browser closure, not a contradiction of
+that narrower result. CAS checks content versions, not current permissions.
+
+Evidence, source paths, exact scenario matrix and native writer handoff:
+[BRAIN_HANDLER_AUTH.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/BRAIN_HANDLER_AUTH.md)
+and synthetic JSON alongside it. Brain Claude owns the atomic role/session writer;
+Codex supplies tests without duplicating the shared implementation. Model-action
+and activation/concurrent revoke paths remain untested. The native CI audit is
+explicitly failing; the required integrity check verifies all controls and exact
+known failures and does **not** declare readiness. No tests are skipped.
+
+Phase1 remains FAIL for AUTH-06 plus canonical client/grant/Brain generation/lock
+contract, pilot same-client descendants and complete Backend pre-effect/lifecycle
+containment. Phase2 not started. P1–P8 off; A7 NO-GO; no hosted/paid/customer effects.

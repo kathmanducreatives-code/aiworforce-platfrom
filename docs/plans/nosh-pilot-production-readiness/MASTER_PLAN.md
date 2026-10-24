@@ -893,3 +893,23 @@ Remaining Phase 1 implementation order:
 
 No Phase 2 work, model budget change, hosted migration, deployment, paid execution,
 customer access or activation. P1–P8 remain disabled and A7 NO-GO.
+
+## Phase 1 AUTH-06: actual Brain handler revocation gap (2026-10-24)
+
+Do not infer complete writer authorization from #169's correct browser-table DML
+restriction. The independent successor on #171 calls #169's unmodified actual
+setup/save_basics and generate/update handlers using real disposable Auth/REST/SQL.
+Membership DELETE, viewer demotion or real logout commits after the initial check,
+yet both handlers commit the edit: six deterministic security failures,17 passing
+controls, zero external attempts. Report/test contract:
+[BRAIN_HANDLER_AUTH.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/BRAIN_HANDLER_AUTH.md).
+
+Brain Claude must supply the canonical native writer's final-transaction live
+session/current role checks, consistent revoke locking and client grant-generation
+checks when that schema arrives. Preserve content CAS and legitimate writer
+controls. Codex owns this reproduction only; no shared handler/schema edits.
+Add AUTH-06 to Phase1 acceptance: same23 tests must become23/0 on the delivered
+candidate, then extend to model/activation timing and native concurrency. A second
+Edge check followed by a service PATCH cannot establish this atomic boundary.
+All previous client/descendant/legacy containment gates remain. Phase2 stays
+unapproved, P1–P8 off and A7 NO-GO.

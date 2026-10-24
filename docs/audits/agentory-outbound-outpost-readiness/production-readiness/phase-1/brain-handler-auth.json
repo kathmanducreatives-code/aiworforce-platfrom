@@ -1,0 +1,237 @@
+{
+  "date": "2026-10-24",
+  "finding": "AUTH-06",
+  "severity": "P1 security blocker",
+  "phase_1": "FAIL",
+  "base_pr": 171,
+  "base_head": "0d7cd07741aed8f20b824d90e45385629ff40412",
+  "brain169": "60be04712c41193da213a95c1918f7f4f9a4e645",
+  "controls_passed": 17,
+  "security_assertions_failed": 6,
+  "external_attempts": 0,
+  "raw_test_exit": 1,
+  "implementation_modified": false,
+  "customer_pilot_ready": false,
+  "records": [
+    {
+      "handler": "setup",
+      "scenario": "owner",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"company\":{\"name\":\"Before synthetic edit\"},\"company_name\":\"After synthetic edit\"}}"
+    },
+    {
+      "handler": "setup",
+      "scenario": "admin",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"company\":{\"name\":\"Before synthetic edit\"},\"company_name\":\"After synthetic edit\"}}"
+    },
+    {
+      "handler": "setup",
+      "scenario": "editor",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"company\":{\"name\":\"Before synthetic edit\"},\"company_name\":\"After synthetic edit\"}}"
+    },
+    {
+      "handler": "setup",
+      "scenario": "viewer",
+      "status": 403,
+      "changed": false,
+      "writes": 0,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"error\":\"brain_role_forbidden\",\"role\":\"viewer\",\"required\":\"edit\"}"
+    },
+    {
+      "handler": "setup",
+      "scenario": "revoked",
+      "status": 403,
+      "changed": false,
+      "writes": 0,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"error\":\"forbidden\"}"
+    },
+    {
+      "handler": "setup",
+      "scenario": "foreign",
+      "status": 403,
+      "changed": false,
+      "writes": 0,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"error\":\"forbidden\"}"
+    },
+    {
+      "handler": "setup",
+      "scenario": "logged_out",
+      "status": 401,
+      "changed": false,
+      "writes": 0,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"error\":\"Unauthorized\"}"
+    },
+    {
+      "handler": "setup",
+      "scenario": "member",
+      "status": 403,
+      "changed": false,
+      "writes": 0,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"error\":\"brain_role_forbidden\",\"role\":\"viewer\",\"required\":\"edit\"}"
+    },
+    {
+      "handler": "setup",
+      "scenario": "revoke_inflight",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": true,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"company\":{\"name\":\"Before synthetic edit\"},\"company_name\":\"After synthetic edit\"}}"
+    },
+    {
+      "handler": "setup",
+      "scenario": "demote_inflight",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": true,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"company\":{\"name\":\"Before synthetic edit\"},\"company_name\":\"After synthetic edit\"}}"
+    },
+    {
+      "handler": "setup",
+      "scenario": "logout_inflight",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": true,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"company\":{\"name\":\"Before synthetic edit\"},\"company_name\":\"After synthetic edit\"}}"
+    },
+    {
+      "handler": "update",
+      "scenario": "owner",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"icp\":{\"geography\":\"\",\"industries\":[],\"buyer_roles\":[],\"pain_points\":[],\"company_size\":\"\",\"disqualifiers\":[]},\"company\":{\"name\":\"After synthetic edit\"},\"is_draft\":false,\"setup_status\":\"in_progress\",\"missing_fields\":[\"company.identity\",\"company.business_model\",\"target_customer.market\",\"buyer_personas\",\"triggers\",\"disqualifiers\",\"voice\"],\"schema_version\":2,\"brain_confidence\":\"weak\"},\"updated_at\":\"2026-10-24T05:44:02.939888+00:00\",\"applied_paths\":[\"company.name\"]}"
+    },
+    {
+      "handler": "update",
+      "scenario": "admin",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"icp\":{\"geography\":\"\",\"industries\":[],\"buyer_roles\":[],\"pain_points\":[],\"company_size\":\"\",\"disqualifiers\":[]},\"company\":{\"name\":\"After synthetic edit\"},\"is_draft\":false,\"setup_status\":\"in_progress\",\"missing_fields\":[\"company.identity\",\"company.business_model\",\"target_customer.market\",\"buyer_personas\",\"triggers\",\"disqualifiers\",\"voice\"],\"schema_version\":2,\"brain_confidence\":\"weak\"},\"updated_at\":\"2026-10-24T05:44:03.084087+00:00\",\"applied_paths\":[\"company.name\"]}"
+    },
+    {
+      "handler": "update",
+      "scenario": "editor",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"icp\":{\"geography\":\"\",\"industries\":[],\"buyer_roles\":[],\"pain_points\":[],\"company_size\":\"\",\"disqualifiers\":[]},\"company\":{\"name\":\"After synthetic edit\"},\"is_draft\":false,\"setup_status\":\"in_progress\",\"missing_fields\":[\"company.identity\",\"company.business_model\",\"target_customer.market\",\"buyer_personas\",\"triggers\",\"disqualifiers\",\"voice\"],\"schema_version\":2,\"brain_confidence\":\"weak\"},\"updated_at\":\"2026-10-24T05:44:03.240541+00:00\",\"applied_paths\":[\"company.name\"]}"
+    },
+    {
+      "handler": "update",
+      "scenario": "viewer",
+      "status": 403,
+      "changed": false,
+      "writes": 0,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"error\":\"brain_role_forbidden\",\"role\":\"viewer\",\"required\":\"edit\"}"
+    },
+    {
+      "handler": "update",
+      "scenario": "revoked",
+      "status": 403,
+      "changed": false,
+      "writes": 0,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"error\":\"forbidden\"}"
+    },
+    {
+      "handler": "update",
+      "scenario": "foreign",
+      "status": 403,
+      "changed": false,
+      "writes": 0,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"error\":\"forbidden\"}"
+    },
+    {
+      "handler": "update",
+      "scenario": "logged_out",
+      "status": 401,
+      "changed": false,
+      "writes": 0,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"error\":\"Unauthorized\"}"
+    },
+    {
+      "handler": "update",
+      "scenario": "member",
+      "status": 403,
+      "changed": false,
+      "writes": 0,
+      "revoked": false,
+      "external_calls": 0,
+      "response": "{\"error\":\"brain_role_forbidden\",\"role\":\"viewer\",\"required\":\"edit\"}"
+    },
+    {
+      "handler": "update",
+      "scenario": "revoke_inflight",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": true,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"icp\":{\"geography\":\"\",\"industries\":[],\"buyer_roles\":[],\"pain_points\":[],\"company_size\":\"\",\"disqualifiers\":[]},\"company\":{\"name\":\"After synthetic edit\"},\"is_draft\":false,\"setup_status\":\"in_progress\",\"missing_fields\":[\"company.identity\",\"company.business_model\",\"target_customer.market\",\"buyer_personas\",\"triggers\",\"disqualifiers\",\"voice\"],\"schema_version\":2,\"brain_confidence\":\"weak\"},\"updated_at\":\"2026-10-24T05:44:04.141464+00:00\",\"applied_paths\":[\"company.name\"]}"
+    },
+    {
+      "handler": "update",
+      "scenario": "demote_inflight",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": true,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"icp\":{\"geography\":\"\",\"industries\":[],\"buyer_roles\":[],\"pain_points\":[],\"company_size\":\"\",\"disqualifiers\":[]},\"company\":{\"name\":\"After synthetic edit\"},\"is_draft\":false,\"setup_status\":\"in_progress\",\"missing_fields\":[\"company.identity\",\"company.business_model\",\"target_customer.market\",\"buyer_personas\",\"triggers\",\"disqualifiers\",\"voice\"],\"schema_version\":2,\"brain_confidence\":\"weak\"},\"updated_at\":\"2026-10-24T05:44:04.278047+00:00\",\"applied_paths\":[\"company.name\"]}"
+    },
+    {
+      "handler": "update",
+      "scenario": "logout_inflight",
+      "status": 200,
+      "changed": true,
+      "writes": 1,
+      "revoked": true,
+      "external_calls": 0,
+      "response": "{\"ok\":true,\"profile\":{\"icp\":{\"geography\":\"\",\"industries\":[],\"buyer_roles\":[],\"pain_points\":[],\"company_size\":\"\",\"disqualifiers\":[]},\"company\":{\"name\":\"After synthetic edit\"},\"is_draft\":false,\"setup_status\":\"in_progress\",\"missing_fields\":[\"company.identity\",\"company.business_model\",\"target_customer.market\",\"buyer_personas\",\"triggers\",\"disqualifiers\",\"voice\"],\"schema_version\":2,\"brain_confidence\":\"weak\"},\"updated_at\":\"2026-10-24T05:44:04.43223+00:00\",\"applied_paths\":[\"company.name\"]}"
+    }
+  ]
+}
