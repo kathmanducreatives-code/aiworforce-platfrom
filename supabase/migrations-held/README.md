@@ -192,3 +192,26 @@ default).
 
 Rollback (refuses while any authorization or operation row exists):
 `rollback/20261015140000_discovery_smoke_admission.down.sql`.
+
+## `20261024160000_client_company_brain.sql`
+
+Company Brain **Phase 3c**: canonical client accounts, append-only client
+access grants (generations), one Company Brain per client, and a
+`permission_revision` on every membership (one global sequence, renewed on
+each role change and each new membership). Writes go only through the
+service-role SECURITY DEFINER functions in the file, which re-authorize under
+the lock order session → membership → client → grant → data. The agency Brain
+(`company_brain`) and its writers are untouched.
+
+**Not approved.** It implements the contract proposed in #174
+(`docs/plans/company-brain/CLIENT_BRAIN_CONTRACT.md`); O3 (the membership
+writer) needs Backend's confirmation and the whole contract needs owner
+approval before this moves to `supabase/migrations/`. Applied only by
+`tests/db-contract/bootstrap.sh` to the lane's throwaway database.
+`tests/db-contract/clientCompanyBrain.contract.test.ts` proves the behaviour;
+`tests/db-contract/mutation.sh` proves those tests fail without its locks and
+rules. Nothing reads or writes these tables yet outside tests and the
+switched-off `_shared/clientBrain.ts`.
+
+Rollback: the statements listed in the file's header (drops only the new
+objects and the new column).
