@@ -158,3 +158,18 @@ Next actions, in order:
 This continuation adds test/readiness tooling and evidence, not application
 capabilities. No merges, deployment, hosted writes/migrations, customer records,
 provider/model calls, paid operations, sends or activation.
+
+## Publication CI harness correction
+
+Implementation `b630ee002051236af6730ff34b3d9e9d1f6dbd45` passes the complete
+[standard CI gate40097155626](https://github.com/kathmanducreatives-code/aiworforce-platfrom/actions/runs/40097155626).
+The separate native workflow40097155631 stopped before new audits: existing P1
+mutation helper's `sed | grep -q` produced `sed: Broken pipe` under pipefail.
+`grep -q` closed a longer log early. The successor consumes the full stream using
+plain grep redirected to /dev/null. Both exact forged-MAC and altered-payload
+FAILED assertions remain required. Targeted real mutation verification passes;
+P1 source is restored on exit. No security gate, permission or retry was weakened.
+An initial local invocation lacked an old /tmp dependency; the unchanged #159 SQL
+was re-extracted from its pinned commit before the successful verification.
+Final-head CI results are in the draft publication receipt; the failed native
+run is not relabeled green. No application implementation changed for this fix.

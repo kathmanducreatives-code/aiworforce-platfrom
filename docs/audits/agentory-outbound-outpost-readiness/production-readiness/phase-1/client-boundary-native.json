@@ -3208,5 +3208,14 @@
   "phase_2_started": false,
   "pilot_enabled": false,
   "customer_pilot_ready": false,
-  "external_model_provider_calls": 0
+  "external_model_provider_calls": 0,
+  "publication_initial_ci": {
+    "head": "b630ee002051236af6730ff34b3d9e9d1f6dbd45",
+    "standard_run": 40097155626,
+    "standard_result": "PASS",
+    "native_run": 40097155631,
+    "native_result": "FAIL: sed Broken pipe from grep-q early exit in unchanged P1 mutation helper",
+    "correction": "consume full stream; both exact original semantic failure assertions preserved",
+    "targeted_real_mutation_after_correction": "PASS"
+  }
 }

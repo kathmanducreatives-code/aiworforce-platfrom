@@ -420,3 +420,10 @@ canonical schema/API delivery→owned composite bridge/descendant and same-works
 native tests; Backend guards→complete combined acceptance. Phase2 not started.
 All customer pilot flags off; A7 NO-GO. No merges/deployment/hosted writes or
 migrations, paid calls, real customer records or external actions.
+
+Publication follow-up: b630ee00 full standard CI40097155626 passes. Native
+40097155631 stopped at an existing mutation helper's sed/grep-q Broken pipe,
+before the new audits. Consume the complete log without grep-q; both original
+security failure assertions preserved. Targeted real P1 omission proof passes and
+restores the source file. Final-head publication receipt records the rerun; no
+runtime/security/budget changes and no historical failure relabeled green.
