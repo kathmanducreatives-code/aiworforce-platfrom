@@ -34,6 +34,7 @@ import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
 import { renderContentBrain, type RecentContent } from "../_shared/contentBrainContext.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
+import { type GuardDb, legacyExecutionGuard, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
 import { loadV2OwnedTaskIds } from "../_shared/leadMissionV2Request.ts";
 import {
   isDirectLeadActionAttempt,
@@ -1167,6 +1168,27 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
 
     const access = decideWorkspaceAccess({ bearerIsServiceRole, authenticatedUserId, isMember });
     if (!access.ok) return json({ error: access.error }, access.status);
+  }
+
+  // ---- The legacy pre-effect guard (legacyExecutionGuard.ts) ----------------
+  // Before ANY effect: no task row, message, ledger row, credit, model call or
+  // purchase exists yet. Pilot and client-scoped work is refused (disabled),
+  // decided by the stored task rows the request points at as well as the
+  // request; a service caller's forwarded `user_id` must still be a member,
+  // and a resumed task keeps its original principal.
+  {
+    const guard = await legacyExecutionGuard({
+      db: supabase as unknown as GuardDb,
+      workspaceId: workspace_id as string,
+      principalUserId: bearerIsServiceRole ? (typeof user_id === "string" && user_id ? user_id : null) : authenticatedUserId,
+      principalMembershipVerified: !bearerIsServiceRole,
+      body,
+      taskIds: referencedTaskIds(body),
+    });
+    if (!guard.ok) {
+      console.error("[run-agent][pre-effect-guard] refused", { workspace_id, code: guard.code, detail: guard.detail });
+      return json({ success: false, error: guard.code, detail: guard.detail }, guard.status);
+    }
   }
 
   // ---- Workspace model spend ceiling -----------------------------------------

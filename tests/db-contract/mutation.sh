@@ -138,6 +138,38 @@ prove_killed "no serialization lock" "$adm_sql" \
 # which holds this row from a second session, still does.)
 prove_killed "no deadline" "$adm_sql" "or a.deadline_at <= v_now" "" \
   "$adm_tests" "deadline: absolute, from the queue row, read after the lock, never renewed"
+
+# ── PROOFS: the legacy pre-effect guard ────────────────────────────────────
+# Each mutant removes one part of the guard or one entry's call to it; a named
+# test, judged by effects (rows, vendor requests, writes), must then fail.
+guard_ts="$root/supabase/functions/_shared/legacyExecutionGuard.ts"
+ra_ts="$root/supabase/functions/run-agent/index.ts"
+orch_ts="$root/supabase/functions/orchestrate/index.ts"
+enq_ts="$root/supabase/functions/enqueue-lead-mission/index.ts"
+guard_tests="$root/tests/db-contract/legacyPreEffectGuard.contract.test.ts"
+for f in "$guard_ts" "$ra_ts" "$orch_ts" "$enq_ts"; do cp "$f" "$f.mutation-backup"; restore_list+=("$f"); done
+prove_killed "guard: run-agent ignores the refusal" "$ra_ts" \
+  "      return json({ success: false, error: guard.code, detail: guard.detail }, guard.status);" \
+  "      void json({ success: false, error: guard.code, detail: guard.detail }, guard.status);" \
+  "$guard_tests" "run-agent: a request carrying the pilot marker is refused before any effect"
+prove_killed "guard: the stored task's pilot markers are not read" "$guard_ts" \
+  "      if (stored.pilot.length) return" "      if (stored.pilot.length && false) return" \
+  "$guard_tests" "run-agent: a resume of a STORED pilot task is refused before any effect, with the request's markers stripped"
+prove_killed "guard: membership not re-checked for a service caller" "$guard_ts" \
+  "    if (!data) return refuse(403, \"principal_not_member\"" "    if (!data && false) return refuse(403, \"principal_not_member\"" \
+  "$guard_tests" "run-agent: a service call for a user who is no longer a member is refused before any effect"
+prove_killed "guard: a resume may change its principal" "$guard_ts" \
+  "if (i.taskIds.resume.includes(row.id) && row.user_id && row.user_id !== i.principalUserId) {" \
+  "if (i.taskIds.resume.includes(row.id) && row.user_id && row.user_id !== i.principalUserId && false) {" \
+  "$guard_tests" "run-agent: a resume keeps its original principal — another member cannot resume it"
+prove_killed "guard: enqueue-lead-mission ignores the refusal" "$enq_ts" \
+  "    return json({ error: guard.code, detail: guard.detail }, guard.status);" \
+  "    void json({ error: guard.code, detail: guard.detail }, guard.status);" \
+  "$guard_tests" "enqueue-lead-mission: no pilot, client-scoped or non-member mission is queued"
+prove_killed "guard: orchestrate ignores the refusal" "$orch_ts" \
+  "        return json({ error: guard.code, details: guard.detail }, guard.status);" \
+  "        void json({ error: guard.code, details: guard.detail }, guard.status);" \
+  "$guard_tests" "orchestrate: a pilot or client-scoped request is refused before any plan, Brain read, model call or dispatch"
 prove_killed "clock read before the lock wait" "$adm_sql" "v_now := clock_timestamp();  -- after the lock wait" "v_now := now();  --" \
   "$adm_tests" "deadline: an admission that waited on the lock past the deadline is refused"
 prove_killed "a run bought with one read (no dataset read)" "$plan_ts" "export const SMOKE_MIN_RUN_READS = 2;" "export const SMOKE_MIN_RUN_READS = 1;" \

@@ -3,6 +3,7 @@
 // content, screening, brief) with tool + approval metadata, then deterministic
 // expansion to guarantee depth. Tool availability is annotated, never faked.
 
+import { type GuardDb, legacyExecutionGuard, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -754,6 +755,20 @@ async function handleOrchestrate(req: Request): Promise<Response> {
       .maybeSingle();
     if (!member) {
       return json({ error: "workspace_not_found", details: "User is not a member", workspace_id }, 404);
+    }
+
+    // THE LEGACY PRE-EFFECT GUARD (legacyExecutionGuard.ts), before the
+    // idempotency read, any plan, message, Brain read, model call or dispatch:
+    // pilot and client-scoped requests are refused while those are disabled.
+    {
+      const guard = await legacyExecutionGuard({
+        db: admin as unknown as GuardDb, workspaceId: workspace_id, principalUserId: userId,
+        principalMembershipVerified: true, body: b, taskIds: referencedTaskIds(b),
+      });
+      if (!guard.ok) {
+        console.error("[orchestrate][pre-effect-guard] refused", { workspace_id, code: guard.code, detail: guard.detail });
+        return json({ error: guard.code, details: guard.detail }, guard.status);
+      }
     }
 
     // ── THE SAME START, AGAIN ────────────────────────────────────────────
