@@ -4,6 +4,9 @@
 // Input:  { plan_id | task_plan_id, step_index, agent_slug | agent_id,
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
+import { brainReadinessV2Enabled } from "../_shared/companyBrainGate.ts";
+import { companyBrainReadiness } from "../_shared/companyBrainReadiness.ts";
+import { normalizeCompanyBrain } from "../_shared/normalizeCompanyBrain.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
 import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
@@ -1661,6 +1664,12 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     .maybeSingle();
   const brain = (brainRow?.profile ?? null) as CompanyBrain;
   const brainOnboardingCompleted = (brainRow as { onboarding_completed?: boolean } | null)?.onboarding_completed === true;
+  // Roadmap Phase 2 (BRAIN_READINESS_V2): chat now admits the work a usable,
+  // not-yet-activated Brain supports, so such a run must get that Brain as
+  // context. Off: only an activated Brain is injected, as before.
+  const brainContextAllowed = brainReadinessV2Enabled((k) => { try { return Deno.env.get(k); } catch { return undefined; } })
+    ? companyBrainReadiness(normalizeCompanyBrain(brain ?? {}), brainOnboardingCompleted).state !== "draft"
+    : brainOnboardingCompleted;
 
   // Inject a compact, labeled brain summary (not the raw JSON). We omit
   // companyBrain from getAgentorySystemPrompt so it doesn't add its own
@@ -1678,7 +1687,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     && typeof tool_input_body.content_loop === "object")
     ? tool_input_body.content_loop as { content_item_id?: string; use_company_brain?: boolean }
     : null;
-  let brainBlock = renderBrainForAgent(brain, brainOnboardingCompleted);
+  let brainBlock = renderBrainForAgent(brain, brainContextAllowed);
   if (contentLoop) {
     let recent: RecentContent[] = [];
     try {
@@ -1701,8 +1710,8 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           };
         });
     } catch { /* recent content is context, never a reason to fail the draft */ }
-    brainBlock = renderContentBrain(brainOnboardingCompleted ? brain : null, {
-      onboardingCompleted: brainOnboardingCompleted,
+    brainBlock = renderContentBrain(brainContextAllowed ? brain : null, {
+      onboardingCompleted: brainContextAllowed,
       useCompanyBrain: contentLoop.use_company_brain !== false,
       recent,
     });

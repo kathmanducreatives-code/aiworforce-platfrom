@@ -82,3 +82,43 @@ export function mergeStale(base: ProgressCopy, mine: ProgressCopy, server: Progr
     conflicts,
   };
 }
+
+// ── Mapping between the wizard's forms and stored answers ────────────────────
+
+/** Mirrors SETUP_ANSWER_FIELDS on the server. Consent is never part of progress. */
+export const ANSWER_FIELDS = {
+  company: ['name', 'website_url', 'linkedin_url', 'description', 'stage', 'team_size'],
+  founder: ['name', 'role', 'linkedin_url', 'timezone', 'first_help_goal'],
+} as const;
+
+/** The forms' typed values as answers (empty fields omitted). */
+export function answersFromForms(forms: { company: object; founder: object }): Answers {
+  const out: Answers = {};
+  for (const form of ['company', 'founder'] as const) {
+    const kept: Record<string, string> = {};
+    for (const f of ANSWER_FIELDS[form]) {
+      const v = (forms[form] as Record<string, unknown>)[f];
+      if (typeof v === 'string' && v.trim()) kept[f] = v.trim();
+    }
+    if (Object.keys(kept).length) out[form] = kept;
+  }
+  return out;
+}
+
+/** Progress the server stored at `onboarding_meta.setup`, or null. */
+export function readServerProgress(profile: unknown): ProgressCopy | null {
+  const meta = (profile as { onboarding_meta?: { setup?: unknown } } | null)?.onboarding_meta;
+  const s = meta?.setup as { version?: unknown; step?: unknown; answers?: unknown; updated_at?: unknown } | undefined;
+  if (!s || s.version !== 1 || typeof s.step !== 'number' || !Number.isInteger(s.step) || s.step < 0) return null;
+  const raw = (s.answers && typeof s.answers === 'object') ? s.answers as Record<string, Record<string, unknown>> : {};
+  return {
+    step: s.step,
+    answers: answersFromForms({ company: raw.company ?? {}, founder: raw.founder ?? {} }),
+    updated_at: typeof s.updated_at === 'string' ? s.updated_at : '',
+  };
+}
+
+/** Same answers and step — nothing to save. */
+export function sameProgress(a: Pick<ProgressCopy, 'step' | 'answers'>, b: Pick<ProgressCopy, 'step' | 'answers'>): boolean {
+  return a.step === b.step && JSON.stringify(a.answers) === JSON.stringify(b.answers);
+}
