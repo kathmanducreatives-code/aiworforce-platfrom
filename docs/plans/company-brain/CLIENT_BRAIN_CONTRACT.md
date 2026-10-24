@@ -168,3 +168,54 @@ Consumers take these locks **in this order**, skipping levels they don't use, an
   - So a stored client task resuming after the user logged out is refused (`session_invalid`).
   - That matches #166's original-session binding. A resumed task must pass its original session id along with its pins.
   - Confirm, or specify the durable task principal that replaces the session for background execution. Brain will not invent one.
+
+## 8. Decisions for review: exact questions, options, recommendation (v2.1)
+
+Nothing below is implemented beyond what §2–§3 already hold. Until each item is agreed, the held behaviour stays **fail-closed**.
+
+### O3: the canonical membership removal and role-change writer (Backend)
+
+**Today:** no code removes a member or changes a role; the only membership writers are the two provisioning inserts. The held schema's hooks are triggers, so they apply to any future writer.
+
+| Option | What | Risk |
+|---|---|---|
+| **A (recommended)** | Backend adds one SECURITY DEFINER writer per action, e.g. `workspace_member_remove(ws, target, actor, session)` and `workspace_member_set_role(ws, target, role, actor, session)`. Each locks the actor's session (level 1), then the actor and target membership rows FOR UPDATE in `user_id` order (level 2), then deletes or updates. The held triggers revoke grants (level 4) and renew `permission_revision` in the same transaction | None beyond normal review; keeps one lock order |
+| B | The writer revokes grants itself, with no triggers | Any other writer (service SQL, a future route) silently skips revocation. Not recommended |
+
+**Questions for Backend:**
+1. Option A or B? The function names and the module that owns them.
+2. Who may remove or demote whom? For example: admins may not remove owners; the last owner can't be removed.
+3. Confirm that no route uses `session_replication_role = replica`, TRUNCATE or COPY on `workspace_members`.
+4. Confirm membership identity is immutable, so a "move" is remove + add. The held trigger refuses identity changes.
+
+### O4: what a resumed background task presents (Backend + Codex)
+
+**Held behaviour (kept until agreed):**
+- `p_intent = 'task'` requires the actor's live original session **and** the three pins: grant id, generation and `permission_revision`.
+- A task resuming after logout, session expiry, a revoke, a regrant, a role change or a remove → rejoin is refused.
+- Brain will not add a bypass.
+
+| Option | What | Trade-off |
+|---|---|---|
+| **A (recommended now)** | Keep the original-session requirement (matches #166's original-session binding) | Long tasks stop when the user logs out. That is safe, and the user can restart them |
+| B | A durable, Backend-owned **task principal** recorded at enqueue while the session is live: `(task_id, actor, workspace, client, grant_id, generation, permission_revision, expires_at)`. A resume presents `task_id` instead of a session. The rule then checks: the principal exists, is unexpired and unrevoked; the actor is still a member with a sufficient role; the grant pin is the active generation; the revision is unchanged. A logout either revokes the actor's principals (B1) or doesn't (B2) | It survives logout (B2) but never a permission change. It needs a new Backend table, an expiry policy and Codex's native acceptance |
+| C | A service or agency principal that runs regardless of the user | **Rejected:** a service credential is not user or client authorization (Codex A-series) |
+
+**Questions:**
+1. Is A enough for the pilot?
+2. If not, should it be B1 or B2, with what maximum `expires_at`, and who owns the table? Backend, with Codex for acceptance. Brain would then add one rule variant, `p_intent = 'task'` with a principal id instead of a session, and nothing else.
+
+### Pins in task storage (Backend)
+
+Agreed semantics are §3/§4. **Question:** where Backend stores the pins. The proposal is task row columns `client_id`, `client_grant_id`, `client_grant_generation`, `permission_revision`, written once at authorization from `client_brain_pin`.
+
+Every resume and retry path must pass them (Codex EXEC-01 / RETRY-01), and must never re-pin silently. A re-pin is a new user authorization.
+
+### OWN-01 and descendants (Backend; for alignment)
+
+**Proposal:**
+- Every descendant row that belongs to a client carries `(workspace_id, client_id)` with a composite FK to `client_accounts (workspace_id, id)`.
+- Contacts reference accounts by `(workspace_id, account_id)` → `accounts (workspace_id, id)`, which makes the cross-workspace contact → account case structurally impossible.
+- Reads of client context go only through `_shared/clientBrain.ts`.
+
+**Question:** does Backend accept the composite-FK approach, and in which migration order relative to this contract's held migration (the client tables must exist first)?
