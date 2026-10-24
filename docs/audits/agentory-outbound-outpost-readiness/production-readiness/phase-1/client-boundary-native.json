@@ -1,0 +1,3212 @@
+{
+  "date": "2026-10-24",
+  "base_pr": 172,
+  "base_head": "2ffc6b5f22b5ce2d71c965054c06f5c34cfffce9",
+  "owner_sources": {
+    "brain169": "60be04712c41193da213a95c1918f7f4f9a4e645",
+    "workspace170": "cc83eb7ee3edf68192378ef68805a71b125edc59",
+    "membership159_sql": "572dca5c8d9c7f121731456801a035cfb6186b1e",
+    "backend150_inspected": "be625f46a5e8c63759ccdfd6e7d8612bfdb8ae86"
+  },
+  "native_catalog": {
+    "read_only": "on",
+    "registry": {
+      "account": "accounts",
+      "contact": "contacts",
+      "lead": "lead_candidates",
+      "memory": "saved_outputs",
+      "draft": "outreach_drafts",
+      "research": "tool_calls",
+      "task": "tasks",
+      "plan": "task_plans",
+      "conversation": "conversations",
+      "signal": "signals",
+      "approval": "approvals",
+      "agent": "agents",
+      "evidence": "lead_evidence",
+      "lineage": "lead_lineages"
+    },
+    "prerequisites": [
+      {
+        "table": "public.client_accounts",
+        "status": "BLOCKED",
+        "reasons": [
+          "owner schema not delivered"
+        ]
+      },
+      {
+        "table": "public.client_access_grants",
+        "status": "BLOCKED",
+        "reasons": [
+          "owner schema not delivered"
+        ]
+      },
+      {
+        "table": "public.client_company_brain",
+        "status": "BLOCKED",
+        "reasons": [
+          "owner schema not delivered"
+        ]
+      }
+    ],
+    "pilot_bridge": {
+      "table": "outpost_private.clients",
+      "canonical_fk": false
+    },
+    "descendants": [
+      {
+        "table": "public.accounts",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.agents",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.approvals",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.agents",
+            "columns": [
+              "agent_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.tasks",
+            "columns": [
+              "task_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.task_plans",
+            "columns": [
+              "task_plan_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.contacts",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.accounts",
+            "columns": [
+              "account_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.conversations",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "auth.users",
+            "columns": [
+              "user_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.lead_candidates",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.accounts",
+            "columns": [
+              "account_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.contacts",
+            "columns": [
+              "contact_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.lead_evidence",
+            "columns": [
+              "evidence_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.signals",
+            "columns": [
+              "signal_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.lead_evidence",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.accounts",
+            "columns": [
+              "account_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.contacts",
+            "columns": [
+              "contact_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.lead_candidates",
+            "columns": [
+              "lead_candidate_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.signals",
+            "columns": [
+              "legacy_signal_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.lead_lineages",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.messages",
+        "present": true,
+        "workspace_column": null,
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.conversations",
+            "columns": [
+              "conversation_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.outreach_drafts",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.accounts",
+            "columns": [
+              "account_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.contacts",
+            "columns": [
+              "contact_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.lead_candidates",
+            "columns": [
+              "lead_candidate_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.saved_outputs",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.signals",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.task_plans",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.tasks",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [
+          {
+            "kind": "f",
+            "target": "public.agents",
+            "columns": [
+              "agent_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.task_plans",
+            "columns": [
+              "task_plan_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.lead_lineages",
+            "columns": [
+              "lineage_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "lineage_id"
+            ]
+          }
+        ],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      },
+      {
+        "table": "public.tool_calls",
+        "present": true,
+        "workspace_column": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        "client_column": null,
+        "direct_canonical_fk": false,
+        "parent_keys": [],
+        "rls": true,
+        "behavioral_isolation": "NOT_TESTED"
+      }
+    ],
+    "structural_prerequisites": "BLOCKED",
+    "same_workspace_isolation": "NOT_TESTED",
+    "grant_generation_contract": "PENDING_OWNER_CONFIRMATION",
+    "phase_1": "FAIL",
+    "customer_pilot_ready": false,
+    "catalog": [
+      {
+        "name": "outpost_private.clients",
+        "rls": true,
+        "forced": true,
+        "columns": [
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "client_binding_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "seller_domain",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "configuration_version",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "customer_enabled",
+            "type": "boolean",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "u",
+            "target": null,
+            "columns": [
+              "client_binding_id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "u",
+            "target": null,
+            "columns": [
+              "workspace_id",
+              "client_binding_id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": false,
+        "policies": [
+          {
+            "cmd": "SELECT",
+            "qual": "outpost_private.current_member_session(workspace_id, ( SELECT auth.uid() AS uid), NULL::uuid)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "clients",
+            "permissive": "PERMISSIVE",
+            "policyname": "clients_current_owner_read",
+            "schemaname": "outpost_private",
+            "with_check": null
+          }
+        ]
+      },
+      {
+        "name": "public.accounts",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "domain",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "website_url",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "linkedin_url",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "location",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "industry",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "stage",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "employee_count",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "source",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "raw",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "u",
+            "target": null,
+            "columns": [
+              "workspace_id",
+              "name"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "DELETE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "accounts",
+            "permissive": "PERMISSIVE",
+            "policyname": "accounts members delete",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "accounts",
+            "permissive": "PERMISSIVE",
+            "policyname": "accounts members insert",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          },
+          {
+            "cmd": "SELECT",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "accounts",
+            "permissive": "PERMISSIVE",
+            "policyname": "accounts members read",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "UPDATE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "accounts",
+            "permissive": "PERMISSIVE",
+            "policyname": "accounts members update",
+            "schemaname": "public",
+            "with_check": null
+          }
+        ]
+      },
+      {
+        "name": "public.agents",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "role_prompt",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "department",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "tools",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "trigger_type",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "trigger_config",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "avatar_color",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "avatar_icon",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "is_default",
+            "type": "boolean",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "slug",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": true
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "ALL",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "agents",
+            "permissive": "PERMISSIVE",
+            "policyname": "agents_workspace_member_access",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          }
+        ]
+      },
+      {
+        "name": "public.approvals",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "task_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "task_plan_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "agent_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "title",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "summary",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "payload",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "resolved_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "plan_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "agent_slug",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "type",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "body",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "metadata",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.agents",
+            "columns": [
+              "agent_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.tasks",
+            "columns": [
+              "task_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.task_plans",
+            "columns": [
+              "task_plan_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "ALL",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "approvals",
+            "permissive": "PERMISSIVE",
+            "policyname": "approvals_workspace_member_access",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          }
+        ]
+      },
+      {
+        "name": "public.contacts",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "account_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "full_name",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "title",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "headline",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "company",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "location",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "linkedin_url",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "email",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "phone",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "source",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "raw",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "u",
+            "target": null,
+            "columns": [
+              "workspace_id",
+              "linkedin_url"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.accounts",
+            "columns": [
+              "account_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "DELETE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "contacts",
+            "permissive": "PERMISSIVE",
+            "policyname": "contacts members delete",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "contacts",
+            "permissive": "PERMISSIVE",
+            "policyname": "contacts members insert",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          },
+          {
+            "cmd": "SELECT",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "contacts",
+            "permissive": "PERMISSIVE",
+            "policyname": "contacts members read",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "UPDATE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "contacts",
+            "permissive": "PERMISSIVE",
+            "policyname": "contacts members update",
+            "schemaname": "public",
+            "with_check": null
+          }
+        ]
+      },
+      {
+        "name": "public.conversations",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "agent_slug",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "channel",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "title",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "auth.users",
+            "columns": [
+              "user_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "DELETE",
+            "qual": "(user_id = auth.uid())",
+            "roles": [
+              "public"
+            ],
+            "tablename": "conversations",
+            "permissive": "PERMISSIVE",
+            "policyname": "conversations_owner_delete",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+              "public"
+            ],
+            "tablename": "conversations",
+            "permissive": "PERMISSIVE",
+            "policyname": "conversations_owner_insert",
+            "schemaname": "public",
+            "with_check": "(user_id = auth.uid())"
+          },
+          {
+            "cmd": "SELECT",
+            "qual": "(user_id = auth.uid())",
+            "roles": [
+              "public"
+            ],
+            "tablename": "conversations",
+            "permissive": "PERMISSIVE",
+            "policyname": "conversations_owner_select",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "UPDATE",
+            "qual": "(user_id = auth.uid())",
+            "roles": [
+              "public"
+            ],
+            "tablename": "conversations",
+            "permissive": "PERMISSIVE",
+            "policyname": "conversations_owner_update",
+            "schemaname": "public",
+            "with_check": "(user_id = auth.uid())"
+          }
+        ]
+      },
+      {
+        "name": "public.lead_candidates",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "conversation_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "plan_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "account_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "contact_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "signal_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "lead_type",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "fit_score",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "priority",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "reason",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "next_action",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "raw",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "evidence_id",
+            "type": "uuid",
+            "nullable": true
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.accounts",
+            "columns": [
+              "account_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.contacts",
+            "columns": [
+              "contact_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.lead_evidence",
+            "columns": [
+              "evidence_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.signals",
+            "columns": [
+              "signal_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "DELETE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "lead_candidates",
+            "permissive": "PERMISSIVE",
+            "policyname": "lc members delete",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "lead_candidates",
+            "permissive": "PERMISSIVE",
+            "policyname": "lc members insert",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          },
+          {
+            "cmd": "SELECT",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "lead_candidates",
+            "permissive": "PERMISSIVE",
+            "policyname": "lc members read",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "UPDATE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "lead_candidates",
+            "permissive": "PERMISSIVE",
+            "policyname": "lc members update",
+            "schemaname": "public",
+            "with_check": null
+          }
+        ]
+      },
+      {
+        "name": "public.lead_evidence",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "evidence_kind",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "contact_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "account_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "lead_candidate_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "provider",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "actor_key",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "actor_id",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "source_url",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "source_record_id",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "observed_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "verified_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "verification_status",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "confidence",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "normalized_value",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "dedupe_key",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "lifecycle_status",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "sanitized",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "legacy_signal_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.accounts",
+            "columns": [
+              "account_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.contacts",
+            "columns": [
+              "contact_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.lead_candidates",
+            "columns": [
+              "lead_candidate_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.signals",
+            "columns": [
+              "legacy_signal_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "DELETE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "lead_evidence",
+            "permissive": "PERMISSIVE",
+            "policyname": "lead_evidence members delete",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "lead_evidence",
+            "permissive": "PERMISSIVE",
+            "policyname": "lead_evidence members insert",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          },
+          {
+            "cmd": "SELECT",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "lead_evidence",
+            "permissive": "PERMISSIVE",
+            "policyname": "lead_evidence members read",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "UPDATE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "lead_evidence",
+            "permissive": "PERMISSIVE",
+            "policyname": "lead_evidence members update",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          }
+        ]
+      },
+      {
+        "name": "public.lead_lineages",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "lineage_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "mission_hash",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "state_version",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "current_state",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "lease_holder",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "lease_expires_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "generation",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "terminal_reason",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "last_progress_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "lineage_id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": []
+      },
+      {
+        "name": "public.messages",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "conversation_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "role",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "content",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "agent_slug",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "model_used",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "tokens_used",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "is_error",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "metadata",
+            "type": "jsonb",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.conversations",
+            "columns": [
+              "conversation_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "DELETE",
+            "qual": "(EXISTS ( SELECT 1\n   FROM conversations c\n  WHERE ((c.id = messages.conversation_id) AND (c.user_id = auth.uid()))))",
+            "roles": [
+              "public"
+            ],
+            "tablename": "messages",
+            "permissive": "PERMISSIVE",
+            "policyname": "messages_via_conversation_delete",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+              "public"
+            ],
+            "tablename": "messages",
+            "permissive": "PERMISSIVE",
+            "policyname": "messages_via_conversation_insert",
+            "schemaname": "public",
+            "with_check": "(EXISTS ( SELECT 1\n   FROM conversations c\n  WHERE ((c.id = messages.conversation_id) AND (c.user_id = auth.uid()))))"
+          },
+          {
+            "cmd": "SELECT",
+            "qual": "(EXISTS ( SELECT 1\n   FROM conversations c\n  WHERE ((c.id = messages.conversation_id) AND (c.user_id = auth.uid()))))",
+            "roles": [
+              "public"
+            ],
+            "tablename": "messages",
+            "permissive": "PERMISSIVE",
+            "policyname": "messages_via_conversation_select",
+            "schemaname": "public",
+            "with_check": null
+          }
+        ]
+      },
+      {
+        "name": "public.outreach_drafts",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "lead_candidate_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "account_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "contact_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "approval_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "channel",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "subject",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "body",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "personalization_notes",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "raw",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.accounts",
+            "columns": [
+              "account_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.contacts",
+            "columns": [
+              "contact_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.lead_candidates",
+            "columns": [
+              "lead_candidate_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "DELETE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "outreach_drafts",
+            "permissive": "PERMISSIVE",
+            "policyname": "od members delete",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "outreach_drafts",
+            "permissive": "PERMISSIVE",
+            "policyname": "od members insert",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          },
+          {
+            "cmd": "SELECT",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "outreach_drafts",
+            "permissive": "PERMISSIVE",
+            "policyname": "od members read",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "UPDATE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "outreach_drafts",
+            "permissive": "PERMISSIVE",
+            "policyname": "od members update",
+            "schemaname": "public",
+            "with_check": null
+          }
+        ]
+      },
+      {
+        "name": "public.saved_outputs",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "conversation_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "plan_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "task_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "type",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "title",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "body",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "raw",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "DELETE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "saved_outputs",
+            "permissive": "PERMISSIVE",
+            "policyname": "so members delete",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "saved_outputs",
+            "permissive": "PERMISSIVE",
+            "policyname": "so members insert",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          },
+          {
+            "cmd": "SELECT",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "saved_outputs",
+            "permissive": "PERMISSIVE",
+            "policyname": "so members read",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "UPDATE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "saved_outputs",
+            "permissive": "PERMISSIVE",
+            "policyname": "so members update",
+            "schemaname": "public",
+            "with_check": null
+          }
+        ]
+      },
+      {
+        "name": "public.signals",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "conversation_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "plan_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "task_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "tool_call_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "source",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "signal_type",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "signal_label",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "title",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "source_url",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "confidence",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "raw",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "created_by",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "DELETE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "signals",
+            "permissive": "PERMISSIVE",
+            "policyname": "signals members delete",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "signals",
+            "permissive": "PERMISSIVE",
+            "policyname": "signals members insert",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          },
+          {
+            "cmd": "SELECT",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "signals",
+            "permissive": "PERMISSIVE",
+            "policyname": "signals members read",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "UPDATE",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "signals",
+            "permissive": "PERMISSIVE",
+            "policyname": "signals members update",
+            "schemaname": "public",
+            "with_check": null
+          }
+        ]
+      },
+      {
+        "name": "public.task_plans",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "user_instruction",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "plan",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "current_step",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "created_by",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "goal",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "plan_summary",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "steps",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "completed_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "idempotency_key",
+            "type": "text",
+            "nullable": true
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "ALL",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "task_plans",
+            "permissive": "PERMISSIVE",
+            "policyname": "task_plans_workspace_member_access",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          }
+        ]
+      },
+      {
+        "name": "public.tasks",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "agent_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "task_plan_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "step_index",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "input",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "output",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "tokens_in",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "tokens_out",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "plan_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "agent_slug",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "parent_task_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "depends_on",
+            "type": "uuid[]",
+            "nullable": false
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "payload",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "result",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "error_message",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "started_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "finished_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "completed_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "continuation_claim_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "continuation_claimed_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "continuation_claim_expires_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "checkpoint_version",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "lineage_id",
+            "type": "uuid",
+            "nullable": true
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          },
+          {
+            "kind": "f",
+            "target": "public.agents",
+            "columns": [
+              "agent_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.task_plans",
+            "columns": [
+              "task_plan_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.workspaces",
+            "columns": [
+              "workspace_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "f",
+            "target": "public.lead_lineages",
+            "columns": [
+              "lineage_id"
+            ],
+            "validated": true,
+            "target_columns": [
+              "lineage_id"
+            ]
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "ALL",
+            "qual": "has_workspace_access(auth.uid(), workspace_id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "tasks",
+            "permissive": "PERMISSIVE",
+            "policyname": "tasks_workspace_member_access",
+            "schemaname": "public",
+            "with_check": "has_workspace_access(auth.uid(), workspace_id)"
+          },
+          {
+            "cmd": "SELECT",
+            "qual": "outpost_private.public_task_read(id)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "tasks",
+            "permissive": "RESTRICTIVE",
+            "policyname": "outpost_bound_task_read",
+            "schemaname": "public",
+            "with_check": null
+          },
+          {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "tasks",
+            "permissive": "RESTRICTIVE",
+            "policyname": "outpost_bound_task_insert",
+            "schemaname": "public",
+            "with_check": "outpost_private.public_task_write(id, payload)"
+          },
+          {
+            "cmd": "UPDATE",
+            "qual": "outpost_private.public_task_write(id, payload)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "tasks",
+            "permissive": "RESTRICTIVE",
+            "policyname": "outpost_bound_task_update",
+            "schemaname": "public",
+            "with_check": "outpost_private.public_task_write(id, payload)"
+          },
+          {
+            "cmd": "DELETE",
+            "qual": "outpost_private.public_task_write(id, payload)",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "tasks",
+            "permissive": "RESTRICTIVE",
+            "policyname": "outpost_bound_task_delete",
+            "schemaname": "public",
+            "with_check": null
+          }
+        ]
+      },
+      {
+        "name": "public.tool_calls",
+        "rls": true,
+        "forced": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "plan_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "task_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "agent_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "tool_name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "provider",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "input_json",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "output_json",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "error",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "started_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "completed_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "created_by",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "keys": [
+          {
+            "kind": "p",
+            "target": null,
+            "columns": [
+              "id"
+            ],
+            "validated": true,
+            "target_columns": []
+          }
+        ],
+        "browser_write": true,
+        "policies": [
+          {
+            "cmd": "SELECT",
+            "qual": "(EXISTS ( SELECT 1\n   FROM workspace_members wm\n  WHERE ((wm.workspace_id = tool_calls.workspace_id) AND (wm.user_id = auth.uid()))))",
+            "roles": [
+              "authenticated"
+            ],
+            "tablename": "tool_calls",
+            "permissive": "PERMISSIVE",
+            "policyname": "LOCAL_TEST tool_calls member select",
+            "schemaname": "public",
+            "with_check": null
+          }
+        ]
+      }
+    ]
+  },
+  "resource_parent": {
+    "foreign_parent_visible": false,
+    "auth_requests": 2,
+    "traces": [
+      {
+        "scenario": "own_parent",
+        "raw_api_status": 201,
+        "persisted_rows": 1,
+        "wrong_workspace_parent_persisted": false,
+        "unapproved_cross_scope_request_persisted": false,
+        "stored_parent_rows": [
+          {
+            "workspace_id": "16d2e3db-0395-40e5-b5b6-5fd17af0b10c",
+            "account_id": "901daed7-3d7a-46c4-9de7-a38de91bc026",
+            "parent_workspace_id": "16d2e3db-0395-40e5-b5b6-5fd17af0b10c"
+          }
+        ],
+        "pilot_prepare_status": 200,
+        "pilot_response": {
+          "workspace_id": "16d2e3db-0395-40e5-b5b6-5fd17af0b10c",
+          "client_binding_id": "7e6616c0-56cc-443b-9c22-6bfdc4d74c4e",
+          "version": 1,
+          "task_id": "41f5c762-d149-4d84-ba76-e06ee5fda328",
+          "action": "prepare",
+          "result": "registered",
+          "mode": "draft_only"
+        },
+        "signed": true,
+        "binding_count": 1
+      },
+      {
+        "scenario": "foreign_parent",
+        "raw_api_status": 201,
+        "persisted_rows": 1,
+        "wrong_workspace_parent_persisted": true,
+        "unapproved_cross_scope_request_persisted": true,
+        "stored_parent_rows": [
+          {
+            "workspace_id": "16d2e3db-0395-40e5-b5b6-5fd17af0b10c",
+            "account_id": "d2f18621-e9f5-45f4-b953-5fa43563b997",
+            "parent_workspace_id": "ee6a535c-ae0e-4305-9f32-3a531483ef5b"
+          }
+        ],
+        "pilot_prepare_status": 404,
+        "pilot_response": {
+          "error": "resource_unavailable"
+        },
+        "signed": false,
+        "binding_count": 0
+      }
+    ],
+    "raw_parent_integrity": "FAIL",
+    "pilot_parent_integrity": "PASS",
+    "same_workspace_client_isolation": "NOT_TESTED",
+    "phase_1": "FAIL",
+    "customer_pilot_ready": false
+  },
+  "commands": {
+    "catalog_exit": 2,
+    "parent_exit": 1,
+    "structural_units_passed": 7,
+    "infra_passed": 203,
+    "failed_unit_or_infra_tests": 0
+  },
+  "brain_23_assertions": "NOT RERUN: owner head unchanged; existing CI evidence17 pass/6 fail verified",
+  "phase_1": "FAIL",
+  "phase_2_started": false,
+  "pilot_enabled": false,
+  "customer_pilot_ready": false,
+  "external_model_provider_calls": 0
+}

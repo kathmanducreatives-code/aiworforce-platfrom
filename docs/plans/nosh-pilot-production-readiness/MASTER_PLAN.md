@@ -247,6 +247,7 @@ integration. All rows are mandatory unless explicitly scoped to future automatio
 | SEC-04 | P0 task registration/lifecycle and immutable parent coverage incomplete | backend + Codex / 1–2 | trusted signed registration, relational ownership; A→B→A never revives; normal lifecycle updates survive only agreed version rules |
 | SEC-05 | P0 arbitrary foreign-workspace self-enrollment enables cross-workspace task reads | Brain owner + Codex / 1 | native self-insert owner refused; legitimate workspace creation/invitation and nonpilot controls pass |
 | CI-01 | P1 schema-qualified RLS source scanner regression | Codex, coordinate CI owner / 1 | schema-aware parser adversaries; private and public missing-RLS mutants caught; no allow-list/skip; #151 combined CI green |
+| OWN-01 | P1 raw contact can reference an unreadable account in a different workspace; P1 ancestry still refuses | Backend + Codex native ownership coordination / 1 | native raw insert denied and no row; legitimate same-workspace/account-less/deletion controls; P1 refusal and zero new bindings retained |
 | DATA-01 | P0 no durable import or atomic creation of bound tasks | Codex / 2, wire 5 | native duplicate/conflict/concurrent/restart tests; exact input/client/source and all-or-nothing confirm |
 | DATA-02 | P0 snapshots/drafts/reviews/approvals are interfaces only | Codex / 2 | real insert-once/CAS/batch/crash tests; full lineage; no half-approval/export |
 | REPLAY-01 | P0 V2 replay not proven in native storage; V1 incompatible states | Codex / 2 | JSONB roundtrip, reordered source rows, Unicode/numbers, exact reuse; no recapture or model retry |
@@ -913,3 +914,27 @@ candidate, then extend to model/activation timing and native concurrency. A seco
 Edge check followed by a service PATCH cannot establish this atomic boundary.
 All previous client/descendant/legacy containment gates remain. Phase2 stays
 unapproved, P1–P8 off and A7 NO-GO.
+
+## Phase 1 native prerequisite / parent check continuation (2026-10-24)
+
+Current #169 remains60be0471 with no AUTH-06 fix. #171 and #172 remain unchanged
+at0d7cd077 and2ffc6b5f; both full/native CI pass, but #172's actual authorization
+substep remains17 pass/6 fail. Read completed CI evidence, do not re-investigate
+those unchanged Brain cases. No owner canonical client/grant/Brain delivery or
+final A7 generation/lock acknowledgment was found. Phase1 is still FAIL.
+
+Independent `codex/nosh-phase1-client-contract-gates` adds metadata-only READ ONLY
+native prerequisites and registry-complete ownership evidence. Canonical three
+tables absent, pilot canonical FK absent,15 resources inventoried,0 direct
+canonical FKs. Structural/indirect evidence never substitutes for native two-client
+behavior. Seven checker adversaries and full infra203/0 pass.
+
+New OWN-01 native trace: a user who cannot read B's prospect account can create
+contact A pointing to B (201, actual SQL mismatch). Original P1 prepare rejects404
+and creates no signature/binding, while a legitimate parent passes. Coordinate
+the shared native ownership successor, not a parallel registry or qualification
+rewrite. No shared schema change before owner contract/overlap agreement.
+
+Full receipts, exact commands, scope limits and owner next actions:
+[CLIENT_BOUNDARY_GATES.md](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/CLIENT_BOUNDARY_GATES.md).
+Phase2 unstarted, P1–P8 disabled, A7 NO-GO; no hosted/paid/customer effects.
