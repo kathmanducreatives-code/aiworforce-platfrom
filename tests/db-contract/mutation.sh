@@ -82,8 +82,9 @@ runner_ts="$root/worker/leadMissionRunner.ts"
 clock_ts="$root/supabase/functions/_shared/missionWallClock.ts"
 plan_ts="$root/supabase/functions/_shared/smokeAdmissionRefusal.ts"
 planner_ts="$root/supabase/functions/_shared/gptExecutionPlanner.ts"
+brain_writer_sql="$root/supabase/migrations/20261024120000_company_brain_authorized_writer.sql"
 restore_list=()
-for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts"; do
+for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql"; do
   cp "$f" "$f.mutation-backup"; restore_list+=("$f")
 done
 trap 'cp "$backup" "$real"; for f in "${restore_list[@]}"; do mv -f "$f.mutation-backup" "$f"; done; rm -f "$backup" "$out"' EXIT
@@ -338,6 +339,23 @@ fi
 echo "mutant killed: without the migration a viewer rewrites the Company Brain from the browser"
 ran=$((ran + 1))
 fi
+
+# ── PROOFS: the Company Brain writer re-authorizes under locks (AUTH-06) ────
+# Each mutant weakens one part of public.company_brain_authorized_write; a
+# named race or refusal test must then fail. The function is applied by the
+# bootstrap as a normal migration, so the mutant is what the database runs.
+brain_writer_tests="$root/tests/db-contract/companyBrainAuthorizedWrite.contract.test.ts"
+prove_killed "Brain writer: no lock on the session (a logout overtakes the write)" "$brain_writer_sql" \
+  "     and (s.not_after is null or s.not_after > v_now)
+   for share;" "     and (s.not_after is null or s.not_after > v_now);" \
+  "$brain_writer_tests" "race: logged out in flight → the write waits, then is refused"
+prove_killed "Brain writer: no lock on the membership (a demotion overtakes the write)" "$brain_writer_sql" \
+  "   where m.workspace_id = p_workspace_id and m.user_id = p_actor_id
+   for share;" "   where m.workspace_id = p_workspace_id and m.user_id = p_actor_id;" \
+  "$brain_writer_tests" "race: demoted to viewer in flight → the write waits, then is refused"
+prove_killed "Brain writer: role not checked at the write" "$brain_writer_sql" \
+  "            when 'edit' then v_role in ('owner', 'admin', 'editor')" "            when 'edit' then true" \
+  "$brain_writer_tests" "owner, admin and editor write; viewer, legacy roles and non-members are refused and change nothing"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"

@@ -125,6 +125,7 @@ checks the refusals with a stub `psql`.
 | 42 | `20260929130000_revoke_anon_writes_on_workspace_tables.sql` |
 | 43 | `20260929140000_beta_access_requests.sql` |
 | 46 | `20261023120000_company_brain_server_writes_only.sql` (numbered after #159's 44 and the collaboration-room fix's 45) |
+| 47 | `20261024120000_company_brain_authorized_writer.sql` (AUTH-06: every Brain write re-authorized in its transaction) |
 
 **Step C: the held Lead V2 queue chain (needed by the worker)**
 

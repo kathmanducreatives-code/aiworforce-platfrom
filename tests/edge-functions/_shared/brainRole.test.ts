@@ -59,8 +59,7 @@ Deno.test("R3-4 generate-company-brain-draft checks the role after membership an
   assertRoleGateFirst(f, /if \(!canBrain\(role, required\)\)/, [
     /= buildDeps\(\);/,                            // model and provider dependencies (the call)
     /if \(action === "research_founder"\)/,         // first action
-    /\.from\("company_brain"\)\s*\.update\(/,       // the update write
-    /writeBrain|\.upsert\(/,                        // the save/activate write
+    /authorizedBrainWrite\(admin/,                  // every Brain write (re-authorized again in its transaction)
   ]);
 });
 
@@ -72,6 +71,6 @@ Deno.test("R3-5 setup-company-brain checks the role before any model call or wri
   assertRoleGateFirst(f, /if \(!canBrain\(role, required\)\)/, [
     /if \(action === "save_basics"\)/,
     /if \(action === "analyze"\)/,
-    /onboarding_completed: true/,
+    /saveProfile\(patch, \{ activate: true \}\)/,   // finalize: the activating write
   ]);
 });

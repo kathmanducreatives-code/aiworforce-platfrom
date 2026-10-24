@@ -3,6 +3,7 @@
 // All AI/tool calls are server-side. Workspace membership enforced.
 
 import { canBrain, normalizeWorkspaceRole } from "../_shared/brainRole.ts";
+import { authorizedBrainWrite, brainWriteRefusal, sessionIdFromBearer, type BrainWriteOutcome } from "../_shared/brainWriter.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured, runTool } from "../_shared/toolRegistry.ts";
@@ -123,6 +124,12 @@ Deno.serve(async (req) => {
   const role = normalizeWorkspaceRole((member as { role?: unknown }).role);
   const required = action === "finalize" ? "activate" : "edit";
   if (!canBrain(role, required)) return json({ error: "brain_role_forbidden", role, required }, 403);
+  // Every Brain write re-checks this caller's live session, membership and role
+  // in the write's own transaction (_shared/brainWriter.ts, AUTH-06).
+  const sessionId = sessionIdFromBearer(authHeader);
+  class BrainWriteRefused extends Error {
+    constructor(readonly outcome: Exclude<BrainWriteOutcome, "ok" | "stale">) { super(outcome); }
+  }
 
   // Helper: load current profile
   async function loadProfile(): Promise<AnyObj> {
@@ -134,27 +141,25 @@ Deno.serve(async (req) => {
   // write could revert an edit saved between the read and the write. The write
   // only lands on the version it read; on a race it re-reads and re-applies the
   // patch (a small top-level merge), and gives up loudly after a few tries.
-  async function saveProfile(patch: AnyObj, extra: AnyObj = {}) {
-    return saveProfileWith((current) => ({ ...current, ...patch }), extra);
+  // `activate` marks the Brain activated in the same authorized write (finalize).
+  async function saveProfile(patch: AnyObj, opts: { activate?: boolean } = {}) {
+    return saveProfileWith((current) => ({ ...current, ...patch }), opts);
   }
-  async function saveProfileWith(merge: (current: AnyObj) => AnyObj, extra: AnyObj = {}) {
+  async function saveProfileWith(merge: (current: AnyObj) => AnyObj, opts: { activate?: boolean } = {}) {
     for (let attempt = 0; attempt < 4; attempt++) {
       const { data: row } = await admin
         .from("company_brain").select("profile, updated_at").eq("workspace_id", workspace_id).maybeSingle();
       const merged = merge((row?.profile as AnyObj) ?? {});
-      if (!row) {
-        const { error } = await admin.from("company_brain").insert({
-          workspace_id, profile: merged, updated_at: new Date().toISOString(), ...extra,
-        });
-        if (!error) return merged;
-        continue; // a concurrent insert won; retry as an update
-      }
-      const { data: written, error } = await admin.from("company_brain")
-        .update({ profile: merged, updated_at: new Date().toISOString(), ...extra })
-        .eq("workspace_id", workspace_id).eq("updated_at", row.updated_at)
-        .select("workspace_id");
-      if (error) throw error;
-      if (written?.length) return merged;
+      const written = await authorizedBrainWrite(admin, {
+        workspaceId: workspace_id, actorId: userId, sessionId,
+        permission: opts.activate ? "activate" : "edit",
+        // No row yet: insert (a concurrent insert wins → retry as an update).
+        mode: row ? "cas" : "insert", profile: merged,
+        expectedUpdatedAt: row ? (row as { updated_at: string }).updated_at : null,
+        activate: opts.activate === true,
+      });
+      if (written.outcome === "ok") return merged;
+      if (written.outcome !== "stale") throw new BrainWriteRefused(written.outcome);
     }
     throw new Error("company_brain changed concurrently; retry");
   }
@@ -308,10 +313,7 @@ Deno.serve(async (req) => {
     if (action === "finalize") {
       const patch: AnyObj = {};
       if (body.profile && typeof body.profile === "object") Object.assign(patch, body.profile);
-      const merged = await saveProfile(patch, {
-        onboarding_completed: true,
-        onboarding_completed_at: new Date().toISOString(),
-      });
+      const merged = await saveProfile(patch, { activate: true });
       // Non-blocking activity log
       admin.from("activity_feed").insert({
         workspace_id,
@@ -325,6 +327,7 @@ Deno.serve(async (req) => {
 
     return json({ error: "unknown_action", action }, 400);
   } catch (e) {
+    if (e instanceof BrainWriteRefused) { const r = brainWriteRefusal(e.outcome); return json(r.body, r.status); }
     console.error("setup-company-brain error", e);
     return json({ error: "internal_error", details: e instanceof Error ? e.message : String(e) }, 500);
   }
