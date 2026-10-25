@@ -138,7 +138,7 @@ checked. Independent of every other held migration.
 `tests/db-contract/taskCommitBoundary.contract.test.ts` proves it, including
 the two-session race; `mutation.sh` proves it fails without the migration,
 without the lock, and without the plan-workspace comparison. Rollback:
-`rollback/20261025130000_tasks_commit_boundary.down.sql`.
+`rollback/20261025130000_tasks_commit_boundary.down.sql` (round trip verified: rolled back equals never applied, privileges included). Before applying on a hosted project, run `scripts/test-project/tasks-commit-boundary-preflight.sql` (read-only); it must end in `OK`.
 
 ## `20261015120000_provider_purchase_claims.sql`
 
