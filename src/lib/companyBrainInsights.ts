@@ -56,14 +56,16 @@ const text = (t: string): IcpPhrase => ({ kind: 'text', text: t });
 
 /**
  * The ICP as three sentences: who, when they fit best, who to skip. Slots are
- * always present — an empty one renders as an invitation to fill it.
+ * always present — an empty one renders as an invitation to fill it. `subject`
+ * names whose ICP this is when it is not the reader's own company (a client
+ * Brain, Phase 3c): "Acme sells to … / Acme skips …" instead of "We".
  */
-export function buildIcpSentences(b: CompanyBrainV2): IcpPhrase[][] {
+export function buildIcpSentences(b: CompanyBrainV2, subject?: string | null): IcpPhrase[][] {
   const t = b.target_customer;
   const size = companySizeLabel(b);
   return [
     [
-      text('We sell to'), slot('business models', t.business_models, 'or', 'targeting', 'business_models'),
+      text(subject ? `${subject} sells to` : 'We sell to'), slot('business models', t.business_models, 'or', 'targeting', 'business_models'),
       text('companies in'), slot('industries', t.industries, 'or', 'targeting', 'industries'),
       text('with'), slot('company size', size ? [size] : [], 'or', 'targeting', null),
       text('based in'), slot('regions', t.geography, 'or', 'targeting', 'geography'),
@@ -76,7 +78,7 @@ export function buildIcpSentences(b: CompanyBrainV2): IcpPhrase[][] {
       text('.'),
     ],
     [
-      text('We skip'), slot('excluded industries', t.disqualifiers.industries, 'and', 'disqualifiers', 'disq_industries'),
+      text(subject ? `${subject} skips` : 'We skip'), slot('excluded industries', t.disqualifiers.industries, 'and', 'disqualifiers', 'disq_industries'),
       text('and'), slot('excluded company types', t.disqualifiers.company_types, 'and', 'disqualifiers', 'disq_company_types'),
       text('.'),
     ],
@@ -104,7 +106,11 @@ export interface NextStep {
 }
 
 /** Ordered improvements: real gaps first (in the order agents use the brain), then polish. */
-export function deriveNextSteps(b: CompanyBrainV2): NextStep[] {
+export function deriveNextSteps(b: CompanyBrainV2, subject?: string | null): NextStep[] {
+  // Whose Brain: the reader's own company ("your", "you"), or a client's (Phase 3c).
+  const s = subject?.trim() || null;
+  const their = s ? `${s}'s` : 'your';
+  const them = s ?? 'you';
   const h = deriveHealth(b);
   const t = b.target_customer;
   const gaps: NextStep[] = [];
@@ -113,44 +119,44 @@ export function deriveNextSteps(b: CompanyBrainV2): NextStep[] {
 
   if (h.company !== 'configured') {
     const m = missing([[!!b.company.name, 'name'], [!!b.company.description, 'description'], [!!b.company.category, 'category']]);
-    gaps.push({ section: 'company', kind: 'gap', title: 'Complete your company profile', detail: `Add your ${joinValues(m, 'and')} so every agent describes you the same way.` });
+    gaps.push({ section: 'company', kind: 'gap', title: `Complete ${their} company profile`, detail: `Add ${s ? 'its' : 'your'} ${joinValues(m, 'and')} so every agent describes ${s ? 'it' : 'you'} the same way.` });
   }
   if (h.targeting !== 'configured') {
     gaps.push(!t.industries.length
       ? { section: 'targeting', kind: 'gap', title: 'Choose target industries', detail: 'Industries decide which companies are worth researching at all.' }
-      : { section: 'targeting', kind: 'gap', title: 'Sharpen your target market', detail: `Add ${joinValues(missing([[!!t.business_models.length, 'business models'], [!!t.geography.length, 'regions']]), 'and')} to narrow the search.` });
+      : { section: 'targeting', kind: 'gap', title: `Sharpen ${their} target market`, detail: `Add ${joinValues(missing([[!!t.business_models.length, 'business models'], [!!t.geography.length, 'regions']]), 'and')} to narrow the search.` });
   }
   if (h.buyers !== 'configured') {
     gaps.push(!b.buyer_personas.length
-      ? { section: 'buyers', kind: 'gap', title: 'Add the roles you sell to', detail: 'Buyer roles decide who inside an account is worth contacting.' }
-      : { section: 'buyers', kind: 'gap', title: 'Add the pains your buyers feel', detail: 'Pain points give outreach a reason to exist.' });
+      ? { section: 'buyers', kind: 'gap', title: s ? `Add the roles ${s} sells to` : 'Add the roles you sell to', detail: 'Buyer roles decide who inside an account is worth contacting.' }
+      : { section: 'buyers', kind: 'gap', title: `Add the pains ${their} buyers feel`, detail: 'Pain points give outreach a reason to exist.' });
   }
   if (h.signals !== 'configured') {
     gaps.push(!b.triggers.length && !b.jobs_to_watch.length
-      ? { section: 'signals', kind: 'gap', title: 'Add buying moments to watch', detail: 'Trigger events and hiring roles tell your team when to reach out.' }
+      ? { section: 'signals', kind: 'gap', title: 'Add buying moments to watch', detail: 'Trigger events and hiring roles tell your AI team when to reach out.' }
       : !b.triggers.length
         ? { section: 'signals', kind: 'gap', title: 'Add trigger events', detail: 'Events like a new hire or a funding round make outreach timely.' }
         : { section: 'signals', kind: 'gap', title: 'Add roles to watch for', detail: 'Open roles are one of the clearest signs a company is investing.' });
   }
   if (h.disqualifiers !== 'configured') {
-    gaps.push({ section: 'disqualifiers', kind: 'gap', title: 'Set your guardrails', detail: 'Add at least one rule or exclusion so weak fits are filtered out early.' });
+    gaps.push({ section: 'disqualifiers', kind: 'gap', title: `Set ${their} guardrails`, detail: 'Add at least one rule or exclusion so weak fits are filtered out early.' });
   }
   if (h.messaging !== 'configured') {
     const m = missing([[!!b.positioning.promise, 'a core promise'], [!!b.content_angles.length, 'content angles'], [!!b.brand_voice.tone, 'a tone of voice']]);
-    gaps.push({ section: 'messaging', kind: 'gap', title: 'Finish your messaging', detail: `Add ${joinValues(m, 'and')} so drafts sound like you.` });
+    gaps.push({ section: 'messaging', kind: 'gap', title: `Finish ${their} messaging`, detail: `Add ${joinValues(m, 'and')} so drafts sound like ${them}.` });
   }
 
   if (h.messaging === 'configured' && !b.positioning.proof_points.length) {
     polish.push({ section: 'messaging', kind: 'polish', title: 'Add proof points', detail: 'A customer result or metric makes every message more credible.' });
   }
   if (h.messaging === 'configured' && !b.positioning.differentiators.length) {
-    polish.push({ section: 'messaging', kind: 'polish', title: 'Name what makes you different', detail: 'Differentiators keep messages from sounding like every competitor.' });
+    polish.push({ section: 'messaging', kind: 'polish', title: s ? `Name what makes ${s} different` : 'Name what makes you different', detail: 'Differentiators keep messages from sounding like every competitor.' });
   }
   if (h.buyers === 'configured' && b.buyer_personas.length === 1) {
     polish.push({ section: 'buyers', kind: 'polish', title: 'Add a second buyer role', detail: 'Most deals involve more than one person — name who else signs off.' });
   }
   if (h.disqualifiers === 'configured' && !b.qualification_rules.reject_if.length) {
-    polish.push({ section: 'disqualifiers', kind: 'polish', title: 'Add a hard reject rule', detail: 'A clear reject rule saves research on companies you would never close.' });
+    polish.push({ section: 'disqualifiers', kind: 'polish', title: 'Add a hard reject rule', detail: `A clear reject rule saves research on companies ${s ? `${s} would` : 'you would'} never close.` });
   }
   return [...gaps, ...polish];
 }

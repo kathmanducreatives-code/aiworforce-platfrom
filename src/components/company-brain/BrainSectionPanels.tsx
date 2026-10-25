@@ -207,7 +207,7 @@ export function VoicePanel({ brain, health, saved, onSaveFields }: PanelProps) {
         <div className="brain-field-grid">
           <InlineText label="Offer" value={p.offer} placeholder="What a new customer gets — a pilot, a trial, a package."
             onCommit={(next) => onSaveFields('messaging', { offer: next })} />
-          <InlineText label="Pricing" value={p.pricing} placeholder="How you price, as you'd say it to a buyer."
+          <InlineText label="Pricing" value={p.pricing} placeholder="How it is priced, as you would say it to a buyer."
             onCommit={(next) => onSaveFields('messaging', { pricing: next })} />
           <Field {...f} field="use_cases" label="Use cases" variant="rows" values={p.use_cases} emptyText="No use cases yet." />
           <Field {...f} field="avoid_positioning" label="Never position as" tone="negative" variant="rows" values={p.avoid_positioning}

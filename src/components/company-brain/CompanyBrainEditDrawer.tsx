@@ -47,6 +47,8 @@ interface Props {
   serverUpdatedAt?: string | null;
   /** The client whose Brain this is (Phase 3c); absent = the agency Brain. Drafts are kept per Brain. */
   clientId?: string | null;
+  /** The client's name, on a client Brain: the editor names whose Brain it is (Phase 3c). */
+  clientName?: string | null;
 }
 
 const SECTION_ORDER: SectionKey[] = ['company', 'targeting', 'buyers', 'signals', 'disqualifiers', 'messaging'];
@@ -67,7 +69,17 @@ const TITLES: Record<SectionKey, {
   messaging:     { eyebrow: 'COMPANY BRAIN', title: 'Edit Messaging & Positioning', short: 'Messaging Fit', description: 'How Agentory should sound on your behalf.', influences: 'Shapes outreach drafts, content, and brand voice.', icon: Megaphone },
 };
 
-export default function CompanyBrainEditDrawer({ open, section, brain, onOpenChange, onSave, serverUpdatedAt, clientId = null }: Props) {
+/** A client's Brain never speaks as if it were the reader's own company. */
+function forClient(m: (typeof TITLES)[SectionKey], section: SectionKey, name: string): (typeof TITLES)[SectionKey] {
+  const copy: Partial<Record<SectionKey, { description: string; influences?: string }>> = {
+    company: { description: `What Agentory tells other agents about ${name}.`, influences: `Grounds every agent in what ${name} does and who it sells to.` },
+    buyers: { description: `The roles ${name} sells to and the pains it solves.` },
+    messaging: { description: `How Agentory should sound on ${name}'s behalf.` },
+  };
+  return { ...m, eyebrow: `CLIENT BRAIN · ${name}`, ...copy[section] };
+}
+
+export default function CompanyBrainEditDrawer({ open, section, brain, onOpenChange, onSave, serverUpdatedAt, clientId = null, clientName = null }: Props) {
   const reduce = useReducedMotion();
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -227,7 +239,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   }
 
   if (!activeSection) return null;
-  const meta = TITLES[activeSection];
+  const meta = clientName ? forClient(TITLES[activeSection], activeSection, clientName) : TITLES[activeSection];
   const Icon = meta.icon;
   const sectionIndex = SECTION_ORDER.indexOf(activeSection) + 1;
 

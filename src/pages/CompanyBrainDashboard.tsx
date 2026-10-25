@@ -4,6 +4,11 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
+import { useBrainScope } from '@/hooks/useBrainScope';
+import { BrainScopeSwitcher } from '@/components/company-brain/BrainScopeSwitcher';
+import { saveClientBrainPatch } from '@/lib/brainInvoke';
+import { DENIAL_TEXT } from '@/lib/clientBrainApi';
+import { brainScopeKey } from '@/lib/brainScope';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 import { BrainOverview } from '@/components/company-brain/BrainOverview';
@@ -24,7 +29,21 @@ import { BrainEditableContext } from '@/components/company-brain/brainEditable';
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
   const { workspaceId } = useWorkspace();
-  const { data, loading, isRefreshing, error, refresh } = useCompanyBrain();
+  // Which Brain: the agency's own, or a client's (Phase 3c, held — off unless
+  // VITE_CLIENT_BRAINS is set). Uncertain → the agency Brain.
+  const brainScope = useBrainScope();
+  const scope = brainScope.scope;
+  const { accessChanged } = brainScope;
+  const scopeId = scope.kind === 'client' ? scope.clientId : null;
+  // Which Brain, for which signed-in session (CACHE-SESSION): a save answered
+  // after a switch of client, workspace or user never moves what is on screen.
+  const { principal } = useWorkspace();
+  const scopeKey = workspaceId && principal ? brainScopeKey(workspaceId, scope, principal) : null;
+  const currentScopeKey = useRef(scopeKey);
+  currentScopeKey.current = scopeKey;
+  const { data, loading, isRefreshing, error, denied, refresh } = useCompanyBrain(scope);
+  // A Brain's version token: updated_at (agency) or the integer version (client).
+  const dataVersion = scope.kind === 'client' ? (data?.version == null ? null : String(data.version)) : (data?.updated_at ?? null);
   // Viewers get a read-only page (Phase 3a). The server refuses their writes regardless.
   const { canEditBrain } = useWorkspaceRole();
   const [openSection, setOpenSection] = useState<DrawerSectionKey | null>(null);
@@ -46,7 +65,7 @@ export default function CompanyBrainDashboard() {
   // The row version the queued saves build on. The server refuses a save whose
   // version is out of date, so a change from another tab, a teammate, onboarding
   // or the Signals radar is never silently overwritten.
-  const version = useRef<string | null>(data?.updated_at ?? null);
+  const version = useRef<string | null>(dataVersion);
   const pending = useRef(0);
   const batchFailed = useRef(false);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -55,9 +74,25 @@ export default function CompanyBrainDashboard() {
     serverRaw.current = serverView.raw;
     if (pending.current > 0) return;
     latestRaw.current = serverView.raw;
-    version.current = data?.updated_at ?? null;
+    version.current = dataVersion;
     setOptimistic(null);
-  }, [serverView, data?.updated_at]);
+  }, [serverView, dataVersion]);
+
+  // Access to the selected client went away (revoked, archived, signed out):
+  // say so and return to the agency Brain. Nothing from that client stays on screen.
+  useEffect(() => {
+    if (scope.kind === 'client' && denied) {
+      toast.error(DENIAL_TEXT[denied]);
+      accessChanged();
+    }
+  }, [scope, denied, accessChanged]);
+  // Switching Brain: optimistic copies, refused edits and open editors belong
+  // to the Brain they were made on.
+  useEffect(() => {
+    setOpenSection(null);
+    setOptimistic(null);
+    setUnsaved([]);
+  }, [scopeId, workspaceId]);
 
   const view = useMemo(() => (optimistic ? toSavedBrainView(optimistic) : serverView), [optimistic, serverView]);
   const { brain } = view;
@@ -97,14 +132,26 @@ export default function CompanyBrainDashboard() {
     const run = queue.current.then(async () => {
       // A save after a failed one was built on top of it — don't save half a batch.
       if (batchFailed.current) return false;
-      const result = await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: version.current });
+      const savedFor = currentScopeKey.current;
+      const result = scope.kind === 'client'
+        ? await saveClientBrainPatch({ workspaceId, scope, patch, expectedVersion: version.current === null ? null : Number(version.current) })
+        : await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: version.current });
+      // The user switched Brain while this was saving: its answer is not this Brain's.
+      if (currentScopeKey.current !== savedFor) return result.ok;
+      if (!result.ok && 'denied' in result && result.denied) {
+        batchFailed.current = true;
+        toast.error(result.message ?? 'Access changed');
+        accessChanged();
+        return false;
+      }
       if (!result.ok) {
         batchFailed.current = true;
         lastFailureWasConflict.current = result.conflict === true;
         toast.error(result.conflict ? 'Company Brain was changed elsewhere' : 'Save failed', { description: result.message });
         return false;
       }
-      version.current = result.updatedAt ?? version.current;
+      const next = scope.kind === 'client' ? (result as { version?: string }).version : (result as { updatedAt?: string }).updatedAt;
+      version.current = next ?? version.current;
       return true;
     }).finally(() => {
       pending.current -= 1;
@@ -120,7 +167,7 @@ export default function CompanyBrainDashboard() {
     });
     queue.current = run;
     return run;
-  }, [workspaceId, refresh]);
+  }, [workspaceId, refresh, scope, accessChanged]);
 
   // The drawer keeps its edit when this throws (see CompanyBrainEditDrawer).
   async function saveSection(section: SectionKey, patch: BrainProfile) {
@@ -201,7 +248,9 @@ export default function CompanyBrainDashboard() {
         )}
 
         {error && <div role="alert" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 p-4 text-sm"><span>Company Brain could not refresh. Please try again.</span><Button size="sm" variant="outline" onClick={() => refresh()}>Retry</Button></div>}
-        {(!error || data) && <BrainEditableContext.Provider value={canEditBrain}><BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} syncing={isRefreshing} onEdit={setOpenSection} onRestart={() => setRestartOpen(true)} onStartSetup={() => navigate('/onboarding/company-brain')} onSaveFields={saveFields} /></BrainEditableContext.Provider>}
+        {(!error || data) && <BrainEditableContext.Provider value={canEditBrain}><BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} syncing={isRefreshing} onEdit={setOpenSection} onRestart={scope.kind === 'agency' ? () => setRestartOpen(true) : undefined} onStartSetup={scope.kind === 'agency' ? () => navigate('/onboarding/company-brain') : undefined} onSaveFields={saveFields}
+          clientName={brainScope.currentClient?.name ?? null}
+          scopeSwitcher={brainScope.available ? <BrainScopeSwitcher scope={scope} clients={brainScope.clients} onSelect={brainScope.select} disabled={openSection !== null} /> : undefined} /></BrainEditableContext.Provider>}
       </div>
 
       <CompanyBrainEditDrawer
@@ -210,7 +259,9 @@ export default function CompanyBrainDashboard() {
         brain={brain}
         onOpenChange={(v) => { if (!v) setOpenSection(null); }}
         onSave={(patch) => saveSection(openSection as SectionKey, patch)}
-        serverUpdatedAt={data?.updated_at ?? null}
+        clientId={scopeId}
+        clientName={brainScope.currentClient?.name ?? null}
+        serverUpdatedAt={dataVersion}
       />
 
       <RestartOnboardingModal

@@ -25,10 +25,10 @@ Deno.test("E-1 empty means: never activated and nothing filled in at all", () =>
 Deno.test("E-2 the page: setup prompt, direct setup action, no identity warning, no '·' avatar", () => {
   const overview = read("src/components/company-brain/BrainOverview.tsx");
   assert(/\{empty && \(\s*<section className="brain-empty"/.test(overview));
-  assert(/\{editable && <Button onClick=\{onStartSetup\} className="shrink-0">Start guided setup<\/Button>\}/.test(overview));
+  assert(/\{editable && onStartSetup && <Button onClick=\{onStartSetup\} className="shrink-0">Start guided setup<\/Button>\}/.test(overview), "guided setup is the agency's; a client Brain has none");
   assert(/onClick=\{active \? onRestart : onStartSetup\}/.test(overview), "never 'restart' a setup that never ran");
   assert(/\{c\.name\.trim\(\) \? monogram\(c\.name\) : <Building2 size=\{18\} \/>\}/.test(overview));
   const page = read("src/pages/CompanyBrainDashboard.tsx");
   assert(/\{identityBanner && !brainEmpty && \(/.test(page));
-  assert(/onStartSetup=\{\(\) => navigate\('\/onboarding\/company-brain'\)\}/.test(page));
+  assert(/onStartSetup=\{scope\.kind === 'agency' \? \(\) => navigate\('\/onboarding\/company-brain'\) : undefined\}/.test(page));
 });

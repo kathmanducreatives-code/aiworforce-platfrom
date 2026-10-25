@@ -52,7 +52,10 @@ Deno.test("3. the page saves through saveCompanyBrainPatch, sends the patch, cha
   const src = await Deno.readTextFile(new URL("src/pages/CompanyBrainDashboard.tsx", ROOT));
   assert(/saveCompanyBrainPatch\(\{\s*workspaceId,\s*patch,\s*expectedUpdatedAt:\s*version\.current\s*\}\)/.test(src),
     "the queue sends the edit's patch with the version it builds on");
-  assert(/version\.current = result\.updatedAt/.test(src), "and carries the returned version into the next save");
+  assert(/\(result as \{ updatedAt\?: string \}\)\.updatedAt;\s*version\.current = next \?\? version\.current;/.test(src), "and carries the returned version into the next save");
+  // Phase 3c (held): a client Brain saves through its own call and chains its integer version.
+  assert(/saveClientBrainPatch\(\{ workspaceId, scope, patch, expectedVersion: version\.current === null \? null : Number\(version\.current\) \}\)/.test(src));
+  assert(/if \(currentScopeKey\.current !== savedFor\) return result\.ok;/.test(src), "an answer that arrives after a switch never moves the new Brain's version");
   assertFalse(/from\(['"]company_brain['"]\)/.test(src), "the page never touches the row itself");
   assertFalse(/supabase/.test(src), "nor imports the client");
   assertFalse(/saveCompanyBrainPatch\(\{[^}]*merged/.test(src), "the merged profile is for display only");

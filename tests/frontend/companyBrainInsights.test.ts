@@ -163,3 +163,14 @@ Deno.test("12. the page's saves are versioned like every other writer of the bra
   assert(/expectedUpdatedAt: version\.current/.test(page), "every save names the version it builds on");
   assert(/updated_at'\)/.test(hook), "the shared read carries the version");
 });
+
+// Phase 3c: a client's Brain never speaks as if it were the reader's own company.
+Deno.test("next steps and the ICP name the client on a client Brain; the agency wording is unchanged", () => {
+  const empty = normalizeCompanyBrain({});
+  const agency = deriveNextSteps(empty).map((s) => `${s.title} ${s.detail}`).join(" | ");
+  const client = deriveNextSteps(empty, "Acme Health").map((s) => `${s.title} ${s.detail}`).join(" | ");
+  assert(agency.includes("Complete your company profile"));
+  assert(client.includes("Complete Acme Health's company profile"));
+  assert(client.includes("Add the roles Acme Health sells to"));
+  assert(!/\byour\b|\byou\b|\bwe\b/i.test(client.replace(/your AI team/g, "")), `no reader-possessive copy on a client Brain: ${client}`);
+});

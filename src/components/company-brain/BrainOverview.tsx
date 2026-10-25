@@ -28,10 +28,15 @@ interface Props {
   /** A background read is in flight (the page stays usable). */
   syncing?: boolean;
   onEdit: (section: SectionKey) => void;
-  onRestart: () => void;
-  /** Open guided setup directly (a Brain that was never activated has nothing to restart). */
-  onStartSetup: () => void;
+  /** Re-run setup. Absent for a client Brain (guided setup is the agency's). */
+  onRestart?: () => void;
+  /** Open guided setup directly (a Brain that was never activated has nothing to restart). Absent for a client Brain. */
+  onStartSetup?: () => void;
   onSaveFields: SaveFields;
+  /** The Brain switcher (agency ↔ clients, Phase 3c), when the user has a choice. */
+  scopeSwitcher?: ReactNode;
+  /** Set when this is a client's Brain. */
+  clientName?: string | null;
 }
 
 const TABS: { key: TabKey; label: string; sections: SectionKey[] }[] = [
@@ -50,7 +55,7 @@ const COVERAGE_LABEL: Record<SectionKey, string> = {
 
 const uniq = (values: string[]) => [...new Set(values.map((v) => v.trim()).filter(Boolean))];
 
-export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEdit, onRestart, onStartSetup, onSaveFields }: Props) {
+export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEdit, onRestart, onStartSetup, onSaveFields, scopeSwitcher, clientName }: Props) {
   const editable = useBrainEditable();
   const [params, setParams] = useSearchParams();
   const tab: TabKey = isTab(params.get('tab')) ? (params.get('tab') as TabKey) : 'overview';
@@ -68,9 +73,12 @@ export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEd
     <div className="brain-page">
       <header className="brain-header">
         <div className="min-w-0">
-          <p className="brain-eyebrow">Company Brain</p>
-          <h1 className="brain-title">Your go-to-market intelligence</h1>
-          <p className="brain-lede">Everything your AI team knows about who you sell to, when to reach out, and how to sound.{editable ? ' Click anything to change it.' : ''}</p>
+          {scopeSwitcher && <div className="mb-3">{scopeSwitcher}</div>}
+          <p className="brain-eyebrow">{clientName ? 'Client Brain' : 'Company Brain'}</p>
+          <h1 className="brain-title">{clientName ? <>{clientName}<span className="text-muted-foreground/60"> · go-to-market intelligence</span></> : 'Your go-to-market intelligence'}</h1>
+          <p className="brain-lede">{clientName
+            ? 'Everything your AI team knows about this client — who it sells to, when to reach out, how to sound. It never mixes with your company or other clients.'
+            : 'Everything your AI team knows about who you sell to, when to reach out, and how to sound.'}{editable ? ' Click anything to change it.' : ''}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {syncing && <span className="brain-sync" aria-live="polite">Syncing…</span>}
@@ -82,24 +90,26 @@ export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEd
               {FLOW_SECTIONS.map((s) => <DropdownMenuItem key={s.drawerKey} onSelect={() => onEdit(s.drawerKey)}>{s.number} · {s.title}</DropdownMenuItem>)}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" variant="ghost" onClick={active ? onRestart : onStartSetup} className="gap-2"><RotateCcw size={14} />{active ? 'Re-run setup' : empty ? 'Start setup' : 'Continue setup'}</Button></>}
+          {(active ? onRestart : onStartSetup) && <Button size="sm" variant="ghost" onClick={active ? onRestart : onStartSetup} className="gap-2"><RotateCcw size={14} />{active ? 'Re-run setup' : empty ? 'Start setup' : 'Continue setup'}</Button>}</>}
         </div>
       </header>
 
-      <IdentityCard brain={brain} health={health} active={active} activatedAt={activatedAt} saved={saved === 'company'} onEdit={onEdit} />
+      <IdentityCard brain={brain} health={health} active={active} activatedAt={activatedAt} saved={saved === 'company'} onEdit={onEdit} clientName={clientName ?? null} />
 
       {empty && (
         <section className="brain-empty" aria-labelledby="brain-empty-title">
           <div className="min-w-0">
             <p className="brain-eyebrow">Get started</p>
-            <h2 id="brain-empty-title" className="brain-empty-title">Teach your AI team about your company</h2>
+            <h2 id="brain-empty-title" className="brain-empty-title">{clientName ? `Teach your AI team about ${clientName}` : 'Teach your AI team about your company'}</h2>
             <p className="brain-empty-text">
-              {editable
+              {clientName
+                ? (editable ? 'Fill in any section below — the company, who it sells to, when to reach out and who to skip.' : 'This client’s Brain hasn’t been filled in yet. An owner, admin or editor with access can add it.')
+                : editable
                 ? 'A guided setup takes about five minutes: your company, who you sell to, when to reach out and who to skip. Or fill in any section below by hand.'
                 : 'This Company Brain hasn’t been set up yet. An owner, admin or editor can start the guided setup.'}
             </p>
           </div>
-          {editable && <Button onClick={onStartSetup} className="shrink-0">Start guided setup</Button>}
+          {editable && onStartSetup && <Button onClick={onStartSetup} className="shrink-0">Start guided setup</Button>}
         </section>
       )}
 
@@ -110,7 +120,7 @@ export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEd
               const attention = t.sections.some((s) => health[s] !== 'configured');
               return (
                 <TabsTrigger key={t.key} value={t.key} className="brain-tab">
-                  {t.label}
+                  {clientName && t.key === 'market' ? 'Who they sell to' : t.label}
                   {attention && <span className="brain-tab-dot" aria-label="needs attention" />}
                 </TabsTrigger>
               );
@@ -118,7 +128,7 @@ export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEd
           </TabsList>
         </div>
 
-        <TabsContent value="overview" className="brain-panel"><OverviewPanel {...panelProps} onOpenTab={setTab} /></TabsContent>
+        <TabsContent value="overview" className="brain-panel"><OverviewPanel {...panelProps} onOpenTab={setTab} clientName={clientName ?? null} /></TabsContent>
         <TabsContent value="market" className="brain-panel"><MarketPanel {...panelProps} /></TabsContent>
         <TabsContent value="moments" className="brain-panel"><MomentsPanel {...panelProps} /></TabsContent>
         <TabsContent value="rules" className="brain-panel"><RulesPanel {...panelProps} /></TabsContent>
@@ -142,7 +152,8 @@ function ReadinessRing({ ready, total }: { ready: number; total: number }) {
   );
 }
 
-function IdentityCard({ brain, health, active, activatedAt, saved, onEdit }: {
+function IdentityCard({ brain, health, active, activatedAt, saved, onEdit, clientName = null }: {
+  clientName?: string | null;
   brain: CompanyBrainV2; health: Record<SectionKey, SectionHealth>; active: boolean; activatedAt: string | null;
   saved: boolean; onEdit: (s: SectionKey) => void;
 }) {
@@ -159,7 +170,7 @@ function IdentityCard({ brain, health, active, activatedAt, saved, onEdit }: {
         <span className="brain-monogram" aria-hidden>{c.name.trim() ? monogram(c.name) : <Building2 size={18} />}</span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h2 className="brain-company-name">{c.name || 'Your company'}</h2>
+            <h2 className="brain-company-name">{c.name || clientName || 'Your company'}</h2>
             {site && (site.href
               ? <a className="brain-site" href={site.href} target="_blank" rel="noopener noreferrer">{site.label}<ArrowUpRight size={12} aria-hidden /></a>
               : <span className="brain-site">{site.label}</span>)}
@@ -196,10 +207,10 @@ interface PanelProps {
   onSaveFields: SaveFields;
 }
 
-function OverviewPanel({ brain, health, saved, onEdit, onSaveFields, onOpenTab }: PanelProps & { onOpenTab: (t: TabKey) => void }) {
+function OverviewPanel({ brain, health, saved, onEdit, onSaveFields, onOpenTab, clientName = null }: PanelProps & { onOpenTab: (t: TabKey) => void; clientName?: string | null }) {
   const editable = useBrainEditable();
-  const steps = useMemo(() => deriveNextSteps(brain), [brain]);
-  const sentences = useMemo(() => buildIcpSentences(brain), [brain]);
+  const steps = useMemo(() => deriveNextSteps(brain, clientName), [brain, clientName]);
+  const sentences = useMemo(() => buildIcpSentences(brain, clientName), [brain, clientName]);
   const sources = useMemo(() => brainSources(brain), [brain]);
   const notes = uniq(brain.evidence.confidence_notes);
   const t = brain.target_customer;
