@@ -34,7 +34,7 @@ import {
   type CancelSweepDb, type LapsedSweepDb, type TerminalIds,
 } from "../supabase/functions/_shared/leadMissionCancellation.ts";
 import { resolvePlanNoticesForQueueEnd, supabaseNoticeDb } from "../supabase/functions/_shared/runNotices.ts";
-import { type GuardDb, legacyExecutionGuard } from "../supabase/functions/_shared/legacyExecutionGuard.ts";
+import { type GuardDb, legacyExecutionGuard, referencedPlanId } from "../supabase/functions/_shared/legacyExecutionGuard.ts";
 import { createLeadMissionRunner } from "./leadMissionRunner.ts";
 import { missionWallClockEnabled } from "../supabase/functions/_shared/missionWallClock.ts";
 import { installTimestampedConsole } from "./logTimestamps.ts";
@@ -168,6 +168,7 @@ async function main() {
       principalUserId: typeof m.request.user_id === "string" && m.request.user_id ? m.request.user_id : null,
       body: m.request,
       taskIds: { resume: m.taskId ? [m.taskId] : [], related: [] },
+      planId: referencedPlanId(m.request),
     }),
     serviceRoleKey: key,
     functionsBaseUrl: `${url.replace(/\/+$/, "")}/functions/v1`,

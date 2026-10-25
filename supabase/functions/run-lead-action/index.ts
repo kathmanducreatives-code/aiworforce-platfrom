@@ -29,6 +29,7 @@
 // doing the same job in a new file. A caller cannot tell the difference except
 // by the URL.
 
+import { type GuardDb, legacyExecutionGuard, referencedPlanId, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool } from "../_shared/toolRegistry.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
@@ -135,6 +136,23 @@ Deno.serve(async (req) => {
 
     const access = decideWorkspaceAccess({ bearerIsServiceRole, authenticatedUserId, isMember });
     if (!access.ok) return json({ error: access.error }, access.status);
+  }
+
+  // THE LEGACY PRE-EFFECT GUARD (legacyExecutionGuard.ts), before the agent
+  // lookup, the task row, any ledger/credit write, model call or purchase:
+  // pilot/client scope refused, a service caller's forwarded user must still be
+  // a member. (The task row is re-authorized at commit by the held boundary.)
+  {
+    const guard = await legacyExecutionGuard({
+      db: supabase as unknown as GuardDb, workspaceId: workspace_id,
+      principalUserId: bearerIsServiceRole ? (typeof user_id === "string" && user_id ? user_id : null) : authenticatedUserId,
+      principalMembershipVerified: !bearerIsServiceRole,
+      body, taskIds: referencedTaskIds(body), planId: referencedPlanId(body),
+    });
+    if (!guard.ok) {
+      console.error("[run-lead-action][pre-effect-guard] refused", { workspace_id, code: guard.code, detail: guard.detail });
+      return json({ success: false, error: guard.code, detail: guard.detail }, guard.status);
+    }
   }
 
   // AGENT, SCOPED TO THE WORKSPACE. Unscoped, `scout` can resolve to another
