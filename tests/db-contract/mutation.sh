@@ -468,6 +468,48 @@ prove_killed "membership writers: browsers may call them" "$mw_sql" \
   "grant execute on function public.workspace_member_remove(uuid, uuid, uuid, uuid) to authenticated;" \
   "$mw_tests" "surface: browsers cannot call the writers; the service role cannot call the internal check"
 
+# ── The membership write boundary (held 20261025160000, Codex MEMBER-SURFACE) ──
+ms_sql="$root/supabase/migrations-held/20261025160000_workspace_members_app_surface.sql"
+cp "$ms_sql" "$ms_sql.mutation-backup"; restore_list+=("$ms_sql")
+ms_tests="$root/tests/db-contract/workspaceMembersAppSurface.contract.test.ts"
+ms_raw="surface: the service role cannot promote, demote or delete a membership directly"
+ms_regrant="surface: the invariant holds even if the service role is re-granted the writes (the trigger, not just the grant)"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025160000_workspace_members_app_surface.sql "$root/tests/db-contract/run.sh" "$ms_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "$ms_raw ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: membership surface tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the boundary the service role promotes and removes the last owner directly"
+ran=$((ran + 1))
+fi
+prove_killed "membership surface: the service role keeps its direct writes (trigger only)" "$ms_sql" \
+  "revoke update, delete, truncate on public.workspace_members from service_role;" "select 1;" "$ms_tests" "$ms_raw"
+prove_killed "membership surface: the trigger lets application roles through" "$ms_sql" \
+  "  if current_user::text not in ('service_role', 'authenticated', 'anon') then" "  if true then" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: the trigger runs as its owner (definer), so it sees no application role" "$ms_sql" \
+  "language plpgsql
+set search_path = ''
+as \$\$
+begin
+  if current_user::text" "language plpgsql
+security definer
+set search_path = ''
+as \$\$
+begin
+  if current_user::text" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: a raw role change is allowed" "$ms_sql" \
+  "  elsif new.role is distinct from old.role then" "  elsif false then" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: a raw delete is allowed" "$ms_sql" \
+  "  elsif tg_op = 'DELETE' then" "  elsif false then" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: TRUNCATE is not guarded" "$ms_sql" \
+  "create trigger workspace_members_app_surface_truncate
+  before truncate on public.workspace_members
+  for each statement execute function public.workspace_members_app_surface();" "" \
+  "$ms_tests" "surface: TRUNCATE is refused for application roles, by grant and by trigger"
+
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
 if [ -n "${MUTATION_TALLY_FILE:-}" ]; then

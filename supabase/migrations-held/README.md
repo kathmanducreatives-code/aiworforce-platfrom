@@ -229,3 +229,22 @@ objects and the new column).
 - **Refused, because it is not decided:** promotion (`promotion_unsupported`), and roles outside owner/admin/editor/viewer.
 - **Proof:** `tests/db-contract/workspaceMemberWriters.contract.test.ts` and `mutation.sh`.
 - **Rollback:** `rollback/20261025140000_workspace_member_writers.down.sql`. It removes the writers only; memberships, grants and #176's triggers are untouched.
+
+## `20261025160000_workspace_members_app_surface.sql`
+
+**Not approved for any hosted project; needs #176 and `20261025140000` first.** This closes Codex's MEMBER-SURFACE findings. Before it, a raw service-role PATCH promoted a viewer to owner, and a raw service-role DELETE removed the last owner.
+
+Application roles now change or delete a membership **only** through #186's writers:
+- **The grant.** UPDATE, DELETE and TRUNCATE are revoked from `service_role`. The browser roles' grants belong to #159. SELECT and the provisioning INSERT are unchanged.
+- **The invariant.** A SECURITY INVOKER trigger refuses the same writes from `anon`, `authenticated` and `service_role`, whatever their grants, and names the canonical writer.
+- **What it leaves alone.** Definer functions (provisioning, the canonical writers), foreign-key cascades (workspace deletion) and administrative SQL run as the owner, so the trigger doesn't apply to them.
+
+- **Proof:** `tests/db-contract/workspaceMembersAppSurface.contract.test.ts`. Codex's two MEMBER-SURFACE cases pass unchanged. Seven mutation proofs cover:
+  - the migration omitted;
+  - the revoke removed;
+  - the trigger bypassed;
+  - the trigger made definer;
+  - role changes allowed;
+  - deletes allowed;
+  - TRUNCATE unguarded.
+- **Rollback:** `rollback/20261025160000_workspace_members_app_surface.down.sql`.
