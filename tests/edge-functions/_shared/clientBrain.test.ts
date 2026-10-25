@@ -150,13 +150,20 @@ Deno.test("I2 (source): the client helper never names the agency Brain, and the 
   }
 });
 
+const CLIENT_RPCS = [
+  "client_brain_authorization", "client_brain_read", "client_brain_pin", "client_brain_authorized_write",
+  "client_account_create", "client_account_archive", "client_access_grant", "client_access_revoke",
+  "client_account_manage_list", "client_accounts_for_actor", "client_admin_authorization",
+];
 Deno.test("held (source): the client RPCs are called only from _shared/clientBrain.ts; only the Brain handlers use it, behind the switch", () => {
   const callers: string[] = [];
   const importers: string[] = [];
   for (const f of walk(new URL("supabase/functions/", ROOT))) {
     const src = Deno.readTextFileSync(f);
     const rel = f.slice(f.indexOf("supabase/functions/"));
-    if (/["'](client_brain_[a-z_]+|client_access_(grant|revoke)|client_account_[a-z_]+|client_accounts_for_actor)["']/.test(src)) callers.push(rel);
+    // A CALL of one of the held client functions (a field named client_account_id,
+    // e.g. in Backend's pre-effect guard, is not one).
+    if (CLIENT_RPCS.some((fn) => new RegExp(`\\.rpc\\(\\s*["']${fn}["']`).test(src))) callers.push(rel);
     if (/from\s+["'][^"']*clientBrain(\.ts)?["']/.test(src)) importers.push(rel);
     assert(!/\.from\(\s*["'](client_company_brain|client_access_grants|client_accounts)["']\s*\)[\s\S]{0,160}\.(insert|update|upsert|delete)\(/.test(src),
       `${rel} writes a client table directly`);
