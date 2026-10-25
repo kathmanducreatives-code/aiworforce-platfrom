@@ -28,6 +28,14 @@ on:
         required: true
         default: "5"
         type: string
+      providers:
+        description: "openai-only = zero-Apify (Apify unreachable, no token). openai-and-apify only for the separately approved paid A7"
+        required: true
+        default: openai-only
+        type: choice
+        options:
+          - openai-only
+          - openai-and-apify
 
 permissions:
   contents: read
@@ -48,6 +56,7 @@ jobs:
     env:
       CONFIRM_REF: ${{ inputs.confirm_project_ref }}
       SESSION_MINUTES: ${{ inputs.session_minutes }}
+      PROVIDERS: ${{ inputs.providers }}
       TEST_PROJECT_REF: ${{ vars.TEST_PROJECT_REF }}
       # NO SECRET AT JOB LEVEL. A job-level secret reaches every step, including
       # the third-party actions below; each secret is set on the one step that
@@ -105,6 +114,10 @@ jobs:
             || { echo "refusing: the allowlist must name exactly one test workspace" >&2; exit 1; }
           [[ "$SESSION_MINUTES" =~ ^[0-9]+$ ]] && [ "$SESSION_MINUTES" -ge 1 ] && [ "$SESSION_MINUTES" -le 25 ] \
             || { echo "refusing: session_minutes must be 1-25" >&2; exit 1; }
+          case "$PROVIDERS" in
+            openai-only|openai-and-apify) ;;
+            *) echo "refusing: providers must be openai-only or openai-and-apify" >&2; exit 1 ;;
+          esac
 
       # Pinned to full commit SHAs: a moved tag cannot change what runs here.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
@@ -140,9 +153,21 @@ jobs:
           # Deno refuses any other host before connecting, so production is
           # unreachable even if the admission gate had a hole; modules load
           # from esm.sh (the worker's only remote import host) under --allow-import.
+          # ZERO-APIFY unless the dispatch chose otherwise: the worker gets no
+          # Apify token and Deno refuses api.apify.com before connecting,
+          # whatever the authorization or the Environment's secrets say. The
+          # deny names the port: a bare-host deny does NOT override a
+          # host:port allow (tests/infra/testWorkerProposal.test.ts checks
+          # the permission itself).
+          deny=""
+          if [ "$PROVIDERS" != "openai-and-apify" ]; then
+            unset APIFY_API_TOKEN
+            deny="--deny-net=api.apify.com:443"
+          fi
+          echo "providers: $PROVIDERS"
           timeout -s TERM --kill-after=10m "${SESSION_MINUTES}m" \
             deno run --allow-env --allow-read --allow-import=esm.sh:443 \
-              --allow-net="$CONFIRM_REF.supabase.co:443,api.apify.com:443,api.openai.com:443" \
+              --allow-net="$CONFIRM_REF.supabase.co:443,api.apify.com:443,api.openai.com:443" $deny \
               worker/main.ts \
             > "$RUNNER_TEMP/worker.log" 2>&1
           status=$?
