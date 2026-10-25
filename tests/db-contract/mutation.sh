@@ -129,6 +129,34 @@ echo "mutant killed: without the held admission migration nothing is admitted"
 ran=$((ran + 1))
 fi
 
+# ── PROOFS: OWN-01, lead-graph parents stay in their workspace ─────────────
+# Without the held migration a member stores a contact under another
+# workspace's account; each part of the fix is required by a named test.
+own01_sql="$root/supabase/migrations-held/20261025120000_lead_graph_same_workspace_parents.sql"
+own01_tests="$root/tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts"
+cp "$own01_sql" "$own01_sql.mutation-backup"; restore_list+=("$own01_sql")
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025120000_lead_graph_same_workspace_parents.sql "$root/tests/db-contract/run.sh" "$own01_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "OWN-01: a member cannot store a contact under another workspace's account (raw INSERT) ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: OWN-01 tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the OWN-01 migration a contact stores another workspace's account"
+ran=$((ran + 1))
+fi
+prove_killed "OWN-01: SET NULL nulls the whole key (workspace_id too)" "$own01_sql" \
+  "when 'set null' then format('set null (%I)', r.col)" "when 'set null' then 'set null'" \
+  "$own01_tests" "positive controls: own parent, no parent, embed, delete behaviour"
+prove_killed "OWN-01: contacts left out of the reference list" "$own01_sql" \
+  '    ["contacts",              "account_id",         "accounts",         "set null"],
+' "" \
+  "$own01_tests" "OWN-01: a member cannot store a contact under another workspace's account (raw INSERT)"
+prove_killed "OWN-01: preflight does not abort on an existing mismatch" "$own01_sql" \
+  "  if v_report <> '' then" "  if false then" \
+  "$own01_tests" "preflight: an existing mismatch aborts the migration and changes nothing"
+
 prove_killed "no serialization lock" "$adm_sql" \
   "where queue_id = p_queue for update;
   if not found then return jsonb_build_object('decision', 'not_authorized'); end if;" \
