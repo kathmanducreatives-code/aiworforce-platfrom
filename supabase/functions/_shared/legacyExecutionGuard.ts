@@ -28,8 +28,8 @@
 // unchanged, and the shared spending admission still runs after this guard.
 //
 // When the canonical client contract (#174/#176) is agreed, client scope stops
-// being refused here and is authorized instead through
-// `client_brain_authorization` with the task's stored grant pins.
+// being refused here and is authorized instead, through _shared/clientBrain.ts
+// with the task's stored grant pins (the only module that calls client RPCs).
 
 export type GuardCode =
   | "pilot_execution_disabled"
@@ -44,8 +44,12 @@ export type GuardResult =
   | { ok: true }
   | { ok: false; status: 401 | 403 | 409 | 503; code: GuardCode; detail: string };
 
-/** Keys whose presence (non-null) makes a request or task client-scoped. */
-const CLIENT_KEYS = ["client_id", "client_account_id", "client_binding_id", "client_grant_id", "client_scope"] as const;
+/**
+ * Keys whose presence (non-null) makes a request or task client-scoped: the
+ * task pins named by the client contract (#174 §8: client_id, the grant id and
+ * its generation), the pilot's client binding, and an explicit scope.
+ */
+const CLIENT_KEYS = ["client_id", "client_grant_id", "client_grant_generation", "client_binding_id", "client_scope"] as const;
 /** Keys whose presence (non-null) makes a request or task a pilot task. */
 const PILOT_KEYS = ["pilot_scope", "pilot_origin_session_id"] as const;
 

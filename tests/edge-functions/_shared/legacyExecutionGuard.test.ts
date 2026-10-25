@@ -47,6 +47,8 @@ Deno.test("markers: pilot and client markers are found where they can sit, and n
   assertEquals(scopeMarkers({ tool_input: { lead_mission: { pilot_origin_session_id: "s" } } }).pilot, ["pilot_origin_session_id"]);
   assertEquals(scopeMarkers({ payload: { execution_mode: "pilot_draft_only" } }).pilot, ["execution_mode=pilot_draft_only"]);
   assertEquals(scopeMarkers({ lead_mission: { client_id: "c" } }).client, ["client_id"]);
+  // The client contract's task pins (#174 §8) mark a stored task client-scoped too.
+  assertEquals(scopeMarkers({ payload: { client_grant_id: "g", client_grant_generation: 3 } }).client, ["client_grant_id", "client_grant_generation"]);
   // A prospect record that mentions a client is lead data, not scope.
   assertEquals(scopeMarkers({ tool_input: { rows: [{ client_id: "prospect's own field" }] } }), { pilot: [], client: [] });
   assertEquals(scopeMarkers({ execution_mode: "company_first", client_id: null }), { pilot: [], client: [] });
