@@ -80,6 +80,8 @@ if (process.env.GITHUB_OUTPUT) {
   appendFileSync(process.env.GITHUB_OUTPUT, [
     `level=${p.level}`, `contract=${p.contract}`, `contract_all=${p.contract_all}`,
     `contract_files=${p.contract_files.join(" ")}`, `mutation=${p.mutation}`,
+    // Real worker processes run whenever the database contract does.
+    `realprocess=${p.contract}`,
     `contract_count=${contractSelected.length}`,
     ...contractShards.map((s, k) => `contract_shard_${k + 1}=${s.join(" ")}`), "",
   ].join("\n"));
