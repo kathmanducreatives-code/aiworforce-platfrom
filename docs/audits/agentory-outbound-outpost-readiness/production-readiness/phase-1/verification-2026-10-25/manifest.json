@@ -1,0 +1,1150 @@
+{
+  "date": "2026-10-25 Asia/Kathmandu",
+  "integration_source": "914a3a71220bbe3eedf85d3707c1c07c7151bd69",
+  "first_assembly": "33d964027d76d55ed7dd8c7057765357f4cb757a",
+  "owner_heads": {
+    "178": {
+      "headRefOid": "54c92a163b33d088537aadd52785724add6dddef",
+      "headRefName": "feat/client-brain-integration",
+      "baseRefName": "feat/client-brain-3c",
+      "state": "OPEN",
+      "comments": [
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/178#issuecomment-6394917952",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/178#issuecomment-6394919735"
+      ],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "FAILURE"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 0)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 1)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 2)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 4)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 5)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 6)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 7)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "FAILURE"
+        }
+      ]
+    },
+    "181": {
+      "headRefOid": "90bd993f00ef248b3d810333b89d63e1e945d48e",
+      "headRefName": "fix/hiring-verifier-phase-clock",
+      "baseRefName": "launch/hardening",
+      "state": "OPEN",
+      "comments": [
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/181#issuecomment-6394918398"
+      ],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard ${{ matrix.shard }})",
+          "conclusion": "SKIPPED"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "SUCCESS"
+        }
+      ]
+    },
+    "174": {
+      "headRefOid": "86f29509b33616e689098ba87c9a8b58762955d3",
+      "headRefName": "docs/client-brain-contract",
+      "baseRefName": "launch/hardening",
+      "state": "OPEN",
+      "comments": [
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/174#issuecomment-6385838606",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/174#issuecomment-6386343190",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/174#issuecomment-6387382298",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/174#issuecomment-6387683499",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/174#issuecomment-6394918193",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/174#issuecomment-6395222870"
+      ],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "FAILURE"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard ${{ matrix.shard }}/3)",
+          "conclusion": "SKIPPED"
+        },
+        {
+          "name": "Mutation proofs (shard ${{ matrix.shard }})",
+          "conclusion": "SKIPPED"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "FAILURE"
+        }
+      ]
+    },
+    "175": {
+      "headRefOid": "dbd73f06d69bd56700f896128a6730cf73216963",
+      "headRefName": "fix/s18a-malformed-dataset-visible",
+      "baseRefName": "launch/hardening",
+      "state": null,
+      "comments": [],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "FAILURE"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 0)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 1)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 2)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 4)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 5)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 6)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 7)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "FAILURE"
+        }
+      ]
+    },
+    "180": {
+      "headRefOid": "dd7cba8470e9cbddcaf98b4de5799bb8873e3069",
+      "headRefName": "fix/lead-search-seller-fallbacks",
+      "baseRefName": "test/lead-search-seller-fallbacks",
+      "state": "OPEN",
+      "comments": [],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "FAILURE"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard ${{ matrix.shard }})",
+          "conclusion": "SKIPPED"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "FAILURE"
+        }
+      ]
+    },
+    "179": {
+      "headRefOid": "d3d68201881ad241cfd4ccf3bc01efd5aec9b722",
+      "headRefName": "fix/legacy-pre-effect-guards",
+      "baseRefName": "launch/hardening",
+      "state": "OPEN",
+      "comments": [],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "FAILURE"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 0)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 1)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 2)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 4)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 5)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 6)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 7)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "FAILURE"
+        }
+      ]
+    },
+    "172": {
+      "headRefOid": "2ffc6b5f22b5ce2d71c965054c06f5c34cfffce9",
+      "headRefName": "codex/nosh-phase1-brain-handler-audit",
+      "baseRefName": "codex/nosh-phase1-task-lifecycle",
+      "state": "OPEN",
+      "comments": [
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/172#issuecomment-6385625106"
+      ],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "identity-foundation",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 0)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 1)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 2)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 4)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 5)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 6)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 7)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "SUCCESS"
+        }
+      ]
+    },
+    "168": {
+      "headRefOid": "b8b0419f3ba11f031b0ab66901a8210eeb35fa86",
+      "headRefName": "feat/brain-readiness-wiring",
+      "baseRefName": "feat/brain-readiness-policy",
+      "state": "OPEN",
+      "comments": [
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/168#issuecomment-6394918813",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/168#issuecomment-6394969736"
+      ],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard ${{ matrix.shard }})",
+          "conclusion": "SKIPPED"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "SUCCESS"
+        }
+      ]
+    },
+    "169": {
+      "headRefOid": "833affce5077ae5f50b53353cb84fa0e916918dc",
+      "headRefName": "fix/brain-role-aware-writes",
+      "baseRefName": "fix/brain-onboarding-authoritative-save",
+      "state": "OPEN",
+      "comments": [
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6367856118",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6368176504",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6380529556",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6380761434",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6382077593",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6384678134",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6384830267",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6385018708",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6385624766",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6386085243",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/169#issuecomment-6386344491"
+      ],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 0)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 1)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 2)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 4)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 5)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 6)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 7)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "SUCCESS"
+        }
+      ]
+    },
+    "173": {
+      "headRefOid": "70507ba059dbed0d8e396758a3fa6c00c9af2777",
+      "headRefName": "codex/nosh-phase1-client-contract-gates",
+      "baseRefName": "codex/nosh-phase1-brain-handler-audit",
+      "state": "OPEN",
+      "comments": [
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/173#issuecomment-6384818648",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/173#issuecomment-6385267517"
+      ],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "identity-foundation",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 0)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 1)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 2)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 4)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 5)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 6)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 7)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "SUCCESS"
+        }
+      ]
+    },
+    "107": {
+      "headRefOid": "e0b0f2eb59f66de96cad64a04c318b1c8a64a517",
+      "headRefName": "codex/discovery-exhausted-claim-recovery",
+      "baseRefName": "launch/hardening",
+      "state": "OPEN",
+      "comments": [
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/107#issuecomment-6262223041"
+      ],
+      "checks": [
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (Postgres + PostgREST)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        }
+      ]
+    },
+    "184": {
+      "headRefOid": "cd3a7a00548ddfc0a7a58f024b2a6f2fbd04ca82",
+      "headRefName": "fix/radar-readiness-c5",
+      "baseRefName": "feat/brain-readiness-wiring",
+      "state": "OPEN",
+      "comments": [],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "FAILURE"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard ${{ matrix.shard }})",
+          "conclusion": "SKIPPED"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "FAILURE"
+        }
+      ]
+    },
+    "171": {
+      "headRefOid": "0d7cd07741aed8f20b824d90e45385629ff40412",
+      "headRefName": "codex/nosh-phase1-task-lifecycle",
+      "baseRefName": "codex/nosh-phase1-access-fixes",
+      "state": "OPEN",
+      "comments": [
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/171#issuecomment-6368455847",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/171#issuecomment-6380763707"
+      ],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "identity-foundation",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 0)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 1)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 2)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 4)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 5)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 6)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 7)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "SUCCESS"
+        }
+      ]
+    },
+    "183": {
+      "headRefOid": "c8aa4e2c309288fe460f7c1e48ae9da7d7b805ea",
+      "headRefName": "fix/autosave-stale-without-copy",
+      "baseRefName": "feat/brain-readiness-wiring",
+      "state": "OPEN",
+      "comments": [],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "FAILURE"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard ${{ matrix.shard }}/3)",
+          "conclusion": "SKIPPED"
+        },
+        {
+          "name": "Mutation proofs (shard ${{ matrix.shard }})",
+          "conclusion": "SKIPPED"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "FAILURE"
+        }
+      ]
+    },
+    "176": {
+      "headRefOid": "1756b21717fd172cf256ca05bd1b3370248638a9",
+      "headRefName": "feat/client-brain-3c",
+      "baseRefName": "fix/brain-role-aware-writes",
+      "state": "OPEN",
+      "comments": [
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/176#issuecomment-6386444568",
+        "https://github.com/kathmanducreatives-code/aiworforce-platfrom/pull/176#issuecomment-6387382881"
+      ],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "FAILURE"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 0)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 1)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 2)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 4)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 5)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 6)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 7)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "FAILURE"
+        }
+      ]
+    },
+    "177": {
+      "headRefOid": "05e288e1ea775e1efaf53581ed7bb4e0b6d032d4",
+      "headRefName": "fix/own01-lead-graph-same-workspace-parents",
+      "baseRefName": "launch/hardening",
+      "state": "OPEN",
+      "comments": [],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "FAILURE"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 1/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 2/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard 3/3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 0)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 1)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 2)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 3)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 4)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 5)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 6)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Mutation proofs (shard 7)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "FAILURE"
+        }
+      ]
+    },
+    "182": {
+      "headRefOid": "50928cb41dcceec0994c397d10b8830ea5d60173",
+      "headRefName": "docs/test-acceptance-pack",
+      "baseRefName": "fix/smoke-credit-reconciliation",
+      "state": null,
+      "comments": [],
+      "checks": [
+        {
+          "name": "Plan tests",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Edge functions, worker, deploy safety",
+          "conclusion": "FAILURE"
+        },
+        {
+          "name": "Lead V2 readiness (offline Replay Lab)",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Frontend build, UI tests, type and lint ratchets",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "Database contract (shard ${{ matrix.shard }}/3)",
+          "conclusion": "SKIPPED"
+        },
+        {
+          "name": "Mutation proofs (shard ${{ matrix.shard }})",
+          "conclusion": "SKIPPED"
+        },
+        {
+          "name": "CI gate",
+          "conclusion": "FAILURE"
+        }
+      ]
+    }
+  },
+  "source_sha256": {
+    "tests/outpost-native/brain-handler-auth.test.ts": "43b7b26c1584876f199654995a7d638c0f17378b684d4b88223eeae0be98d171",
+    "tests/outpost-native/check-brain-handler-audit.py": "6e858bbc80f7e9390412f1dcc5049375b7b52bfb6d3c8ebc3801c7d8fe3ae4b1",
+    "tests/outpost-native/resource-parent-audit.ts": "12fd570934da4df37c6b39480bb172d854e75bb05be39ef8582879aa33657b6d",
+    "supabase/migrations/20261024120000_company_brain_authorized_writer.sql": "a8fb5531b126a1e36d4af45c0e663cf03bb96c96e0c134186f0d1b94c8a9eab1",
+    "supabase/migrations-held/20261024160000_client_company_brain.sql": "7c9c0aa39b27b1a5d70ca02136b50e2b4aad8ce3d4bedb18643caf655a406781",
+    "supabase/migrations-held/20261025120000_lead_graph_same_workspace_parents.sql": "1d362cc4c5b385013948456b6ee76e81b7a98fd40265cef8ee5baf55880c4376"
+  },
+  "logs": {
+    "auth06-receipt.log.gz": {
+      "uncompressed_sha256": "fd89fbe7cbcda01ee8957f077ed3054f10c669e2891b045d656ecfdfe41eb1c8",
+      "bytes": 7579
+    },
+    "auth06.log.gz": {
+      "uncompressed_sha256": "d522cd538915419d5032141156a608118fd69c13f8ebff7e05c50fe088e5487d",
+      "bytes": 10469
+    },
+    "baseline-native.log.gz": {
+      "uncompressed_sha256": "8d37c47704084aefcd680f6738d6860e341ba02f8db1627979ea9ffc60ca8874",
+      "bytes": 5739
+    },
+    "brain-import-check.log.gz": {
+      "uncompressed_sha256": "16ef4cadcbe6db3a1252f21b5d76a4807933673964931418bda38c18fbb1ae66",
+      "bytes": 38
+    },
+    "build.log.gz": {
+      "uncompressed_sha256": "08b63b7776b84a7ad1d990ab29fde575fe527bd1c3eee94d9f3573f755971f04",
+      "bytes": 14100
+    },
+    "cache-session.log.gz": {
+      "uncompressed_sha256": "dd8e4c2cc326fef730a7ddacd62e7d14c356103ff76755b88ea33f7b128e8c56",
+      "bytes": 2330
+    },
+    "client-catalog-receipt.log.gz": {
+      "uncompressed_sha256": "3696bc6d27c4cbddcc3b7ada340f138b82724dd778e7d3a3691dc59d88a41baa",
+      "bytes": 269
+    },
+    "client-catalog.log.gz": {
+      "uncompressed_sha256": "869ee363d97464385dacda5c92f78f9583c07f0442a08c0e5c0fb358924c6e0d",
+      "bytes": 83881
+    },
+    "db.log.gz": {
+      "uncompressed_sha256": "fb0d204f87d28828f8332c3f61cc8f750b7a82892e0bfb197fbd410723e709d1",
+      "bytes": 7284022
+    },
+    "edge.log.gz": {
+      "uncompressed_sha256": "c447be3b97da523ebca7a686187c9f9591549f2de7809c2b13d4b90464cee255",
+      "bytes": 943093
+    },
+    "eslint.log.gz": {
+      "uncompressed_sha256": "47befe78d93a245f83ee7d9d0befcfa92526ffca9a6ad81aceb2b8fbfdc5cc5d",
+      "bytes": 50
+    },
+    "execution-audit.log.gz": {
+      "uncompressed_sha256": "7b59414ed8ee5ea4a284cdc0ffd4b4e19d6d8b7a51e5d671f27ae00f60c4b0d7",
+      "bytes": 12680
+    },
+    "infra.log.gz": {
+      "uncompressed_sha256": "7e89e36c8235e4b9a08bad09bf712019880d90b61ee467c020f56e9915ca09e7",
+      "bytes": 21247
+    },
+    "mutation-0.log.gz": {
+      "uncompressed_sha256": "859e7b611a6d7cc1c49fadfcb648f795ff6066927cf564e463c2a6571283fcf2",
+      "bytes": 2578
+    },
+    "mutation-1.log.gz": {
+      "uncompressed_sha256": "d22ab82a8c5e7daa6fbd29e7c3ffd24f70aa340d33794fe641e70e3fa0c6d6f3",
+      "bytes": 4524
+    },
+    "mutation-2.log.gz": {
+      "uncompressed_sha256": "6df83c5ebc07379eea0782daeccc2457db154a30eaddc65238a3143dd9de44f6",
+      "bytes": 3772
+    },
+    "mutation-3.log.gz": {
+      "uncompressed_sha256": "fa2b08308349fd21414d8ef74fad6e8f33c76373cc6d649415af797fd051d446",
+      "bytes": 4369
+    },
+    "native-ci-failure.log.gz": {
+      "uncompressed_sha256": "af10e3dfe1b0fce542f52c35d97fb3d286607a84a571a296a34bcb67d0b4eb15",
+      "bytes": 50516
+    },
+    "native-focused.log.gz": {
+      "uncompressed_sha256": "f98b2afb2bb95b49f215a3a239b95d2c36a842ad055e745d30c547efe3b89c72",
+      "bytes": 11579
+    },
+    "own01-receipt.log.gz": {
+      "uncompressed_sha256": "194d463b80cabd90db1517524270e1e0c484eabe5c996e3b90530d67ed3d6894",
+      "bytes": 156
+    },
+    "own01.log.gz": {
+      "uncompressed_sha256": "48c0316b29e4bb309e89576efb43fd149bfcd27e3e99444de949ee5eb0ae1858",
+      "bytes": 2738
+    },
+    "pilot-integration.log.gz": {
+      "uncompressed_sha256": "875c2ea0c6077219188ccfae54f3d460fcad9cb346c934e8aa2519b7231e511b",
+      "bytes": 77720
+    },
+    "plan.log.gz": {
+      "uncompressed_sha256": "4ac58e6978b66801ab39cc49835a15622b4b72ed04619101cbf0e03eaaf246e4",
+      "bytes": 357
+    },
+    "real-login.log.gz": {
+      "uncompressed_sha256": "28b99a549392e831905dcca265253f44e0f485dc6884b8e40e02bb38fd4534fd",
+      "bytes": 2746
+    },
+    "tsc.log.gz": {
+      "uncompressed_sha256": "489f4161988a43f60edc874159f3d5fc57cafd57e9c7f8ae35699fd67915f50f",
+      "bytes": 43
+    },
+    "ui-node.log.gz": {
+      "uncompressed_sha256": "df5efafd0c71d1003ea741f985fc98894b62be90ccef3c7bfab6e6a6c80f0b91",
+      "bytes": 1083
+    },
+    "ui.log.gz": {
+      "uncompressed_sha256": "5db32a1656f295e4607bbe3221d00140367b5310cb0ed2dac02f9cbb935890a9",
+      "bytes": 56841
+    }
+  },
+  "phase_1": "FAIL",
+  "phase_2": "UNSTARTED",
+  "a7": "NO-GO",
+  "pilot_enabled": false
+}

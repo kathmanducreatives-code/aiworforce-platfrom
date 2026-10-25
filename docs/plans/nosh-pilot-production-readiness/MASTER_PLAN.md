@@ -1,6 +1,6 @@
 # Nosh pilot: implementation and production-readiness master plan
 
-**Phase 0 complete; Phase 1 authorized, owned access/task fixes implemented, overall FAIL.**
+**Phase 0 complete; Phase 1 authorized, AUTH-06/OWN-01 independently verified; integrated security FAIL.**
 
 Audit date: 2026-10-23 (Asia/Kathmandu); GitHub state refreshed at
 2026-10-22T18:38Z. P1–P8 remain disabled. A7 remains NO-GO.
@@ -964,3 +964,54 @@ until actual owner APIs arrive. These are planned tests, not synthetic successes
 Phase1 FAIL; Phase2 unstarted; all pilot flags off; A7 NO-GO. No shared schema or
 implementation changes, new PR, hosted effects, paid calls, customer operations,
 merge or deploy.
+
+## Current Phase1 integration receipt — 2026-10-25 (#185)
+
+This section supersedes earlier current-status descriptions of AUTH-06/OWN-01;
+historical reproductions remain unchanged. [Independent integrated evidence](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/INTEGRATED_VERIFICATION_2026-10-25.md)
+pins169/174/176/178/183 and175/177/179/180/181/184, validates original17223/0
+and original173 raw-parent/P1 PASS, and retains the two new native execution
+failures and the cross-principal cache proof. Phase1 remainsFAIL.
+
+Owner boundaries and completion gates:
+
+- **Backend:** EXEC-PLAN parent-plan authorization/native integrity; EXEC-REVOKE
+  authorization at effects after revocation; O3 membership writers/last-owner
+  concurrency; immutable task client/grant/revision/original-session pins and
+  resume consumption; parent/child same-client descendant constraints.177's
+  workspace-only keys are verified and do not replace these client constraints.
+- **Company Brain:** fix178's cache/session boundary, test actual mounted login
+  changes and late responses. Keep AUTH-06 + versioned autosave;178's8fbfb6f3
+  resolution and183 preservation passed real-GoTrue19/0. Contract176 mechanisms
+  passed15/0 native; they remain held and switched off.
+- **Codex:** preserve independent failing probes; consume finalized shared
+  task/client contracts in the held private-client composite bridge, reconcile
+  global lock order and prove same-workspace A/B/replay/session isolation.
+  The existing one-client private enrollment is not a multi-client proof.
+
+O3 A/O4 A accepted: Backend writers with Brain triggers; original live session
+plus all immutable pins, no service substitution or silent re-pin. Atomic
+registration must revalidate a GET pin snapshot. Member policy needs concurrent
+last-owner tests. Client-id FKs plus workspace-only parent FKs cannot alone
+prevent same-workspace cross-client parent links.
+
+Current candidate excludes107's duplicate20261019120000 held recovery. An
+independent version-uniqueness check prevents accidental integration of both
+files.181 fixes the phase-clock fallback without changing live clock input;
+its regression tests and full combined edge9401/0 pass.
+
+Phase1PASS requires every security and shared integration gate to pass on one
+exact candidate. Phase2 needs separate approval afterward. A7 remainsNO-GO
+under its additional independent qualification, reliability, target and spending
+acceptance requirements. No deployment/migration/paid-call authority is implied.
+
+### Incoming Brain follow-up and full CI receipt (2026-10-25)
+
+178 advanced toaeeba016 during verification. Its versioned first-save correction
+was independently reproduced red on the old handler (0/1), then verified with
+real-GoTrue24/0 on local assembly221da7ab. The patch preserves AUTH-06 and CAS;
+original23 and pilot security are rerun. The earlier full CI40178721665 is
+SUCCESS on914a3a71:16 jobs,22 contract files,98/98 mutation proofs. It does not
+authorize customer use or claim coverage of later source changes. The final
+verification commit and CI are linked from185. All execution/cache/shared client
+integration blockers above remain, so Phase1FAIL and Phase2 unstarted.

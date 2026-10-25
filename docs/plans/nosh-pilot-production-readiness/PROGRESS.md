@@ -2,10 +2,13 @@
 
 **Customer pilot readiness: FAIL. P1–P8 disabled. A7 NO-GO.**
 
-Last continuation: 2026-10-24 Asia/Kathmandu; Phase 1 approved in user message following #152.
-Readiness remains FAIL; owned access and native task protections are implemented below.
-Exact Brain #169/#170 raw-table composition passes; actual Brain save handlers
-have confirmed in-flight authorization failures (AUTH-06). Client-grant/lifecycle contracts remain required.
+Last continuation: **2026-10-25 Asia/Kathmandu**, isolated draft **#185**.
+AUTH-06 independently **23/0 PASS**; OWN-01 native workspace integrity **PASS**;
+client Brain/real-GoTrue autosave **15/0 and19/0 PASS**. Overall Phase1 remains
+**FAIL**: new native foreign-plan and post-removal task persistence failures,
+a client-session cache gap, and undelivered member writers/task pins/client
+parent/bridge integration. See the dated receipt below; historical failed
+receipts remain preserved. Phase2 is unstarted and P1–P8/A7 stay off.
 Read [MASTER_PLAN.md](MASTER_PLAN.md) before resuming. This tracker supersedes
 historical phase-number status in `docs/audits/.../production-readiness/`; those
 files remain immutable receipts of narrower previous work. Production-readiness
@@ -16,7 +19,7 @@ Phase 0–8 below is distinct from the historical P1–P8 feature implementation
 | Phase | Status | Branch / PR | Validation | Remaining blockers |
 | --- | --- | --- | --- | --- |
 | 0 — architecture/readiness audit | COMPLETE / reviewed; Phase 1 authorized | `codex/nosh-readiness-master-plan`; draft #152, stacked on #151 | repository/PR/CI/interface audit; documentation checks in phase receipt | DEC-01 target chosen in Phase 1 approval; shared contract still open |
-| 1 — native security | PARTIAL / owned protections PASS locally, overall FAIL | `codex/nosh-phase1-client-contract-gates` on #172; previous PRs preserved | previous owned native proofs pass; new checker7/0 and infra203/0; catalogBLOCKED; raw parentOWN-01FAIL and P1 denialPASS | AUTH-06 fix; canonical client/grant/Brain and A7; OWN-01/descendant constraints; legacy pre-effect guards; complete integrated acceptance |
+| 1 — native security | PARTIAL / AUTH-06 and OWN-01 verified, overall FAIL | `codex/nosh-phase1-client-contract-gates` on #172; previous PRs preserved | previous owned native proofs pass; draft185: AUTH23/0, OWN-018/0 + original reproductionPASS, client15/0, real-login19/0, pilot68/0+8/0; edge9401/0; infra214/0; execution1/2FAIL; cache1/1FAIL | Backend EXEC-PLAN/EXEC-REVOKE; Brain CACHE-SESSION; member writers/task pins; same-client parent constraints; Codex canonical bridge/global locks; complete integrated acceptance |
 | 2 — transactional persistence | PENDING / NOT APPROVED | no implementation PR yet; P3/P5/P6/P7 interfaces are not persistence | offline contracts only; no native durable import/snapshot/review/approval adapter | Phase 1; DATA-01/02; REPLAY-01; original-task lifecycle and shared receipt contract |
 | 3 — legacy executor containment | PENDING / NOT APPROVED | owner #145/#149/#150 are dependencies, not pilot containment completion | no complete pilot route-by-route native acceptance | Phase 1/2; backend EXEC-01; Brain context seam |
 | 4 — recovery/spending | PENDING / NOT APPROVED | owner #150 plus future FIN-01 successor | mocked P4/P8 safeguards; no native pilot shared-ledger recovery proof | Phase 2/3; FIN-01/02; MODEL-01; no competing ledger |
@@ -470,3 +473,42 @@ one combined candidate→all mandatory native acceptance. Phase1 FAIL, Phase2
 unstarted, P1–P8 disabled, A7 NO-GO. No owner implementation edits or hosted/paid/
 customer/merge/deploy effects. Verification readiness improved; no security
 blocker is marked closed by this tooling alone.
+
+## 2026-10-25 — owner integration and independent security verification (#185)
+
+The [complete receipt](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/INTEGRATED_VERIFICATION_2026-10-25.md) pins every owner SHA, commands,
+results, raw compressed logs and exact reproductions. Current source candidate
+914a3a71 incorporates178/175/177/179/180/181/184 and original171–173 fixtures.
+The original dirty worktree is preserved; no owner branch or implementation
+was edited. AUTH-06 and OWN-01 are now narrow PASS, not pending fixes.
+
+Two Backend179 failures are retained as required failing native acceptance:
+foreign plan linkage and task creation after committed membership removal.
+Brain178 has a source-grounded actual QueryClient cross-principal cache failure;
+full mounted browser/session acceptance is still needed. Contract174 v2.2 O3 A
+and O4 A are accepted, with explicit same-client parent-edge constraints and
+atomic pin/registration requirements. Actual successor implementations remain
+owned by Backend/Brain/Codex as detailed in the receipt. No duplicate ACL, ledger,
+qualification implementation or new runtime feature was added.
+
+Full local database289/1 has the known16.4 D1 test mismatch. Complete Ubuntu
+12.2.3 CI40178721665 was dispatched at full level; its final result is recorded
+in the dated receipt. The native workflow also retains the genuine execution
+security failures; ordinary CI passing never changes Phase1 acceptance.
+
+Next: obtain owner fixes and canonical task/descendant contracts, verify unchanged
+reproductions, finish the Codex private-client bridge and same-workspace native
+acceptance, then rerun the combined security boundary. **Do not start Phase2.**
+No hosted migration/write, deployment, merge, paid provider/model, customer data,
+feature activation or A7 execution occurred.
+
+### Incoming Brain follow-up and full CI receipt (2026-10-25)
+
+178 advanced toaeeba016 during verification. Its versioned first-save correction
+was independently reproduced red on the old handler (0/1), then verified with
+real-GoTrue24/0 on local assembly221da7ab. The patch preserves AUTH-06 and CAS;
+original23 and pilot security are rerun. The earlier full CI40178721665 is
+SUCCESS on914a3a71:16 jobs,22 contract files,98/98 mutation proofs. It does not
+authorize customer use or claim coverage of later source changes. The final
+verification commit and CI are linked from185. All execution/cache/shared client
+integration blockers above remain, so Phase1FAIL and Phase2 unstarted.

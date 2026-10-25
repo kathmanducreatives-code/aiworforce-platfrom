@@ -90,6 +90,13 @@ if [ -n "${OUTPOST_NATIVE_MEMBERSHIP_SQL:-}" ]; then
   psql "$db_url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$OUTPOST_NATIVE_MEMBERSHIP_SQL"
   echo 'Owner dependency #159 exact SQL applied to this disposable database only'
 fi
+# A combined candidate can already contain the reviewed active #169 migration.
+# Pin and verify it through the SAME grant preflight as the overlay lane; do not
+# misclassify it as a historical browser-writable Brain merely because no caller
+# supplied an optional overlay path.
+if [ -z "${OUTPOST_NATIVE_BRAIN_SQL:-}" ] && [ -f "$root/supabase/migrations/20261023120000_company_brain_server_writes_only.sql" ]; then
+  export OUTPOST_NATIVE_BRAIN_SQL="$root/supabase/migrations/20261023120000_company_brain_server_writes_only.sql"
+fi
 if [ -n "${OUTPOST_NATIVE_BRAIN_SQL:-}" ]; then
   checksum="$(shasum -a 256 "$OUTPOST_NATIVE_BRAIN_SQL" | cut -d ' ' -f 1)"
   if [ "$checksum" != d490ead239fbffbbe9467a09eac314d1d1eee705ca231ff08ff5b2b2a34f7340 ]; then

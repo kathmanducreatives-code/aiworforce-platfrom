@@ -17,11 +17,11 @@ control that reaches the intended writer/execution stage. HTTP200 alone is not
 success;403 alone does not prove zero effects. Keep failed and blocked outcomes
 visible even when an audit-integrity or CI job succeeds.
 
-No owner fix has arrived at this continuation's refresh: Brain #169 remains
-`60be0471`, Backend #150 `be625f46`. #171/#172 remain unchanged. The next Brain
-verification must use #172's same23 assertions against the delivered exact head,
-require23/0 and preserve all17 controls. Do not manually rerun the unchanged six
-failures as a substitute for incoming-fix verification.
+Current owner verification is recorded in [2026-10-25 receipt](INTEGRATED_VERIFICATION_2026-10-25.md).
+AUTH-06 passes the unchanged23; OWN-01 workspace parent integrity passes.
+Canonical held Brain passes15 and real-login autosave19. New Backend execution
+and Brain cache failures, plus missing client/task/bridge successors, retain
+Phase1FAIL. Historical receipts are not current-status claims.
 
 ## Required native invariant matrix
 
@@ -32,15 +32,15 @@ failures as a substitute for incoming-fix verification.
 | OWN-01 / Backend + Codex | Unreadable account B referenced from contact A; INSERT and PATCH, role and service variants; no-account/deletion/nonpilot controls | `resource-parent-audit.ts` currently proves raw201/mismatched SQL and P1 prepare404/zero bindings; correction requires raw denial and no mismatched row. Extend PATCH/service/descendants on actual owner patch | AVAILABLE INSERT/P1 reproduction; FAIL; remaining variants pending |
 | GRANT-01 / Brain→Codex | Every role including agency owner/admin lacks B grant; audited self-grant; revoke and regrant; permission reduction then restoration | Real grant writer/read policies; derive actor from verified session; old task/approval generation never revives after regrant. Compare stored grant identity/revision, not Brain content version | BLOCKED final A7/API |
 | BRAIN-01 / Brain→Codex | Distinct A/B ICP, voice, exclusions and version; missing/null/wrong client and agency fallback attempts; stale CAS | Canonical Brain API; authorized client read/edit succeeds; B never appears in A; no client task falls back to agency/first/latest Brain; native CAS and persisted context evidence | BLOCKED client Brain API |
-| AUTH-REMOVE / Brain→Codex | Commit membership removal after initial check, before protected write | #172 actual setup/save_basics and generate/update callbacks; require401/403, unchanged profile and positive writer controls | AVAILABLE; known FAIL |
-| AUTH-DEMOTE / Brain→Codex | Same ordering, downgrade owner→viewer before writer proceeds | Same23 assertions; current role governs final write; no stale role/JWT authority | AVAILABLE; known FAIL |
-| AUTH-LOGOUT / Brain→Codex | Real GoTrue logout commits after initial check; verify original auth.sessions row absent | Same23 assertions; stale unexpired JWT cannot authorize the final write | AVAILABLE; known FAIL |
+| AUTH-REMOVE / Brain→Codex | Commit membership removal after initial check, before protected write | #172 actual setup/save_basics and generate/update callbacks; require401/403, unchanged profile and positive writer controls | PASS on169833affce /17854c92a16; unchanged23 |
+| AUTH-DEMOTE / Brain→Codex | Same ordering, downgrade owner→viewer before writer proceeds | Same23 assertions; current role governs final write; no stale role/JWT authority | PASS on169833affce /17854c92a16; unchanged23 |
+| AUTH-LOGOUT / Brain→Codex | Real GoTrue logout commits after initial check; verify original auth.sessions row absent | Same23 assertions; stale unexpired JWT cannot authorize the final write | PASS on169833affce /17854c92a16; unchanged23 |
 | TASK-01 / Codex | Forged scope/signature, wrong actor/client/resource, new login, same-session refresh, invalid/expired session; failed preparation | #171 real `handlePilotTaskRegistration`, original signer and native transaction; no signature/binding on refusal, exact authorized prepare/replay; no new authorization engine | AVAILABLE #171 native/real Auth |
 | LIFE-01 / Codex + Backend | Mutate owner/input, add/strip markers, legacy status claim/fenced output, terminal cancel/reopen | #171 native triggers + actual claimContinuationViaRpc/fencedTaskUpdate; original inputs immutable, cancellation terminal; legitimate nonpilot control | AVAILABLE containment; executable lifecycle owner contract pending |
 | EXEC-01 / Backend→Codex | Missing/forged scope, wrong/revoked/new session; remove request marker while stored task remains pilot | Actual handleRunAgent, handleOrchestrate, createLeadMissionRunner.run and worker callbacks; deny before protected context/model/purchase/queue/dispatch/output; service credential not user/client authority | BLOCKED owner guards/entry contract |
 | EFFECT-01 / Backend→Codex | Unauthorized entry; swallowed provider error/fallback; detached work after response, cancellation and retry | Actual transport/purchase/dispatch spies AND native ledger/queue/output diffs. Zero protected effects at unauthorized entry. Reachable authorized nonpilot model/provider mock is mandatory; no paid calls | Fence tool AVAILABLE; actual route acceptance BLOCKED |
 | RETRY-01 / Codex + Backend | Lost prepare/cancel response, abort/rollback, concurrent task requests; resume after client switch/logout/regrant | #171 original-session/replay native suites; original task/client/input/grant generation retained; no namespace, authorization repair or budget reset. Add actual worker/resume routes on delivery | AVAILABLE task coverage; grant/worker extension BLOCKED |
-| LOCK-01 / Brain/Backend→Codex | Two native connections and explicit barriers, both permission-revoke/write orderings | Revocation committed before authorization/write must deny. If writer holds permission lock first, verify safe linearization and later denial. Use bounded locks/events, not arbitrary sleeps or timeout-as-PASS | Existing task locks AVAILABLE; shared writer/grant locks BLOCKED |
+| LOCK-01 / Brain/Backend→Codex | Two native connections and explicit barriers, both permission-revoke/write orderings | Revocation committed before authorization/write must deny. If writer holds permission lock first, verify safe linearization and later denial. Use bounded locks/events, not arbitrary sleeps or timeout-as-PASS | Brain/grant locks native PASS; pilot/global integration successor BLOCKED |
 
 ## Ordering and effects assertions
 
@@ -103,3 +103,17 @@ attempts alone does not establish zero model/purchase/queue effects.
 Until every mandatory invariant has native evidence at the same candidate,
 Phase1 remains FAIL. No merge, deploy, hosted write, customer operation, paid call
 or external dispatch is authorized by this preparation work.
+
+## Added integrated security gates (2026-10-25)
+
+- EXEC-PLAN: actual run-agent cannot create an A task under B plan; nativeSQL
+  unchanged, authorized own-plan control required. CurrentlyFAIL (Backend179).
+- EXEC-REVOKE: removal committed after entry gate and before task write must
+  deny new protected effects. CurrentlyFAIL (Backend179); retain accounting
+  for already authorized work rather than creating a second ledger.
+- CACHE-SESSION: prior principal client names/Brain cannot be reused after
+  logout/login or a late response; actual key/QueryClient proof currentlyFAIL
+  (Brain178), mounted browser/session acceptance still required.
+
+Canonical schema existence nowPASS, but same-client descendant/bridge native
+acceptance remainsBLOCKED;15-resource catalog shows0 direct canonical parents.
