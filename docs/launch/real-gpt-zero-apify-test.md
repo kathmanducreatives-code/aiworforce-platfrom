@@ -74,7 +74,7 @@ OPENAI_API_KEY=<TEST project key> deno run --allow-env --allow-net=api.openai.co
 
 ## Step 3 — ⛔ Start the worker, then run the kickoff transaction (starts the 300 s clock)
 
-Dispatch `discovery-test-worker.yml` on the dispatch SHA (`confirm_project_ref` = `TEST_PROJECT_REF`, `session_minutes` = 10). Once the job is running (the worker idles; nothing is queued):
+Dispatch `discovery-test-worker.yml` on the dispatch SHA (`confirm_project_ref` = `TEST_PROJECT_REF`, `session_minutes` = 10, `providers` = `openai-only`, the default: the worker step then unsets any Apify token and Deno denies `api.apify.com:443`, so Apify is unreachable even if the secret exists). Once the job is running (the worker idles; nothing is queued):
 
 ```sh
 psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -f ./real-gpt-run/kickoff.sql     # as an administrator

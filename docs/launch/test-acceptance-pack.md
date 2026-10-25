@@ -52,7 +52,7 @@ Purpose: the deployed code refuses before execution when it has no providers, an
      --proposal docs/launch/proposals/a7-reviewed-mission-proposal.json
    ```
    This compiles the reviewed proposal offline (I1–I8 still judged). No `OPENAI_API_KEY` is needed, `--allow-net` is not granted, and the compile gate allows 0 calls. Review `dry-run/kickoff.sql`: both actors are at **0** starts. Then run it as an administrator (⛔ hosted write).
-3. Dispatch `discovery-test-worker.yml` on the dispatch SHA (`session_minutes` = 5).
+3. Dispatch `discovery-test-worker.yml` on the dispatch SHA (`session_minutes` = 5, `providers` = `openai-only`).
 4. Evidence: `real-gpt-evidence.sql` and `smoke-credit-reconciliation.sql`.
 
 **PASS:**
@@ -68,6 +68,24 @@ Then restore `TEST_OPENAI_API_KEY`.
 Exactly `docs/launch/real-gpt-zero-apify-test.md`: preflight → prepare (Luna only, ≤ 2 calls) → kickoff → judge.
 - 25 criteria, of which **R4** (the Apify console shows no run) and **M6** (OpenAI usage equals the ledger) are manual.
 - Ceiling ≤ $0.075, of which ≤ $0.05 is worker model spend. Expected ≈ $0.012. $0 Apify.
+
+### Dispatch and evidence commands (steps 2, 3 and 5)
+`gh workflow run --ref` takes a branch or tag, not a SHA. Tag the approved dispatch SHA first.
+```sh
+git tag test-dispatch-<date> <dispatch-sha> && git push origin test-dispatch-<date>
+gh workflow run discovery-test-worker.yml --ref test-dispatch-<date> \
+  -f confirm_project_ref=<TEST_PROJECT_REF> -f session_minutes=10 -f providers=openai-only
+gh run list --workflow discovery-test-worker.yml -L 1      # approve the Environment reviewer in the UI
+gh run watch <run-id> --exit-status
+gh run view <run-id> --log | grep -E 'providers: openai-only|worker exited'   # the log carries nothing else
+mkdir -p ./real-gpt-run
+psql "$TEST_DB_URL" -X -At -v queue_id='<queue_id>' -f scripts/test-project/real-gpt/real-gpt-evidence.sql > ./real-gpt-run/evidence.json
+deno run --allow-read scripts/test-project/real-gpt/judge-real-gpt-run.ts ./real-gpt-run/evidence.json
+psql "$TEST_DB_URL" -X -f scripts/test-project/smoke-credit-reconciliation.sql > ./real-gpt-run/credits.txt
+```
+Abort at any point: `select public.stop_discovery_smoke('<queue_id>', 'operator stop');`, then `gh run cancel <run-id>`. The stop is proven on a real worker in CI (`tests/realprocess`): nothing is bought or sent after it, and nothing stays held.
+
+`providers=openai-only` is the default. In that mode the worker step unsets any Apify token and Deno denies `api.apify.com:443` (`tests/infra/testWorkerZeroApify.test.ts` executes the step's own shell). Only the separately approved paid A7 uses `openai-and-apify`.
 
 ## 4. Credit and ledger reconciliation (read-only)
 
