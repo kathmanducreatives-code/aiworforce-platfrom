@@ -1,0 +1,4 @@
+{"case":"plan_parent_move","status":403,"mismatched_tasks":0}
+{"case":"raw_service_promotion","status":403,"role":"viewer"}
+{"case":"raw_service_last_owner","status":403,"owners":1}
+ok | 101 passed | 0 failed (1m30s)

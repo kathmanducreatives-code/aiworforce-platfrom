@@ -1,0 +1,35 @@
+mutant killed: without the re-arm migration a refunded key's purchase goes uncharged
+mutant killed: OWN-01: contacts left out of the reference list
+mutant killed: guard: run-agent ignores the refusal
+mutant killed: guard: enqueue-lead-mission ignores the refusal
+mutant killed: commit boundary: membership read without its lock (EXEC-REVOKE race)
+mutant killed: plan parent: a deleted plan's id may be re-created elsewhere
+mutant killed: effect fence: a refused provider start reads as a definite non-start (early refund)
+mutant killed: no generation fence
+mutant killed: two smokes race past the recheck: admission lock removed
+mutant killed: a template missing a required key is authorized
+mutant killed: two templates for one kind and actor are authorized
+mutant killed: a nonterminal vendor status is accepted
+mutant killed: re-keyed payload buys again
+mutant killed: no model USD cap
+mutant killed: gate passes requests with no mission
+mutant killed: smoke start ignores the lifecycle's reads
+mutant killed: receipt read skipped
+mutant killed: legacy jobs actor keeps its customer shape in the smoke
+mutant killed: R4 redirects followed
+mutant killed: R8 queue row not fenced
+mutant killed: SAF-008 bodyless purchase skips mandatory fields
+mutant killed: adoption: a same- or later-generation purchase adopted
+mutant killed: wall clock: deadline extended past 300 s
+mutant killed: without the migration a viewer rewrites the Company Brain from the browser
+mutant killed: client writer: no lock on the session (a logout overtakes the write)
+mutant killed: client rule: a task's pinned generation is not compared (regrant revives the old task)
+mutant killed: archive leaves the client's grants active
+mutant killed: autosave: a stale answer without the server's copy is merged against nothing (typed text blanked)
+mutant killed: switcher: the client list is served while client Brains are switched off
+mutant killed: merge dropped the in-transaction version check (every save an upsert)
+mutant killed: membership writers: the last owner can be removed
+mutant killed: membership writers: an expired or foreign session is accepted
+mutant killed: membership surface: the trigger lets application roles through
+mutant killed: membership surface: TRUNCATE is not guarded
+MUTATION_TALLY shard=1 shards=4 total=134 ran=34

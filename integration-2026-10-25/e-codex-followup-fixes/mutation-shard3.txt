@@ -1,0 +1,34 @@
+mutant killed: without the OWN-01 migration a contact stores another workspace's account
+mutant killed: no serialization lock
+mutant killed: guard: membership not re-checked for a service caller
+mutant killed: guard: the plan is not checked (EXEC-PLAN)
+mutant killed: without the parent guard a referenced plan moves to another workspace
+mutant killed: effect fence: run-agent never binds its principal
+mutant killed: clock read before the lock wait
+mutant killed: no new smoke over unreconciled liability: gate removed
+mutant killed: one actor's slow run spends another's reads: allocation ignored by the read plan
+mutant killed: an incomplete or oversized read allocation is authorized
+mutant killed: an above-quote reconciliation lets another authorization spend
+mutant killed: a padded reference is a different record
+mutant killed: no combined USD cap
+mutant killed: S18a: a malformed dataset recorded as an empty one
+mutant killed: vendor caps not pinned
+mutant killed: smoke start ignores the time left
+mutant killed: vendor cap above the quote kept
+mutant killed: R2 uncertain Firecrawl refunded
+mutant killed: R6 closure not rechecked
+mutant killed: R8 lineage row not fenced
+mutant killed: adoption: evidence not bound to the task
+mutant killed: adoption: another operation's answer adopted
+mutant killed: settlement judged at arrival, not send time (Codex P2)
+mutant killed: Brain writer: no lock on the membership (a demotion overtakes the write)
+mutant killed: client writer: no lock on the client or its grant (an archive overtakes the write)
+mutant killed: permission revision not renewed on a role change
+mutant killed: client rule: a viewer edits
+mutant killed: handler: the request's client is ignored (a client save lands on the agency Brain)
+mutant killed: page: a Brain answer for another client is accepted
+mutant killed: without the held membership writers nothing removes or demotes
+mutant killed: membership writers: any member may remove others
+mutant killed: without the boundary the service role promotes and removes the last owner directly
+mutant killed: membership surface: a raw role change is allowed
+MUTATION_TALLY shard=3 shards=4 total=134 ran=33

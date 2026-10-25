@@ -1,0 +1,3 @@
+{"case":"revoke_after_insert","removed":true,"inserted":true,"model_attempts":0,"status":500}
+{"case":"authorized_model_control","removed":false,"inserted":true,"model_attempts":1,"status":500}
+ok | 149 passed | 0 failed (5m14s)

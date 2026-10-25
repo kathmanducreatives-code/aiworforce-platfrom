@@ -1,0 +1,5 @@
+real process: SIGKILL between the paid job-search start and its execution-ledger run id — worker 2 adopts it via the gate ... ok (42s)
+real process (PR #150 control): SIGKILL at the first status read, run id already in the ledger — worker 2 adopts it from the ledger ... ok (33s)
+real process: an operator stop mid-mission — nothing bought or sent after it, the mission ends, credits settle ... ok (12s)
+real process: the zero-Apify real-GPT kickoff — prepared, run by a real worker, judged PASS ... ok (3s)
+ok | 4 passed | 0 failed (1m32s)

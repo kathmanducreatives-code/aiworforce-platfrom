@@ -1,0 +1,34 @@
+mutant killed: without the held admission migration nothing is admitted
+mutant killed: OWN-01: preflight does not abort on an existing mismatch
+mutant killed: guard: the stored task's pilot markers are not read
+mutant killed: guard: orchestrate ignores the refusal
+mutant killed: commit boundary: the plan's workspace is not compared
+mutant killed: effect fence: the live membership check is skipped
+mutant killed: effect fence: the transport's marks are hidden by the wrapper
+mutant killed: any task status admitted
+mutant killed: ownership judged before the liability lock's wait
+mutant killed: a template missing allowed_kinds admits
+mutant killed: an above-quote reconciliation closes liability for authorization
+mutant killed: NO_RUN closes a purchase that ran
+mutant killed: no model attempt count
+mutant killed: no poll limit
+mutant killed: replayed purchase reported as a definite refusal
+mutant killed: read plan refusal reads as a refund for a replay
+mutant killed: settled receipt not labelled
+mutant killed: R1 later refusal refunds an earlier hold
+mutant killed: R5 malformed admission trusted
+mutant killed: R8 task row not fenced
+mutant killed: adoption: a verified adopt still answered 503
+mutant killed: adoption: a conflicting run id adopted
+mutant killed: wall clock: far-future queue timestamp accepted
+mutant killed: Brain writer: no lock on the session (a logout overtakes the write)
+mutant killed: client writer: no lock on the membership (a demotion overtakes the write)
+mutant killed: client rule: a task's pinned permission revision is not compared
+mutant killed: client rule: a missing client falls through instead of client_context_required
+mutant killed: handler: client Brains served while switched off
+mutant killed: switcher: a selected client stays shown after it is no longer listed
+mutant killed: a versioned first save upserts over a Brain another device created
+mutant killed: membership writers: an admin may remove an owner
+mutant killed: membership writers: browsers may call them
+mutant killed: membership surface: the trigger runs as its owner (definer), so it sees no application role
+MUTATION_TALLY shard=2 shards=4 total=134 ran=33

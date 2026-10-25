@@ -1,0 +1,35 @@
+mutant killed: reverting the D1 fix fails the fenced-write contract
+mutant killed: OWN-01: SET NULL nulls the whole key (workspace_id too)
+mutant killed: no deadline
+mutant killed: guard: a resume may change its principal
+mutant killed: without the commit boundary a non-member's task commits
+mutant killed: plan parent: the workspace may change
+mutant killed: effect fence: settlement reads of an admitted run are refused too
+mutant killed: a run bought with one read (no dataset read)
+mutant killed: an earlier authorization spends over open liability: admission recheck removed
+mutant killed: one actor's reads exceed its share: database allocation removed
+mutant killed: a priced read template is authorized
+mutant killed: a live authorization's purchase is reconciled
+mutant killed: no lineage lease check
+mutant killed: no provider USD cap
+mutant killed: worker may authorize
+mutant killed: smoke status read ignores the read reserve
+mutant killed: long poll not clamped to the time left
+mutant killed: billed-per-entry arrays unbounded
+mutant killed: R3 remote media accepted
+mutant killed: R7 start charge dropped
+mutant killed: R2 uncertain crawl start refunded (Codex P2)
+mutant killed: adoption: dataset id format not checked
+mutant killed: wall clock: expired mission still reaches the handler
+mutant killed: smoke planner shown every authorised actor (Codex P1)
+mutant killed: Brain writer: role not checked at the write
+mutant killed: client rule: a revoked grant still authorizes
+mutant killed: membership removal leaves the user's grants active
+mutant killed: client RLS: every member enumerates every client (O1)
+mutant killed: client save: the version the page built on is not checked (a stale save overwrites)
+mutant killed: merge kept #168's side: writeBrain writes the table directly (no AUTH-06 re-check)
+mutant killed: membership writers: only the actor and target rows are locked, not every owner
+mutant killed: membership writers: promotion is allowed
+mutant killed: membership surface: the service role keeps its direct writes (trigger only)
+mutant killed: membership surface: a raw delete is allowed
+MUTATION_TALLY shard=0 shards=4 total=134 ran=34
