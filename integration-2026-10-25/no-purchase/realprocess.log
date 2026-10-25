@@ -1,0 +1,200 @@
+applied tests/db-contract/sql/00_supabase_shim.sql
+applied supabase/migrations-held/20260816120000_baseline_schema.sql
+applied supabase/migrations/20260816180000_mcp_feed_views.sql
+applied supabase/migrations/20260821120000_execution_cost_provenance.sql
+applied supabase/migrations/20260822120000_model_call_ledger.sql
+applied supabase/migrations/20260822130000_credit_kind_provider_call.sql
+applied supabase/migrations/20260822140000_company_headcount_snapshots.sql
+applied supabase/migrations/20260824120000_signal_events_origin.sql
+applied supabase/migrations/20260824130000_signal_events_subject.sql
+applied supabase/migrations/20260824140000_monitoring_subjects.sql
+applied supabase/migrations/20260824180000_monitoring_runs.sql
+applied supabase/migrations/20260824190000_backfill_signal_event_feed_payload.sql
+applied supabase/migrations/20260825120000_monitoring_schedule.sql
+applied supabase/migrations/20260825130000_monitoring_call_kind.sql
+applied supabase/migrations/20260825140000_monitoring_cron.sql
+applied supabase/migrations/20260825150000_signal_cluster_relevance.sql
+applied supabase/migrations/20260825160000_relevance_cites_check_fix.sql
+applied supabase/migrations/20260825170000_canonical_dedupe_keys.sql
+applied supabase/migrations/20260826100000_sweep_stuck_runs.sql
+applied supabase/migrations/20260826170000_resume_stalled_leads_cron.sql
+applied supabase/migrations/20260827090000_request_understanding_log.sql
+applied supabase/migrations/20260828090000_messages_realtime_publication.sql
+applied supabase/migrations/20260828100000_request_understanding_log_read.sql
+applied supabase/migrations/20260829140000_lead_lineages.sql
+applied supabase/migrations/20260829150000_lead_lineages_backfill.sql
+applied supabase/migrations/20260829170000_hiring_evidence_unavailable_backfill.sql
+applied supabase/migrations/20260903090000_company_web_evidence.sql
+applied supabase/migrations/20260903120000_company_web_evidence_requirement.sql
+applied supabase/migrations/20260903130000_company_web_evidence_soft_404_correction.sql
+applied supabase/migrations/20260903160000_cancellation_row_fence.sql
+applied supabase/migrations/20260904120000_claim_fences_on_lineage_status.sql
+applied supabase/migrations/20260907090000_ops_archive_rls.sql
+applied supabase/migrations/20260907120000_drop_permissive_policies.sql
+applied supabase/migrations/20260907150000_drop_fake_token_policies.sql
+applied supabase/migrations/20260907170000_close_screening_scenarios.sql
+applied supabase/migrations/20260910120000_content_item.sql
+applied supabase/migrations/20260910130000_content_item_versioning.sql
+applied supabase/migrations/20260911120000_content_v1.sql
+applied supabase/migrations/20260911140000_content_asset.sql
+applied supabase/migrations/20260911150000_content_version_empty_draft.sql
+applied supabase/migrations/20260916120000_lead_v2_p2_execution_spine.sql
+applied supabase/migrations/20260917120000_signal_events_realtime_publication.sql
+applied supabase/migrations/20260929120000_lock_down_definer_rpcs.sql
+applied supabase/migrations/20260929130000_revoke_anon_writes_on_workspace_tables.sql
+applied supabase/migrations/20260929140000_beta_access_requests.sql
+applied supabase/migrations/20261023120000_company_brain_server_writes_only.sql
+applied supabase/migrations/20261024120000_company_brain_authorized_writer.sql
+applied supabase/migrations-held/20260910140000_lead_mission_v2_claim.sql
+applied supabase/migrations-held/20260915120000_sweep_skips_v2_queue_tasks.sql
+applied supabase/migrations-held/20261003120000_lead_mission_v2_continuations_not_retries.sql
+applied supabase/migrations-held/20261011120000_lead_mission_v2_productive_continuation_no_backoff.sql
+applied supabase/migrations-held/20261019120000_lead_mission_v2_exhausted_lease_terminal.sql
+applied supabase/migrations-held/20261015130000_credits_rearm_settled_key.sql
+applied supabase/migrations-held/20261022120000_credits_reaper_charges_confirmed_purchase.sql
+applied supabase/migrations-held/20261015140000_discovery_smoke_admission.sql
+applied supabase/migrations-held/20261025120000_lead_graph_same_workspace_parents.sql
+database ready
+postgrest PostgREST 12.2.3 on :34986, postgres 17.11 (Ubuntu 17.11-1.pgdg24.04+2)
+Check tests/realprocess/workerKill.rehearsal.ts
+running 3 tests from ./tests/realprocess/workerKill.rehearsal.ts
+real process: SIGKILL between the paid job-search start and its execution-ledger run id — worker 2 adopts it via the gate ...'real process: SIGKILL between the paid job-search start and its execution-ledger run id — worker 2 adopts it via the gate' has been running for over (1m0s)
+'real process: SIGKILL between the paid job-search start and its execution-ledger run id — worker 2 adopts it via the gate' has been running for over (2m0s)
+ FAILED (2m0s)
+real process (PR #150 control): SIGKILL at the first status read, run id already in the ledger — worker 2 adopts it from the ledger ...'real process (PR #150 control): SIGKILL at the first status read, run id already in the ledger — worker 2 adopts it from the ledger' has been running for over (1m0s)
+'real process (PR #150 control): SIGKILL at the first status read, run id already in the ledger — worker 2 adopts it from the ledger' has been running for over (2m0s)
+ FAILED (2m0s)
+real process: the zero-Apify real-GPT kickoff — prepared, run by a real worker, judged PASS ...
+------- output -------
+(node:7412) TimeoutNegativeWarning: -238637.7635428994 is a negative number.
+Timeout duration was set to 1.
+REAL_GPT_JUDGE {"queue":"failed","verdicts":["PASS I1","PASS I2","PASS I3","PASS I4","PASS I5","PASS I6","PASS I7","PASS I8","FAIL P1","FAIL P2","FAIL P3","FAIL P4","PASS R1","PASS R2","PASS R3","MANUAL R4","FAIL M1","FAIL M2","PASS M3","PASS M4","FAIL M5","MANUAL M6","FAIL T1","PASS T2","PASS T3"]}
+----- output end -----
+real process: the zero-Apify real-GPT kickoff — prepared, run by a real worker, judged PASS ... FAILED (1s)
+
+ ERRORS 
+
+real process: SIGKILL between the paid job-search start and its execution-ledger run id — worker 2 adopts it via the gate => ./tests/realprocess/workerKill.rehearsal.ts:200:6
+error: Error: timed out waiting for the kill point
+  throw new Error(`timed out waiting for ${what}`);
+        ^
+    at waitFor (file:///home/user/wt-p1x2/tests/realprocess/workerKill.rehearsal.ts:115:9)
+    at async rehearse (file:///home/user/wt-p1x2/tests/realprocess/workerKill.rehearsal.ts:126:3)
+    at async file:///home/user/wt-p1x2/tests/realprocess/workerKill.rehearsal.ts:201:13
+
+real process (PR #150 control): SIGKILL at the first status read, run id already in the ledger — worker 2 adopts it from the ledger => ./tests/realprocess/workerKill.rehearsal.ts:206:6
+error: Error: timed out waiting for the kill point
+  throw new Error(`timed out waiting for ${what}`);
+        ^
+    at waitFor (file:///home/user/wt-p1x2/tests/realprocess/workerKill.rehearsal.ts:115:9)
+    at async rehearse (file:///home/user/wt-p1x2/tests/realprocess/workerKill.rehearsal.ts:126:3)
+    at async file:///home/user/wt-p1x2/tests/realprocess/workerKill.rehearsal.ts:207:13
+
+real process: the zero-Apify real-GPT kickoff — prepared, run by a real worker, judged PASS => ./tests/realprocess/workerKill.rehearsal.ts:218:6
+error: AssertionError: Values are not equal: every automatic criterion passes
+
+
+    [Diff] Actual / Expected
+
+
+-   [
+-     {
+-       criterion: "the plan came from the model and passed validation (no deterministic fallback, no violations)",
+-       id: "P1",
+-       observed: '{"source":null,"violations":null}',
+-       question: "P",
+-       result: "FAIL",
+-     },
+-     {
+-       criterion: "every provider step uses an approved actor",
+-       id: "P2",
+-       observed: "[]",
+-       question: "P",
+-       result: "FAIL",
+-     },
+-     {
+-       criterion: 'the first purchase is job_discovery on apify_linkedin_job_search: titles ["Account Executive"], locations ["United States"], ≤ 3 items, posted "month"',
+-       id: "P3",
+-       observed: "null",
+-       question: "P",
+-       result: "FAIL",
+-     },
+-     {
+-       criterion: "the plan qualifies companies against the stated requirements before persisting",
+-       id: "P4",
+-       observed: "[]",
+-       question: "P",
+-       result: "FAIL",
+-     },
+-     {
+-       criterion: "≤ 4 model calls admitted, each at the template's committed maximum (12480 µ$), total ≤ 50000 µ$",
+-       id: "M1",
+-       observed: "[]",
+-       question: "M",
+-       result: "FAIL",
+-     },
+-     {
+-       criterion: "every admitted model call has exactly one ledger row (and the compilation has its own)",
+-       id: "M2",
+-       observed: '{"admitted":0,"run_rows":1,"compile_rows":0}',
+-       question: "M",
+-       result: "FAIL",
+-     },
+-     {
+-       criterion: "recorded run spend never exceeds what admission committed",
+-       id: "M5",
+-       observed: '{"recorded_microusd":680,"committed_microusd":0}',
+-       question: "M",
+-       result: "FAIL",
+-     },
+-     {
+-       criterion: "the mission ended with exactly one terminal verdict",
+-       id: "T1",
+-       observed: "[]",
+-       question: "T",
+-       result: "FAIL",
+-     },
+-   ]
++   []
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at file:///home/user/wt-p1x2/tests/realprocess/workerKill.rehearsal.ts:288:3
+
+ FAILURES 
+
+real process: SIGKILL between the paid job-search start and its execution-ledger run id — worker 2 adopts it via the gate => ./tests/realprocess/workerKill.rehearsal.ts:200:6
+real process (PR #150 control): SIGKILL at the first status read, run id already in the ledger — worker 2 adopts it from the ledger => ./tests/realprocess/workerKill.rehearsal.ts:206:6
+real process: the zero-Apify real-GPT kickoff — prepared, run by a real worker, judged PASS => ./tests/realprocess/workerKill.rehearsal.ts:218:6
+
+FAILED | 0 passed | 3 failed (4m1s)
+
+error: Test failed
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+   8: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+   9: <unknown>
+--- postgrest log ---
+25/Oct/2026:08:08:44 +0000: Starting PostgREST 12.2.3...
+25/Oct/2026:08:08:44 +0000: Listening on port 34986
+127.0.0.1 - anon [25/Oct/2026:08:08:44 +0000] "GET / HTTP/1.1" 503 - "" "curl/8.5.0"
+25/Oct/2026:08:08:44 +0000: Listening for notifications on the "pgrst" channel
+25/Oct/2026:08:08:44 +0000: Successfully connected to PostgreSQL 17.11 (Ubuntu 17.11-1.pgdg24.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+25/Oct/2026:08:08:44 +0000: Config reloaded
+25/Oct/2026:08:08:44 +0000: Schema cache queried in 13.7 milliseconds
+25/Oct/2026:08:08:44 +0000: Schema cache loaded 136 Relations, 142 Relationships, 35 Functions, 0 Domain Representations, 4 Media Type Handlers, 499 Timezones
+25/Oct/2026:08:08:44 +0000: Successfully connected to PostgreSQL 17.11 (Ubuntu 17.11-1.pgdg24.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+25/Oct/2026:08:08:44 +0000: Config reloaded
+25/Oct/2026:08:08:44 +0000: Schema cache queried in 11.1 milliseconds
+25/Oct/2026:08:08:44 +0000: Schema cache loaded 136 Relations, 142 Relationships, 35 Functions, 0 Domain Representations, 4 Media Type Handlers, 499 Timezones

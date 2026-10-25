@@ -23,3 +23,8 @@ With the fixes (#179 `d3d68201`, #177 `05e288e1`): 9 / 9 and 8 / 8 pass.
 ## Also
 - #181 full release CI (workflow_dispatch level=full, run 40172330252): **16 / 16 jobs green**, including all 8 mutation shards.
 - `operator-checklist.md`: deployment settings, merge order, migrations, secrets, rollback, approvals.
+
+## Zero-Apify / no-purchase evidence (`no-purchase/`)
+- `modelonly.log`: modelOnlySmoke, realGptJudge (3) and realGptPreflight contracts on the combined tree `bed1b480`, **5 / 5**.
+- `realprocess.log`: the real-process rehearsal on `bed1b480` **failed 3 / 3**. The #179 guard refused the rehearsal's requester, who was not a workspace member (a fixture gap in #154/#158, not a product defect).
+- `realprocess2.log`: the same with the requester seeded as a member, **3 / 3**: both SIGKILL adoption paths, and the zero-Apify kickoff run by a real worker and judged PASS with no Apify request. Fixed on the branches: #154 → `266dc470`, #158 → `b8998427` (3 / 3 standalone).

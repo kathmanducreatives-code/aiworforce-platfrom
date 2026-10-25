@@ -22,12 +22,12 @@ Every ☐ is a manual check or an approval. Nothing here is done by merging alon
 | 2 | #144 `385173f` | launch | Batch 1 |
 | 3 | #153 `6223dd5` | launch | Batch 1. Held reaper SQL, never applied by merging. README row conflict with #158 (keep both) |
 | 4 | #149 `c704f92` → #157 `005d508` | #157 on #149 | Batch 2 |
-| 5 | #145 `37b3b1a` → #150 `be625f4` → #154 `551d84b` → #158 `84490a2` | each on the previous | Batch 3. README rows: keep all |
-| 6 | **#179** `c0199569` pre-effect guard | launch | Needed for TEST steps 5b/5c. Merges cleanly onto 2–5 and onto #169/#176 |
+| 5 | #145 `37b3b1a` → #150 `be625f4` → #154 `266dc470` → #158 `b8998427` | each on the previous | Batch 3. README rows: keep all |
+| 6 | **#179** `d3d68201` pre-effect guard | launch | Needed for TEST steps 5b/5c. Merges cleanly onto 2–5 and onto #169/#176 |
 | 7 | #175 `dbd73f06` S18a | launch | Optional for TEST |
 | 8 | #177 `05e288e1` OWN-01 | launch | **Held SQL.** Merging applies nothing |
 | 9 | #165 `d0647f6d` → #180 `dd7cba84` | #180 on #165 | Seller facts (C1–C4) |
-| 10 | #182 `50928cb4` acceptance pack | #158 | After #158 |
+| 10 | #182 `50928cb4` acceptance pack | #158 | After #158 (merge #158's new head into it first, or let GitHub retarget) |
 | — | #184 `cd3a7a00` C5 | #168 (→ #167 → #160 → #147) | Lands with Brain's Phase 2 chain, after **Brain resolves #168 ↔ #169/#176** in `generate-company-brain-draft` (keep AUTH-06's authorized writer) |
 | — | #169 → #176 (Brain), #171–#173 (Codex) | their stacks | Owners' order. **When #153 and #169 meet, `mutation.sh` needs one restore loop naming both `$reaper_sql` and `$brain_writer_sql`, plus both proof blocks** (diff on the evidence branch) |
 | ✗ | #107 (Codex) | — | **Close or renumber.** It duplicates held `20261019120000` in the same directory |
@@ -72,3 +72,6 @@ No PR needs a rebase today: `launch/hardening` is still `8b0e2b6`. After each me
 4. TEST step 3: zero-Apify real-GPT (≤ $0.075 OpenAI, $0 Apify).
 5. TEST step 5: the retry/resume scenarios (5b needs a temporary membership removal on TEST).
 6. Later and separate: the paid A7 (~$0.25), production deploy, production migrations, and enabling Lead V2 for one workspace.
+
+## G. Local gate not covered by CI
+`tests/realprocess/run.sh` (real worker processes, SIGKILL adoption, zero-Apify kickoff) is **not run by CI**. Run it on the merged dispatch SHA before TEST. It passed 3/3 on the combined tree once #154 `266dc470` and #158 `b8998427` seeded the requester as a workspace member, which the #179 guard requires.

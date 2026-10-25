@@ -1,0 +1,78 @@
+applied tests/db-contract/sql/00_supabase_shim.sql
+applied supabase/migrations-held/20260816120000_baseline_schema.sql
+applied supabase/migrations/20260816180000_mcp_feed_views.sql
+applied supabase/migrations/20260821120000_execution_cost_provenance.sql
+applied supabase/migrations/20260822120000_model_call_ledger.sql
+applied supabase/migrations/20260822130000_credit_kind_provider_call.sql
+applied supabase/migrations/20260822140000_company_headcount_snapshots.sql
+applied supabase/migrations/20260824120000_signal_events_origin.sql
+applied supabase/migrations/20260824130000_signal_events_subject.sql
+applied supabase/migrations/20260824140000_monitoring_subjects.sql
+applied supabase/migrations/20260824180000_monitoring_runs.sql
+applied supabase/migrations/20260824190000_backfill_signal_event_feed_payload.sql
+applied supabase/migrations/20260825120000_monitoring_schedule.sql
+applied supabase/migrations/20260825130000_monitoring_call_kind.sql
+applied supabase/migrations/20260825140000_monitoring_cron.sql
+applied supabase/migrations/20260825150000_signal_cluster_relevance.sql
+applied supabase/migrations/20260825160000_relevance_cites_check_fix.sql
+applied supabase/migrations/20260825170000_canonical_dedupe_keys.sql
+applied supabase/migrations/20260826100000_sweep_stuck_runs.sql
+applied supabase/migrations/20260826170000_resume_stalled_leads_cron.sql
+applied supabase/migrations/20260827090000_request_understanding_log.sql
+applied supabase/migrations/20260828090000_messages_realtime_publication.sql
+applied supabase/migrations/20260828100000_request_understanding_log_read.sql
+applied supabase/migrations/20260829140000_lead_lineages.sql
+applied supabase/migrations/20260829150000_lead_lineages_backfill.sql
+applied supabase/migrations/20260829170000_hiring_evidence_unavailable_backfill.sql
+applied supabase/migrations/20260903090000_company_web_evidence.sql
+applied supabase/migrations/20260903120000_company_web_evidence_requirement.sql
+applied supabase/migrations/20260903130000_company_web_evidence_soft_404_correction.sql
+applied supabase/migrations/20260903160000_cancellation_row_fence.sql
+applied supabase/migrations/20260904120000_claim_fences_on_lineage_status.sql
+applied supabase/migrations/20260907090000_ops_archive_rls.sql
+applied supabase/migrations/20260907120000_drop_permissive_policies.sql
+applied supabase/migrations/20260907150000_drop_fake_token_policies.sql
+applied supabase/migrations/20260907170000_close_screening_scenarios.sql
+applied supabase/migrations/20260910120000_content_item.sql
+applied supabase/migrations/20260910130000_content_item_versioning.sql
+applied supabase/migrations/20260911120000_content_v1.sql
+applied supabase/migrations/20260911140000_content_asset.sql
+applied supabase/migrations/20260911150000_content_version_empty_draft.sql
+applied supabase/migrations/20260916120000_lead_v2_p2_execution_spine.sql
+applied supabase/migrations/20260917120000_signal_events_realtime_publication.sql
+applied supabase/migrations/20260929120000_lock_down_definer_rpcs.sql
+applied supabase/migrations/20260929130000_revoke_anon_writes_on_workspace_tables.sql
+applied supabase/migrations/20260929140000_beta_access_requests.sql
+applied supabase/migrations/20261023120000_company_brain_server_writes_only.sql
+applied supabase/migrations/20261024120000_company_brain_authorized_writer.sql
+applied supabase/migrations-held/20260910140000_lead_mission_v2_claim.sql
+applied supabase/migrations-held/20260915120000_sweep_skips_v2_queue_tasks.sql
+applied supabase/migrations-held/20261003120000_lead_mission_v2_continuations_not_retries.sql
+applied supabase/migrations-held/20261011120000_lead_mission_v2_productive_continuation_no_backoff.sql
+applied supabase/migrations-held/20261019120000_lead_mission_v2_exhausted_lease_terminal.sql
+applied supabase/migrations-held/20261015130000_credits_rearm_settled_key.sql
+applied supabase/migrations-held/20261022120000_credits_reaper_charges_confirmed_purchase.sql
+applied supabase/migrations-held/20261015140000_discovery_smoke_admission.sql
+applied supabase/migrations-held/20261025120000_lead_graph_same_workspace_parents.sql
+database ready
+postgrest PostgREST 12.2.3 on :45341, postgres 17.11 (Ubuntu 17.11-1.pgdg24.04+2)
+Check tests/realprocess/workerKill.rehearsal.ts
+running 3 tests from ./tests/realprocess/workerKill.rehearsal.ts
+real process: SIGKILL between the paid job-search start and its execution-ledger run id — worker 2 adopts it via the gate ...
+------- output -------
+REHEARSAL {"killAt":"jobs_run_id_write","w1":"2a44924d-0377-4466-a29e-014787c6c6b6","w2":"055fc9dc-ba9a-45dc-add1-c37a107360aa","queue":"complete","attempts":2,"task":"complete","terminal":"completed","lineage":{"status":"terminal","generation":2},"posts":{"jobs":1,"details":1},"forbidden":[],"pids":2,"adopted_by_gate":1,"adopted_from_ledger":0,"credits":[["apify_linkedin_company_details","charged",1],["apify_linkedin_job_search","charged",1]],"balance":[8,0],"leads":[["qualified Software",true]],"open_liability":[["apify:harvestapi~linkedin-job-search","open"],["apify:harvestapi~linkedin-company","open"]],"ops":[["apify:harvestapi~linkedin-company","run-details"],["apify:harvestapi~linkedin-job-search","run-jobs"]],"logs":["/tmp/rehearsal-w1-a878b21bae93dd7a.log","/tmp/rehearsal-w2-f1961e1dad46495d.log"]}
+----- output end -----
+real process: SIGKILL between the paid job-search start and its execution-ledger run id — worker 2 adopts it via the gate ... ok (41s)
+real process (PR #150 control): SIGKILL at the first status read, run id already in the ledger — worker 2 adopts it from the ledger ...
+------- output -------
+REHEARSAL {"killAt":"jobs_status","w1":"9f1b243b-1712-40f2-954f-d32677537c0c","w2":"a13d6f9f-e83c-402b-ab51-aae7a1b5cd25","queue":"complete","attempts":2,"task":"complete","terminal":"completed","lineage":{"status":"terminal","generation":2},"posts":{"jobs":1,"details":1},"forbidden":[],"pids":2,"adopted_by_gate":0,"adopted_from_ledger":1,"credits":[["apify_linkedin_company_details","charged",1],["apify_linkedin_job_search","charged",1]],"balance":[8,0],"leads":[["qualified Software",true]],"open_liability":[["apify:harvestapi~linkedin-job-search","open"],["apify:harvestapi~linkedin-company","open"]],"ops":[["apify:harvestapi~linkedin-company","run-details"],["apify:harvestapi~linkedin-job-search","run-jobs"]],"logs":["/tmp/rehearsal-w1-856f9816c1695eaf.log","/tmp/rehearsal-w2-d67dc71ab990dc6f.log"]}
+----- output end -----
+real process (PR #150 control): SIGKILL at the first status read, run id already in the ledger — worker 2 adopts it from the ledger ... ok (32s)
+real process: the zero-Apify real-GPT kickoff — prepared, run by a real worker, judged PASS ...
+------- output -------
+REAL_GPT_JUDGE {"queue":"complete","verdicts":["PASS I1","PASS I2","PASS I3","PASS I4","PASS I5","PASS I6","PASS I7","PASS I8","PASS P1","PASS P2","PASS P3","PASS P4","PASS R1","PASS R2","PASS R3","MANUAL R4","PASS M1","PASS M2","PASS M3","PASS M4","PASS M5","MANUAL M6","PASS T1","PASS T2","PASS T3"]}
+----- output end -----
+real process: the zero-Apify real-GPT kickoff — prepared, run by a real worker, judged PASS ... ok (1s)
+
+ok | 3 passed | 0 failed (1m14s)
+
