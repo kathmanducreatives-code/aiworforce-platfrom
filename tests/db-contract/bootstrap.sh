@@ -51,6 +51,9 @@ held_client=(
 # which proves the credit, admission and membership tests fail without their
 # migrations; nothing else sets it.
 omit="${DB_CONTRACT_OMIT_HELD:-}"
+# A comma-separated list is accepted too (a proof that omits a migration and the
+# held successor built on it).
+omitted() { case ",$omit," in *",$1,"*) return 0;; esac; return 1; }
 apply() {
   psql "$url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$1" >/dev/null \
     || { echo "FAILED applying ${1#$root/}" >&2; exit 1; }
@@ -59,20 +62,22 @@ apply() {
 apply "$root/tests/db-contract/sql/00_supabase_shim.sql"
 apply "$held/20260816120000_baseline_schema.sql"
 for f in $(ls "$root/supabase/migrations/"*.sql | sort); do
-  if [ "$(basename "$f")" = "$omit" ]; then echo "omitted ${f#$root/} (mutation proof)"; continue; fi
+  if omitted "$(basename "$f")"; then echo "omitted ${f#$root/} (mutation proof)"; continue; fi
   apply "$f"
 done
 for f in "${held_v2[@]}" "${held_billing[@]}" "${held_admission[@]}" "${held_client[@]}"; do
-  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  if omitted "$f"; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done
 # The held lead-graph ownership fix (OWN-01): every parent reference in the
 # lead graph is composite on (workspace_id, id). Independent of the chains above.
 held_ownership=(
   20261025120000_lead_graph_same_workspace_parents.sql
+  # Same-client descendants (#174 §9.5): needs the keys above and #176's client accounts.
+  20261025180000_lead_graph_same_client_parents.sql
 )
 for f in "${held_ownership[@]}"; do
-  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  if omitted "$f"; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done
 # PostgREST reads its schema cache once at start; nothing else to reload here.

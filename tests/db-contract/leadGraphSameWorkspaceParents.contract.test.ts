@@ -150,12 +150,15 @@ Deno.test("catalog: all 26 lead-graph references are (workspace_id, col) → par
       from pg_constraint
      where contype = 'f' and connamespace = 'public'::regnamespace
        and confrelid::regclass::text in ('accounts', 'contacts', 'lead_candidates', 'lead_evidence', 'signals')`];
+  // With the held same-client successor (20261025180000) applied, each key also binds the parent's client.
+  const [{ bound }] = await sql`select exists (select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'contacts' and column_name = 'client_scope') as bound`;
   for (const [child, col, parent, del] of REFS) {
     const fks = rows.filter((r) => r.child === child && r.parent === parent && (r.cols as string[]).includes(col));
     assertEquals(fks.length, 1, `${child}.${col}: exactly one relationship`);
     const fk = fks[0];
     assertEquals(fk.conname, `${child}_${col}_fkey`, "name kept for PostgREST hints");
-    assertEquals(fk.cols, ["workspace_id", col], `${child}.${col}: composite`);
+    assertEquals(fk.cols, bound ? ["workspace_id", "client_scope", col] : ["workspace_id", col], `${child}.${col}: composite`);
     assertEquals(fk.del, del === "n" ? "n" : "c", `${child}.${col}: delete action`);
     if (del === "n") assertMatch(fk.def as string, new RegExp(`ON DELETE SET NULL \\(${col}\\)$`), `${child}.${col}: nulls only ${col}`);
   }
@@ -185,5 +188,5 @@ Deno.test("preflight: an existing mismatch aborts the migration and changes noth
   assertMatch(caught, /OWN-01 preflight: rows reference a parent in another workspace: contacts\.account_id→accounts: 1;/);
   // The real schema is back to the composite key.
   const [d] = await sql`select pg_get_constraintdef(oid) as d from pg_constraint where conname = 'contacts_account_id_fkey'`;
-  assertMatch(d.d as string, /^FOREIGN KEY \(workspace_id, account_id\)/);
+  assertMatch(d.d as string, /^FOREIGN KEY \(workspace_id, (client_scope, )?account_id\)/);
 });
