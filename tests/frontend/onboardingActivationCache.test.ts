@@ -59,9 +59,10 @@ Deno.test("2. the invalidation is scoped to this workspace", () => {
   // cache can never serve another. Invalidating a bare key would blow away
   // every workspace's row, which is both wasteful and a way to leak one
   // workspace's loading state into another's screen.
+  // CACHE-SESSION (Codex #185): the key is also this signed-in session's.
   assert(
-    /companyBrainKey\(workspaceId\)/.test(ONBOARDING),
-    "invalidate the key for THIS workspace, not a bare prefix",
+    /companyBrainKey\(workspaceId, AGENCY_SCOPE, principal\)/.test(ONBOARDING),
+    "invalidate the key for THIS workspace and THIS session, not a bare prefix",
   );
 });
 

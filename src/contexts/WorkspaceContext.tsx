@@ -1,5 +1,7 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { brainStorageKeysToPurge, principalOfSession, type BrainPrincipal } from '@/lib/brainScope';
 import { getCurrentWorkspaceId } from '@/lib/orchestration';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -8,6 +10,8 @@ interface WorkspaceContextValue {
   loading: boolean;
   error: Error | null;
   retry: () => void;
+  /** Who the workspace was resolved for: the signed-in user and session. Brain caches are keyed by it. */
+  principal: BrainPrincipal | null;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue>({
@@ -15,7 +19,17 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   loading: true,
   error: null,
   retry: () => {},
+  principal: null,
 });
+
+/** Remove the Brain state a sign-out must not leave behind (brainStorageKeysToPurge). */
+function purgeBrainSessionStorage() {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) { const k = sessionStorage.key(i); if (k) keys.push(k); }
+    for (const k of brainStorageKeysToPurge(keys)) sessionStorage.removeItem(k);
+  } catch { /* storage unavailable: nothing was stored */ }
+}
 
 const isAuthLockError = (e: unknown) => {
   const msg = e instanceof Error ? e.message : String(e ?? '');
@@ -41,8 +55,31 @@ async function resolveWithRetry(): Promise<string | null> {
 }
 
 export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  // The principal is stable across token refreshes (same user, same session id).
+  const resolvedPrincipal = principalOfSession(session);
+  const principalId = resolvedPrincipal ? `${resolvedPrincipal.userId}:${resolvedPrincipal.sessionId}` : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const principal = useMemo(() => resolvedPrincipal, [principalId]);
+
+  // CACHE-SESSION boundary (Codex #185). When the signed-in session ends or
+  // changes — sign-out, another user, a new session — nothing cached or in
+  // flight for it may serve what comes next: cancel every query (a late
+  // response is discarded), clear the cache, forget this workspace, and remove
+  // the session-stored client state. Brain keys also carry the principal, so
+  // even a response that slipped through lands under a key no one else reads.
+  const queryClient = useQueryClient();
+  const lastPrincipal = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = lastPrincipal.current;
+    lastPrincipal.current = principalId;
+    if (previous === null || previous === principalId) return;
+    void queryClient.cancelQueries();
+    queryClient.clear();
+    setWorkspaceId(null);
+    purgeBrainSessionStorage();
+  }, [principalId, queryClient]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [tick, setTick] = useState(0);
@@ -101,7 +138,7 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
   }, [workspaceId]);
 
   return (
-    <WorkspaceContext.Provider value={{ workspaceId, loading, error, retry }}>
+    <WorkspaceContext.Provider value={{ workspaceId, loading, error, retry, principal }}>
       {children}
     </WorkspaceContext.Provider>
   );
