@@ -30,9 +30,14 @@ export function brainScopeBody(scope: BrainScope): Record<string, string> {
   return scope.kind === 'client' ? { scope: 'client', client_id: scope.clientId } : {};
 }
 
-/** Where this scope's unsaved onboarding answers are buffered. Distinct per workspace AND per client. */
-export function brainScopeKey(workspaceId: string, scope: BrainScope): string {
-  return scope.kind === 'client' ? `brain:${workspaceId}:client:${scope.clientId}` : `brain:${workspaceId}:agency`;
+/**
+ * Which Brain a page is editing, for one signed-in session: distinct per
+ * principal, workspace AND client. Save answers are matched against it, so an
+ * answer that arrives after a switch — of client, workspace or user — is dropped.
+ */
+export function brainScopeKey(workspaceId: string, scope: BrainScope, principal?: BrainPrincipal | null): string {
+  const who = principal ? `${principal.userId}:${principal.sessionId}` : '-';
+  return scope.kind === 'client' ? `brain:${who}:${workspaceId}:client:${scope.clientId}` : `brain:${who}:${workspaceId}:agency`;
 }
 
 /**
@@ -68,3 +73,54 @@ export function effectiveBrainScope(requested: string | null, listed: readonly {
   if (!requested || !listed) return AGENCY_SCOPE;
   return listed.some((c) => c.clientId === requested) ? (clientScope(requested) ?? AGENCY_SCOPE) : AGENCY_SCOPE;
 }
+
+// ── Whose Brain data this is (CACHE-SESSION, Codex #185) ─────────────────────
+// Brain data in the browser — the query cache, the selected client, drafts —
+// belongs to ONE signed-in session. A different user, or a new session of the
+// same user, must reach the server's authorization again; nothing cached or in
+// flight for another login may be served to it.
+
+/** The signed-in user and their session (the access token's `session_id`). */
+export interface BrainPrincipal { userId: string; sessionId: string }
+
+let unknownPrincipal = 0;
+/**
+ * The principal's part of a Brain cache key. With no known principal, a part
+ * that matches no other key, ever — an unidentified request never shares a
+ * cache entry with anything (fail closed).
+ */
+export function principalKeyPart(p?: BrainPrincipal | null): string {
+  return p?.userId && p?.sessionId ? `${p.userId}:${p.sessionId}` : `no-principal:${++unknownPrincipal}`;
+}
+
+/** The principal of a Supabase session, or null when its user or session id is unknown. */
+export function principalOfSession(session: { access_token?: string | null; user?: { id?: string | null } | null } | null | undefined): BrainPrincipal | null {
+  const userId = session?.user?.id;
+  const token = session?.access_token;
+  if (!userId || !token) return null;
+  try {
+    const part = token.split('.')[1] ?? '';
+    const claims = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '='))) as { sub?: unknown; session_id?: unknown };
+    if (claims.sub !== userId || typeof claims.session_id !== 'string' || !claims.session_id) return null;
+    return { userId, sessionId: claims.session_id };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Session-stored Brain state that must not outlive a sign-out or a change of
+ * user: every remembered client selection, every client Brain draft (client
+ * data, whoever typed it), and the pre-user-scoping guided-setup buffers. An
+ * agency draft and a user-keyed guided-setup buffer stay: they restore only for
+ * the same user (draft key + envelope check), so a returning user keeps them.
+ */
+export function brainStorageKeysToPurge(keys: readonly string[]): string[] {
+  return keys.filter((k) =>
+    k.startsWith('agentory.brainScope.') ||
+    (k.startsWith('agentory.company-brain-draft.v1:') && k.includes(':client:')) ||
+    /^agentory:guided-setup:[^:]+$/.test(k));
+}
+
+/** The guided-setup offline buffer of one user in one workspace. */
+export const guidedSetupStorageKey = (userId: string, workspaceId: string) => `agentory:guided-setup:${userId}:${workspaceId}`;

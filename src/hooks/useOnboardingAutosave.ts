@@ -17,6 +17,7 @@ import {
 } from '@/lib/onboardingAutosave';
 import { saveOnboardingProgress } from '@/lib/onboardingProgressSave';
 import { AGENCY_SCOPE, brainScopeKey, type BrainScope } from '@/lib/brainScope';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 export type AutosaveStatus = 'off' | 'idle' | 'saving' | 'saved' | 'offline';
 
@@ -39,11 +40,14 @@ export function useOnboardingAutosave(opts: {
 }): AutosaveStatus {
   const { enabled, workspaceId, row, step, answers, localCopy, onRestore, onConflicts } = opts;
   const scope = opts.scope ?? AGENCY_SCOPE;
-  // Resume once per Brain: a workspace or client switch starts from that Brain's copy.
-  const scopeKey = workspaceId ? brainScopeKey(workspaceId, scope) : null;
+  // Resume once per Brain AND signed-in session: a workspace, client or user
+  // switch starts from that Brain's copy, and a save answered for the previous
+  // one is dropped (CACHE-SESSION).
+  const { principal } = useWorkspace();
+  const scopeKey = workspaceId && principal ? brainScopeKey(workspaceId, scope, principal) : null;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
-  const active = enabled && !!workspaceId && row !== undefined && row?.onboarding_completed !== true;
+  const active = enabled && !!scopeKey && row !== undefined && row?.onboarding_completed !== true;
   const [status, setStatus] = useState<AutosaveStatus>('off');
   const version = useRef<string | null>(null);
   const base = useRef<ProgressCopy | null>(null);

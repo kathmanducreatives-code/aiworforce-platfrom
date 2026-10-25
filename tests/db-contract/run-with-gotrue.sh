@@ -13,6 +13,8 @@
 #   3. PostgREST on a free localhost port;
 #   4. the tests run with BRAIN_E2E_AUTH_URL set, so they sign up real users and
 #      send real access tokens. Mail is auto-confirmed locally; nothing is sent.
+#      BRAIN_E2E_DENO_FLAGS adds permissions a test needs (the mounted browser
+#      test spawns Vite and headless Chrome: --allow-run --allow-write).
 # Same GoTrue image and digest as tests/outpost-native/run.sh. No production
 # URL, key or secret is read; every credential is minted here.
 set -euo pipefail
@@ -79,7 +81,7 @@ echo "real GoTrue $(curl -fsS "$auth_url/health" | head -c 120); postgrest :$por
 set +e
 DB_CONTRACT_REST_URL="http://127.0.0.1:$port" DB_CONTRACT_JWT_SECRET="$jwt_secret" DB_CONTRACT_PG_URL="$db_url" \
 BRAIN_E2E_AUTH_URL="$auth_url" \
-  deno test --node-modules-dir=none --allow-read --allow-env --allow-net=127.0.0.1,localhost --no-prompt \
+  deno test --node-modules-dir=none --allow-read --allow-env --allow-net=127.0.0.1,localhost --no-prompt ${BRAIN_E2E_DENO_FLAGS:-} \
     "${@:-$root/tests/db-contract/brainAutosaveEndToEnd.contract.test.ts}"
 status=$?
 set -e

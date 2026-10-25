@@ -22,7 +22,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import type { BrainProfile } from '@/lib/companyBrainView';
-import { AGENCY_SCOPE, type BrainScope } from '@/lib/brainScope';
+import { AGENCY_SCOPE, principalKeyPart, type BrainPrincipal, type BrainScope } from '@/lib/brainScope';
 import { loadClientBrain, type ClientBrainDenial } from '@/lib/clientBrainApi';
 import { invokeBrain } from '@/lib/brainInvoke';
 
@@ -42,22 +42,28 @@ export class ClientBrainDeniedError extends Error {
 }
 
 /**
- * Stable, workspace-scoped key. One workspace's cache can never serve another,
- * and one client's never another client's or the agency's. The agency key is
- * unchanged, so existing invalidations keep working.
+ * Stable key, scoped to the signed-in session, the workspace and the Brain.
+ * One login's cache can never serve another (CACHE-SESSION, Codex #185), one
+ * workspace's never another's, one client's never another client's or the
+ * agency's. Without a principal the key matches nothing else (principalKeyPart),
+ * so an unidentified read always goes to the server. The agency key is a prefix
+ * of that principal's client keys, so a workspace invalidation covers both.
  */
-export const companyBrainKey = (workspaceId: string | null | undefined, scope: BrainScope = AGENCY_SCOPE) =>
+export const companyBrainKey = (workspaceId: string | null | undefined, scope: BrainScope = AGENCY_SCOPE, principal?: BrainPrincipal | null) =>
   scope.kind === 'agency'
-    ? (['company_brain', workspaceId ?? null] as const)
-    : (['company_brain', workspaceId ?? null, 'client', scope.clientId] as const);
+    ? (['company_brain', principalKeyPart(principal), workspaceId ?? null] as const)
+    : (['company_brain', principalKeyPart(principal), workspaceId ?? null, 'client', scope.clientId] as const);
+const SIGNED_OUT_KEY = ['company_brain', 'signed-out'] as const;
 
 export function useCompanyBrain(scope: BrainScope = AGENCY_SCOPE) {
-  const { workspaceId, loading: wsLoading } = useWorkspace();
+  const { workspaceId, loading: wsLoading, principal } = useWorkspace();
   const qc = useQueryClient();
+  // No signed-in session: nothing is read or shown (a fixed, never-fetched key).
+  const queryKey = principal ? companyBrainKey(workspaceId, scope, principal) : SIGNED_OUT_KEY;
 
   const query = useQuery({
-    queryKey: companyBrainKey(workspaceId, scope),
-    enabled: !wsLoading && !!workspaceId,
+    queryKey,
+    enabled: !wsLoading && !!workspaceId && !!principal,
     // A refusal is an answer, not a network blip.
     retry: (count, err) => !(err instanceof ClientBrainDeniedError) && count < 3,
 
@@ -111,10 +117,10 @@ export function useCompanyBrain(scope: BrainScope = AGENCY_SCOPE) {
   /** A read is in flight but there is already something to render. */
   const isRefreshing = !!data && query.isFetching;
 
-  const scopeId = scope.kind === 'client' ? scope.clientId : null;
+  const keyId = JSON.stringify(queryKey);
   const refresh = useCallback(
-    () => qc.invalidateQueries({ queryKey: companyBrainKey(workspaceId, scopeId ? { kind: 'client', clientId: scopeId } : AGENCY_SCOPE), exact: true }),
-    [qc, workspaceId, scopeId],
+    () => qc.invalidateQueries({ queryKey: JSON.parse(keyId), exact: true }),
+    [qc, keyId],
   );
 
   return {
