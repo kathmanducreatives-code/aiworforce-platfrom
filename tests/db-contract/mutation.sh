@@ -145,6 +145,63 @@ prove_killed "no serialization lock" "$adm_sql" \
 # which holds this row from a second session, still does.)
 prove_killed "no deadline" "$adm_sql" "or a.deadline_at <= v_now" "" \
   "$adm_tests" "deadline: absolute, from the queue row, read after the lock, never renewed"
+
+# ── PROOFS: the legacy pre-effect guard ────────────────────────────────────
+# Each mutant removes one part of the guard or one entry's call to it; a named
+# test, judged by effects (rows, vendor requests, writes), must then fail.
+guard_ts="$root/supabase/functions/_shared/legacyExecutionGuard.ts"
+ra_ts="$root/supabase/functions/run-agent/index.ts"
+orch_ts="$root/supabase/functions/orchestrate/index.ts"
+enq_ts="$root/supabase/functions/enqueue-lead-mission/index.ts"
+guard_tests="$root/tests/db-contract/legacyPreEffectGuard.contract.test.ts"
+for f in "$guard_ts" "$ra_ts" "$orch_ts" "$enq_ts"; do cp "$f" "$f.mutation-backup"; restore_list+=("$f"); done
+prove_killed "guard: run-agent ignores the refusal" "$ra_ts" \
+  "      return json({ success: false, error: guard.code, detail: guard.detail }, guard.status);" \
+  "      void json({ success: false, error: guard.code, detail: guard.detail }, guard.status);" \
+  "$guard_tests" "run-agent: a request carrying the pilot marker is refused before any effect"
+prove_killed "guard: the stored task's pilot markers are not read" "$guard_ts" \
+  "      if (stored.pilot.length) return" "      if (stored.pilot.length && false) return" \
+  "$guard_tests" "run-agent: a resume of a STORED pilot task is refused before any effect, with the request's markers stripped"
+prove_killed "guard: membership not re-checked for a service caller" "$guard_ts" \
+  "    if (!data) return refuse(403, \"principal_not_member\"" "    if (!data && false) return refuse(403, \"principal_not_member\"" \
+  "$guard_tests" "run-agent: a service call for a user who is no longer a member is refused before any effect"
+prove_killed "guard: a resume may change its principal" "$guard_ts" \
+  "if (i.taskIds.resume.includes(row.id) && row.user_id && row.user_id !== i.principalUserId) {" \
+  "if (i.taskIds.resume.includes(row.id) && row.user_id && row.user_id !== i.principalUserId && false) {" \
+  "$guard_tests" "run-agent: a resume keeps its original principal — another member cannot resume it"
+prove_killed "guard: enqueue-lead-mission ignores the refusal" "$enq_ts" \
+  "    return json({ error: guard.code, detail: guard.detail }, guard.status);" \
+  "    void json({ error: guard.code, detail: guard.detail }, guard.status);" \
+  "$guard_tests" "enqueue-lead-mission: no pilot, client-scoped or non-member mission is queued"
+prove_killed "guard: orchestrate ignores the refusal" "$orch_ts" \
+  "        return json({ error: guard.code, details: guard.detail }, guard.status);" \
+  "        void json({ error: guard.code, details: guard.detail }, guard.status);" \
+  "$guard_tests" "orchestrate: a pilot or client-scoped request is refused before any plan, Brain read, model call or dispatch"
+prove_killed "guard: the plan is not checked (EXEC-PLAN)" "$guard_ts" \
+  "    if (!plan || plan.workspace_id !== i.workspaceId) {" "    if ((!plan || plan.workspace_id !== i.workspaceId) && false) {" \
+  "$guard_tests" "run-agent: a task filed under another workspace's plan is refused before any effect (Codex EXEC-PLAN)"
+# The task commit boundary (held 20261025130000): the database's own check.
+cb_sql="$root/supabase/migrations-held/20261025130000_tasks_commit_boundary.sql"
+cb_tests="$root/tests/db-contract/taskCommitBoundary.contract.test.ts"
+cp "$cb_sql" "$cb_sql.mutation-backup"; restore_list+=("$cb_sql")
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025130000_tasks_commit_boundary.sql "$root/tests/db-contract/run.sh" "$cb_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "commit boundary: a new task's principal must be a current member ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: commit boundary tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the commit boundary a non-member's task commits"
+ran=$((ran + 1))
+fi
+prove_killed "commit boundary: membership read without its lock (EXEC-REVOKE race)" "$cb_sql" \
+  "      where m.workspace_id = new.workspace_id and m.user_id = new.user_id
+      for key share;" "      where m.workspace_id = new.workspace_id and m.user_id = new.user_id;" \
+  "$cb_tests" "commit boundary: a membership DELETE racing the INSERT — the INSERT waits, then is refused"
+prove_killed "commit boundary: the plan's workspace is not compared" "$cb_sql" \
+  "    if not found or v_plan_ws is distinct from new.workspace_id then" "    if not found then" \
+  "$cb_tests" "commit boundary: a task filed under another workspace's plan is refused (plan_id and task_plan_id)"
 prove_killed "clock read before the lock wait" "$adm_sql" "v_now := clock_timestamp();  -- after the lock wait" "v_now := now();  --" \
   "$adm_tests" "deadline: an admission that waited on the lock past the deadline is refused"
 prove_killed "a run bought with one read (no dataset read)" "$plan_ts" "export const SMOKE_MIN_RUN_READS = 2;" "export const SMOKE_MIN_RUN_READS = 1;" \
