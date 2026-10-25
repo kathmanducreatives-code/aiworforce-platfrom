@@ -143,6 +143,8 @@ jobs:
         run: tests/db-contract/run-with-gotrue.sh | tee /tmp/outpost-native-client-login.log
       - name: Native execution integration acceptance (known security gaps)
         run: tests/db-contract/run-with-gotrue.sh tests/outpost-native/execution-integration-audit.test.ts | tee /tmp/outpost-native-execution-integration.log
+      - name: Supplemental parent, membership and effect security acceptance
+        run: tests/db-contract/run-with-gotrue.sh tests/outpost-native/task-parent-membership-audit.test.ts tests/outpost-native/post-insert-revocation-audit.test.ts | tee /tmp/outpost-native-supplemental-security.log
       - name: Preserve proof logs
         if: always()
         uses: actions/upload-artifact@v4

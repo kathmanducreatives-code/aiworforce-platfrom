@@ -54,7 +54,7 @@ Deno.test("UI-only draft: no database starts", () => {
 
 Deno.test("mock-response-only draft: the scenario suites that use the mock, nothing else", () => {
   const p = pr(["tests/db-contract/lib/discoveryScenario.ts"], true);
-  assertEquals(p.contract_files.map(short), ["a7Lifecycle", "a7Qualification", "a7Reliability", "legacyPreEffectGuard", "qualificationAuthority"]);
+  assertEquals(p.contract_files.map(short), ["a7Lifecycle", "a7Qualification", "a7Reliability", "killResume", "killResumeAdoption", "legacyPreEffectGuard", "modelOnlySmoke", "qualificationAuthority", "realGptJudge", "smokeCreditReconciliation"]);
   assertEquals(p.mutation, false);
 });
 
