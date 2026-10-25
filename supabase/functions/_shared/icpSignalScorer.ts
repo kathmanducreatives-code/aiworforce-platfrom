@@ -226,6 +226,10 @@ export function scoreAgainstCompanyBrain(candidate: SignalCandidate, brain: Comp
   if (brain.meta.setup_required) {
     if (verification === "verified") verification = "needs_verification";
     risk_flags.push("Company Brain incomplete — complete setup for verified Top Signals");
+  } else if (brain.meta.unactivated_draft) {
+    // C5b: a usable but never-activated draft may run, never verify.
+    if (verification === "verified") verification = "needs_verification";
+    risk_flags.push("Company Brain draft not activated — activate it for verified Top Signals");
   }
   if (brain.meta.confidence === "weak") { if (verification === "verified") verification = "needs_verification"; risk_flags.push("Company Brain is weak — scored conservatively"); }
 

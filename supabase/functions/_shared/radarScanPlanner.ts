@@ -76,8 +76,10 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
   const apifyReady = options.apifyReady ?? false;
   const flags = options.flags ?? {};
   const setupRequired = brain.meta.setup_required;
-  // An incomplete Brain runs the same conservative, low-cap path as a weak Brain.
-  const weak = brain.meta.confidence === "weak" || setupRequired;
+  // An incomplete Brain runs the same conservative, low-cap path as a weak
+  // Brain — and so does a usable, never-activated draft (C5b).
+  const unactivatedDraft = brain.meta.unactivated_draft === true;
+  const weak = brain.meta.confidence === "weak" || setupRequired || unactivatedDraft;
   const capScale = weak ? 0.5 : options.mode === "load_more" ? 1.6 : 1;
   const capOf = (s: RadarSource) => Math.max(3, Math.round(CAPS[s] * capScale));
 
@@ -96,6 +98,7 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
 
   const warnings = [...brain.meta.warnings];
   if (setupRequired) warnings.push("Company Brain incomplete — complete setup for a high-quality scan. Running conservative, low-cap queries and no verified Top Signals until then.");
+  else if (unactivatedDraft) warnings.push("Company Brain draft not activated — running conservative, low-cap queries and no verified Top Signals until you activate it.");
   else if (weak) warnings.push("Company Brain is weak — running conservative, low-cap queries. Fill ICP for precise radar.");
 
   // ---- query builders (Brain-derived, never disqualifier-violating) ----
