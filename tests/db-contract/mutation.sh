@@ -221,7 +221,9 @@ prove_killed "plan parent: a deleted plan's id may be re-created elsewhere" "$pp
 # The live-principal effect fence (effectFence.ts, Codex EXEC-EFFECT).
 fence_ts="$root/supabase/functions/_shared/effectFence.ts"
 ra_ts="$root/supabase/functions/run-agent/index.ts"
-for f in "$fence_ts" "$ra_ts"; do cp "$f" "$f.mutation-backup"; restore_list+=("$f"); done
+# run-agent is already registered by the guard proofs above: register each file once, or the
+# trap's second restore of it fails and (set -e) skips every file registered after it.
+for f in "$fence_ts" "$ra_ts"; do [ -e "$f.mutation-backup" ] && continue; cp "$f" "$f.mutation-backup"; restore_list+=("$f"); done
 ef_tests="$root/tests/db-contract/effectFence.contract.test.ts"
 efm_tests="$root/tests/db-contract/effectFenceMission.contract.test.ts"
 ef_name="fence: membership removed after the task INSERT — no model call starts, and the task still ends terminal"
