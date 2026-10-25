@@ -219,3 +219,46 @@ Every resume and retry path must pass them (Codex EXEC-01 / RETRY-01), and must 
 - Reads of client context go only through `_shared/clientBrain.ts`.
 
 **Question:** does Backend accept the composite-FK approach, and in which migration order relative to this contract's held migration (the client tables must exist first)?
+
+## 9. Interfaces Backend builds against (v2.2, after Backend's answers on #174)
+
+**Agreed:**
+- O3 option A;
+- O4 option A (fail-closed) for the pilot;
+- the pins as immutable `tasks` columns;
+- composite FKs.
+
+Below are the exact Brain-side calls. All are held in #176/#178, service-role only, and change nothing on refusal.
+
+### 9.1 At authorization: record the pins (once)
+
+`client_brain_pin(p_workspace_id, p_client_id, p_actor_id, p_session_id, p_permission)` → `(outcome, grant_id, generation, permission_revision)`.
+- STABLE; call it as a GET.
+- On `ok`, write all of these once on the task: `client_id`, `client_grant_id = grant_id`, `client_grant_generation = generation`, `permission_revision`, `origin_session_id = session_id`.
+- On any other outcome, there is no task.
+- TS: `pinClientBrain(admin, {workspaceId, clientId, actorId, sessionId}, permission)` in `_shared/clientBrain.ts`.
+
+### 9.2 Before every effect of a resumed or retried client task
+
+`client_brain_authorization(p_workspace_id, p_client_id, p_actor_id, p_session_id := origin_session_id, p_permission, p_intent := 'task', p_pin_grant_id, p_pin_generation, p_pin_revision)` → `'ok'` or a refusal.
+- `task` intent without all three pins is a SQL error, never `ok`.
+- **Refusals:** `session_invalid` (logout or expiry: O4 A), `not_member`, `forbidden_role`, `no_grant`, `client_archived`, `grant_changed` (revoked, or revoked then regranted), `permission_changed` (any role change, or remove → rejoin), `client_context_required`.
+- **What Backend's guard does on a refusal:** stop before context, model, purchase, queue, message or output, and record the outcome. **It never re-pins.**
+- In #179's `legacyExecutionGuard`, this check replaces today's blanket `client_scope_unsupported` refusal. That replacement happens only when you approve enabling client Brains.
+
+### 9.3 The client Brain as agent context
+
+`clientBrainContextForScope(admin, {kind:'client', clientId}, {workspaceId, actorId, sessionId, intent:'task', pins})` → `{outcome:'ok', profile, version}` or a refusal.
+- Feed `profile` to the **existing** pure context builders (`buildCompanyBrainContext` / `compileCompanyBrainContext`). There is no second source of truth and no fallback to the agency Brain.
+- Agency-scope tasks keep today's agency reader unchanged.
+
+### 9.4 Membership writers (Backend, O3)
+
+`workspace_member_remove` / `workspace_member_set_role`, with the agreed policy and lock order: L1 session, then L2 actor and target rows FOR UPDATE in `user_id` order, then DELETE or UPDATE.
+- **The held triggers do the rest in the same transaction:** a DELETE revokes the user's active grants (`membership_removed`); a role change renews `permission_revision`.
+- Brain's contract tests 6 and 6b prove both against direct SQL.
+- **Suggested acceptance for Backend's writers:** after `workspace_member_remove`, every grant of that user has `revoke_reason = 'membership_removed'`; after `workspace_member_set_role`, `permission_revision` has moved and a pinned task gets `permission_changed`.
+
+### 9.5 Descendants
+
+The composite FK target already exists: `client_accounts` has `unique (workspace_id, id)`. Migration order: #176, then #177 (independent), then Backend's descendant migration.
