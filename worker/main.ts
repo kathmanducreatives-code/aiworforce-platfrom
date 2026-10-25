@@ -34,6 +34,7 @@ import {
   type CancelSweepDb, type LapsedSweepDb, type TerminalIds,
 } from "../supabase/functions/_shared/leadMissionCancellation.ts";
 import { resolvePlanNoticesForQueueEnd, supabaseNoticeDb } from "../supabase/functions/_shared/runNotices.ts";
+import { type GuardDb, legacyExecutionGuard } from "../supabase/functions/_shared/legacyExecutionGuard.ts";
 import { createLeadMissionRunner } from "./leadMissionRunner.ts";
 import { missionWallClockEnabled } from "../supabase/functions/_shared/missionWallClock.ts";
 import { installTimestampedConsole } from "./logTimestamps.ts";
@@ -160,6 +161,14 @@ async function main() {
   const runner = createLeadMissionRunner({
     enforceMissionWallClock: missionWallClockEnabled(env("LEAD_V2_SMOKE_WALL_CLOCK")),
     handler: handleRunAgent,
+    // Before the handler: the claimed mission's request, the task it resumes
+    // (stored markers decide) and its requester's membership.
+    guard: (m) => legacyExecutionGuard({
+      db: db as unknown as GuardDb, workspaceId: m.workspaceId,
+      principalUserId: typeof m.request.user_id === "string" && m.request.user_id ? m.request.user_id : null,
+      body: m.request,
+      taskIds: { resume: m.taskId ? [m.taskId] : [], related: [] },
+    }),
     serviceRoleKey: key,
     functionsBaseUrl: `${url.replace(/\/+$/, "")}/functions/v1`,
     createDeadline: (budgetMs) => createExecutionDeadline({ budgetMs }),
