@@ -23,7 +23,7 @@ Codex has independently accepted #178 `86d33d6f` for AUTH-06, autosave, the firs
 
 ## 2. Phase 1: agency Company Brain (no client features)
 
-**Hosted order:**
+**Hosted order.** Apply each migration **individually, in this order**, never with a bulk `supabase db push`: the timestamps sort M-B (`20261023…`) before M-A (`20261024…`), which is the wrong way round for the handlers (see `docs/SUPABASE_TARGETING.md`).
 1. **M-A** `20261024120000_company_brain_authorized_writer.sql` (#169/#178). This is additive: two service-only SECURITY DEFINER functions. Apply it **before** the functions deploy, because the handlers call it.
 2. **Deploy edge functions** from the merged #178 head: `generate-company-brain-draft`, `setup-company-brain`, `integration-readiness`, `run-agent`, `pilot-chat` (`_shared` is bundled). Smoke test: one authorized save and one refused viewer save on an internal workspace.
 3. **Deploy the frontend** from the #187 head (Lovable/Netlify auto-publish from `main`: confirm which commit publishes before merging to `main`). The new page writes only through the backend.
@@ -38,6 +38,25 @@ Codex has independently accepted #178 `86d33d6f` for AUTH-06, autosave, the firs
 - redeploy the previous functions;
 - revert M-B (re-grant, per its header) **only** if the old frontend must come back;
 - drop M-A's two functions (header) last, after no deployed handler calls them.
+
+## 2a. The agency-only TEST mission (Discovery TEST project, not production)
+
+**Candidate:** #188 `508d438f`. It is a combined tree, **not** a merge vehicle: #187 plus Backend #181/#179/#182/#175/#180/#177. Client features stay off.
+
+**The TEST mission does not need Company Brain.** Backend's pack runs it on a workspace with **no `company_brain` row** (preflight P10). With no Brain and the readiness flags off, the Brain code on the mission path renders a byte-identical agent Brain block.
+
+**Rules for the TEST workspace**
+- **No Brain row:** don't open onboarding or the Brain page, and don't save a Brain, on the TEST workspace before or during the run. Any save creates the row and fails P10.
+- **Provisioning:** `provision_workspace_for_user` creates an empty row too, so the workspace must be seeded without it, which Backend's P10 enforces.
+
+**If the TEST project's edge functions are deployed from the candidate**
+1. Apply **M-A** to the TEST project **first**: the Brain handlers call its functions.
+   - Read-only check afterwards: `select count(*) from pg_proc where proname in ('company_brain_authorized_write','company_brain_write_authorization')` → `2`.
+2. Deploy the functions.
+3. **M-B** is optional on TEST (no old frontend writes there).
+4. **Never** apply the held client schema; the flags stay unset.
+
+**Rollback on TEST:** redeploy the previous functions, then drop M-A's two functions (statements in its header).
 
 ## 3. Phase 3c: client Brains (separately approved, later)
 
