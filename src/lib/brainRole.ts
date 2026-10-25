@@ -43,6 +43,9 @@ export function canBrain(role: WorkspaceRole, permission: BrainPermission): bool
  */
 export function brainPermissionForAction(action: string): BrainPermission {
   if (action === "status") return "read";
+  // The client switcher's list (Phase 3c, held): names of the clients this
+  // caller is granted, nothing else.
+  if (action === "list_clients") return "read";
   if (action === "activate") return "activate";
   return "edit";
 }

@@ -22,6 +22,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import type { BrainProfile } from '@/lib/companyBrainView';
+import { AGENCY_SCOPE, type BrainScope } from '@/lib/brainScope';
+import { loadClientBrain, type ClientBrainDenial } from '@/lib/clientBrainApi';
+import { invokeBrain } from '@/lib/brainInvoke';
 
 export interface CompanyBrainRow {
   profile: BrainProfile;
@@ -29,19 +32,34 @@ export interface CompanyBrainRow {
   onboarding_completed_at: string | null;
   /** Row version (set by a database trigger on every update). Edits are built on it. */
   updated_at: string | null;
+  /** A CLIENT Brain's integer version (Phase 3c); null for the agency Brain and before a client's first save. */
+  version?: number | null;
 }
 
-/** Stable, workspace-scoped key. One workspace's cache can never serve another. */
-export const companyBrainKey = (workspaceId: string | null | undefined) =>
-  ['company_brain', workspaceId ?? null] as const;
+/** A client Brain the server would not show (revoked, archived, signed out…). Never retried, never replaced by another Brain. */
+export class ClientBrainDeniedError extends Error {
+  constructor(public readonly reason: ClientBrainDenial) { super(`client_brain_denied:${reason}`); }
+}
 
-export function useCompanyBrain() {
+/**
+ * Stable, workspace-scoped key. One workspace's cache can never serve another,
+ * and one client's never another client's or the agency's. The agency key is
+ * unchanged, so existing invalidations keep working.
+ */
+export const companyBrainKey = (workspaceId: string | null | undefined, scope: BrainScope = AGENCY_SCOPE) =>
+  scope.kind === 'agency'
+    ? (['company_brain', workspaceId ?? null] as const)
+    : (['company_brain', workspaceId ?? null, 'client', scope.clientId] as const);
+
+export function useCompanyBrain(scope: BrainScope = AGENCY_SCOPE) {
   const { workspaceId, loading: wsLoading } = useWorkspace();
   const qc = useQueryClient();
 
   const query = useQuery({
-    queryKey: companyBrainKey(workspaceId),
+    queryKey: companyBrainKey(workspaceId, scope),
     enabled: !wsLoading && !!workspaceId,
+    // A refusal is an answer, not a network blip.
+    retry: (count, err) => !(err instanceof ClientBrainDeniedError) && count < 3,
 
     // Five minutes of freshness: a tab switch or route return inside that
     // window renders from cache with no request at all.
@@ -59,6 +77,11 @@ export function useCompanyBrain() {
     refetchOnMount: true,
 
     queryFn: async (): Promise<CompanyBrainRow> => {
+      if (scope.kind === 'client') {
+        const r = await loadClientBrain(invokeBrain, workspaceId!, scope.clientId);
+        if (r.kind === 'denied') throw new ClientBrainDeniedError(r.reason);
+        return { profile: r.row.profile, onboarding_completed: r.row.onboarding_completed, onboarding_completed_at: null, updated_at: null, version: r.row.version };
+      }
       const { data: row, error } = await supabase
         .from('company_brain')
         .select('profile, onboarding_completed, onboarding_completed_at, updated_at')
@@ -88,9 +111,10 @@ export function useCompanyBrain() {
   /** A read is in flight but there is already something to render. */
   const isRefreshing = !!data && query.isFetching;
 
+  const scopeId = scope.kind === 'client' ? scope.clientId : null;
   const refresh = useCallback(
-    () => qc.invalidateQueries({ queryKey: companyBrainKey(workspaceId) }),
-    [qc, workspaceId],
+    () => qc.invalidateQueries({ queryKey: companyBrainKey(workspaceId, scopeId ? { kind: 'client', clientId: scopeId } : AGENCY_SCOPE), exact: true }),
+    [qc, workspaceId, scopeId],
   );
 
   return {
@@ -99,6 +123,7 @@ export function useCompanyBrain() {
     loading,
     isRefreshing,
     error: query.error instanceof Error ? query.error : null,
+    denied: query.error instanceof ClientBrainDeniedError ? query.error.reason : null,
     refresh,
   };
 }

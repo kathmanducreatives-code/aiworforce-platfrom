@@ -87,8 +87,10 @@ client_sql="$root/supabase/migrations-held/20261024160000_client_company_brain.s
 autosave_ts="$root/src/lib/onboardingAutosave.ts"
 brain_draft_ts="$root/supabase/functions/generate-company-brain-draft/index.ts"
 client_save_ts="$root/supabase/functions/_shared/clientBrainSave.ts"
+brain_scope_ts="$root/src/lib/brainScope.ts"
+client_api_ts="$root/src/lib/clientBrainApi.ts"
 restore_list=()
-for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts"; do
+for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts" "$brain_scope_ts" "$client_api_ts"; do
   cp "$f" "$f.mutation-backup"; restore_list+=("$f")
 done
 trap 'cp "$backup" "$real"; for f in "${restore_list[@]}"; do mv -f "$f.mutation-backup" "$f"; done; rm -f "$backup" "$out"' EXIT
@@ -445,6 +447,18 @@ prove_killed "handler: the request's client is ignored (a client save lands on t
 prove_killed "client save: the version the page built on is not checked (a stale save overwrites)" "$client_save_ts" \
   "  if (expected !== currentVersion) {" "  if (false) {" \
   "$e2e_tests" "6. a stale autosave is rejected without a write and without losing the user's unsaved text"
+prove_killed "switcher: the client list is served while client Brains are switched off" "$brain_draft_ts" \
+  '  if (action === "list_clients") {
+    if (!clientBrainsEnabled((k) => Deno.env.get(k))) return json({ error: "client_brains_disabled" }, 409);' \
+  '  if (action === "list_clients") {' \
+  "$e2e_tests" "9. the switcher lists exactly the user's active granted clients — and drops one the moment access ends"
+prove_killed "switcher: a selected client stays shown after it is no longer listed" "$brain_scope_ts" \
+  "  return listed.some((c) => c.clientId === requested) ? (clientScope(requested) ?? AGENCY_SCOPE) : AGENCY_SCOPE;" \
+  "  return clientScope(requested) ?? AGENCY_SCOPE;" \
+  "$e2e_tests" "9. the switcher lists exactly the user's active granted clients — and drops one the moment access ends"
+prove_killed "page: a Brain answer for another client is accepted" "$client_api_ts" \
+  "  if (body?.ok === true && body.client_id === clientId) {" "  if (body?.ok === true) {" \
+  "$e2e_tests" "11. switching agency → A → B → agency: each read shows only that Brain; nothing from one is shown or saved as another"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"

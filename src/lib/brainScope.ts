@@ -58,3 +58,13 @@ export function nextBrainScope(
 export function sameBrainScope(a: BrainScope, b: BrainScope): boolean {
   return a.kind === b.kind && (a.kind === 'agency' || a.clientId === (b as { clientId: string }).clientId);
 }
+
+/**
+ * The scope actually shown: the requested client only if the server lists it
+ * for this user right now. No list (off, failed, still loading) or an unlisted
+ * client — revoked, archived, another workspace's — is the agency Brain.
+ */
+export function effectiveBrainScope(requested: string | null, listed: readonly { clientId: string }[] | null): BrainScope {
+  if (!requested || !listed) return AGENCY_SCOPE;
+  return listed.some((c) => c.clientId === requested) ? (clientScope(requested) ?? AGENCY_SCOPE) : AGENCY_SCOPE;
+}

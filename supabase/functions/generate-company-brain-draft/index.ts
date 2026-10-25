@@ -24,7 +24,7 @@ import { generateBrainDraft, type DraftInput } from "../_shared/companyBrainRese
 import type { FirecrawlPage, ResearchDeps, ResearchSourceType, ResearchProvider } from "../_shared/companyBrainResearch/types.ts";
 import { brainPermissionForAction, canBrain, normalizeWorkspaceRole } from "../_shared/brainRole.ts";
 import { authorizedBrainWrite, brainWriteRefusal, sessionIdFromBearer } from "../_shared/brainWriter.ts";
-import { clientBrainRefusal, clientBrainsEnabled, resolveBrainScope } from "../_shared/clientBrain.ts";
+import { clientBrainRefusal, clientBrainsEnabled, listClientsForActor, resolveBrainScope } from "../_shared/clientBrain.ts";
 import { handleClientBrainAction } from "../_shared/clientBrainSave.ts";
 import { applyBrainSave, type CompanyBrainV2Patch } from "../_shared/companyBrainV2Save.ts";
 import { parseSetupProgress, withSetupProgress, withoutSetupProgress } from "../_shared/onboardingProgress.ts";
@@ -198,6 +198,17 @@ Deno.serve(async (req) => {
       return json(r.body, r.status);
     } catch (e) {
       console.error("generate-company-brain-draft client scope error", e);
+      return json({ error: "internal_error" }, 500);
+    }
+  }
+
+  // The client switcher's list (read; the role gate above already ran).
+  if (action === "list_clients") {
+    if (!clientBrainsEnabled((k) => Deno.env.get(k))) return json({ error: "client_brains_disabled" }, 409);
+    try {
+      return json({ ok: true, clients: await listClientsForActor(admin, { workspaceId: workspace_id, actorId: userId, sessionId }) });
+    } catch (e) {
+      console.error("generate-company-brain-draft list_clients error", e);
       return json({ error: "internal_error" }, 500);
     }
   }
