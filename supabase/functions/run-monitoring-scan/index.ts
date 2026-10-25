@@ -20,6 +20,7 @@
 //   publish behind.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { brainReadinessV2Enabled } from "../_shared/companyBrainGate.ts";
 import { runTool } from "../_shared/toolRegistry.ts";
 import { buildInvoker, readPendingRun } from "../_shared/capabilityExecution.ts";
 import { createExecutionDeadline } from "../_shared/leadExecutionFinalizer.ts";
@@ -171,6 +172,8 @@ Deno.serve(async (req) => {
   const profile = (brainRow?.profile as any) ?? {};
   const brain = compileCompanyBrainContext({
     workspace_id, profile, signal_preferences: profile?.signal_preferences,
+    // C5: under BRAIN_READINESS_V2 the radar runs on the shared readiness rule.
+    readiness_v2: brainReadinessV2Enabled((k) => Deno.env.get(k)),
   });
   const sizeMin = brain.icp.company_size_min;
   const sizeMax = brain.icp.company_size_max;
