@@ -76,7 +76,8 @@ Deno.test("F-5 onboarding autosave: behind the switch, never for an activated Br
   assert(/enrichment_consent: f\.enrichment_consent/.test(page), "a restore never sets consent");
   const hook = read("src/hooks/useOnboardingAutosave.ts");
   assert(/row\?\.onboarding_completed !== true/.test(hook), "an activated Brain is never draft-saved");
-  assert(/mergeStale\(base\.current!, mine, server\)/.test(hook), "a stale save is merged, not overwritten");
+  assert(/applyProgressSaveResult\(\{ version: version\.current, base: base\.current! \}, mine, r\)/.test(hook), "a stale save is merged, not overwritten");
+  assert(/mergeStale\(state\.base, mine, server\)/.test(read("src/lib/onboardingAutosave.ts")), "the merge is the three-way mergeStale");
   const save = read("src/lib/onboardingProgressSave.ts");
   assert(/patch: \{\}/.test(save), "an autosave never writes Brain fields");
   assert(/expected_updated_at: input\.expectedUpdatedAt/.test(save), "and always names the version it builds on");

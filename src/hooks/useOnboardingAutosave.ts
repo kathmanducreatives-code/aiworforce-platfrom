@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  mergeStale, readServerProgress, resumeFrom, sameProgress,
+  applyProgressSaveResult, readServerProgress, resumeFrom, sameProgress,
   type Answers, type FieldConflict, type ProgressCopy,
 } from '@/lib/onboardingAutosave';
 import { saveOnboardingProgress } from '@/lib/onboardingProgressSave';
@@ -71,21 +71,13 @@ export function useOnboardingAutosave(opts: {
       setStatus('saving');
       try {
         const r = await saveOnboardingProgress({ workspaceId, step: mine.step, answers: mine.answers, expectedUpdatedAt: version.current });
-        if (r.kind === 'saved') {
-          version.current = r.updatedAt ?? version.current;
-          base.current = mine;
-          setStatus('saved');
-        } else if (r.kind === 'stale') {
-          const server = readServerProgress(r.serverProfile) ?? { step: 0, answers: {}, updated_at: '' };
-          const { merged, conflicts } = mergeStale(base.current!, mine, server);
-          version.current = r.currentUpdatedAt;
-          base.current = server;
-          callbacks.current.onRestore(merged);       // the forms change → the next save sends the merge
-          if (conflicts.length) callbacks.current.onConflicts(conflicts);
-          setStatus('idle');
-        } else {
-          setStatus('offline');                       // the tab's buffer still holds everything
-        }
+        // A stale save is merged into the server's copy, never overwritten (applyProgressSaveResult).
+        const next = applyProgressSaveResult({ version: version.current, base: base.current! }, mine, r);
+        version.current = next.version;
+        base.current = next.base;
+        if (next.restore) callbacks.current.onRestore(next.restore); // the forms change → the next save sends the merge
+        if (next.conflicts.length) callbacks.current.onConflicts(next.conflicts);
+        setStatus(next.status);                       // 'offline': the tab's buffer still holds everything
       } finally {
         saving.current = false;
         if (base.current && !sameProgress(latest.current, base.current)) setRetry((n) => n + 1);

@@ -122,3 +122,46 @@ export function readServerProgress(profile: unknown): ProgressCopy | null {
 export function sameProgress(a: Pick<ProgressCopy, 'step' | 'answers'>, b: Pick<ProgressCopy, 'step' | 'answers'>): boolean {
   return a.step === b.step && JSON.stringify(a.answers) === JSON.stringify(b.answers);
 }
+
+// ── What a save's result does to the autosave state ─────────────────────────
+
+/** The server's answer to one progress save (onboardingProgressSave). */
+export type ProgressSaveOutcome =
+  | { kind: 'saved'; updatedAt: string | null }
+  | { kind: 'stale'; serverProfile: unknown; currentUpdatedAt: string | null }
+  | { kind: 'failed'; message: string };
+
+/**
+ * After one save of `mine` built on (`version`, `base`):
+ *   saved   the new version; `mine` is the new base;
+ *   stale   the server's copy is the new base and `restore` is the merge of
+ *           this tab's unsaved answers into it (nothing typed is dropped; a
+ *           field both changed is reported in `conflicts` with this tab's
+ *           value), saved on the next pass against the server's version;
+ *           (stale without the server's copy: nothing changes but the
+ *           version, so the next save fetches the copy to merge against);
+ *   failed  nothing changes: the version, the base and the unsaved answers
+ *           all stay, so the next pass retries the same edit.
+ * `version` is opaque: updated_at for the agency Brain, the integer version
+ * (as a string) for a client Brain.
+ */
+export function applyProgressSaveResult(
+  state: { version: string | null; base: ProgressCopy },
+  mine: ProgressCopy,
+  r: ProgressSaveOutcome,
+): { version: string | null; base: ProgressCopy; restore: ProgressCopy | null; conflicts: FieldConflict[]; status: 'saved' | 'idle' | 'offline' } {
+  if (r.kind === 'saved') return { version: r.updatedAt ?? state.version, base: mine, restore: null, conflicts: [], status: 'saved' };
+  if (r.kind === 'stale' && (r.serverProfile === null || r.serverProfile === undefined)) {
+    // Stale, but the server did not say what won (a race lost at the write).
+    // Merging against "nothing" would blank the forms and turn every typed
+    // field into a conflict. Keep everything; clear the version so the next
+    // save is answered with the current copy, and merge then.
+    return { version: null, base: state.base, restore: null, conflicts: [], status: 'idle' };
+  }
+  if (r.kind === 'stale') {
+    const server = readServerProgress(r.serverProfile) ?? { step: 0, answers: {}, updated_at: '' };
+    const { merged, conflicts } = mergeStale(state.base, mine, server);
+    return { version: r.currentUpdatedAt, base: server, restore: merged, conflicts, status: 'idle' };
+  }
+  return { version: state.version, base: state.base, restore: null, conflicts: [], status: 'offline' };
+}
