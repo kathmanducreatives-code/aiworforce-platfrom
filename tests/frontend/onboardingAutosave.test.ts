@@ -1,7 +1,7 @@
 // ONBOARDING RESUMES ACROSS DEVICES AND A STALE AUTOSAVE LOSES NOTHING TYPED
 // (roadmap Phase 2). Pure.
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { mergeStale, resumeFrom, type ProgressCopy } from "../../src/lib/onboardingAutosave.ts";
+import { applyProgressSaveResult, mergeStale, resumeFrom, type ProgressCopy } from "../../src/lib/onboardingAutosave.ts";
 
 const copy = (step: number, answers: ProgressCopy["answers"], updated_at: string): ProgressCopy => ({ step, answers, updated_at });
 const T1 = "2026-10-23T10:00:00.000Z";
@@ -50,4 +50,26 @@ Deno.test("AS-5 the same edit on both sides is kept once, without a conflict", (
   const base = copy(1, {}, T1);
   const both = { founder: { first_help_goal: "Improve outbound" } };
   assertEquals(mergeStale(base, copy(1, both, T1), copy(1, both, T2)), { merged: copy(1, both, T2), conflicts: [] });
+});
+
+// A stale answer WITHOUT the server's copy (a race lost at the locked write,
+// "changed during save") must not be merged against an empty copy: that blanked
+// the forms and turned every typed field into a conflict with ''. Found by the
+// end-to-end autosave test (#178).
+Deno.test("save result: a stale answer without the server's copy keeps every typed field and asks again", () => {
+  const base = { step: 1, answers: { company: { name: "Old", description: "base" } }, updated_at: "" };
+  const mine = { step: 1, answers: { company: { name: "Mine", description: "base" } }, updated_at: "" };
+  const r = applyProgressSaveResult({ version: "t1", base }, mine, { kind: "stale", serverProfile: null, currentUpdatedAt: null });
+  assertEquals(r.restore, null, "nothing restored over the user's answers");
+  assertEquals(r.conflicts, []);
+  assertEquals(r.base, base);
+  assertEquals(r.version, null, "the next save is answered with the current copy");
+  const withCopy = applyProgressSaveResult({ version: "t1", base }, mine, {
+    kind: "stale", currentUpdatedAt: "t2",
+    serverProfile: { onboarding_meta: { setup: { version: 1, step: 1, answers: { company: { name: "Old", description: "theirs" } }, updated_at: "t2" } } },
+  });
+  assertEquals(withCopy.restore?.answers.company, { name: "Mine", description: "theirs" });
+  assertEquals(withCopy.version, "t2");
+  const failed = applyProgressSaveResult({ version: "t1", base }, mine, { kind: "failed", message: "x" });
+  assertEquals([failed.version, failed.base, failed.restore, failed.status], ["t1", base, null, "offline"]);
 });
