@@ -60,6 +60,15 @@ for f in "${held_v2[@]}" "${held_billing[@]}" "${held_admission[@]}" "${held_cli
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done
+# The held lead-graph ownership fix (OWN-01): every parent reference in the
+# lead graph is composite on (workspace_id, id). Independent of the chains above.
+held_ownership=(
+  20261025120000_lead_graph_same_workspace_parents.sql
+)
+for f in "${held_ownership[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done
 # PostgREST reads its schema cache once at start; nothing else to reload here.
 echo "database ready"
 # The held task commit boundary (#179: EXEC-PLAN / EXEC-REVOKE): a task's plan

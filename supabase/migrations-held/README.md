@@ -140,6 +140,26 @@ the two-session race; `mutation.sh` proves it fails without the migration,
 without the lock, and without the plan-workspace comparison. Rollback:
 `rollback/20261025130000_tasks_commit_boundary.down.sql` (round trip verified: rolled back equals never applied, privileges included). Before applying on a hosted project, run `scripts/test-project/tasks-commit-boundary-preflight.sql` (read-only); it must end in `OK`.
 
+## `20261025120000_lead_graph_same_workspace_parents.sql`
+
+**OWN-01. Not approved for any hosted project.** Every parent reference in the
+Lead Discovery graph (26 foreign keys into `accounts`, `contacts`,
+`lead_candidates`, `lead_evidence` and `signals`) becomes a composite key on
+`(workspace_id, <col>)` → parent `(workspace_id, id)`, so a row can only point
+at a parent in its own workspace, whoever writes it. Before it, a member who
+could not read another workspace's account could still store a contact under
+it (201; #173's native reproduction). Constraint names, optional parents,
+`SET NULL` (now `SET NULL (<col>)`) and `CASCADE` are preserved, so PostgREST
+embeds and hints are unchanged. The migration counts existing mismatches first
+and **aborts without changing anything** if there are any; it never reassigns a
+parent. Run `scripts/test-project/own01-parent-preflight.sql` (read-only) on the
+target first. Needs PostgreSQL 15+. Independent of every other held migration.
+`tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts` proves the
+behaviour; `tests/db-contract/mutation.sh` proves it fails without the
+migration, with plain `SET NULL`, with a reference left out, and without the
+preflight abort. Rollback (restores the ID-only keys under the same names):
+`rollback/20261025120000_lead_graph_same_workspace_parents.down.sql`.
+
 ## `20261015120000_provider_purchase_claims.sql`
 
 **PROPOSED — NOT APPLIED, NOT WIRED, NOT APPROVED.** One buyer per provider-call
