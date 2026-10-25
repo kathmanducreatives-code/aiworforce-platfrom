@@ -53,3 +53,14 @@ for f in "${held_v2[@]}" "${held_billing[@]}" "${held_admission[@]}"; do
 done
 # PostgREST reads its schema cache once at start; nothing else to reload here.
 echo "database ready"
+# The held task commit boundary (#179: EXEC-PLAN / EXEC-REVOKE): a task's plan
+# is in its workspace and its principal is a current member, checked in the
+# writing transaction. Independent of the chains above. (Placed after the
+# message above so it merges cleanly with the other held loops.)
+held_execution=(
+  20261025130000_tasks_commit_boundary.sql
+)
+for f in "${held_execution[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done

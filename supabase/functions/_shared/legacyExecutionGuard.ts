@@ -38,6 +38,7 @@ export type GuardCode =
   | "principal_not_member"
   | "principal_mismatch"
   | "referenced_task_foreign"
+  | "referenced_plan_foreign"
   | "guard_read_failed";
 
 export type GuardResult =
@@ -88,6 +89,13 @@ export function scopeMarkers(root: unknown): { pilot: string[]; client: string[]
   return { pilot: [...pilot], client: [...client] };
 }
 
+/** The plan a run-agent or kickoff body files its work under, if any. */
+export function referencedPlanId(body: unknown): string | null {
+  const b = obj(body) ?? {};
+  const v = b.plan_id ?? b.task_plan_id;
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
 /**
  * The stored tasks a run-agent body points at. `resume` is the SAME task run
  * again (a resume or a continuation token): it keeps its original principal.
@@ -122,6 +130,12 @@ export interface GuardInput {
   body: unknown;
   /** Stored tasks the request points at (`referencedTaskIds`, or the queue row's task as `resume`). */
   taskIds: { resume: string[]; related: string[] };
+  /**
+   * The plan the work will be filed under (`plan_id` / `task_plan_id`). It must
+   * exist in this workspace: a task linked to another workspace's plan is a
+   * cross-workspace parent (Codex EXEC-PLAN on #179).
+   */
+  planId?: string | null;
   /** True when the caller already verified membership from a user JWT. */
   principalMembershipVerified?: boolean;
 }
@@ -152,7 +166,18 @@ export async function legacyExecutionGuard(i: GuardInput): Promise<GuardResult> 
     }
   }
 
-  // 3. The principal is still a member (a JWT caller was verified by its entry already).
+  // 3. The plan the task will be filed under belongs to this workspace.
+  if (i.planId) {
+    const { data, error } = await i.db.from("task_plans").select("id, workspace_id").in("id", [i.planId]);
+    if (error) return refuse(503, "guard_read_failed", "plan read failed");
+    const plan = (Array.isArray(data) ? data[0] : null) as { workspace_id?: string } | null;
+    // A missing plan and another workspace's plan answer alike: no existence oracle.
+    if (!plan || plan.workspace_id !== i.workspaceId) {
+      return refuse(409, "referenced_plan_foreign", "the plan does not belong to this workspace");
+    }
+  }
+
+  // 4. The principal is still a member (a JWT caller was verified by its entry already).
   // (401, as run-agent's own `unidentified_user` answered this case before the guard.)
   if (!i.principalUserId) return refuse(401, "principal_missing", "no principal for this work");
   if (!i.principalMembershipVerified) {

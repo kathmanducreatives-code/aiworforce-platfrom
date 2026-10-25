@@ -5,7 +5,7 @@
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
 import { withBuildStamp } from "../_shared/buildStamp.ts";
-import { type GuardDb, legacyExecutionGuard, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
+import { type GuardDb, legacyExecutionGuard, referencedPlanId, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
 import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
 import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
 import { hiringSearchTitles } from "../_shared/hiringSearchVocabulary.ts";
@@ -1184,6 +1184,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
       principalMembershipVerified: !bearerIsServiceRole,
       body,
       taskIds: referencedTaskIds(body),
+      planId: referencedPlanId(body),
     });
     if (!guard.ok) {
       console.error("[run-agent][pre-effect-guard] refused", { workspace_id, code: guard.code, detail: guard.detail });

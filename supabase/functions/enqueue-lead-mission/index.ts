@@ -15,7 +15,7 @@ import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
 import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
-import { type GuardDb, legacyExecutionGuard, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
+import { type GuardDb, legacyExecutionGuard, referencedPlanId, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
 import {
   prepareV2LeadCount, validateV2KickoffBody, type KickoffBody,
 } from "../_shared/leadMissionV2Request.ts";
@@ -62,7 +62,7 @@ async function handleEnqueueLeadMission(req: Request): Promise<Response> {
   const guard = await legacyExecutionGuard({
     db: admin as unknown as GuardDb, workspaceId,
     principalUserId: typeof request.user_id === "string" && request.user_id ? request.user_id : null,
-    body: request, taskIds: referencedTaskIds(request),
+    body: request, taskIds: referencedTaskIds(request), planId: referencedPlanId(request),
   });
   if (!guard.ok) {
     console.error("[enqueue-lead-mission][pre-effect-guard] refused", { workspace_id: workspaceId, code: guard.code, detail: guard.detail });

@@ -121,6 +121,25 @@ Tested against real Postgres + PostgREST in
 `tests/db-contract/leadMissionExhaustedLease.contract.test.ts` (unit:
 `tests/edge-functions/_shared/leadMissionLapsedLease.test.ts`).
 
+## `20261025130000_tasks_commit_boundary.sql`
+
+**Not approved for any hosted project.** The database half of #179's
+pre-effect guard. For the application roles (every PostgREST writer), a task
+is authorized in the transaction that writes it:
+- its plan (`plan_id`, `task_plan_id`) must exist in the task's workspace;
+- a new task's principal must be a current member, read under a `FOR KEY SHARE`
+  lock, so a concurrent membership `DELETE` either commits first (the task is
+  refused) or waits for the task's transaction.
+
+This closes Codex's EXEC-PLAN and EXEC-REVOKE findings. Codex's own
+reproduction passes unchanged. Status and result writes do not fire it, so
+authorized work keeps settling. Administrative SQL (role `postgres`) is not
+checked. Independent of every other held migration.
+`tests/db-contract/taskCommitBoundary.contract.test.ts` proves it, including
+the two-session race; `mutation.sh` proves it fails without the migration,
+without the lock, and without the plan-workspace comparison. Rollback:
+`rollback/20261025130000_tasks_commit_boundary.down.sql`.
+
 ## `20261015120000_provider_purchase_claims.sql`
 
 **PROPOSED — NOT APPLIED, NOT WIRED, NOT APPROVED.** One buyer per provider-call

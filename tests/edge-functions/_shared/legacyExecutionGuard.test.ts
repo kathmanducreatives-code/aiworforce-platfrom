@@ -7,7 +7,7 @@
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  type GuardDb, legacyExecutionGuard, referencedTaskIds, scopeMarkers,
+  type GuardDb, legacyExecutionGuard, referencedPlanId, referencedTaskIds, scopeMarkers,
 } from "../../../supabase/functions/_shared/legacyExecutionGuard.ts";
 import { createLeadMissionRunner } from "../../../worker/leadMissionRunner.ts";
 
@@ -98,6 +98,19 @@ Deno.test("guard: another workspace's task is refused; read failures fail closed
   assertEquals(m.ok ? null : [m.status, m.code], [503, "guard_read_failed"]);
 });
 
+Deno.test("guard: the plan must exist in this workspace (EXEC-PLAN); missing and foreign answer alike", async () => {
+  const plans = [{ id: "p-own", workspace_id: WS }, { id: "p-foreign", workspace_id: "other" }];
+  const f = fakeDb({ members: [A], tasks: plans });
+  const own = await legacyExecutionGuard({ db: f.db, workspaceId: WS, principalUserId: A, body: {}, taskIds: none, planId: "p-own" });
+  assertEquals(own, { ok: true });
+  for (const planId of ["p-foreign", "p-missing"]) {
+    const r = await legacyExecutionGuard({ db: f.db, workspaceId: WS, principalUserId: A, body: {}, taskIds: none, planId });
+    assertEquals(r.ok ? null : [r.status, r.code], [409, "referenced_plan_foreign"], planId);
+  }
+  assertEquals(referencedPlanId({ task_plan_id: "p1" }), "p1");
+  assertEquals(referencedPlanId({ plan_id: "" }), null);
+});
+
 Deno.test("guard positive control: a current member's non-pilot work passes; a JWT caller is not re-read", async () => {
   const f = fakeDb({ members: [A], tasks: [{ id: "t1", workspace_id: WS, user_id: A, payload: { instruction: "x" } }] });
   assertEquals(await legacyExecutionGuard({ db: f.db, workspaceId: WS, principalUserId: A, body: { execution_mode: "company_first" }, taskIds: { resume: ["t1"], related: [] } }), { ok: true });
@@ -143,6 +156,13 @@ Deno.test("source: every entry asks the guard BEFORE its first effect", () => {
   const enq = src("supabase/functions/enqueue-lead-mission/index.ts");
   assert(enq.indexOf("await legacyExecutionGuard(") > 0 && enq.indexOf("await legacyExecutionGuard(") < enq.indexOf('from("lead_mission_queue")'),
     "enqueue: the guard precedes the queue insert");
+  const rla = src("supabase/functions/run-lead-action/index.ts");
+  const rg = rla.indexOf("await legacyExecutionGuard(");
+  assert(rg > 0, "run-lead-action asks the guard");
+  for (const effect of ['from("agents")', 'from("tasks").insert', "runTool("]) {
+    const at = rla.indexOf(effect);
+    if (at >= 0) assert(rg < at, `run-lead-action: the guard precedes ${effect}`);
+  }
   const main = src("worker/main.ts");
   assert(/guard: \(m\) => legacyExecutionGuard\(/.test(main), "worker/main.ts wires the runner's guard");
 });

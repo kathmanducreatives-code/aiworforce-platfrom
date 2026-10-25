@@ -154,6 +154,13 @@ Deno.test("run-agent: a task of another workspace is refused before any effect",
   await assertRefusedWithoutEffect(w.ws, () => runAgent(kickoff(w, w.member, { resume_task_id: other.ownTask })), "referenced_task_foreign", 409);
 });
 
+Deno.test("run-agent: a task filed under another workspace's plan is refused before any effect (Codex EXEC-PLAN)", opts, async () => {
+  const w = await world(), other = await world();
+  await assertRefusedWithoutEffect(w.ws, () => runAgent(kickoff({ ws: w.ws, plan: other.plan }, w.member)), "referenced_plan_foreign", 409);
+  // A plan that does not exist answers exactly the same (no existence oracle).
+  await assertRefusedWithoutEffect(w.ws, () => runAgent(kickoff({ ws: w.ws, plan: uuid() }, w.member)), "referenced_plan_foreign", 409);
+});
+
 Deno.test("run-agent positive control: a current member's non-pilot request passes the guard", opts, async () => {
   const w = await world();
   // An unknown agent is the first check AFTER the guard: reaching it proves the
@@ -189,6 +196,8 @@ Deno.test("enqueue-lead-mission: no pilot, client-scoped or non-member mission i
   });
   await assertRefusedWithoutEffect(w.ws, () => enqueue(body(w.member, { execution_mode: "pilot_draft_only" }), w.ws), "pilot_execution_disabled", 403);
   await assertRefusedWithoutEffect(w.ws, () => enqueue(body(w.member, { client_id: uuid() }), w.ws), "client_scope_unsupported", 403);
+  const other = await world();
+  await assertRefusedWithoutEffect(w.ws, () => enqueue(body(w.member, { plan_id: other.plan }), w.ws), "referenced_plan_foreign", 409);
   await sql`delete from public.workspace_members where workspace_id = ${w.ws} and user_id = ${w.teammate}`;
   await assertRefusedWithoutEffect(w.ws, () => enqueue(body(w.teammate), w.ws), "principal_not_member", 403);
   // Positive control: a member's non-pilot mission is queued.
