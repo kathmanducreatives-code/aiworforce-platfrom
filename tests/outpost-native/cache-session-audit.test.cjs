@@ -33,16 +33,19 @@ test('CACHE-SESSION: a different login must not receive the prior principal clie
   const key=companyBrainKey(workspace,{kind:'client',clientId:client});
   const listKey=brainClientsKey(workspace);
   // Principal A's authorized response. The app singleton survives sign-out;
-  // AuthProvider and WorkspaceContext never cancel/remove its query entries.
+  // The corrected harness catches expected denials; the original count assertion
+  // is retained and no-prior-data assertions are added below.
   qc.setQueryData(key,{profile:{private_offer:'Client A confidential'}});
   qc.setQueryData(listKey,[{clientId:client,name:'Confidential client name'}]);
   let checks=0;
   const denied = async () => {checks++;throw Error('new principal has no grant');};
-  const seenBrain=await qc.fetchQuery({queryKey:companyBrainKey(workspace,{kind:'client',clientId:client}),staleTime:5*60_000,queryFn:denied});
-  const seenList=await qc.fetchQuery({queryKey:brainClientsKey(workspace),staleTime:60_000,queryFn:denied});
-  console.log(JSON.stringify({scenario:'same_workspace_new_principal',authorization_requests:checks,prior_brain_visible:!!seenBrain.profile.private_offer,prior_client_name_visible:!!seenList[0].name}));
+  const seenBrain=await qc.fetchQuery({queryKey:companyBrainKey(workspace,{kind:'client',clientId:client}),staleTime:5*60_000,queryFn:denied}).catch((error)=>{assert.match(error.message,/new principal has no grant/);return undefined;});
+  const seenList=await qc.fetchQuery({queryKey:brainClientsKey(workspace),staleTime:60_000,queryFn:denied}).catch((error)=>{assert.match(error.message,/new principal has no grant/);return undefined;});
+  console.log(JSON.stringify({scenario:'same_workspace_new_principal',authorization_requests:checks,prior_brain_visible:!!seenBrain?.profile?.private_offer,prior_client_name_visible:!!seenList?.[0]?.name}));
   qc.clear();
   assert.equal(checks,2,'each new principal must reauthorize rather than reuse another login cache');
+  assert.equal(seenBrain,undefined,'no prior principal Brain is returned');
+  assert.equal(seenList,undefined,'no prior principal client list is returned');
 });
 test('CACHE positive: an empty cache reaches the authorization boundary and surfaces denial',async()=>{
   const {companyBrainKey}=await actualKeys();
