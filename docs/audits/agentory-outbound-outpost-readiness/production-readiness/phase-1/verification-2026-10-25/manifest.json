@@ -1031,7 +1031,8 @@
     "tests/outpost-native/resource-parent-audit.ts": "12fd570934da4df37c6b39480bb172d854e75bb05be39ef8582879aa33657b6d",
     "supabase/migrations/20261024120000_company_brain_authorized_writer.sql": "a8fb5531b126a1e36d4af45c0e663cf03bb96c96e0c134186f0d1b94c8a9eab1",
     "supabase/migrations-held/20261024160000_client_company_brain.sql": "7c9c0aa39b27b1a5d70ca02136b50e2b4aad8ce3d4bedb18643caf655a406781",
-    "supabase/migrations-held/20261025120000_lead_graph_same_workspace_parents.sql": "1d362cc4c5b385013948456b6ee76e81b7a98fd40265cef8ee5baf55880c4376"
+    "supabase/migrations-held/20261025120000_lead_graph_same_workspace_parents.sql": "1d362cc4c5b385013948456b6ee76e81b7a98fd40265cef8ee5baf55880c4376",
+    "supabase/functions/generate-company-brain-draft/index.ts": "e5aec480fd05c3e54852bfa7f1930824e818ab9f12abdd10a2a3c857c21f13e2"
   },
   "logs": {
     "auth06-receipt.log.gz": {
@@ -1141,10 +1142,73 @@
     "ui.log.gz": {
       "uncompressed_sha256": "5db32a1656f295e4607bbe3221d00140367b5310cb0ed2dac02f9cbb935890a9",
       "bytes": 56841
+    },
+    "edge-latest.log.gz": {
+      "uncompressed_sha256": "677e257c0da8e967adfd75927351d0afb09dd8e4b4a092412c335517312286e9",
+      "bytes": 942878
+    },
+    "ci-full-914.log.gz": {
+      "uncompressed_sha256": "a641957e3c9bcfd81307e36d43b76360d59669e7dee3d9b67cf4bfabfc9e6c4c",
+      "bytes": 12230140
+    },
+    "pilot-integration-latest.log.gz": {
+      "uncompressed_sha256": "6c7cf302ddf89f9460e172ca041a49eba6bc8fdee6865b479ac94cd4b7f88d74",
+      "bytes": 77700
+    },
+    "native-final-failure.log.gz": {
+      "uncompressed_sha256": "2e56ebb1417b03be153e5dba7ce3728b321352a40aa12c52e3538f028bd15b1f",
+      "bytes": 26175
+    },
+    "real-login-latest.log.gz": {
+      "uncompressed_sha256": "9182659a4419c8162e3bf62f8d281e76df577bcc10e370686785f8b35b51d4f5",
+      "bytes": 3398
+    },
+    "auth06-latest.log.gz": {
+      "uncompressed_sha256": "13d3e8156d90d2ae476c75bef94bcb6658cb12d4a388942f55092d2477f8bf1a",
+      "bytes": 10469
+    },
+    "first-save-before.log.gz": {
+      "uncompressed_sha256": "5904daacb105812d1aa24ae52d1e8f13e32837d4ad8668b01cbef3e83a41719c",
+      "bytes": 3636
+    },
+    "ci-full-final.log.gz": {
+      "uncompressed_sha256": "b3d3fb48c40b50aaf0119968acdb08a90eb8c00c6c9b7315ab05687ee038f4f9",
+      "bytes": 12231371
     }
   },
   "phase_1": "FAIL",
   "phase_2": "UNSTARTED",
   "a7": "NO-GO",
-  "pilot_enabled": false
+  "pilot_enabled": false,
+  "latest_owner_brain": "aeeba01673f17a25de44490247a4d05c0f8d581b",
+  "latest_assembly": "221da7ab88f3f32f9d9bae50a679edac6e3376a5",
+  "verified_candidate": "a3a3e89565b2d455ad532ab5a5487277baf505c5",
+  "runtime_test_trees": {
+    "supabase": "b93c3e9ec0f95b3f25b5b82cd98228c0a4b71b33",
+    "worker": "a4621a63f6a7b91301db987bb5a1af4d616244fc",
+    "src": "0dd10cf07aff6db58bc3e885eb580d014e2591e7",
+    "tests": "7c5392c0a3bad7417c45c674a0f6221c5ddc4555",
+    ".github": "d3618b285a230138c815b051de7a22bee913b38e",
+    "scripts": "e6fda2bab37ae2a0585a1861a09a20f6035f1aab"
+  },
+  "ci": {
+    "40178721665": {
+      "head": "914a3a71220bbe3eedf85d3707c1c07c7151bd69",
+      "conclusion": "SUCCESS",
+      "mutation_proofs": 98
+    },
+    "40179846237": {
+      "head": "a3a3e89565b2d455ad532ab5a5487277baf505c5",
+      "conclusion": "FAILURE",
+      "reason": "native execution audit1PASS/2FAIL"
+    },
+    "40179843416": {
+      "head": "a3a3e89565b2d455ad532ab5a5487277baf505c5",
+      "conclusion": "SUCCESS",
+      "jobs": 16,
+      "database_assertions": 295,
+      "contract_files": 22,
+      "mutation_proofs": 101
+    }
+  }
 }

@@ -4,7 +4,7 @@
 
 Last continuation: **2026-10-25 Asia/Kathmandu**, isolated draft **#185**.
 AUTH-06 independently **23/0 PASS**; OWN-01 native workspace integrity **PASS**;
-client Brain/real-GoTrue autosave **15/0 and19/0 PASS**. Overall Phase1 remains
+client Brain/real-GoTrue autosave **15/0 and24/0 PASS**. Overall Phase1 remains
 **FAIL**: new native foreign-plan and post-removal task persistence failures,
 a client-session cache gap, and undelivered member writers/task pins/client
 parent/bridge integration. See the dated receipt below; historical failed
@@ -512,3 +512,13 @@ SUCCESS on914a3a71:16 jobs,22 contract files,98/98 mutation proofs. It does not
 authorize customer use or claim coverage of later source changes. The final
 verification commit and CI are linked from185. All execution/cache/shared client
 integration blockers above remain, so Phase1FAIL and Phase2 unstarted.
+
+### Final independent CI/security outcome — source a3a3e895
+
+Full CI40179843416 **PASS16/16, DB295/0,101/101 mutation proofs** on the
+latest owner integration (Brain178aeeba016). Separate native40179846237
+**FAIL** only at the required EXEC-PLAN/EXEC-REVOKE gate (1positive/2fail);
+real-GoTrue24/0 and AUTH0623/0 pass. Cache proof1positive/1fail remains with
+Brain. Full checksummed logs/tallies are committed in the dated receipt.
+The final documentation commit preserves the exact tested runtime/test trees.
+OverallPhase1FAIL; no Phase2, pilot enablement, hosted action, merge or A7.

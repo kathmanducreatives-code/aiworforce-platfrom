@@ -218,7 +218,33 @@ new tests also cover blocked/successful activation, permission loss, stale
 activation and logout. Original172 and pilot integration were rerun on the new
 combined head. No security finding was fixed by editing Brain-owned source.
 
-The first green98-proof workflow belongs to914a3a71, not the later100-proof
+The first green98-proof workflow belongs to914a3a71, not the later101-proof
 candidate; do not extrapolate its result to a new source SHA. Final candidate CI
 is tracked on185 and its publication receipt. Cache/session and Backend execution
 failures remain open and must not be hidden by either ordinary workflow.
+
+## Final verified source: a3a3e895 — complete independent acceptance receipt
+
+- Full [CI40179843416](https://github.com/kathmanducreatives-code/aiworforce-platfrom/actions/runs/40179843416):
+  **SUCCESS,16/16 jobs,295/0 DB assertions across22 contract files,101/101
+  mutation proofs across8 shards**. The final artifact tally is101, not the
+  anticipated100. Edge9401/0, infrastructure214/0, UI682/0, Node5/0, type/lint
+  ratchets unchanged, buildPASS, offline Replay LabPASS.
+- Separate [native40179846237](https://github.com/kathmanducreatives-code/aiworforce-platfrom/actions/runs/40179846237):
+  **FAIL**, solely at required execution integration acceptance:1 positivePASS,
+  EXEC-PLAN and EXEC-REVOKE2FAIL. Real-GoTrue client/autosave24/0, AUTH0623/0,
+  owner/private task/session, source integration and mutation steps all passed
+  before that final required gate. Full logs are preserved, not reclassified
+  as an acceptance success.
+- Manual cache-session proof remains1positivePASS/1FAIL; not a full mounted
+  browser test. Brain178aeeba016 and Backend179d3d68201 remained the latest
+  inspected owner heads at freeze. No incoming execution/cache fix was present.
+- Documentation-only publication successors preserve identical supabase/worker/
+  src/tests/.github/scripts trees to the verified sourcea3a3e895. The manifest
+  records those tree IDs and all evidence hashes; source verification is not
+  falsely attributed to a different code tree.
+
+**Phase1FAIL; Phase2 unstarted; P1–P8 disabled; A7NO-GO.** Next actions remain
+Backend execution + membership/task/descendant fixes, Brain cache/auth fix and
+Codex private canonical bridge + full same-workspace native acceptance. The
+unchanged failing assertions must pass on the actual delivered implementations.
