@@ -1,6 +1,6 @@
 # Company Brain: production-readiness checklist
 
-Updated 2026-10-25. **Status: NOT production-ready.** Phase 1 FAIL; A7 NO-GO. Client Brains are built, tested and switched off.
+Updated 2026-10-25 (CACHE-SESSION fix). **Status: NOT production-ready.** Phase 1 FAIL; A7 NO-GO. Client Brains are built, tested and switched off.
 
 Legend: ✅ done and verified · 🟡 done, awaiting review or approval · ⬜ not done · ⛔ blocked on another owner.
 
@@ -28,8 +28,10 @@ Legend: ✅ done and verified · 🟡 done, awaiting review or approval · ⬜ n
 | B2 | Held schema: clients, grant generations, client Brains, permission revision (#176) | 🟡 | 15 native tests; 12 mutation proofs |
 | B3 | Client save/read through the existing actions; fail-closed switch-off (#178) | 🟡 | E2E 19/0 (stand-in **and** real GoTrue); 7 E2E proofs |
 | B4 | Client list endpoint and switcher UI (#178; UI-2 wiring local) | 🟡 | Screenshots verified; per-Brain drafts; revoked → agency |
-| B5 | Real-session acceptance (real GoTrue sign-up, tokens, logout) | ✅ (local) | `tests/db-contract/run-with-gotrue.sh` 19/0 |
-| B6 | Membership remove/role writers (O3) | ⛔ | **Backend**, after #176's triggers are agreed |
+| B5 | Real-session acceptance (real GoTrue sign-up, tokens, logout) | ✅ (local) | `tests/db-contract/run-with-gotrue.sh` 24/0 (#178 `5d5eb5e3`) |
+| B5a | #168 ↔ #169/#176 save-path conflict: AUTH-06 writer + in-transaction versioning on every path | 🟡 | #178 `aeeba016`; Codex's unchanged audit 23/0; 3 merge mutation proofs |
+| B5b | CACHE-SESSION (Codex #185): no client data across sign-out/sign-in | 🟡 | #178 `5d5eb5e3`; mounted browser test red→green (5/5); awaiting Codex's independent acceptance |
+| B6 | Membership remove/role writers (O3) | 🟡 | **Backend** #186 `bbbf3811` (held); promotion policy needs an owner decision |
 | B7 | Task pins on `tasks` and the resume check (§9.1–9.2) | ⛔ | **Backend** |
 | B8 | Client context in agent execution (§9.3) | ⛔ | **Backend**; the helper is ready |
 | B9 | OWN-01 composite parents (#177) | 🟡 | **Backend** delivered; Codex to verify |
