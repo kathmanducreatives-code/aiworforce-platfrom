@@ -76,9 +76,9 @@ Deno.test("OP-6 save_draft: progress makes the save versioned and conditional; s
     "a stale autosave gets the current copy back to merge against");
   // Through the AUTH-06 authorized writer (#169): CAS on the version read when
   // versioned, the original upsert otherwise; never a direct table write.
-  assert(/const versioned = setup !== null && currentUpdatedAt !== null;/.test(block), "versioned only with progress and an existing row");
-  assert(/mode: versioned \? "cas" : "upsert", expectedUpdatedAt: versioned \? currentUpdatedAt : null/.test(block),
-    "a versioned write lands only on the version read; an unversioned save keeps the upsert");
+  assert(/const versioned = setup !== null;/.test(block), "versioned whenever the save carries progress");
+  assert(/mode: !versioned \? "upsert" : currentUpdatedAt !== null \? "cas" : "insert",/.test(block),
+    "a versioned write lands only on the version read (or creates the row only if still absent); an unversioned save keeps the upsert");
   assert(!/\.from\("company_brain"\)\s*\.(update|upsert|insert)\(/.test(block), "no direct Brain write");
   assert(/if \(saved\.outcome === "stale"\) return staleDuringSave\(\)/.test(block), "a lost race is reported as stale");
   assert(/if \(result\.onboarding_completed\) result\.profile = withoutSetupProgress\(result\.profile\)/.test(block), "activation ends progress");

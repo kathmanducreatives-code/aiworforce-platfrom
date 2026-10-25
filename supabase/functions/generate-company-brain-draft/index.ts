@@ -503,11 +503,17 @@ Deno.serve(async (req) => {
       // the upsert. Either way it is the AUTH-06 authorized writer, which
       // re-checks the caller's session, membership and role in the write's
       // own transaction.
-      const versioned = setup !== null && currentUpdatedAt !== null;
+      // A versioned save names the version it read: an existing row is replaced
+      // only at that version (cas); no row yet means "create, unless another
+      // device just did" (insert, stale on conflict) — never an overwrite. Both
+      // are checked by the writer inside its locked transaction, after it has
+      // re-checked the caller's session, membership and role.
+      const versioned = setup !== null;
       const writeBrain = (w: { permission: "edit" | "activate"; profile: AnyObj; activate?: boolean }) =>
         authorizedBrainWrite(admin, {
           workspaceId: workspace_id, actorId: userId, sessionId, ...w,
-          mode: versioned ? "cas" : "upsert", expectedUpdatedAt: versioned ? currentUpdatedAt : null,
+          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "insert",
+          expectedUpdatedAt: versioned ? currentUpdatedAt : null,
         });
       const staleDuringSave = () =>
         json({ ok: false, rejected_reason: "stale", detail: "changed during save", current_updated_at: null }, 409);
