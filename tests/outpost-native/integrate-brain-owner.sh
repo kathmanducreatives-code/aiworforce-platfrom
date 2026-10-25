@@ -3,7 +3,8 @@
 # CI prepares these exact reviewed objects. This script itself performs no fetch.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-brain=833affce5077ae5f50b53353cb84fa0e916918dc
+brain="${OUTPOST_NATIVE_BRAIN_SOURCE:-833affce5077ae5f50b53353cb84fa0e916918dc}"
+if ! [[ "$brain" =~ ^[0-9a-f]{40}$ ]]; then echo "exact Brain source commit required" >&2; exit 2; fi
 workspace=cc83eb7ee3edf68192378ef68805a71b125edc59
 launch=8b0e2b6bdb20d6fe30542da39f0170d514d52746
 membership=572dca5c8d9c7f121731456801a035cfb6186b1e

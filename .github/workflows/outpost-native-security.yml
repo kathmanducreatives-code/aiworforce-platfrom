@@ -71,6 +71,8 @@ jobs:
         run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" tests/outpost-native/mutate-registration-verifier.sh | tee /tmp/outpost-native-p1-registration-mutant.log
       - name: Prepare exact Company Brain and workspace-selection owner sources
         run: git fetch --no-tags --depth=1 origin 833affce5077ae5f50b53353cb84fa0e916918dc cc83eb7ee3edf68192378ef68805a71b125edc59 8b0e2b6bdb20d6fe30542da39f0170d514d52746
+      - name: Pin this isolated integration candidate
+        run: echo "OUTPOST_NATIVE_BRAIN_SOURCE=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Integrated Brain owner security with real REST bind collisions
         id: owner-security
         run: tests/outpost-native/test-bind-collision.sh | tee /tmp/outpost-native-owner-integration.log
@@ -88,9 +90,8 @@ jobs:
       - name: Require read-only native catalog and complete pilot resource coverage
         if: always() && steps.client-contract.outcome != 'skipped'
         run: python3 tests/outpost-native/check-client-contract-audit.py /tmp/outpost-native-client-contract.log | tee /tmp/outpost-native-client-contract-receipt.log
-      - name: Actual Brain handler authorization (known in-flight owner blocker)
+      - name: Actual Brain handler authorization (AUTH-06 regression acceptance)
         id: brain-edge-authorization
-        continue-on-error: true
         run: OUTPOST_NATIVE_BRAIN_HANDLER_ONLY=1 tests/outpost-native/integrate-brain-owner.sh | tee /tmp/outpost-native-brain-edge.log
       - name: Require complete Brain handler audit and passing legitimate controls
         if: always() && steps.brain-edge-authorization.outcome != 'skipped'
@@ -138,6 +139,10 @@ jobs:
           echo 'Client contract prerequisites outcome: ${{ steps.client-contract.outcome }}. Catalog integrity never proves same-workspace isolation; missing canonical tables block Phase 1.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Brain Edge authorization outcome: ${{ steps.brain-edge-authorization.outcome }}. Known in-flight revocation failures block Phase 1; audit-integrity success is not readiness.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Context-session audit outcome: ${{ steps.context-readiness.outcome }}. Original-session handler integration is a required security gate.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Real GoTrue client isolation and autosave acceptance
+        run: tests/db-contract/run-with-gotrue.sh | tee /tmp/outpost-native-client-login.log
+      - name: Native execution integration acceptance (known security gaps)
+        run: tests/db-contract/run-with-gotrue.sh tests/outpost-native/execution-integration-audit.test.ts | tee /tmp/outpost-native-execution-integration.log
       - name: Preserve proof logs
         if: always()
         uses: actions/upload-artifact@v4
