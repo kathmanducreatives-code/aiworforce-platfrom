@@ -2,12 +2,9 @@
 // `setup` and the version it builds on. The Brain itself is not touched by an
 // autosave (empty patch) — the explicit "Save draft" / "Activate" still save it.
 import { supabase } from '@/integrations/supabase/client';
-import type { Answers } from './onboardingAutosave';
+import type { Answers, ProgressSaveOutcome } from './onboardingAutosave';
 
-export type ProgressSaveResult =
-  | { kind: 'saved'; updatedAt: string | null }
-  | { kind: 'stale'; serverProfile: unknown; currentUpdatedAt: string | null }
-  | { kind: 'failed'; message: string };
+export type ProgressSaveResult = ProgressSaveOutcome;
 
 export async function saveOnboardingProgress(input: {
   workspaceId: string; step: number; answers: Answers; expectedUpdatedAt: string | null;
