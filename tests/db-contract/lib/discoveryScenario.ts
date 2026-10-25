@@ -18,6 +18,7 @@ import { mintJwt, REST_URL, sql, uuid } from "./harness.ts";
 import { seedSmokeMission } from "./smokeMission.ts";
 import { mockCriterionVerdicts } from "./criterionFixture.ts";
 import { createAdmissionFetch, missionAdmission } from "../../../supabase/functions/_shared/smokeAdmission.ts";
+import { installEffectFence } from "../../../supabase/functions/_shared/effectFence.ts";
 import { createLeadMissionRunner } from "../../../worker/leadMissionRunner.ts";
 import { createExecutionDeadline } from "../../../supabase/functions/_shared/leadExecutionFinalizer.ts";
 import { buildMissionCompilerBinding } from "../../../supabase/functions/_shared/leadMissionCompilerBinding.ts";
@@ -199,6 +200,10 @@ export interface Scenario {
   jobsDatasetRaw?: string;
   /** Every runtime model request after compilation times out (S21). */
   modelTimeout?: boolean;
+  /** Install the live-principal effect fence over the admission gate, as the worker's import does (EXEC-EFFECT). */
+  effectFence?: boolean;
+  /** Remove the requester's membership (committed) when this vendor request arrives. */
+  removeMemberAt?: "jobs_post";
 }
 export interface Run {
   trace: Json; operations: Json[]; leads: Json[]; credits: Json[]; tasks: Json[]; refused: string[];
@@ -285,6 +290,12 @@ export async function runScenario(s: Scenario): Promise<Run> {
       const refused = kind === "jobs" ? s.jobsStartStatus : s.detailsStartStatus;
       if (refused) return json({ error: { type: "offline", message: "offline: Apify refused the run" } }, refused);
       if (kind === "details") detailsUrl = (body as Json)?.companies?.[0] ?? null;
+      if (kind === "jobs" && s.removeMemberAt === "jobs_post" && trace.member_removed_after === undefined) {
+        return sql`delete from public.workspace_members where workspace_id = ${m.ws} and user_id = ${user}`.then(() => {
+          trace.member_removed_after = trace.requests.length;
+          return json({ data: { id: `run-${kind}`, defaultDatasetId: `dataset-${kind}`, status: "RUNNING" } }, 201);
+        });
+      }
       return json({ data: { id: `run-${kind}`, defaultDatasetId: `dataset-${kind}`, status: "RUNNING" } }, 201);
     }
     if (url.pathname.includes("/actor-runs/")) {
@@ -319,6 +330,7 @@ export async function runScenario(s: Scenario): Promise<Run> {
     trace.compiled_mission = mission;
     compiled = true;
     globalThis.fetch = gate;
+    if (s.effectFence) installEffectFence(REST_URL);
     const request = { plan_id: plan, step_index: 0, agent_slug: "scout", workspace_id: m.ws, user_id: user, instruction: missionGoal,
       requested_lead_count: 1, workflow_kind: "qualified_lead_sourcing", execution_mode: "company_first", tool_needed: "source_with_apify",
       lead_mission: mission, tool_input: { lead_mission: mission, source_type: "jobs" }, run_budget: { provider_usd: 0.20, max_candidates: 3 } };
