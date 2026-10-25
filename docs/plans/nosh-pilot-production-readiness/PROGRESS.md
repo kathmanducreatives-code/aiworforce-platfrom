@@ -2,13 +2,12 @@
 
 **Customer pilot readiness: FAIL. P1–P8 disabled. A7 NO-GO.**
 
-Last continuation: **2026-10-25 Asia/Kathmandu**, isolated draft **#185**.
-AUTH-06 independently **23/0 PASS**; OWN-01 native workspace integrity **PASS**;
-client Brain/real-GoTrue autosave **15/0 and24/0 PASS**. Overall Phase1 remains
-**FAIL**: new native foreign-plan and post-removal task persistence failures,
-a client-session cache gap, and undelivered member writers/task pins/client
-parent/bridge integration. See the dated receipt below; historical failed
-receipts remain preserved. Phase2 is unstarted and P1–P8/A7 stay off.
+Last continuation: **2026-10-25, follow-up source09ef98f6 / draft185**.
+AUTH-06, OWN-01, original execution3/3, member RPC8/8 and CACHE-SESSION
+(mounted5/5) are narrowly verified. Overall **Phase1FAIL**: four new supplemental
+authorization failures plus remaining canonical task/client/bridge integration.
+Full CI17/17 and119/119mutation proofs pass; native security gate remainsFAIL.
+Historical receipts below remain unchanged; see the final follow-up section.
 Read [MASTER_PLAN.md](MASTER_PLAN.md) before resuming. This tracker supersedes
 historical phase-number status in `docs/audits/.../production-readiness/`; those
 files remain immutable receipts of narrower previous work. Production-readiness
@@ -522,3 +521,30 @@ real-GoTrue24/0 and AUTH0623/0 pass. Cache proof1positive/1fail remains with
 Brain. Full checksummed logs/tallies are committed in the dated receipt.
 The final documentation commit preserves the exact tested runtime/test trees.
 OverallPhase1FAIL; no Phase2, pilot enablement, hosted action, merge or A7.
+
+## Current follow-up verification — 2026-10-25, draft185 source09ef98f6
+
+[Complete follow-up receipt](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/FOLLOWUP_VERIFICATION_2026-10-25.md) supersedes the prior current-status
+claims for original EXEC-PLAN/EXEC-REVOKE and CACHE-SESSION. Original execution
+assertions are unchanged and now3/3PASS. Brain17886d33d6f CACHE-SESSION is
+independently closed with corrected repro red/green + mounted real-login5/0.
+The harness retains its authorization-count assertion and adds no-data assertions.
+Canonical member RPCs8/0, client15/0, autosave24/0, task trigger5/0, rollback1/0,
+combined real-GoTrue56/0, originalAUTH0623/0 and OWN-01 native boundaryPASS.
+
+Full CI40202500235 **PASS17/17,30contract files,119/119mutation proofs,4/4real
+workers**, edge9414/0,infra221/0,UI682/0,Node9/0. Native40202502983 remains
+**FAIL:2positive/4securityfailures**: service parent-plan relocation; raw service
+promotion; raw service last-owner removal; new model invocation after membership
+removal following task insertion. Backend179/186 owns corrections, with Brain
+for shared membership privileges. No competing implementation was authored.
+
+Required remaining Phase1 work: those four native failures; Backend immutable
+task pins/per-effect grant+session consumption and same-client parent constraints;
+Codex canonical private-client bridge/global lock alignment and complete A/B
+native/replay acceptance. Original insertion fixes and RPC policies are narrowly
+verified, not a claim that every privileged path is secured. CACHE-SESSION must
+no longer be reported as an outstanding leak on86d33d6f. Promotions stay unsupported.
+
+Phase1FAIL; Phase2unstarted; P1–P8disabled; A7NO-GO. No PR merge, hosted
+migration/write, deployment, paid API, customer operation or enablement occurred.

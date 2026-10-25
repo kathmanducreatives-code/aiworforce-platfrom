@@ -1025,3 +1025,30 @@ real-GoTrue24/0 and AUTH0623/0 pass. Cache proof1positive/1fail remains with
 Brain. Full checksummed logs/tallies are committed in the dated receipt.
 The final documentation commit preserves the exact tested runtime/test trees.
 OverallPhase1FAIL; no Phase2, pilot enablement, hosted action, merge or A7.
+
+## Current follow-up verification — 2026-10-25, draft185 source09ef98f6
+
+[Complete follow-up receipt](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/FOLLOWUP_VERIFICATION_2026-10-25.md) supersedes the prior current-status
+claims for original EXEC-PLAN/EXEC-REVOKE and CACHE-SESSION. Original execution
+assertions are unchanged and now3/3PASS. Brain17886d33d6f CACHE-SESSION is
+independently closed with corrected repro red/green + mounted real-login5/0.
+The harness retains its authorization-count assertion and adds no-data assertions.
+Canonical member RPCs8/0, client15/0, autosave24/0, task trigger5/0, rollback1/0,
+combined real-GoTrue56/0, originalAUTH0623/0 and OWN-01 native boundaryPASS.
+
+Full CI40202500235 **PASS17/17,30contract files,119/119mutation proofs,4/4real
+workers**, edge9414/0,infra221/0,UI682/0,Node9/0. Native40202502983 remains
+**FAIL:2positive/4securityfailures**: service parent-plan relocation; raw service
+promotion; raw service last-owner removal; new model invocation after membership
+removal following task insertion. Backend179/186 owns corrections, with Brain
+for shared membership privileges. No competing implementation was authored.
+
+Required remaining Phase1 work: those four native failures; Backend immutable
+task pins/per-effect grant+session consumption and same-client parent constraints;
+Codex canonical private-client bridge/global lock alignment and complete A/B
+native/replay acceptance. Original insertion fixes and RPC policies are narrowly
+verified, not a claim that every privileged path is secured. CACHE-SESSION must
+no longer be reported as an outstanding leak on86d33d6f. Promotions stay unsupported.
+
+Phase1FAIL; Phase2unstarted; P1–P8disabled; A7NO-GO. No PR merge, hosted
+migration/write, deployment, paid API, customer operation or enablement occurred.
