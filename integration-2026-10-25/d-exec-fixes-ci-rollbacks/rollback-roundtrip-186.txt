@@ -1,0 +1,9 @@
+# #186 bbbf3811 (on #176 1756b217)
+held applied: 10; with rollback: 6
+ok   down+up restores the schema exactly: 20261003120000_lead_mission_v2_continuations_not_retries.sql
+ok   down+up restores the schema exactly: 20261011120000_lead_mission_v2_productive_continuation_no_backoff.sql
+ok   down+up restores the schema exactly: 20261019120000_lead_mission_v2_exhausted_lease_terminal.sql
+ok   down+up restores the schema exactly: 20261015130000_credits_rearm_settled_key.sql
+ok   down+up restores the schema exactly: 20261015140000_discovery_smoke_admission.sql
+ok   down+up restores the schema exactly: 20261025140000_workspace_member_writers.sql
+ok   full stack identical after teardown and reapply

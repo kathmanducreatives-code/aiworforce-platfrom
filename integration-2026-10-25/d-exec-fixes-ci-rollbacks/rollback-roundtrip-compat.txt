@@ -1,0 +1,11 @@
+# full TEST-path held stack (compat tree: #185 b91040cd + #179 29824498 [SQL identical at 08351242] + #153 6223dd5f)
+held applied: 12; with rollback: 8
+ok   down+up restores the schema exactly: 20261003120000_lead_mission_v2_continuations_not_retries.sql
+ok   down+up restores the schema exactly: 20261011120000_lead_mission_v2_productive_continuation_no_backoff.sql
+ok   down+up restores the schema exactly: 20261019120000_lead_mission_v2_exhausted_lease_terminal.sql
+ok   down+up restores the schema exactly: 20261015130000_credits_rearm_settled_key.sql
+ok   down+up restores the schema exactly: 20261022120000_credits_reaper_charges_confirmed_purchase.sql
+ok   down+up restores the schema exactly: 20261015140000_discovery_smoke_admission.sql
+ok   down+up restores the schema exactly: 20261025120000_lead_graph_same_workspace_parents.sql
+ok   down+up restores the schema exactly: 20261025130000_tasks_commit_boundary.sql
+ok   full stack identical after teardown and reapply
