@@ -233,6 +233,11 @@ prove_killed "no model USD cap" "$adm_sql" "or (p_kind = 'model' and v_model + v
   "$adm_tests" "model: the \$0.05 model ceiling binds before the attempt count"
 prove_killed "no poll limit" "$adm_sql" "if p_kind = 'poll' and n_poll >= a.provider_polls then" "if false then" \
   "$adm_tests" "polls: five across the whole mission, each tied to a purchase this mission made"
+
+# ── PROOF: a malformed vendor dataset is recorded as malformed (A7 S18a) ───
+prove_killed "S18a: a malformed dataset recorded as an empty one" "$tools_ts" \
+  "  const datasetMalformed = !Array.isArray(itemsRes.data);" "  const datasetMalformed = false;" \
+  "$root/tests/db-contract/a7Reliability.contract.test.ts" "S18a: the job-search dataset is malformed JSON — no lead, no further purchase, recorded as malformed"
 prove_killed "worker may authorize" "$adm_sql" \
   "revoke all on function public.authorize_discovery_smoke(uuid, text, jsonb, jsonb, integer) from public, anon, authenticated, service_role;" \
   "grant execute on function public.authorize_discovery_smoke(uuid, text, jsonb, jsonb, integer) to service_role;" \
