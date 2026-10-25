@@ -38,6 +38,9 @@ export const DB_ALL_TRIGGERS = [
   /^tests\/db-contract\/[^/]+\.sh$/,
 ];
 
+/** The real-process rehearsals spawn these by path: a change to them runs the rehearsals even when no contract file is selected. */
+export const REALPROCESS_TRIGGERS = [/^worker\//, /^tests\/realprocess\//];
+
 /**
  * Top-level areas the plan understands. A changed path outside all of them is
  * UNCLASSIFIED and runs the complete database contract (and the mutation
@@ -216,9 +219,17 @@ export function plan(i) {
   }
   if (level === 1 && !mutation) reasons.push("mutation proofs: deferred to ready-for-review / release");
 
+  // ── real worker processes (tests/realprocess) ──────────────────────────
+  // With the contract, and whenever the worker or the rehearsals themselves
+  // change: they spawn worker/main.ts by path, which no import scan follows.
+  const rpHit = unknownDiff ? null : changed.find((f) => REALPROCESS_TRIGGERS.some((r) => r.test(f)));
+  if (rpHit && contract.length === 0) reasons.push(`real worker processes: ${rpHit} changed`);
+  const realprocess = contract.length > 0 || unknownDiff || Boolean(rpHit);
+
   return {
     level,
     fast: true,
+    realprocess,
     contract: contract.length > 0,
     contract_all: contractAll,
     contract_files: contractAll ? [] : contract,

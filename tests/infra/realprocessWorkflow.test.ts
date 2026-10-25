@@ -4,7 +4,7 @@
 // workspace member, 2026-10-25) went unnoticed while they ran only by hand.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { parse } from "https://deno.land/std@0.224.0/yaml/mod.ts";
-import { gateVerdict } from "../../scripts/ci/planCore.mjs";
+import { gateVerdict, plan } from "../../scripts/ci/planCore.mjs";
 
 type Step = { name?: string; run?: string; uses?: string; if?: string };
 type Job = { name?: string; needs?: string | string[]; if?: string; "timeout-minutes"?: number; steps: Step[] };
@@ -22,8 +22,24 @@ Deno.test("realprocess job: planned, its own Postgres, the real runner, and it m
   assert(/-ge 4/.test(runs), "a job that ran fewer than the four rehearsals (two SIGKILLs, an operator stop, the zero-Apify kickoff) fails");
   assert(runs.includes("docker run -d --name realprocess-pg"), "a disposable Postgres of its own");
   assertEquals(wf.jobs.plan.outputs.realprocess, "${{ steps.plan.outputs.realprocess }}");
-  assert(Deno.readTextFileSync(new URL("../../scripts/ci/plan.mjs", import.meta.url)).includes("`realprocess=${p.contract}`"),
-    "planned whenever the database contract is");
+  assert(Deno.readTextFileSync(new URL("../../scripts/ci/plan.mjs", import.meta.url)).includes("`realprocess=${p.realprocess}`"),
+    "the plan's own decision reaches the job");
+});
+
+const planOf = (changed: string[] | null) => plan({
+  event: "pull_request", draft: true, ref: "refs/pull/1/merge", requested: "auto", changed,
+  contractFiles: ["tests/db-contract/a.contract.test.ts"], mutationScript: "",
+  readFile: (f: string) => f === "tests/db-contract/a.contract.test.ts" ? "// reads nothing\n" : null,
+});
+
+Deno.test("plan: the rehearsals run with the contract, and whenever the worker or the rehearsals change", () => {
+  assertEquals(planOf(["src/App.tsx"]).realprocess, false, "a front-end-only draft skips them");
+  for (const f of ["tests/realprocess/vendorPreload.ts", "worker/main.ts", "worker/leadMissionRunner.ts"]) {
+    const p = planOf([f]);
+    assertEquals([p.contract, p.realprocess], [false, true], `${f}: spawned by path, so no contract file selects it`);
+  }
+  assertEquals(planOf(["supabase/migrations-held/x.sql"]).realprocess, true, "a database build input selects the contract, and with it the rehearsals");
+  assertEquals(planOf(null).realprocess, true, "an unknown diff runs them");
 });
 
 const base = (outputs: Record<string, string>, results: Record<string, string>) => ({
