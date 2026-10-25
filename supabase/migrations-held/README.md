@@ -253,3 +253,17 @@ switched-off `_shared/clientBrain.ts`.
 
 Rollback: the statements listed in the file's header (drops only the new
 objects and the new column).
+
+## `20261025140000_workspace_member_writers.sql`
+
+**Backend. Not approved for any hosted project; needs #176 and approval of the #174 contract first.** These are the canonical membership writers from contract §8 O3 option A and §9.4: `workspace_member_remove(ws, target, actor, session)` and `workspace_member_set_role(ws, target, role, actor, session)`. Both are service-role only and return an outcome. Any refusal changes nothing.
+
+- **Lock order (§5):** the actor's session (L1, `FOR SHARE`), then the actor, the target and **every owner** row in one `FOR UPDATE` statement, in `user_id` order (L2). Locking every owner row serializes concurrent last-owner changes, which Codex required. #176's triggers then revoke grants (`membership_removed`) or renew `permission_revision` in the same transaction.
+- **Policy (agreed on #174):**
+  - owners and admins may remove or demote;
+  - an admin may not touch an owner;
+  - the last owner can be neither removed nor demoted;
+  - anyone may remove themself, except the last owner.
+- **Refused, because it is not decided:** promotion (`promotion_unsupported`), and roles outside owner/admin/editor/viewer.
+- **Proof:** `tests/db-contract/workspaceMemberWriters.contract.test.ts` and `mutation.sh`.
+- **Rollback:** `rollback/20261025140000_workspace_member_writers.down.sql`. It removes the writers only; memberships, grants and #176's triggers are untouched.

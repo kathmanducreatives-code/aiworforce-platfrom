@@ -39,6 +39,8 @@ held_admission=(
 # generations, one Brain per client (#174, proposal; not approved).
 held_client=(
   20261024160000_client_company_brain.sql
+  # Backend's canonical membership writers (#174 O3 A, §9.4); need the triggers above.
+  20261025140000_workspace_member_writers.sql
 )
 # DB_CONTRACT_OMIT_HELD names ONE file to leave out: a held file, or a file in
 # supabase/migrations/ by its basename. It is for tests/db-contract/mutation.sh,

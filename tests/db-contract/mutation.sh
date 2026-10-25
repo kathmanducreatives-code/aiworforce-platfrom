@@ -566,6 +566,46 @@ prove_killed "merge dropped the in-transaction version check (every save an upse
 prove_killed "a versioned first save upserts over a Brain another device created" "$brain_draft_ts" \
   '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "insert",' '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "upsert",' \
   "$e2e_tests" "15. a versioned first save never overwrites a Brain another device created in flight"
+# ── Backend's membership writers (held 20261025140000; #174 O3 A, §9.4) ──────
+mw_sql="$root/supabase/migrations-held/20261025140000_workspace_member_writers.sql"
+cp "$mw_sql" "$mw_sql.mutation-backup"; restore_list+=("$mw_sql")
+mw_tests="$root/tests/db-contract/workspaceMemberWriters.contract.test.ts"
+mw_policy="policy: who may remove and demote whom; each refusal leaves memberships and grants unchanged"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025140000_workspace_member_writers.sql "$root/tests/db-contract/run.sh" "$mw_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "remove: the member is gone and every grant of theirs is revoked 'membership_removed' in the same transaction ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: membership writer tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the held membership writers nothing removes or demotes"
+ran=$((ran + 1))
+fi
+prove_killed "membership writers: only the actor and target rows are locked, not every owner" "$mw_sql" \
+  "and (m.user_id in (p_actor_id, p_target_user_id) or lower(btrim(coalesce(m.role, ''))) = 'owner')" \
+  "and m.user_id in (p_actor_id, p_target_user_id)" \
+  "$mw_tests" "race: the only two owners leave at once — one succeeds, the other is refused 'last_owner', one owner remains"
+prove_killed "membership writers: the last owner can be removed" "$mw_sql" \
+  "    return 'last_owner';" "    null;" "$mw_tests" "$mw_policy"
+prove_killed "membership writers: an admin may remove an owner" "$mw_sql" \
+  "  if v_target = 'owner' and p_actor_id <> p_target_user_id and v_actor <> 'owner' then return 'owner_protected'; end if;" "" \
+  "$mw_tests" "$mw_policy"
+prove_killed "membership writers: any member may remove others" "$mw_sql" \
+  "  if p_actor_id <> p_target_user_id and v_actor not in ('owner', 'admin') then return 'forbidden_role'; end if;" "" \
+  "$mw_tests" "$mw_policy"
+prove_killed "membership writers: promotion is allowed" "$mw_sql" \
+  "then return 'promotion_unsupported'; end if;" "then null; end if;" "$mw_tests" "$mw_policy"
+prove_killed "membership writers: an expired or foreign session is accepted" "$mw_sql" \
+  "                    and (s.not_after is null or s.not_after > clock_timestamp())) then
+    return 'session_invalid';" \
+  "                    and (s.not_after is null or s.not_after > clock_timestamp())) and false then
+    return 'session_invalid';" \
+  "$mw_tests" "$mw_policy"
+prove_killed "membership writers: browsers may call them" "$mw_sql" \
+  "revoke all on function public.workspace_member_remove(uuid, uuid, uuid, uuid) from public, anon, authenticated;" \
+  "grant execute on function public.workspace_member_remove(uuid, uuid, uuid, uuid) to authenticated;" \
+  "$mw_tests" "surface: browsers cannot call the writers; the service role cannot call the internal check"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
