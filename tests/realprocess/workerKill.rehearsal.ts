@@ -227,6 +227,8 @@ Deno.test("real process: the zero-Apify real-GPT kickoff — prepared, run by a 
   const ws = await (await import("../db-contract/lib/harness.ts")).seedWorkspace();
   const user = uuid();
   await sql`insert into auth.users (id, email) values (${user}, ${"real-gpt-" + user + "@example.invalid"})`;
+  // The requester is a member, as on TEST (schema-verify S03): the pre-effect guard re-checks it.
+  await sql`insert into public.workspace_members (workspace_id, user_id, role) values (${ws}, ${user}, 'owner')`;
   await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${ws}, 'scout', 'Offline Scout', 'Find and verify the requested company using source evidence.', 'research')`;
   await sql`insert into public.workspace_credit_balances (workspace_id, balance_credits) values (${ws}, 10)`;
 
