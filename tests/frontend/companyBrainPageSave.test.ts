@@ -56,6 +56,11 @@ Deno.test("3. the page saves through saveCompanyBrainPatch, sends the patch, cha
   // Phase 3c (held): a client Brain saves through its own call and chains its integer version.
   assert(/saveClientBrainPatch\(\{ workspaceId, scope, patch, expectedVersion: version\.current === null \? null : Number\(version\.current\) \}\)/.test(src));
   assert(/if \(currentScopeKey\.current !== savedFor\) return result\.ok;/.test(src), "an answer that arrives after a switch never moves the new Brain's version");
+  // A queued edit belongs to the Brain it was made on: fixed at enqueue, and not sent after a switch.
+  const enq = src.indexOf("const enqueuedFor = currentScopeKey.current;");
+  const run = src.indexOf("const run = queue.current.then(");
+  assert(enq > 0 && enq < run, "the Brain is captured when the edit is queued, before the queued save runs");
+  assert(/queue\.current\.then\(async \(\) => \{\s*if \(currentScopeKey\.current !== enqueuedFor\) return false;/.test(src), "a queued edit is dropped if the user switched Brain");
   assertFalse(/from\(['"]company_brain['"]\)/.test(src), "the page never touches the row itself");
   assertFalse(/supabase/.test(src), "nor imports the client");
   assertFalse(/saveCompanyBrainPatch\(\{[^}]*merged/.test(src), "the merged profile is for display only");

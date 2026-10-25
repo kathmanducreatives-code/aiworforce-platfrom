@@ -129,10 +129,17 @@ export default function CompanyBrainDashboard() {
     setOptimistic(merged);
     pending.current += 1;
 
+    // The Brain this edit was made on, fixed NOW — not when the queued save
+    // starts. If the user has switched Brain (client, workspace or login) by
+    // then, the edit is not sent at all: it must never reach another Brain or
+    // build on another Brain's version. (The switch already discarded the
+    // optimistic copy.)
+    const enqueuedFor = currentScopeKey.current;
     const run = queue.current.then(async () => {
+      if (currentScopeKey.current !== enqueuedFor) return false;
       // A save after a failed one was built on top of it — don't save half a batch.
       if (batchFailed.current) return false;
-      const savedFor = currentScopeKey.current;
+      const savedFor = enqueuedFor;
       const result = scope.kind === 'client'
         ? await saveClientBrainPatch({ workspaceId, scope, patch, expectedVersion: version.current === null ? null : Number(version.current) })
         : await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: version.current });
