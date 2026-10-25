@@ -9,6 +9,7 @@
 //
 // Reuses parseSizeLabel + DEFAULT_DISQUALIFIERS from companyBrainIcp.ts.
 
+import { companyBrainReadiness } from "./companyBrainReadiness.ts";
 import { parseSizeLabel, DEFAULT_DISQUALIFIERS, SOFTWARE_ICP_DISQUALIFIERS } from "./companyBrainIcp.ts";
 import { normalizeCompanyBrain, type BrainConfidence as V2Confidence } from "./normalizeCompanyBrain.ts";
 import { computeCompanyBrainCompleteness } from "./companyBrainCompleteness.ts";
@@ -117,6 +118,13 @@ export interface CompanyBrainContext {
     matched_from: Record<string, string[]>;
     /** true when the Brain lacks a workable ICP; radar/leads/content must degrade. */
     setup_required: boolean;
+    /**
+     * An onboarding draft never activated (contract C5b): runs conservatively
+     * and never yields a VERIFIED Top Signal. Kept separate from
+     * `setup_required` so readiness decides "can it run" and activation
+     * decides "may it verify". Optional: absent means false.
+     */
+    unactivated_draft?: boolean;
     schema_version: 1 | 2;
     /** Normalizer's confidence grade ("weak" | "partial" | "strong"). */
     brain_confidence: V2Confidence;
@@ -167,6 +175,13 @@ export interface CompileInput {
   workspace_id: string;
   profile?: Record<string, unknown> | null;
   signal_preferences?: Record<string, unknown> | null;
+  /**
+   * Roadmap Phase 2 (BRAIN_READINESS_V2), passed by the caller that reads the
+   * switch: `meta.setup_required` then follows the ONE readiness rule
+   * (`!companyBrainReadiness(...).can.signals`, contract C5a). Off (the
+   * default): unchanged.
+   */
+  readiness_v2?: boolean;
 }
 
 /** Compile the Company Brain into a structured, honest ICP intelligence object. */
@@ -451,7 +466,13 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
       warnings,
       derivation_sources: uniq(derivationSources),
       matched_from,
-      setup_required: v2.setup_required || isUnactivatedDraft,
+      // C5a: under BRAIN_READINESS_V2, "can the radar run with this Brain" is
+      // the readiness rule shared with chat and the route guard; the
+      // normalizer's own rule is retired for this purpose (C5c). Off: unchanged.
+      setup_required: input.readiness_v2
+        ? !companyBrainReadiness(v2, !isUnactivatedDraft).can.signals
+        : v2.setup_required || isUnactivatedDraft,
+      unactivated_draft: isUnactivatedDraft,
       schema_version: schemaVersion,
       brain_confidence: v2.brain_confidence,
       missing_fields: computeCompanyBrainCompleteness(v2).missing_keys,

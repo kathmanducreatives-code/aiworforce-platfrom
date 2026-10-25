@@ -3,6 +3,7 @@
 // Persists accepted signals to public.signals with rich metadata under `raw`.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { brainReadinessV2Enabled } from "../_shared/companyBrainGate.ts";
 import { signalDedupeKey } from "../_shared/signalQuality.ts";
 import { isSignalsV2Enabled } from "../_shared/signalsV2Flag.ts";
 import { writeSignalEventV2 } from "../_shared/signalsV2Writer.ts";
@@ -253,7 +254,11 @@ Deno.serve(async (req) => {
   const firecrawl = present("FIRECRAWL_API_KEY");
 
   // Company Brain is the source of truth: compile it, then build a scan plan.
-  const brain = compileCompanyBrainContext({ workspace_id, profile, signal_preferences: profile?.signal_preferences });
+  const brain = compileCompanyBrainContext({
+    workspace_id, profile, signal_preferences: profile?.signal_preferences,
+    // C5: under BRAIN_READINESS_V2 the radar runs on the shared readiness rule.
+    readiness_v2: brainReadinessV2Enabled((k) => Deno.env.get(k)),
+  });
   const scanPlan = buildRadarScanPlan(brain, { firecrawlReady: firecrawl, apifyReady: apifyToken && apifyEnabled });
   const planReasonFor = (source: RadarPlanSource) => scanPlan.source_plan.find((p) => p.source === source)?.reason ?? "";
 
