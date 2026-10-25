@@ -151,12 +151,16 @@ export async function legacyExecutionGuard(i: GuardInput): Promise<GuardResult> 
   // 2. The stored rows it points at: authoritative even when the request's markers were stripped.
   const all = [...i.taskIds.resume, ...i.taskIds.related];
   if (all.length) {
-    const { data, error } = await i.db.from("tasks").select("id, workspace_id, user_id, payload").in("id", all);
+    // The WHOLE row: markers sit in `payload` and, once the held task pins
+    // (#174 §9.1) exist, in columns (client_id, client_grant_id, …). A pinned
+    // client task must never resume as agency work because its request and
+    // payload carry no marker. `*` reads whichever columns this schema has.
+    const { data, error } = await i.db.from("tasks").select("*").in("id", all);
     if (error) return refuse(503, "guard_read_failed", "stored task read failed");
     const rows = (Array.isArray(data) ? data : []) as Array<{ id: string; workspace_id: string; user_id: string | null; payload: unknown }>;
     for (const row of rows) {
       if (row.workspace_id !== i.workspaceId) return refuse(409, "referenced_task_foreign", `task ${row.id} belongs to another workspace`);
-      const stored = scopeMarkers({ payload: row.payload });
+      const stored = scopeMarkers(row);
       if (stored.pilot.length) return refuse(403, "pilot_execution_disabled", `stored task ${row.id} carries ${stored.pilot.join(", ")}`);
       if (stored.client.length) return refuse(403, "client_scope_unsupported", `stored task ${row.id} carries ${stored.client.join(", ")}`);
       // A resumed task keeps its original principal.
