@@ -40,10 +40,20 @@ Deno.test("S17: the job search starts but its status can never be read — no da
     assertEquals(r.outcome.credits.apify_linkedin_job_search, "charged", "a run that exists keeps its credit");
   }));
 
-Deno.test("S18a: the job-search dataset is malformed JSON — no lead, no further purchase", opts, () =>
-  scenario("S18a", { jobsDatasetRaw: "[{\"id\": \"broken\", " }, "0 leads, no company lookup", (r) => {
+Deno.test("S18a: the job-search dataset is malformed JSON — no lead, no further purchase, recorded as malformed", opts, () =>
+  scenario("S18a", { jobsDatasetRaw: "[{\"id\": \"broken\", " }, "0 leads, no company lookup, ledger says malformed", (r) => {
     noLead(r); terminal(r);
     assertEquals(r.of("provider").map((o) => o.actor), [JOBS]);
+    // Spending is that of an empty search: one purchase, never bought again
+    // (the route is exhausted), charged one credit, and its committed quote
+    // counted against the mission's provider budget.
+    assertEquals(r.outcome.attempts, ["empty"]);
+    assertEquals(r.vendorRequests.filter((v) => v.method === "POST" && v.path.includes("linkedin-job-search")).length, 1, "one start, never repeated");
+    assertEquals(Object.values(r.outcome.credits), ["charged"], JSON.stringify(r.outcome.credits));
+    assert(Number(r.of("provider")[0].committed_microusd) > 0, "the purchase is counted against the provider budget");
+    // The record is not: the ledger row says the dataset was unreadable.
+    assertEquals(r.providerLedger.map((l) => [l.status, l.metadata?.no_results, l.metadata?.dataset_malformed]),
+      [["succeeded", true, true]], JSON.stringify(r.providerLedger));
   }));
 
 Deno.test("S18b: postings without the employer record (no company field) — no lookup bought, no lead", opts, () => {
@@ -64,6 +74,11 @@ Deno.test("S19: an empty job-search dataset — no lookup, recorded as empty", o
     noLead(r); terminal(r);
     assertEquals(r.of("provider").map((o) => o.actor), [JOBS]);
     assertEquals(r.outcome.attempts, ["empty"]);
+    // Charged and counted exactly like S18a: only the record differs.
+    assertEquals(Object.values(r.outcome.credits), ["charged"], JSON.stringify(r.outcome.credits));
+    // A genuinely empty dataset is not flagged malformed.
+    assertEquals(r.providerLedger.map((l) => [l.status, l.metadata?.no_results, l.metadata?.dataset_malformed ?? null]),
+      [["succeeded", true, null]], JSON.stringify(r.providerLedger));
   }));
 
 Deno.test("S20: the job search never finishes — reads stop at their share, the mission ends, nothing more is bought", opts, () =>

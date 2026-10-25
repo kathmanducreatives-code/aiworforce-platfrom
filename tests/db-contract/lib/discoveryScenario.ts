@@ -233,6 +233,8 @@ export interface Scenario {
 export interface Run {
   trace: Json; operations: Json[]; leads: Json[]; credits: Json[]; tasks: Json[]; refused: string[];
   of: (k: string) => Json[]; m: Awaited<ReturnType<typeof seedSmokeMission>>; plan: string; outcome: Json;
+  /** The execution ledger's provider_call rows, as the production writer left them. */
+  providerLedger: Json[];
   vendorRequests: Array<{ method: string; path: string; body: unknown }>; modelStages: string[];
 }
 
@@ -462,6 +464,8 @@ export async function runScenario(s: Scenario): Promise<Run> {
     const leads = (await client.from("lead_candidates").select("*").eq("workspace_id", m.ws)).data ?? [];
     const credits = await sql`select status, idempotency_key from public.credit_transactions where workspace_id = ${m.ws}`;
     const tasks = await sql`select id, status, result from public.tasks where workspace_id = ${m.ws}`;
+    const providerLedger = await sql`select status, provider_run_id, metadata from public.lead_execution_calls
+      where workspace_id = ${m.ws} and record_kind = 'provider_call' order by started_at`;
     const refused = trace.admissions.filter((a: Json) => a.message === "[smoke-admission] refused").map((a: Json) => a.data?.decision);
     const of = (k: string) => (operations as Json[]).filter((o) => o.kind === k);
     const live = (tasks as Json[]).map((t) => t.result).find((r) => r?.capability_execution_state) ?? {};
@@ -480,7 +484,7 @@ export async function runScenario(s: Scenario): Promise<Run> {
     };
     trace.outcome = outcome;
     return { trace, operations: operations as Json[], leads: leads as Json[], credits: credits as Json[], tasks: tasks as Json[], refused, of, m, plan,
-      outcome, vendorRequests, modelStages: trace.model_stages };
+      outcome, providerLedger: [...providerLedger] as Json[], vendorRequests, modelStages: trace.model_stages };
   } catch (e) {
     trace.errors.push(String(e));
     throw e;
