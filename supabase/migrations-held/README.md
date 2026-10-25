@@ -159,6 +159,17 @@ the two-session race; `mutation.sh` proves it fails without the migration,
 without the lock, and without the plan-workspace comparison. Rollback:
 `rollback/20261025130000_tasks_commit_boundary.down.sql` (round trip verified: rolled back equals never applied, privileges included). Before applying on a hosted project, run `scripts/test-project/tasks-commit-boundary-preflight.sql` (read-only); it must end in `OK`.
 
+
+## `20261025150000_task_plans_parent_identity.sql`
+
+**Not approved for any hosted project.** This is the parent side of `20261025130000` and closes Codex's PLAN-PARENT finding. For application roles:
+- a plan's `id` and `workspace_id` are fixed once it exists (`42501`). No application code changes them; every writer updates status only.
+- a deleted plan's id cannot be re-created in another workspace while tasks still point at it (`23503`). `tasks.plan_id` has no foreign key, so it can outlive its plan.
+
+A plan is never moved, so a task is never left under a foreign plan or silently re-homed. Status writes, new plans and administrative SQL are unchanged.
+
+- **Proof:** `tests/db-contract/taskPlanParentIdentity.contract.test.ts`. Codex's `task-parent-membership-audit.test.ts` PLAN-PARENT case passes unchanged. `mutation.sh` covers it with the migration omitted, the workspace comparison removed and the re-creation check removed.
+- **Rollback:** `rollback/20261025150000_task_plans_parent_identity.down.sql`.
 ## `20261015120000_provider_purchase_claims.sql`
 
 **PROPOSED — NOT APPLIED, NOT WIRED, NOT APPROVED.** One buyer per provider-call

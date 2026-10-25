@@ -4,6 +4,7 @@
 // expansion to guarantee depth. Tool availability is annotated, never faked.
 
 import { type GuardDb, legacyExecutionGuard, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
+import { bindEffectPrincipal, type EffectPrincipalDb, installEffectFence, withEffectScope } from "../_shared/effectFence.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -591,7 +592,13 @@ function stripFences(s: string): string {
 
 // ---------- Main handler ----------
 
+// Every new model/provider operation re-checks the principal (effectFence.ts, EXEC-EFFECT).
+installEffectFence();
+
 async function handleOrchestrate(req: Request): Promise<Response> {
+  // One effect scope per request (effectFence.ts); the guard below binds its principal.
+  const scoped = withEffectScope(req, () => handleOrchestrate(req));
+  if (scoped) return scoped;
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
@@ -769,6 +776,8 @@ async function handleOrchestrate(req: Request): Promise<Response> {
         console.error("[orchestrate][pre-effect-guard] refused", { workspace_id, code: guard.code, detail: guard.detail });
         return json({ error: guard.code, details: guard.detail }, guard.status);
       }
+      // Every later model call or dispatch re-checks this principal (EXEC-EFFECT).
+      bindEffectPrincipal({ db: admin as unknown as EffectPrincipalDb, workspaceId: workspace_id, userId });
     }
 
     // ── THE SAME START, AGAIN ────────────────────────────────────────────

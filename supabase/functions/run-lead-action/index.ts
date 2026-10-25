@@ -30,6 +30,7 @@
 // by the URL.
 
 import { type GuardDb, legacyExecutionGuard, referencedPlanId, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
+import { bindEffectPrincipal, effectScope, type EffectPrincipalDb, installEffectFence } from "../_shared/effectFence.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool } from "../_shared/toolRegistry.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
@@ -68,7 +69,10 @@ const cors = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
-Deno.serve(async (req) => {
+// Every new model/provider operation re-checks the principal (effectFence.ts, EXEC-EFFECT).
+installEffectFence();
+
+Deno.serve((req) => effectScope.run({ principal: null }, async () => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const supabase = createClient(
@@ -153,6 +157,11 @@ Deno.serve(async (req) => {
       console.error("[run-lead-action][pre-effect-guard] refused", { workspace_id, code: guard.code, detail: guard.detail });
       return json({ success: false, error: guard.code, detail: guard.detail }, guard.status);
     }
+    // Every later model call or purchase re-checks this principal (EXEC-EFFECT).
+    bindEffectPrincipal({
+      db: supabase as unknown as EffectPrincipalDb, workspaceId: workspace_id,
+      userId: (bearerIsServiceRole ? user_id : authenticatedUserId) as string,
+    });
   }
 
   // AGENT, SCOPED TO THE WORKSPACE. Unscoped, `scout` can resolve to another
@@ -271,4 +280,4 @@ Deno.serve(async (req) => {
       per_lead: failed,
     }, 500);
   }
-});
+}));
