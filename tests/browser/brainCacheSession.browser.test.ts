@@ -134,7 +134,8 @@ async function signUp(): Promise<{ id: string; session: string; email: string }>
 const ws1 = await seedWorkspace();
 const A = await signUp();
 const B = await signUp();
-await sql`insert into public.workspace_members (workspace_id, user_id, role) values (${ws1}, ${A.id}, 'owner'), (${ws1}, ${B.id}, 'editor')`;
+const OWNER = await signUp(); // manages grants; never signs in to the browser, so its session stays live
+await sql`insert into public.workspace_members (workspace_id, user_id, role) values (${ws1}, ${A.id}, 'owner'), (${ws1}, ${B.id}, 'editor'), (${ws1}, ${OWNER.id}, 'owner')`;
 await sql`insert into public.company_brain (workspace_id, profile, onboarding_completed) values (${ws1}, ${sql.json({ company: { name: "Agency Co" } } as never)}, true)`;
 const svc = await serviceClient();
 const created = await svc.rpc("client_account_create", { p_workspace_id: ws1, p_actor_id: A.id, p_session_id: A.session, p_name: CLIENT_NAME });
@@ -237,6 +238,41 @@ Deno.test("positive controls: same user keeps working — A signs back in, picks
   await shot("4-A-again");
   await signOut();
   assertEquals(pageErrors, [], "no uncaught page errors");
+});
+
+Deno.test("grant revoked while A is viewing the client: a save is refused, the page leaves the client, and after a reload its name is gone", opts, async () => {
+  await signIn(A.email);
+  await pickClient(CLIENT_NAME);
+  assert(await waitFor(`document.body.innerText.includes(${JSON.stringify(SECRET)})`), "A sees the client's Brain");
+  const revoked = await svc.rpc("client_access_revoke", { p_workspace_id: ws1, p_client_id: clientId, p_target_user_id: A.id, p_actor_id: OWNER.id, p_session_id: OWNER.session });
+  assertEquals((revoked.data as { outcome: string }[])[0].outcome, "ok");
+  // A tries to edit: open the editor and save — the server refuses; the page leaves the client.
+  assert(await click(`[...document.querySelectorAll('button')].find((b) => /Edit ICP|Edit section/.test(b.textContent ?? ''))`), "edit menu");
+  assert(await waitFor(`[...document.querySelectorAll('[role="menuitem"]')].length > 0`, 5000));
+  // Radix menus ignore a release right after opening, like the select: use the keyboard.
+  assert(await evaluate(`(() => { const m = [...document.querySelectorAll('[role="menuitem"]')].find((m) => /Company identity/.test(m.textContent ?? '')); if (!m) return false; m.focus(); return true; })()`));
+  for (const type of ["keyDown", "keyUp"]) await send("Input.dispatchKeyEvent", { type, key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  assert(await waitFor(`!!document.querySelector('[role="dialog"]')`, 5000), "editor open");
+  // A real edit (Save is enabled only for a change): type into the first field.
+  assert(await click(`document.querySelector('[role="dialog"] textarea, [role="dialog"] input[type="text"], [role="dialog"] input:not([type])')`), "a field");
+  await send("Input.insertText", { text: " edited after revoke" });
+  await sleep(300);
+  const saved = await click(`[...document.querySelectorAll('[role="dialog"] button')].find((b) => /^Save/.test((b.textContent ?? '').trim()))`);
+  assert(saved, "Save clicked");
+  {
+    const explained = await waitFor(`document.body.innerText.includes('You no longer have access to this client.')`, 10000);
+    await shot("5-A-after-revoke");
+    assert(explained, "the refusal is explained");
+    assert(await waitFor(`!document.body.innerText.includes(${JSON.stringify(SECRET)})`, 10000), "the client's Brain left the page");
+  }
+  await send("Page.reload");
+  assert(await waitFor(`!!document.querySelector('#signed-in') && !!document.querySelector('.brain-overview-page')`, 20000));
+  await sleep(1500);
+  const after = { page_shows_client_name: await bodyHas(CLIENT_NAME), page_shows_client_brain: await bodyHas(SECRET),
+    cache_holds_client_brain: await cacheHas(SECRET), switcher: await evaluate(`!!document.querySelector('[aria-label="Choose which Company Brain to view"]')`) };
+  console.log(JSON.stringify({ scenario: "grant_revoked_then_reload", save_attempted: saved, ...after }));
+  assertEquals(after, { page_shows_client_name: false, page_shows_client_brain: false, cache_holds_client_brain: false, switcher: false });
+  await signOut();
 });
 
 Deno.test("teardown", opts, async () => {
