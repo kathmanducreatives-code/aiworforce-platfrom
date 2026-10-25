@@ -300,6 +300,13 @@ export function gateVerdict(i) {
     if (required && r !== "success") problems.push(`${j}: required by the plan, ${r}`);
     if (!required && r !== "skipped" && r !== "success") problems.push(`${j}: not required, but ${r}`);
   }
+  // Real worker processes: required when the plan says so. A plan from before
+  // the job existed names no `realprocess`, and then the job is not judged.
+  if (out.realprocess !== undefined) {
+    const rp = res("realprocess");
+    if (out.realprocess === "true" && rp !== "success") problems.push(`realprocess: required by the plan, ${rp}`);
+    if (out.realprocess !== "true" && rp !== "skipped" && rp !== "success") problems.push(`realprocess: not required, but ${rp}`);
+  }
   if (level === 3 && !conditional.mutation) problems.push("level 3 without the mutation proofs");
   if (level >= 2 && out.contract_all !== "true") problems.push(`level ${level} without the complete database contract`);
   if (conditional.contract) {

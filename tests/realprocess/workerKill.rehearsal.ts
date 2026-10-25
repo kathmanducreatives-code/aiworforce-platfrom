@@ -1,7 +1,7 @@
 // REAL-PROCESS CRASH RECOVERY — two real `worker/main.ts` processes, a real
 // SIGKILL, real lease expiry and claim, against the contract lane's disposable
 // Postgres + PostgREST. Only OpenAI and Apify are scripted (vendorPreload.ts);
-// any other host is refused and reported. Opt-in, not part of CI:
+// any other host is refused and reported. CI runs it (the `realprocess` job):
 //
 //   PG_ADMIN_URL=… POSTGREST_BIN=… tests/realprocess/run.sh
 //
@@ -73,7 +73,7 @@ async function queueMission() {
 }
 
 interface Proc { child: Deno.ChildProcess; log: string; id: string; flushed: Promise<unknown> }
-function startWorker(label: string, ws: string, key: string, events: string, killAt: string | null): Proc {
+function startWorker(label: string, ws: string, key: string, events: string, killAt: string | null, extra: Record<string, string> = {}): Proc {
   const id = uuid();
   const log = Deno.makeTempFileSync({ prefix: `rehearsal-${label}-`, suffix: ".log" });
   const env: Record<string, string> = {
@@ -88,7 +88,7 @@ function startWorker(label: string, ws: string, key: string, events: string, kil
     MODEL_SPEND_CEILING_USD: "0.05", MODEL_SPEND_PERIOD_DAYS: "1", MODEL_RUN_MAX_CALLS: "2",
     LEAD_V2_MISSION_PROVIDER_USD_CAP: "0.20", LEAD_V2_MISSION_CREDIT_CAP: "5", LEAD_WORKER_MAX_RUNTIME_MS: "150000",
     LEAD_MAX_AUTO_CONTINUATIONS: "1", LEAD_V2_SMOKE_ORCHESTRATION: "minimal", EVIDENCE_ENRICHMENT: "off",
-    REHEARSAL_EVENTS: events, REHEARSAL_SCENARIO: "{}", ...(killAt ? { REHEARSAL_KILL_AT: killAt } : {}),
+    REHEARSAL_EVENTS: events, REHEARSAL_SCENARIO: "{}", ...(killAt ? { REHEARSAL_KILL_AT: killAt } : {}), ...extra,
     PATH: Deno.env.get("PATH") ?? "", HOME: Deno.env.get("HOME") ?? "", DENO_DIR: Deno.env.get("DENO_DIR") ?? `${Deno.env.get("HOME")}/.cache/deno`,
   };
   const file = Deno.openSync(log, { write: true, append: true });
@@ -210,6 +210,58 @@ Deno.test("real process (PR #150 control): SIGKILL at the first status read, run
   assertEquals(r.summary.adopted_by_gate, 0, "nothing reached the gate: the ledger named the run");
   assert(r.summary.adopted_from_ledger >= 1, "adopted from the ledger");
   await recoveredOnce(r);
+});
+
+// ── AN OPERATOR STOP MID-MISSION (the TEST runbook's abort) ────────────────
+//
+// A real worker has bought the job search and is reading its status when the
+// operator runs `stop_discovery_smoke`. From then on nothing is bought and no
+// model call is sent; the mission still ends on its own and its credits settle.
+Deno.test("real process: an operator stop mid-mission — nothing bought or sent after it, the mission ends, credits settle", opts, async () => {
+  const key = await mintJwt("service_role");
+  await reconcilePriorLiability();
+  const m = await queueMission();
+  const events = Deno.makeTempFileSync({ prefix: "rehearsal-stop-", suffix: ".jsonl" });
+  const w = startWorker("stop", m.ws, key, events, null, { REHEARSAL_PAUSE_AT: "jobs_status" });
+  await waitFor("the pause point", 120_000, async () => readEvents(events).some((e) => e.type === "pause_point") ? true : null);
+  const stoppedAt = Date.now();
+  const [{ stopped }] = await sql`select public.stop_discovery_smoke(${m.queueId}, 'operator stop') as stopped`;
+  assertEquals(stopped, true, "the stop found the active authorization");
+  Deno.writeTextFileSync(`${events}.release`, "");
+  const final = await waitFor("the stopped mission to end", 240_000, async () => {
+    const [q] = await sql`select status, task_id from public.lead_mission_queue where id = ${m.queueId}`;
+    return ["complete", "failed", "cancelled"].includes(q.status) ? q : null;
+  });
+  w.child.kill("SIGTERM");
+  await w.child.status;
+  await w.flushed;
+  const log = Deno.readTextFileSync(w.log);
+  const ev = readEvents(events);
+  const after = ev.filter((e) => e.type === "vendor" && e.at > stoppedAt);
+  const [task] = await sql`select status, result->>'terminal_status' as terminal from public.tasks where id = ${final.task_id}`;
+  const credits = await sql`select idempotency_key, status, actual_credits from public.credit_transactions where workspace_id = ${m.ws} order by created_at`;
+  const [bal] = await sql`select balance_credits, reserved_credits from public.workspace_credit_balances where workspace_id = ${m.ws}`;
+  const ops = await sql`select kind, actor from public.discovery_smoke_operations where authorization_id = ${m.authorizationId} order by admitted_at`;
+  const [auth] = await sql`select status, stop_reason from public.discovery_smoke_authorizations where id = ${m.authorizationId}`;
+  const summary = {
+    queue: final.status, task: task?.status, terminal: task?.terminal, auth: [auth.status, auth.stop_reason],
+    after: after.map((e) => `${e.method} ${e.host}${e.path}`), forbidden: ev.filter((e) => e.type === "forbidden"),
+    credits: credits.map((c) => [String(c.idempotency_key).split(":")[1], c.status, c.actual_credits]),
+    balance: [bal.balance_credits, bal.reserved_credits], ops: ops.map((o) => [o.kind, o.actor]),
+    refused_by_gate: (log.match(/\[smoke-admission\] refused/g) ?? []).length, log: w.log,
+  };
+  console.log("REHEARSAL_STOP", JSON.stringify(summary));
+  assertEquals(summary.forbidden, [], "no forbidden external call");
+  assertEquals(after.filter((e) => e.method === "POST"), [], "no purchase and no model call after the stop");
+  assertEquals(ev.filter((e) => e.type === "vendor" && e.method === "POST" && String(e.path).includes("linkedin-company")).length, 0,
+    "the second actor is never bought");
+  assert(summary.refused_by_gate >= 1, "the worker's next call was refused by the gate, not merely not made");
+  assertEquals(summary.ops.filter((o) => o[0] === "provider").map((o) => o[1]), [JOBS], "only the pre-stop purchase was admitted");
+  assertEquals(summary.credits.map((c) => [c[1], c[2]]), [["charged", 1]], "the pre-stop purchase is charged once; nothing else reserved");
+  assertEquals(summary.balance, [9, 0], "no credit left held after the stop");
+  assertEquals([auth.status, auth.stop_reason], ["stopped", "operator stop"], "the stop is final");
+  assertEquals((await sql`select status from public.tasks where id = ${final.task_id}`)[0].status, "complete", "the task reached a terminal state");
+  await reconcilePriorLiability();
 });
 
 // ── THE ZERO-APIFY REAL-GPT PROCEDURE, END TO END (model scripted) ─────────
