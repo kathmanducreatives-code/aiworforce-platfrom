@@ -10,6 +10,11 @@
 //       --workspace <uuid> --user <uuid> --pricing-version <v> \
 //       --jobs-max <µ$> --details-max <µ$> --observed-at <ISO> --price-source "<where>"
 //
+// DRY RUN (TEST acceptance step 2, no model call at all): pass
+// `--proposal docs/launch/proposals/a7-reviewed-mission-proposal.json` instead
+// of OPENAI_API_KEY. The reviewed proposal is compiled offline; nothing is sent
+// and the compile ledger is empty.
+//
 // Writes <out>/kickoff.sql (the one transaction to review and run),
 // <out>/kickoff.json (body, compiled mission, ledger rows, authorization) and
 // <out>/interpretation.txt (I1–I8). Exits 1 if any interpretation check fails:
@@ -19,17 +24,19 @@ import { buildMissionCompilerBinding } from "../../../supabase/functions/_shared
 import { lunaOnlyFetch, prepareKickoff } from "./prepareKickoff.ts";
 
 const a = parseArgs(Deno.args, {
-  string: ["approved-by", "out", "workspace", "user", "pricing-version", "jobs-max", "details-max", "observed-at", "price-source", "queue", "plan"],
+  string: ["approved-by", "out", "workspace", "user", "pricing-version", "jobs-max", "details-max", "observed-at", "price-source", "queue", "plan", "proposal"],
 });
 const need = (k: string) => { const v = a[k]; if (!v) { console.error(`--${k} is required`); Deno.exit(2); } return String(v); };
 need("approved-by");
 const out = need("out");
-if (!Deno.env.get("OPENAI_API_KEY")) { console.error("OPENAI_API_KEY (the TEST project's key) is required"); Deno.exit(2); }
+const proposalFile = a.proposal ? String(a.proposal) : null;
+if (!proposalFile && !Deno.env.get("OPENAI_API_KEY")) { console.error("OPENAI_API_KEY (the TEST project's key) is required, or --proposal for a dry run"); Deno.exit(2); }
 const workspaceId = need("workspace");
 const catalog = JSON.parse(Deno.readTextFileSync(new URL("../../../docs/launch/proposals/smoke-catalog-two-actor.json", import.meta.url))).approved_quotes;
 
 // Luna only, ≤ 2 calls, the Luna template's bounds: refused before sending otherwise.
-const gate = lunaOnlyFetch(globalThis.fetch.bind(globalThis));
+// A dry run allows ZERO calls: the gate refuses anything at all.
+const gate = lunaOnlyFetch(globalThis.fetch.bind(globalThis), proposalFile ? { maxCalls: 0 } : {});
 globalThis.fetch = gate.fetch;
 const k = await prepareKickoff({
   workspace_id: workspaceId, user_id: need("user"),
@@ -37,8 +44,10 @@ const k = await prepareKickoff({
   pricing_version: need("pricing-version"), catalog,
   prices: { jobs_maximum_microusd: Number(need("jobs-max")), details_maximum_microusd: Number(need("details-max")),
     observed_at: need("observed-at"), source: need("price-source") },
-  compile: (mission, onModelCall) =>
-    buildMissionCompilerBinding({ workspaceId, onModelCall }).proposeMission!({ originalUserQuery: mission, requestedCount: 1 }),
+  compile: proposalFile
+    ? () => Promise.resolve(JSON.parse(Deno.readTextFileSync(proposalFile)))
+    : (mission, onModelCall) =>
+      buildMissionCompilerBinding({ workspaceId, onModelCall }).proposeMission!({ originalUserQuery: mission, requestedCount: 1 }),
 });
 console.log(`compile gate: ${gate.sent.length} request(s) sent ${JSON.stringify(gate.sent)}; refused ${JSON.stringify(gate.refused)}`);
 Deno.mkdirSync(out, { recursive: true });
