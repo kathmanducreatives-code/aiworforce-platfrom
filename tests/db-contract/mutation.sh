@@ -84,8 +84,13 @@ plan_ts="$root/supabase/functions/_shared/smokeAdmissionRefusal.ts"
 planner_ts="$root/supabase/functions/_shared/gptExecutionPlanner.ts"
 brain_writer_sql="$root/supabase/migrations/20261024120000_company_brain_authorized_writer.sql"
 client_sql="$root/supabase/migrations-held/20261024160000_client_company_brain.sql"
+autosave_ts="$root/src/lib/onboardingAutosave.ts"
+brain_draft_ts="$root/supabase/functions/generate-company-brain-draft/index.ts"
+client_save_ts="$root/supabase/functions/_shared/clientBrainSave.ts"
+brain_scope_ts="$root/src/lib/brainScope.ts"
+client_api_ts="$root/src/lib/clientBrainApi.ts"
 restore_list=()
-for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$client_sql"; do
+for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts" "$brain_scope_ts" "$client_api_ts"; do
   cp "$f" "$f.mutation-backup"; restore_list+=("$f")
 done
 trap 'cp "$backup" "$real"; for f in "${restore_list[@]}"; do mv -f "$f.mutation-backup" "$f"; done; rm -f "$backup" "$out"' EXIT
@@ -426,6 +431,51 @@ prove_killed "client rule: a viewer edits" "$client_sql" \
 prove_killed "client RLS: every member enumerates every client (O1)" "$client_sql" \
   "  using (status = 'active' and public.client_access_is_active(workspace_id, id));" "  using (true);" \
   "$client_tests" "2. a user granted only client A reads and edits A, and can neither read, write nor list B"
+
+# End-to-end autosave (actual handler + page logic): the guards the E2E tests rely on.
+e2e_tests="$root/tests/db-contract/brainAutosaveEndToEnd.contract.test.ts"
+prove_killed "autosave: a stale answer without the server's copy is merged against nothing (typed text blanked)" "$autosave_ts" \
+  "  if (r.kind === 'stale' && (r.serverProfile === null || r.serverProfile === undefined)) {" \
+  "  if (false) {" \
+  "$e2e_tests" "4. two users autosave the same agency Brain from one version: no edit is lost, both orderings"
+prove_killed "handler: client Brains served while switched off" "$brain_draft_ts" \
+  '    if (!clientBrainsEnabled((k) => Deno.env.get(k))) return json({ error: "client_brains_disabled" }, 409);' "" \
+  "$e2e_tests" "switched off: a client request is refused before any Brain access — never served from the agency Brain"
+prove_killed "handler: the request's client is ignored (a client save lands on the agency Brain)" "$brain_draft_ts" \
+  "  const brainScope = resolveBrainScope(body);" "  const brainScope = resolveBrainScope({});" \
+  "$e2e_tests" "2. a user edits and autosaves an AUTHORIZED CLIENT Brain: first insert, then CAS on its version; the agency Brain is untouched"
+prove_killed "client save: the version the page built on is not checked (a stale save overwrites)" "$client_save_ts" \
+  "  if (expected !== currentVersion) {" "  if (false) {" \
+  "$e2e_tests" "6. a stale autosave is rejected without a write and without losing the user's unsaved text"
+prove_killed "switcher: the client list is served while client Brains are switched off" "$brain_draft_ts" \
+  '  if (action === "list_clients") {
+    if (!clientBrainsEnabled((k) => Deno.env.get(k))) return json({ error: "client_brains_disabled" }, 409);' \
+  '  if (action === "list_clients") {' \
+  "$e2e_tests" "9. the switcher lists exactly the user's active granted clients — and drops one the moment access ends"
+prove_killed "switcher: a selected client stays shown after it is no longer listed" "$brain_scope_ts" \
+  "  return listed.some((c) => c.clientId === requested) ? (clientScope(requested) ?? AGENCY_SCOPE) : AGENCY_SCOPE;" \
+  "  return clientScope(requested) ?? AGENCY_SCOPE;" \
+  "$e2e_tests" "9. the switcher lists exactly the user's active granted clients — and drops one the moment access ends"
+prove_killed "page: a Brain answer for another client is accepted" "$client_api_ts" \
+  "  if (body?.ok === true && body.client_id === clientId) {" "  if (body?.ok === true) {" \
+  "$e2e_tests" "11. switching agency → A → B → agency: each read shows only that Brain; nothing from one is shown or saved as another"
+# The #168 ↔ #169/#176 merge: each way the resolution can lose a protection.
+prove_killed "merge kept #168's side: writeBrain writes the table directly (no AUTH-06 re-check)" "$brain_draft_ts" \
+  '      const writeBrain = (w: { permission: "edit" | "activate"; profile: AnyObj; activate?: boolean }) =>
+        authorizedBrainWrite(admin, {' \
+  '      const writeBrain = async (w: { permission: "edit" | "activate"; profile: AnyObj; activate?: boolean }) => {
+        const { data } = await admin.from("company_brain").upsert({ workspace_id, profile: w.profile, updated_at: new Date().toISOString(), ...(w.activate ? { onboarding_completed: true } : {}) }, { onConflict: "workspace_id" }).select("updated_at");
+        return { outcome: "ok" as "ok" | "stale" | "not_member" | "forbidden_role" | "session_invalid", updated_at: (data?.[0] as { updated_at?: string } | undefined)?.updated_at ?? null };
+      };
+      const _authorizedUnused = (w: { permission: "edit" | "activate"; profile: AnyObj; activate?: boolean }) =>
+        authorizedBrainWrite(admin, {' \
+  "$e2e_tests" "12. activation goes through the AUTH-06 writer: an admin demoted in flight is refused and nothing activates; an owner's activation lands and ends onboarding progress"
+prove_killed "merge dropped the in-transaction version check (every save an upsert)" "$brain_draft_ts" \
+  '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "insert",' '          mode: "upsert",' \
+  "$e2e_tests" "14. a versioned activation that loses the race at the write is stale: nothing written, nothing activated"
+prove_killed "a versioned first save upserts over a Brain another device created" "$brain_draft_ts" \
+  '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "insert",' '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "upsert",' \
+  "$e2e_tests" "15. a versioned first save never overwrites a Brain another device created in flight"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"

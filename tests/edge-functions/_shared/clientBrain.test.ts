@@ -150,17 +150,39 @@ Deno.test("I2 (source): the client helper never names the agency Brain, and the 
   }
 });
 
-Deno.test("held (source): the client RPCs are called only from _shared/clientBrain.ts, and no deployed handler imports it yet", () => {
+const CLIENT_RPCS = [
+  "client_brain_authorization", "client_brain_read", "client_brain_pin", "client_brain_authorized_write",
+  "client_account_create", "client_account_archive", "client_access_grant", "client_access_revoke",
+  "client_account_manage_list", "client_accounts_for_actor", "client_admin_authorization",
+];
+Deno.test("held (source): the client RPCs are called only from _shared/clientBrain.ts; only the Brain handlers use it, behind the switch", () => {
   const callers: string[] = [];
   const importers: string[] = [];
   for (const f of walk(new URL("supabase/functions/", ROOT))) {
     const src = Deno.readTextFileSync(f);
     const rel = f.slice(f.indexOf("supabase/functions/"));
-    if (/["'](client_brain_[a-z_]+|client_access_(grant|revoke)|client_account_[a-z_]+|client_accounts_for_actor)["']/.test(src)) callers.push(rel);
+    // A CALL of one of the held client functions (a field named client_account_id,
+    // e.g. in Backend's pre-effect guard, is not one).
+    if (CLIENT_RPCS.some((fn) => new RegExp(`\\.rpc\\(\\s*["']${fn}["']`).test(src))) callers.push(rel);
     if (/from\s+["'][^"']*clientBrain(\.ts)?["']/.test(src)) importers.push(rel);
     assert(!/\.from\(\s*["'](client_company_brain|client_access_grants|client_accounts)["']\s*\)[\s\S]{0,160}\.(insert|update|upsert|delete)\(/.test(src),
       `${rel} writes a client table directly`);
   }
   assertEquals(callers, ["supabase/functions/_shared/clientBrain.ts"]);
-  assertEquals(importers, [], "switched off: no handler uses client Brains until Phase 3c is approved");
+  assertEquals(importers.sort(), [
+    "supabase/functions/_shared/clientBrainSave.ts",
+    "supabase/functions/generate-company-brain-draft/index.ts",
+    "supabase/functions/setup-company-brain/index.ts",
+  ]);
+  // generate-company-brain-draft: a client request is refused unless the switch
+  // is on, and it is resolved before any provider/model dependency is built.
+  const gen = read("supabase/functions/generate-company-brain-draft/index.ts");
+  const at = (needle: string) => { const i = gen.indexOf(needle); assert(i > 0, needle); return i; };
+  assert(at("const brainScope = resolveBrainScope(body);") > at("if (!canBrain(role, required))"), "after the role gate");
+  assert(at('if (!clientBrainsEnabled((k) => Deno.env.get(k))) return json({ error: "client_brains_disabled" }, 409);') < at("handleClientBrainAction({"));
+  assert(at("handleClientBrainAction({") < at("const { deps, apifyReady, firecrawlReady, llmReady, providerMode } = buildDeps();"), "before any provider dependency");
+  // setup-company-brain: the wizard never serves a client scope.
+  const setup = read("supabase/functions/setup-company-brain/index.ts");
+  assert(/if \(brainScope\.scope\.kind === "client"\) return json\(\{ error: "client_scope_not_supported", action \}, 400\);/.test(setup));
+  assert(!setup.includes("handleClientBrainAction"), "setup has no client path");
 });

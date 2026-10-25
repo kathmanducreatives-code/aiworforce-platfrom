@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ArrowUpRight, Brain, ChevronDown, Pencil, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -11,11 +12,16 @@ interface Props {
   activatedAt: string | null;
   saved: SectionKey | null;
   onEdit: (section: SectionKey) => void;
-  onRestart: () => void;
+  /** Re-run onboarding. Absent for a client Brain (onboarding is the agency's). */
+  onRestart?: () => void;
+  /** The Brain switcher (agency ↔ clients), when the user has a choice. */
+  scopeSwitcher?: ReactNode;
+  /** Set when this is a client's Brain. */
+  clientName?: string | null;
 }
 const clean = (values: string[]) => [...new Set(values.map(v => v.trim()).filter(Boolean))];
 
-export function BrainOverview({ brain, active, activatedAt, saved, onEdit, onRestart }: Props) {
+export function BrainOverview({ brain, active, activatedAt, saved, onEdit, onRestart, scopeSwitcher, clientName }: Props) {
   const health = deriveHealth(brain);
   const configured = FLOW_SECTIONS.filter(s => health[s.drawerKey] === 'configured').length;
   const t = brain.target_customer;
@@ -34,21 +40,22 @@ export function BrainOverview({ brain, active, activatedAt, saved, onEdit, onRes
   };
   return <>
     <header className="brain-overview-header">
-      <div><p className="text-[10px] font-medium uppercase tracking-[.18em] text-primary">Company Brain</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Your go-to-market intelligence system</h1>
-        <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">Turn your company knowledge into focused outreach, better qualification, and higher-converting conversations.</p>
+      <div>{scopeSwitcher && <div className="mb-3">{scopeSwitcher}</div>}
+        <p className="text-[10px] font-medium uppercase tracking-[.18em] text-primary">{clientName ? 'Client Brain' : 'Company Brain'}</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{clientName ? <>{clientName}<span className="text-muted-foreground/60">’s go-to-market intelligence</span></> : 'Your go-to-market intelligence system'}</h1>
+        <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">{clientName ? 'Everything here applies to this client only — its targeting, buyers, signals and voice. It never mixes with your company or other clients.' : 'Turn your company knowledge into focused outreach, better qualification, and higher-converting conversations.'}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" className="gap-2"><Pencil size={14} />Edit ICP<ChevronDown size={14} /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => onEdit('company')}>Company identity</DropdownMenuItem>{FLOW_SECTIONS.map(s => <DropdownMenuItem key={s.drawerKey} onSelect={() => onEdit(s.drawerKey)}>{s.number} · {s.title}</DropdownMenuItem>)}</DropdownMenuContent>
         </DropdownMenu>
-        <Button size="sm" variant="outline" onClick={onRestart} className="gap-2"><RotateCcw size={14} />Refresh</Button>
+        {onRestart && <Button size="sm" variant="outline" onClick={onRestart} className="gap-2"><RotateCcw size={14} />Refresh</Button>}
       </div>
     </header>
     <div className="brain-overview-grid">
       <section className="brain-overview-core brain-overview-card" aria-label="Company Brain overview">
-        <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium">Company Brain</span><span className={`brain-overview-status ${active ? 'is-configured' : ''}`}>{active ? 'Active' : 'Setup needed'}</span></div>
-        <div className="my-4 flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/5 text-primary"><Brain size={19} /></span><button onClick={() => onEdit('company')} className="truncate text-sm font-medium text-foreground/85 hover:text-primary" title="Edit company identity">{brain.company.name || 'Add your company'} <ArrowUpRight className="inline h-3 w-3" /></button></div>
+        <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium">{clientName ? 'Client Brain' : 'Company Brain'}</span><span className={`brain-overview-status ${active ? 'is-configured' : ''}`}>{active ? 'Active' : 'Setup needed'}</span></div>
+        <div className="my-4 flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/5 text-primary"><Brain size={19} /></span><button onClick={() => onEdit('company')} className="truncate text-sm font-medium text-foreground/85 hover:text-primary" title="Edit company identity">{brain.company.name || (clientName ? 'Add the client’s company' : 'Add your company')} <ArrowUpRight className="inline h-3 w-3" /></button></div>
         <h2 className="text-lg font-semibold tracking-tight">All the pieces work together</h2>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Your company knowledge powers every outreach, signal, qualification decision, and interaction across Agentory.</p>
         <div className="mt-auto grid grid-cols-2 gap-3 border-t border-foreground/[.07] pt-3">

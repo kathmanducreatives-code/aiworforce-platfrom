@@ -42,6 +42,8 @@ interface Props {
   onSave: (patch: BrainProfile) => Promise<void> | void;
   /** Server version this edit started from, for background-update detection. */
   serverUpdatedAt?: string | null;
+  /** The client whose Brain this is (Phase 3c); absent = the agency Brain. Drafts are kept per Brain. */
+  clientId?: string | null;
 }
 
 const SECTION_ORDER: SectionKey[] = ['company', 'targeting', 'buyers', 'signals', 'disqualifiers', 'messaging'];
@@ -62,7 +64,7 @@ const TITLES: Record<SectionKey, {
   messaging:     { eyebrow: 'COMPANY BRAIN', title: 'Edit Messaging & Positioning', short: 'Messaging Fit', description: 'How Agentory should sound on your behalf.', influences: 'Shapes outreach drafts, content, and brand voice.', icon: Megaphone },
 };
 
-export default function CompanyBrainEditDrawer({ open, section, brain, onOpenChange, onSave, serverUpdatedAt }: Props) {
+export default function CompanyBrainEditDrawer({ open, section, brain, onOpenChange, onSave, serverUpdatedAt, clientId = null }: Props) {
   const reduce = useReducedMotion();
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -83,7 +85,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   const [confirmClose, setConfirmClose] = useState(false);
   // Drafts are keyed on the section actually being edited, which the in-drawer
   // navigator can change independently of the `section` prop.
-  const scope = { userId, workspaceId, sectionId: activeSection };
+  const scope = { userId, workspaceId, sectionId: activeSection, clientId };
 
   // Newest `brain` reachable WITHOUT making it an effect dependency.
   const brainRef = useRef(brain);
@@ -97,7 +99,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   useEffect(() => {
     if (!open || !activeSection) return;
     const serverValues = initialFor(activeSection, brainRef.current);
-    const draft = loadDraft({ userId, workspaceId, sectionId: activeSection });
+    const draft = loadDraft({ userId, workspaceId, sectionId: activeSection, clientId });
 
     if (draft && draft.dirty) {
       // The user's own unsaved work outranks the server copy.
@@ -113,7 +115,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
     setBackgroundUpdate(false);
     setSaved(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, activeSection, workspaceId, userId]);
+  }, [open, activeSection, workspaceId, userId, clientId]);
 
   const dirty = useMemo(() => {
     if (!state) return false;
@@ -141,7 +143,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
       if (dirty) {
         saveDraft({
           schemaVersion: DRAFT_SCHEMA_VERSION,
-          userId, workspaceId, sectionId: activeSection,
+          userId, workspaceId, sectionId: activeSection, clientId,
           brainVersion: serverUpdatedAt ?? null,
           values: state as SectionDraftValues,
           dirty: true,
@@ -158,7 +160,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
     }, DRAFT_DEBOUNCE_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, dirty, open, activeSection, userId, workspaceId, serverUpdatedAt]);
+  }, [state, dirty, open, activeSection, userId, workspaceId, serverUpdatedAt, clientId]);
 
   // Native reload/close warning ONLY while there is unsaved work.
   useEffect(() => {

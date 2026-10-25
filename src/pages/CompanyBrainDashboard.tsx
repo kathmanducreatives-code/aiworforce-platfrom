@@ -1,9 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
+import { useBrainScope } from '@/hooks/useBrainScope';
+import { BrainScopeSwitcher } from '@/components/company-brain/BrainScopeSwitcher';
+import { saveClientBrainPatch } from '@/lib/brainInvoke';
+import { DENIAL_TEXT } from '@/lib/clientBrainApi';
+import { brainScopeKey } from '@/lib/brainScope';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 import { BrainOverview } from '@/components/company-brain/BrainOverview';
@@ -19,10 +24,33 @@ import { type SectionKey } from '@/lib/companyBrainSections';
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
   const { workspaceId } = useWorkspace();
-  const { data, loading, isRefreshing, error, refresh } = useCompanyBrain();
+  // Which Brain: the agency's own, or a client's (Phase 3c, held — off unless
+  // VITE_CLIENT_BRAINS is set). Uncertain → the agency Brain.
+  const brainScope = useBrainScope();
+  const scope = brainScope.scope;
+  const { data, loading, isRefreshing, error, denied, refresh } = useCompanyBrain(scope);
   const [openSection, setOpenSection] = useState<DrawerSectionKey | null>(null);
   const [restartOpen, setRestartOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState<SectionKey | null>(null);
+
+  // Access to the selected client went away (revoked, archived, signed out):
+  // say so and return to the agency Brain. Nothing from that client stays on screen.
+  const { accessChanged } = brainScope;
+  useEffect(() => {
+    if (scope.kind === 'client' && denied) {
+      toast.error(DENIAL_TEXT[denied]);
+      accessChanged();
+    }
+  }, [scope, denied, accessChanged]);
+  // A half-finished edit belongs to the Brain it was opened on.
+  const scopeId = scope.kind === 'client' ? scope.clientId : null;
+  // Which Brain, for which signed-in session: a save answered after a switch of
+  // client, workspace or user is not applied to what is now on screen.
+  const { principal } = useWorkspace();
+  const identity = workspaceId && principal ? brainScopeKey(workspaceId, scope, principal) : null;
+  const currentIdentity = useRef(identity);
+  currentIdentity.current = identity;
+  useEffect(() => { setOpenSection(null); }, [scopeId, workspaceId]);
 
   const view = useMemo(() => toSavedBrainView(data?.profile as BrainProfile | undefined), [data?.profile]);
   const { brain, raw } = view;
@@ -39,7 +67,16 @@ export default function CompanyBrainDashboard() {
   // the version this page loaded. A failure throws so the editor keeps the edit.
   async function saveSection(section: SectionKey, patch: BrainProfile) {
     if (!workspaceId) { toast.error('No workspace'); throw new Error('no_workspace'); }
-    const result = await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: data?.updated_at ?? null });
+    const savedFor = currentIdentity.current;
+    const result = scope.kind === 'client'
+      ? await saveClientBrainPatch({ workspaceId, scope, patch, expectedVersion: data?.version ?? null })
+      : await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: data?.updated_at ?? null });
+    if (currentIdentity.current !== savedFor) throw new Error('switched');
+    if (!result.ok && 'denied' in result && result.denied) {
+      toast.error(result.message ?? 'Access changed');
+      accessChanged();
+      throw new Error('denied');
+    }
     if (!result.ok) {
       toast.error(result.conflict ? 'Company Brain was changed elsewhere' : 'Save failed', { description: result.message });
       if (result.conflict) refresh();
@@ -98,7 +135,10 @@ export default function CompanyBrainDashboard() {
         )}
 
         {error && <div role="alert" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 p-4 text-sm"><span>Company Brain could not refresh. Please try again.</span><Button size="sm" variant="outline" onClick={() => refresh()}>Retry</Button></div>}
-        {(!error || data) && <BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} onEdit={setOpenSection} onRestart={() => setRestartOpen(true)} />}
+        {(!error || data) && <BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} onEdit={setOpenSection}
+          onRestart={scope.kind === 'agency' ? () => setRestartOpen(true) : undefined}
+          clientName={brainScope.currentClient?.name ?? null}
+          scopeSwitcher={brainScope.available ? <BrainScopeSwitcher scope={scope} clients={brainScope.clients} onSelect={brainScope.select} disabled={openSection !== null} /> : undefined} />}
       </div>
 
       <CompanyBrainEditDrawer
@@ -107,7 +147,8 @@ export default function CompanyBrainDashboard() {
         brain={brain}
         onOpenChange={(v) => { if (!v) setOpenSection(null); }}
         onSave={(patch) => saveSection(openSection as SectionKey, patch)}
-        serverUpdatedAt={data?.updated_at ?? null}
+        clientId={scopeId}
+        serverUpdatedAt={scope.kind === 'client' ? (data?.version == null ? null : String(data.version)) : (data?.updated_at ?? null)}
       />
 
       <RestartOnboardingModal

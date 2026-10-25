@@ -193,6 +193,23 @@ export async function clientBrainContextForScope(
   return { outcome: "ok", scope: "client", clientId: scope.clientId, version: r.brain.version, profile: r.brain.profile ?? {} };
 }
 
+/**
+ * The client switcher's list: only the ACTIVE clients this actor holds an
+ * active grant for, on a live session (client_accounts_for_actor). Ids and
+ * names only — never grant ids, other clients or a reason. Empty when the
+ * session or membership is gone.
+ */
+export async function listClientsForActor(admin: Admin, a: { workspaceId: string; actorId: string; sessionId: string | null }):
+  Promise<{ client_id: string; name: string }[]> {
+  if (!a.sessionId) return [];
+  const args = { p_workspace_id: a.workspaceId, p_actor_id: a.actorId, p_session_id: a.sessionId };
+  const { data, error } = await admin.rpc("client_accounts_for_actor", args, { get: true });
+  if (error) throw error;
+  return ((data ?? []) as { client_id?: unknown; name?: unknown }[])
+    .filter((r) => typeof r.client_id === "string" && typeof r.name === "string")
+    .map((r) => ({ client_id: r.client_id as string, name: r.name as string }));
+}
+
 /** HTTP status and body for a refusal. Unknown and ungranted clients look the same (O1). */
 export function clientBrainRefusal(outcome: ClientBrainRefusal | "invalid_scope"): { status: number; body: Record<string, unknown> } {
   switch (outcome) {

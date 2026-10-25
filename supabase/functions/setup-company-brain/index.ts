@@ -4,6 +4,7 @@
 
 import { canBrain, normalizeWorkspaceRole } from "../_shared/brainRole.ts";
 import { authorizedBrainWrite, brainWriteRefusal, sessionIdFromBearer, type BrainWriteOutcome } from "../_shared/brainWriter.ts";
+import { clientBrainRefusal, resolveBrainScope } from "../_shared/clientBrain.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured, runTool } from "../_shared/toolRegistry.ts";
@@ -127,6 +128,11 @@ Deno.serve(async (req) => {
   // Every Brain write re-checks this caller's live session, membership and role
   // in the write's own transaction (_shared/brainWriter.ts, AUTH-06).
   const sessionId = sessionIdFromBearer(authHeader);
+  // Phase 3c (held): the setup wizard writes the agency Brain only. A request
+  // for a client is refused here — never written to the agency Brain.
+  const brainScope = resolveBrainScope(body);
+  if (!brainScope.ok) { const r = clientBrainRefusal(brainScope.outcome); return json(r.body, r.status); }
+  if (brainScope.scope.kind === "client") return json({ error: "client_scope_not_supported", action }, 400);
   class BrainWriteRefused extends Error {
     constructor(readonly outcome: Exclude<BrainWriteOutcome, "ok" | "stale">) { super(outcome); }
   }
