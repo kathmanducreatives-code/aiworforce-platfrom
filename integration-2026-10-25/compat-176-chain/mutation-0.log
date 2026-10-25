@@ -1,0 +1,50 @@
+own generation, open row: the write lands and is reported written ... FAILED (55ms)
+stale generation: refused as fenced, the newer row is untouched ... FAILED (7ms)
+finalized row: an open-row write is fenced even on its own generation ... FAILED (5ms)
+unknown generation: the open-row fence alone still protects a finalized row ... FAILED (5ms)
+an empty result and a result without terminal_status are open ... FAILED (6ms)
+a follow-up to the slice's own verdict writes on its finalized row; a stale one is fenced ... ok (19ms)
+a missing task is fenced, not an error ... FAILED (3ms)
+a database error is reported as an error, never as fenced or written ... ok (11ms)
+resolveSliceGeneration: the claim's version, else the row's own, else null ... ok (7ms)
+end to end: a newer claim's generation fences the older slice's write (the D1 scenario) ... FAILED (14ms)
+documents the 42703 the first D1 version hit: `or` + a representation fails in PostgREST ... ok (8ms)
+FAILED | 4 passed | 7 failed (169ms)
+mutant killed: reverting the D1 fix fails the fenced-write contract
+mutant killed: without the OWN-01 migration a contact stores another workspace's account
+mutant killed: OWN-01: preflight does not abort on an existing mismatch
+mutant killed: guard: run-agent ignores the refusal
+mutant killed: guard: a resume may change its principal
+mutant killed: clock read before the lock wait
+mutant killed: any task status admitted
+mutant killed: two smokes race past the recheck: admission lock removed
+mutant killed: one actor's reads exceed its share: database allocation removed
+mutant killed: an incomplete or oversized read allocation is authorized
+mutant killed: an above-quote reconciliation closes liability for authorization
+mutant killed: a nonterminal vendor status is accepted
+mutant killed: no lineage lease check
+mutant killed: no combined USD cap
+mutant killed: no poll limit
+mutant killed: gate passes requests with no mission
+mutant killed: smoke status read ignores the read reserve
+mutant killed: smoke start ignores the time left
+mutant killed: settled receipt not labelled
+mutant killed: legacy jobs actor keeps its customer shape in the smoke
+mutant killed: R3 remote media accepted
+mutant killed: R6 closure not rechecked
+mutant killed: R8 task row not fenced
+mutant killed: SAF-008 bodyless purchase skips mandatory fields
+mutant killed: wall clock: far-future queue timestamp accepted
+omitted supabase/migrations/20261023120000_company_brain_server_writes_only.sql (mutation proof)
+no member — viewer, editor, admin or owner — writes the Brain from the browser ... FAILED (71ms)
+no one creates a Brain for a workspace from the browser — member, outsider or anon ... FAILED (15ms)
+reads are unchanged: every member role reads its Brain; an outsider and anon read nothing ... ok (44ms)
+the backend path (service role) still writes, and provisioning still creates the Brain ... ok (29ms)
+FAILED | 2 passed | 2 failed (167ms)
+mutant killed: without the migration a viewer rewrites the Company Brain from the browser
+mutant killed: Brain writer: role not checked at the write
+mutant killed: client writer: no lock on the client or its grant (an archive overtakes the write)
+mutant killed: client rule: a task's pinned permission revision is not compared
+mutant killed: archive leaves the client's grants active
+mutant killed: client RLS: every member enumerates every client (O1)
+MUTATION_TALLY shard=0 shards=3 total=91 ran=31

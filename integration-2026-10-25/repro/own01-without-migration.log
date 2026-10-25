@@ -1,0 +1,178 @@
+applied tests/db-contract/sql/00_supabase_shim.sql
+applied supabase/migrations-held/20260816120000_baseline_schema.sql
+applied supabase/migrations/20260816180000_mcp_feed_views.sql
+applied supabase/migrations/20260821120000_execution_cost_provenance.sql
+applied supabase/migrations/20260822120000_model_call_ledger.sql
+applied supabase/migrations/20260822130000_credit_kind_provider_call.sql
+applied supabase/migrations/20260822140000_company_headcount_snapshots.sql
+applied supabase/migrations/20260824120000_signal_events_origin.sql
+applied supabase/migrations/20260824130000_signal_events_subject.sql
+applied supabase/migrations/20260824140000_monitoring_subjects.sql
+applied supabase/migrations/20260824180000_monitoring_runs.sql
+applied supabase/migrations/20260824190000_backfill_signal_event_feed_payload.sql
+applied supabase/migrations/20260825120000_monitoring_schedule.sql
+applied supabase/migrations/20260825130000_monitoring_call_kind.sql
+applied supabase/migrations/20260825140000_monitoring_cron.sql
+applied supabase/migrations/20260825150000_signal_cluster_relevance.sql
+applied supabase/migrations/20260825160000_relevance_cites_check_fix.sql
+applied supabase/migrations/20260825170000_canonical_dedupe_keys.sql
+applied supabase/migrations/20260826100000_sweep_stuck_runs.sql
+applied supabase/migrations/20260826170000_resume_stalled_leads_cron.sql
+applied supabase/migrations/20260827090000_request_understanding_log.sql
+applied supabase/migrations/20260828090000_messages_realtime_publication.sql
+applied supabase/migrations/20260828100000_request_understanding_log_read.sql
+applied supabase/migrations/20260829140000_lead_lineages.sql
+applied supabase/migrations/20260829150000_lead_lineages_backfill.sql
+applied supabase/migrations/20260829170000_hiring_evidence_unavailable_backfill.sql
+applied supabase/migrations/20260903090000_company_web_evidence.sql
+applied supabase/migrations/20260903120000_company_web_evidence_requirement.sql
+applied supabase/migrations/20260903130000_company_web_evidence_soft_404_correction.sql
+applied supabase/migrations/20260903160000_cancellation_row_fence.sql
+applied supabase/migrations/20260904120000_claim_fences_on_lineage_status.sql
+applied supabase/migrations/20260907090000_ops_archive_rls.sql
+applied supabase/migrations/20260907120000_drop_permissive_policies.sql
+applied supabase/migrations/20260907150000_drop_fake_token_policies.sql
+applied supabase/migrations/20260907170000_close_screening_scenarios.sql
+applied supabase/migrations/20260910120000_content_item.sql
+applied supabase/migrations/20260910130000_content_item_versioning.sql
+applied supabase/migrations/20260911120000_content_v1.sql
+applied supabase/migrations/20260911140000_content_asset.sql
+applied supabase/migrations/20260911150000_content_version_empty_draft.sql
+applied supabase/migrations/20260916120000_lead_v2_p2_execution_spine.sql
+applied supabase/migrations/20260917120000_signal_events_realtime_publication.sql
+applied supabase/migrations/20260929120000_lock_down_definer_rpcs.sql
+applied supabase/migrations/20260929130000_revoke_anon_writes_on_workspace_tables.sql
+applied supabase/migrations/20260929140000_beta_access_requests.sql
+applied supabase/migrations-held/20260910140000_lead_mission_v2_claim.sql
+applied supabase/migrations-held/20260915120000_sweep_skips_v2_queue_tasks.sql
+applied supabase/migrations-held/20261003120000_lead_mission_v2_continuations_not_retries.sql
+applied supabase/migrations-held/20261011120000_lead_mission_v2_productive_continuation_no_backoff.sql
+applied supabase/migrations-held/20261019120000_lead_mission_v2_exhausted_lease_terminal.sql
+applied supabase/migrations-held/20261015130000_credits_rearm_settled_key.sql
+applied supabase/migrations-held/20261015140000_discovery_smoke_admission.sql
+omitted 20261025120000_lead_graph_same_workspace_parents.sql (mutation proof)
+database ready
+postgrest PostgREST 12.2.3 on :39635, postgres 17.11 (Ubuntu 17.11-1.pgdg24.04+2)
+running 8 tests from ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts
+OWN-01: a member cannot store a contact under another workspace's account (raw INSERT) ... FAILED (58ms)
+OWN-01: a member cannot repoint an existing contact at another workspace's account (PATCH) ... FAILED (18ms)
+OWN-01: the service role (worker, edge functions) is refused the same mismatch ... FAILED (18ms)
+OWN-01: a foreign parent and a non-existent parent are refused alike (no existence oracle) ... FAILED (14ms)
+positive controls: own parent, no parent, embed, delete behaviour ... ok (38ms)
+CASCADE references still cascade, inside the workspace ... ok (14ms)
+catalog: all 26 lead-graph references are (workspace_id, col) → parent (workspace_id, id), one per pair ... FAILED (4ms)
+preflight: an existing mismatch aborts the migration and changes nothing ... FAILED (19ms)
+
+ ERRORS 
+
+OWN-01: a member cannot store a contact under another workspace's account (raw INSERT) => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:45:6
+error: AssertionError: refused: {"error":null,"data":[{"id":"0e2c2baa-71f2-4003-a676-d750373f6d7e"}],"count":null,"status":201,"statusText":"Created"}
+    throw new AssertionError(msg);
+          ^
+    at assert (https://deno.land/std@0.224.0/assert/assert.ts:18:11)
+    at file:///home/user/wt-own01/tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:52:3
+
+OWN-01: a member cannot repoint an existing contact at another workspace's account (PATCH) => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:57:6
+error: AssertionError: refused: {"error":null,"data":[{"id":"ffb30617-fc7c-49d9-80c5-851927ec3a99"}],"count":null,"status":200,"statusText":"OK"}
+    throw new AssertionError(msg);
+          ^
+    at assert (https://deno.land/std@0.224.0/assert/assert.ts:18:11)
+    at file:///home/user/wt-own01/tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:63:3
+
+OWN-01: the service role (worker, edge functions) is refused the same mismatch => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:67:6
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+-   undefined
++   "23503"
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at file:///home/user/wt-own01/tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:72:3
+
+OWN-01: a foreign parent and a non-existent parent are refused alike (no existence oracle) => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:86:6
+error: AssertionError: Values are not equal.
+
+
+    [Diff] Actual / Expected
+
+
+    [
+-     201,
+-     undefined,
++     409,
++     "23503",
+    ]
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at file:///home/user/wt-own01/tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:91:3
+
+catalog: all 26 lead-graph references are (workspace_id, col) → parent (workspace_id, id), one per pair => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:144:6
+error: AssertionError: Values are not equal: contacts.account_id: composite
+
+
+    [Diff] Actual / Expected
+
+
+    [
++     "workspace_id",
+      "account_id",
+    ]
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at file:///home/user/wt-own01/tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:158:5
+
+preflight: an existing mismatch aborts the migration and changes nothing => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:167:6
+error: AssertionError: Expected actual: "OWN-01 preflight: rows reference a parent in another workspace: contacts.account_id→accounts: 5;  Resolve them (scripts/test-project/own01-parent-preflight.sql); nothing was changed." to match: "/OWN-01 preflight: rows reference a parent in another workspace: contacts\.account_id→accounts: 1;/".
+    throw new AssertionError(msg);
+          ^
+    at assertMatch (https://deno.land/std@0.224.0/assert/assert_match.ts:25:11)
+    at file:///home/user/wt-own01/tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:185:3
+
+ FAILURES 
+
+OWN-01: a member cannot store a contact under another workspace's account (raw INSERT) => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:45:6
+OWN-01: a member cannot repoint an existing contact at another workspace's account (PATCH) => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:57:6
+OWN-01: the service role (worker, edge functions) is refused the same mismatch => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:67:6
+OWN-01: a foreign parent and a non-existent parent are refused alike (no existence oracle) => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:86:6
+catalog: all 26 lead-graph references are (workspace_id, col) → parent (workspace_id, id), one per pair => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:144:6
+preflight: an existing mismatch aborts the migration and changes nothing => ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts:167:6
+
+FAILED | 2 passed | 6 failed (198ms)
+
+error: Test failed
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+   8: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+   9: <unknown>
+--- postgrest log ---
+25/Oct/2026:08:07:04 +0000: Starting PostgREST 12.2.3...
+25/Oct/2026:08:07:04 +0000: Listening on port 39635
+127.0.0.1 - anon [25/Oct/2026:08:07:04 +0000] "GET / HTTP/1.1" 503 - "" "curl/8.5.0"
+25/Oct/2026:08:07:04 +0000: Successfully connected to PostgreSQL 17.11 (Ubuntu 17.11-1.pgdg24.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+25/Oct/2026:08:07:04 +0000: Listening for notifications on the "pgrst" channel
+25/Oct/2026:08:07:04 +0000: Config reloaded
+25/Oct/2026:08:07:04 +0000: Schema cache queried in 12.8 milliseconds
+25/Oct/2026:08:07:04 +0000: Schema cache loaded 136 Relations, 142 Relationships, 33 Functions, 0 Domain Representations, 4 Media Type Handlers, 499 Timezones
+25/Oct/2026:08:07:04 +0000: Successfully connected to PostgreSQL 17.11 (Ubuntu 17.11-1.pgdg24.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+25/Oct/2026:08:07:04 +0000: Config reloaded
+25/Oct/2026:08:07:04 +0000: Schema cache queried in 11.5 milliseconds
+25/Oct/2026:08:07:04 +0000: Schema cache loaded 136 Relations, 142 Relationships, 33 Functions, 0 Domain Representations, 4 Media Type Handlers, 499 Timezones

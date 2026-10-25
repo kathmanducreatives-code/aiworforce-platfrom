@@ -1,0 +1,40 @@
+omitted 20261015130000_credits_rearm_settled_key.sql (mutation proof)
+a key refunded once (not_charged) and then really bought is charged ... FAILED (90ms)
+a reservation released by the stale reaper and then really bought is charged ... FAILED (21ms)
+enforcement: a refunded key is balance-checked again, never waved through ... FAILED (11ms)
+a charged key is still a replay: the same purchase is never charged twice ... ok (22ms)
+an in-flight reservation is still a replay: no second hold ... ok (7ms)
+concurrent re-arms of one refunded key hold the credit once ... FAILED (62ms)
+a re-armed reservation is not reaped by its original age ... FAILED (23ms)
+FAILED | 2 passed | 5 failed (251ms)
+mutant killed: without the re-arm migration a refunded key's purchase goes uncharged
+mutant killed: OWN-01: SET NULL nulls the whole key (workspace_id too)
+mutant killed: no serialization lock
+mutant killed: guard: the stored task's pilot markers are not read
+mutant killed: guard: enqueue-lead-mission ignores the refusal
+mutant killed: a run bought with one read (no dataset read)
+mutant killed: no new smoke over unreconciled liability: gate removed
+mutant killed: ownership judged before the liability lock's wait
+mutant killed: a template missing a required key is authorized
+mutant killed: a priced read template is authorized
+mutant killed: an above-quote reconciliation lets another authorization spend
+mutant killed: NO_RUN closes a purchase that ran
+mutant killed: re-keyed payload buys again
+mutant killed: no provider USD cap
+mutant killed: S18a: a malformed dataset recorded as an empty one
+mutant killed: replayed purchase reported as a definite refusal
+mutant killed: smoke start ignores the lifecycle's reads
+mutant killed: long poll not clamped to the time left
+mutant killed: vendor cap above the quote kept
+mutant killed: R1 later refusal refunds an earlier hold
+mutant killed: R4 redirects followed
+mutant killed: R7 start charge dropped
+mutant killed: R8 lineage row not fenced
+mutant killed: wall clock: expired mission still reaches the handler
+mutant killed: settlement judged at arrival, not send time (Codex P2)
+mutant killed: Brain writer: no lock on the session (a logout overtakes the write)
+mutant killed: client writer: no lock on the session (a logout overtakes the write)
+mutant killed: client rule: a revoked grant still authorizes
+mutant killed: permission revision not renewed on a role change
+mutant killed: client rule: a missing client falls through instead of client_context_required
+MUTATION_TALLY shard=1 shards=3 total=91 ran=30

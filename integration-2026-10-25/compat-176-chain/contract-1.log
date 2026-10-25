@@ -1,0 +1,5888 @@
+applied tests/db-contract/sql/00_supabase_shim.sql
+applied supabase/migrations-held/20260816120000_baseline_schema.sql
+applied supabase/migrations/20260816180000_mcp_feed_views.sql
+applied supabase/migrations/20260821120000_execution_cost_provenance.sql
+applied supabase/migrations/20260822120000_model_call_ledger.sql
+applied supabase/migrations/20260822130000_credit_kind_provider_call.sql
+applied supabase/migrations/20260822140000_company_headcount_snapshots.sql
+applied supabase/migrations/20260824120000_signal_events_origin.sql
+applied supabase/migrations/20260824130000_signal_events_subject.sql
+applied supabase/migrations/20260824140000_monitoring_subjects.sql
+applied supabase/migrations/20260824180000_monitoring_runs.sql
+applied supabase/migrations/20260824190000_backfill_signal_event_feed_payload.sql
+applied supabase/migrations/20260825120000_monitoring_schedule.sql
+applied supabase/migrations/20260825130000_monitoring_call_kind.sql
+applied supabase/migrations/20260825140000_monitoring_cron.sql
+applied supabase/migrations/20260825150000_signal_cluster_relevance.sql
+applied supabase/migrations/20260825160000_relevance_cites_check_fix.sql
+applied supabase/migrations/20260825170000_canonical_dedupe_keys.sql
+applied supabase/migrations/20260826100000_sweep_stuck_runs.sql
+applied supabase/migrations/20260826170000_resume_stalled_leads_cron.sql
+applied supabase/migrations/20260827090000_request_understanding_log.sql
+applied supabase/migrations/20260828090000_messages_realtime_publication.sql
+applied supabase/migrations/20260828100000_request_understanding_log_read.sql
+applied supabase/migrations/20260829140000_lead_lineages.sql
+applied supabase/migrations/20260829150000_lead_lineages_backfill.sql
+applied supabase/migrations/20260829170000_hiring_evidence_unavailable_backfill.sql
+applied supabase/migrations/20260903090000_company_web_evidence.sql
+applied supabase/migrations/20260903120000_company_web_evidence_requirement.sql
+applied supabase/migrations/20260903130000_company_web_evidence_soft_404_correction.sql
+applied supabase/migrations/20260903160000_cancellation_row_fence.sql
+applied supabase/migrations/20260904120000_claim_fences_on_lineage_status.sql
+applied supabase/migrations/20260907090000_ops_archive_rls.sql
+applied supabase/migrations/20260907120000_drop_permissive_policies.sql
+applied supabase/migrations/20260907150000_drop_fake_token_policies.sql
+applied supabase/migrations/20260907170000_close_screening_scenarios.sql
+applied supabase/migrations/20260910120000_content_item.sql
+applied supabase/migrations/20260910130000_content_item_versioning.sql
+applied supabase/migrations/20260911120000_content_v1.sql
+applied supabase/migrations/20260911140000_content_asset.sql
+applied supabase/migrations/20260911150000_content_version_empty_draft.sql
+applied supabase/migrations/20260916120000_lead_v2_p2_execution_spine.sql
+applied supabase/migrations/20260917120000_signal_events_realtime_publication.sql
+applied supabase/migrations/20260929120000_lock_down_definer_rpcs.sql
+applied supabase/migrations/20260929130000_revoke_anon_writes_on_workspace_tables.sql
+applied supabase/migrations/20260929140000_beta_access_requests.sql
+applied supabase/migrations/20261023120000_company_brain_server_writes_only.sql
+applied supabase/migrations/20261024120000_company_brain_authorized_writer.sql
+applied supabase/migrations-held/20260910140000_lead_mission_v2_claim.sql
+applied supabase/migrations-held/20260915120000_sweep_skips_v2_queue_tasks.sql
+applied supabase/migrations-held/20261003120000_lead_mission_v2_continuations_not_retries.sql
+applied supabase/migrations-held/20261011120000_lead_mission_v2_productive_continuation_no_backoff.sql
+applied supabase/migrations-held/20261019120000_lead_mission_v2_exhausted_lease_terminal.sql
+applied supabase/migrations-held/20261015130000_credits_rearm_settled_key.sql
+applied supabase/migrations-held/20261015140000_discovery_smoke_admission.sql
+applied supabase/migrations-held/20261024160000_client_company_brain.sql
+applied supabase/migrations-held/20261025120000_lead_graph_same_workspace_parents.sql
+database ready
+postgrest PostgREST 12.2.3 on :38136, postgres 17.11 (Ubuntu 17.11-1.pgdg24.04+2)
+Check tests/db-contract/a7Lifecycle.contract.test.ts
+Check tests/db-contract/clientCompanyBrain.contract.test.ts
+Check tests/db-contract/creditRearm.contract.test.ts
+Check tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts
+Check tests/db-contract/legacyPreEffectGuard.contract.test.ts
+Check tests/db-contract/qualificationAuthority.contract.test.ts
+Check tests/db-contract/smokeAdmission.contract.test.ts
+running 4 tests from ./tests/db-contract/a7Lifecycle.contract.test.ts
+S29: two workers race to recover one exhausted mission — it is ended once, claimed by neither ... ok (827ms)
+S32: a completed mission — a stale worker can neither heartbeat, release over it, nor have it claimed again ... ok (64ms)
+S34: after a real mission, every purchase is open liability until a person reconciles it; no new smoke meanwhile ...
+------- output -------
+[run-agent][lineage-lease] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  lineage_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  version: "lineage-lease-v1",
+  enforced: true,
+  outcome: "acquired",
+  reason: "acquired",
+  held_by: null,
+  held_until: "2026-10-25T07:40:36.169506+00:00"
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:37:36.181Z",
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  phase: "startup_lease",
+  since_start_ms: 52,
+  since_prev_ms: 52,
+  lease: "acquired"
+}
+[run-agent] entity routing {
+  target_entity: "company",
+  output_type: "qualified_people",
+  actor_key: "apify_jobs",
+  clarification_required: false,
+  conflict: false,
+  execution_mode: "company_first",
+  company_first: true,
+  company_gate_required: true,
+  requested_person_role: "executive"
+}
+[run-agent][company-first] executing {
+  requested_person_role: "executive",
+  workspace: "25427df3-4e42-4823-9941-3d0969a356ed"
+}
+[run-agent][broadening-owner] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  owner: "deterministic_only"
+}
+[run-agent][lead-plan-artifact] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  source: "absent",
+  plan_source: null,
+  planning_owner: null,
+  missing_reason: "no_artifact_on_plan_row"
+}
+[run-agent][planner-owner] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  planning_owner: "deterministic_registry_v1",
+  reason: "no planner adapter is enabled for this workspace; the deterministic ladder owns titles",
+  not_selected: [],
+  plan_provenance: {
+    owner: "deterministic_registry_v1",
+    adapter: "none",
+    outcome: "selected_directly",
+    fallback_reason: null
+  },
+  provenance_description: "deterministic ladder, selected directly — no adapter was enabled for this workspace"
+}
+[run-agent][mission-cap] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  lineage_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  provider_usd: 0.2,
+  credits: 5,
+  invalid_env: [],
+  floor_usd: 0,
+  floor_calls: 0,
+  floor_source: "lead_execution_calls"
+}
+[run-agent][funding-screen] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  reason: "not_lead_v2_general_discovery",
+  plan: null,
+  priced: 0,
+  recently_checked: 0,
+  prior_searches: 0
+}
+[run-agent][lead-mission] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  has_mission: true,
+  mission_version: "lead-mission-v1",
+  mission_type: "company_research",
+  requested_output: "qualified_companies",
+  entry_capability: "job_discovery",
+  readiness: {
+    mode: "production",
+    probe_routes: [],
+    allow_experimental: [],
+    overrides: []
+  },
+  bound_referents: 0,
+  capabilities: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  allowed_providers: [
+    "apify_linkedin_job_search",
+    "apify_linkedin_company_search",
+    "apify_linkedin_company_details"
+  ],
+  authority: "lead_mission_v1"
+}
+[run-agent][playbook-selection] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  version: "lead-research-playbook-v2",
+  ok: true,
+  combination: "single",
+  strategy_source: "derived_from_mission_fields",
+  selected: [ "hiring:supported" ],
+  runnable: [ "hiring" ],
+  blocked: [],
+  unknown_strategies: [],
+  qualifying_signals: [],
+  routing_conflicts: [],
+  reason: "the mission declares no strategy; hiring derived from required signals"
+}
+[run-agent][playbook-authorization] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  version: "lead-playbook-execution-v1",
+  applies: true,
+  authorized: true,
+  playbook: "hiring",
+  entry_capability: "job_discovery",
+  entry_source: "playbook_discovery",
+  capabilities: [ "job_discovery:driven", "hiring_verification:driven" ],
+  violations: [],
+  reason: 'the plan executes the hiring playbook: entry "job_discovery" (a hiring discovery capability), requiring job_discovery, hiring_verification'
+}
+[run-agent][hiring-route] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  ok: true,
+  requested: "general_company_first",
+  validated: "general_company_first",
+  source_order: [ "apify_linkedin_company_search" ],
+  fallback_reason: null,
+  repairs: [
+    "source_not_in_route_dropped:apify_linkedin_job_search",
+    "source_not_in_route_dropped:apify_linkedin_company_details"
+  ],
+  actor_limitation_briefing_size: 16
+}
+[run-agent][prior-contact-state] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  prior_contact_credit: 0,
+  scanned_rows: 0,
+  unidentifiable: 0,
+  ignored_request_identities: 0,
+  lookup_error: null,
+  identity_digests: [],
+  source: "canonical_persisted_state"
+}
+[run-agent][resume-precheck] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  prior_contact_credit: 0,
+  requested_quota: 1,
+  remaining_quota: 1,
+  decision: "continue_sourcing",
+  reason: "quota_unmet_and_no_pending_work",
+  company_first_will_run: true
+}
+[run-agent][mission-evaluation][binding] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  calls_allowed: 3,
+  shortlist_size: 3,
+  cap: 20
+}
+[run-agent][mission-triage][binding] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  batches_allowed: 1,
+  batch_size: 25,
+  pool_size: 3,
+  cap: 6
+}
+[run-agent][smoke-orchestration] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  mode: "minimal",
+  skipped: [
+    "route_control",
+    "triage",
+    "discovery_replan",
+    "execution_plan_amendment",
+    "pool_ranking_shadow",
+    "p2_receipt_rereads"
+  ]
+}
+[run-agent][grounded-brain][binding] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  enabled: true,
+  reason: "enabled",
+  mode: "shadow",
+  model: "openai/gpt-5.6-luna",
+  threshold: 0.6
+}
+[run-agent][stage2][binding] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  full_pool: {
+    enabled: true,
+    reason: "enabled",
+    limits: { batch_size: 8, max_evaluated: 100 }
+  },
+  ranking: {
+    enabled: true,
+    reason: "enabled",
+    mode: "shadow",
+    model: "openai/gpt-5.6-luna"
+  }
+}
+[run-agent][intelligence-policy] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  mode: "new_architecture",
+  stages: {
+    mission_compiler: true,
+    grounded_brain: true,
+    full_pool_evaluation: true,
+    pool_ranking: true,
+    multi_round: true
+  },
+  missing_required: [],
+  reason: "every required intelligence stage is enabled"
+}
+[run-agent][runtime] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  executor: {
+    role: "executor",
+    function: "run-agent",
+    git_sha: "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    git_short: "046b61b0",
+    build_timestamp: "2026-08-29T10:44:33.276Z",
+    lead_intelligence_contract_version: "v1",
+    dirty: false
+  },
+  planner: {
+    role: "planner",
+    function: "offline-rehearsal",
+    git_sha: "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    git_short: "046b61b0",
+    build_timestamp: "2026-08-29T10:44:33.276Z",
+    lead_intelligence_contract_version: "v1",
+    dirty: false
+  },
+  contract: {
+    ok: true,
+    planner_version: "v1",
+    executor_version: "v1",
+    same_build: true
+  }
+}
+[run-agent][stage4][binding] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  enabled: true,
+  reason: "enabled",
+  max_rounds: 3,
+  max_provider_cost_units: 12,
+  max_model_operations: 24,
+  model: "openai/gpt-5.6-luna"
+}
+[run-agent][paid-preflight] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  ok: true,
+  mission_authority: "lead_mission_v1",
+  entry_capability: "job_discovery",
+  ordered_capabilities: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  first_provider: "apify_linkedin_job_search",
+  input_valid: true,
+  blocked: []
+}
+[run-agent][resume][loaded] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  parent_task_id: null,
+  records: 0,
+  rejection: null,
+  client_fields_ignored: []
+}
+[run-agent][stage2][restored] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  restored: 0,
+  stale: false
+}
+[run-agent][capability-engine] qualification_context {
+  version: "mission-qualification-context-v1",
+  target_entity: "company",
+  role_vocabulary_source: "mission",
+  required_titles: [
+    "sdr",
+    "bdr",
+    "sales development representative",
+    "account executive",
+    "founding sdr",
+    "founding ae",
+    "head of sales",
+    "gtm",
+    "go to market",
+    "business development",
+    "demand generation",
+    "revenue",
+    "salesperson",
+    "sales representative",
+    "territory sales manager",
+    "ae",
+    "enterprise ae",
+    "seller",
+    "enterprise seller",
+    "enterprise sales"
+  ],
+  verticals: [ "b2b software" ],
+  stages: [],
+  locations: [ "united states" ],
+  strategies: [],
+  employee_range: { min: 11, max: 50 },
+  mission_owns: {
+    employee_count: true,
+    industry: true,
+    geography: true,
+    stage: false,
+    hiring_role: true
+  },
+  hard_constraint_keys: [ "company_profile.locations" ]
+}
+[run-agent][capability-engine] mission_cap_applied {
+  mission_provider_usd: 0.2,
+  mission_credits: 5,
+  floor_usd: 0,
+  floor_calls: 0,
+  floor_source: "lead_execution_calls",
+  invalid_env: []
+}
+[gpt-execution-plan] gpt_call_ok {
+  purpose: "execution_plan",
+  model: "gpt-5.6-luna",
+  tier: "reasoning",
+  routing_reason: "plans the whole chain and decides which paid stages are unnecessary; this is the most consequential single call the pipeline makes",
+  latency_ms: 18
+}
+[gpt-execution-plan] gpt_call_telemetry {
+  version: "model-cost-model-v1",
+  role: "execution_plan",
+  model: "gpt-5.6-luna",
+  reasoning_effort: "low",
+  input_tokens: 1000,
+  cached_input_tokens: 0,
+  output_tokens: 400,
+  estimated_cost_usd: 0.00068,
+  actual_cost_usd: null,
+  cost_source: "event_priced",
+  latency_ms: 18,
+  fallback_reason: null
+}
+[run-agent][capability-engine] execution_plan_resolved {
+  steps: [
+    "job_discovery:apify_linkedin_job_search",
+    "company_brain_qualification:-",
+    "persistence:-"
+  ],
+  source: "model_validated"
+}
+[run-agent][capability-engine] retrieval_plan_created { version: 1, routes: 1, stages: 0 }
+[run-agent][capability-engine] discovery_actors_from_execution_plan {
+  actors: [ "apify_linkedin_job_search" ],
+  source: "model_validated",
+  violations: []
+}
+[run-agent][capability-engine] discovery_strategy_resolved {
+  version: "lead-discovery-strategy-v1",
+  source: "model_validated",
+  model_chosen: true,
+  actors: [
+    {
+      actor_key: "apify_linkedin_job_search",
+      role: "primary",
+      rationale: "find the specified open role",
+      input: {
+        jobTitles: [ "Account Executive" ],
+        locations: [ "United States" ],
+        maxItems: 3,
+        postedLimit: "month",
+        sortBy: "date"
+      },
+      input_fields: [ "jobTitles", "locations", "maxItems", "postedLimit", "sortBy" ],
+      dropped_filters: [],
+      requires_enrichment: false
+    }
+  ],
+  violations: [],
+  blocked: 0,
+  repaired: 0,
+  all_require_enrichment: false
+}
+[credits][authorization] {
+  mode: "enforce",
+  allowed: true,
+  reserved: true,
+  reason: "reserved",
+  balance_after: 9,
+  capability: "apify_linkedin_job_search",
+  detail: null
+}
+[toolRegistry] smoke: Apify receipt NOT settled; this purchase needs reconciliation { run_id: "run-jobs", status: "SUCCEEDED" }
+[credits][settlement] {
+  transaction_id: "e5e337a8-bd04-4561-a2eb-793a4e229e0f",
+  started: true,
+  charged: 1,
+  settled: true,
+  detail: null
+}
+[memoryWriter] tool_call {
+  tool: "source_with_apify",
+  plan_id: "94956851-8fde-4bbd-8e17-8f6dac89aa07",
+  tool_call_id: "b1669b48-ed18-4ee9-877d-72a6ca60bffc",
+  conv: null
+}
+[memoryWriter] skipped: an engine owns persistence {
+  tool: "source_with_apify",
+  authority: "capability_engine",
+  plan_id: "94956851-8fde-4bbd-8e17-8f6dac89aa07",
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d"
+}
+[run-agent][capability-engine] job_discovery_rows { kept: 1, dropped: {}, not_hiring_proof: 0, employers: 1 }
+[run-agent][capability-engine] research_wave_summarized {
+  wave: 1,
+  routes: [ "apify_linkedin_job_search:1/1+0" ],
+  unique: 1,
+  multi_source: 0,
+  low_yield: [],
+  exhausted: []
+}
+[run-agent][capability-engine] discovery_replan_skipped {
+  pass: 2,
+  reason: "smoke_minimal_orchestration",
+  pool: 1,
+  admitted: 1
+}
+[run-agent][capability-engine] discovery_source_state {
+  sources_attempted: [ "apify_linkedin_job_search" ],
+  pages_taken: { apify_linkedin_job_search: 1 },
+  page_fingerprints: {
+    apify_linkedin_job_search: "4f82b5b5f23a97ad5dd96089b32a7ec8dabd2e95decbc4880e66a1edba6001d2"
+  },
+  admitted: 1,
+  available_admitted: 1,
+  raw_rows: 1,
+  pool_target: 3,
+  exhausted: false,
+  stop_reason: "no_further_actor_proposed"
+}
+[run-agent][capability-engine] prequalification_complete {
+  unique: 1,
+  eligible: 1,
+  size_excluded: 0,
+  technical_only: 0,
+  yc_rows: 0,
+  generic_scored: 1
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "prequalified",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 0,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7761,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "prequalified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[run-agent][capability-engine] triage_and_ranking_complete {
+  budget: 1,
+  budget_source: "pool_bound",
+  count_budget: 1,
+  requested: 1,
+  pool: 1,
+  relevant: 0,
+  uncertain: 0,
+  irrelevant: 0,
+  ineligible: 0,
+  no_triage: 1,
+  hard_excluded: 0,
+  selected: 1,
+  ranked: 1,
+  triage_enabled: false,
+  untriaged_policy: "rank",
+  time_capacity: 2,
+  per_company_ms: 42867,
+  usable_ms: 122561,
+  gpt_read_budget: 1,
+  gpt_evaluation_budget: 1,
+  frontier: 1,
+  excluded_permanently: 0,
+  first_slice_preview: 1
+}
+[run-agent][capability-engine] investigation_slice_taken {
+  pass: 1,
+  selected: 1,
+  frontier_remaining: 0,
+  already_investigated: 0,
+  excluded_permanently: 0,
+  reason: "budget",
+  budget: 1,
+  budget_source: "pool_bound",
+  carried_in_flight: 0,
+  allowance: 1
+}
+[run-agent][capability-engine] execution_plan_amendment_skipped {
+  reason: "smoke_minimal_orchestration",
+  detail: "the smoke catalog approves no further purchase an amendment could add"
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "prequalified",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 0,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7733,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "prequalified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[run-agent][capability-engine] identity_resolution_complete {
+  targets: 1,
+  resolved: 1,
+  unresolved: 0,
+  deferred: 0,
+  provider_errors: 0,
+  attempted: 1,
+  unattempted: 0,
+  truncated: false,
+  deferred_company_keys: [],
+  concurrency: 4
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "identity_resolved",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7906,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "identity_resolved",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[credits][authorization] {
+  mode: "enforce",
+  allowed: true,
+  reserved: true,
+  reason: "reserved",
+  balance_after: 8,
+  capability: "apify_linkedin_company_details",
+  detail: null
+}
+[toolRegistry] smoke: Apify receipt NOT settled; this purchase needs reconciliation { run_id: "run-details", status: "SUCCEEDED" }
+[credits][settlement] {
+  transaction_id: "8e7a55ef-466e-48f1-9653-a0c1ec3ee515",
+  started: true,
+  charged: 1,
+  settled: true,
+  detail: null
+}
+[memoryWriter] tool_call {
+  tool: "source_with_apify",
+  plan_id: "94956851-8fde-4bbd-8e17-8f6dac89aa07",
+  tool_call_id: "b4f269e3-990f-47e1-ac2d-b7e6963ad819",
+  conv: null
+}
+[memoryWriter] skipped: an engine owns persistence {
+  tool: "source_with_apify",
+  authority: "capability_engine",
+  plan_id: "94956851-8fde-4bbd-8e17-8f6dac89aa07",
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d"
+}
+[run-agent][capability-engine] company_enrichment_complete {
+  resolved_urls: 1,
+  actor_starts: 1,
+  enriched: 1,
+  outcomes: {
+    not_attempted: 0,
+    success: 1,
+    empty: 0,
+    provider_error: 0,
+    deferred: 0,
+    total: 1
+  },
+  truncated: false,
+  deferred_company_keys: []
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "companies_enriched",
+  companies: 1,
+  enriched_in_memory: 1,
+  enriched_in_records: 1,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 11866,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "companies_enriched",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 1
+}
+[run-agent][capability-engine] hiring_verification_skipped_by_chain { reasoning: "" }
+[run-agent][capability-engine] stage2_eligible_pool { discovered: 1, hard_gated: 0, eligible: 1, exclusion_reasons: {} }
+[run-agent][capability-engine] stage2_batch_evaluation_complete { eligible: 1, evaluated: 1, restored: 0, beyond_cap: 0 }
+[run-agent][mission-evaluation] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  company_key: "https://www.linkedin.com/company/offline-s34",
+  parse_status: "valid",
+  decision: "qualified",
+  mission_fit: "pass",
+  match_score: 80,
+  repaired: []
+}
+[run-agent][capability-engine] investigation_yield_gate {
+  pass: 1,
+  qualified: 1,
+  requested: 1,
+  frontier_remaining: 0,
+  time_capacity: 2,
+  take_another_slice: false,
+  reason: "quota_met",
+  qualification_ready: 0,
+  evidence_debt_pending: 0
+}
+[run-agent][capability-engine] company_brain_qualification_complete {
+  version: "evaluation-path-telemetry-v1",
+  reached_evaluation: 1,
+  decided_without_model: 0,
+  decided_by_model: 1,
+  counts: {
+    not_reached: 0,
+    fabricated_pass: 0,
+    fabricated_reject: 0,
+    model_evaluated: 1,
+    model_unavailable: 0,
+    restored_decision: 0
+  },
+  companies: undefined,
+  eligible: 1,
+  passed: 1,
+  unknown: 0,
+  restored_decisions: 0
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "qualified",
+  companies: 1,
+  enriched_in_memory: 1,
+  enriched_in_records: 1,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 16225,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "qualified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 1
+}
+[run-agent][capability-engine] stage2_ranking_shadow {
+  computed: false,
+  proposed_source: null,
+  moved: 0,
+  would_enter: 0,
+  would_leave: 0
+}
+[run-agent][capability-engine] stage2_pool_complete {
+  evaluated: 1,
+  unevaluated: 0,
+  ranking_source: "deterministic_fallback",
+  ranking_mode: "shadow",
+  composition_changed: null,
+  delivered: 1,
+  shortfall: 0
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:37:45.831Z",
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  phase: "engine",
+  since_start_ms: 9702,
+  since_prev_ms: 9650,
+  companies: 1
+}
+[run-agent][multi-round][skipped] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  reason: "p2_specs_enforced"
+}
+[run-agent][p2-spine][final] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  settlement: null,
+  persisted: { plan_versions: 1, events: 8, settlements: 2, errors: [] },
+  error: null
+}
+[run-agent][trace] request: Find 1 US B2B software company with a current declared 11–50 employee band and an open Account Executive posting dated within 30 days.
+[run-agent][trace] entry: job_discovery — the mission is hiring-led: an open account executive role is how these companies are found
+[run-agent][trace] plan (gpt/model_validated): job_discovery:apify_linkedin_job_search → company_brain_qualification:- → persistence:-
+[run-agent][trace] skipped hiring_verification: the planned chain proves hiring from evidence an earlier step already returned; a paid verification would re-buy it
+[run-agent][trace] outcome: 1 of 1 qualified
+[run-agent][capability-engine][portfolio] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  requested: 1,
+  rows_shown: 1,
+  opportunities: 1,
+  tiers: [ 1, 0, 0 ],
+  qualified: 1,
+  watch: 0,
+  contact_ready: 0,
+  shortfall: 0
+}
+[run-agent][capability-engine][evaluation-rows] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  rows: 0,
+  counts: {
+    accounts_found: 1,
+    evaluated: 1,
+    shortlisted: 1,
+    identity_unresolved: 0,
+    qualified: 1,
+    contact_ready: 0,
+    not_qualified: 0,
+    not_investigated: 0,
+    awaiting_investigation: 0,
+    deferred: 0,
+    held_for_evidence: 0
+  }
+}
+[run-agent][mission-funnel] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  line: "discovery: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  line: "mission_intelligence: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  line: "smart_shortlist: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  line: "identity_resolution: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  line: "enrichment: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  line: "company_brain: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  line: "mission_evaluator: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  line: "persistence: 1→0 withheld=1"
+}
+[run-agent][claim-plan] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  entry: "job_discovery",
+  hard: [
+    {
+      claim: "business_model",
+      dimension: "industry",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details", "firecrawl" ]
+    },
+    {
+      claim: "country",
+      dimension: "geography",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details" ]
+    },
+    {
+      claim: "company_size",
+      dimension: "company_size",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details" ]
+    },
+    {
+      claim: "open_role",
+      dimension: "hiring",
+      status: "verifiable",
+      routes: [ "apify_linkedin_job_search" ]
+    }
+  ],
+  targets: [],
+  unprovable: []
+}
+[run-agent][claim-verifier][verification_stopped] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  reason: "quota_met",
+  qualified: 1,
+  requested: 1
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:37:45.871Z",
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  phase: "claim_verification",
+  since_start_ms: 9742,
+  since_prev_ms: 40
+}
+[run-agent][claim-verifier] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  order: [
+    "funding_stage_corroboration",
+    "open_role_linkedin_jobs",
+    "business_model_first_party_pages"
+  ],
+  ran: [],
+  stopped: "quota_met",
+  irrelevant: [ "funding_stage_corroboration" ],
+  pending_runs: 0,
+  stopped_by: null,
+  deferred: []
+}
+[run-agent][p2-spine][claim-verifier] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  settlement: null,
+  persisted: { plan_versions: 1, events: 8, settlements: 2, errors: [] },
+  error: null
+}
+[run-agent][capability-engine][lead-library] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  version: "lead-mission-persistence-projection-v1",
+  planned: 1,
+  persisted: 1,
+  skipped: [],
+  gate: "hiring_playbook_authorized",
+  failed: []
+}
+[run-agent][payload-size] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  path: "final_snapshot",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 16197,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine][done] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  entry: "job_discovery",
+  completed: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  pending: [ "hiring_verification" ],
+  attempts: 3,
+  cost_units: 2,
+  qualified: 1,
+  unknown: 0,
+  terminal_reason: null
+}
+[run-agent][company-brain] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  enforced: false,
+  policy_hash: "d3dc7127467decd43cd8e0283b447e8bd8bf9cd1a669b04c37bb41b76627d8e8",
+  hard_constraints: [],
+  size: {
+    min: null,
+    max: null,
+    source: "unresolved",
+    mapping_id: null,
+    mapping_version: "company-size-semantics-1.0.0",
+    confirmation_required: false
+  }
+}
+[run-agent][adaptive-enforcement] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  decision: null,
+  reason: null,
+  requested_quota: 1,
+  persisted_contact: 0,
+  founder_pending: 0,
+  contact_pending: 0,
+  will_run_another_source: true,
+  skip_reason: null
+}
+[run-agent][broad-job-fallback] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  validated_route: "general_company_first",
+  company_first_ran: true,
+  qualified_companies: 1,
+  fallback_reason: null,
+  blocked: "execution_owned_by:capability_engine_v1"
+}
+[run-agent][combined-quota] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  legacy_contact_count_raw: 0,
+  company_first_contact_count_raw: 0,
+  duplicate_contact_count: 0,
+  deduplicated_contact_count: 0,
+  remaining_quota: 1,
+  identity_strategy: "none",
+  unidentifiable_contacts: 0,
+  identity_digests: [],
+  legacy_sourcing_ran: false,
+  legacy_blocked_provider_calls: 0,
+  adaptive_decision: null
+}
+[gpt-opportunity-reasoner] gpt_call_ok {
+  purpose: "opportunity_reasoning",
+  model: "gpt-5.6-luna",
+  tier: "reasoning",
+  routing_reason: "explains a label the evidence already permits; the ceiling, the citations and the missing list are all code's, so there is nothing for a repair round to fix",
+  latency_ms: 4
+}
+[gpt-opportunity-reasoner] gpt_call_telemetry {
+  version: "model-cost-model-v1",
+  role: "opportunity_reasoning",
+  model: "gpt-5.6-luna",
+  reasoning_effort: "low",
+  input_tokens: 1000,
+  cached_input_tokens: 0,
+  output_tokens: 400,
+  estimated_cost_usd: 0.00068,
+  actual_cost_usd: null,
+  cost_source: "event_priced",
+  latency_ms: 5,
+  fallback_reason: null
+}
+[run-agent][lineage-progress] task copy behind a durable copy — using the maximum {
+  at: "2026-10-25T07:37:45.971Z",
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  stored: null,
+  lineage: null,
+  queue: null,
+  effective: 0
+}
+[run-agent][auto-continuation] terminal_status_overridden {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  from: "round_limit_reached",
+  to: "completed",
+  frontier_remaining: 0,
+  qualified: 1,
+  requested: 1
+}
+[run-agent][payload-size] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  path: "slice_result",
+  version: "payload-size-v1",
+  kind: "canonical_view",
+  bytes: 6098,
+  warn_at: 400000,
+  over: false
+}
+[run-agent][lineage-progress-write] {
+  at: "2026-10-25T07:37:45.977Z",
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  path: "slice_result",
+  present_before: false,
+  present_in_write: true,
+  continuations_before: null,
+  continuations_after: 1,
+  restored: false,
+  queue_continuations: null,
+  result_bytes: 73886
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:37:45.988Z",
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  phase: "slice_result_write",
+  since_start_ms: 9859,
+  since_prev_ms: 117
+}
+[run-agent][lineage-progress-write] {
+  at: "2026-10-25T07:37:45.998Z",
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  path: "run_outcome",
+  present_before: true,
+  present_in_write: true,
+  continuations_before: 1,
+  continuations_after: 1,
+  restored: false,
+  queue_continuations: null,
+  result_bytes: 74877
+}
+[run-agent][run-outcome] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  lineage_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  state: "SATISFIED",
+  leads: 1,
+  credits: 2,
+  reused: 0,
+  unsettled: 0,
+  eligible: 1,
+  evaluated: 1,
+  not_reached: 0,
+  cited_rows: 0
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:37:46.017Z",
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  phase: "lineage_release",
+  since_start_ms: 9888,
+  since_prev_ms: 29,
+  released: true,
+  attempts: 1,
+  state_bytes: 32485
+}
+[lead-v2][state-size] {
+  task: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  slice: 1,
+  checkpoint_bytes: 16197,
+  result_bytes: 73886,
+  lineage_bytes: 32485,
+  canonical_view_bytes: 6098,
+  over_budget: []
+}
+[run-agent][auto-continuation] {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  qualified: 1,
+  requested: 1,
+  frontier_remaining: 0,
+  continuations_used: 1,
+  cost_units_used: 2,
+  barren_slices: 0,
+  decision: "quota_met",
+  detail: "1 of 1 qualified — the request is met",
+  dispatched: false,
+  continuing: false
+}
+[run-agent][model-ledger] { task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d", rows: 4 }
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  plan_id: "94956851-8fde-4bbd-8e17-8f6dac89aa07",
+  status: "partial",
+  reason: "partial_capability_progress",
+  task_status: "ready",
+  plan_status: "partial"
+}
+[run-agent][terminal-guard] terminal_guard_skip_task {
+  task_id: "3501a23f-8aa2-4936-b5ce-0312707c1f8d",
+  current: "complete"
+}
+----- output end -----
+S34: after a real mission, every purchase is open liability until a person reconciles it; no new smoke meanwhile ... ok (14s)
+S30: after a mission persisted its lead and its deadline passed — the lead stands and nothing more is admitted ...
+------- output -------
+[run-agent][lineage-lease] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  lineage_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  version: "lineage-lease-v1",
+  enforced: true,
+  outcome: "acquired",
+  reason: "acquired",
+  held_by: null,
+  held_until: "2026-10-25T07:40:46.2103+00:00"
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:37:46.212Z",
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  phase: "startup_lease",
+  since_start_ms: 14,
+  since_prev_ms: 14,
+  lease: "acquired"
+}
+[run-agent] entity routing {
+  target_entity: "company",
+  output_type: "qualified_people",
+  actor_key: "apify_jobs",
+  clarification_required: false,
+  conflict: false,
+  execution_mode: "company_first",
+  company_first: true,
+  company_gate_required: true,
+  requested_person_role: "executive"
+}
+[run-agent][company-first] executing {
+  requested_person_role: "executive",
+  workspace: "a24ddcf3-2905-4556-a443-ced143aba970"
+}
+[run-agent][broadening-owner] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  owner: "deterministic_only"
+}
+[run-agent][lead-plan-artifact] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  source: "absent",
+  plan_source: null,
+  planning_owner: null,
+  missing_reason: "no_artifact_on_plan_row"
+}
+[run-agent][planner-owner] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  planning_owner: "deterministic_registry_v1",
+  reason: "no planner adapter is enabled for this workspace; the deterministic ladder owns titles",
+  not_selected: [],
+  plan_provenance: {
+    owner: "deterministic_registry_v1",
+    adapter: "none",
+    outcome: "selected_directly",
+    fallback_reason: null
+  },
+  provenance_description: "deterministic ladder, selected directly — no adapter was enabled for this workspace"
+}
+[run-agent][mission-cap] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  lineage_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  provider_usd: 0.2,
+  credits: 5,
+  invalid_env: [],
+  floor_usd: 0,
+  floor_calls: 0,
+  floor_source: "lead_execution_calls"
+}
+[run-agent][funding-screen] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  reason: "not_lead_v2_general_discovery",
+  plan: null,
+  priced: 0,
+  recently_checked: 0,
+  prior_searches: 0
+}
+[run-agent][lead-mission] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  has_mission: true,
+  mission_version: "lead-mission-v1",
+  mission_type: "company_research",
+  requested_output: "qualified_companies",
+  entry_capability: "job_discovery",
+  readiness: {
+    mode: "production",
+    probe_routes: [],
+    allow_experimental: [],
+    overrides: []
+  },
+  bound_referents: 0,
+  capabilities: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  allowed_providers: [
+    "apify_linkedin_job_search",
+    "apify_linkedin_company_search",
+    "apify_linkedin_company_details"
+  ],
+  authority: "lead_mission_v1"
+}
+[run-agent][playbook-selection] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  version: "lead-research-playbook-v2",
+  ok: true,
+  combination: "single",
+  strategy_source: "derived_from_mission_fields",
+  selected: [ "hiring:supported" ],
+  runnable: [ "hiring" ],
+  blocked: [],
+  unknown_strategies: [],
+  qualifying_signals: [],
+  routing_conflicts: [],
+  reason: "the mission declares no strategy; hiring derived from required signals"
+}
+[run-agent][playbook-authorization] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  version: "lead-playbook-execution-v1",
+  applies: true,
+  authorized: true,
+  playbook: "hiring",
+  entry_capability: "job_discovery",
+  entry_source: "playbook_discovery",
+  capabilities: [ "job_discovery:driven", "hiring_verification:driven" ],
+  violations: [],
+  reason: 'the plan executes the hiring playbook: entry "job_discovery" (a hiring discovery capability), requiring job_discovery, hiring_verification'
+}
+[run-agent][hiring-route] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  ok: true,
+  requested: "general_company_first",
+  validated: "general_company_first",
+  source_order: [ "apify_linkedin_company_search" ],
+  fallback_reason: null,
+  repairs: [
+    "source_not_in_route_dropped:apify_linkedin_job_search",
+    "source_not_in_route_dropped:apify_linkedin_company_details"
+  ],
+  actor_limitation_briefing_size: 16
+}
+[run-agent][prior-contact-state] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  prior_contact_credit: 0,
+  scanned_rows: 0,
+  unidentifiable: 0,
+  ignored_request_identities: 0,
+  lookup_error: null,
+  identity_digests: [],
+  source: "canonical_persisted_state"
+}
+[run-agent][resume-precheck] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  prior_contact_credit: 0,
+  requested_quota: 1,
+  remaining_quota: 1,
+  decision: "continue_sourcing",
+  reason: "quota_unmet_and_no_pending_work",
+  company_first_will_run: true
+}
+[run-agent][mission-evaluation][binding] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  calls_allowed: 3,
+  shortlist_size: 3,
+  cap: 20
+}
+[run-agent][mission-triage][binding] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  batches_allowed: 1,
+  batch_size: 25,
+  pool_size: 3,
+  cap: 6
+}
+[run-agent][smoke-orchestration] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  mode: "minimal",
+  skipped: [
+    "route_control",
+    "triage",
+    "discovery_replan",
+    "execution_plan_amendment",
+    "pool_ranking_shadow",
+    "p2_receipt_rereads"
+  ]
+}
+[run-agent][grounded-brain][binding] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  enabled: true,
+  reason: "enabled",
+  mode: "shadow",
+  model: "openai/gpt-5.6-luna",
+  threshold: 0.6
+}
+[run-agent][stage2][binding] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  full_pool: {
+    enabled: true,
+    reason: "enabled",
+    limits: { batch_size: 8, max_evaluated: 100 }
+  },
+  ranking: {
+    enabled: true,
+    reason: "enabled",
+    mode: "shadow",
+    model: "openai/gpt-5.6-luna"
+  }
+}
+[run-agent][intelligence-policy] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  mode: "new_architecture",
+  stages: {
+    mission_compiler: true,
+    grounded_brain: true,
+    full_pool_evaluation: true,
+    pool_ranking: true,
+    multi_round: true
+  },
+  missing_required: [],
+  reason: "every required intelligence stage is enabled"
+}
+[run-agent][runtime] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  executor: {
+    role: "executor",
+    function: "run-agent",
+    git_sha: "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    git_short: "046b61b0",
+    build_timestamp: "2026-08-29T10:44:33.276Z",
+    lead_intelligence_contract_version: "v1",
+    dirty: false
+  },
+  planner: {
+    role: "planner",
+    function: "offline-rehearsal",
+    git_sha: "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    git_short: "046b61b0",
+    build_timestamp: "2026-08-29T10:44:33.276Z",
+    lead_intelligence_contract_version: "v1",
+    dirty: false
+  },
+  contract: {
+    ok: true,
+    planner_version: "v1",
+    executor_version: "v1",
+    same_build: true
+  }
+}
+[run-agent][stage4][binding] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  enabled: true,
+  reason: "enabled",
+  max_rounds: 3,
+  max_provider_cost_units: 12,
+  max_model_operations: 24,
+  model: "openai/gpt-5.6-luna"
+}
+[run-agent][paid-preflight] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  ok: true,
+  mission_authority: "lead_mission_v1",
+  entry_capability: "job_discovery",
+  ordered_capabilities: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  first_provider: "apify_linkedin_job_search",
+  input_valid: true,
+  blocked: []
+}
+[run-agent][resume][loaded] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  parent_task_id: null,
+  records: 0,
+  rejection: null,
+  client_fields_ignored: []
+}
+[run-agent][stage2][restored] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  restored: 0,
+  stale: false
+}
+[run-agent][capability-engine] qualification_context {
+  version: "mission-qualification-context-v1",
+  target_entity: "company",
+  role_vocabulary_source: "mission",
+  required_titles: [
+    "sdr",
+    "bdr",
+    "sales development representative",
+    "account executive",
+    "founding sdr",
+    "founding ae",
+    "head of sales",
+    "gtm",
+    "go to market",
+    "business development",
+    "demand generation",
+    "revenue",
+    "salesperson",
+    "sales representative",
+    "territory sales manager",
+    "ae",
+    "enterprise ae",
+    "seller",
+    "enterprise seller",
+    "enterprise sales"
+  ],
+  verticals: [ "b2b software" ],
+  stages: [],
+  locations: [ "united states" ],
+  strategies: [],
+  employee_range: { min: 11, max: 50 },
+  mission_owns: {
+    employee_count: true,
+    industry: true,
+    geography: true,
+    stage: false,
+    hiring_role: true
+  },
+  hard_constraint_keys: [ "company_profile.locations" ]
+}
+[run-agent][capability-engine] mission_cap_applied {
+  mission_provider_usd: 0.2,
+  mission_credits: 5,
+  floor_usd: 0,
+  floor_calls: 0,
+  floor_source: "lead_execution_calls",
+  invalid_env: []
+}
+[gpt-execution-plan] gpt_call_ok {
+  purpose: "execution_plan",
+  model: "gpt-5.6-luna",
+  tier: "reasoning",
+  routing_reason: "plans the whole chain and decides which paid stages are unnecessary; this is the most consequential single call the pipeline makes",
+  latency_ms: 11
+}
+[gpt-execution-plan] gpt_call_telemetry {
+  version: "model-cost-model-v1",
+  role: "execution_plan",
+  model: "gpt-5.6-luna",
+  reasoning_effort: "low",
+  input_tokens: 1000,
+  cached_input_tokens: 0,
+  output_tokens: 400,
+  estimated_cost_usd: 0.00068,
+  actual_cost_usd: null,
+  cost_source: "event_priced",
+  latency_ms: 11,
+  fallback_reason: null
+}
+[run-agent][capability-engine] execution_plan_resolved {
+  steps: [
+    "job_discovery:apify_linkedin_job_search",
+    "company_brain_qualification:-",
+    "persistence:-"
+  ],
+  source: "model_validated"
+}
+[run-agent][capability-engine] retrieval_plan_created { version: 1, routes: 1, stages: 0 }
+[run-agent][capability-engine] discovery_actors_from_execution_plan {
+  actors: [ "apify_linkedin_job_search" ],
+  source: "model_validated",
+  violations: []
+}
+[run-agent][capability-engine] discovery_strategy_resolved {
+  version: "lead-discovery-strategy-v1",
+  source: "model_validated",
+  model_chosen: true,
+  actors: [
+    {
+      actor_key: "apify_linkedin_job_search",
+      role: "primary",
+      rationale: "find the specified open role",
+      input: {
+        jobTitles: [ "Account Executive" ],
+        locations: [ "United States" ],
+        maxItems: 3,
+        postedLimit: "month",
+        sortBy: "date"
+      },
+      input_fields: [ "jobTitles", "locations", "maxItems", "postedLimit", "sortBy" ],
+      dropped_filters: [],
+      requires_enrichment: false
+    }
+  ],
+  violations: [],
+  blocked: 0,
+  repaired: 0,
+  all_require_enrichment: false
+}
+[credits][authorization] {
+  mode: "enforce",
+  allowed: true,
+  reserved: true,
+  reason: "reserved",
+  balance_after: 9,
+  capability: "apify_linkedin_job_search",
+  detail: null
+}
+[toolRegistry] smoke: Apify receipt NOT settled; this purchase needs reconciliation { run_id: "run-jobs", status: "SUCCEEDED" }
+[credits][settlement] {
+  transaction_id: "5c41f182-b010-43c2-bf51-26a581dd5e7c",
+  started: true,
+  charged: 1,
+  settled: true,
+  detail: null
+}
+[memoryWriter] tool_call {
+  tool: "source_with_apify",
+  plan_id: "e2968830-3fa2-4935-b3a6-e268b8af3fdb",
+  tool_call_id: "1936a127-29d2-4cb4-9503-731192199e41",
+  conv: null
+}
+[memoryWriter] skipped: an engine owns persistence {
+  tool: "source_with_apify",
+  authority: "capability_engine",
+  plan_id: "e2968830-3fa2-4935-b3a6-e268b8af3fdb",
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2"
+}
+[run-agent][capability-engine] job_discovery_rows { kept: 1, dropped: {}, not_hiring_proof: 0, employers: 1 }
+[run-agent][capability-engine] research_wave_summarized {
+  wave: 1,
+  routes: [ "apify_linkedin_job_search:1/1+0" ],
+  unique: 1,
+  multi_source: 0,
+  low_yield: [],
+  exhausted: []
+}
+[run-agent][capability-engine] discovery_replan_skipped {
+  pass: 2,
+  reason: "smoke_minimal_orchestration",
+  pool: 1,
+  admitted: 1
+}
+[run-agent][capability-engine] discovery_source_state {
+  sources_attempted: [ "apify_linkedin_job_search" ],
+  pages_taken: { apify_linkedin_job_search: 1 },
+  page_fingerprints: {
+    apify_linkedin_job_search: "1e7ef573b2653daadeb6b2bcd7fd6ecb61cc1323befcec22f74031b6015659cb"
+  },
+  admitted: 1,
+  available_admitted: 1,
+  raw_rows: 1,
+  pool_target: 3,
+  exhausted: false,
+  stop_reason: "no_further_actor_proposed"
+}
+[run-agent][capability-engine] prequalification_complete {
+  unique: 1,
+  eligible: 1,
+  size_excluded: 0,
+  technical_only: 0,
+  yc_rows: 0,
+  generic_scored: 1
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "prequalified",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 0,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7761,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "prequalified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[run-agent][capability-engine] triage_and_ranking_complete {
+  budget: 1,
+  budget_source: "pool_bound",
+  count_budget: 1,
+  requested: 1,
+  pool: 1,
+  relevant: 0,
+  uncertain: 0,
+  irrelevant: 0,
+  ineligible: 0,
+  no_triage: 1,
+  hard_excluded: 0,
+  selected: 1,
+  ranked: 1,
+  triage_enabled: false,
+  untriaged_policy: "rank",
+  time_capacity: 2,
+  per_company_ms: 42867,
+  usable_ms: 122737,
+  gpt_read_budget: 1,
+  gpt_evaluation_budget: 1,
+  frontier: 1,
+  excluded_permanently: 0,
+  first_slice_preview: 1
+}
+[run-agent][capability-engine] investigation_slice_taken {
+  pass: 1,
+  selected: 1,
+  frontier_remaining: 0,
+  already_investigated: 0,
+  excluded_permanently: 0,
+  reason: "budget",
+  budget: 1,
+  budget_source: "pool_bound",
+  carried_in_flight: 0,
+  allowance: 1
+}
+[run-agent][capability-engine] execution_plan_amendment_skipped {
+  reason: "smoke_minimal_orchestration",
+  detail: "the smoke catalog approves no further purchase an amendment could add"
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "prequalified",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 0,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7733,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "prequalified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[run-agent][capability-engine] identity_resolution_complete {
+  targets: 1,
+  resolved: 1,
+  unresolved: 0,
+  deferred: 0,
+  provider_errors: 0,
+  attempted: 1,
+  unattempted: 0,
+  truncated: false,
+  deferred_company_keys: [],
+  concurrency: 4
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "identity_resolved",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7906,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "identity_resolved",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[credits][authorization] {
+  mode: "enforce",
+  allowed: true,
+  reserved: true,
+  reason: "reserved",
+  balance_after: 8,
+  capability: "apify_linkedin_company_details",
+  detail: null
+}
+[toolRegistry] smoke: Apify receipt NOT settled; this purchase needs reconciliation { run_id: "run-details", status: "SUCCEEDED" }
+[credits][settlement] {
+  transaction_id: "236904cc-b196-4d9b-884c-d2d773abf9ba",
+  started: true,
+  charged: 1,
+  settled: true,
+  detail: null
+}
+[memoryWriter] tool_call {
+  tool: "source_with_apify",
+  plan_id: "e2968830-3fa2-4935-b3a6-e268b8af3fdb",
+  tool_call_id: "bc3d9a9d-9324-446a-9df8-c8e9215146cc",
+  conv: null
+}
+[memoryWriter] skipped: an engine owns persistence {
+  tool: "source_with_apify",
+  authority: "capability_engine",
+  plan_id: "e2968830-3fa2-4935-b3a6-e268b8af3fdb",
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2"
+}
+[run-agent][capability-engine] company_enrichment_complete {
+  resolved_urls: 1,
+  actor_starts: 1,
+  enriched: 1,
+  outcomes: {
+    not_attempted: 0,
+    success: 1,
+    empty: 0,
+    provider_error: 0,
+    deferred: 0,
+    total: 1
+  },
+  truncated: false,
+  deferred_company_keys: []
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "companies_enriched",
+  companies: 1,
+  enriched_in_memory: 1,
+  enriched_in_records: 1,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 11866,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "companies_enriched",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 1
+}
+[run-agent][capability-engine] hiring_verification_skipped_by_chain { reasoning: "" }
+[run-agent][capability-engine] stage2_eligible_pool { discovered: 1, hard_gated: 0, eligible: 1, exclusion_reasons: {} }
+[run-agent][capability-engine] stage2_batch_evaluation_complete { eligible: 1, evaluated: 1, restored: 0, beyond_cap: 0 }
+[run-agent][mission-evaluation] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  company_key: "https://www.linkedin.com/company/offline-s30",
+  parse_status: "valid",
+  decision: "qualified",
+  mission_fit: "pass",
+  match_score: 80,
+  repaired: []
+}
+[run-agent][capability-engine] investigation_yield_gate {
+  pass: 1,
+  qualified: 1,
+  requested: 1,
+  frontier_remaining: 0,
+  time_capacity: 2,
+  take_another_slice: false,
+  reason: "quota_met",
+  qualification_ready: 0,
+  evidence_debt_pending: 0
+}
+[run-agent][capability-engine] company_brain_qualification_complete {
+  version: "evaluation-path-telemetry-v1",
+  reached_evaluation: 1,
+  decided_without_model: 0,
+  decided_by_model: 1,
+  counts: {
+    not_reached: 0,
+    fabricated_pass: 0,
+    fabricated_reject: 0,
+    model_evaluated: 1,
+    model_unavailable: 0,
+    restored_decision: 0
+  },
+  companies: undefined,
+  eligible: 1,
+  passed: 1,
+  unknown: 0,
+  restored_decisions: 0
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "qualified",
+  companies: 1,
+  enriched_in_memory: 1,
+  enriched_in_records: 1,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 16225,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "qualified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 1
+}
+[run-agent][capability-engine] stage2_ranking_shadow {
+  computed: false,
+  proposed_source: null,
+  moved: 0,
+  would_enter: 0,
+  would_leave: 0
+}
+[run-agent][capability-engine] stage2_pool_complete {
+  evaluated: 1,
+  unevaluated: 0,
+  ranking_source: "deterministic_fallback",
+  ranking_mode: "shadow",
+  composition_changed: null,
+  delivered: 1,
+  shortfall: 0
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:37:55.660Z",
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  phase: "engine",
+  since_start_ms: 9462,
+  since_prev_ms: 9448,
+  companies: 1
+}
+[run-agent][multi-round][skipped] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  reason: "p2_specs_enforced"
+}
+[run-agent][p2-spine][final] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  settlement: null,
+  persisted: { plan_versions: 1, events: 8, settlements: 2, errors: [] },
+  error: null
+}
+[run-agent][trace] request: Find 1 US B2B software company with a current declared 11–50 employee band and an open Account Executive posting dated within 30 days.
+[run-agent][trace] entry: job_discovery — the mission is hiring-led: an open account executive role is how these companies are found
+[run-agent][trace] plan (gpt/model_validated): job_discovery:apify_linkedin_job_search → company_brain_qualification:- → persistence:-
+[run-agent][trace] skipped hiring_verification: the planned chain proves hiring from evidence an earlier step already returned; a paid verification would re-buy it
+[run-agent][trace] outcome: 1 of 1 qualified
+[run-agent][capability-engine][portfolio] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  requested: 1,
+  rows_shown: 1,
+  opportunities: 1,
+  tiers: [ 1, 0, 0 ],
+  qualified: 1,
+  watch: 0,
+  contact_ready: 0,
+  shortfall: 0
+}
+[run-agent][capability-engine][evaluation-rows] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  rows: 0,
+  counts: {
+    accounts_found: 1,
+    evaluated: 1,
+    shortlisted: 1,
+    identity_unresolved: 0,
+    qualified: 1,
+    contact_ready: 0,
+    not_qualified: 0,
+    not_investigated: 0,
+    awaiting_investigation: 0,
+    deferred: 0,
+    held_for_evidence: 0
+  }
+}
+[run-agent][mission-funnel] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  line: "discovery: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  line: "mission_intelligence: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  line: "smart_shortlist: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  line: "identity_resolution: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  line: "enrichment: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  line: "company_brain: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  line: "mission_evaluator: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  line: "persistence: 1→0 withheld=1"
+}
+[run-agent][claim-plan] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  entry: "job_discovery",
+  hard: [
+    {
+      claim: "business_model",
+      dimension: "industry",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details", "firecrawl" ]
+    },
+    {
+      claim: "country",
+      dimension: "geography",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details" ]
+    },
+    {
+      claim: "company_size",
+      dimension: "company_size",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details" ]
+    },
+    {
+      claim: "open_role",
+      dimension: "hiring",
+      status: "verifiable",
+      routes: [ "apify_linkedin_job_search" ]
+    }
+  ],
+  targets: [],
+  unprovable: []
+}
+[run-agent][claim-verifier][verification_stopped] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  reason: "quota_met",
+  qualified: 1,
+  requested: 1
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:37:55.678Z",
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  phase: "claim_verification",
+  since_start_ms: 9480,
+  since_prev_ms: 18
+}
+[run-agent][claim-verifier] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  order: [
+    "funding_stage_corroboration",
+    "open_role_linkedin_jobs",
+    "business_model_first_party_pages"
+  ],
+  ran: [],
+  stopped: "quota_met",
+  irrelevant: [ "funding_stage_corroboration" ],
+  pending_runs: 0,
+  stopped_by: null,
+  deferred: []
+}
+[run-agent][p2-spine][claim-verifier] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  settlement: null,
+  persisted: { plan_versions: 1, events: 8, settlements: 2, errors: [] },
+  error: null
+}
+[run-agent][capability-engine][lead-library] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  version: "lead-mission-persistence-projection-v1",
+  planned: 1,
+  persisted: 1,
+  skipped: [],
+  gate: "hiring_playbook_authorized",
+  failed: []
+}
+[run-agent][payload-size] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  path: "final_snapshot",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 16197,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine][done] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  entry: "job_discovery",
+  completed: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  pending: [ "hiring_verification" ],
+  attempts: 3,
+  cost_units: 2,
+  qualified: 1,
+  unknown: 0,
+  terminal_reason: null
+}
+[run-agent][company-brain] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  enforced: false,
+  policy_hash: "d3dc7127467decd43cd8e0283b447e8bd8bf9cd1a669b04c37bb41b76627d8e8",
+  hard_constraints: [],
+  size: {
+    min: null,
+    max: null,
+    source: "unresolved",
+    mapping_id: null,
+    mapping_version: "company-size-semantics-1.0.0",
+    confirmation_required: false
+  }
+}
+[run-agent][adaptive-enforcement] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  decision: null,
+  reason: null,
+  requested_quota: 1,
+  persisted_contact: 0,
+  founder_pending: 0,
+  contact_pending: 0,
+  will_run_another_source: true,
+  skip_reason: null
+}
+[run-agent][broad-job-fallback] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  validated_route: "general_company_first",
+  company_first_ran: true,
+  qualified_companies: 1,
+  fallback_reason: null,
+  blocked: "execution_owned_by:capability_engine_v1"
+}
+[run-agent][combined-quota] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  legacy_contact_count_raw: 0,
+  company_first_contact_count_raw: 0,
+  duplicate_contact_count: 0,
+  deduplicated_contact_count: 0,
+  remaining_quota: 1,
+  identity_strategy: "none",
+  unidentifiable_contacts: 0,
+  identity_digests: [],
+  legacy_sourcing_ran: false,
+  legacy_blocked_provider_calls: 0,
+  adaptive_decision: null
+}
+[gpt-opportunity-reasoner] gpt_call_ok {
+  purpose: "opportunity_reasoning",
+  model: "gpt-5.6-luna",
+  tier: "reasoning",
+  routing_reason: "explains a label the evidence already permits; the ceiling, the citations and the missing list are all code's, so there is nothing for a repair round to fix",
+  latency_ms: 4
+}
+[gpt-opportunity-reasoner] gpt_call_telemetry {
+  version: "model-cost-model-v1",
+  role: "opportunity_reasoning",
+  model: "gpt-5.6-luna",
+  reasoning_effort: "low",
+  input_tokens: 1000,
+  cached_input_tokens: 0,
+  output_tokens: 400,
+  estimated_cost_usd: 0.00068,
+  actual_cost_usd: null,
+  cost_source: "event_priced",
+  latency_ms: 5,
+  fallback_reason: null
+}
+[run-agent][lineage-progress] task copy behind a durable copy — using the maximum {
+  at: "2026-10-25T07:37:55.752Z",
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  stored: null,
+  lineage: null,
+  queue: null,
+  effective: 0
+}
+[run-agent][auto-continuation] terminal_status_overridden {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  from: "round_limit_reached",
+  to: "completed",
+  frontier_remaining: 0,
+  qualified: 1,
+  requested: 1
+}
+[run-agent][payload-size] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  path: "slice_result",
+  version: "payload-size-v1",
+  kind: "canonical_view",
+  bytes: 6098,
+  warn_at: 400000,
+  over: false
+}
+[run-agent][lineage-progress-write] {
+  at: "2026-10-25T07:37:55.757Z",
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  path: "slice_result",
+  present_before: false,
+  present_in_write: true,
+  continuations_before: null,
+  continuations_after: 1,
+  restored: false,
+  queue_continuations: null,
+  result_bytes: 73886
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:37:55.771Z",
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  phase: "slice_result_write",
+  since_start_ms: 9573,
+  since_prev_ms: 93
+}
+[run-agent][lineage-progress-write] {
+  at: "2026-10-25T07:37:55.779Z",
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  path: "run_outcome",
+  present_before: true,
+  present_in_write: true,
+  continuations_before: 1,
+  continuations_after: 1,
+  restored: false,
+  queue_continuations: null,
+  result_bytes: 74877
+}
+[run-agent][run-outcome] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  lineage_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  state: "SATISFIED",
+  leads: 1,
+  credits: 2,
+  reused: 0,
+  unsettled: 0,
+  eligible: 1,
+  evaluated: 1,
+  not_reached: 0,
+  cited_rows: 0
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:37:55.794Z",
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  phase: "lineage_release",
+  since_start_ms: 9596,
+  since_prev_ms: 23,
+  released: true,
+  attempts: 1,
+  state_bytes: 32485
+}
+[lead-v2][state-size] {
+  task: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  slice: 1,
+  checkpoint_bytes: 16197,
+  result_bytes: 73886,
+  lineage_bytes: 32485,
+  canonical_view_bytes: 6098,
+  over_budget: []
+}
+[run-agent][auto-continuation] {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  qualified: 1,
+  requested: 1,
+  frontier_remaining: 0,
+  continuations_used: 1,
+  cost_units_used: 2,
+  barren_slices: 0,
+  decision: "quota_met",
+  detail: "1 of 1 qualified — the request is met",
+  dispatched: false,
+  continuing: false
+}
+[run-agent][model-ledger] { task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2", rows: 4 }
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  plan_id: "e2968830-3fa2-4935-b3a6-e268b8af3fdb",
+  status: "partial",
+  reason: "partial_capability_progress",
+  task_status: "ready",
+  plan_status: "partial"
+}
+[run-agent][terminal-guard] terminal_guard_skip_task {
+  task_id: "46680f9b-396e-4ce4-b7d4-53f2983f61c2",
+  current: "complete"
+}
+(node:11092) TimeoutNegativeWarning: -17715.86964110251 is a negative number.
+Timeout duration was set to 1.
+----- output end -----
+S30: after a mission persisted its lead and its deadline passed — the lead stands and nothing more is admitted ... ok (9s)
+running 15 tests from ./tests/db-contract/clientCompanyBrain.contract.test.ts
+1. two clients in one workspace keep separate Brains, even with the same external ids ... ok (102ms)
+2. a user granted only client A reads and edits A, and can neither read, write nor list B ... ok (80ms)
+3. owner and admin without a grant get no client data, only management; a self-grant is recorded ... ok (78ms)
+4. race: grant revoked in flight → the write waits on the lock, then is refused; nothing written ... ok (86ms)
+5. revoke → regrant: a new generation; a task pinned to the old one is refused, read and write ... ok (95ms)
+6. race: demoted to viewer in flight → waits, then forbidden_role; a pinned task is refused after demote→promote ... ok (114ms)
+6b. race: membership removed in flight → not_member and every grant revoked; remove → rejoin → regrant refuses the old task ... ok (120ms)
+6c. race: logged out in flight → session_invalid; nothing written ... ok (97ms)
+7. race: client archived in flight → waits, then client_archived; every grant revoked; archive is terminal ... ok (108ms)
+8. a client request without a client is refused everywhere — never the agency Brain or a default client ... ok (57ms)
+9. cross-client and cross-workspace ids are refused and indistinguishable from unknown ones ... ok (132ms)
+10. the agency Brain and client Brains never cross: writes, reads and agent context stay in scope ... ok (81ms)
+11. two writers on one version: exactly one wins, the other is stale; insert never overwrites ... ok (78ms)
+12. browser roles and even the service role cannot write these tables; refusals make no write or external request ... ok (107ms)
+concurrent grants to one user allocate one generation; mixed grant/revoke/archive/remove/write traffic never deadlocks ... ok (147ms)
+running 7 tests from ./tests/db-contract/creditRearm.contract.test.ts
+a key refunded once (not_charged) and then really bought is charged ... ok (67ms)
+a reservation released by the stale reaper and then really bought is charged ... ok (23ms)
+enforcement: a refunded key is balance-checked again, never waved through ... ok (18ms)
+a charged key is still a replay: the same purchase is never charged twice ... ok (19ms)
+an in-flight reservation is still a replay: no second hold ... ok (9ms)
+concurrent re-arms of one refunded key hold the credit once ... ok (19ms)
+a re-armed reservation is not reaped by its original age ... ok (15ms)
+running 8 tests from ./tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts
+OWN-01: a member cannot store a contact under another workspace's account (raw INSERT) ... ok (67ms)
+OWN-01: a member cannot repoint an existing contact at another workspace's account (PATCH) ... ok (20ms)
+OWN-01: the service role (worker, edge functions) is refused the same mismatch ... ok (28ms)
+OWN-01: a foreign parent and a non-existent parent are refused alike (no existence oracle) ... ok (18ms)
+positive controls: own parent, no parent, embed, delete behaviour ... ok (29ms)
+CASCADE references still cascade, inside the workspace ... ok (10ms)
+catalog: all 26 lead-graph references are (workspace_id, col) → parent (workspace_id, id), one per pair ... ok (4ms)
+preflight: an existing mismatch aborts the migration and changes nothing ... ok (24ms)
+running 9 tests from ./tests/db-contract/legacyPreEffectGuard.contract.test.ts
+run-agent: a resume of a STORED pilot task is refused before any effect, with the request's markers stripped ...
+------- post-test output -------
+[run-agent][pre-effect-guard] refused {
+  workspace_id: "84e8ac2e-e23e-45f7-9681-37a6dadfd5ec",
+  code: "pilot_execution_disabled",
+  detail: "stored task 281114e4-3c3d-4a83-a061-049ab1981410 carries execution_mode=pilot_draft_only, pilot_scope, pilot_origin_session_id"
+}
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+----- post-test output end -----
+run-agent: a resume of a STORED pilot task is refused before any effect, with the request's markers stripped ... ok (253ms)
+run-agent: a request carrying the pilot marker is refused before any effect ...
+------- post-test output -------
+[run-agent][pre-effect-guard] refused {
+  workspace_id: "b63e11f0-edb8-4356-99a6-58d03daf797e",
+  code: "pilot_execution_disabled",
+  detail: "request carries execution_mode=pilot_draft_only"
+}
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+----- post-test output end -----
+run-agent: a request carrying the pilot marker is refused before any effect ... ok (22ms)
+run-agent: a client-scoped request is refused before any effect (client research disabled until #174) ...
+------- post-test output -------
+[run-agent][pre-effect-guard] refused {
+  workspace_id: "b332779c-64b4-40e2-b6db-c72c5e01fea0",
+  code: "client_scope_unsupported",
+  detail: "request carries client_id"
+}
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+----- post-test output end -----
+run-agent: a client-scoped request is refused before any effect (client research disabled until #174) ... ok (26ms)
+run-agent: a service call for a user who is no longer a member is refused before any effect ...
+------- post-test output -------
+[run-agent][pre-effect-guard] refused {
+  workspace_id: "3305a499-3e0c-4ce5-86cd-dd5f3eed7f53",
+  code: "principal_not_member",
+  detail: "the requesting user is no longer a member of this workspace"
+}
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+[run-agent][pre-effect-guard] refused {
+  workspace_id: "3305a499-3e0c-4ce5-86cd-dd5f3eed7f53",
+  code: "principal_not_member",
+  detail: "the requesting user is no longer a member of this workspace"
+}
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+----- post-test output end -----
+run-agent: a service call for a user who is no longer a member is refused before any effect ... ok (39ms)
+run-agent: a resume keeps its original principal — another member cannot resume it ...
+------- post-test output -------
+[run-agent][pre-effect-guard] refused {
+  workspace_id: "b9c0351d-2f12-4b8b-978d-5df79a2a1701",
+  code: "principal_mismatch",
+  detail: "task 1e512451-3f65-45e2-bb36-e84737a148b1 belongs to another principal"
+}
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+----- post-test output end -----
+run-agent: a resume keeps its original principal — another member cannot resume it ... ok (16ms)
+run-agent: a task of another workspace is refused before any effect ...
+------- post-test output -------
+[run-agent][pre-effect-guard] refused {
+  workspace_id: "08edcdd5-f094-4a2e-a90a-4486aaaa5704",
+  code: "referenced_task_foreign",
+  detail: "task 303bb87c-b810-4606-ad88-3b67f1548019 belongs to another workspace"
+}
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+----- post-test output end -----
+run-agent: a task of another workspace is refused before any effect ... ok (19ms)
+run-agent positive control: a current member's non-pilot request passes the guard ...
+------- post-test output -------
+[run-agent] agent not found: { agent_slug: "no-such-agent", agent_id_in: undefined, agentErr: null }
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+[run-agent] agent not found: { agent_slug: "no-such-agent", agent_id_in: undefined, agentErr: null }
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+----- post-test output end -----
+run-agent positive control: a current member's non-pilot request passes the guard ... ok (27ms)
+enqueue-lead-mission: no pilot, client-scoped or non-member mission is queued ...
+------- post-test output -------
+[enqueue-lead-mission][pre-effect-guard] refused {
+  workspace_id: "45f51737-c935-44c2-9d00-044de966e326",
+  code: "pilot_execution_disabled",
+  detail: "request carries execution_mode=pilot_draft_only"
+}
+[enqueue-lead-mission][pre-effect-guard] refused {
+  workspace_id: "45f51737-c935-44c2-9d00-044de966e326",
+  code: "client_scope_unsupported",
+  detail: "request carries client_id"
+}
+[enqueue-lead-mission][pre-effect-guard] refused {
+  workspace_id: "45f51737-c935-44c2-9d00-044de966e326",
+  code: "principal_not_member",
+  detail: "the requesting user is no longer a member of this workspace"
+}
+----- post-test output end -----
+enqueue-lead-mission: no pilot, client-scoped or non-member mission is queued ... ok (45ms)
+orchestrate: a pilot or client-scoped request is refused before any plan, Brain read, model call or dispatch ...
+------- post-test output -------
+[orchestrate][pre-effect-guard] refused {
+  workspace_id: "88c5c0bb-0732-4d13-9596-0ff3491e8d66",
+  code: "pilot_execution_disabled",
+  detail: "request carries execution_mode=pilot_draft_only"
+}
+[orchestrate][pre-effect-guard] refused {
+  workspace_id: "88c5c0bb-0732-4d13-9596-0ff3491e8d66",
+  code: "client_scope_unsupported",
+  detail: "request carries client_id"
+}
+[orchestrate][pre-effect-guard] refused {
+  workspace_id: "88c5c0bb-0732-4d13-9596-0ff3491e8d66",
+  code: "pilot_execution_disabled",
+  detail: "request carries execution_mode=pilot_draft_only"
+}
+----- post-test output end -----
+orchestrate: a pilot or client-scoped request is refused before any plan, Brain read, model call or dispatch ... ok (45ms)
+running 3 tests from ./tests/db-contract/qualificationAuthority.contract.test.ts
+Q1-01 (control): every row PASS and the evaluator qualifies — one lead, reported and counted ...
+------- post-test output -------
+[run-agent][lineage-lease] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  lineage_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  version: "lineage-lease-v1",
+  enforced: true,
+  outcome: "acquired",
+  reason: "acquired",
+  held_by: null,
+  held_until: "2026-10-25T07:40:59.561088+00:00"
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:37:59.565Z",
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  phase: "startup_lease",
+  since_start_ms: 33,
+  since_prev_ms: 33,
+  lease: "acquired"
+}
+[run-agent] entity routing {
+  target_entity: "company",
+  output_type: "qualified_people",
+  actor_key: "apify_jobs",
+  clarification_required: false,
+  conflict: false,
+  execution_mode: "company_first",
+  company_first: true,
+  company_gate_required: true,
+  requested_person_role: "executive"
+}
+[run-agent][company-first] executing {
+  requested_person_role: "executive",
+  workspace: "35a882bf-46d2-4640-9fb7-3aa9a120ce5a"
+}
+[run-agent][broadening-owner] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  owner: "deterministic_only"
+}
+[run-agent][lead-plan-artifact] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  source: "absent",
+  plan_source: null,
+  planning_owner: null,
+  missing_reason: "no_artifact_on_plan_row"
+}
+[run-agent][planner-owner] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  planning_owner: "deterministic_registry_v1",
+  reason: "no planner adapter is enabled for this workspace; the deterministic ladder owns titles",
+  not_selected: [],
+  plan_provenance: {
+    owner: "deterministic_registry_v1",
+    adapter: "none",
+    outcome: "selected_directly",
+    fallback_reason: null
+  },
+  provenance_description: "deterministic ladder, selected directly — no adapter was enabled for this workspace"
+}
+[run-agent][mission-cap] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  lineage_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  provider_usd: 0.2,
+  credits: 5,
+  invalid_env: [],
+  floor_usd: 0,
+  floor_calls: 0,
+  floor_source: "lead_execution_calls"
+}
+[run-agent][funding-screen] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  reason: "not_lead_v2_general_discovery",
+  plan: null,
+  priced: 0,
+  recently_checked: 0,
+  prior_searches: 0
+}
+[run-agent][lead-mission] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  has_mission: true,
+  mission_version: "lead-mission-v1",
+  mission_type: "company_research",
+  requested_output: "qualified_companies",
+  entry_capability: "job_discovery",
+  readiness: {
+    mode: "production",
+    probe_routes: [],
+    allow_experimental: [],
+    overrides: []
+  },
+  bound_referents: 0,
+  capabilities: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  allowed_providers: [
+    "apify_linkedin_job_search",
+    "apify_linkedin_company_search",
+    "apify_linkedin_company_details"
+  ],
+  authority: "lead_mission_v1"
+}
+[run-agent][playbook-selection] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  version: "lead-research-playbook-v2",
+  ok: true,
+  combination: "single",
+  strategy_source: "derived_from_mission_fields",
+  selected: [ "hiring:supported" ],
+  runnable: [ "hiring" ],
+  blocked: [],
+  unknown_strategies: [],
+  qualifying_signals: [],
+  routing_conflicts: [],
+  reason: "the mission declares no strategy; hiring derived from required signals"
+}
+[run-agent][playbook-authorization] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  version: "lead-playbook-execution-v1",
+  applies: true,
+  authorized: true,
+  playbook: "hiring",
+  entry_capability: "job_discovery",
+  entry_source: "playbook_discovery",
+  capabilities: [ "job_discovery:driven", "hiring_verification:driven" ],
+  violations: [],
+  reason: 'the plan executes the hiring playbook: entry "job_discovery" (a hiring discovery capability), requiring job_discovery, hiring_verification'
+}
+[run-agent][hiring-route] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  ok: true,
+  requested: "general_company_first",
+  validated: "general_company_first",
+  source_order: [ "apify_linkedin_company_search" ],
+  fallback_reason: null,
+  repairs: [
+    "source_not_in_route_dropped:apify_linkedin_job_search",
+    "source_not_in_route_dropped:apify_linkedin_company_details"
+  ],
+  actor_limitation_briefing_size: 16
+}
+[run-agent][prior-contact-state] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  prior_contact_credit: 0,
+  scanned_rows: 0,
+  unidentifiable: 0,
+  ignored_request_identities: 0,
+  lookup_error: null,
+  identity_digests: [],
+  source: "canonical_persisted_state"
+}
+[run-agent][resume-precheck] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  prior_contact_credit: 0,
+  requested_quota: 1,
+  remaining_quota: 1,
+  decision: "continue_sourcing",
+  reason: "quota_unmet_and_no_pending_work",
+  company_first_will_run: true
+}
+[run-agent][mission-evaluation][binding] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  calls_allowed: 3,
+  shortlist_size: 3,
+  cap: 20
+}
+[run-agent][mission-triage][binding] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  batches_allowed: 1,
+  batch_size: 25,
+  pool_size: 3,
+  cap: 6
+}
+[run-agent][smoke-orchestration] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  mode: "minimal",
+  skipped: [
+    "route_control",
+    "triage",
+    "discovery_replan",
+    "execution_plan_amendment",
+    "pool_ranking_shadow",
+    "p2_receipt_rereads"
+  ]
+}
+[run-agent][grounded-brain][binding] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  enabled: true,
+  reason: "enabled",
+  mode: "shadow",
+  model: "openai/gpt-5.6-luna",
+  threshold: 0.6
+}
+[run-agent][stage2][binding] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  full_pool: {
+    enabled: true,
+    reason: "enabled",
+    limits: { batch_size: 8, max_evaluated: 100 }
+  },
+  ranking: {
+    enabled: true,
+    reason: "enabled",
+    mode: "shadow",
+    model: "openai/gpt-5.6-luna"
+  }
+}
+[run-agent][intelligence-policy] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  mode: "new_architecture",
+  stages: {
+    mission_compiler: true,
+    grounded_brain: true,
+    full_pool_evaluation: true,
+    pool_ranking: true,
+    multi_round: true
+  },
+  missing_required: [],
+  reason: "every required intelligence stage is enabled"
+}
+[run-agent][runtime] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  executor: {
+    role: "executor",
+    function: "run-agent",
+    git_sha: "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    git_short: "046b61b0",
+    build_timestamp: "2026-08-29T10:44:33.276Z",
+    lead_intelligence_contract_version: "v1",
+    dirty: false
+  },
+  planner: {
+    role: "planner",
+    function: "offline-rehearsal",
+    git_sha: "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    git_short: "046b61b0",
+    build_timestamp: "2026-08-29T10:44:33.276Z",
+    lead_intelligence_contract_version: "v1",
+    dirty: false
+  },
+  contract: {
+    ok: true,
+    planner_version: "v1",
+    executor_version: "v1",
+    same_build: true
+  }
+}
+[run-agent][stage4][binding] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  enabled: true,
+  reason: "enabled",
+  max_rounds: 3,
+  max_provider_cost_units: 12,
+  max_model_operations: 24,
+  model: "openai/gpt-5.6-luna"
+}
+[run-agent][paid-preflight] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  ok: true,
+  mission_authority: "lead_mission_v1",
+  entry_capability: "job_discovery",
+  ordered_capabilities: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  first_provider: "apify_linkedin_job_search",
+  input_valid: true,
+  blocked: []
+}
+[run-agent][resume][loaded] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  parent_task_id: null,
+  records: 0,
+  rejection: null,
+  client_fields_ignored: []
+}
+[run-agent][stage2][restored] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  restored: 0,
+  stale: false
+}
+[run-agent][capability-engine] qualification_context {
+  version: "mission-qualification-context-v1",
+  target_entity: "company",
+  role_vocabulary_source: "mission",
+  required_titles: [
+    "sdr",
+    "bdr",
+    "sales development representative",
+    "account executive",
+    "founding sdr",
+    "founding ae",
+    "head of sales",
+    "gtm",
+    "go to market",
+    "business development",
+    "demand generation",
+    "revenue",
+    "salesperson",
+    "sales representative",
+    "territory sales manager",
+    "ae",
+    "enterprise ae",
+    "seller",
+    "enterprise seller",
+    "enterprise sales"
+  ],
+  verticals: [ "b2b software" ],
+  stages: [],
+  locations: [ "united states" ],
+  strategies: [],
+  employee_range: { min: 11, max: 50 },
+  mission_owns: {
+    employee_count: true,
+    industry: true,
+    geography: true,
+    stage: false,
+    hiring_role: true
+  },
+  hard_constraint_keys: [ "company_profile.locations" ]
+}
+[run-agent][capability-engine] mission_cap_applied {
+  mission_provider_usd: 0.2,
+  mission_credits: 5,
+  floor_usd: 0,
+  floor_calls: 0,
+  floor_source: "lead_execution_calls",
+  invalid_env: []
+}
+[gpt-execution-plan] gpt_call_ok {
+  purpose: "execution_plan",
+  model: "gpt-5.6-luna",
+  tier: "reasoning",
+  routing_reason: "plans the whole chain and decides which paid stages are unnecessary; this is the most consequential single call the pipeline makes",
+  latency_ms: 6
+}
+[gpt-execution-plan] gpt_call_telemetry {
+  version: "model-cost-model-v1",
+  role: "execution_plan",
+  model: "gpt-5.6-luna",
+  reasoning_effort: "low",
+  input_tokens: 1000,
+  cached_input_tokens: 0,
+  output_tokens: 400,
+  estimated_cost_usd: 0.00068,
+  actual_cost_usd: null,
+  cost_source: "event_priced",
+  latency_ms: 7,
+  fallback_reason: null
+}
+[run-agent][capability-engine] execution_plan_resolved {
+  steps: [
+    "job_discovery:apify_linkedin_job_search",
+    "company_brain_qualification:-",
+    "persistence:-"
+  ],
+  source: "model_validated"
+}
+[run-agent][capability-engine] retrieval_plan_created { version: 1, routes: 1, stages: 0 }
+[run-agent][capability-engine] discovery_actors_from_execution_plan {
+  actors: [ "apify_linkedin_job_search" ],
+  source: "model_validated",
+  violations: []
+}
+[run-agent][capability-engine] discovery_strategy_resolved {
+  version: "lead-discovery-strategy-v1",
+  source: "model_validated",
+  model_chosen: true,
+  actors: [
+    {
+      actor_key: "apify_linkedin_job_search",
+      role: "primary",
+      rationale: "find the specified open role",
+      input: {
+        jobTitles: [ "Account Executive" ],
+        locations: [ "United States" ],
+        maxItems: 3,
+        postedLimit: "month",
+        sortBy: "date"
+      },
+      input_fields: [ "jobTitles", "locations", "maxItems", "postedLimit", "sortBy" ],
+      dropped_filters: [],
+      requires_enrichment: false
+    }
+  ],
+  violations: [],
+  blocked: 0,
+  repaired: 0,
+  all_require_enrichment: false
+}
+[credits][authorization] {
+  mode: "enforce",
+  allowed: true,
+  reserved: true,
+  reason: "reserved",
+  balance_after: 9,
+  capability: "apify_linkedin_job_search",
+  detail: null
+}
+[toolRegistry] smoke: Apify receipt NOT settled; this purchase needs reconciliation { run_id: "run-jobs", status: "SUCCEEDED" }
+[credits][settlement] {
+  transaction_id: "cef9f4a7-1b69-4ca2-a81f-bb207ce2e169",
+  started: true,
+  charged: 1,
+  settled: true,
+  detail: null
+}
+[memoryWriter] tool_call {
+  tool: "source_with_apify",
+  plan_id: "fd1672fd-238d-45d1-8448-23453afdf47b",
+  tool_call_id: "89dd667b-cc47-4bb7-8971-2f3ab84a2b5b",
+  conv: null
+}
+[memoryWriter] skipped: an engine owns persistence {
+  tool: "source_with_apify",
+  authority: "capability_engine",
+  plan_id: "fd1672fd-238d-45d1-8448-23453afdf47b",
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762"
+}
+[run-agent][capability-engine] job_discovery_rows { kept: 1, dropped: {}, not_hiring_proof: 0, employers: 1 }
+[run-agent][capability-engine] research_wave_summarized {
+  wave: 1,
+  routes: [ "apify_linkedin_job_search:1/1+0" ],
+  unique: 1,
+  multi_source: 0,
+  low_yield: [],
+  exhausted: []
+}
+[run-agent][capability-engine] discovery_replan_skipped {
+  pass: 2,
+  reason: "smoke_minimal_orchestration",
+  pool: 1,
+  admitted: 1
+}
+[run-agent][capability-engine] discovery_source_state {
+  sources_attempted: [ "apify_linkedin_job_search" ],
+  pages_taken: { apify_linkedin_job_search: 1 },
+  page_fingerprints: {
+    apify_linkedin_job_search: "228df52e8deeff900ccc242360495528bcafa8379efc066e642ba62c15cbe6f7"
+  },
+  admitted: 1,
+  available_admitted: 1,
+  raw_rows: 1,
+  pool_target: 3,
+  exhausted: false,
+  stop_reason: "no_further_actor_proposed"
+}
+[run-agent][capability-engine] prequalification_complete {
+  unique: 1,
+  eligible: 1,
+  size_excluded: 0,
+  technical_only: 0,
+  yc_rows: 0,
+  generic_scored: 1
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "prequalified",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 0,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7838,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "prequalified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[run-agent][capability-engine] triage_and_ranking_complete {
+  budget: 1,
+  budget_source: "pool_bound",
+  count_budget: 1,
+  requested: 1,
+  pool: 1,
+  relevant: 0,
+  uncertain: 0,
+  irrelevant: 0,
+  ineligible: 0,
+  no_triage: 1,
+  hard_excluded: 0,
+  selected: 1,
+  ranked: 1,
+  triage_enabled: false,
+  untriaged_policy: "rank",
+  time_capacity: 2,
+  per_company_ms: 42867,
+  usable_ms: 122712,
+  gpt_read_budget: 1,
+  gpt_evaluation_budget: 1,
+  frontier: 1,
+  excluded_permanently: 0,
+  first_slice_preview: 1
+}
+[run-agent][capability-engine] investigation_slice_taken {
+  pass: 1,
+  selected: 1,
+  frontier_remaining: 0,
+  already_investigated: 0,
+  excluded_permanently: 0,
+  reason: "budget",
+  budget: 1,
+  budget_source: "pool_bound",
+  carried_in_flight: 0,
+  allowance: 1
+}
+[run-agent][capability-engine] execution_plan_amendment_skipped {
+  reason: "smoke_minimal_orchestration",
+  detail: "the smoke catalog approves no further purchase an amendment could add"
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "prequalified",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 0,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7810,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "prequalified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[run-agent][capability-engine] identity_resolution_complete {
+  targets: 1,
+  resolved: 1,
+  unresolved: 0,
+  deferred: 0,
+  provider_errors: 0,
+  attempted: 1,
+  unattempted: 0,
+  truncated: false,
+  deferred_company_keys: [],
+  concurrency: 4
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "identity_resolved",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7983,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "identity_resolved",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[credits][authorization] {
+  mode: "enforce",
+  allowed: true,
+  reserved: true,
+  reason: "reserved",
+  balance_after: 8,
+  capability: "apify_linkedin_company_details",
+  detail: null
+}
+[toolRegistry] smoke: Apify receipt NOT settled; this purchase needs reconciliation { run_id: "run-details", status: "SUCCEEDED" }
+[credits][settlement] {
+  transaction_id: "de8bdf74-a96d-4a9d-a4ce-35a967d0b1e5",
+  started: true,
+  charged: 1,
+  settled: true,
+  detail: null
+}
+[memoryWriter] tool_call {
+  tool: "source_with_apify",
+  plan_id: "fd1672fd-238d-45d1-8448-23453afdf47b",
+  tool_call_id: "d77f769b-9979-4576-8a89-bf22bbdcd673",
+  conv: null
+}
+[memoryWriter] skipped: an engine owns persistence {
+  tool: "source_with_apify",
+  authority: "capability_engine",
+  plan_id: "fd1672fd-238d-45d1-8448-23453afdf47b",
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762"
+}
+[run-agent][capability-engine] company_enrichment_complete {
+  resolved_urls: 1,
+  actor_starts: 1,
+  enriched: 1,
+  outcomes: {
+    not_attempted: 0,
+    success: 1,
+    empty: 0,
+    provider_error: 0,
+    deferred: 0,
+    total: 1
+  },
+  truncated: false,
+  deferred_company_keys: []
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "companies_enriched",
+  companies: 1,
+  enriched_in_memory: 1,
+  enriched_in_records: 1,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 11943,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "companies_enriched",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 1
+}
+[run-agent][capability-engine] hiring_verification_skipped_by_chain { reasoning: "" }
+[run-agent][capability-engine] stage2_eligible_pool { discovered: 1, hard_gated: 0, eligible: 1, exclusion_reasons: {} }
+[run-agent][capability-engine] stage2_batch_evaluation_complete { eligible: 1, evaluated: 1, restored: 0, beyond_cap: 0 }
+[run-agent][mission-evaluation] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  company_key: "https://www.linkedin.com/company/offline-q1-01",
+  parse_status: "valid",
+  decision: "qualified",
+  mission_fit: "pass",
+  match_score: 80,
+  repaired: []
+}
+[run-agent][capability-engine] investigation_yield_gate {
+  pass: 1,
+  qualified: 1,
+  requested: 1,
+  frontier_remaining: 0,
+  time_capacity: 2,
+  take_another_slice: false,
+  reason: "quota_met",
+  qualification_ready: 0,
+  evidence_debt_pending: 0
+}
+[run-agent][capability-engine] company_brain_qualification_complete {
+  version: "evaluation-path-telemetry-v1",
+  reached_evaluation: 1,
+  decided_without_model: 0,
+  decided_by_model: 1,
+  counts: {
+    not_reached: 0,
+    fabricated_pass: 0,
+    fabricated_reject: 0,
+    model_evaluated: 1,
+    model_unavailable: 0,
+    restored_decision: 0
+  },
+  companies: undefined,
+  eligible: 1,
+  passed: 1,
+  unknown: 0,
+  restored_decisions: 0
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "qualified",
+  companies: 1,
+  enriched_in_memory: 1,
+  enriched_in_records: 1,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 16383,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "qualified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 1
+}
+[run-agent][capability-engine] stage2_ranking_shadow {
+  computed: false,
+  proposed_source: null,
+  moved: 0,
+  would_enter: 0,
+  would_leave: 0
+}
+[run-agent][capability-engine] stage2_pool_complete {
+  evaluated: 1,
+  unevaluated: 0,
+  ranking_source: "deterministic_fallback",
+  ranking_mode: "shadow",
+  composition_changed: null,
+  delivered: 1,
+  shortfall: 0
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:09.052Z",
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  phase: "engine",
+  since_start_ms: 9520,
+  since_prev_ms: 9487,
+  companies: 1
+}
+[run-agent][multi-round][skipped] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  reason: "p2_specs_enforced"
+}
+[run-agent][p2-spine][final] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  settlement: null,
+  persisted: { plan_versions: 1, events: 8, settlements: 2, errors: [] },
+  error: null
+}
+[run-agent][trace] request: Find 1 US B2B software company with a current declared 11–50 employee band and an open Account Executive posting dated within 30 days.
+[run-agent][trace] entry: job_discovery — the mission is hiring-led: an open account executive role is how these companies are found
+[run-agent][trace] plan (gpt/model_validated): job_discovery:apify_linkedin_job_search → company_brain_qualification:- → persistence:-
+[run-agent][trace] skipped hiring_verification: the planned chain proves hiring from evidence an earlier step already returned; a paid verification would re-buy it
+[run-agent][trace] outcome: 1 of 1 qualified
+[run-agent][capability-engine][portfolio] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  requested: 1,
+  rows_shown: 1,
+  opportunities: 1,
+  tiers: [ 1, 0, 0 ],
+  qualified: 1,
+  watch: 0,
+  contact_ready: 0,
+  shortfall: 0
+}
+[run-agent][capability-engine][evaluation-rows] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  rows: 0,
+  counts: {
+    accounts_found: 1,
+    evaluated: 1,
+    shortlisted: 1,
+    identity_unresolved: 0,
+    qualified: 1,
+    contact_ready: 0,
+    not_qualified: 0,
+    not_investigated: 0,
+    awaiting_investigation: 0,
+    deferred: 0,
+    held_for_evidence: 0
+  }
+}
+[run-agent][mission-funnel] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  line: "discovery: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  line: "mission_intelligence: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  line: "smart_shortlist: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  line: "identity_resolution: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  line: "enrichment: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  line: "company_brain: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  line: "mission_evaluator: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  line: "persistence: 1→0 withheld=1"
+}
+[run-agent][claim-plan] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  entry: "job_discovery",
+  hard: [
+    {
+      claim: "business_model",
+      dimension: "industry",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details", "firecrawl" ]
+    },
+    {
+      claim: "country",
+      dimension: "geography",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details" ]
+    },
+    {
+      claim: "company_size",
+      dimension: "company_size",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details" ]
+    },
+    {
+      claim: "open_role",
+      dimension: "hiring",
+      status: "verifiable",
+      routes: [ "apify_linkedin_job_search" ]
+    }
+  ],
+  targets: [],
+  unprovable: []
+}
+[run-agent][claim-verifier][verification_stopped] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  reason: "quota_met",
+  qualified: 1,
+  requested: 1
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:09.075Z",
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  phase: "claim_verification",
+  since_start_ms: 9543,
+  since_prev_ms: 23
+}
+[run-agent][claim-verifier] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  order: [
+    "funding_stage_corroboration",
+    "open_role_linkedin_jobs",
+    "business_model_first_party_pages"
+  ],
+  ran: [],
+  stopped: "quota_met",
+  irrelevant: [ "funding_stage_corroboration" ],
+  pending_runs: 0,
+  stopped_by: null,
+  deferred: []
+}
+[run-agent][p2-spine][claim-verifier] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  settlement: null,
+  persisted: { plan_versions: 1, events: 8, settlements: 2, errors: [] },
+  error: null
+}
+[run-agent][capability-engine][lead-library] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  version: "lead-mission-persistence-projection-v1",
+  planned: 1,
+  persisted: 1,
+  skipped: [],
+  gate: "hiring_playbook_authorized",
+  failed: []
+}
+[run-agent][payload-size] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  path: "final_snapshot",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 16355,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine][done] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  entry: "job_discovery",
+  completed: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  pending: [ "hiring_verification" ],
+  attempts: 3,
+  cost_units: 2,
+  qualified: 1,
+  unknown: 0,
+  terminal_reason: null
+}
+[run-agent][company-brain] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  enforced: false,
+  policy_hash: "d3dc7127467decd43cd8e0283b447e8bd8bf9cd1a669b04c37bb41b76627d8e8",
+  hard_constraints: [],
+  size: {
+    min: null,
+    max: null,
+    source: "unresolved",
+    mapping_id: null,
+    mapping_version: "company-size-semantics-1.0.0",
+    confirmation_required: false
+  }
+}
+[run-agent][adaptive-enforcement] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  decision: null,
+  reason: null,
+  requested_quota: 1,
+  persisted_contact: 0,
+  founder_pending: 0,
+  contact_pending: 0,
+  will_run_another_source: true,
+  skip_reason: null
+}
+[run-agent][broad-job-fallback] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  validated_route: "general_company_first",
+  company_first_ran: true,
+  qualified_companies: 1,
+  fallback_reason: null,
+  blocked: "execution_owned_by:capability_engine_v1"
+}
+[run-agent][combined-quota] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  legacy_contact_count_raw: 0,
+  company_first_contact_count_raw: 0,
+  duplicate_contact_count: 0,
+  deduplicated_contact_count: 0,
+  remaining_quota: 1,
+  identity_strategy: "none",
+  unidentifiable_contacts: 0,
+  identity_digests: [],
+  legacy_sourcing_ran: false,
+  legacy_blocked_provider_calls: 0,
+  adaptive_decision: null
+}
+[gpt-opportunity-reasoner] gpt_call_ok {
+  purpose: "opportunity_reasoning",
+  model: "gpt-5.6-luna",
+  tier: "reasoning",
+  routing_reason: "explains a label the evidence already permits; the ceiling, the citations and the missing list are all code's, so there is nothing for a repair round to fix",
+  latency_ms: 4
+}
+[gpt-opportunity-reasoner] gpt_call_telemetry {
+  version: "model-cost-model-v1",
+  role: "opportunity_reasoning",
+  model: "gpt-5.6-luna",
+  reasoning_effort: "low",
+  input_tokens: 1000,
+  cached_input_tokens: 0,
+  output_tokens: 400,
+  estimated_cost_usd: 0.00068,
+  actual_cost_usd: null,
+  cost_source: "event_priced",
+  latency_ms: 4,
+  fallback_reason: null
+}
+[run-agent][lineage-progress] task copy behind a durable copy — using the maximum {
+  at: "2026-10-25T07:38:09.171Z",
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  stored: null,
+  lineage: null,
+  queue: null,
+  effective: 0
+}
+[run-agent][auto-continuation] terminal_status_overridden {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  from: "round_limit_reached",
+  to: "completed",
+  frontier_remaining: 0,
+  qualified: 1,
+  requested: 1
+}
+[run-agent][payload-size] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  path: "slice_result",
+  version: "payload-size-v1",
+  kind: "canonical_view",
+  bytes: 6142,
+  warn_at: 400000,
+  over: false
+}
+[run-agent][lineage-progress-write] {
+  at: "2026-10-25T07:38:09.181Z",
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  path: "slice_result",
+  present_before: false,
+  present_in_write: true,
+  continuations_before: null,
+  continuations_after: 1,
+  restored: false,
+  queue_continuations: null,
+  result_bytes: 74255
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:09.192Z",
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  phase: "slice_result_write",
+  since_start_ms: 9660,
+  since_prev_ms: 117
+}
+[run-agent][lineage-progress-write] {
+  at: "2026-10-25T07:38:09.203Z",
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  path: "run_outcome",
+  present_before: true,
+  present_in_write: true,
+  continuations_before: 1,
+  continuations_after: 1,
+  restored: false,
+  queue_continuations: null,
+  result_bytes: 75246
+}
+[run-agent][run-outcome] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  lineage_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  state: "SATISFIED",
+  leads: 1,
+  credits: 2,
+  reused: 0,
+  unsettled: 0,
+  eligible: 1,
+  evaluated: 1,
+  not_reached: 0,
+  cited_rows: 0
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:09.224Z",
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  phase: "lineage_release",
+  since_start_ms: 9692,
+  since_prev_ms: 32,
+  released: true,
+  attempts: 1,
+  state_bytes: 32675
+}
+[lead-v2][state-size] {
+  task: "d016134b-0375-46fa-a2d4-7e3534159762",
+  slice: 1,
+  checkpoint_bytes: 16355,
+  result_bytes: 74255,
+  lineage_bytes: 32675,
+  canonical_view_bytes: 6142,
+  over_budget: []
+}
+[run-agent][auto-continuation] {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  qualified: 1,
+  requested: 1,
+  frontier_remaining: 0,
+  continuations_used: 1,
+  cost_units_used: 2,
+  barren_slices: 0,
+  decision: "quota_met",
+  detail: "1 of 1 qualified — the request is met",
+  dispatched: false,
+  continuing: false
+}
+[run-agent][model-ledger] { task_id: "d016134b-0375-46fa-a2d4-7e3534159762", rows: 4 }
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  plan_id: "fd1672fd-238d-45d1-8448-23453afdf47b",
+  status: "partial",
+  reason: "partial_capability_progress",
+  task_status: "ready",
+  plan_status: "partial"
+}
+[run-agent][terminal-guard] terminal_guard_skip_task {
+  task_id: "d016134b-0375-46fa-a2d4-7e3534159762",
+  current: "complete"
+}
+----- post-test output end -----
+Q1-01 (control): every row PASS and the evaluator qualifies — one lead, reported and counted ... ok (10s)
+Q1-02 (G09): every row PASS but the evaluator answers FAIL — held, nothing persisted, reported or bought ...
+------- post-test output -------
+[run-agent][lineage-lease] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  lineage_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  version: "lineage-lease-v1",
+  enforced: true,
+  outcome: "acquired",
+  reason: "acquired",
+  held_by: null,
+  held_until: "2026-10-25T07:41:09.436201+00:00"
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:09.440Z",
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  phase: "startup_lease",
+  since_start_ms: 17,
+  since_prev_ms: 17,
+  lease: "acquired"
+}
+[run-agent] entity routing {
+  target_entity: "company",
+  output_type: "qualified_people",
+  actor_key: "apify_jobs",
+  clarification_required: false,
+  conflict: false,
+  execution_mode: "company_first",
+  company_first: true,
+  company_gate_required: true,
+  requested_person_role: "executive"
+}
+[run-agent][company-first] executing {
+  requested_person_role: "executive",
+  workspace: "7a92362a-00d2-4f55-971c-7ba6522cad72"
+}
+[run-agent][broadening-owner] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  owner: "deterministic_only"
+}
+[run-agent][lead-plan-artifact] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  source: "absent",
+  plan_source: null,
+  planning_owner: null,
+  missing_reason: "no_artifact_on_plan_row"
+}
+[run-agent][planner-owner] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  planning_owner: "deterministic_registry_v1",
+  reason: "no planner adapter is enabled for this workspace; the deterministic ladder owns titles",
+  not_selected: [],
+  plan_provenance: {
+    owner: "deterministic_registry_v1",
+    adapter: "none",
+    outcome: "selected_directly",
+    fallback_reason: null
+  },
+  provenance_description: "deterministic ladder, selected directly — no adapter was enabled for this workspace"
+}
+[run-agent][mission-cap] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  lineage_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  provider_usd: 0.2,
+  credits: 5,
+  invalid_env: [],
+  floor_usd: 0,
+  floor_calls: 0,
+  floor_source: "lead_execution_calls"
+}
+[run-agent][funding-screen] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  reason: "not_lead_v2_general_discovery",
+  plan: null,
+  priced: 0,
+  recently_checked: 0,
+  prior_searches: 0
+}
+[run-agent][lead-mission] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  has_mission: true,
+  mission_version: "lead-mission-v1",
+  mission_type: "company_research",
+  requested_output: "qualified_companies",
+  entry_capability: "job_discovery",
+  readiness: {
+    mode: "production",
+    probe_routes: [],
+    allow_experimental: [],
+    overrides: []
+  },
+  bound_referents: 0,
+  capabilities: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  allowed_providers: [
+    "apify_linkedin_job_search",
+    "apify_linkedin_company_search",
+    "apify_linkedin_company_details"
+  ],
+  authority: "lead_mission_v1"
+}
+[run-agent][playbook-selection] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  version: "lead-research-playbook-v2",
+  ok: true,
+  combination: "single",
+  strategy_source: "derived_from_mission_fields",
+  selected: [ "hiring:supported" ],
+  runnable: [ "hiring" ],
+  blocked: [],
+  unknown_strategies: [],
+  qualifying_signals: [],
+  routing_conflicts: [],
+  reason: "the mission declares no strategy; hiring derived from required signals"
+}
+[run-agent][playbook-authorization] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  version: "lead-playbook-execution-v1",
+  applies: true,
+  authorized: true,
+  playbook: "hiring",
+  entry_capability: "job_discovery",
+  entry_source: "playbook_discovery",
+  capabilities: [ "job_discovery:driven", "hiring_verification:driven" ],
+  violations: [],
+  reason: 'the plan executes the hiring playbook: entry "job_discovery" (a hiring discovery capability), requiring job_discovery, hiring_verification'
+}
+[run-agent][hiring-route] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  ok: true,
+  requested: "general_company_first",
+  validated: "general_company_first",
+  source_order: [ "apify_linkedin_company_search" ],
+  fallback_reason: null,
+  repairs: [
+    "source_not_in_route_dropped:apify_linkedin_job_search",
+    "source_not_in_route_dropped:apify_linkedin_company_details"
+  ],
+  actor_limitation_briefing_size: 16
+}
+[run-agent][prior-contact-state] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  prior_contact_credit: 0,
+  scanned_rows: 0,
+  unidentifiable: 0,
+  ignored_request_identities: 0,
+  lookup_error: null,
+  identity_digests: [],
+  source: "canonical_persisted_state"
+}
+[run-agent][resume-precheck] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  prior_contact_credit: 0,
+  requested_quota: 1,
+  remaining_quota: 1,
+  decision: "continue_sourcing",
+  reason: "quota_unmet_and_no_pending_work",
+  company_first_will_run: true
+}
+[run-agent][mission-evaluation][binding] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  calls_allowed: 3,
+  shortlist_size: 3,
+  cap: 20
+}
+[run-agent][mission-triage][binding] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  batches_allowed: 1,
+  batch_size: 25,
+  pool_size: 3,
+  cap: 6
+}
+[run-agent][smoke-orchestration] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  mode: "minimal",
+  skipped: [
+    "route_control",
+    "triage",
+    "discovery_replan",
+    "execution_plan_amendment",
+    "pool_ranking_shadow",
+    "p2_receipt_rereads"
+  ]
+}
+[run-agent][grounded-brain][binding] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  enabled: true,
+  reason: "enabled",
+  mode: "shadow",
+  model: "openai/gpt-5.6-luna",
+  threshold: 0.6
+}
+[run-agent][stage2][binding] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  full_pool: {
+    enabled: true,
+    reason: "enabled",
+    limits: { batch_size: 8, max_evaluated: 100 }
+  },
+  ranking: {
+    enabled: true,
+    reason: "enabled",
+    mode: "shadow",
+    model: "openai/gpt-5.6-luna"
+  }
+}
+[run-agent][intelligence-policy] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  mode: "new_architecture",
+  stages: {
+    mission_compiler: true,
+    grounded_brain: true,
+    full_pool_evaluation: true,
+    pool_ranking: true,
+    multi_round: true
+  },
+  missing_required: [],
+  reason: "every required intelligence stage is enabled"
+}
+[run-agent][runtime] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  executor: {
+    role: "executor",
+    function: "run-agent",
+    git_sha: "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    git_short: "046b61b0",
+    build_timestamp: "2026-08-29T10:44:33.276Z",
+    lead_intelligence_contract_version: "v1",
+    dirty: false
+  },
+  planner: {
+    role: "planner",
+    function: "offline-rehearsal",
+    git_sha: "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    git_short: "046b61b0",
+    build_timestamp: "2026-08-29T10:44:33.276Z",
+    lead_intelligence_contract_version: "v1",
+    dirty: false
+  },
+  contract: {
+    ok: true,
+    planner_version: "v1",
+    executor_version: "v1",
+    same_build: true
+  }
+}
+[run-agent][stage4][binding] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  enabled: true,
+  reason: "enabled",
+  max_rounds: 3,
+  max_provider_cost_units: 12,
+  max_model_operations: 24,
+  model: "openai/gpt-5.6-luna"
+}
+[run-agent][paid-preflight] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  ok: true,
+  mission_authority: "lead_mission_v1",
+  entry_capability: "job_discovery",
+  ordered_capabilities: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  first_provider: "apify_linkedin_job_search",
+  input_valid: true,
+  blocked: []
+}
+[run-agent][resume][loaded] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  parent_task_id: null,
+  records: 0,
+  rejection: null,
+  client_fields_ignored: []
+}
+[run-agent][stage2][restored] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  restored: 0,
+  stale: false
+}
+[run-agent][capability-engine] qualification_context {
+  version: "mission-qualification-context-v1",
+  target_entity: "company",
+  role_vocabulary_source: "mission",
+  required_titles: [
+    "sdr",
+    "bdr",
+    "sales development representative",
+    "account executive",
+    "founding sdr",
+    "founding ae",
+    "head of sales",
+    "gtm",
+    "go to market",
+    "business development",
+    "demand generation",
+    "revenue",
+    "salesperson",
+    "sales representative",
+    "territory sales manager",
+    "ae",
+    "enterprise ae",
+    "seller",
+    "enterprise seller",
+    "enterprise sales"
+  ],
+  verticals: [ "b2b software" ],
+  stages: [],
+  locations: [ "united states" ],
+  strategies: [],
+  employee_range: { min: 11, max: 50 },
+  mission_owns: {
+    employee_count: true,
+    industry: true,
+    geography: true,
+    stage: false,
+    hiring_role: true
+  },
+  hard_constraint_keys: [ "company_profile.locations" ]
+}
+[run-agent][capability-engine] mission_cap_applied {
+  mission_provider_usd: 0.2,
+  mission_credits: 5,
+  floor_usd: 0,
+  floor_calls: 0,
+  floor_source: "lead_execution_calls",
+  invalid_env: []
+}
+[gpt-execution-plan] gpt_call_ok {
+  purpose: "execution_plan",
+  model: "gpt-5.6-luna",
+  tier: "reasoning",
+  routing_reason: "plans the whole chain and decides which paid stages are unnecessary; this is the most consequential single call the pipeline makes",
+  latency_ms: 6
+}
+[gpt-execution-plan] gpt_call_telemetry {
+  version: "model-cost-model-v1",
+  role: "execution_plan",
+  model: "gpt-5.6-luna",
+  reasoning_effort: "low",
+  input_tokens: 1000,
+  cached_input_tokens: 0,
+  output_tokens: 400,
+  estimated_cost_usd: 0.00068,
+  actual_cost_usd: null,
+  cost_source: "event_priced",
+  latency_ms: 6,
+  fallback_reason: null
+}
+[run-agent][capability-engine] execution_plan_resolved {
+  steps: [
+    "job_discovery:apify_linkedin_job_search",
+    "company_brain_qualification:-",
+    "persistence:-"
+  ],
+  source: "model_validated"
+}
+[run-agent][capability-engine] retrieval_plan_created { version: 1, routes: 1, stages: 0 }
+[run-agent][capability-engine] discovery_actors_from_execution_plan {
+  actors: [ "apify_linkedin_job_search" ],
+  source: "model_validated",
+  violations: []
+}
+[run-agent][capability-engine] discovery_strategy_resolved {
+  version: "lead-discovery-strategy-v1",
+  source: "model_validated",
+  model_chosen: true,
+  actors: [
+    {
+      actor_key: "apify_linkedin_job_search",
+      role: "primary",
+      rationale: "find the specified open role",
+      input: {
+        jobTitles: [ "Account Executive" ],
+        locations: [ "United States" ],
+        maxItems: 3,
+        postedLimit: "month",
+        sortBy: "date"
+      },
+      input_fields: [ "jobTitles", "locations", "maxItems", "postedLimit", "sortBy" ],
+      dropped_filters: [],
+      requires_enrichment: false
+    }
+  ],
+  violations: [],
+  blocked: 0,
+  repaired: 0,
+  all_require_enrichment: false
+}
+[credits][authorization] {
+  mode: "enforce",
+  allowed: true,
+  reserved: true,
+  reason: "reserved",
+  balance_after: 9,
+  capability: "apify_linkedin_job_search",
+  detail: null
+}
+[toolRegistry] smoke: Apify receipt NOT settled; this purchase needs reconciliation { run_id: "run-jobs", status: "SUCCEEDED" }
+[credits][settlement] {
+  transaction_id: "2f257805-d2ea-496b-916a-b229d7ba6b84",
+  started: true,
+  charged: 1,
+  settled: true,
+  detail: null
+}
+[memoryWriter] tool_call {
+  tool: "source_with_apify",
+  plan_id: "5f9604c1-2d6d-426f-ab2a-90d0b6568f0b",
+  tool_call_id: "9b2241b1-b3ac-4c0b-8b66-a63e0216372f",
+  conv: null
+}
+[memoryWriter] skipped: an engine owns persistence {
+  tool: "source_with_apify",
+  authority: "capability_engine",
+  plan_id: "5f9604c1-2d6d-426f-ab2a-90d0b6568f0b",
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092"
+}
+[run-agent][capability-engine] job_discovery_rows { kept: 1, dropped: {}, not_hiring_proof: 0, employers: 1 }
+[run-agent][capability-engine] research_wave_summarized {
+  wave: 1,
+  routes: [ "apify_linkedin_job_search:1/1+0" ],
+  unique: 1,
+  multi_source: 0,
+  low_yield: [],
+  exhausted: []
+}
+[run-agent][capability-engine] discovery_replan_skipped {
+  pass: 2,
+  reason: "smoke_minimal_orchestration",
+  pool: 1,
+  admitted: 1
+}
+[run-agent][capability-engine] discovery_source_state {
+  sources_attempted: [ "apify_linkedin_job_search" ],
+  pages_taken: { apify_linkedin_job_search: 1 },
+  page_fingerprints: {
+    apify_linkedin_job_search: "20f089e2640ca92698f3232b6735960adc2b37fd2d104c3988089cda14ab6b8e"
+  },
+  admitted: 1,
+  available_admitted: 1,
+  raw_rows: 1,
+  pool_target: 3,
+  exhausted: false,
+  stop_reason: "no_further_actor_proposed"
+}
+[run-agent][capability-engine] prequalification_complete {
+  unique: 1,
+  eligible: 1,
+  size_excluded: 0,
+  technical_only: 0,
+  yc_rows: 0,
+  generic_scored: 1
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "prequalified",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 0,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7895,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "prequalified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[run-agent][capability-engine] triage_and_ranking_complete {
+  budget: 1,
+  budget_source: "pool_bound",
+  count_budget: 1,
+  requested: 1,
+  pool: 1,
+  relevant: 0,
+  uncertain: 0,
+  irrelevant: 0,
+  ineligible: 0,
+  no_triage: 1,
+  hard_excluded: 0,
+  selected: 1,
+  ranked: 1,
+  triage_enabled: false,
+  untriaged_policy: "rank",
+  time_capacity: 2,
+  per_company_ms: 42867,
+  usable_ms: 122801,
+  gpt_read_budget: 1,
+  gpt_evaluation_budget: 1,
+  frontier: 1,
+  excluded_permanently: 0,
+  first_slice_preview: 1
+}
+[run-agent][capability-engine] investigation_slice_taken {
+  pass: 1,
+  selected: 1,
+  frontier_remaining: 0,
+  already_investigated: 0,
+  excluded_permanently: 0,
+  reason: "budget",
+  budget: 1,
+  budget_source: "pool_bound",
+  carried_in_flight: 0,
+  allowance: 1
+}
+[run-agent][capability-engine] execution_plan_amendment_skipped {
+  reason: "smoke_minimal_orchestration",
+  detail: "the smoke catalog approves no further purchase an amendment could add"
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "prequalified",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 0,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7867,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "prequalified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[run-agent][capability-engine] identity_resolution_complete {
+  targets: 1,
+  resolved: 1,
+  unresolved: 0,
+  deferred: 0,
+  provider_errors: 0,
+  attempted: 1,
+  unattempted: 0,
+  truncated: false,
+  deferred_company_keys: [],
+  concurrency: 4
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "identity_resolved",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 8040,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "identity_resolved",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[credits][authorization] {
+  mode: "enforce",
+  allowed: true,
+  reserved: true,
+  reason: "reserved",
+  balance_after: 8,
+  capability: "apify_linkedin_company_details",
+  detail: null
+}
+[toolRegistry] smoke: Apify receipt NOT settled; this purchase needs reconciliation { run_id: "run-details", status: "SUCCEEDED" }
+[credits][settlement] {
+  transaction_id: "cdc21cf3-21ee-484a-8efb-ed9d0ca27e15",
+  started: true,
+  charged: 1,
+  settled: true,
+  detail: null
+}
+[memoryWriter] tool_call {
+  tool: "source_with_apify",
+  plan_id: "5f9604c1-2d6d-426f-ab2a-90d0b6568f0b",
+  tool_call_id: "26915aa1-a99d-4ee1-aa5f-7866335df2e8",
+  conv: null
+}
+[memoryWriter] skipped: an engine owns persistence {
+  tool: "source_with_apify",
+  authority: "capability_engine",
+  plan_id: "5f9604c1-2d6d-426f-ab2a-90d0b6568f0b",
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092"
+}
+[run-agent][capability-engine] company_enrichment_complete {
+  resolved_urls: 1,
+  actor_starts: 1,
+  enriched: 1,
+  outcomes: {
+    not_attempted: 0,
+    success: 1,
+    empty: 0,
+    provider_error: 0,
+    deferred: 0,
+    total: 1
+  },
+  truncated: false,
+  deferred_company_keys: []
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "companies_enriched",
+  companies: 1,
+  enriched_in_memory: 1,
+  enriched_in_records: 1,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 11993,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "companies_enriched",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 1
+}
+[run-agent][capability-engine] hiring_verification_skipped_by_chain { reasoning: "" }
+[run-agent][capability-engine] stage2_eligible_pool { discovered: 1, hard_gated: 0, eligible: 1, exclusion_reasons: {} }
+[run-agent][capability-engine] stage2_batch_evaluation_complete { eligible: 1, evaluated: 1, restored: 0, beyond_cap: 0 }
+[run-agent][mission-evaluation] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  company_key: "https://www.linkedin.com/company/offline-q1-02-fail",
+  parse_status: "valid",
+  decision: "not_qualified",
+  mission_fit: "fail",
+  match_score: 80,
+  repaired: []
+}
+[run-agent][capability-engine] capability_completion_provisional {
+  capability: "company_brain_qualification",
+  rows: 0,
+  still_pending: [
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ]
+}
+[run-agent][capability-engine] investigation_yield_gate {
+  pass: 1,
+  qualified: 0,
+  requested: 1,
+  frontier_remaining: 0,
+  time_capacity: 2,
+  take_another_slice: false,
+  reason: "frontier_exhausted",
+  qualification_ready: 0,
+  evidence_debt_pending: 0
+}
+[run-agent][capability-engine] company_brain_qualification_complete {
+  version: "evaluation-path-telemetry-v1",
+  reached_evaluation: 1,
+  decided_without_model: 0,
+  decided_by_model: 1,
+  counts: {
+    not_reached: 0,
+    fabricated_pass: 0,
+    fabricated_reject: 0,
+    model_evaluated: 1,
+    model_unavailable: 0,
+    restored_decision: 0
+  },
+  companies: undefined,
+  eligible: 1,
+  passed: 0,
+  unknown: 0,
+  restored_decisions: 0
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "qualified",
+  companies: 1,
+  enriched_in_memory: 1,
+  enriched_in_records: 1,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 16639,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "qualified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 1
+}
+[run-agent][capability-engine] capability_completion_provisional {
+  capability: "persistence",
+  rows: 0,
+  still_pending: [
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ]
+}
+[run-agent][capability-engine] stage2_ranking_shadow {
+  computed: false,
+  proposed_source: null,
+  moved: 0,
+  would_enter: 0,
+  would_leave: 0
+}
+[run-agent][capability-engine] stage2_pool_complete {
+  evaluated: 1,
+  unevaluated: 0,
+  ranking_source: "deterministic_fallback",
+  ranking_mode: "shadow",
+  composition_changed: null,
+  delivered: 0,
+  shortfall: 1
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:18.833Z",
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  phase: "engine",
+  since_start_ms: 9410,
+  since_prev_ms: 9393,
+  companies: 1
+}
+[run-agent][multi-round][skipped] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  reason: "p2_specs_enforced"
+}
+[run-agent][p2-spine][final] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  settlement: null,
+  persisted: { plan_versions: 1, events: 8, settlements: 2, errors: [] },
+  error: null
+}
+[run-agent][trace] request: Find 1 US B2B software company with a current declared 11–50 employee band and an open Account Executive posting dated within 30 days.
+[run-agent][trace] entry: job_discovery — the mission is hiring-led: an open account executive role is how these companies are found
+[run-agent][trace] plan (gpt/model_validated): job_discovery:apify_linkedin_job_search → company_brain_qualification:- → persistence:-
+[run-agent][trace] skipped hiring_verification: the planned chain proves hiring from evidence an earlier step already returned; a paid verification would re-buy it
+[run-agent][trace] outcome: 0 of 1 qualified
+[run-agent][capability-engine][portfolio] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  requested: 1,
+  rows_shown: 0,
+  opportunities: 0,
+  tiers: [ 0, 0, 0 ],
+  qualified: 0,
+  watch: 0,
+  contact_ready: 0,
+  shortfall: 1
+}
+[run-agent][capability-engine][evaluation-rows] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  rows: 1,
+  counts: {
+    accounts_found: 1,
+    evaluated: 1,
+    shortlisted: 1,
+    identity_unresolved: 0,
+    qualified: 0,
+    contact_ready: 0,
+    not_qualified: 1,
+    not_investigated: 0,
+    awaiting_investigation: 0,
+    deferred: 0,
+    held_for_evidence: 0
+  }
+}
+[run-agent][mission-funnel] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  line: "discovery: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  line: "mission_intelligence: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  line: "smart_shortlist: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  line: "identity_resolution: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  line: "enrichment: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  line: "company_brain: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  line: "mission_evaluator: 1→0 decided=1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  line: "persistence: 0→0"
+}
+[run-agent][claim-plan] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  entry: "job_discovery",
+  hard: [
+    {
+      claim: "business_model",
+      dimension: "industry",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details", "firecrawl" ]
+    },
+    {
+      claim: "country",
+      dimension: "geography",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details" ]
+    },
+    {
+      claim: "company_size",
+      dimension: "company_size",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details" ]
+    },
+    {
+      claim: "open_role",
+      dimension: "hiring",
+      status: "verifiable",
+      routes: [ "apify_linkedin_job_search" ]
+    }
+  ],
+  targets: [],
+  unprovable: []
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:18.851Z",
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  phase: "claim_verification",
+  since_start_ms: 9428,
+  since_prev_ms: 18
+}
+[run-agent][claim-verifier] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  order: [
+    "funding_stage_corroboration",
+    "open_role_linkedin_jobs",
+    "business_model_first_party_pages"
+  ],
+  ran: [],
+  stopped: null,
+  irrelevant: [ "funding_stage_corroboration" ],
+  pending_runs: 0,
+  stopped_by: null,
+  deferred: []
+}
+[run-agent][p2-spine][claim-verifier] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  settlement: null,
+  persisted: { plan_versions: 1, events: 8, settlements: 2, errors: [] },
+  error: null
+}
+[run-agent][capability-engine][lead-library] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  version: "lead-mission-persistence-projection-v1",
+  planned: 0,
+  persisted: 0,
+  skipped: [],
+  gate: "hiring_playbook_authorized",
+  failed: []
+}
+[run-agent][payload-size] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  path: "final_snapshot",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 16627,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine][done] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  entry: "job_discovery",
+  completed: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment"
+  ],
+  pending: [
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  attempts: 3,
+  cost_units: 2,
+  qualified: 0,
+  unknown: 0,
+  terminal_reason: null
+}
+[run-agent][company-brain] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  enforced: false,
+  policy_hash: "d3dc7127467decd43cd8e0283b447e8bd8bf9cd1a669b04c37bb41b76627d8e8",
+  hard_constraints: [],
+  size: {
+    min: null,
+    max: null,
+    source: "unresolved",
+    mapping_id: null,
+    mapping_version: "company-size-semantics-1.0.0",
+    confirmation_required: false
+  }
+}
+[run-agent][adaptive-enforcement] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  decision: null,
+  reason: null,
+  requested_quota: 1,
+  persisted_contact: 0,
+  founder_pending: 0,
+  contact_pending: 0,
+  will_run_another_source: true,
+  skip_reason: null
+}
+[run-agent][broad-job-fallback] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  validated_route: "general_company_first",
+  company_first_ran: true,
+  qualified_companies: 0,
+  fallback_reason: null,
+  blocked: "execution_owned_by:capability_engine_v1"
+}
+[run-agent][combined-quota] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  legacy_contact_count_raw: 0,
+  company_first_contact_count_raw: 0,
+  duplicate_contact_count: 0,
+  deduplicated_contact_count: 0,
+  remaining_quota: 1,
+  identity_strategy: "none",
+  unidentifiable_contacts: 0,
+  identity_digests: [],
+  legacy_sourcing_ran: false,
+  legacy_blocked_provider_calls: 0,
+  adaptive_decision: null
+}
+[run-agent][lineage-progress] task copy behind a durable copy — using the maximum {
+  at: "2026-10-25T07:38:18.932Z",
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  stored: null,
+  lineage: null,
+  queue: null,
+  effective: 0
+}
+[run-agent][auto-continuation] terminal_status_overridden {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  from: "round_limit_reached",
+  to: "budget_exhausted",
+  frontier_remaining: 0,
+  qualified: 0,
+  requested: 1
+}
+[run-agent][payload-size] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  path: "slice_result",
+  version: "payload-size-v1",
+  kind: "canonical_view",
+  bytes: 6952,
+  warn_at: 400000,
+  over: false
+}
+[run-agent][lineage-progress-write] {
+  at: "2026-10-25T07:38:18.940Z",
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  path: "slice_result",
+  present_before: false,
+  present_in_write: true,
+  continuations_before: null,
+  continuations_after: 1,
+  restored: false,
+  queue_continuations: null,
+  result_bytes: 75633
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:18.954Z",
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  phase: "slice_result_write",
+  since_start_ms: 9531,
+  since_prev_ms: 103
+}
+[run-agent][lineage-progress-write] {
+  at: "2026-10-25T07:38:18.965Z",
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  path: "run_outcome",
+  present_before: true,
+  present_in_write: true,
+  continuations_before: 1,
+  continuations_after: 1,
+  restored: false,
+  queue_continuations: null,
+  result_bytes: 76590
+}
+[run-agent][run-outcome] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  lineage_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  state: "PARTIALLY_SATISFIED",
+  leads: 0,
+  credits: 2,
+  reused: 0,
+  unsettled: 0,
+  eligible: 0,
+  evaluated: 1,
+  not_reached: 0,
+  cited_rows: 0
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:18.982Z",
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  phase: "lineage_release",
+  since_start_ms: 9559,
+  since_prev_ms: 28,
+  released: true,
+  attempts: 1,
+  state_bytes: 32907
+}
+[lead-v2][state-size] {
+  task: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  slice: 1,
+  checkpoint_bytes: 16627,
+  result_bytes: 75633,
+  lineage_bytes: 32907,
+  canonical_view_bytes: 6952,
+  over_budget: []
+}
+[run-agent][auto-continuation] {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  qualified: 0,
+  requested: 1,
+  frontier_remaining: 0,
+  continuations_used: 1,
+  cost_units_used: 2,
+  barren_slices: 0,
+  decision: "continuation_ceiling",
+  detail: "1 of 1 continuations used; 0 candidates remain unexamined",
+  dispatched: false,
+  continuing: false
+}
+[run-agent][model-ledger] { task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092", rows: 3 }
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  plan_id: "5f9604c1-2d6d-426f-ab2a-90d0b6568f0b",
+  status: "partial",
+  reason: "partial_capability_progress",
+  task_status: "ready",
+  plan_status: "partial"
+}
+[run-agent][terminal-guard] terminal_guard_skip_task {
+  task_id: "7f95d62a-6c25-4be2-a51b-a6effb1b7092",
+  current: "complete"
+}
+(node:11092) TimeoutNegativeWarning: -17498.940013003416 is a negative number.
+Timeout duration was set to 1.
+----- post-test output end -----
+Q1-02 (G09): every row PASS but the evaluator answers FAIL — held, nothing persisted, reported or bought ... ok (9s)
+Q1-02 (G09): every row PASS but the evaluator answers REVIEW — held, nothing persisted, reported or bought ...
+------- post-test output -------
+[run-agent][lineage-lease] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  lineage_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  version: "lineage-lease-v1",
+  enforced: true,
+  outcome: "acquired",
+  reason: "acquired",
+  held_by: null,
+  held_until: "2026-10-25T07:41:19.136798+00:00"
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:19.139Z",
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  phase: "startup_lease",
+  since_start_ms: 14,
+  since_prev_ms: 14,
+  lease: "acquired"
+}
+[run-agent] entity routing {
+  target_entity: "company",
+  output_type: "qualified_people",
+  actor_key: "apify_jobs",
+  clarification_required: false,
+  conflict: false,
+  execution_mode: "company_first",
+  company_first: true,
+  company_gate_required: true,
+  requested_person_role: "executive"
+}
+[run-agent][company-first] executing {
+  requested_person_role: "executive",
+  workspace: "78edc440-4ed1-4d81-a617-e18f3f2ea488"
+}
+[run-agent][broadening-owner] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  owner: "deterministic_only"
+}
+[run-agent][lead-plan-artifact] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  source: "absent",
+  plan_source: null,
+  planning_owner: null,
+  missing_reason: "no_artifact_on_plan_row"
+}
+[run-agent][planner-owner] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  planning_owner: "deterministic_registry_v1",
+  reason: "no planner adapter is enabled for this workspace; the deterministic ladder owns titles",
+  not_selected: [],
+  plan_provenance: {
+    owner: "deterministic_registry_v1",
+    adapter: "none",
+    outcome: "selected_directly",
+    fallback_reason: null
+  },
+  provenance_description: "deterministic ladder, selected directly — no adapter was enabled for this workspace"
+}
+[run-agent][mission-cap] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  lineage_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  provider_usd: 0.2,
+  credits: 5,
+  invalid_env: [],
+  floor_usd: 0,
+  floor_calls: 0,
+  floor_source: "lead_execution_calls"
+}
+[run-agent][funding-screen] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  reason: "not_lead_v2_general_discovery",
+  plan: null,
+  priced: 0,
+  recently_checked: 0,
+  prior_searches: 0
+}
+[run-agent][lead-mission] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  has_mission: true,
+  mission_version: "lead-mission-v1",
+  mission_type: "company_research",
+  requested_output: "qualified_companies",
+  entry_capability: "job_discovery",
+  readiness: {
+    mode: "production",
+    probe_routes: [],
+    allow_experimental: [],
+    overrides: []
+  },
+  bound_referents: 0,
+  capabilities: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  allowed_providers: [
+    "apify_linkedin_job_search",
+    "apify_linkedin_company_search",
+    "apify_linkedin_company_details"
+  ],
+  authority: "lead_mission_v1"
+}
+[run-agent][playbook-selection] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  version: "lead-research-playbook-v2",
+  ok: true,
+  combination: "single",
+  strategy_source: "derived_from_mission_fields",
+  selected: [ "hiring:supported" ],
+  runnable: [ "hiring" ],
+  blocked: [],
+  unknown_strategies: [],
+  qualifying_signals: [],
+  routing_conflicts: [],
+  reason: "the mission declares no strategy; hiring derived from required signals"
+}
+[run-agent][playbook-authorization] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  version: "lead-playbook-execution-v1",
+  applies: true,
+  authorized: true,
+  playbook: "hiring",
+  entry_capability: "job_discovery",
+  entry_source: "playbook_discovery",
+  capabilities: [ "job_discovery:driven", "hiring_verification:driven" ],
+  violations: [],
+  reason: 'the plan executes the hiring playbook: entry "job_discovery" (a hiring discovery capability), requiring job_discovery, hiring_verification'
+}
+[run-agent][hiring-route] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  ok: true,
+  requested: "general_company_first",
+  validated: "general_company_first",
+  source_order: [ "apify_linkedin_company_search" ],
+  fallback_reason: null,
+  repairs: [
+    "source_not_in_route_dropped:apify_linkedin_job_search",
+    "source_not_in_route_dropped:apify_linkedin_company_details"
+  ],
+  actor_limitation_briefing_size: 16
+}
+[run-agent][prior-contact-state] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  prior_contact_credit: 0,
+  scanned_rows: 0,
+  unidentifiable: 0,
+  ignored_request_identities: 0,
+  lookup_error: null,
+  identity_digests: [],
+  source: "canonical_persisted_state"
+}
+[run-agent][resume-precheck] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  prior_contact_credit: 0,
+  requested_quota: 1,
+  remaining_quota: 1,
+  decision: "continue_sourcing",
+  reason: "quota_unmet_and_no_pending_work",
+  company_first_will_run: true
+}
+[run-agent][mission-evaluation][binding] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  calls_allowed: 3,
+  shortlist_size: 3,
+  cap: 20
+}
+[run-agent][mission-triage][binding] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  batches_allowed: 1,
+  batch_size: 25,
+  pool_size: 3,
+  cap: 6
+}
+[run-agent][smoke-orchestration] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  mode: "minimal",
+  skipped: [
+    "route_control",
+    "triage",
+    "discovery_replan",
+    "execution_plan_amendment",
+    "pool_ranking_shadow",
+    "p2_receipt_rereads"
+  ]
+}
+[run-agent][grounded-brain][binding] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  enabled: true,
+  reason: "enabled",
+  mode: "shadow",
+  model: "openai/gpt-5.6-luna",
+  threshold: 0.6
+}
+[run-agent][stage2][binding] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  full_pool: {
+    enabled: true,
+    reason: "enabled",
+    limits: { batch_size: 8, max_evaluated: 100 }
+  },
+  ranking: {
+    enabled: true,
+    reason: "enabled",
+    mode: "shadow",
+    model: "openai/gpt-5.6-luna"
+  }
+}
+[run-agent][intelligence-policy] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  mode: "new_architecture",
+  stages: {
+    mission_compiler: true,
+    grounded_brain: true,
+    full_pool_evaluation: true,
+    pool_ranking: true,
+    multi_round: true
+  },
+  missing_required: [],
+  reason: "every required intelligence stage is enabled"
+}
+[run-agent][runtime] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  executor: {
+    role: "executor",
+    function: "run-agent",
+    git_sha: "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    git_short: "046b61b0",
+    build_timestamp: "2026-08-29T10:44:33.276Z",
+    lead_intelligence_contract_version: "v1",
+    dirty: false
+  },
+  planner: {
+    role: "planner",
+    function: "offline-rehearsal",
+    git_sha: "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    git_short: "046b61b0",
+    build_timestamp: "2026-08-29T10:44:33.276Z",
+    lead_intelligence_contract_version: "v1",
+    dirty: false
+  },
+  contract: {
+    ok: true,
+    planner_version: "v1",
+    executor_version: "v1",
+    same_build: true
+  }
+}
+[run-agent][stage4][binding] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  enabled: true,
+  reason: "enabled",
+  max_rounds: 3,
+  max_provider_cost_units: 12,
+  max_model_operations: 24,
+  model: "openai/gpt-5.6-luna"
+}
+[run-agent][paid-preflight] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  ok: true,
+  mission_authority: "lead_mission_v1",
+  entry_capability: "job_discovery",
+  ordered_capabilities: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  first_provider: "apify_linkedin_job_search",
+  input_valid: true,
+  blocked: []
+}
+[run-agent][resume][loaded] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  parent_task_id: null,
+  records: 0,
+  rejection: null,
+  client_fields_ignored: []
+}
+[run-agent][stage2][restored] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  restored: 0,
+  stale: false
+}
+[run-agent][capability-engine] qualification_context {
+  version: "mission-qualification-context-v1",
+  target_entity: "company",
+  role_vocabulary_source: "mission",
+  required_titles: [
+    "sdr",
+    "bdr",
+    "sales development representative",
+    "account executive",
+    "founding sdr",
+    "founding ae",
+    "head of sales",
+    "gtm",
+    "go to market",
+    "business development",
+    "demand generation",
+    "revenue",
+    "salesperson",
+    "sales representative",
+    "territory sales manager",
+    "ae",
+    "enterprise ae",
+    "seller",
+    "enterprise seller",
+    "enterprise sales"
+  ],
+  verticals: [ "b2b software" ],
+  stages: [],
+  locations: [ "united states" ],
+  strategies: [],
+  employee_range: { min: 11, max: 50 },
+  mission_owns: {
+    employee_count: true,
+    industry: true,
+    geography: true,
+    stage: false,
+    hiring_role: true
+  },
+  hard_constraint_keys: [ "company_profile.locations" ]
+}
+[run-agent][capability-engine] mission_cap_applied {
+  mission_provider_usd: 0.2,
+  mission_credits: 5,
+  floor_usd: 0,
+  floor_calls: 0,
+  floor_source: "lead_execution_calls",
+  invalid_env: []
+}
+[gpt-execution-plan] gpt_call_ok {
+  purpose: "execution_plan",
+  model: "gpt-5.6-luna",
+  tier: "reasoning",
+  routing_reason: "plans the whole chain and decides which paid stages are unnecessary; this is the most consequential single call the pipeline makes",
+  latency_ms: 4
+}
+[gpt-execution-plan] gpt_call_telemetry {
+  version: "model-cost-model-v1",
+  role: "execution_plan",
+  model: "gpt-5.6-luna",
+  reasoning_effort: "low",
+  input_tokens: 1000,
+  cached_input_tokens: 0,
+  output_tokens: 400,
+  estimated_cost_usd: 0.00068,
+  actual_cost_usd: null,
+  cost_source: "event_priced",
+  latency_ms: 5,
+  fallback_reason: null
+}
+[run-agent][capability-engine] execution_plan_resolved {
+  steps: [
+    "job_discovery:apify_linkedin_job_search",
+    "company_brain_qualification:-",
+    "persistence:-"
+  ],
+  source: "model_validated"
+}
+[run-agent][capability-engine] retrieval_plan_created { version: 1, routes: 1, stages: 0 }
+[run-agent][capability-engine] discovery_actors_from_execution_plan {
+  actors: [ "apify_linkedin_job_search" ],
+  source: "model_validated",
+  violations: []
+}
+[run-agent][capability-engine] discovery_strategy_resolved {
+  version: "lead-discovery-strategy-v1",
+  source: "model_validated",
+  model_chosen: true,
+  actors: [
+    {
+      actor_key: "apify_linkedin_job_search",
+      role: "primary",
+      rationale: "find the specified open role",
+      input: {
+        jobTitles: [ "Account Executive" ],
+        locations: [ "United States" ],
+        maxItems: 3,
+        postedLimit: "month",
+        sortBy: "date"
+      },
+      input_fields: [ "jobTitles", "locations", "maxItems", "postedLimit", "sortBy" ],
+      dropped_filters: [],
+      requires_enrichment: false
+    }
+  ],
+  violations: [],
+  blocked: 0,
+  repaired: 0,
+  all_require_enrichment: false
+}
+[credits][authorization] {
+  mode: "enforce",
+  allowed: true,
+  reserved: true,
+  reason: "reserved",
+  balance_after: 9,
+  capability: "apify_linkedin_job_search",
+  detail: null
+}
+[toolRegistry] smoke: Apify receipt NOT settled; this purchase needs reconciliation { run_id: "run-jobs", status: "SUCCEEDED" }
+[credits][settlement] {
+  transaction_id: "67277a05-c2a8-45eb-9860-ec36e5aca790",
+  started: true,
+  charged: 1,
+  settled: true,
+  detail: null
+}
+[memoryWriter] tool_call {
+  tool: "source_with_apify",
+  plan_id: "abf53411-54a6-48d7-9b39-ad69d1b0e1cd",
+  tool_call_id: "9663f409-af0b-473c-82e1-8d2137335ee2",
+  conv: null
+}
+[memoryWriter] skipped: an engine owns persistence {
+  tool: "source_with_apify",
+  authority: "capability_engine",
+  plan_id: "abf53411-54a6-48d7-9b39-ad69d1b0e1cd",
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235"
+}
+[run-agent][capability-engine] job_discovery_rows { kept: 1, dropped: {}, not_hiring_proof: 0, employers: 1 }
+[run-agent][capability-engine] research_wave_summarized {
+  wave: 1,
+  routes: [ "apify_linkedin_job_search:1/1+0" ],
+  unique: 1,
+  multi_source: 0,
+  low_yield: [],
+  exhausted: []
+}
+[run-agent][capability-engine] discovery_replan_skipped {
+  pass: 2,
+  reason: "smoke_minimal_orchestration",
+  pool: 1,
+  admitted: 1
+}
+[run-agent][capability-engine] discovery_source_state {
+  sources_attempted: [ "apify_linkedin_job_search" ],
+  pages_taken: { apify_linkedin_job_search: 1 },
+  page_fingerprints: {
+    apify_linkedin_job_search: "169ebe49480bb4c719830157b99ed31a5de8ef1728d711b8c6efcbc36fd1ca0d"
+  },
+  admitted: 1,
+  available_admitted: 1,
+  raw_rows: 1,
+  pool_target: 3,
+  exhausted: false,
+  stop_reason: "no_further_actor_proposed"
+}
+[run-agent][capability-engine] prequalification_complete {
+  unique: 1,
+  eligible: 1,
+  size_excluded: 0,
+  technical_only: 0,
+  yc_rows: 0,
+  generic_scored: 1
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "prequalified",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 0,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7941,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "prequalified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[run-agent][capability-engine] triage_and_ranking_complete {
+  budget: 1,
+  budget_source: "pool_bound",
+  count_budget: 1,
+  requested: 1,
+  pool: 1,
+  relevant: 0,
+  uncertain: 0,
+  irrelevant: 0,
+  ineligible: 0,
+  no_triage: 1,
+  hard_excluded: 0,
+  selected: 1,
+  ranked: 1,
+  triage_enabled: false,
+  untriaged_policy: "rank",
+  time_capacity: 2,
+  per_company_ms: 42867,
+  usable_ms: 122846,
+  gpt_read_budget: 1,
+  gpt_evaluation_budget: 1,
+  frontier: 1,
+  excluded_permanently: 0,
+  first_slice_preview: 1
+}
+[run-agent][capability-engine] investigation_slice_taken {
+  pass: 1,
+  selected: 1,
+  frontier_remaining: 0,
+  already_investigated: 0,
+  excluded_permanently: 0,
+  reason: "budget",
+  budget: 1,
+  budget_source: "pool_bound",
+  carried_in_flight: 0,
+  allowance: 1
+}
+[run-agent][capability-engine] execution_plan_amendment_skipped {
+  reason: "smoke_minimal_orchestration",
+  detail: "the smoke catalog approves no further purchase an amendment could add"
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "prequalified",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 0,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 7913,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "prequalified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[run-agent][capability-engine] identity_resolution_complete {
+  targets: 1,
+  resolved: 1,
+  unresolved: 0,
+  deferred: 0,
+  provider_errors: 0,
+  attempted: 1,
+  unattempted: 0,
+  truncated: false,
+  deferred_company_keys: [],
+  concurrency: 4
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "identity_resolved",
+  companies: 1,
+  enriched_in_memory: 0,
+  enriched_in_records: 0,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 8086,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "identity_resolved",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 0
+}
+[credits][authorization] {
+  mode: "enforce",
+  allowed: true,
+  reserved: true,
+  reason: "reserved",
+  balance_after: 8,
+  capability: "apify_linkedin_company_details",
+  detail: null
+}
+[toolRegistry] smoke: Apify receipt NOT settled; this purchase needs reconciliation { run_id: "run-details", status: "SUCCEEDED" }
+[credits][settlement] {
+  transaction_id: "7d5f7adc-d5ee-4758-b70b-488401a7a7c2",
+  started: true,
+  charged: 1,
+  settled: true,
+  detail: null
+}
+[memoryWriter] tool_call {
+  tool: "source_with_apify",
+  plan_id: "abf53411-54a6-48d7-9b39-ad69d1b0e1cd",
+  tool_call_id: "f22983cf-c610-45c7-958c-2f9a222846f5",
+  conv: null
+}
+[memoryWriter] skipped: an engine owns persistence {
+  tool: "source_with_apify",
+  authority: "capability_engine",
+  plan_id: "abf53411-54a6-48d7-9b39-ad69d1b0e1cd",
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235"
+}
+[run-agent][capability-engine] company_enrichment_complete {
+  resolved_urls: 1,
+  actor_starts: 1,
+  enriched: 1,
+  outcomes: {
+    not_attempted: 0,
+    success: 1,
+    empty: 0,
+    provider_error: 0,
+    deferred: 0,
+    total: 1
+  },
+  truncated: false,
+  deferred_company_keys: []
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "companies_enriched",
+  companies: 1,
+  enriched_in_memory: 1,
+  enriched_in_records: 1,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 12047,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "companies_enriched",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 1
+}
+[run-agent][capability-engine] hiring_verification_skipped_by_chain { reasoning: "" }
+[run-agent][capability-engine] stage2_eligible_pool { discovered: 1, hard_gated: 0, eligible: 1, exclusion_reasons: {} }
+[run-agent][capability-engine] stage2_batch_evaluation_complete { eligible: 1, evaluated: 1, restored: 0, beyond_cap: 0 }
+[run-agent][mission-evaluation] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  company_key: "https://www.linkedin.com/company/offline-q1-02-review",
+  parse_status: "valid",
+  decision: "insufficient_evidence",
+  mission_fit: "review",
+  match_score: 80,
+  repaired: []
+}
+[run-agent][capability-engine] capability_completion_provisional {
+  capability: "company_brain_qualification",
+  rows: 0,
+  still_pending: [
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ]
+}
+[run-agent][capability-engine] investigation_yield_gate {
+  pass: 1,
+  qualified: 0,
+  requested: 1,
+  frontier_remaining: 0,
+  time_capacity: 2,
+  take_another_slice: false,
+  reason: "frontier_exhausted",
+  qualification_ready: 0,
+  evidence_debt_pending: 0
+}
+[run-agent][capability-engine] company_brain_qualification_complete {
+  version: "evaluation-path-telemetry-v1",
+  reached_evaluation: 1,
+  decided_without_model: 0,
+  decided_by_model: 1,
+  counts: {
+    not_reached: 0,
+    fabricated_pass: 0,
+    fabricated_reject: 0,
+    model_evaluated: 1,
+    model_unavailable: 0,
+    restored_decision: 0
+  },
+  companies: undefined,
+  eligible: 1,
+  passed: 0,
+  unknown: 1,
+  restored_decisions: 0
+}
+[run-agent][capability-engine] checkpoint_published {
+  stage: "qualified",
+  companies: 1,
+  enriched_in_memory: 1,
+  enriched_in_records: 1,
+  identity_actionable: 1,
+  coherent: true
+}
+[run-agent][payload-size] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  path: "stage_boundary",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 16648,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine] checkpoint_write {
+  stage: "qualified",
+  written: true,
+  reason: null,
+  checkpoint_version: 0,
+  enriched_in_records: 1
+}
+[run-agent][capability-engine] capability_completion_provisional {
+  capability: "persistence",
+  rows: 0,
+  still_pending: [
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ]
+}
+[run-agent][capability-engine] stage2_ranking_shadow {
+  computed: false,
+  proposed_source: null,
+  moved: 0,
+  would_enter: 0,
+  would_leave: 0
+}
+[run-agent][capability-engine] stage2_pool_complete {
+  evaluated: 1,
+  unevaluated: 0,
+  ranking_source: "deterministic_fallback",
+  ranking_mode: "shadow",
+  composition_changed: null,
+  delivered: 1,
+  shortfall: 0
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:28.476Z",
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  phase: "engine",
+  since_start_ms: 9351,
+  since_prev_ms: 9337,
+  companies: 1
+}
+[run-agent][multi-round][skipped] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  reason: "p2_specs_enforced"
+}
+[run-agent][p2-spine][final] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  settlement: null,
+  persisted: { plan_versions: 1, events: 8, settlements: 2, errors: [] },
+  error: null
+}
+[run-agent][trace] request: Find 1 US B2B software company with a current declared 11–50 employee band and an open Account Executive posting dated within 30 days.
+[run-agent][trace] entry: job_discovery — the mission is hiring-led: an open account executive role is how these companies are found
+[run-agent][trace] plan (gpt/model_validated): job_discovery:apify_linkedin_job_search → company_brain_qualification:- → persistence:-
+[run-agent][trace] skipped hiring_verification: the planned chain proves hiring from evidence an earlier step already returned; a paid verification would re-buy it
+[run-agent][trace] outcome: 0 of 1 qualified
+[run-agent][capability-engine][portfolio] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  requested: 1,
+  rows_shown: 1,
+  opportunities: 1,
+  tiers: [ 1, 0, 0 ],
+  qualified: 0,
+  watch: 0,
+  contact_ready: 0,
+  shortfall: 0
+}
+[run-agent][capability-engine][evaluation-rows] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  rows: 1,
+  counts: {
+    accounts_found: 1,
+    evaluated: 1,
+    shortlisted: 1,
+    identity_unresolved: 0,
+    qualified: 0,
+    contact_ready: 0,
+    not_qualified: 0,
+    not_investigated: 0,
+    awaiting_investigation: 0,
+    deferred: 0,
+    held_for_evidence: 1
+  }
+}
+[run-agent][mission-funnel] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  line: "discovery: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  line: "mission_intelligence: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  line: "smart_shortlist: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  line: "identity_resolution: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  line: "enrichment: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  line: "company_brain: 1→1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  line: "mission_evaluator: 1→0 withheld=1"
+}
+[run-agent][mission-funnel] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  line: "persistence: 0→0"
+}
+[run-agent][claim-plan] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  entry: "job_discovery",
+  hard: [
+    {
+      claim: "business_model",
+      dimension: "industry",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details", "firecrawl" ]
+    },
+    {
+      claim: "country",
+      dimension: "geography",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details" ]
+    },
+    {
+      claim: "company_size",
+      dimension: "company_size",
+      status: "verifiable",
+      routes: [ "apify_linkedin_company_details" ]
+    },
+    {
+      claim: "open_role",
+      dimension: "hiring",
+      status: "verifiable",
+      routes: [ "apify_linkedin_job_search" ]
+    }
+  ],
+  targets: [],
+  unprovable: []
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:28.493Z",
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  phase: "claim_verification",
+  since_start_ms: 9368,
+  since_prev_ms: 17
+}
+[run-agent][claim-verifier] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  order: [
+    "funding_stage_corroboration",
+    "open_role_linkedin_jobs",
+    "business_model_first_party_pages"
+  ],
+  ran: [],
+  stopped: null,
+  irrelevant: [ "funding_stage_corroboration" ],
+  pending_runs: 0,
+  stopped_by: null,
+  deferred: []
+}
+[run-agent][p2-spine][claim-verifier] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  settlement: null,
+  persisted: { plan_versions: 1, events: 8, settlements: 2, errors: [] },
+  error: null
+}
+[run-agent][capability-engine][lead-library] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  version: "lead-mission-persistence-projection-v1",
+  planned: 0,
+  persisted: 0,
+  skipped: [],
+  gate: "hiring_playbook_authorized",
+  failed: []
+}
+[run-agent][payload-size] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  path: "final_snapshot",
+  version: "payload-size-v1",
+  kind: "checkpoint",
+  bytes: 16636,
+  warn_at: 900000,
+  over: false
+}
+[run-agent][capability-engine][done] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  entry: "job_discovery",
+  completed: [
+    "job_discovery",
+    "job_deduplication",
+    "company_identity_resolution",
+    "company_enrichment"
+  ],
+  pending: [
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+  ],
+  attempts: 3,
+  cost_units: 2,
+  qualified: 0,
+  unknown: 1,
+  terminal_reason: null
+}
+[run-agent][company-brain] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  enforced: false,
+  policy_hash: "d3dc7127467decd43cd8e0283b447e8bd8bf9cd1a669b04c37bb41b76627d8e8",
+  hard_constraints: [],
+  size: {
+    min: null,
+    max: null,
+    source: "unresolved",
+    mapping_id: null,
+    mapping_version: "company-size-semantics-1.0.0",
+    confirmation_required: false
+  }
+}
+[run-agent][adaptive-enforcement] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  decision: null,
+  reason: null,
+  requested_quota: 1,
+  persisted_contact: 0,
+  founder_pending: 0,
+  contact_pending: 0,
+  will_run_another_source: true,
+  skip_reason: null
+}
+[run-agent][broad-job-fallback] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  validated_route: "general_company_first",
+  company_first_ran: true,
+  qualified_companies: 0,
+  fallback_reason: null,
+  blocked: "execution_owned_by:capability_engine_v1"
+}
+[run-agent][combined-quota] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  legacy_contact_count_raw: 0,
+  company_first_contact_count_raw: 0,
+  duplicate_contact_count: 0,
+  deduplicated_contact_count: 0,
+  remaining_quota: 1,
+  identity_strategy: "none",
+  unidentifiable_contacts: 0,
+  identity_digests: [],
+  legacy_sourcing_ran: false,
+  legacy_blocked_provider_calls: 0,
+  adaptive_decision: null
+}
+[run-agent][lineage-progress] task copy behind a durable copy — using the maximum {
+  at: "2026-10-25T07:38:28.556Z",
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  stored: null,
+  lineage: null,
+  queue: null,
+  effective: 0
+}
+[run-agent][auto-continuation] terminal_status_overridden {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  from: "round_limit_reached",
+  to: "budget_exhausted",
+  frontier_remaining: 0,
+  qualified: 0,
+  requested: 1
+}
+[run-agent][payload-size] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  path: "slice_result",
+  version: "payload-size-v1",
+  kind: "canonical_view",
+  bytes: 7090,
+  warn_at: 400000,
+  over: false
+}
+[run-agent][lineage-progress-write] {
+  at: "2026-10-25T07:38:28.562Z",
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  path: "slice_result",
+  present_before: false,
+  present_in_write: true,
+  continuations_before: null,
+  continuations_after: 1,
+  restored: false,
+  queue_continuations: null,
+  result_bytes: 77044
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:28.575Z",
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  phase: "slice_result_write",
+  since_start_ms: 9450,
+  since_prev_ms: 82
+}
+[run-agent][lineage-progress-write] {
+  at: "2026-10-25T07:38:28.585Z",
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  path: "run_outcome",
+  present_before: true,
+  present_in_write: true,
+  continuations_before: 1,
+  continuations_after: 1,
+  restored: false,
+  queue_continuations: null,
+  result_bytes: 78001
+}
+[run-agent][run-outcome] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  lineage_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  state: "PARTIALLY_SATISFIED",
+  leads: 0,
+  credits: 2,
+  reused: 0,
+  unsettled: 0,
+  eligible: 0,
+  evaluated: 1,
+  not_reached: 0,
+  cited_rows: 0
+}
+[run-agent][phase] {
+  at: "2026-10-25T07:38:28.604Z",
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  phase: "lineage_release",
+  since_start_ms: 9479,
+  since_prev_ms: 29,
+  released: true,
+  attempts: 1,
+  state_bytes: 32991
+}
+[lead-v2][state-size] {
+  task: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  slice: 1,
+  checkpoint_bytes: 16636,
+  result_bytes: 77044,
+  lineage_bytes: 32991,
+  canonical_view_bytes: 7090,
+  over_budget: []
+}
+[run-agent][auto-continuation] {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  qualified: 0,
+  requested: 1,
+  frontier_remaining: 0,
+  continuations_used: 1,
+  cost_units_used: 2,
+  barren_slices: 0,
+  decision: "continuation_ceiling",
+  detail: "1 of 1 continuations used; 0 candidates remain unexamined",
+  dispatched: false,
+  continuing: false
+}
+[run-agent][model-ledger] { task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235", rows: 3 }
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  plan_id: "abf53411-54a6-48d7-9b39-ad69d1b0e1cd",
+  status: "partial",
+  reason: "partial_capability_progress",
+  task_status: "ready",
+  plan_status: "partial"
+}
+[run-agent][terminal-guard] terminal_guard_skip_task {
+  task_id: "7fce31b2-7958-4788-bdbe-86d22ee0b235",
+  current: "complete"
+}
+----- post-test output end -----
+Q1-02 (G09): every row PASS but the evaluator answers REVIEW — held, nothing persisted, reported or bought ... ok (9s)
+running 41 tests from ./tests/db-contract/smokeAdmission.contract.test.ts
+admission: the template's maximum is charged, durably, before anything is sent ... ok (96ms)
+admission: a template that does not name this kind and actor is an unknown price ... ok (29ms)
+model: four attempts, then refused; failed attempts keep their slot ... ok (30ms)
+model: the $0.05 model ceiling binds before the attempt count ... ok (25ms)
+money: provider $0.20 and combined $0.25 are shared by every kind ... ok (86ms)
+counts: per-actor limits, one discovery page, five purchases ... ok (87ms)
+polls: five across the whole mission, each tied to a purchase this mission made ... ok (67ms)
+replay: the same key, or the same payload under a new key, is never a second purchase ... ok (33ms)
+receipt: wrong token refused; run id immutable; an over-quote charge stops the mission ... ok (57ms)
+ownership: queue claim, queue lease, lineage lease, task binding and generation all fence ... ok (266ms)
+stop: one-way; the worker can stop its authorization but never restart it ... ok (29ms)
+deadline: absolute, from the queue row, read after the lock, never renewed ... ok (1s)
+deadline: an admission that waited on the lock past the deadline is refused ... ok (3s)
+leases: a paid admission that waited on the liability lock past a lease is refused (Codex P1, final review) ... ok (10s)
+leases: a paid admission that waited on the liability lock past the deadline is refused ... ok (3s)
+leases: concurrent buyers waiting on the lock past their leases are all refused ... ok (2s)
+leases: after a stale owner is refused, the resumed task (new claim, new generation) buys exactly once ... ok (2s)
+restart: a new worker and a new generation inherit every counter; a new queue row inherits nothing ... ok (71ms)
+race: an admission still in flight holds the last slot until it commits ... ok (891ms)
+race: twelve simultaneous model admissions, exactly four admitted ... ok (83ms)
+race: two purchases racing for the last provider dollars cannot both win ... ok (172ms)
+race: duplicate dispatch of one purchase from two sessions admits exactly one ... ok (37ms)
+privileges: service_role reads and admits; it cannot authorize, insert, update or delete ... ok (65ms)
+authorize: refuses stale, future, unbounded or evidence-free prices ... ok (159ms)
+rollback: refuses while any authorization exists, and changes nothing ... ok (32ms)
+R8: cancellation cannot commit while an admission is in flight, and refuses every admission after it ... ok (362ms)
+R8: a newer generation cannot commit while an admission is in flight, and refuses every admission after it ... ok (352ms)
+R8: a moved lineage lease cannot commit while an admission is in flight, and refuses every admission after it ... ok (356ms)
+reconciliation: an unsettled purchase blocks the next authorization until a person reconciles it ... ok (68ms)
+reconciliation: immutable, provider purchases only, terminal, and a padded reference is the same record ... ok (59ms)
+reconciliation: never while the authorization is live, and only for a terminal vendor status (final hardening) ... ok (69ms)
+reconciliation: a figure above the quote is recorded, HELD open, and blocks every later smoke (final hardening) ...
+------- post-test output -------
+(node:11092) TimeoutNegativeWarning: -102.63373697400675 is a negative number.
+Timeout duration was set to 1.
+----- post-test output end -----
+reconciliation: a figure above the quote is recorded, HELD open, and blocks every later smoke (final hardening) ... ok (2s)
+reconciliation: a worker-written 'settled' label is not a reconciliation (Codex review, PR #96) ... ok (80ms)
+reconciliation: an earlier authorization cannot spend over another's open liability (Codex review, PR #96) ... ok (59ms)
+reconciliation: two smokes racing to buy first — exactly one purchase is admitted ... ok (142ms)
+proposal: the two-actor catalog cannot be authorized as written (no invented price; live stays blocked) ... ok (16ms)
+reconciliation: a pre-authorized mission cannot spend over a CANCELLED mission's uncertain purchase (independent repro, PR #96) ... ok (43ms)
+polls: a reads template's per-actor allocation holds each actor to its share of the five (independent review, PR #96) ... ok (61ms)
+authorize: a read allocation covers exactly the reads template's actors and fits the five (final hardening) ... ok (42ms)
+authorize: reads are free, and one template per kind and actor (final hardening) ... ok (18ms)
+admission: a template missing a key admits nothing, even one written outside authorize (final hardening) ... ok (35ms)
+
+ok | 87 passed | 0 failed (1m27s)
+

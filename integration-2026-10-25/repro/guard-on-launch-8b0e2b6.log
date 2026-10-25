@@ -1,0 +1,639 @@
+applied tests/db-contract/sql/00_supabase_shim.sql
+applied supabase/migrations-held/20260816120000_baseline_schema.sql
+applied supabase/migrations/20260816180000_mcp_feed_views.sql
+applied supabase/migrations/20260821120000_execution_cost_provenance.sql
+applied supabase/migrations/20260822120000_model_call_ledger.sql
+applied supabase/migrations/20260822130000_credit_kind_provider_call.sql
+applied supabase/migrations/20260822140000_company_headcount_snapshots.sql
+applied supabase/migrations/20260824120000_signal_events_origin.sql
+applied supabase/migrations/20260824130000_signal_events_subject.sql
+applied supabase/migrations/20260824140000_monitoring_subjects.sql
+applied supabase/migrations/20260824180000_monitoring_runs.sql
+applied supabase/migrations/20260824190000_backfill_signal_event_feed_payload.sql
+applied supabase/migrations/20260825120000_monitoring_schedule.sql
+applied supabase/migrations/20260825130000_monitoring_call_kind.sql
+applied supabase/migrations/20260825140000_monitoring_cron.sql
+applied supabase/migrations/20260825150000_signal_cluster_relevance.sql
+applied supabase/migrations/20260825160000_relevance_cites_check_fix.sql
+applied supabase/migrations/20260825170000_canonical_dedupe_keys.sql
+applied supabase/migrations/20260826100000_sweep_stuck_runs.sql
+applied supabase/migrations/20260826170000_resume_stalled_leads_cron.sql
+applied supabase/migrations/20260827090000_request_understanding_log.sql
+applied supabase/migrations/20260828090000_messages_realtime_publication.sql
+applied supabase/migrations/20260828100000_request_understanding_log_read.sql
+applied supabase/migrations/20260829140000_lead_lineages.sql
+applied supabase/migrations/20260829150000_lead_lineages_backfill.sql
+applied supabase/migrations/20260829170000_hiring_evidence_unavailable_backfill.sql
+applied supabase/migrations/20260903090000_company_web_evidence.sql
+applied supabase/migrations/20260903120000_company_web_evidence_requirement.sql
+applied supabase/migrations/20260903130000_company_web_evidence_soft_404_correction.sql
+applied supabase/migrations/20260903160000_cancellation_row_fence.sql
+applied supabase/migrations/20260904120000_claim_fences_on_lineage_status.sql
+applied supabase/migrations/20260907090000_ops_archive_rls.sql
+applied supabase/migrations/20260907120000_drop_permissive_policies.sql
+applied supabase/migrations/20260907150000_drop_fake_token_policies.sql
+applied supabase/migrations/20260907170000_close_screening_scenarios.sql
+applied supabase/migrations/20260910120000_content_item.sql
+applied supabase/migrations/20260910130000_content_item_versioning.sql
+applied supabase/migrations/20260911120000_content_v1.sql
+applied supabase/migrations/20260911140000_content_asset.sql
+applied supabase/migrations/20260911150000_content_version_empty_draft.sql
+applied supabase/migrations/20260916120000_lead_v2_p2_execution_spine.sql
+applied supabase/migrations/20260917120000_signal_events_realtime_publication.sql
+applied supabase/migrations/20260929120000_lock_down_definer_rpcs.sql
+applied supabase/migrations/20260929130000_revoke_anon_writes_on_workspace_tables.sql
+applied supabase/migrations/20260929140000_beta_access_requests.sql
+applied supabase/migrations-held/20260910140000_lead_mission_v2_claim.sql
+applied supabase/migrations-held/20260915120000_sweep_skips_v2_queue_tasks.sql
+applied supabase/migrations-held/20261003120000_lead_mission_v2_continuations_not_retries.sql
+applied supabase/migrations-held/20261011120000_lead_mission_v2_productive_continuation_no_backoff.sql
+applied supabase/migrations-held/20261019120000_lead_mission_v2_exhausted_lease_terminal.sql
+applied supabase/migrations-held/20261015130000_credits_rearm_settled_key.sql
+applied supabase/migrations-held/20261015140000_discovery_smoke_admission.sql
+database ready
+postgrest PostgREST 12.2.3 on :34596, postgres 17.11 (Ubuntu 17.11-1.pgdg24.04+2)
+Check tests/db-contract/legacyPreEffectGuard.contract.test.ts
+running 9 tests from ./tests/db-contract/legacyPreEffectGuard.contract.test.ts
+run-agent: a resume of a STORED pilot task is refused before any effect, with the request's markers stripped ...
+------- output -------
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+----- output end -----
+run-agent: a resume of a STORED pilot task is refused before any effect, with the request's markers stripped ... FAILED (947ms)
+run-agent: a request carrying the pilot marker is refused before any effect ...
+------- output -------
+[run-agent][lineage-lease] {
+  task_id: "c1861ce9-2263-4456-8159-6a69cce8cc84",
+  lineage_id: "c1861ce9-2263-4456-8159-6a69cce8cc84",
+  version: "lineage-lease-v1",
+  enforced: false,
+  outcome: "acquired",
+  reason: "acquired",
+  held_by: null,
+  held_until: "2026-10-25T08:09:59.806624+00:00"
+}
+[run-agent][phase] {
+  at: "2026-10-25T08:06:59.813Z",
+  task_id: "c1861ce9-2263-4456-8159-6a69cce8cc84",
+  phase: "startup_lease",
+  since_start_ms: 20,
+  since_prev_ms: 20,
+  lease: "acquired"
+}
+[ai-provider] no provider for task {
+  task: "agent_execution",
+  intended_model: "claude-haiku-4-5-20251001",
+  needed_env: "ANTHROPIC_API_KEY",
+  fallback_allowed: false
+}
+[run-agent] api failure: No provider for task "agent_execution" (intended claude-haiku-4-5-20251001; set ANTHROPIC_API_KEY).
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: "c1861ce9-2263-4456-8159-6a69cce8cc84",
+  plan_id: "32b49e3a-2e05-40ee-aafd-3575ae51987d",
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+[run-agent][terminal-guard] terminal_guard_skip_task { task_id: "c1861ce9-2263-4456-8159-6a69cce8cc84", current: "failed" }
+[run-agent][terminal-guard] terminal_guard_skip_plan { plan_id: "32b49e3a-2e05-40ee-aafd-3575ae51987d", current: "failed" }
+----- output end -----
+run-agent: a request carrying the pilot marker is refused before any effect ... FAILED (70ms)
+run-agent: a client-scoped request is refused before any effect (client research disabled until #174) ...
+------- output -------
+[run-agent][lineage-lease] {
+  task_id: "f04fde27-a5d9-47f8-8f31-d6fe056054c8",
+  lineage_id: "f04fde27-a5d9-47f8-8f31-d6fe056054c8",
+  version: "lineage-lease-v1",
+  enforced: false,
+  outcome: "acquired",
+  reason: "acquired",
+  held_by: null,
+  held_until: "2026-10-25T08:09:59.875801+00:00"
+}
+[run-agent][phase] {
+  at: "2026-10-25T08:06:59.878Z",
+  task_id: "f04fde27-a5d9-47f8-8f31-d6fe056054c8",
+  phase: "startup_lease",
+  since_start_ms: 13,
+  since_prev_ms: 13,
+  lease: "acquired"
+}
+[ai-provider] no provider for task {
+  task: "agent_execution",
+  intended_model: "claude-haiku-4-5-20251001",
+  needed_env: "ANTHROPIC_API_KEY",
+  fallback_allowed: false
+}
+[run-agent] api failure: No provider for task "agent_execution" (intended claude-haiku-4-5-20251001; set ANTHROPIC_API_KEY).
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: "f04fde27-a5d9-47f8-8f31-d6fe056054c8",
+  plan_id: "52a1b3b3-baf8-47ee-b7b8-fbcf8f891f87",
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+[run-agent][terminal-guard] terminal_guard_skip_task { task_id: "f04fde27-a5d9-47f8-8f31-d6fe056054c8", current: "failed" }
+[run-agent][terminal-guard] terminal_guard_skip_plan { plan_id: "52a1b3b3-baf8-47ee-b7b8-fbcf8f891f87", current: "failed" }
+----- output end -----
+run-agent: a client-scoped request is refused before any effect (client research disabled until #174) ... FAILED (57ms)
+run-agent: a service call for a user who is no longer a member is refused before any effect ...
+------- output -------
+[run-agent][lineage-lease] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  lineage_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  version: "lineage-lease-v1",
+  enforced: false,
+  outcome: "acquired",
+  reason: "acquired",
+  held_by: null,
+  held_until: "2026-10-25T08:09:59.930521+00:00"
+}
+[run-agent][phase] {
+  at: "2026-10-25T08:06:59.932Z",
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  phase: "startup_lease",
+  since_start_ms: 11,
+  since_prev_ms: 11,
+  lease: "acquired"
+}
+[run-agent] entity routing {
+  target_entity: "company",
+  output_type: "qualified_companies",
+  actor_key: "apify_jobs",
+  clarification_required: false,
+  conflict: false,
+  execution_mode: "company_first",
+  company_first: true,
+  company_gate_required: true,
+  requested_person_role: null
+}
+[run-agent][company-first] executing {
+  requested_person_role: null,
+  workspace: "b440ad6d-15af-4237-8424-8be80e1c5c53"
+}
+[run-agent][broadening-owner] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  owner: "deterministic_only"
+}
+[run-agent][lead-plan-artifact] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  source: "absent",
+  plan_source: null,
+  planning_owner: null,
+  missing_reason: "no_artifact_on_plan_row"
+}
+[run-agent][planner-owner] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  planning_owner: "deterministic_registry_v1",
+  reason: "no planner adapter is enabled for this workspace; the deterministic ladder owns titles",
+  not_selected: [],
+  plan_provenance: {
+    owner: "deterministic_registry_v1",
+    adapter: "none",
+    outcome: "selected_directly",
+    fallback_reason: null
+  },
+  provenance_description: "deterministic ladder, selected directly — no adapter was enabled for this workspace"
+}
+[run-agent][funding-screen] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  reason: "not_lead_v2_general_discovery",
+  plan: null,
+  priced: 0,
+  recently_checked: 0,
+  prior_searches: 0
+}
+[run-agent][lead-mission] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  has_mission: false,
+  mission_version: null,
+  mission_type: null,
+  requested_output: null,
+  entry_capability: null,
+  readiness: {
+    mode: "production",
+    probe_routes: [],
+    allow_experimental: [],
+    overrides: []
+  },
+  bound_referents: 0,
+  capabilities: null,
+  allowed_providers: null,
+  authority: "legacy_carrier_union"
+}
+[run-agent][hiring-route] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  ok: true,
+  requested: "general_company_first",
+  validated: "general_company_first",
+  source_order: [ "apify_linkedin_company_search" ],
+  fallback_reason: null,
+  repairs: [],
+  actor_limitation_briefing_size: 16
+}
+[run-agent][prior-contact-state] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  prior_contact_credit: 0,
+  scanned_rows: 0,
+  unidentifiable: 0,
+  ignored_request_identities: 0,
+  lookup_error: null,
+  identity_digests: [],
+  source: "canonical_persisted_state"
+}
+[run-agent][resume-precheck] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  prior_contact_credit: 0,
+  requested_quota: 1,
+  remaining_quota: 1,
+  decision: "continue_sourcing",
+  reason: "quota_unmet_and_no_pending_work",
+  company_first_will_run: true
+}
+[run-agent][mission-evaluation][binding] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  calls_allowed: 10,
+  shortlist_size: 10,
+  cap: 20
+}
+[run-agent][mission-triage][binding] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  enabled: true,
+  reason: "enabled",
+  model: "openai/gpt-5.6-luna",
+  batches_allowed: 1,
+  batch_size: 25,
+  pool_size: 10,
+  cap: 6
+}
+[run-agent][grounded-brain][binding] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  enabled: true,
+  reason: "enabled",
+  mode: "shadow",
+  model: "openai/gpt-5.6-luna",
+  threshold: 0.6
+}
+[run-agent][stage2][binding] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  full_pool: {
+    enabled: true,
+    reason: "enabled",
+    limits: { batch_size: 8, max_evaluated: 100 }
+  },
+  ranking: {
+    enabled: true,
+    reason: "enabled",
+    mode: "shadow",
+    model: "openai/gpt-5.6-luna"
+  }
+}
+[run-agent][intelligence-policy] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  mode: "new_architecture",
+  stages: {
+    mission_compiler: true,
+    grounded_brain: true,
+    full_pool_evaluation: true,
+    pool_ranking: true,
+    multi_round: true
+  },
+  missing_required: [],
+  reason: "every required intelligence stage is enabled"
+}
+[run-agent][runtime] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  executor: {
+    role: "executor",
+    function: "run-agent",
+    git_sha: "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    git_short: "046b61b0",
+    build_timestamp: "2026-08-29T10:44:33.276Z",
+    lead_intelligence_contract_version: "v1",
+    dirty: false
+  },
+  planner: null,
+  contract: {
+    ok: false,
+    reason: "unknown_planner_contract",
+    planner_version: null,
+    executor_version: "v1",
+    detail: "the mission carries no contract version, so it was compiled by a build that predates this guard; it cannot be assumed compatible"
+  }
+}
+[run-agent][stage4][binding] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  enabled: true,
+  reason: "enabled",
+  max_rounds: 3,
+  max_provider_cost_units: 12,
+  max_model_operations: 24,
+  model: "openai/gpt-5.6-luna"
+}
+[run-agent][paid-preflight] {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  ok: false,
+  mission_authority: "none",
+  entry_capability: null,
+  ordered_capabilities: [],
+  first_provider: null,
+  input_valid: true,
+  blocked: [
+    {
+      code: "missing_mission",
+      message: "no LeadMissionV1 on this task; paid execution is refused because nothing states what is being bought"
+    },
+    {
+      code: "incompatible_planner_contract",
+      message: "the mission carries no contract version, so it was compiled by a build that predates this guard; it cannot be assumed compatible"
+    }
+  ]
+}
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: "ea74b323-1ab0-4f78-8988-4d6709a3f9df",
+  plan_id: "f0cb48bd-fea5-44ae-a0f7-d21e14d7f2b2",
+  status: "blocked",
+  reason: "refused_before_execution",
+  task_status: "blocked",
+  plan_status: "blocked"
+}
+[run-agent][unhandled] PaidExecutionBlockedError: paid execution refused (2 blocks): missing_mission: no LeadMissionV1 on this task; paid execution is refused because nothing states what is being bought | incompatible_planner_contract: the mission carries no contract version, so it was compiled by a build that predates this guard; it cannot be assumed compatible
+----- output end -----
+run-agent: a service call for a user who is no longer a member is refused before any effect ... FAILED (90ms)
+run-agent: a resume keeps its original principal — another member cannot resume it ...
+------- output -------
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+----- output end -----
+run-agent: a resume keeps its original principal — another member cannot resume it ... FAILED (25ms)
+run-agent: a task of another workspace is refused before any effect ...
+------- output -------
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+----- output end -----
+run-agent: a task of another workspace is refused before any effect ... FAILED (29ms)
+run-agent positive control: a current member's non-pilot request passes the guard ...
+------- output -------
+[run-agent] agent not found: { agent_slug: "no-such-agent", agent_id_in: undefined, agentErr: null }
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+[run-agent] agent not found: { agent_slug: "no-such-agent", agent_id_in: undefined, agentErr: null }
+[run-agent][terminal-guard] terminal_guard_decision {
+  task_id: null,
+  plan_id: null,
+  status: "partial",
+  reason: "no_execution_state_observed",
+  task_status: "ready",
+  plan_status: "partial"
+}
+----- output end -----
+run-agent positive control: a current member's non-pilot request passes the guard ... ok (25ms)
+enqueue-lead-mission: no pilot, client-scoped or non-member mission is queued ... FAILED (19ms)
+orchestrate: a pilot or client-scoped request is refused before any plan, Brain read, model call or dispatch ...
+------- output -------
+[orchestrate][model-spend] {
+  version: "model-spend-ceiling-v1",
+  mode: "enforce",
+  allowed: false,
+  over_ceiling: false,
+  spent_usd: 0,
+  ceiling_usd: 25,
+  period_days: 1,
+  unpriced_calls: 0,
+  reason: "ceiling_misconfigured",
+  detail: "MODEL_SPEND_CEILING_USD missing or not a positive number; MODEL_SPEND_PERIOD_DAYS missing or not a positive number"
+}
+----- output end -----
+orchestrate: a pilot or client-scoped request is refused before any plan, Brain read, model call or dispatch ... FAILED (559ms)
+
+ ERRORS 
+
+run-agent: a resume of a STORED pilot task is refused before any effect, with the request's markers stripped => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:122:6
+error: AssertionError: Values are not equal: {"success":false,"error":"continuation_refused","reason":"no_checkpoint","message":"That run has no saved checkpoint to continue from."}
+
+
+    [Diff] Actual / Expected
+
+
+    [
+-     409,
+-     "continuation_refused",
++     403,
++     "pilot_execution_disabled",
+    ]
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at assertRefusedWithoutEffect (file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:116:3)
+    at async file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:124:3
+
+run-agent: a request carrying the pilot marker is refused before any effect => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:127:6
+error: AssertionError: Values are not equal: {"error":"step_failed","details":"No provider for task \"agent_execution\" (intended claude-haiku-4-5-20251001; set ANTHROPIC_API_KEY).","task_id":"c1861ce9-2263-4456-8159-6a69cce8cc84"}
+
+
+    [Diff] Actual / Expected
+
+
+    [
+-     500,
+-     "step_failed",
++     403,
++     "pilot_execution_disabled",
+    ]
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at assertRefusedWithoutEffect (file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:116:3)
+    at async file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:129:3
+
+run-agent: a client-scoped request is refused before any effect (client research disabled until #174) => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:133:6
+error: AssertionError: Values are not equal: {"error":"step_failed","details":"No provider for task \"agent_execution\" (intended claude-haiku-4-5-20251001; set ANTHROPIC_API_KEY).","task_id":"f04fde27-a5d9-47f8-8f31-d6fe056054c8"}
+
+
+    [Diff] Actual / Expected
+
+
+    [
+-     500,
+-     "step_failed",
++     403,
++     "client_scope_unsupported",
+    ]
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at assertRefusedWithoutEffect (file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:116:3)
+    at async file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:135:3
+
+run-agent: a service call for a user who is no longer a member is refused before any effect => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:139:6
+error: AssertionError: Values are not equal: {"error":"run_agent_unhandled_exception","message":"PaidExecutionBlockedError: paid execution refused (2 blocks): missing_mission: no LeadMissionV1 on this task; paid execution is refused because nothing states what is being bought | incompatible_planner_contract: the mission carries no contract version, so it was compiled by a build that predates this guard; it cannot be assumed compatible"}
+
+
+    [Diff] Actual / Expected
+
+
+    [
+-     500,
+-     "run_agent_unhandled_exception",
++     403,
++     "principal_not_member",
+    ]
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at assertRefusedWithoutEffect (file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:116:3)
+    at async file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:142:3
+
+run-agent: a resume keeps its original principal — another member cannot resume it => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:147:6
+error: AssertionError: Values are not equal: {"success":false,"error":"continuation_refused","reason":"no_checkpoint","message":"That run has no saved checkpoint to continue from."}
+
+
+    [Diff] Actual / Expected
+
+
+    [
+-     409,
+-     "continuation_refused",
++     403,
++     "principal_mismatch",
+    ]
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at assertRefusedWithoutEffect (file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:116:3)
+    at async file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:149:3
+
+run-agent: a task of another workspace is refused before any effect => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:152:6
+error: AssertionError: Values are not equal: {"success":false,"error":"continuation_refused","reason":"workspace_mismatch","message":"That sourcing run belongs to a different workspace."}
+
+
+    [Diff] Actual / Expected
+
+
+    [
+      409,
+-     "continuation_refused",
++     "referenced_task_foreign",
+    ]
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at assertRefusedWithoutEffect (file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:116:3)
+    at async file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:154:3
+
+enqueue-lead-mission: no pilot, client-scoped or non-member mission is queued => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:184:6
+error: AssertionError: Values are not equal: {"queue_id":"ef57640c-9b72-4844-955d-eadc1b60317f","engine":"v2_worker","requested_lead_count":1}
+
+
+    [Diff] Actual / Expected
+
+
+    [
+-     201,
+-     undefined,
++     403,
++     "pilot_execution_disabled",
+    ]
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at assertRefusedWithoutEffect (file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:116:3)
+    at async file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:190:3
+
+orchestrate: a pilot or client-scoped request is refused before any plan, Brain read, model call or dispatch => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:216:6
+error: AssertionError: Values are not equal: {"error":"model_spend_ceiling_reached","reason":"ceiling_misconfigured","details":"The model spend ceiling is not configured correctly, so model spend is refused until it is fixed."}
+
+
+    [Diff] Actual / Expected
+
+
+    [
+-     429,
+-     "model_spend_ceiling_reached",
++     403,
++     "pilot_execution_disabled",
+    ]
+
+  throw new AssertionError(message);
+        ^
+    at assertEquals (https://deno.land/std@0.224.0/assert/assert_equals.ts:52:9)
+    at assertRefusedWithoutEffect (file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:116:3)
+    at async file:///home/user/wt-base/tests/db-contract/legacyPreEffectGuard.contract.test.ts:219:3
+
+ FAILURES 
+
+run-agent: a resume of a STORED pilot task is refused before any effect, with the request's markers stripped => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:122:6
+run-agent: a request carrying the pilot marker is refused before any effect => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:127:6
+run-agent: a client-scoped request is refused before any effect (client research disabled until #174) => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:133:6
+run-agent: a service call for a user who is no longer a member is refused before any effect => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:139:6
+run-agent: a resume keeps its original principal — another member cannot resume it => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:147:6
+run-agent: a task of another workspace is refused before any effect => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:152:6
+enqueue-lead-mission: no pilot, client-scoped or non-member mission is queued => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:184:6
+orchestrate: a pilot or client-scoped request is refused before any plan, Brain read, model call or dispatch => ./tests/db-contract/legacyPreEffectGuard.contract.test.ts:216:6
+
+FAILED | 1 passed | 8 failed (1s)
+
+error: Test failed
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+   8: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+   9: <unknown>
+--- postgrest log ---
+25/Oct/2026:08:06:48 +0000: Starting PostgREST 12.2.3...
+25/Oct/2026:08:06:48 +0000: Listening on port 34596
+127.0.0.1 - anon [25/Oct/2026:08:06:48 +0000] "GET / HTTP/1.1" 503 - "" "curl/8.5.0"
+25/Oct/2026:08:06:48 +0000: Listening for notifications on the "pgrst" channel
+25/Oct/2026:08:06:48 +0000: Successfully connected to PostgreSQL 17.11 (Ubuntu 17.11-1.pgdg24.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+25/Oct/2026:08:06:48 +0000: Config reloaded
+25/Oct/2026:08:06:48 +0000: Schema cache queried in 12.4 milliseconds
+25/Oct/2026:08:06:48 +0000: Schema cache loaded 136 Relations, 142 Relationships, 33 Functions, 0 Domain Representations, 4 Media Type Handlers, 499 Timezones
+25/Oct/2026:08:06:48 +0000: Successfully connected to PostgreSQL 17.11 (Ubuntu 17.11-1.pgdg24.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+25/Oct/2026:08:06:48 +0000: Config reloaded
+25/Oct/2026:08:06:48 +0000: Schema cache queried in 9.6 milliseconds
+25/Oct/2026:08:06:48 +0000: Schema cache loaded 136 Relations, 142 Relationships, 33 Functions, 0 Domain Representations, 4 Media Type Handlers, 499 Timezones
