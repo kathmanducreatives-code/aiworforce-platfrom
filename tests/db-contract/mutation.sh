@@ -459,6 +459,23 @@ prove_killed "switcher: a selected client stays shown after it is no longer list
 prove_killed "page: a Brain answer for another client is accepted" "$client_api_ts" \
   "  if (body?.ok === true && body.client_id === clientId) {" "  if (body?.ok === true) {" \
   "$e2e_tests" "11. switching agency → A → B → agency: each read shows only that Brain; nothing from one is shown or saved as another"
+# The #168 ↔ #169/#176 merge: each way the resolution can lose a protection.
+prove_killed "merge kept #168's side: writeBrain writes the table directly (no AUTH-06 re-check)" "$brain_draft_ts" \
+  '      const writeBrain = (w: { permission: "edit" | "activate"; profile: AnyObj; activate?: boolean }) =>
+        authorizedBrainWrite(admin, {' \
+  '      const writeBrain = async (w: { permission: "edit" | "activate"; profile: AnyObj; activate?: boolean }) => {
+        const { data } = await admin.from("company_brain").upsert({ workspace_id, profile: w.profile, updated_at: new Date().toISOString(), ...(w.activate ? { onboarding_completed: true } : {}) }, { onConflict: "workspace_id" }).select("updated_at");
+        return { outcome: "ok" as "ok" | "stale" | "not_member" | "forbidden_role" | "session_invalid", updated_at: (data?.[0] as { updated_at?: string } | undefined)?.updated_at ?? null };
+      };
+      const _authorizedUnused = (w: { permission: "edit" | "activate"; profile: AnyObj; activate?: boolean }) =>
+        authorizedBrainWrite(admin, {' \
+  "$e2e_tests" "12. activation goes through the AUTH-06 writer: an admin demoted in flight is refused and nothing activates; an owner's activation lands and ends onboarding progress"
+prove_killed "merge dropped the in-transaction version check (every save an upsert)" "$brain_draft_ts" \
+  '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "insert",' '          mode: "upsert",' \
+  "$e2e_tests" "14. a versioned activation that loses the race at the write is stale: nothing written, nothing activated"
+prove_killed "a versioned first save upserts over a Brain another device created" "$brain_draft_ts" \
+  '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "insert",' '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "upsert",' \
+  "$e2e_tests" "15. a versioned first save never overwrites a Brain another device created in flight"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"

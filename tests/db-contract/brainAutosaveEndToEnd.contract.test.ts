@@ -598,3 +598,136 @@ Deno.test("11. switching agency → A → B → agency: each read shows only tha
   // The page asks the server which Brain answered; a mismatched answer is refused.
   assertEquals(await loadClientBrain(async () => ({ ok: true, client_id: ag.A, profile: { x: 1 }, version: 1 }), ag.ws, ag.B), { kind: "denied", reason: "unknown" });
 });
+
+// ── AUTH-06 × versioned autosave on the ACTIVATE paths (#168 ↔ #169/#176) ────
+// The merge of #168 into #169/#176 must keep BOTH protections in
+// generate-company-brain-draft's save_draft/activate: every write goes through
+// the AUTH-06 authorized writer (session, membership and role re-checked in the
+// write's transaction), and a versioned save lands only on the version it was
+// built from — checked by that same writer, never by a comparison after it.
+const COMPLETE = {
+  company: { name: "Ready Co", description: "Scheduling software for clinics", business_model: "B2B SaaS" },
+  target_customer: { industries: ["Healthcare"], disqualifiers: { industries: ["Agencies"] } },
+  buyer_personas: ["COO"], triggers: ["New clinic opened"], pain_points: ["No-shows"],
+};
+async function agencyWith(profile: Record<string, unknown> | null) {
+  const ws = await seedWorkspace();
+  const owner = await member(ws, "owner");
+  const admin = await member(ws, "admin");
+  const editor = await member(ws, "editor");
+  if (profile) await sql`insert into public.company_brain (workspace_id, profile) values (${ws}, ${sql.json(profile as never)})`;
+  return { ws, owner, admin, editor };
+}
+const brainRow = async (ws: string) =>
+  (await sql`select profile, onboarding_completed, updated_at::text as v from public.company_brain where workspace_id = ${ws}`)[0] as
+    { profile: Record<string, unknown>; onboarding_completed: boolean; v: string } | undefined;
+const activateBody = (ws: string, extra: Record<string, unknown> = {}) =>
+  ({ action: "activate", workspace_id: ws, patch: {}, change_origin: "onboarding_seller_confirmation", ...extra });
+async function atWriter(writer: string, act: () => Promise<unknown>) {
+  let fired = false;
+  onRest = async (s) => {
+    if (fired || s.method !== "POST" || !s.path.startsWith(writer)) return;
+    fired = true; onRest = null; await act();
+  };
+  return () => fired;
+}
+
+Deno.test("12. activation goes through the AUTH-06 writer: an admin demoted in flight is refused and nothing activates; an owner's activation lands and ends onboarding progress", opts, async () => {
+  clientsOn(false);
+  const a = await agencyWith(COMPLETE);
+  const before = await brainRow(a.ws);
+  freshLog();
+  const fired = await atWriter("/rpc/company_brain_authorized_write",
+    () => sql`update public.workspace_members set role = 'editor' where workspace_id = ${a.ws} and user_id = ${a.admin.id}`);
+  const r = await call(a.admin, activateBody(a.ws));
+  assert(fired(), "the demotion committed between the handler's check and the write");
+  assertEquals(r.status, 403, JSON.stringify(r.body)); assertEquals(r.body.reason, "role_changed");
+  const after = await brainRow(a.ws);
+  assertEquals(after?.onboarding_completed, false, "not activated");
+  assertEquals(after?.v, before?.v, "the row did not change");
+  assertEquals(posts("/company_brain"), 0, "never a direct table write");
+  // Positive control: progress saved, then an owner activates — one authorized write.
+  const p = await openAgency(a.ws);
+  const prog = await autosave(a.owner, p, copy({ company: { name: "Ready Co" } }));
+  assertEquals(prog.reply.status, 200);
+  assert(readServerProgress((await brainRow(a.ws))?.profile) !== null, "progress recorded");
+  freshLog();
+  const ok = await call(a.owner, activateBody(a.ws));
+  assertEquals(ok.status, 200, JSON.stringify(ok.body)); assertEquals(ok.body.activated, true);
+  const done = await brainRow(a.ws);
+  assertEquals(done?.onboarding_completed, true);
+  assertEquals(readServerProgress(done?.profile), null, "activation ends onboarding progress (withoutSetupProgress)");
+  assertEquals(posts("/rpc/company_brain_authorized_write"), 1); assertEquals(posts("/company_brain"), 0);
+  assertEquals(external, []);
+});
+
+Deno.test("13. blocked activation (incomplete Brain) saves its draft only through the AUTH-06 writer: a member removed in flight is refused and nothing changes", opts, async () => {
+  clientsOn(false);
+  const a = await agencyWith({ company: { name: "Half Co" } });
+  const before = await brainRow(a.ws);
+  freshLog();
+  const fired = await atWriter("/rpc/company_brain_authorized_write",
+    () => sql`delete from public.workspace_members where workspace_id = ${a.ws} and user_id = ${a.admin.id}`);
+  const r = await call(a.admin, activateBody(a.ws));
+  assert(fired());
+  assertEquals(r.status, 403, JSON.stringify(r.body)); assertEquals(r.body.reason, "not_member");
+  assertEquals((await brainRow(a.ws))?.v, before?.v);
+  // Positive control: the owner's blocked activation keeps the draft, does not activate.
+  const ok = await call(a.owner, activateBody(a.ws, { patch: { company: { name: "Half Co", description: "now described" } } }));
+  assertEquals(ok.status, 200, JSON.stringify(ok.body)); assertEquals(ok.body.activated, false); assertEquals(ok.body.ok, false);
+  const row = await brainRow(a.ws);
+  assertEquals(row?.onboarding_completed, false);
+  assertNotEquals(row?.v, before?.v, "the draft was saved");
+  assertEquals(posts("/company_brain"), 0);
+});
+
+Deno.test("14. a versioned activation that loses the race at the write is stale: nothing written, nothing activated", opts, async () => {
+  clientsOn(false);
+  const a = await agencyWith(COMPLETE);
+  let p = await openAgency(a.ws);
+  const s1 = await autosave(a.owner, p, copy({ company: { name: "Ready Co" } }));
+  assertEquals(s1.reply.status, 200); p = s1.page;
+  freshLog();
+  const fired = await atWriter("/rpc/company_brain_authorized_write", async () => {
+    const other = await autosave(a.admin, await openAgency(a.ws), copy({ company: { name: "Ready Co", description: "another device" } }));
+    assertEquals(other.reply.status, 200);
+  });
+  const before = await brainRow(a.ws);
+  const r = await call(a.owner, activateBody(a.ws, { setup: { step: 3, answers: { company: { name: "Ready Co" } } }, expected_updated_at: p.version }));
+  assert(fired());
+  assertEquals(r.status, 409, JSON.stringify(r.body)); assertEquals(r.body.rejected_reason, "stale");
+  const after = await brainRow(a.ws);
+  assertEquals(after?.onboarding_completed, false, "an activation never lands on a version it did not build on");
+  assertNotEquals(after?.v, before?.v, "only the other device's save landed");
+  assertEquals(answersIn(after?.profile).company?.description, "another device");
+});
+
+Deno.test("15. a versioned first save never overwrites a Brain another device created in flight", opts, async () => {
+  clientsOn(false);
+  const a = await agencyWith(null);
+  freshLog();
+  const fired = await atWriter("/rpc/company_brain_authorized_write", async () => {
+    const other = await call(a.admin, buildProgressSaveBody({ workspaceId: a.ws, step: 1, answers: { company: { name: "FIRST DEVICE" } }, expectedUpdatedAt: null }));
+    assertEquals(other.status, 200, JSON.stringify(other.body));
+  });
+  const r = await call(a.owner, buildProgressSaveBody({ workspaceId: a.ws, step: 1, answers: { company: { name: "second device" } }, expectedUpdatedAt: null }));
+  assert(fired());
+  assertEquals(r.status, 409, JSON.stringify(r.body));
+  assertEquals(answersIn((await brainRow(a.ws))?.profile).company?.name, "FIRST DEVICE", "the first device's Brain is intact");
+  // The page merges and retries against the copy it is now given.
+  const outcome = readProgressSaveResponse(r.body);
+  assertEquals(outcome.kind, "stale");
+});
+
+Deno.test("16. logged out during activation → session_invalid; nothing activates", opts, async () => {
+  clientsOn(false);
+  const a = await agencyWith(COMPLETE);
+  const before = await brainRow(a.ws);
+  freshLog();
+  const fired = await atWriter("/rpc/company_brain_authorized_write", () => logout(a.owner));
+  const r = await call(a.owner, activateBody(a.ws));
+  assert(fired());
+  assertEquals(r.status, 401, JSON.stringify(r.body)); assertEquals(r.body.reason, "session_invalid");
+  const after = await brainRow(a.ws);
+  assertEquals([after?.onboarding_completed, after?.v], [false, before?.v]);
+});
