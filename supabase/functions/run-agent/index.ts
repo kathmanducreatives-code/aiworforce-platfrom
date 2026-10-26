@@ -6,6 +6,7 @@
 
 import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { type GuardDb, legacyExecutionGuard, referencedPlanId, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
+import { bindEffectPrincipal, type EffectPrincipalDb, installEffectFence, withEffectScope } from "../_shared/effectFence.ts";
 import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
 import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
 import { hiringSearchTitles } from "../_shared/hiringSearchVocabulary.ts";
@@ -926,7 +927,14 @@ export interface RunAgentRunOptions {
     void | Promise<void>;
 }
 
+// Every new model/provider operation re-checks the run's principal at the
+// transport (effectFence.ts, Codex EXEC-EFFECT); outside a bound run it is inert.
+installEffectFence();
+
 async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}): Promise<Response> {
+  // One effect scope per request (effectFence.ts); the guard below binds its principal.
+  const scoped = withEffectScope(req, () => handleRunAgent(req, inProcess));
+  if (scoped) return scoped;
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   // Invocation start — anchors the LATENCY-BOUNDED company-enrichment deadline so
   // the workflow always reserves wall-clock to finish qualification/persistence/
@@ -1190,6 +1198,14 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
       console.error("[run-agent][pre-effect-guard] refused", { workspace_id, code: guard.code, detail: guard.detail });
       return json({ success: false, error: guard.code, detail: guard.detail }, guard.status);
     }
+    // From here on, every NEW external operation re-checks this principal is
+    // still a member (EXEC-EFFECT): a removal committed after the task exists
+    // stops the next model call or purchase; settlement reads still pass.
+    bindEffectPrincipal({
+      db: supabase as unknown as EffectPrincipalDb,
+      workspaceId: workspace_id as string,
+      userId: (bearerIsServiceRole ? user_id : authenticatedUserId) as string,
+    });
   }
 
   // ---- Workspace model spend ceiling -----------------------------------------

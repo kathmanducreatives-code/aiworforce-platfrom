@@ -195,6 +195,52 @@ prove_killed "commit boundary: membership read without its lock (EXEC-REVOKE rac
 prove_killed "commit boundary: the plan's workspace is not compared" "$cb_sql" \
   "    if not found or v_plan_ws is distinct from new.workspace_id then" "    if not found then" \
   "$cb_tests" "commit boundary: a task filed under another workspace's plan is refused (plan_id and task_plan_id)"
+# The plan parent side (held 20261025150000, Codex PLAN-PARENT).
+pp_sql="$root/supabase/migrations-held/20261025150000_task_plans_parent_identity.sql"
+pp_tests="$root/tests/db-contract/taskPlanParentIdentity.contract.test.ts"
+cp "$pp_sql" "$pp_sql.mutation-backup"; restore_list+=("$pp_sql")
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025150000_task_plans_parent_identity.sql "$root/tests/db-contract/run.sh" "$pp_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "parent: no application writer moves a plan to another workspace or changes its id ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: plan parent tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the parent guard a referenced plan moves to another workspace"
+ran=$((ran + 1))
+fi
+prove_killed "plan parent: the workspace may change" "$pp_sql" \
+  "    if new.id is distinct from old.id or new.workspace_id is distinct from old.workspace_id then" \
+  "    if new.id is distinct from old.id then" \
+  "$pp_tests" "parent: no application writer moves a plan to another workspace or changes its id"
+prove_killed "plan parent: a deleted plan's id may be re-created elsewhere" "$pp_sql" \
+  "              where t.plan_id = new.id and t.workspace_id is distinct from new.workspace_id) then" \
+  "              where false) then" \
+  "$pp_tests" "parent: a deleted plan's id cannot be re-created in another workspace while tasks still point at it"
+# The live-principal effect fence (effectFence.ts, Codex EXEC-EFFECT).
+fence_ts="$root/supabase/functions/_shared/effectFence.ts"
+ra_ts="$root/supabase/functions/run-agent/index.ts"
+# run-agent is already registered by the guard proofs above: register each file once, or the
+# trap's second restore of it fails and (set -e) skips every file registered after it.
+for f in "$fence_ts" "$ra_ts"; do [ -e "$f.mutation-backup" ] && continue; cp "$f" "$f.mutation-backup"; restore_list+=("$f"); done
+ef_tests="$root/tests/db-contract/effectFence.contract.test.ts"
+efm_tests="$root/tests/db-contract/effectFenceMission.contract.test.ts"
+ef_name="fence: membership removed after the task INSERT — no model call starts, and the task still ends terminal"
+efm_name="fence mission: removed once the job search is bought — it settles, nothing new starts"
+prove_killed "effect fence: the live membership check is skipped" "$fence_ts" \
+  "    const verdict = await liveEffectAuthorization(principal);" "    const verdict: EffectVerdict = \"ok\";" "$ef_tests" "$ef_name"
+prove_killed "effect fence: run-agent never binds its principal" "$ra_ts" \
+  "    bindEffectPrincipal({" "    void ({" "$ef_tests" "$ef_name"
+prove_killed "effect fence: settlement reads of an admitted run are refused too" "$fence_ts" \
+  "    if (c.kind === \"free\" || c.kind === \"poll\" || stopsAdmitted(method, url)) return base(input, init);" \
+  "    if (c.kind === \"free\") return base(input, init);" "$efm_tests" "$efm_name"
+prove_killed "effect fence: a refused provider start reads as a definite non-start (early refund)" "$fence_ts" \
+  "    return refusal(verdict, { host: url.hostname, path: url.pathname }, c.kind === \"provider\");" \
+  "    return refusal(verdict, { host: url.hostname, path: url.pathname }, false);" "$efm_tests" "$efm_name"
+prove_killed "effect fence: the transport's marks are hidden by the wrapper" "$fence_ts" \
+  "    if (d) Object.defineProperty(fenced, k, d);" "    void d;" \
+  "$efm_tests" "fence mission control: the same mission with the fence and no removal qualifies the lead"
 prove_killed "clock read before the lock wait" "$adm_sql" "v_now := clock_timestamp();  -- after the lock wait" "v_now := now();  --" \
   "$adm_tests" "deadline: an admission that waited on the lock past the deadline is refused"
 prove_killed "a run bought with one read (no dataset read)" "$plan_ts" "export const SMOKE_MIN_RUN_READS = 2;" "export const SMOKE_MIN_RUN_READS = 1;" \
