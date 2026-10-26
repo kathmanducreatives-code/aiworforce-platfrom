@@ -1,0 +1,90 @@
+{
+  "date": "2026-10-26",
+  "integrated_source": "1e12c240ced29df7201f260001296fd98d9efdea",
+  "agency_ci_source": "336e7107e572d70fc7b5b6ec04063c9604de82eb",
+  "agency_candidate": "0cbe2f31b4e581a7d1e4d0a0a7fa58b817bca13e",
+  "owner_heads": {
+    "187": "14e0363a9e763819c342a6991d54da92b91b68d1",
+    "188": "508d438f8b68ee0a2dca849649d5d79a262e2ccf",
+    "190": "949a2c5ea4bb68461df978a0415fe0047e9bd4b9",
+    "189": "5c2ff31890e2aa5fb60cc458d5dc2862453ee825"
+  },
+  "evidence": {
+    "native.log": {
+      "sha256": "59c672b71df6d55a218c37b34c17b32f8ffd77de77a9c1d876a8d84b1b562f47",
+      "bytes": 114243
+    },
+    "minimal-native.log": {
+      "sha256": "a60e7aa9b0d0fbda33cc829430e506fcbcdfb4a47e81163a94ce78532a82589b",
+      "bytes": 106092
+    },
+    "auth06.log": {
+      "sha256": "4fb14c639fbc8f241f77da37b17b2f28fc8c7e352615322e8f848455cbc7729b",
+      "bytes": 10074
+    },
+    "browser.log": {
+      "sha256": "c3eb53e20229ad7e7995da7bedb510bddf2987ca5d92c8f1dc26c5324ea1f27e",
+      "bytes": 1960
+    },
+    "workers.log": {
+      "sha256": "334f23c0358931be16bd2e45837b0cb99ca67d0ebe344aded4031f25530f4c25",
+      "bytes": 8511
+    },
+    "agency-contract.log": {
+      "sha256": "0df40222e658d032be4b5a6ba9f3cce10931211bac621ed69a42b062d91affef",
+      "bytes": 335087
+    },
+    "agency-no-client-profile-final.log": {
+      "sha256": "b1cfff3e6c2e7ede388861e4438c4f5e8af9cba83941943d449e6feaacb7b669",
+      "bytes": 46058
+    },
+    "agency-no-client-profile-pinned.log": {
+      "sha256": "95b11f1aa27d259e72915178b24ee1a9b2f59ab8c73d0344e892e33e33e517ce",
+      "bytes": 45744
+    },
+    "plan-race-fixed-harness.log": {
+      "sha256": "a058121cf998086cd7580599d5f450a9fd260b48a6f7e9526eeb45ad8be49298",
+      "bytes": 715
+    },
+    "followup-rollback.log": {
+      "sha256": "7f4d5946717637fa6a5997af76abb1a3d748781f7b51ba37e6a1a545f906e4c3",
+      "bytes": 455
+    },
+    "minimal-browser-autosave.log": {
+      "sha256": "622a09f89d2561964babd889d1fa4a072b35b0d576309a234c39b388f4fa6720",
+      "bytes": 8816
+    },
+    "minimal-browser-final.log": {
+      "sha256": "0c4c4df1f018099357bff35ff4c77a666a17196757c234cac8e34aa0fa44bc35",
+      "bytes": 2021
+    },
+    "integrated-ci.log": {
+      "sha256": "13c65c6c2a1803af38610c0b7c7e6c131b9948a920d67031a0664a38f6a1b719",
+      "bytes": 14744251
+    },
+    "native-ci.log": {
+      "sha256": "aeffbee8414440f15b56918a1c9be9b7b298489c49ba341db8f8663cc59ddad6",
+      "bytes": 1959722
+    },
+    "agency-ci.log": {
+      "sha256": "54935b680246260f6ad05df9ae7c7000e3232790897794c1897941622989d0f9",
+      "bytes": 14611536
+    },
+    "final-audits.log": {
+      "sha256": "63694475289114b656f7322d60dd21d54b7b2ac5bdd8bac1ffcef50f68debc20",
+      "bytes": 959
+    }
+  },
+  "unchanged_reproductions": {
+    "execution-integration-audit.test.ts": "4e9072612006d47a90f2c1c17ee3ecca43f1c9f4c25b02b4325df5aec48b20f5",
+    "task-parent-membership-audit.test.ts": "bc07ac00742789c8f9fc2b80c741ec5dd0764bec00cfaa92dd854b68716a1a00",
+    "post-insert-revocation-audit.test.ts": "f1e81cbbb8b84015e07e4bd833f5878b4135fdfc4ec418730ca240d155405298"
+  },
+  "runtime_identity_checks": {
+    "supabase": "2e8769ce652e83791d4e5395a943956defa4138f",
+    "worker": "e8c1b0a5bf836496344b3da401afc4e7f171d111",
+    "src": "9cee2022edd7ddbb0820988a109f3cdeeacf0c3d",
+    "scripts": "23eb7b59bbb3f51aa31aeba351ac218daa393404",
+    ".github": "550cc2283faf0533149f9daa1a2c6d5777d3e516"
+  }
+}

@@ -1052,3 +1052,33 @@ no longer be reported as an outstanding leak on86d33d6f. Promotions stay unsuppo
 
 Phase1FAIL; Phase2unstarted; P1–P8disabled; A7NO-GO. No PR merge, hosted
 migration/write, deployment, paid API, customer operation or enablement occurred.
+
+## 2026-10-26 — agency-only TEST candidate and security closures
+
+[Independent report](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/AGENCY_TEST_VERIFICATION_2026-10-26.md)
+pins1895c2ff318,190949a2c5e,18714e0363a,188508d438f. All previous four native
+failures now pass unchanged. Native36/0; parent concurrency1/0; AUTH0623/0;
+agency/admission/ledger92/0; realworkers4/0; mounted5/0; autosave24/0; rollback1/0.
+Agency profile with canonical client tables and membership RPCs absent11/0 proves
+unfinished client features do not block this controlled agency path.
+
+Broad source1e12c240: CI40283377613PASS17/17,34contracts,134/134mutants;
+native40283377704PASS. Smaller source336e7107: CI40284128653PASS17/17,
+34contracts,134/134mutants, edge8953/0, UI709/0, realworkers4/0. Published
+agency candidate0cbe2f31 adds offline audit files only; application/workflow trees
+unchanged. No separate competing implementation or PR was created.
+
+Remaining **agency-only** gates: independently establish actual hosted target/schema/
+source preflight, model/price/budget credentials and approvals. Environment currently
+permits only launch/hardening, so the pack's tag dispatch conflicts with policy.
+Standard supabase:test targets production and must not be used. TEST Apify secret
+name exists; openai-only unsets it and denies network, tested. Fresh-schema builder
+omits held task/parent guards, requiring exact separately approved TEST SQL manifest.
+Backend handoffs are on189/188; Brain187 review is posted. No hosted data or secret
+values were accessed. No merge/deploy/paid call or TEST worker dispatch occurred.
+
+FullPhase1FAIL, Phase2unstarted, P1–P8disabled, A7NO-GO. Request authorization for
+TEST-only preflight/setup and providers-off rehearsal first; only after it passes,
+seek separate model-only approval (worker≤4/$0.05; preparer≤2/$0.02496;
+zeroApify; combined≤$0.07488). This is a separately gated controlled engineering
+experiment, not Nosh pilot Phase7 completion or customer activation.

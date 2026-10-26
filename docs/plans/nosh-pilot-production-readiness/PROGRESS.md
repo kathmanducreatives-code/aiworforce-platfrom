@@ -2,12 +2,15 @@
 
 **Customer pilot readiness: FAIL. P1–P8 disabled. A7 NO-GO.**
 
-Last continuation: **2026-10-25, follow-up source09ef98f6 / draft185**.
-AUTH-06, OWN-01, original execution3/3, member RPC8/8 and CACHE-SESSION
-(mounted5/5) are narrowly verified. Overall **Phase1FAIL**: four new supplemental
-authorization failures plus remaining canonical task/client/bridge integration.
-Full CI17/17 and119/119mutation proofs pass; native security gate remainsFAIL.
-Historical receipts below remain unchanged; see the final follow-up section.
+Last continuation: **2026-10-26, draft185 / agency candidate0cbe2f31**.
+AUTH-06, OWN-01, original execution and CACHE-SESSION remain verified. Backend189/190
+close all four supplemental failures with unchanged assertions. Broad and smaller
+agency candidates each pass17/17CI and134/134mutants; required native gatePASS.
+Full **Phase1FAIL** remains for client/pilot task pins, descendants, bridge and
+complete enablement acceptance. Those are not agency-only TEST prerequisites:
+a no-client-schema native profile independently passes11/11. Hosted/paid execution
+remainsNO-GO pending fresh target preflight and separate approvals. See the dated
+agency report below; historical narrower receipts are preserved.
 Read [MASTER_PLAN.md](MASTER_PLAN.md) before resuming. This tracker supersedes
 historical phase-number status in `docs/audits/.../production-readiness/`; those
 files remain immutable receipts of narrower previous work. Production-readiness
@@ -18,7 +21,7 @@ Phase 0–8 below is distinct from the historical P1–P8 feature implementation
 | Phase | Status | Branch / PR | Validation | Remaining blockers |
 | --- | --- | --- | --- | --- |
 | 0 — architecture/readiness audit | COMPLETE / reviewed; Phase 1 authorized | `codex/nosh-readiness-master-plan`; draft #152, stacked on #151 | repository/PR/CI/interface audit; documentation checks in phase receipt | DEC-01 target chosen in Phase 1 approval; shared contract still open |
-| 1 — native security | PARTIAL / AUTH-06 and OWN-01 verified, overall FAIL | `codex/nosh-phase1-client-contract-gates` on #172; previous PRs preserved | previous owned native proofs pass; draft185: AUTH23/0, OWN-018/0 + original reproductionPASS, client15/0, real-login19/0, pilot68/0+8/0; edge9401/0; infra214/0; execution1/2FAIL; cache1/1FAIL | Backend EXEC-PLAN/EXEC-REVOKE; Brain CACHE-SESSION; member writers/task pins; same-client parent constraints; Codex canonical bridge/global locks; complete integrated acceptance |
+| 1 — native security | PARTIAL / verified delivered fixes; full client/pilot FAIL | draft #185; smaller agency branch `codex/agency-only-test-verification` | unchanged execution9/0, AUTH23/0, focused native36/0, no-client agency profile11/0, browser5/0, autosave24/0, realworkers4/0; fullCI17/17 +134/134mutants; native gatePASS | delivered191–193 need independent client-path acceptance and enablement wiring; same-client uniqueness/read policy; Codex private-client bridge/global lock alignment; full integrated pilot acceptance |
 | 2 — transactional persistence | PENDING / NOT APPROVED | no implementation PR yet; P3/P5/P6/P7 interfaces are not persistence | offline contracts only; no native durable import/snapshot/review/approval adapter | Phase 1; DATA-01/02; REPLAY-01; original-task lifecycle and shared receipt contract |
 | 3 — legacy executor containment | PENDING / NOT APPROVED | owner #145/#149/#150 are dependencies, not pilot containment completion | no complete pilot route-by-route native acceptance | Phase 1/2; backend EXEC-01; Brain context seam |
 | 4 — recovery/spending | PENDING / NOT APPROVED | owner #150 plus future FIN-01 successor | mocked P4/P8 safeguards; no native pilot shared-ledger recovery proof | Phase 2/3; FIN-01/02; MODEL-01; no competing ledger |
@@ -548,3 +551,33 @@ no longer be reported as an outstanding leak on86d33d6f. Promotions stay unsuppo
 
 Phase1FAIL; Phase2unstarted; P1–P8disabled; A7NO-GO. No PR merge, hosted
 migration/write, deployment, paid API, customer operation or enablement occurred.
+
+## 2026-10-26 — agency-only TEST candidate and security closures
+
+[Independent report](../../audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/AGENCY_TEST_VERIFICATION_2026-10-26.md)
+pins1895c2ff318,190949a2c5e,18714e0363a,188508d438f. All previous four native
+failures now pass unchanged. Native36/0; parent concurrency1/0; AUTH0623/0;
+agency/admission/ledger92/0; realworkers4/0; mounted5/0; autosave24/0; rollback1/0.
+Agency profile with canonical client tables and membership RPCs absent11/0 proves
+unfinished client features do not block this controlled agency path.
+
+Broad source1e12c240: CI40283377613PASS17/17,34contracts,134/134mutants;
+native40283377704PASS. Smaller source336e7107: CI40284128653PASS17/17,
+34contracts,134/134mutants, edge8953/0, UI709/0, realworkers4/0. Published
+agency candidate0cbe2f31 adds offline audit files only; application/workflow trees
+unchanged. No separate competing implementation or PR was created.
+
+Remaining **agency-only** gates: independently establish actual hosted target/schema/
+source preflight, model/price/budget credentials and approvals. Environment currently
+permits only launch/hardening, so the pack's tag dispatch conflicts with policy.
+Standard supabase:test targets production and must not be used. TEST Apify secret
+name exists; openai-only unsets it and denies network, tested. Fresh-schema builder
+omits held task/parent guards, requiring exact separately approved TEST SQL manifest.
+Backend handoffs are on189/188; Brain187 review is posted. No hosted data or secret
+values were accessed. No merge/deploy/paid call or TEST worker dispatch occurred.
+
+FullPhase1FAIL, Phase2unstarted, P1–P8disabled, A7NO-GO. Request authorization for
+TEST-only preflight/setup and providers-off rehearsal first; only after it passes,
+seek separate model-only approval (worker≤4/$0.05; preparer≤2/$0.02496;
+zeroApify; combined≤$0.07488). This is a separately gated controlled engineering
+experiment, not Nosh pilot Phase7 completion or customer activation.
