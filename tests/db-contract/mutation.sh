@@ -129,6 +129,38 @@ echo "mutant killed: without the held admission migration nothing is admitted"
 ran=$((ran + 1))
 fi
 
+# ── PROOFS: OWN-01, lead-graph parents stay in their workspace ─────────────
+# Without the held migration a member stores a contact under another
+# workspace's account; each part of the fix is required by a named test.
+own01_sql="$root/supabase/migrations-held/20261025120000_lead_graph_same_workspace_parents.sql"
+own01_tests="$root/tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts"
+cp "$own01_sql" "$own01_sql.mutation-backup"; restore_list+=("$own01_sql")
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025120000_lead_graph_same_workspace_parents.sql,20261025180000_lead_graph_same_client_parents.sql "$root/tests/db-contract/run.sh" "$own01_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "OWN-01: a member cannot store a contact under another workspace's account (raw INSERT) ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: OWN-01 tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the OWN-01 migration a contact stores another workspace's account"
+ran=$((ran + 1))
+fi
+# #177's own proofs judge #177 alone: its held same-client successor (which
+# replaces these keys) is left out of their databases.
+export DB_CONTRACT_OMIT_HELD=20261025180000_lead_graph_same_client_parents.sql
+prove_killed "OWN-01: SET NULL nulls the whole key (workspace_id too)" "$own01_sql" \
+  "when 'set null' then format('set null (%I)', r.col)" "when 'set null' then 'set null'" \
+  "$own01_tests" "positive controls: own parent, no parent, embed, delete behaviour"
+prove_killed "OWN-01: contacts left out of the reference list" "$own01_sql" \
+  '    ["contacts",              "account_id",         "accounts",         "set null"],
+' "" \
+  "$own01_tests" "OWN-01: a member cannot store a contact under another workspace's account (raw INSERT)"
+prove_killed "OWN-01: preflight does not abort on an existing mismatch" "$own01_sql" \
+  "  if v_report <> '' then" "  if false then" \
+  "$own01_tests" "preflight: an existing mismatch aborts the migration and changes nothing"
+unset DB_CONTRACT_OMIT_HELD
+
 prove_killed "no serialization lock" "$adm_sql" \
   "where queue_id = p_queue for update;
   if not found then return jsonb_build_object('decision', 'not_authorized'); end if;" \
@@ -530,6 +562,34 @@ prove_killed "task pins: the grant id need not be the pinned generation's row" "
 prove_killed "task pins: partial pins allowed" "$tp_sql" \
   "  add constraint tasks_client_pins_all_or_none check (" "  add constraint tasks_client_pins_all_or_none check (true or " \
   "$tp_tests" "pins: inconsistent pins are refused by the database itself"
+
+# ── Same-client descendants (held 20261025180000; #174 §9.5) ──────────────────
+sc_sql="$root/supabase/migrations-held/20261025180000_lead_graph_same_client_parents.sql"
+[ -e "$sc_sql.mutation-backup" ] || { cp "$sc_sql" "$sc_sql.mutation-backup"; restore_list+=("$sc_sql"); }
+sc_tests="$root/tests/db-contract/leadGraphSameClientParents.contract.test.ts"
+sc_bind="same client across ALL 27 references: A→A and agency→agency commit; A→B, agency→client, client→agency refused"
+sc_scope="client scope: derived from client_id (a writer cannot lie about it), and a client of another workspace is refused"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025180000_lead_graph_same_client_parents.sql "$root/tests/db-contract/run.sh" "$sc_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "$sc_bind ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: same-client tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the binding a client's child references another client's parent"
+ran=$((ran + 1))
+fi
+prove_killed "same client: the keys bind the workspace only (Codex's two-independent-keys case)" "$sc_sql" \
+  "foreign key (workspace_id, client_scope, %I) '
+      'references public.%I (workspace_id, client_scope, id) on delete %s'" \
+  "foreign key (workspace_id, %I) '
+      'references public.%I (workspace_id, id) on delete %s'" "$sc_tests" "$sc_bind"
+prove_killed "same client: client_scope is not derived from client_id" "$sc_sql" \
+  "  new.client_scope := coalesce(new.client_id, '00000000-0000-0000-0000-000000000000'::uuid);" "" "$sc_tests" "$sc_scope"
+prove_killed "same client: a client of another workspace is accepted" "$sc_sql" \
+  "    execute format('alter table public.%I add constraint %I foreign key (workspace_id, client_id) '
+      'references public.client_accounts (workspace_id, id)', t, t || '_client_in_workspace');" "" "$sc_tests" "$sc_scope"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
