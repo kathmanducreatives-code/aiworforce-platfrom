@@ -315,3 +315,31 @@ Application roles now change or delete a membership **only** through #186's writ
 **Proof and rollback**
 - `tests/db-contract/taskClientPins.contract.test.ts`, plus five mutation proofs.
 - The rollback refuses while any task is pinned.
+
+## `20261025180000_lead_graph_same_client_parents.sql`
+
+**Backend, held. Needs #176, #177 and approval of the #174 contract.** This implements same-client descendants (#174 §9.5) and Codex's parent-client rule. Independent `(workspace_id, client_id)` keys plus #177's keys would still allow a client A contact under a client B account. This migration closes that.
+
+**What it adds**
+- Every lead-graph row gets `client_id` (null = agency work), with a key to `client_accounts (workspace_id, id)`.
+- Every row gets `client_scope`: the client id, or a fixed sentinel for agency rows. A CHECK constraint keeps it equal to that value, and a trigger fills it, so writers never set it.
+- It is a plain column on purpose: PostgreSQL refuses `ON DELETE SET NULL (col)` on a key containing a generated column.
+- All 26 of #177's references, plus `signal_event_evidence → signal_events`, become `(workspace_id, client_scope, col) → parent (workspace_id, client_scope, id)`. Their names and delete behaviour are kept.
+
+**What that means for every writer**
+- Same client, or agency → agency: allowed.
+- Client → other client, agency → client, client → agency: refused.
+- Stripping a referencing child's client, or moving a referenced parent to another client: refused (`23503`).
+- Existing rows are all agency rows, so nothing is reassigned.
+
+**Not included (recorded on #174)**
+- Client-scoped uniqueness and dedup keys. Today's upserts target the current keys, so changing them must ship with those writers before enablement.
+- Browser read isolation of client-scoped lead rows. That is a permission decision.
+
+**Proof**
+- `tests/db-contract/leadGraphSameClientParents.contract.test.ts` covers all 27 references, plus scope derivation, a cross-workspace client, delete behaviour and embeds.
+- #177's suite still passes. Its catalog check accepts the client-bound shape when this migration is present.
+- Mutation proofs: the migration omitted, binding to the workspace only, scope not derived, cross-workspace client allowed.
+- #177's own proofs now run without this successor, so they still judge #177 alone. `DB_CONTRACT_OMIT_HELD` accepts a comma-separated list.
+
+**Rollback:** `rollback/20261025180000_lead_graph_same_client_parents.down.sql` restores #177's keys exactly. It refuses while any client-scoped row exists.
