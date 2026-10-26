@@ -510,6 +510,27 @@ prove_killed "membership surface: TRUNCATE is not guarded" "$ms_sql" \
   for each statement execute function public.workspace_members_app_surface();" "" \
   "$ms_tests" "surface: TRUNCATE is refused for application roles, by grant and by trigger"
 
+# ── Immutable task pins (held 20261025170000; #174 §9.1) ─────────────────────
+tp_sql="$root/supabase/migrations-held/20261025170000_task_client_pins.sql"
+[ -e "$tp_sql.mutation-backup" ] || { cp "$tp_sql" "$tp_sql.mutation-backup"; restore_list+=("$tp_sql"); }
+tp_tests="$root/tests/db-contract/taskClientPins.contract.test.ts"
+tp_stale="pins: pins no longer valid at commit are refused — revoke, demotion, logout, archive"
+prove_killed "task pins: not revalidated at commit" "$tp_sql" \
+  "  if v_outcome <> 'ok' then" "  if v_outcome <> 'ok' and false then" "$tp_tests" "$tp_stale"
+prove_killed "task pins: the grant row is not locked (a revoke in flight is not waited for)" "$tp_sql" \
+  "    where g.id = new.client_grant_id for share;" "    where g.id = new.client_grant_id;" \
+  "$tp_tests" "pins race: a revoke in flight — the task insert waits on the grant, then is refused"
+prove_killed "task pins: they may be rewritten" "$tp_sql" \
+  "      raise exception 'tasks: client pins are written once, when the task is created (a re-pin is a new authorization)'" \
+  "      raise notice 'tasks: client pins are written once, when the task is created (a re-pin is a new authorization)'" \
+  "$tp_tests" "pins are immutable: no re-pin, no unpin, no move of a pinned task; status writes still settle"
+prove_killed "task pins: the grant id need not be the pinned generation's row" "$tp_sql" \
+  "                    and g.generation = new.client_grant_generation) then" "                    ) or false then" \
+  "$tp_tests" "pins: inconsistent pins are refused by the database itself"
+prove_killed "task pins: partial pins allowed" "$tp_sql" \
+  "  add constraint tasks_client_pins_all_or_none check (" "  add constraint tasks_client_pins_all_or_none check (true or " \
+  "$tp_tests" "pins: inconsistent pins are refused by the database itself"
+
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
 if [ -n "${MUTATION_TALLY_FILE:-}" ]; then

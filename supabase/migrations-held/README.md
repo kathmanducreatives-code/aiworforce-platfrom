@@ -248,3 +248,21 @@ Application roles now change or delete a membership **only** through #186's writ
   - deletes allowed;
   - TRUNCATE unguarded.
 - **Rollback:** `rollback/20261025160000_workspace_members_app_surface.down.sql`.
+
+## `20261025170000_task_client_pins.sql`
+
+**Backend, held. Needs #176 and approval of the #174 contract.** These are the immutable task pins from #174 §9.1. A client task carries `client_id`, `client_grant_id`, `client_grant_generation`, `permission_revision` and `origin_session_id`, written once at creation.
+
+**What the database enforces**
+- All five pins or none.
+- The client must be in the task's workspace, and the pinned generation must belong to **this task's user**. Both are composite foreign keys onto #176's existing unique keys; Brain's schema is not changed.
+- For application roles, pins are accepted only if Brain's own `client_brain_authorization(…, 'task', pins)` returns `ok` **at commit**. The check runs under the §5 lock order (membership → client → grant), so a revoke, regrant, role change, archive or logout committed first refuses the task, and one in flight is waited for.
+- Pins never change, and a pinned task keeps its workspace and principal.
+
+**Behaviour today**
+- Client-scoped execution stays refused at every entry (`client_scope_unsupported`). From #189's follow-up onwards, the guard also reads pin columns as client markers.
+- Per-effect consumption (§9.2) lives in the effect fence and is inert until the owner enables client Brains.
+
+**Proof and rollback**
+- `tests/db-contract/taskClientPins.contract.test.ts`, plus five mutation proofs.
+- The rollback refuses while any task is pinned.
