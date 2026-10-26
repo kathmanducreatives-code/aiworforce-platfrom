@@ -1,0 +1,215 @@
+{
+  "source": "09ef98f6a1b7664438e6dd39701dc1aac2c1ae94",
+  "date": "2026-10-25 Asia/Kathmandu",
+  "phase1": "FAIL",
+  "phase2": "UNSTARTED",
+  "a7": "NO-GO",
+  "logs": {
+    "auth06.log.gz": {
+      "sha256": "7a6f12c4462d6b6b1d83e98020eb0d0d39daf5a4bbe9501fe314edf59c6d9d51",
+      "bytes": 10469
+    },
+    "brain-fetch.log.gz": {
+      "sha256": "7443512d350cb356c3007214728d32112b4bbf78a48e0acd869d0a7455b57a34",
+      "bytes": 228
+    },
+    "browser.log.gz": {
+      "sha256": "959490e75ae1b26ddb98e6b55abd815aa04c2e7fc03f78feb6085c1e2991db3c",
+      "bytes": 1960
+    },
+    "cache-corrected-red.log.gz": {
+      "sha256": "7eb55d57f0f1540532b5cdb078304458e20f57177e8aad9f6bde836160716ff3",
+      "bytes": 2517
+    },
+    "cache-corrected.log.gz": {
+      "sha256": "aa7d509eb93858415b1b8dfd0a02090e69ac77b0ba867c5f45f4294173f73361",
+      "bytes": 2619
+    },
+    "cache-original-new-brain.log.gz": {
+      "sha256": "8fa470ce16a3383f2a35d87893e1b6cb429bd50ba3786288f0bce12cee5c0d2e",
+      "bytes": 2946
+    },
+    "cache.log.gz": {
+      "sha256": "0a56fea7b99bdacbf52c522308acb6d40d6af316640fcba3929e49a30cb29fdc",
+      "bytes": 2330
+    },
+    "catalog.log.gz": {
+      "sha256": "b71c710aef4695c826c083f81f692bc8066c5bcb505dc9e94088fbec1dc8b45d",
+      "bytes": 83881
+    },
+    "ci-watch.log.gz": {
+      "sha256": "0968904e835fd2eba8bc499886ed3f225fbb343a34d7850bdc7396ea41d8410e",
+      "bytes": 82182
+    },
+    "contract-fetch.log.gz": {
+      "sha256": "b21911d9bd71a285a315b8485018d449e17fe2ae3c16c07e958803d4f978222a",
+      "bytes": 219
+    },
+    "edge.log.gz": {
+      "sha256": "aa5aa4096d42c963371dd6e919962b8429c37aece7fb5caa510cecc6a927b40f",
+      "bytes": 944580
+    },
+    "final-ci.log.gz": {
+      "sha256": "39fc41d6095730497bbb6b5ce9c21cb460eb92b89e06a6a667c9fdfd0cfe4c36",
+      "bytes": 15124557
+    },
+    "infra-portable.log.gz": {
+      "sha256": "649ea6b0c11b5836bf1e3b0f6978b0193b0de0b6c70cd7eed24f6d40323bf62a",
+      "bytes": 21782
+    },
+    "infra.log.gz": {
+      "sha256": "fd0c4f6b15b044caaf24a56a9090cd5e1c0837b333445bfb9d34833a9822e35f",
+      "bytes": 24859
+    },
+    "latest-auth06.log.gz": {
+      "sha256": "6d5e73659db73878f56a40bc7812a09c27a1f7ac9b0843fcaf90a3b90d35474e",
+      "bytes": 10469
+    },
+    "latest-ci-watch.log.gz": {
+      "sha256": "d557ef479b42fae2cfb742e2b42cc6bfe726a68c4ea0e8f318755cf892f9d448",
+      "bytes": 19827
+    },
+    "latest-native-ci-fail.log.gz": {
+      "sha256": "0d5117e5eff8354494f5f6b03aef60b6dd1ef7ac0b78d9b19a8bf4bbe5b6d280",
+      "bytes": 34733
+    },
+    "latest-native.log.gz": {
+      "sha256": "b4653844bfafd42bd22aa965998b35f12a8fac170e9f734fe0066be382515808",
+      "bytes": 12058
+    },
+    "native-ci-fail.log.gz": {
+      "sha256": "64c75ab33367aff07a5d9de80b67b41b192a08cbfeb83cc797438607a291b3d4",
+      "bytes": 34735
+    },
+    "native.log.gz": {
+      "sha256": "cf8d62a4d155ae668a33ffc3ef88c3d9ff93b274dd1968a4816f3f2e09dda7e6",
+      "bytes": 11819
+    },
+    "node.log.gz": {
+      "sha256": "2bbc01c3af1fe239ea0b7056931dec26f3cade61a42af28414f09be37eaab962",
+      "bytes": 2168
+    },
+    "own01.log.gz": {
+      "sha256": "02664923d44bf55260cabaa8f34dd68e01ae31e29f2a4579834ae66317a791e6",
+      "bytes": 2738
+    },
+    "pilot.log.gz": {
+      "sha256": "180951c65c8cc21045a9fc8d6ba6d4a0c2030c84ae6b7d95b829d0c958772c75",
+      "bytes": 78331
+    },
+    "post-insert.log.gz": {
+      "sha256": "5c90ec8d03881e0f27727bfacfe235c525d7053e3b70c80c736139470de0160f",
+      "bytes": 5660
+    },
+    "realprocess-alias.log.gz": {
+      "sha256": "aaafd87a37bf3d6f1f676a0cc4d09a119f4d1ef28bf92825b0fd1c4bcbfac752",
+      "bytes": 8301
+    },
+    "realprocess.log.gz": {
+      "sha256": "987298906d8a5a1cdc02a704dba7c842ad92cda0793e1b68eb4ef5cab4243f5b",
+      "bytes": 10180
+    },
+    "rollback.log.gz": {
+      "sha256": "e18ad51507d23623836e818232ddf94dce36c063a26d0134a2eebd404f031a71",
+      "bytes": 450
+    },
+    "stop-negative.log.gz": {
+      "sha256": "0ad3bf4f5c716dbf3ba21fbd66ec72c1d932562ff6182dec4cfa133db25de80f",
+      "bytes": 8532
+    },
+    "supplemental.log.gz": {
+      "sha256": "f3c658b0e5561845e3c6837474398d55e3f97a6364070ccdcfe2ef18b474bf96",
+      "bytes": 4486
+    }
+  },
+  "heads": {
+    "178": {
+      "headRefOid": "86d33d6fab97f5b8e1fa68a89edb42bf31973417",
+      "headRefName": "feat/client-brain-integration",
+      "baseRefName": "feat/client-brain-3c"
+    },
+    "181": {
+      "headRefOid": "90bd993f00ef248b3d810333b89d63e1e945d48e",
+      "headRefName": "fix/hiring-verifier-phase-clock",
+      "baseRefName": "launch/hardening"
+    },
+    "158": {
+      "headRefOid": "99bceba527811126ff7eeecd0d37a1c106e32372",
+      "headRefName": "fix/smoke-credit-reconciliation",
+      "baseRefName": "fix/adopt-verified-gate-run"
+    },
+    "174": {
+      "headRefOid": "96962e9a316e4a83c486ad2a3ba14cb259b35251",
+      "headRefName": "docs/client-brain-contract",
+      "baseRefName": "launch/hardening"
+    },
+    "179": {
+      "headRefOid": "083512424873ad9cb9f9a83dec5797fb6633cce9",
+      "headRefName": "fix/legacy-pre-effect-guards",
+      "baseRefName": "launch/hardening"
+    },
+    "186": {
+      "headRefOid": "bbbf3811566f4a1ccdf6b33f6c06602c0a3a358e",
+      "headRefName": "feat/workspace-member-writers",
+      "baseRefName": "feat/client-brain-3c"
+    },
+    "169": {
+      "headRefOid": "833affce5077ae5f50b53353cb84fa0e916918dc",
+      "headRefName": "fix/brain-role-aware-writes",
+      "baseRefName": "fix/brain-onboarding-authoritative-save"
+    },
+    "185": {
+      "headRefOid": "b91040cdb25dedae628050f17d60fd53286a1f8c",
+      "headRefName": "codex/nosh-phase1-integrated-verification",
+      "baseRefName": "feat/client-brain-integration"
+    },
+    "176": {
+      "headRefOid": "1756b21717fd172cf256ca05bd1b3370248638a9",
+      "headRefName": "feat/client-brain-3c",
+      "baseRefName": "fix/brain-role-aware-writes"
+    },
+    "177": {
+      "headRefOid": "05e288e1ea775e1efaf53581ed7bb4e0b6d032d4",
+      "headRefName": "fix/own01-lead-graph-same-workspace-parents",
+      "baseRefName": "launch/hardening"
+    },
+    "182": {
+      "headRefOid": "f0798c88d737113d02b6f2c71838a2b9fa720551",
+      "headRefName": "docs/test-acceptance-pack",
+      "baseRefName": "fix/smoke-credit-reconciliation"
+    }
+  },
+  "screenshots": {
+    "1-A-client-brain.png": "e1f4560c564bf403615f1b303ed2814c77e91ea2bba136808a57fe16c19a5140",
+    "0-A-signed-in.png": "e27db4c386e70f62d968bfd9a3233d84fb7dbeb4de0d73f860aaa3cf231df378",
+    "5-A-after-revoke.png": "40febef375450c980cad8322cdcca808eeeb101819cb984bc5f547f80d3a9618",
+    "3-B-after-late-response.png": "9b6741ae32d65ce45ac889d4cf2ae75e26ce9332e739daeba7e3fe979d326d8b",
+    "4-A-again.png": "e1f4560c564bf403615f1b303ed2814c77e91ea2bba136808a57fe16c19a5140",
+    "2-B-after-switch.png": "9b6741ae32d65ce45ac889d4cf2ae75e26ce9332e739daeba7e3fe979d326d8b"
+  },
+  "cache_original_sha256": "9abfef1e9279b00fc2cc57a082efdf50d399d938cc432097a32d824933b63576",
+  "ci": {
+    "40202500235": {
+      "conclusion": "SUCCESS",
+      "jobs": 17,
+      "contract_files": 30,
+      "mutation_proofs": 119,
+      "real_workers": 4
+    },
+    "40202502983": {
+      "conclusion": "FAILURE",
+      "supplemental_pass": 2,
+      "supplemental_fail": 4,
+      "original_execution_pass": 3
+    }
+  },
+  "original_execution_sha256": "4e9072612006d47a90f2c1c17ee3ecca43f1c9f4c25b02b4325df5aec48b20f5",
+  "trees": {
+    "supabase": "e9e63042a65a32cc3c9d85ac56c71aa31a612f4a",
+    "worker": "e8c1b0a5bf836496344b3da401afc4e7f171d111",
+    "src": "39b0eaa4cc0c69e56abd77845800d375596065fd",
+    "tests": "e07a8ef3ab3e0e0d112949dc880768361ba19632",
+    ".github": "ce8313cd303b3909fc83b1ad4abff041bab2c3a2",
+    "scripts": "23eb7b59bbb3f51aa31aeba351ac218daa393404"
+  }
+}

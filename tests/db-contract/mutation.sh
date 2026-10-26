@@ -134,6 +134,34 @@ echo "mutant killed: without the held admission migration nothing is admitted"
 ran=$((ran + 1))
 fi
 
+# ── PROOFS: OWN-01, lead-graph parents stay in their workspace ─────────────
+# Without the held migration a member stores a contact under another
+# workspace's account; each part of the fix is required by a named test.
+own01_sql="$root/supabase/migrations-held/20261025120000_lead_graph_same_workspace_parents.sql"
+own01_tests="$root/tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts"
+cp "$own01_sql" "$own01_sql.mutation-backup"; restore_list+=("$own01_sql")
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025120000_lead_graph_same_workspace_parents.sql "$root/tests/db-contract/run.sh" "$own01_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "OWN-01: a member cannot store a contact under another workspace's account (raw INSERT) ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: OWN-01 tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the OWN-01 migration a contact stores another workspace's account"
+ran=$((ran + 1))
+fi
+prove_killed "OWN-01: SET NULL nulls the whole key (workspace_id too)" "$own01_sql" \
+  "when 'set null' then format('set null (%I)', r.col)" "when 'set null' then 'set null'" \
+  "$own01_tests" "positive controls: own parent, no parent, embed, delete behaviour"
+prove_killed "OWN-01: contacts left out of the reference list" "$own01_sql" \
+  '    ["contacts",              "account_id",         "accounts",         "set null"],
+' "" \
+  "$own01_tests" "OWN-01: a member cannot store a contact under another workspace's account (raw INSERT)"
+prove_killed "OWN-01: preflight does not abort on an existing mismatch" "$own01_sql" \
+  "  if v_report <> '' then" "  if false then" \
+  "$own01_tests" "preflight: an existing mismatch aborts the migration and changes nothing"
+
 prove_killed "no serialization lock" "$adm_sql" \
   "where queue_id = p_queue for update;
   if not found then return jsonb_build_object('decision', 'not_authorized'); end if;" \
@@ -145,6 +173,109 @@ prove_killed "no serialization lock" "$adm_sql" \
 # which holds this row from a second session, still does.)
 prove_killed "no deadline" "$adm_sql" "or a.deadline_at <= v_now" "" \
   "$adm_tests" "deadline: absolute, from the queue row, read after the lock, never renewed"
+
+# ── PROOFS: the legacy pre-effect guard ────────────────────────────────────
+# Each mutant removes one part of the guard or one entry's call to it; a named
+# test, judged by effects (rows, vendor requests, writes), must then fail.
+guard_ts="$root/supabase/functions/_shared/legacyExecutionGuard.ts"
+ra_ts="$root/supabase/functions/run-agent/index.ts"
+orch_ts="$root/supabase/functions/orchestrate/index.ts"
+enq_ts="$root/supabase/functions/enqueue-lead-mission/index.ts"
+guard_tests="$root/tests/db-contract/legacyPreEffectGuard.contract.test.ts"
+for f in "$guard_ts" "$ra_ts" "$orch_ts" "$enq_ts"; do cp "$f" "$f.mutation-backup"; restore_list+=("$f"); done
+prove_killed "guard: run-agent ignores the refusal" "$ra_ts" \
+  "      return json({ success: false, error: guard.code, detail: guard.detail }, guard.status);" \
+  "      void json({ success: false, error: guard.code, detail: guard.detail }, guard.status);" \
+  "$guard_tests" "run-agent: a request carrying the pilot marker is refused before any effect"
+prove_killed "guard: the stored task's pilot markers are not read" "$guard_ts" \
+  "      if (stored.pilot.length) return" "      if (stored.pilot.length && false) return" \
+  "$guard_tests" "run-agent: a resume of a STORED pilot task is refused before any effect, with the request's markers stripped"
+prove_killed "guard: membership not re-checked for a service caller" "$guard_ts" \
+  "    if (!data) return refuse(403, \"principal_not_member\"" "    if (!data && false) return refuse(403, \"principal_not_member\"" \
+  "$guard_tests" "run-agent: a service call for a user who is no longer a member is refused before any effect"
+prove_killed "guard: a resume may change its principal" "$guard_ts" \
+  "if (i.taskIds.resume.includes(row.id) && row.user_id && row.user_id !== i.principalUserId) {" \
+  "if (i.taskIds.resume.includes(row.id) && row.user_id && row.user_id !== i.principalUserId && false) {" \
+  "$guard_tests" "run-agent: a resume keeps its original principal — another member cannot resume it"
+prove_killed "guard: enqueue-lead-mission ignores the refusal" "$enq_ts" \
+  "    return json({ error: guard.code, detail: guard.detail }, guard.status);" \
+  "    void json({ error: guard.code, detail: guard.detail }, guard.status);" \
+  "$guard_tests" "enqueue-lead-mission: no pilot, client-scoped or non-member mission is queued"
+prove_killed "guard: orchestrate ignores the refusal" "$orch_ts" \
+  "        return json({ error: guard.code, details: guard.detail }, guard.status);" \
+  "        void json({ error: guard.code, details: guard.detail }, guard.status);" \
+  "$guard_tests" "orchestrate: a pilot or client-scoped request is refused before any plan, Brain read, model call or dispatch"
+prove_killed "guard: the plan is not checked (EXEC-PLAN)" "$guard_ts" \
+  "    if (!plan || plan.workspace_id !== i.workspaceId) {" "    if ((!plan || plan.workspace_id !== i.workspaceId) && false) {" \
+  "$guard_tests" "run-agent: a task filed under another workspace's plan is refused before any effect (Codex EXEC-PLAN)"
+# The task commit boundary (held 20261025130000): the database's own check.
+cb_sql="$root/supabase/migrations-held/20261025130000_tasks_commit_boundary.sql"
+cb_tests="$root/tests/db-contract/taskCommitBoundary.contract.test.ts"
+cp "$cb_sql" "$cb_sql.mutation-backup"; restore_list+=("$cb_sql")
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025130000_tasks_commit_boundary.sql "$root/tests/db-contract/run.sh" "$cb_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "commit boundary: a new task's principal must be a current member ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: commit boundary tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the commit boundary a non-member's task commits"
+ran=$((ran + 1))
+fi
+prove_killed "commit boundary: membership read without its lock (EXEC-REVOKE race)" "$cb_sql" \
+  "      where m.workspace_id = new.workspace_id and m.user_id = new.user_id
+      for key share;" "      where m.workspace_id = new.workspace_id and m.user_id = new.user_id;" \
+  "$cb_tests" "commit boundary: a membership DELETE racing the INSERT — the INSERT waits, then is refused"
+prove_killed "commit boundary: the plan's workspace is not compared" "$cb_sql" \
+  "    if not found or v_plan_ws is distinct from new.workspace_id then" "    if not found then" \
+  "$cb_tests" "commit boundary: a task filed under another workspace's plan is refused (plan_id and task_plan_id)"
+# The plan parent side (held 20261025150000, Codex PLAN-PARENT).
+pp_sql="$root/supabase/migrations-held/20261025150000_task_plans_parent_identity.sql"
+pp_tests="$root/tests/db-contract/taskPlanParentIdentity.contract.test.ts"
+cp "$pp_sql" "$pp_sql.mutation-backup"; restore_list+=("$pp_sql")
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025150000_task_plans_parent_identity.sql "$root/tests/db-contract/run.sh" "$pp_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "parent: no application writer moves a plan to another workspace or changes its id ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: plan parent tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the parent guard a referenced plan moves to another workspace"
+ran=$((ran + 1))
+fi
+prove_killed "plan parent: the workspace may change" "$pp_sql" \
+  "    if new.id is distinct from old.id or new.workspace_id is distinct from old.workspace_id then" \
+  "    if new.id is distinct from old.id then" \
+  "$pp_tests" "parent: no application writer moves a plan to another workspace or changes its id"
+prove_killed "plan parent: a deleted plan's id may be re-created elsewhere" "$pp_sql" \
+  "              where t.plan_id = new.id and t.workspace_id is distinct from new.workspace_id) then" \
+  "              where false) then" \
+  "$pp_tests" "parent: a deleted plan's id cannot be re-created in another workspace while tasks still point at it"
+# The live-principal effect fence (effectFence.ts, Codex EXEC-EFFECT).
+fence_ts="$root/supabase/functions/_shared/effectFence.ts"
+ra_ts="$root/supabase/functions/run-agent/index.ts"
+# run-agent is already registered by the guard proofs above: register each file once, or the
+# trap's second restore of it fails and (set -e) skips every file registered after it.
+for f in "$fence_ts" "$ra_ts"; do [ -e "$f.mutation-backup" ] && continue; cp "$f" "$f.mutation-backup"; restore_list+=("$f"); done
+ef_tests="$root/tests/db-contract/effectFence.contract.test.ts"
+efm_tests="$root/tests/db-contract/effectFenceMission.contract.test.ts"
+ef_name="fence: membership removed after the task INSERT — no model call starts, and the task still ends terminal"
+efm_name="fence mission: removed once the job search is bought — it settles, nothing new starts"
+prove_killed "effect fence: the live membership check is skipped" "$fence_ts" \
+  "    const verdict = await liveEffectAuthorization(principal);" "    const verdict: EffectVerdict = \"ok\";" "$ef_tests" "$ef_name"
+prove_killed "effect fence: run-agent never binds its principal" "$ra_ts" \
+  "    bindEffectPrincipal({" "    void ({" "$ef_tests" "$ef_name"
+prove_killed "effect fence: settlement reads of an admitted run are refused too" "$fence_ts" \
+  "    if (c.kind === \"free\" || c.kind === \"poll\" || stopsAdmitted(method, url)) return base(input, init);" \
+  "    if (c.kind === \"free\") return base(input, init);" "$efm_tests" "$efm_name"
+prove_killed "effect fence: a refused provider start reads as a definite non-start (early refund)" "$fence_ts" \
+  "    return refusal(verdict, { host: url.hostname, path: url.pathname }, c.kind === \"provider\");" \
+  "    return refusal(verdict, { host: url.hostname, path: url.pathname }, false);" "$efm_tests" "$efm_name"
+prove_killed "effect fence: the transport's marks are hidden by the wrapper" "$fence_ts" \
+  "    if (d) Object.defineProperty(fenced, k, d);" "    void d;" \
+  "$efm_tests" "fence mission control: the same mission with the fence and no removal qualifies the lead"
 prove_killed "clock read before the lock wait" "$adm_sql" "v_now := clock_timestamp();  -- after the lock wait" "v_now := now();  --" \
   "$adm_tests" "deadline: an admission that waited on the lock past the deadline is refused"
 prove_killed "a run bought with one read (no dataset read)" "$plan_ts" "export const SMOKE_MIN_RUN_READS = 2;" "export const SMOKE_MIN_RUN_READS = 1;" \
@@ -233,6 +364,11 @@ prove_killed "no model USD cap" "$adm_sql" "or (p_kind = 'model' and v_model + v
   "$adm_tests" "model: the \$0.05 model ceiling binds before the attempt count"
 prove_killed "no poll limit" "$adm_sql" "if p_kind = 'poll' and n_poll >= a.provider_polls then" "if false then" \
   "$adm_tests" "polls: five across the whole mission, each tied to a purchase this mission made"
+
+# ── PROOF: a malformed vendor dataset is recorded as malformed (A7 S18a) ───
+prove_killed "S18a: a malformed dataset recorded as an empty one" "$tools_ts" \
+  "  const datasetMalformed = !Array.isArray(itemsRes.data);" "  const datasetMalformed = false;" \
+  "$root/tests/db-contract/a7Reliability.contract.test.ts" "S18a: the job-search dataset is malformed JSON — no lead, no further purchase, recorded as malformed"
 prove_killed "worker may authorize" "$adm_sql" \
   "revoke all on function public.authorize_discovery_smoke(uuid, text, jsonb, jsonb, integer) from public, anon, authenticated, service_role;" \
   "grant execute on function public.authorize_discovery_smoke(uuid, text, jsonb, jsonb, integer) to service_role;" \
@@ -311,6 +447,28 @@ prove_killed "R2 uncertain crawl start refunded (Codex P2)" "$tools_ts" \
 prove_killed "SAF-008 bodyless purchase skips mandatory fields" "$gate_ts" \
   "  if (hasBody || limits.pin_body || mandatory || limits.max_array_items) {" "  if (hasBody || limits.pin_body || limits.max_array_items) {" \
   "$gate_tests" "SAF-008: an absent or empty body never bypasses the quote's mandatory fields"
+# Verified adoption of a run a dead slice bought (smokeAdmission.ts
+# `verifiedAdoption`): the gate wiring and each binding of the evidence.
+adopt_tests="$root/tests/db-contract/killResumeAdoption.contract.test.ts"
+adopt_unit="$root/tests/edge-functions/_shared/smokeAdoption.test.ts"
+prove_killed "adoption: a verified adopt still answered 503" "$gate_ts" \
+  '        return adoptedRunResponse(adopted.runId, adopted.datasetId);' '        return refusal("adopt", adopted.runId);' \
+  "$adopt_tests" "adoption: killed before the run id reached the execution ledger — the next worker adopts the paid run, reads it and finishes; one purchase, one charge"
+prove_killed "adoption: evidence not bound to the task" "$gate_ts" \
+  '  if (row.task_id !== b.taskId) return { ok: false, reason: "task" };' '' \
+  "$adopt_tests" "adoption fails closed: the recorded purchase belongs to another task"
+prove_killed "adoption: dataset id format not checked" "$gate_ts" \
+  '  if (typeof datasetId !== "string" || !RUN_REF_RE.test(datasetId)) return' '  if (typeof datasetId !== "string") return' \
+  "$adopt_tests" "adoption fails closed: a malformed dataset id is never read or adopted"
+prove_killed "adoption: a same- or later-generation purchase adopted" "$gate_ts" \
+  ' || row.generation >= b.generation) return' ') return' \
+  "$adopt_unit" "adoption: the operation row must be this start's purchase, of this task, bought by an earlier generation"
+prove_killed "adoption: a conflicting run id adopted" "$gate_ts" \
+  '  if (row.provider_run_id !== runId) return { ok: false, reason: "run_conflict" };' '' \
+  "$adopt_unit" "adoption: the operation row must be this start's purchase, of this task, bought by an earlier generation"
+prove_killed "adoption: another operation's answer adopted" "$gate_ts" \
+  '  if (d.operation_key !== b.key) return { ok: false, reason: "operation_key" };' '' \
+  "$adopt_unit" "adoption: the answer itself must be complete and well-formed"
 # The opt-in mission wall clock (from codex/smoke-execution-guards).
 prove_killed "wall clock: expired mission still reaches the handler" "$runner_ts" \
   "if (d.enforceMissionWallClock && (expiry === null || now() >= expiry)) {" "if (false) {" \
@@ -476,6 +634,88 @@ prove_killed "merge dropped the in-transaction version check (every save an upse
 prove_killed "a versioned first save upserts over a Brain another device created" "$brain_draft_ts" \
   '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "insert",' '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "upsert",' \
   "$e2e_tests" "15. a versioned first save never overwrites a Brain another device created in flight"
+# ── Backend's membership writers (held 20261025140000; #174 O3 A, §9.4) ──────
+mw_sql="$root/supabase/migrations-held/20261025140000_workspace_member_writers.sql"
+cp "$mw_sql" "$mw_sql.mutation-backup"; restore_list+=("$mw_sql")
+mw_tests="$root/tests/db-contract/workspaceMemberWriters.contract.test.ts"
+mw_policy="policy: who may remove and demote whom; each refusal leaves memberships and grants unchanged"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025140000_workspace_member_writers.sql "$root/tests/db-contract/run.sh" "$mw_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "remove: the member is gone and every grant of theirs is revoked 'membership_removed' in the same transaction ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: membership writer tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the held membership writers nothing removes or demotes"
+ran=$((ran + 1))
+fi
+prove_killed "membership writers: only the actor and target rows are locked, not every owner" "$mw_sql" \
+  "and (m.user_id in (p_actor_id, p_target_user_id) or lower(btrim(coalesce(m.role, ''))) = 'owner')" \
+  "and m.user_id in (p_actor_id, p_target_user_id)" \
+  "$mw_tests" "race: the only two owners leave at once — one succeeds, the other is refused 'last_owner', one owner remains"
+prove_killed "membership writers: the last owner can be removed" "$mw_sql" \
+  "    return 'last_owner';" "    null;" "$mw_tests" "$mw_policy"
+prove_killed "membership writers: an admin may remove an owner" "$mw_sql" \
+  "  if v_target = 'owner' and p_actor_id <> p_target_user_id and v_actor <> 'owner' then return 'owner_protected'; end if;" "" \
+  "$mw_tests" "$mw_policy"
+prove_killed "membership writers: any member may remove others" "$mw_sql" \
+  "  if p_actor_id <> p_target_user_id and v_actor not in ('owner', 'admin') then return 'forbidden_role'; end if;" "" \
+  "$mw_tests" "$mw_policy"
+prove_killed "membership writers: promotion is allowed" "$mw_sql" \
+  "then return 'promotion_unsupported'; end if;" "then null; end if;" "$mw_tests" "$mw_policy"
+prove_killed "membership writers: an expired or foreign session is accepted" "$mw_sql" \
+  "                    and (s.not_after is null or s.not_after > clock_timestamp())) then
+    return 'session_invalid';" \
+  "                    and (s.not_after is null or s.not_after > clock_timestamp())) and false then
+    return 'session_invalid';" \
+  "$mw_tests" "$mw_policy"
+prove_killed "membership writers: browsers may call them" "$mw_sql" \
+  "revoke all on function public.workspace_member_remove(uuid, uuid, uuid, uuid) from public, anon, authenticated;" \
+  "grant execute on function public.workspace_member_remove(uuid, uuid, uuid, uuid) to authenticated;" \
+  "$mw_tests" "surface: browsers cannot call the writers; the service role cannot call the internal check"
+
+# ── The membership write boundary (held 20261025160000, Codex MEMBER-SURFACE) ──
+ms_sql="$root/supabase/migrations-held/20261025160000_workspace_members_app_surface.sql"
+cp "$ms_sql" "$ms_sql.mutation-backup"; restore_list+=("$ms_sql")
+ms_tests="$root/tests/db-contract/workspaceMembersAppSurface.contract.test.ts"
+ms_raw="surface: the service role cannot promote, demote or delete a membership directly"
+ms_regrant="surface: the invariant holds even if the service role is re-granted the writes (the trigger, not just the grant)"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025160000_workspace_members_app_surface.sql "$root/tests/db-contract/run.sh" "$ms_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "$ms_raw ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: membership surface tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the boundary the service role promotes and removes the last owner directly"
+ran=$((ran + 1))
+fi
+prove_killed "membership surface: the service role keeps its direct writes (trigger only)" "$ms_sql" \
+  "revoke update, delete, truncate on public.workspace_members from service_role;" "select 1;" "$ms_tests" "$ms_raw"
+prove_killed "membership surface: the trigger lets application roles through" "$ms_sql" \
+  "  if current_user::text not in ('service_role', 'authenticated', 'anon') then" "  if true then" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: the trigger runs as its owner (definer), so it sees no application role" "$ms_sql" \
+  "language plpgsql
+set search_path = ''
+as \$\$
+begin
+  if current_user::text" "language plpgsql
+security definer
+set search_path = ''
+as \$\$
+begin
+  if current_user::text" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: a raw role change is allowed" "$ms_sql" \
+  "  elsif new.role is distinct from old.role then" "  elsif false then" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: a raw delete is allowed" "$ms_sql" \
+  "  elsif tg_op = 'DELETE' then" "  elsif false then" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: TRUNCATE is not guarded" "$ms_sql" \
+  "create trigger workspace_members_app_surface_truncate
+  before truncate on public.workspace_members
+  for each statement execute function public.workspace_members_app_surface();" "" \
+  "$ms_tests" "surface: TRUNCATE is refused for application roles, by grant and by trigger"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"

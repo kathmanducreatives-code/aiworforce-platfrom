@@ -1,0 +1,154 @@
+name: Outpost native identity foundation (not pilot acceptance)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/outpost-native-security.yml'
+      - 'tests/outpost-native/**'
+      - 'tests/infra/rlsCoversEveryTable.test.ts'
+      - 'tests/infra/rlsRelations.test.ts'
+      - 'tests/infra/lib/rlsRelations.ts'
+      - 'supabase/functions/_shared/pilot/**'
+      - 'supabase/functions/pilot-scope/**'
+      - 'supabase/functions/pilot-context/**'
+      - 'supabase/functions/pilot-import/**'
+      - 'tests/edge-functions/pilot*.test.ts'
+      - 'supabase/functions/_shared/workspaceAccessGuard.ts'
+      - 'supabase/migrations/**'
+      - 'supabase/migrations-held/20261022140824_outpost_native_identity_security.sql'
+      - 'supabase/migrations-held/20261023061143_outpost_pilot_api_authorization.sql'
+      - 'supabase/migrations-held/20261023101216_outpost_pilot_task_registration_lifecycle.sql'
+      - 'docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/native-task-rollback.sql'
+      - 'docs/audits/agentory-outbound-outpost-readiness/production-readiness/phase-1/native-access-rollback.sql'
+      - 'docs/audits/agentory-outbound-outpost-readiness/production-readiness/native-security-rollback.sql'
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  identity-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.8.2
+      - name: Pinned offline-contract PostgREST
+        env:
+          POSTGREST_VERSION: v12.2.3
+          POSTGREST_SHA256: 9f71269e61ac3a940281e93ff415760f5957e430e475ba4c3889f3ede7d5527c
+        run: |
+          dir="$RUNNER_TEMP/outpost-postgrest"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/postgrest.tar.xz" "https://github.com/PostgREST/postgrest/releases/download/$POSTGREST_VERSION/postgrest-$POSTGREST_VERSION-linux-static-x64.tar.xz"
+          echo "$POSTGREST_SHA256  $dir/postgrest.tar.xz" | sha256sum -c -
+          tar -xJf "$dir/postgrest.tar.xz" -C "$dir"
+          echo "POSTGREST_BIN=$dir/postgrest" >> "$GITHUB_ENV"
+      - name: Native grants, ownership, session predicates, direct API and rollback
+        run: tests/outpost-native/run.sh | tee /tmp/outpost-native.log
+      - name: Prepare exact owner membership dependency (PR 159, no hosted operation)
+        run: |
+          git fetch --no-tags --depth=1 origin 572dca5c8d9c7f121731456801a035cfb6186b1e
+          git show 572dca5c8d9c7f121731456801a035cfb6186b1e:supabase/migrations/20261022120000_close_workspace_self_join.sql > "$RUNNER_TEMP/outpost-membership-159.sql"
+          echo "5fb203974a2f79b8d94f3988aec8807c96fb2dae3de17486ecdd803a33970311  $RUNNER_TEMP/outpost-membership-159.sql" | sha256sum -c -
+      - name: Integrated owner membership and pilot API native acceptance
+        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" tests/outpost-native/run.sh | tee /tmp/outpost-native-integrated.log
+      - name: Integrated verified registration, lifecycle and API security
+        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_LIFECYCLE=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-task-lifecycle.log
+      - name: Actual GoTrue original-session registration and cancellation
+        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_LIFECYCLE_AUTH=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-registration-auth.log
+      - name: Lifecycle guard mutation must fail real payload and legacy writer contracts
+        run: |
+          if OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_LIFECYCLE=1 OUTPOST_NATIVE_OMIT_LIFECYCLE_GUARD=1 tests/outpost-native/run.sh > /tmp/outpost-native-lifecycle-mutant.log 2>&1; then
+            echo '::error::Missing pilot lifecycle guard survived native tests'
+            exit 1
+          fi
+          grep -q 'payload mutation and restoration cannot revive native authorization.*FAILED' /tmp/outpost-native-lifecycle-mutant.log
+          grep -q 'service legacy claim and fenced output writes cannot mutate a pilot task.*FAILED' /tmp/outpost-native-lifecycle-mutant.log
+      - name: Original P1 verification omission must fail forged registration tests
+        run: OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" tests/outpost-native/mutate-registration-verifier.sh | tee /tmp/outpost-native-p1-registration-mutant.log
+      - name: Prepare exact Company Brain and workspace-selection owner sources
+        run: git fetch --no-tags --depth=1 origin 833affce5077ae5f50b53353cb84fa0e916918dc cc83eb7ee3edf68192378ef68805a71b125edc59 8b0e2b6bdb20d6fe30542da39f0170d514d52746
+      - name: Pin this isolated integration candidate
+        run: echo "OUTPOST_NATIVE_BRAIN_SOURCE=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Integrated Brain owner security with real REST bind collisions
+        id: owner-security
+        run: tests/outpost-native/test-bind-collision.sh | tee /tmp/outpost-native-owner-integration.log
+      - name: Native raw-parent integrity and P1 preparation boundary
+        id: resource-parent
+        continue-on-error: true
+        run: OUTPOST_NATIVE_RESOURCE_PARENT_ONLY=1 tests/outpost-native/integrate-brain-owner.sh | tee /tmp/outpost-native-resource-parent.log
+      - name: Require real parent-isolation positives and pilot denial evidence
+        if: always() && steps.resource-parent.outcome != 'skipped'
+        run: python3 tests/outpost-native/check-resource-parent-audit.py /tmp/outpost-native-resource-parent.log | tee /tmp/outpost-native-resource-parent-receipt.log
+      - name: Native client contract prerequisites (owner schema delivery gate)
+        id: client-contract
+        continue-on-error: true
+        run: OUTPOST_NATIVE_CLIENT_CONTRACT_ONLY=1 tests/outpost-native/integrate-brain-owner.sh | tee /tmp/outpost-native-client-contract.log
+      - name: Require read-only native catalog and complete pilot resource coverage
+        if: always() && steps.client-contract.outcome != 'skipped'
+        run: python3 tests/outpost-native/check-client-contract-audit.py /tmp/outpost-native-client-contract.log | tee /tmp/outpost-native-client-contract-receipt.log
+      - name: Actual Brain handler authorization (AUTH-06 regression acceptance)
+        id: brain-edge-authorization
+        run: OUTPOST_NATIVE_BRAIN_HANDLER_ONLY=1 tests/outpost-native/integrate-brain-owner.sh | tee /tmp/outpost-native-brain-edge.log
+      - name: Require complete Brain handler audit and passing legitimate controls
+        if: always() && steps.brain-edge-authorization.outcome != 'skipped'
+        run: python3 tests/outpost-native/check-brain-handler-audit.py /tmp/outpost-native-brain-edge.log | tee /tmp/outpost-native-brain-edge-receipt.log
+      - name: Historical surface without Brain 169 (expected shared dependency failure)
+        id: integrated-surface-readiness
+        continue-on-error: true
+        run: OUTPOST_NATIVE_TASK_GUARDS=1 OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_SURFACE_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-integrated-surface.log
+      - name: Actual local GoTrue session, refresh, logout and revocation
+        run: OUTPOST_NATIVE_TASK_GUARDS=1 OUTPOST_NATIVE_AUTH=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-auth.log
+      - name: Ownership guard mutation must fail its native contracts
+        run: |
+          if OUTPOST_NATIVE_OMIT_OWNER_GUARD=1 tests/outpost-native/run.sh > /tmp/outpost-native-mutant.log 2>&1; then
+            echo '::error::Removing the ownership guard did not fail the native contracts'
+            exit 1
+          fi
+          grep -q 'task mutation and restoration cannot revive.*FAILED' /tmp/outpost-native-mutant.log
+          grep -q 'parent capture locks serialize concurrent ownership mutation.*FAILED' /tmp/outpost-native-mutant.log
+          echo 'Native mutation caught the missing ownership guard; this is not customer readiness.'
+      - name: Public task read guard mutation must fail native API tests
+        run: |
+          if OUTPOST_NATIVE_OMIT_TASK_READ_GUARD=1 tests/outpost-native/run.sh > /tmp/outpost-native-read-mutant.log 2>&1; then
+            echo '::error::Removing public task read protection survived native contracts'
+            exit 1
+          fi
+          grep -q 'viewer task and Brain reads use original authorized principal.*FAILED' /tmp/outpost-native-read-mutant.log
+      - name: Public pilot task access acceptance
+        id: public-task-readiness
+        run: OUTPOST_NATIVE_PUBLIC_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-public-audit.log
+      - name: Public task, Brain and membership native audit (known owner blockers)
+        id: public-surface-readiness
+        continue-on-error: true
+        run: OUTPOST_NATIVE_SURFACE_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-surface-audit.log
+      - name: Actual pilot handler original-session acceptance
+        id: context-readiness
+        run: OUTPOST_NATIVE_TASK_GUARDS=1 OUTPOST_NATIVE_MEMBERSHIP_SQL="$RUNNER_TEMP/outpost-membership-159.sql" OUTPOST_NATIVE_CONTEXT_AUDIT=1 tests/outpost-native/run.sh | tee /tmp/outpost-native-context-audit.log
+      - name: Readiness is separate from identity foundation
+        if: always()
+        run: |
+          echo 'Identity foundation tests are not customer-pilot acceptance. P1–P8 stay disabled.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Public-task audit outcome: ${{ steps.public-task-readiness.outcome }}. Native persistence, shared permissions and executor/recovery gates remain open.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Historical surface without Brain 169: ${{ steps.integrated-surface-readiness.outcome }}. Required exact owner-source integration: ${{ steps.owner-security.outcome }}. Agency-client grants and complete legacy pre-effect guards remain Phase 1 blockers.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Public-surface audit outcome: ${{ steps.public-surface-readiness.outcome }}. Known public permission failures block Phase 1/customer acceptance.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Native raw-parent audit outcome: ${{ steps.resource-parent.outcome }}. Pilot denial alone does not close shared ownership constraints.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Client contract prerequisites outcome: ${{ steps.client-contract.outcome }}. Catalog integrity never proves same-workspace isolation; missing canonical tables block Phase 1.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Brain Edge authorization outcome: ${{ steps.brain-edge-authorization.outcome }}. Known in-flight revocation failures block Phase 1; audit-integrity success is not readiness.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Context-session audit outcome: ${{ steps.context-readiness.outcome }}. Original-session handler integration is a required security gate.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Real GoTrue client isolation and autosave acceptance
+        run: tests/db-contract/run-with-gotrue.sh | tee /tmp/outpost-native-client-login.log
+      - name: Native execution integration acceptance (known security gaps)
+        run: tests/db-contract/run-with-gotrue.sh tests/outpost-native/execution-integration-audit.test.ts | tee /tmp/outpost-native-execution-integration.log
+      - name: Supplemental parent, membership and effect security acceptance
+        run: tests/db-contract/run-with-gotrue.sh tests/outpost-native/task-parent-membership-audit.test.ts tests/outpost-native/post-insert-revocation-audit.test.ts | tee /tmp/outpost-native-supplemental-security.log
+      - name: Preserve proof logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: outpost-native-identity-proofs
+          path: /tmp/outpost-native*.log
+          retention-days: 7

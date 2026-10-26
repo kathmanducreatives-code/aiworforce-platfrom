@@ -28,6 +28,7 @@
 // remaining gap.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { relationKey, rlsRelations } from "./lib/rlsRelations.ts";
 
 const MIGRATIONS = new URL("../../supabase/migrations/", import.meta.url);
 // HELD migrations (baseline, V2 queue) are not applied from the synced
@@ -48,25 +49,10 @@ async function migrationSql(): Promise<{ name: string; sql: string }[]> {
 const FILES = await migrationSql();
 const ALL_SQL = FILES.map((f) => f.sql).join("\n");
 
-/** `CREATE TABLE [IF NOT EXISTS] public.x` / `... ONLY public.x`, quoted or not. */
-const CREATED = new RegExp(
-  String.raw`create\s+table\s+(?:if\s+not\s+exists\s+)?(?:only\s+)?(?:public\.)?"?([a-z0-9_]+)"?`,
-  "gi",
-);
-/** `ALTER TABLE [ONLY] public.x ENABLE ROW LEVEL SECURITY`. */
-const RLS_ON = new RegExp(
-  String.raw`alter\s+table\s+(?:only\s+)?(?:public\.)?"?([a-z0-9_]+)"?\s+enable\s+row\s+level\s+security`,
-  "gi",
-);
-
-function names(re: RegExp, sql: string): Set<string> {
-  const s = new Set<string>();
-  for (const m of sql.matchAll(re)) s.add(m[1].toLowerCase());
-  return s;
-}
-
-const created = names(CREATED, ALL_SQL);
-const rlsEnabled = names(RLS_ON, ALL_SQL);
+// All schemas participate, including HELD migrations. A public table's RLS
+// cannot stand in for a same-named private table (or the reverse).
+const created = rlsRelations(ALL_SQL, "created");
+const rlsEnabled = rlsRelations(ALL_SQL, "enabled");
 
 /**
  * Tables allowed to exist without RLS.
@@ -114,14 +100,14 @@ Deno.test(`${ARCHIVE} is created by a migration, not by hand`, () => {
   // The original defect. A table that exists only in the database is invisible
   // to every static check in this directory.
   assert(
-    created.has(ARCHIVE),
+    created.has(relationKey("public", ARCHIVE)),
     `${ARCHIVE} must be created in migrations/ — it previously existed only in ` +
       `the live database, which is why no test could see that it had no RLS`,
   );
 });
 
 Deno.test(`${ARCHIVE} enables RLS`, () => {
-  assert(rlsEnabled.has(ARCHIVE), `${ARCHIVE} must ENABLE ROW LEVEL SECURITY`);
+  assert(rlsEnabled.has(relationKey("public", ARCHIVE)), `${ARCHIVE} must ENABLE ROW LEVEL SECURITY`);
 });
 
 Deno.test(`${ARCHIVE} revokes anon and authenticated`, () => {

@@ -1,0 +1,137 @@
+{
+  "date": "2026-10-23",
+  "branch": "codex/nosh-phase1-task-lifecycle",
+  "base_pr": 166,
+  "base_sha": "4344dec0e224d9766b3919c91a61b8066d17e16f",
+  "final_sha_and_ci": "successor draft PR publication receipt",
+  "phase_1": "FAIL",
+  "owned_disabled_task_foundation": "PASS",
+  "pilot_enabled": false,
+  "phase_2_started": false,
+  "a7": "NO-GO",
+  "held_sql": {
+    "path": "supabase/migrations-held/20261023101216_outpost_pilot_task_registration_lifecycle.sql",
+    "sha256": "e923ad704e259ea2bb28691220c718a61de0838f999e06d54c263293941d7222",
+    "hosted_applied": false
+  },
+  "local_tests": {
+    "edge": {
+      "passed": 9226,
+      "failed": 0,
+      "command": "deno test --no-check --allow-read --allow-env tests/edge-functions/"
+    },
+    "infra": {
+      "passed": 196,
+      "failed": 0,
+      "command": "deno test --allow-read --allow-env --allow-run tests/infra/",
+      "initial_harness_error": "First invocation omitted allow-run; six permission failures; rerun with exact CI command. No assertions changed."
+    },
+    "native_task_api": {
+      "passed": 68,
+      "failed": 0,
+      "ignored": 0,
+      "lifecycle_cases": 46,
+      "api_cases": 22
+    },
+    "real_registration_gotrue": {
+      "passed": 8,
+      "failed": 0
+    },
+    "historical_native_auth": {
+      "passed": 5,
+      "failed": 0
+    },
+    "historical_166_baseline": {
+      "passed": 68,
+      "failed": 0
+    },
+    "p1_verifier_omission": {
+      "caught": true,
+      "required_failures": [
+        "forged MAC",
+        "altered signed payload"
+      ]
+    },
+    "lifecycle_guard_omission": {
+      "caught": true,
+      "passed": 61,
+      "failed": 6,
+      "ignored": 1,
+      "ignored_reason": "empty-only rollback/reapply excluded only when guard intentionally omitted"
+    },
+    "new_modules_native_typecheck": "PASS",
+    "new_six_file_lint": "PASS",
+    "shell_parse": "PASS",
+    "real_bind_collision": {
+      "status": "PASS",
+      "native_lanes": 5,
+      "foreign_listener": "real loopback HTTP200, wrong database nonce",
+      "test_or_provider_retries": 0
+    }
+  },
+  "owner_composition": {
+    "method": "git archive exact owner tree; check/apply independent workspace diff; overlay owned pilot files; disposable database only; no merge or owner branch modification",
+    "brain169": "60be04712c41193da213a95c1918f7f4f9a4e645",
+    "workspace170": "cc83eb7ee3edf68192378ef68805a71b125edc59",
+    "launch": "8b0e2b6bdb20d6fe30542da39f0170d514d52746",
+    "membership159_sql_commit": "572dca5c8d9c7f121731456801a035cfb6186b1e",
+    "membership_sql_sha256": "5fb203974a2f79b8d94f3988aec8807c96fb2dae3de17486ecdd803a33970311",
+    "brain_sql_sha256": "d490ead239fbffbbe9467a09eac314d1d1eee705ca231ff08ff5b2b2a34f7340",
+    "owner_pure_tests": {
+      "passed": 13,
+      "failed": 0
+    },
+    "task_api_tests": {
+      "passed": 68,
+      "failed": 0
+    },
+    "real_registration_auth": {
+      "passed": 8,
+      "failed": 0
+    },
+    "owner_native_contract": {
+      "passed": 4,
+      "failed": 0
+    },
+    "actual_context_session_audit": "PASS",
+    "native_surface_audit": "PASS",
+    "nonpilot_viewer_brain_patch": {
+      "status": 403,
+      "changed": false
+    },
+    "without169_historical_control": {
+      "status": 204,
+      "changed": true,
+      "readiness": "FAIL"
+    }
+  },
+  "remaining_phase_1_blockers": [
+    "Canonical client_accounts/client_access_grants/client_company_brain schema/API; final A7 grant generation and live-session lock ordering agreement/delivery",
+    "Owned pilot composite-FK/descendant adapter after shared delivery; same-workspace two-client positive/negative native tests",
+    "Backend complete legacy service pre-effect guards and executable immutable-input/lifecycle contract",
+    "Integrated child/table/view/RPC/Edge revocation/regrant/session/invitation/nonpilot boundary suite"
+  ],
+  "not_tested": [
+    "hosted/live customer execution",
+    "same-workspace client grants not yet delivered",
+    "every legacy pre-model/pre-purchase entry",
+    "full native browser import to approved export",
+    "durable model/output recovery"
+  ],
+  "external_effects": {
+    "paid_calls": 0,
+    "customer_data_access": false,
+    "hosted_writes": false,
+    "merges": false,
+    "deployments": false,
+    "sends": false
+  },
+  "initial_ci": {
+    "head": "b182e4816a556bc83f21c7a55af1b6df7a8c5e7d",
+    "full_ci_gate": "PASS",
+    "run": 39976500624,
+    "native_workflow": 39976500587,
+    "native_result": "FAIL: pre-test REST port already in use at final owner native lane",
+    "correction": "Kernel-selected port, at most three bind-only launches, own-database nonce readiness and required real-occupied-port regression. No assertion/model/provider retries."
+  }
+}

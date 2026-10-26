@@ -121,7 +121,8 @@ function openRoleItem(t: Pick<VerificationTarget, "company_key">, jobs: Normaliz
   providerCallId: string, observedAt: string, missionId: string | null): EvidenceItem {
   const a = authorityForEvidence({
     claim: "open_role", source: HIRING_ROUTE_ACTOR, field: "job_posting", observed_at: observedAt,
-    now: io.now?.() ?? new Date(),
+    // The phase's clock (observedAt is `deps.now()`), never a second wall clock.
+    now: io.now?.() ?? new Date(observedAt),
   });
   const days = EVIDENCE_VALIDITY_DAYS.hiring ?? null;
   const top = jobs[0];
@@ -189,7 +190,13 @@ export function hiringClaimVerifier(io: HiringVerifierIO): ClaimVerifier & { est
       // One finding per asked company, from the rows of the call that answered it.
       const settle = (asked: ReadonlyArray<{ t: Pick<VerificationTarget, "company_key">; url: string }>,
         rows: Record<string, unknown>[], providerCallId: string) => {
-        const now = io.now?.() ?? new Date();
+        // ONE CLOCK PER PHASE. The window is judged at `deps.now()` — the time the
+        // phase itself runs at and stamps on the evidence — not at a second,
+        // independent wall-clock read. Production passes the wall clock as
+        // `deps.now`, so live behaviour is unchanged; a replay judged at its
+        // fixture time no longer expires 30 real days later (it did on
+        // 2026-10-24: fundingRecencyFallback's two phase replays).
+        const now = io.now?.() ?? new Date(at);
         const jobs = rows.filter((r) => !jobEmployerIdentityConflict(r)).map((r) => normalizeLinkedInJob(r));
         for (const { t, url } of asked) {
           const mine = jobs.filter((j) => normalizeCompanyLinkedInUrl(j.company_linkedin_url) === url);

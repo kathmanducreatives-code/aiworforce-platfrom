@@ -8,6 +8,8 @@ import { brainReadinessV2Enabled } from "../_shared/companyBrainGate.ts";
 import { companyBrainReadiness } from "../_shared/companyBrainReadiness.ts";
 import { normalizeCompanyBrain } from "../_shared/normalizeCompanyBrain.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
+import { type GuardDb, legacyExecutionGuard, referencedPlanId, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
+import { bindEffectPrincipal, type EffectPrincipalDb, installEffectFence, withEffectScope } from "../_shared/effectFence.ts";
 import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
 import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
 import { hiringSearchTitles } from "../_shared/hiringSearchVocabulary.ts";
@@ -38,7 +40,8 @@ import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { renderContentBrain, type RecentContent } from "../_shared/contentBrainContext.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
-import { loadV2OwnedTaskIds } from "../_shared/leadMissionV2Request.ts";
+import { loadV2OwnedTaskIds, loadV2OwnedTaskIdsStrict } from "../_shared/leadMissionV2Request.ts";
+import { decideFirstSliceReentry, type ReentryRow, takeReentryGeneration } from "../_shared/firstSliceReentry.ts";
 import {
   isDirectLeadActionAttempt,
   validateDirectLeadActionRequest,
@@ -930,7 +933,14 @@ export interface RunAgentRunOptions {
     void | Promise<void>;
 }
 
+// Every new model/provider operation re-checks the run's principal at the
+// transport (effectFence.ts, Codex EXEC-EFFECT); outside a bound run it is inert.
+installEffectFence();
+
 async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}): Promise<Response> {
+  // One effect scope per request (effectFence.ts); the guard below binds its principal.
+  const scoped = withEffectScope(req, () => handleRunAgent(req, inProcess));
+  if (scoped) return scoped;
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   // Invocation start — anchors the LATENCY-BOUNDED company-enrichment deadline so
   // the workflow always reserves wall-clock to finish qualification/persistence/
@@ -1174,6 +1184,36 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     if (!access.ok) return json({ error: access.error }, access.status);
   }
 
+  // ---- The legacy pre-effect guard (legacyExecutionGuard.ts) ----------------
+  // Before ANY effect: no task row, message, ledger row, credit, model call or
+  // purchase exists yet. Pilot and client-scoped work is refused (disabled),
+  // decided by the stored task rows the request points at as well as the
+  // request; a service caller's forwarded `user_id` must still be a member,
+  // and a resumed task keeps its original principal.
+  {
+    const guard = await legacyExecutionGuard({
+      db: supabase as unknown as GuardDb,
+      workspaceId: workspace_id as string,
+      principalUserId: bearerIsServiceRole ? (typeof user_id === "string" && user_id ? user_id : null) : authenticatedUserId,
+      principalMembershipVerified: !bearerIsServiceRole,
+      body,
+      taskIds: referencedTaskIds(body),
+      planId: referencedPlanId(body),
+    });
+    if (!guard.ok) {
+      console.error("[run-agent][pre-effect-guard] refused", { workspace_id, code: guard.code, detail: guard.detail });
+      return json({ success: false, error: guard.code, detail: guard.detail }, guard.status);
+    }
+    // From here on, every NEW external operation re-checks this principal is
+    // still a member (EXEC-EFFECT): a removal committed after the task exists
+    // stops the next model call or purchase; settlement reads still pass.
+    bindEffectPrincipal({
+      db: supabase as unknown as EffectPrincipalDb,
+      workspaceId: workspace_id as string,
+      userId: (bearerIsServiceRole ? user_id : authenticatedUserId) as string,
+    });
+  }
+
   // ---- Workspace model spend ceiling -----------------------------------------
   //
   // ── THE HALF THE CEILING DID NOT COVER ─────────────────────────────────────
@@ -1344,7 +1384,32 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
       }, 409);
     }
   }
-  if (resume_task_id) {
+  // ── THE QUEUE'S FIRST SLICE DIED BEFORE ITS FIRST CHECKPOINT ─────────────
+  //
+  // The queue bound this task before any paid boundary and resumes nothing
+  // else, so the refusal below (`no_checkpoint`) would be final: the mission
+  // could never run again. It runs as a first slice on the same task, under a
+  // new generation; see firstSliceReentry.ts for why that buys nothing twice.
+  let reentryGeneration: number | null = null;
+  if (resume_task_id && inProcess.continuationOwner === "v2_queue") {
+    const { data: row } = await supabase
+      .from("tasks").select("id, workspace_id, status, result, payload, checkpoint_version")
+      .eq("id", resume_task_id).maybeSingle();
+    const owned = row ? await loadV2OwnedTaskIdsStrict(supabase as never, [resume_task_id]) : null;
+    const reentry = decideFirstSliceReentry(row as ReentryRow | null, workspace_id, resume_task_id, owned?.has(resume_task_id) ?? false);
+    if (reentry.ok) {
+      reentryGeneration = await takeReentryGeneration(supabase as never, resume_task_id, workspace_id, reentry.from);
+      console.log("[run-agent][first-slice-reentry]", {
+        task_id: resume_task_id, from_generation: reentry.from, generation: reentryGeneration,
+        taken: reentryGeneration !== null,
+      });
+      if (reentryGeneration !== null) {
+        task = { id: resume_task_id };
+        resumedTaskResult = ((row as { result?: Record<string, unknown> | null }).result ?? {}) as Record<string, unknown>;
+      }
+    }
+  }
+  if (resume_task_id && reentryGeneration === null) {
     const { data: existing } = await supabase
       .from("tasks").select("id, workspace_id, status, result, payload")
       .eq("id", resume_task_id).maybeSingle();
@@ -1563,7 +1628,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
   // it in SQL (`fencedTaskUpdate`): a newer claim bumps it, so a stale
   // generation's writes change zero rows.
   const sliceFence: SliceFence = {
-    generation: await resolveSliceGeneration(supabase as never, task.id, heldClaim?.checkpointVersion ?? null),
+    generation: await resolveSliceGeneration(supabase as never, task.id, heldClaim?.checkpointVersion ?? reentryGeneration),
   };
   guardFence = sliceFence;
   // ── A SUPERSEDED SLICE STOPS BUYING ──────────────────────────────────────
@@ -4283,7 +4348,30 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 const restored =
                   readCapabilityExecutionState(body as Record<string, unknown>) ??
                   readCapabilityExecutionState(resumedTaskResult);
-                if (!restored) return restored;
+                // ── A RE-ENTERED FIRST SLICE ADOPTS WHAT THE DEAD ONE BOUGHT ──
+                //
+                // A first slice killed before its first checkpoint left no
+                // state, so the runs the ledger recovered above were dropped
+                // here and the engine asked for the same purchase again. The
+                // gate answered `adopt` as 503 (never sent, rightly), and the
+                // mission ended `budget_exhausted` beside a dataset it had paid
+                // for (killResume.contract, 2026-10-22).
+                //
+                // Only the recovered runs are offered. The seed carries no
+                // `mission_hash`, so `stateMatchesMission` rejects it and the
+                // engine starts a fresh state — nothing else is restored — while
+                // adoption, which reads `opts.state`, matches by exact provider +
+                // input fingerprint as on any resume. Same task + workspace gate.
+                if (!restored) {
+                  if (reentryGeneration === null) return restored;
+                  const pendingSeed = mergePendingRuns([], recoveredPendingRuns, resolvedRunIds);
+                  if (pendingSeed.length === 0 && recoveredCompletedRuns.length === 0) return restored;
+                  return {
+                    version: CAPABILITY_EXECUTION_STATE_VERSION,
+                    completed_capabilities: [], pending_capabilities: [], failed_capabilities: [],
+                    provider_attempts: [], pending_runs: pendingSeed, completed_runs: recoveredCompletedRuns,
+                  } as unknown as NonNullable<typeof restored>;
+                }
                 // ── NOTHING TO ADD IS NOT NOTHING TO DO ──────────────────
                 //
                 // This short-circuited on `recoveredPendingRuns.length === 0`

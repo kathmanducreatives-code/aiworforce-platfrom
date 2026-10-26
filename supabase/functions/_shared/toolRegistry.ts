@@ -1484,6 +1484,22 @@ async function execSourceWithApify(
   }
 
   const rawItems: any[] = Array.isArray(itemsRes.data) ? itemsRes.data : [];
+  // ── A MALFORMED DATASET IS NOT AN EMPTY ONE (A7 S18a) ───────────────────
+  //
+  // A 2xx dataset read whose body is not a JSON array used to become `[]`
+  // here, so a broken vendor answer and a search that genuinely found
+  // nothing were the same row in the ledger. The result is still zero rows,
+  // and spending is unchanged: the run was bought, so it is charged, counted
+  // against the lineage and its route is exhausted exactly as an empty one.
+  // Only the record changes: `dataset_malformed` on the result and in the
+  // ledger row's metadata, and an error log naming the run.
+  // (`apifyFetch` answers `{}` for a body that is not JSON at all.)
+  const datasetMalformed = !Array.isArray(itemsRes.data);
+  if (datasetMalformed) {
+    console.error("[runTool][dataset-malformed]", {
+      actor_id, run_id, dataset_id: resolvedDatasetId, status: itemsRes.status,
+    });
+  }
 
   // ── Structured company-details result path ──────────────────────────────────
   // Return the COMPLETE dataset items untouched via a dedicated `company_items`
@@ -1554,6 +1570,7 @@ async function execSourceWithApify(
         total: company_items.length,
         result_ledger: ledger,
         no_results: company_items.length === 0,
+        ...(datasetMalformed ? { dataset_malformed: true } : {}),
         summary:
           `${kindLabel} actor returned ${company_items.length} complete company record(s) ` +
           `(downloaded ${ledger.downloaded} of a ${ledger.requested_limit}-row request)`,
@@ -1668,6 +1685,7 @@ async function execSourceWithApify(
       ),
       // Success with zero items is `no_results`, not a failure (rule 10).
       no_results: items.length === 0,
+      ...(datasetMalformed ? { dataset_malformed: true } : {}),
       summary: items.length === 0
         ? `Apify actor ran successfully but returned 0 ${source_type} results for: ${search_goal || i.query || "(no goal)"}`
         : `Apify actor returned ${items.length} ${source_type} result(s) for: ${search_goal || i.query || "(no goal)"}`,
@@ -2316,6 +2334,7 @@ function outcomeFromToolResult(
         build_id: d.build_id ?? null,
         build_number: d.build_number ?? null,
         no_results: d.no_results ?? null,
+        ...(d.dataset_malformed === true ? { dataset_malformed: true } : {}),
       },
     };
   }

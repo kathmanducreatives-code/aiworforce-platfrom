@@ -9,6 +9,7 @@
 //
 // Reuses parseSizeLabel + DEFAULT_DISQUALIFIERS from companyBrainIcp.ts.
 
+import { companyBrainReadiness } from "./companyBrainReadiness.ts";
 import { parseSizeLabel, DEFAULT_DISQUALIFIERS, SOFTWARE_ICP_DISQUALIFIERS } from "./companyBrainIcp.ts";
 import { normalizeCompanyBrain, type BrainConfidence as V2Confidence } from "./normalizeCompanyBrain.ts";
 import { computeCompanyBrainCompleteness } from "./companyBrainCompleteness.ts";
@@ -117,6 +118,13 @@ export interface CompanyBrainContext {
     matched_from: Record<string, string[]>;
     /** true when the Brain lacks a workable ICP; radar/leads/content must degrade. */
     setup_required: boolean;
+    /**
+     * An onboarding draft never activated (contract C5b): runs conservatively
+     * and never yields a VERIFIED Top Signal. Kept separate from
+     * `setup_required` so readiness decides "can it run" and activation
+     * decides "may it verify". Optional: absent means false.
+     */
+    unactivated_draft?: boolean;
     schema_version: 1 | 2;
     /** Normalizer's confidence grade ("weak" | "partial" | "strong"). */
     brain_confidence: V2Confidence;
@@ -167,6 +175,13 @@ export interface CompileInput {
   workspace_id: string;
   profile?: Record<string, unknown> | null;
   signal_preferences?: Record<string, unknown> | null;
+  /**
+   * Roadmap Phase 2 (BRAIN_READINESS_V2), passed by the caller that reads the
+   * switch: `meta.setup_required` then follows the ONE readiness rule
+   * (`!companyBrainReadiness(...).can.signals`, contract C5a). Off (the
+   * default): unchanged.
+   */
+  readiness_v2?: boolean;
 }
 
 /** Compile the Company Brain into a structured, honest ICP intelligence object. */
@@ -218,11 +233,38 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
   const painPoints = uniq([...v2.pain_points, ...arr(icpRaw["pain_points"]), ...arr(prefs["pain_points"]), ...(str(gtm["biggest_bottleneck"]) ? [str(gtm["biggest_bottleneck"])!] : [])]);
   const contentTopics = uniq([...v2.content_angles, ...arr(prefs["linkedin_topics"]), ...arr(prefs["workflow_topics"]), ...(str(goals["content"]) ? [str(goals["content"])!] : [])]);
   // v2 disqualifier buckets take priority over legacy flat list.
-  const v2DisqIndustries = v2.target_customer.disqualifiers.industries;
-  const brainDisqualifiers = uniq([...v2DisqIndustries, ...arr(icpRaw["disqualifiers"]), ...arr(prefs["disqualifiers"])]);
-  const sizeLabel = v2.target_customer.company_size.label || str(icpRaw["company_size"]) || str(company["team_size"]);
-  const size = sizeLabel ? parseSizeLabel(sizeLabel) : { min: v2.target_customer.company_size.min ?? null, max: v2.target_customer.company_size.max ?? null };
-  const geographies = uniq([...v2.target_customer.geography, ...(str(icpRaw["geography"]) ? [str(icpRaw["geography"])!] : []), ...arr(prefs["geographies"]), ...(str(company["location"]) ? [str(company["location"])!] : [])]);
+  // ── THE SELLER IS NOT THE TARGET (roadmap 1.4, #165) ──────────────────────
+  // `company.team_size` and `company.location` describe the SELLER. They used
+  // to fill the target size and geography whenever the target was blank — and
+  // even replaced a structured range (an 11–50 seller searched for 11–50
+  // companies when it asked for 50–200). They are read nowhere below.
+  const rawTarget = (profile["target_customer"] && typeof profile["target_customer"] === "object")
+    ? profile["target_customer"] as Record<string, unknown> : null;
+  const rawSize = (rawTarget?.["company_size"] && typeof rawTarget["company_size"] === "object")
+    ? rawTarget["company_size"] as Record<string, unknown> : {};
+  // C4: a STRUCTURED Brain's excluded industries are its industry bucket (plus
+  // radar's own list). The legacy flat `icp.disqualifiers` holds all five
+  // buckets flattened — keywords, titles, company types — and is read only
+  // for a legacy-only Brain.
+  const rawDisq = (rawTarget?.["disqualifiers"] && typeof rawTarget["disqualifiers"] === "object")
+    ? rawTarget["disqualifiers"] as Record<string, unknown> : null;
+  const brainDisqualifiers = rawTarget
+    ? uniq([...arr(rawDisq?.["industries"]), ...arr(prefs["disqualifiers"])])
+    : uniq([...v2.target_customer.disqualifiers.industries, ...arr(icpRaw["disqualifiers"]), ...arr(prefs["disqualifiers"])]);
+  // C1: the first source that yields a number wins — structured min/max, the
+  // structured label, the legacy `icp.company_size` — otherwise no filter.
+  const num = (v: unknown) => typeof v === "number" && Number.isFinite(v) ? v : null;
+  const structuredRange = { min: num(rawSize["min"]), max: num(rawSize["max"]) };
+  const sizeCandidates: Array<{ label: string | null; size: { min: number | null; max: number | null } }> = [
+    { label: null, size: structuredRange },
+    { label: str(rawSize["label"]), size: str(rawSize["label"]) ? parseSizeLabel(str(rawSize["label"])!) : { min: null, max: null } },
+    { label: str(icpRaw["company_size"]), size: str(icpRaw["company_size"]) ? parseSizeLabel(str(icpRaw["company_size"])!) : { min: null, max: null } },
+  ];
+  const sizePick = sizeCandidates.find((c) => c.size.min != null || c.size.max != null) ?? null;
+  const size = sizePick?.size ?? { min: null, max: null };
+  const sizeLabel = sizePick ? (sizePick.label ?? [size.min, size.max].map((n) => n ?? "").join("-")) : null;
+  // C2: target geographies are target fields only.
+  const geographies = uniq([...v2.target_customer.geography, ...(str(icpRaw["geography"]) ? [str(icpRaw["geography"])!] : []), ...arr(prefs["geographies"])]);
 
 
   markAll(structuredIndustries, "icp.industries");
@@ -424,7 +466,13 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
       warnings,
       derivation_sources: uniq(derivationSources),
       matched_from,
-      setup_required: v2.setup_required || isUnactivatedDraft,
+      // C5a: under BRAIN_READINESS_V2, "can the radar run with this Brain" is
+      // the readiness rule shared with chat and the route guard; the
+      // normalizer's own rule is retired for this purpose (C5c). Off: unchanged.
+      setup_required: input.readiness_v2
+        ? !companyBrainReadiness(v2, !isUnactivatedDraft).can.signals
+        : v2.setup_required || isUnactivatedDraft,
+      unactivated_draft: isUnactivatedDraft,
       schema_version: schemaVersion,
       brain_confidence: v2.brain_confidence,
       missing_fields: computeCompanyBrainCompleteness(v2).missing_keys,

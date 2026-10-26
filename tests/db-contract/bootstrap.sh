@@ -39,6 +39,10 @@ held_admission=(
 # generations, one Brain per client (#174, proposal; not approved).
 held_client=(
   20261024160000_client_company_brain.sql
+  # Backend's canonical membership writers (#174 O3 A, §9.4); need the triggers above.
+  20261025140000_workspace_member_writers.sql
+  # The direct-write boundary: application roles change memberships only through those writers.
+  20261025160000_workspace_members_app_surface.sql
 )
 # DB_CONTRACT_OMIT_HELD names ONE file to leave out: a held file, or a file in
 # supabase/migrations/ by its basename. It is for tests/db-contract/mutation.sh,
@@ -60,5 +64,26 @@ for f in "${held_v2[@]}" "${held_billing[@]}" "${held_admission[@]}" "${held_cli
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done
+# The held lead-graph ownership fix (OWN-01): every parent reference in the
+# lead graph is composite on (workspace_id, id). Independent of the chains above.
+held_ownership=(
+  20261025120000_lead_graph_same_workspace_parents.sql
+)
+for f in "${held_ownership[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done
 # PostgREST reads its schema cache once at start; nothing else to reload here.
 echo "database ready"
+# The held task commit boundary (#179: EXEC-PLAN / EXEC-REVOKE): a task's plan
+# is in its workspace and its principal is a current member, checked in the
+# writing transaction. Independent of the chains above. (Placed after the
+# message above so it merges cleanly with the other held loops.)
+held_execution=(
+  20261025130000_tasks_commit_boundary.sql
+  20261025150000_task_plans_parent_identity.sql
+)
+for f in "${held_execution[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done

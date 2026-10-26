@@ -121,6 +121,55 @@ Tested against real Postgres + PostgREST in
 `tests/db-contract/leadMissionExhaustedLease.contract.test.ts` (unit:
 `tests/edge-functions/_shared/leadMissionLapsedLease.test.ts`).
 
+## `20261025120000_lead_graph_same_workspace_parents.sql`
+
+**OWN-01. Not approved for any hosted project.** Every parent reference in the
+Lead Discovery graph (26 foreign keys into `accounts`, `contacts`,
+`lead_candidates`, `lead_evidence` and `signals`) becomes a composite key on
+`(workspace_id, <col>)` → parent `(workspace_id, id)`, so a row can only point
+at a parent in its own workspace, whoever writes it. Before it, a member who
+could not read another workspace's account could still store a contact under
+it (201; #173's native reproduction). Constraint names, optional parents,
+`SET NULL` (now `SET NULL (<col>)`) and `CASCADE` are preserved, so PostgREST
+embeds and hints are unchanged. The migration counts existing mismatches first
+and **aborts without changing anything** if there are any; it never reassigns a
+parent. Run `scripts/test-project/own01-parent-preflight.sql` (read-only) on the
+target first. Needs PostgreSQL 15+. Independent of every other held migration.
+`tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts` proves the
+behaviour; `tests/db-contract/mutation.sh` proves it fails without the
+migration, with plain `SET NULL`, with a reference left out, and without the
+preflight abort. Rollback (restores the ID-only keys under the same names):
+`rollback/20261025120000_lead_graph_same_workspace_parents.down.sql`.
+## `20261025130000_tasks_commit_boundary.sql`
+
+**Not approved for any hosted project.** The database half of #179's
+pre-effect guard. For the application roles (every PostgREST writer), a task
+is authorized in the transaction that writes it:
+- its plan (`plan_id`, `task_plan_id`) must exist in the task's workspace;
+- a new task's principal must be a current member, read under a `FOR KEY SHARE`
+  lock, so a concurrent membership `DELETE` either commits first (the task is
+  refused) or waits for the task's transaction.
+
+This closes Codex's EXEC-PLAN and EXEC-REVOKE findings. Codex's own
+reproduction passes unchanged. Status and result writes do not fire it, so
+authorized work keeps settling. Administrative SQL (role `postgres`) is not
+checked. Independent of every other held migration.
+`tests/db-contract/taskCommitBoundary.contract.test.ts` proves it, including
+the two-session race; `mutation.sh` proves it fails without the migration,
+without the lock, and without the plan-workspace comparison. Rollback:
+`rollback/20261025130000_tasks_commit_boundary.down.sql` (round trip verified: rolled back equals never applied, privileges included). Before applying on a hosted project, run `scripts/test-project/tasks-commit-boundary-preflight.sql` (read-only); it must end in `OK`.
+
+
+## `20261025150000_task_plans_parent_identity.sql`
+
+**Not approved for any hosted project.** This is the parent side of `20261025130000` and closes Codex's PLAN-PARENT finding. For application roles:
+- a plan's `id` and `workspace_id` are fixed once it exists (`42501`). No application code changes them; every writer updates status only.
+- a deleted plan's id cannot be re-created in another workspace while tasks still point at it (`23503`). `tasks.plan_id` has no foreign key, so it can outlive its plan.
+
+A plan is never moved, so a task is never left under a foreign plan or silently re-homed. Status writes, new plans and administrative SQL are unchanged.
+
+- **Proof:** `tests/db-contract/taskPlanParentIdentity.contract.test.ts`. Codex's `task-parent-membership-audit.test.ts` PLAN-PARENT case passes unchanged. `mutation.sh` covers it with the migration omitted, the workspace comparison removed and the re-creation check removed.
+- **Rollback:** `rollback/20261025150000_task_plans_parent_identity.down.sql`.
 ## `20261015120000_provider_purchase_claims.sql`
 
 **PROPOSED — NOT APPLIED, NOT WIRED, NOT APPROVED.** One buyer per provider-call
@@ -215,3 +264,36 @@ switched-off `_shared/clientBrain.ts`.
 
 Rollback: the statements listed in the file's header (drops only the new
 objects and the new column).
+
+## `20261025140000_workspace_member_writers.sql`
+
+**Backend. Not approved for any hosted project; needs #176 and approval of the #174 contract first.** These are the canonical membership writers from contract §8 O3 option A and §9.4: `workspace_member_remove(ws, target, actor, session)` and `workspace_member_set_role(ws, target, role, actor, session)`. Both are service-role only and return an outcome. Any refusal changes nothing.
+
+- **Lock order (§5):** the actor's session (L1, `FOR SHARE`), then the actor, the target and **every owner** row in one `FOR UPDATE` statement, in `user_id` order (L2). Locking every owner row serializes concurrent last-owner changes, which Codex required. #176's triggers then revoke grants (`membership_removed`) or renew `permission_revision` in the same transaction.
+- **Policy (agreed on #174):**
+  - owners and admins may remove or demote;
+  - an admin may not touch an owner;
+  - the last owner can be neither removed nor demoted;
+  - anyone may remove themself, except the last owner.
+- **Refused, because it is not decided:** promotion (`promotion_unsupported`), and roles outside owner/admin/editor/viewer.
+- **Proof:** `tests/db-contract/workspaceMemberWriters.contract.test.ts` and `mutation.sh`.
+- **Rollback:** `rollback/20261025140000_workspace_member_writers.down.sql`. It removes the writers only; memberships, grants and #176's triggers are untouched.
+
+## `20261025160000_workspace_members_app_surface.sql`
+
+**Not approved for any hosted project; needs #176 and `20261025140000` first.** This closes Codex's MEMBER-SURFACE findings. Before it, a raw service-role PATCH promoted a viewer to owner, and a raw service-role DELETE removed the last owner.
+
+Application roles now change or delete a membership **only** through #186's writers:
+- **The grant.** UPDATE, DELETE and TRUNCATE are revoked from `service_role`. The browser roles' grants belong to #159. SELECT and the provisioning INSERT are unchanged.
+- **The invariant.** A SECURITY INVOKER trigger refuses the same writes from `anon`, `authenticated` and `service_role`, whatever their grants, and names the canonical writer.
+- **What it leaves alone.** Definer functions (provisioning, the canonical writers), foreign-key cascades (workspace deletion) and administrative SQL run as the owner, so the trigger doesn't apply to them.
+
+- **Proof:** `tests/db-contract/workspaceMembersAppSurface.contract.test.ts`. Codex's two MEMBER-SURFACE cases pass unchanged. Seven mutation proofs cover:
+  - the migration omitted;
+  - the revoke removed;
+  - the trigger bypassed;
+  - the trigger made definer;
+  - role changes allowed;
+  - deletes allowed;
+  - TRUNCATE unguarded.
+- **Rollback:** `rollback/20261025160000_workspace_members_app_surface.down.sql`.

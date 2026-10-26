@@ -2,7 +2,9 @@
 // Replaces the previous right-side Sheet drawer. Same public props, same
 // `initialFor`/`buildPatch` save contract — this is a frontend-only refresh.
 //
-// Each section maps to a fixed set of top-level `company_brain.profile` keys.
+// The section edit contract (initialFor/buildPatch) lives in lib/companyBrainPatch,
+// shared with the page's inline editors. Each section maps to a fixed set of
+// top-level `company_brain.profile` keys.
 // Save emits a partial patch that the parent shallow-merges onto the raw
 // profile, so we never overwrite fields we don't render.
 
@@ -17,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ChipInput } from '@/components/onboarding/ChipInput';
 import type { CompanyBrainV2 } from '@/lib/normalizeCompanyBrain';
 import type { BrainProfile } from '@/lib/companyBrainView';
+import { initialFor, buildPatch } from '@/lib/companyBrainPatch';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -44,6 +47,8 @@ interface Props {
   serverUpdatedAt?: string | null;
   /** The client whose Brain this is (Phase 3c); absent = the agency Brain. Drafts are kept per Brain. */
   clientId?: string | null;
+  /** The client's name, on a client Brain: the editor names whose Brain it is (Phase 3c). */
+  clientName?: string | null;
 }
 
 const SECTION_ORDER: SectionKey[] = ['company', 'targeting', 'buyers', 'signals', 'disqualifiers', 'messaging'];
@@ -64,7 +69,17 @@ const TITLES: Record<SectionKey, {
   messaging:     { eyebrow: 'COMPANY BRAIN', title: 'Edit Messaging & Positioning', short: 'Messaging Fit', description: 'How Agentory should sound on your behalf.', influences: 'Shapes outreach drafts, content, and brand voice.', icon: Megaphone },
 };
 
-export default function CompanyBrainEditDrawer({ open, section, brain, onOpenChange, onSave, serverUpdatedAt, clientId = null }: Props) {
+/** A client's Brain never speaks as if it were the reader's own company. */
+function forClient(m: (typeof TITLES)[SectionKey], section: SectionKey, name: string): (typeof TITLES)[SectionKey] {
+  const copy: Partial<Record<SectionKey, { description: string; influences?: string }>> = {
+    company: { description: `What Agentory tells other agents about ${name}.`, influences: `Grounds every agent in what ${name} does and who it sells to.` },
+    buyers: { description: `The roles ${name} sells to and the pains it solves.` },
+    messaging: { description: `How Agentory should sound on ${name}'s behalf.` },
+  };
+  return { ...m, eyebrow: `CLIENT BRAIN · ${name}`, ...copy[section] };
+}
+
+export default function CompanyBrainEditDrawer({ open, section, brain, onOpenChange, onSave, serverUpdatedAt, clientId = null, clientName = null }: Props) {
   const reduce = useReducedMotion();
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -224,7 +239,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   }
 
   if (!activeSection) return null;
-  const meta = TITLES[activeSection];
+  const meta = clientName ? forClient(TITLES[activeSection], activeSection, clientName) : TITLES[activeSection];
   const Icon = meta.icon;
   const sectionIndex = SECTION_ORDER.indexOf(activeSection) + 1;
 
@@ -615,110 +630,3 @@ function MessagingEditor({ state, setState }: any) {
   );
 }
 
-// -------------------------------------------------- initial state + patch ---
-
-function initialFor(section: SectionKey, b: CompanyBrainV2): any {
-  switch (section) {
-    case 'company': return {
-      name: b.company.name, website_url: b.company.website_url, category: b.company.category,
-      description: b.company.description, business_model: b.company.business_model,
-      stage: b.company.stage, team_size: b.company.team_size,
-    };
-    case 'targeting': return {
-      industries: [...b.target_customer.industries],
-      business_models: [...b.target_customer.business_models],
-      geography: [...b.target_customer.geography],
-      must_have: [...b.target_customer.must_have],
-      nice_to_have: [...b.target_customer.nice_to_have],
-      funding_stage: [...b.target_customer.funding_stage],
-      size_min: b.target_customer.company_size.min?.toString() ?? '',
-      size_max: b.target_customer.company_size.max?.toString() ?? '',
-      size_label: b.target_customer.company_size.label ?? '',
-    };
-    case 'buyers': return {
-      buyer_personas: [...b.buyer_personas],
-      pain_points: [...b.pain_points],
-    };
-    case 'signals': return {
-      triggers: [...b.triggers],
-      jobs_to_watch: [...b.jobs_to_watch],
-    };
-    case 'disqualifiers': return {
-      disq_industries: [...b.target_customer.disqualifiers.industries],
-      disq_company_types: [...b.target_customer.disqualifiers.company_types],
-      disq_keywords: [...b.target_customer.disqualifiers.keywords],
-      disq_titles: [...b.target_customer.disqualifiers.titles],
-      required_evidence: [...b.qualification_rules.required_evidence],
-      reject_if: [...b.qualification_rules.reject_if],
-      manual_review_if: [...b.qualification_rules.manual_review_if],
-      negative_examples: [...b.negative_examples],
-    };
-    case 'messaging': return {
-      promise: b.positioning.promise,
-      differentiators: [...b.positioning.differentiators],
-      proof_points: [...b.positioning.proof_points],
-      content_angles: [...b.content_angles],
-      tone: b.brand_voice.tone,
-      tags: [...b.brand_voice.tags],
-      style_rules: [...b.brand_voice.style_rules],
-      avoid: [...b.brand_voice.avoid],
-    };
-  }
-}
-
-function buildPatch(section: SectionKey, s: any, b: CompanyBrainV2): BrainProfile {
-  switch (section) {
-    case 'company':
-      return { company: { ...b.company, ...s } };
-    case 'targeting': {
-      const min = s.size_min === '' ? null : Number(s.size_min);
-      const max = s.size_max === '' ? null : Number(s.size_max);
-      return {
-        target_customer: {
-          ...b.target_customer,
-          industries: s.industries, business_models: s.business_models, geography: s.geography,
-          must_have: s.must_have, nice_to_have: s.nice_to_have, funding_stage: s.funding_stage,
-          company_size: {
-            min: Number.isFinite(min as number) ? (min as number) : null,
-            max: Number.isFinite(max as number) ? (max as number) : null,
-            label: s.size_label,
-          },
-        },
-      };
-    }
-    case 'buyers':
-      return { buyer_personas: s.buyer_personas, pain_points: s.pain_points };
-    case 'signals':
-      return { triggers: s.triggers, jobs_to_watch: s.jobs_to_watch };
-    case 'disqualifiers':
-      return {
-        target_customer: {
-          ...b.target_customer,
-          disqualifiers: {
-            ...b.target_customer.disqualifiers,
-            industries: s.disq_industries, company_types: s.disq_company_types,
-            keywords: s.disq_keywords, titles: s.disq_titles,
-          },
-        },
-        qualification_rules: {
-          ...b.qualification_rules,
-          required_evidence: s.required_evidence,
-          reject_if: s.reject_if,
-          manual_review_if: s.manual_review_if,
-        },
-        negative_examples: s.negative_examples,
-      };
-    case 'messaging':
-      return {
-        positioning: {
-          ...b.positioning,
-          promise: s.promise, differentiators: s.differentiators, proof_points: s.proof_points,
-        },
-        content_angles: s.content_angles,
-        brand_voice: {
-          ...b.brand_voice,
-          tone: s.tone, tags: s.tags, style_rules: s.style_rules, avoid: s.avoid,
-        },
-      };
-  }
-}
