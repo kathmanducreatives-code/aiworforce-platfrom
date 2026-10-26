@@ -1,15 +1,19 @@
 // Judge one zero-Apify real-GPT run from its evidence document.
 //   deno run --allow-read scripts/test-project/real-gpt/judge-real-gpt-run.ts evidence.json
+// The providers-off rehearsal (workflow `providers: none`) is judged by its own criteria:
+//   deno run --allow-read scripts/test-project/real-gpt/judge-real-gpt-run.ts --providers-off evidence.json
 // Exits 1 when any automatic criterion fails. MANUAL rows are printed for the
 // operator to sign off against the vendors' consoles; they never pass on their own.
-import { judgeRealGptRun, overall } from "./realGptJudge.ts";
+import { judgeProvidersOff, judgeRealGptRun, overall } from "./realGptJudge.ts";
 
-const path = Deno.args[0];
+const providersOff = Deno.args[0] === "--providers-off";
+const path = providersOff ? Deno.args[1] : Deno.args[0];
 if (!path) {
-  console.error("usage: judge-real-gpt-run.ts <evidence.json>");
+  console.error("usage: judge-real-gpt-run.ts [--providers-off] <evidence.json>");
   Deno.exit(2);
 }
-const verdicts = judgeRealGptRun(JSON.parse(Deno.readTextFileSync(path)));
+const ev = JSON.parse(Deno.readTextFileSync(path));
+const verdicts = providersOff ? judgeProvidersOff(ev) : judgeRealGptRun(ev);
 for (const v of verdicts) console.log(`${v.result.padEnd(6)} ${v.id.padEnd(3)} ${v.criterion}\n         observed: ${v.observed}`);
 const result = overall(verdicts);
 const manual = verdicts.filter((v) => v.result === "MANUAL").map((v) => v.id);

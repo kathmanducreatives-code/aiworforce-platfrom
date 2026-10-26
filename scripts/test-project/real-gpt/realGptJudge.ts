@@ -189,6 +189,41 @@ export function judgeRealGptRun(ev: Json, x: Expectations = A7_EXPECTATIONS): Ve
   return out;
 }
 
+/**
+ * THE PROVIDERS-OFF REHEARSAL (workflow `providers: none`, preparer `--proposal`):
+ * the same kickoff and worker with no model or vendor key and both hosts denied.
+ * Nothing may reach a vendor, be admitted, charged, held or persisted, and the
+ * mission must end terminally with one verdict. On this candidate (without
+ * #149) that verdict is `unhandled_exception` (the planner has no key); with
+ * #149 it would be a refusal before execution. Either is a contained ending;
+ * any other terminal verdict, or none, fails.
+ */
+export const PROVIDERS_OFF_TERMINALS = ["unhandled_exception", "refused_before_execution", "execution_planner_unavailable"];
+
+export function judgeProvidersOff(ev: Json, x: Expectations = A7_EXPECTATIONS): Verdict[] {
+  const out: Verdict[] = [];
+  const v = (id: string, criterion: string, ok: boolean, observed: unknown) =>
+    out.push({ id, question: id.startsWith("O") ? "R" : "T", criterion, result: ok ? "PASS" : "FAIL",
+      observed: typeof observed === "string" ? observed : JSON.stringify(observed) });
+  const ops: Json[] = ev.smoke_operations ?? [];
+  const ledger: Json[] = ev.ledger ?? [];
+  const credits: Json[] = ev.credit_transactions ?? [];
+  v("O1", "the queue row ended terminally (failed or complete), never left claimable",
+    ["failed", "complete"].includes(ev.queue?.status), ev.queue?.status ?? null);
+  v("O2", `exactly one contained terminal verdict (${PROVIDERS_OFF_TERMINALS.join(" / ")})`,
+    Array.isArray(ev.terminal) && ev.terminal.length === 1 && PROVIDERS_OFF_TERMINALS.includes(ev.terminal[0]), ev.terminal ?? null);
+  v("O3", "no admitted operation of any kind (model, provider, poll)", ops.length === 0, ops.map((o) => o.kind));
+  v("O4", "no ledger row: no model call (the compile was offline) and no provider call", ledger.length === 0,
+    ledger.map((r) => ({ kind: r.record_kind, source: r.source, status: r.status })));
+  v("O5", `no credit charged or held; balance ${x.starting_credits}, 0 reserved`,
+    credits.every((c) => c.status === "not_charged" || c.status === "released") &&
+      ev.balance?.balance_credits === x.starting_credits && ev.balance?.reserved_credits === 0,
+    { credits: credits.map((c) => c.status), balance: ev.balance ?? null });
+  v("O6", "nothing persisted or qualified", Number(ev.leads ?? 0) === 0, { leads: ev.leads ?? null });
+  v("O7", "the credit check lists nothing", Array.isArray(ev.credit_check) && ev.credit_check.length === 0, ev.credit_check ?? null);
+  return out;
+}
+
 /** PASS when no automatic criterion failed; MANUAL rows still need the operator's sign-off. */
 export function overall(verdicts: Verdict[]): "PASS" | "FAIL" {
   return verdicts.some((v) => v.result === "FAIL") ? "FAIL" : "PASS";

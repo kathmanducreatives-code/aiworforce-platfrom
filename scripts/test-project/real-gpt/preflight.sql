@@ -45,8 +45,9 @@ checks(id, what, expected, actual) as (
   select 'P08', 'the test workspace exists with the Scout agent', '1',
          (select count(*) from public.agents where workspace_id = :'workspace_id'::uuid and slug = 'scout')::text
   union all
-  select 'P09', 'the test workspace holds credits, none reserved', 'balance>=1, reserved=0',
-         coalesce((select case when balance_credits >= 1 and reserved_credits = 0 then 'balance>=1, reserved=0'
+  -- Exactly 10: the judge's R3 compares the ending balance with a starting balance of 10 (A7_EXPECTATIONS).
+  select 'P09', 'the test workspace holds exactly 10 credits, none reserved', 'balance=10, reserved=0',
+         coalesce((select case when balance_credits = 10 and reserved_credits = 0 then 'balance=10, reserved=0'
                                else format('balance=%s, reserved=%s', balance_credits, reserved_credits) end
                      from public.workspace_credit_balances where workspace_id = :'workspace_id'::uuid), 'no balance row')
   union all
@@ -67,6 +68,25 @@ checks(id, what, expected, actual) as (
   union all
   select 'P14', 'model calls must name their model (the evidence relies on it)', '1',
          (select count(*) from pg_constraint where conname = 'lead_execution_calls_model_call_names_model')::text
+  union all
+  -- Candidate B's three held security migrations (20261025130000, …150000, …160000).
+  select 'P15', 'security triggers installed: task commit boundary, plan parent identity, membership app surface (row + truncate)', '4',
+         (select count(*) from pg_trigger t where not t.tgisinternal and t.tgenabled <> 'D' and (t.tgrelid, t.tgname) in (
+            ('public.tasks'::regclass, 'tasks_commit_boundary'), ('public.task_plans'::regclass, 'task_plans_parent_identity'),
+            ('public.workspace_members'::regclass, 'workspace_members_app_surface'),
+            ('public.workspace_members'::regclass, 'workspace_members_app_surface_truncate')))::text
+  union all
+  select 'P16', 'service_role cannot update, delete or truncate memberships; it keeps select and insert (provisioning)', 'ok',
+         case when not has_table_privilege('service_role', 'public.workspace_members', 'UPDATE')
+               and not has_table_privilege('service_role', 'public.workspace_members', 'DELETE')
+               and not has_table_privilege('service_role', 'public.workspace_members', 'TRUNCATE')
+               and has_table_privilege('service_role', 'public.workspace_members', 'SELECT')
+               and has_table_privilege('service_role', 'public.workspace_members', 'INSERT')
+              then 'ok' else 'mismatch' end
+  union all
+  -- The agency-only test needs no client schema; recorded, not refused (client work stays refused at every entry).
+  select 'P17', 'client Brain schema (held 20261024160000) installed', 'decision',
+         case when to_regclass('public.client_accounts') is not null then 'installed' else 'not installed' end
 )
 select id, what, expected, actual,
        case when expected = 'decision' then 'INFO'

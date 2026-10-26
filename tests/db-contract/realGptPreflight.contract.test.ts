@@ -22,16 +22,32 @@ Deno.test("preflight: a prepared TEST workspace passes; each unsafe state fails 
   await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${ws}, 'scout', 'Scout', 'x', 'research')`;
   await sql`insert into public.workspace_credit_balances (workspace_id, balance_credits) values (${ws}, 10)`;
   const ok = await run(ws);
-  for (const id of ["P01", "P02", "P03", "P04", "P07", "P08", "P09", "P10", "P11", "P12", "P13", "P14"]) {
+  for (const id of ["P01", "P02", "P03", "P04", "P07", "P08", "P09", "P10", "P11", "P12", "P13", "P14", "P15", "P16"]) {
     assertEquals(ok[id].split(":")[0], "PASS", `${id}: ${ok[id]}`);
   }
   // The billing fixes are a decision, never a failure: reported INFO, installed or not (held until approved).
-  for (const id of ["P05", "P06"]) assertEquals(ok[id].split(":")[0], "INFO", `${id}: ${ok[id]}`);
+  for (const id of ["P05", "P06", "P17"]) assertEquals(ok[id].split(":")[0], "INFO", `${id}: ${ok[id]}`);
 
   await sql`insert into public.lead_mission_queue (id, workspace_id, request, status) values (${uuid()}, ${ws}, ${sql.json({})}, 'queued')`;
   await sql`update public.workspace_credit_balances set reserved_credits = 1 where workspace_id = ${ws}`;
   const bad = await run(ws);
   assertEquals(bad.P13.split(":")[0], "FAIL", "a claimable row would be run by the worker");
   assertEquals(bad.P09.split(":")[0], "FAIL");
+  // Exactly 10 (the judge's starting balance): 9 or 11 available fails too.
+  await sql`update public.workspace_credit_balances set reserved_credits = 0, balance_credits = 11 where workspace_id = ${ws}`;
+  assertEquals((await run(ws)).P09.split(":")[0], "FAIL", "the judge would misread a run that started at 11");
   await sql`update public.lead_mission_queue set status = 'complete' where workspace_id = ${ws}`;
+});
+
+Deno.test("preflight: without Candidate B's security migrations P15/P16 fail", opts, async () => {
+  const ws = await seedWorkspace();
+  await sql.begin(async (tx) => {
+    await tx`drop trigger tasks_commit_boundary on public.tasks`;
+    await tx`grant update on public.workspace_members to service_role`;
+    const r = Object.fromEntries(([...await tx.unsafe(preflight.replaceAll(":'workspace_id'", `'${ws}'`))] as Array<Record<string, string>>)
+      .map((x) => [x.id, `${x.result}:${x.actual}`]));
+    assertEquals([r.P15, r.P16], ["FAIL:3", "FAIL:mismatch"]);
+    throw new Error("rollback");
+  }).catch((e) => { if (e.message !== "rollback") throw e; });
+  assertEquals((await sql`select count(*)::int n from pg_trigger where tgname = 'tasks_commit_boundary'`)[0].n, 1, "restored");
 });

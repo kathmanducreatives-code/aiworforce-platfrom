@@ -21,3 +21,23 @@ Deno.test("compile gate: Luna within bounds is sent, at most twice; everything e
   assertEquals(g.sent.length, 2);
   assertEquals(g.refused.length, 5);
 });
+
+Deno.test("compile gate: only the audited text-only shape, one choice, a whole output bound — the per-call maximum holds", async () => {
+  let reached = 0;
+  const g = lunaOnlyFetch((() => { reached++; return Promise.resolve(new Response("{}")); }) as typeof fetch, { maxCalls: 10 });
+  const call = (b: string) => g.fetch(OPENAI, { method: "POST", body: b });
+  const msgs = [{ role: "system", content: "s" }, { role: "user", content: "u" }];
+  // Extended (12 h) cache retention is billed at a dearer cache-write rate than the template prices.
+  assertEquals((await call(body({ messages: msgs, prompt_cache_retention: "24h" }))).status, 409);
+  assertEquals((await call(body({ messages: msgs, tools: [] }))).status, 409, "tools are refused");
+  assertEquals((await call(body({ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "https://x" } }] }] }))).status, 409, "media is refused");
+  assertEquals((await call(body({ messages: msgs, n: 2 }))).status, 409, "more than one choice is refused");
+  assertEquals((await call(body({ messages: msgs, max_tokens: undefined }))).status, 409, "no output bound is refused");
+  assertEquals((await call(body({ messages: msgs, max_tokens: 3999.5 }))).status, 409, "a fractional bound is refused");
+  assertEquals((await call(body({ messages: msgs, max_tokens: 100, max_completion_tokens: 9000 }))).status, 409, "every bound must hold");
+  assertEquals((await call("[]")).status, 409, "a non-object body is refused");
+  assertEquals(reached, 0, "nothing left the process");
+  assertEquals((await call(body({ messages: msgs, n: 1, response_format: { type: "json_object" }, reasoning_effort: "low" }))).status, 200,
+    "the transport's own shape still passes");
+  assertEquals(reached, 1);
+});

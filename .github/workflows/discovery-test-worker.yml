@@ -29,13 +29,18 @@ on:
         default: "5"
         type: string
       providers:
-        description: "openai-only = zero-Apify (Apify unreachable, no token). openai-and-apify only for the separately approved paid A7"
+        description: "openai-only = zero-Apify (Apify unreachable, no token). none = providers-off rehearsal (no model or Apify key; both hosts denied). openai-and-apify only for the separately approved paid A7"
         required: true
         default: openai-only
         type: choice
         options:
           - openai-only
+          - none
           - openai-and-apify
+      expected_sha:
+        description: "The full 40-character commit SHA approved for this run; the job refuses any other checkout"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -57,6 +62,7 @@ jobs:
       CONFIRM_REF: ${{ inputs.confirm_project_ref }}
       SESSION_MINUTES: ${{ inputs.session_minutes }}
       PROVIDERS: ${{ inputs.providers }}
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
       TEST_PROJECT_REF: ${{ vars.TEST_PROJECT_REF }}
       # NO SECRET AT JOB LEVEL. A job-level secret reaches every step, including
       # the third-party actions below; each secret is set on the one step that
@@ -115,9 +121,13 @@ jobs:
           [[ "$SESSION_MINUTES" =~ ^[0-9]+$ ]] && [ "$SESSION_MINUTES" -ge 1 ] && [ "$SESSION_MINUTES" -le 25 ] \
             || { echo "refusing: session_minutes must be 1-25" >&2; exit 1; }
           case "$PROVIDERS" in
-            openai-only|openai-and-apify) ;;
-            *) echo "refusing: providers must be openai-only or openai-and-apify" >&2; exit 1 ;;
+            openai-only|none|openai-and-apify) ;;
+            *) echo "refusing: providers must be openai-only, none or openai-and-apify" >&2; exit 1 ;;
           esac
+          # The approved commit, typed by the dispatcher: a branch that moved
+          # after approval never runs (GITHUB_SHA is what checkout fetches).
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$EXPECTED_SHA" = "$GITHUB_SHA" ] \
+            || { echo "refusing: this run's commit $GITHUB_SHA is not the approved expected_sha" >&2; exit 1; }
 
       # Pinned to full commit SHAs: a moved tag cannot change what runs here.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
@@ -138,8 +148,10 @@ jobs:
           # Only the two vendors the smoke catalog prices. No Firecrawl or
           # Anthropic key: the catalog has no template for either (the gate
           # would refuse them), and the offline rehearsal runs with both absent.
-          APIFY_API_TOKEN: ${{ secrets.TEST_APIFY_API_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY }}   # gptProvider and the OpenAI strategist require it
+          # A key reaches the step only for a dispatch that may use it: Apify only
+          # for openai-and-apify, OpenAI for anything but the providers-off run.
+          APIFY_API_TOKEN: ${{ inputs.providers == 'openai-and-apify' && secrets.TEST_APIFY_API_TOKEN || '' }}
+          OPENAI_API_KEY: ${{ inputs.providers != 'none' && secrets.TEST_OPENAI_API_KEY || '' }}   # gptProvider and the OpenAI strategist require it
         run: |
           set +e
           # SIGTERM asks the worker to drain: a mission in flight finishes and
@@ -159,8 +171,13 @@ jobs:
           # deny names the port: a bare-host deny does NOT override a
           # host:port allow (tests/infra/testWorkerProposal.test.ts checks
           # the permission itself).
+          # PROVIDERS-OFF (none): no model key either, and Deno refuses OpenAI too,
+          # so the mission cannot reach any vendor (the rehearsal before any paid run).
           deny=""
-          if [ "$PROVIDERS" != "openai-and-apify" ]; then
+          if [ "$PROVIDERS" = "none" ]; then
+            unset APIFY_API_TOKEN OPENAI_API_KEY
+            deny="--deny-net=api.apify.com:443,api.openai.com:443"
+          elif [ "$PROVIDERS" != "openai-and-apify" ]; then
             unset APIFY_API_TOKEN
             deny="--deny-net=api.apify.com:443"
           fi

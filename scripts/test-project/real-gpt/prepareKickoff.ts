@@ -16,6 +16,7 @@ import { compileLeadMission } from "../../../supabase/functions/_shared/leadMiss
 import { LEAD_INTELLIGENCE_CONTRACT_VERSION, runtimeIdentity } from "../../../supabase/functions/_shared/leadRuntimeIdentity.ts";
 import { createLedgerWriter, type LedgerDb, ModelCallCollector } from "../../../supabase/functions/_shared/executionLedger.ts";
 import { A7_EXPECTATIONS, judgeRealGptRun, type Json, type Verdict } from "./realGptJudge.ts";
+import { textOnlyModelRequest } from "../../../supabase/functions/_shared/smokeAdmission.ts";
 
 export const A7_MISSION =
   "Find 1 US B2B software company with a current declared 11–50 employee band and an open Account Executive posting dated within 30 days.";
@@ -157,9 +158,17 @@ export function lunaOnlyFetch(base: typeof fetch, o: { maxCalls?: number; maxReq
     const bytes = new TextEncoder().encode(body).length;
     let j: Json = {};
     try { j = JSON.parse(body); } catch { return refuse("unreadable body"); }
+    if (!j || typeof j !== "object" || Array.isArray(j)) return refuse("body is not a JSON object");
     if (j.model !== "gpt-5.6-luna") return refuse(`model ${j.model} refused (Luna only)`);
-    const out = j.max_completion_tokens ?? j.max_tokens;
-    if (typeof out !== "number" || out > maxOut) return refuse(`output bound ${out} refused (≤ ${maxOut})`);
+    // The worker gate's audited text-only shape: no field that charges beyond the
+    // request's own bytes (e.g. extended cache retention, tools, media), one choice.
+    const shape = textOnlyModelRequest("openai", j);
+    if (shape) return refuse(`request shape refused (${shape})`);
+    if ("n" in j && j.n !== 1) return refuse(`n=${j.n} refused (one choice only)`);
+    const outs = [j.max_completion_tokens, j.max_tokens].filter((v) => v !== undefined);
+    if (outs.length === 0 || !outs.every((v) => Number.isInteger(v) && v >= 1 && v <= maxOut)) {
+      return refuse(`output bound ${JSON.stringify(outs)} refused (≤ ${maxOut})`);
+    }
     if (bytes > maxBytes) return refuse(`request ${bytes} bytes refused (≤ ${maxBytes})`);
     if (sent.length >= maxCalls) return refuse(`call ${sent.length + 1} refused (≤ ${maxCalls})`);
     sent.push({ model: j.model, bytes });
