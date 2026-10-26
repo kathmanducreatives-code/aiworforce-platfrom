@@ -73,7 +73,10 @@ async function run(removeAfter: "task_insert" | "first_model" | null) {
     await res.body?.cancel();
   } finally {
     globalThis.fetch = original;
-    for (const [k, v] of saved) v === undefined ? Deno.env.delete(k) : Deno.env.set(k, v);
+    for (const [k, v] of saved) {
+      if (v === undefined) Deno.env.delete(k);
+      else Deno.env.set(k, v);
+    }
   }
   const tasks = await sql`select status from public.tasks where workspace_id = ${w.ws}`;
   return { ...w, removed, external, taskSeen, status, tasks: tasks.map((t) => t.status as string) };
