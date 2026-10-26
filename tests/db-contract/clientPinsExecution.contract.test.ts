@@ -56,6 +56,9 @@ Deno.test({ name: "pins + guard: a stored task pinned in columns never resumes a
   const w = await world();
   await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department)
             values (${w.ws}, 'scribe', 'Synthetic Scribe', 'Write a short draft using supplied facts only.', 'content')`;
+  const plan = uuid();
+  await sql`insert into public.task_plans (id, workspace_id, user_id, user_instruction, status)
+            values (${plan}, ${w.ws}, ${w.editor.id}, 'continue', 'running')`;
   // Created through the database's own check (service role, valid pins at commit), with a clean payload.
   const svc = createClient(REST_URL, await mintJwt("service_role"), { auth: { persistSession: false }, global: { fetch: gatewayFetch } });
   const ins = await svc.from("tasks").insert({ workspace_id: w.ws, user_id: w.editor.id, status: "running", agent_slug: "scribe",
@@ -84,7 +87,7 @@ Deno.test({ name: "pins + guard: a stored task pinned in columns never resumes a
     const { handleRunAgent } = await import("../../supabase/functions/run-agent/index.ts");
     const res = await handleRunAgent(new Request(`${REST_URL}/functions/v1/run-agent`, {
       method: "POST", headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({ workspace_id: w.ws, user_id: w.editor.id, agent_slug: "scribe", instruction: "continue",
+      body: JSON.stringify({ plan_id: plan, step_index: 0, workspace_id: w.ws, user_id: w.editor.id, agent_slug: "scribe", instruction: "continue",
         resume_task_id: pinnedId }),
     }));
     status = res.status;
