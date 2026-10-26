@@ -43,6 +43,8 @@ held_client=(
   20261025140000_workspace_member_writers.sql
   # The direct-write boundary: application roles change memberships only through those writers.
   20261025160000_workspace_members_app_surface.sql
+  # Immutable task pins (#174 §9.1): client tasks carry the authorization they were created under.
+  20261025170000_task_client_pins.sql
 )
 # DB_CONTRACT_OMIT_HELD names ONE file to leave out: a held file, or a file in
 # supabase/migrations/ by its basename. It is for tests/db-contract/mutation.sh,
