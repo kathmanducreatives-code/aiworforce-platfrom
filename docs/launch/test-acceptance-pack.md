@@ -1,5 +1,10 @@
 # Controlled TEST acceptance pack (Lead Discovery)
 
+> **For the first agency-only run use `agency-test-operator-checklist.md`
+> (Candidate B).** It replaces steps 0–3 below for that run: dispatch commit,
+> migrations, seed, `providers: none` for step 2, `expected_sha`, and the
+> corrected commands. The criteria here are unchanged.
+
 Everything that can be prepared without a paid call, a hosted write or a
 running hosted worker. **Each step marked ⛔ needs its own explicit owner
 approval.** Phase 1 stays FAIL and A7 stays NO-GO until §6 says otherwise.
@@ -15,8 +20,8 @@ The dispatch SHA is the merged `launch/hardening` head that contains:
 | # | What | Verified by |
 |---|---|---|
 | E1 | **A new production-test Apify account.** The old account is assumed unusable. Read its plan, restriction status and both actors' prices on that account. Nothing is bought until step 3's sequel, the paid A7 | owner, account page |
-| E2 | Environment `discovery-test` holds, by name: vars `TEST_PROJECT_REF`, `TEST_WORKSPACE_ID`; secrets `TEST_SUPABASE_URL`, `TEST_SUPABASE_SERVICE_ROLE_KEY`, `TEST_SUPABASE_ANON_KEY`, `TEST_OPENAI_API_KEY`. `TEST_APIFY_API_TOKEN` stays **absent** until the paid A7 | owner, GitHub settings |
-| E3 | OpenAI TEST project with a **hard** budget; `gpt-5.6-luna` enabled; price read within 24 h | owner |
+| E2 | Environment `discovery-test` holds, by name: vars `TEST_PROJECT_REF`, `TEST_WORKSPACE_ID`; secrets `TEST_SUPABASE_URL`, `TEST_SUPABASE_SERVICE_ROLE_KEY`, `TEST_SUPABASE_ANON_KEY`, `TEST_OPENAI_API_KEY`. `TEST_APIFY_API_TOKEN` exists today (2026-10-26); it reaches the worker step only for `providers` = `openai-and-apify`, so leaving it is safe, removing it is optional | owner, GitHub settings |
+| E3 | OpenAI TEST project with an **enforced** cap: Project → Limits → Spend with **"Enforce a hard limit" on**, or prepaid credits with auto-reload off. A budget **alert** is not a cap. `gpt-5.6-luna` available to the key; price read within 24 h | owner, screenshot |
 | E4 | Observed `maximum_microusd` for both actor templates, read ≤ 24 h before any authorization. They come from E1's account, never from the old one | owner |
 | E5 | A named operator who has read this pack and `real-gpt-zero-apify-test.md` | owner |
 
@@ -30,7 +35,7 @@ psql "$TEST_DB_URL" -X -v workspace_id='<TEST_WORKSPACE_ID>' -v user_id='<TEST_U
 
 | Expected | |
 |---|---|
-| P01–P14 | as in `real-gpt-zero-apify-test.md`. P05/P06 (billing) are INFO |
+| P01–P16 | as in `real-gpt-zero-apify-test.md`; P09 needs **exactly 10** credits (the judge's R3 baseline); P15/P16 the three held security migrations. P05/P06 (billing) and P17 (client schema) are INFO |
 | S01–S02 | the V2 queue, lineage and credit functions are present |
 | S03 | the requesting user is a workspace **member**: the pre-effect guard refuses a non-member's mission |
 | S04 | no pilot-marked task in the test workspace |
@@ -43,7 +48,7 @@ Any FAIL: stop. Fix only with a separately approved hosted change.
 
 Purpose: the deployed code refuses before execution when it has no providers, and spends nothing.
 
-1. In Environment `discovery-test`, remove `TEST_OPENAI_API_KEY` for this run. `TEST_APIFY_API_TOKEN` is already absent.
+1. No Environment change: dispatch with `providers` = `none` (step 3). No model or Apify key then reaches the worker step, and Deno denies both `api.openai.com:443` and `api.apify.com:443` (`tests/infra/testWorkerZeroApify.test.ts` executes the step's own shell).
 2. Prepare the kickoff with **no model call and no network at all**:
    ```sh
    deno run --allow-env --allow-read --allow-write=./dry-run scripts/test-project/real-gpt/prepare-real-gpt-kickoff.ts \
@@ -52,16 +57,16 @@ Purpose: the deployed code refuses before execution when it has no providers, an
      --proposal docs/launch/proposals/a7-reviewed-mission-proposal.json
    ```
    This compiles the reviewed proposal offline (I1–I8 still judged). No `OPENAI_API_KEY` is needed, `--allow-net` is not granted, and the compile gate allows 0 calls. Review `dry-run/kickoff.sql`: both actors are at **0** starts. Then run it as an administrator (⛔ hosted write).
-3. Dispatch `discovery-test-worker.yml` on the dispatch SHA (`session_minutes` = 5, `providers` = `openai-only`).
-4. Evidence: `real-gpt-evidence.sql` and `smoke-credit-reconciliation.sql`.
+3. Dispatch `discovery-test-worker.yml` on the dispatch commit (`session_minutes` = 5, `providers` = `none`, `expected_sha` = the commit).
+4. Evidence: `real-gpt-evidence.sql`, judged with `judge-real-gpt-run.ts --providers-off`, and both reconciliations with `-v queue_id`.
 
-**PASS:**
-- the task ends `blocked / refused_before_execution` (`execution_planner_unavailable`);
+**PASS** (judge O1–O7):
+- the queue ends `failed` with one contained terminal verdict: `unhandled_exception` on Candidate B (without #149); `refused_before_execution` (`execution_planner_unavailable`) only once #149 is in the dispatch commit;
 - 0 model rows and 0 provider rows;
 - credit balance unchanged, 0 reserved;
 - the credit check lists nothing.
 
-Then restore `TEST_OPENAI_API_KEY`.
+Then close the authorization (`stop_discovery_smoke`, or wait 300 s): preflight P12 fails while it is live.
 
 ## 3. ⛔ Zero-Apify real-GPT acceptance
 
@@ -70,18 +75,17 @@ Exactly `docs/launch/real-gpt-zero-apify-test.md`: preflight → prepare (Luna o
 - Ceiling ≤ $0.075, of which ≤ $0.05 is worker model spend. Expected ≈ $0.012. $0 Apify.
 
 ### Dispatch and evidence commands (steps 2, 3 and 5)
-`gh workflow run --ref` takes a branch or tag, not a SHA. Tag the approved dispatch SHA first.
+`gh workflow run --ref` takes a branch or tag, not a SHA, and the Environment's deployment branch policy decides which refs may run at all (on 2026-10-26: only `launch/hardening`; a tag is not allowed). Dispatch only from a ref the owner allowed, and pass the approved commit as `expected_sha`: the guard refuses any other checkout.
 ```sh
-git tag test-dispatch-<date> <dispatch-sha> && git push origin test-dispatch-<date>
-gh workflow run discovery-test-worker.yml --ref test-dispatch-<date> \
-  -f confirm_project_ref=<TEST_PROJECT_REF> -f session_minutes=10 -f providers=openai-only
+gh workflow run discovery-test-worker.yml --ref <allowed branch> \
+  -f confirm_project_ref=<TEST_PROJECT_REF> -f session_minutes=10 -f providers=openai-only -f expected_sha=<dispatch-sha>
 gh run list --workflow discovery-test-worker.yml -L 1      # approve the Environment reviewer in the UI
 gh run watch <run-id> --exit-status
 gh run view <run-id> --log | grep -E 'providers: openai-only|worker exited'   # the log carries nothing else
 mkdir -p ./real-gpt-run
 psql "$TEST_DB_URL" -X -At -v queue_id='<queue_id>' -f scripts/test-project/real-gpt/real-gpt-evidence.sql > ./real-gpt-run/evidence.json
 deno run --allow-read scripts/test-project/real-gpt/judge-real-gpt-run.ts ./real-gpt-run/evidence.json
-psql "$TEST_DB_URL" -X -f scripts/test-project/smoke-credit-reconciliation.sql > ./real-gpt-run/credits.txt
+psql "$TEST_DB_URL" -X -v queue_id='<queue_id>' -f scripts/test-project/smoke-credit-reconciliation.sql > ./real-gpt-run/credits.txt
 ```
 Abort at any point: `select public.stop_discovery_smoke('<queue_id>', 'operator stop');`, then `gh run cancel <run-id>`. The stop is proven on a real worker in CI (`tests/realprocess`): nothing is bought or sent after it, and nothing stays held.
 
@@ -90,8 +94,9 @@ Abort at any point: `select public.stop_discovery_smoke('<queue_id>', 'operator 
 ## 4. Credit and ledger reconciliation (read-only)
 
 ```sh
-psql "$TEST_DB_URL" -X -f scripts/test-project/smoke-reconciliation.sql
-psql "$TEST_DB_URL" -X -f scripts/test-project/smoke-credit-reconciliation.sql
+# Both are per mission and require its queue id.
+psql "$TEST_DB_URL" -X -v queue_id='<queue_id>' -f scripts/test-project/smoke-reconciliation.sql
+psql "$TEST_DB_URL" -X -v queue_id='<queue_id>' -f scripts/test-project/smoke-credit-reconciliation.sql
 ```
 
 **PASS:**

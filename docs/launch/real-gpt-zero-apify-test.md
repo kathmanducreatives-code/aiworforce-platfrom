@@ -10,6 +10,10 @@ paid provider runs:
 | **R** | It respects the provider restriction: **zero Apify starts** |
 | **M** | It records model spending accurately |
 
+> **For the first run use `agency-test-operator-checklist.md` (Candidate B):**
+> its source, migrations, seed, providers-off rehearsal and commands replace
+> the prerequisites and steps here. The PASS criteria below are unchanged.
+
 **Not approved by this document.** Each step marked ⛔ needs its own explicit
 approval. Nothing here merges, deploys, migrates or buys from Apify.
 
@@ -26,12 +30,12 @@ approval. Nothing here merges, deploys, migrates or buys from Apify.
 
 ## Prerequisites (all must hold)
 
-- The merged dispatch SHA with #144, #145, #149, #150, #153 (code only), #154, #157 and #158. #156 is not needed for this test.
+- The dispatch commit of `agency-test-operator-checklist.md` (Candidate B: #188 + #189 + #190 with TEST-only tooling). #145, #150, #154 and #158 are inside it; #144, #149, #153, #156 and #157 are not needed for this test.
 - The worker is **not deployed**: it is one bounded GitHub Actions session, `.github/workflows/discovery-test-worker.yml` (manual dispatch, Environment `discovery-test` behind a required reviewer). It already sets `DISCOVERY_SMOKE_ADMISSION=enforce`, `LEAD_V2_SMOKE_WALL_CLOCK=enforce`, `LEAD_V2_SMOKE_ORCHESTRATION=minimal`, `LEAD_CREDIT_ENFORCEMENT=enforce`, `MODEL_SPEND_ENFORCEMENT=enforce`, `MODEL_SPEND_CEILING_USD=0.05`, `MODEL_SPEND_PERIOD_DAYS=1`, `LEAD_STRATEGIST_PROVIDER=openai`, and `LEAD_V2_WORKER_WORKSPACES=${vars.TEST_WORKSPACE_ID}`.
   - Environment `discovery-test`: vars `TEST_PROJECT_REF` and `TEST_WORKSPACE_ID`; secrets `TEST_SUPABASE_URL`, `TEST_SUPABASE_SERVICE_ROLE_KEY`, `TEST_SUPABASE_ANON_KEY` and `TEST_OPENAI_API_KEY`.
-  - **`TEST_APIFY_API_TOKEN` absent** (delete it, or never create it). The workflow does not require it, and an empty token makes every Apify start `apify_not_configured` at the tool layer.
+  - `TEST_APIFY_API_TOKEN`: it exists today (2026-10-26). It reaches the worker step only for `providers` = `openai-and-apify`; with `openai-only` or `none` the step receives an empty value, unsets it, and Deno denies `api.apify.com:443`. An absent token makes every Apify start `apify_not_configured` at the tool layer.
   - The worker's commit is the commit the workflow is dispatched on; the run page shows it. Dispatch it on the merged dispatch SHA.
-- OpenAI: a dedicated TEST project with a **hard** budget (not only an alert), `gpt-5.6-luna` enabled, and its price read within 24 h ($0.20 in, $0.02 cached, $1.20 out per 1M; cache writes $0.25).
+- OpenAI: a dedicated TEST project with an **enforced** cap — Project → Limits → Spend with **"Enforce a hard limit" on** (requests then fail with 429 `project_spend_limit_exceeded`), or prepaid credits with auto-reload off. A budget alert is **not** a cap, and OpenAI states enforcement is not instantaneous: it is the backstop; the code-enforced bound ($0.07488) is the cap. `gpt-5.6-luna` available to the key, and its price read within 24 h ($0.20 in, $0.02 cached, $1.20 out per 1M; cache writes $0.25 for 30 min, $0.50 for 12 h — the 12-hour write needs `prompt_cache_retention`, which both gates refuse).
 - Observed Apify prices for both templates, read within 24 h and written into the authorization. They are never charged here (0 starts), but `authorize_discovery_smoke` refuses a template without an observed maximum, and nothing is invented.
 - The billing migrations stay **held**. This test buys nothing; the preflight reports them as INFO.
 
@@ -45,7 +49,9 @@ psql "$TEST_DB_URL" -X -v workspace_id='<TEST_WORKSPACE_ID>' -f scripts/test-pro
 |---|---|
 | P01–P04 | held admission and V2 queue objects present; service-role grants exact |
 | P07 | no cron job calls a hosted project |
-| P08–P10 | the workspace exists with the Scout agent, ≥ 1 credit, 0 reserved, **no Company Brain** |
+| P08–P10 | the workspace exists with the Scout agent, **exactly 10** credits (the judge's R3 baseline), 0 reserved, **no Company Brain** |
+| P15–P16 | the three held security migrations: four triggers; service_role cannot update/delete/truncate memberships |
+| P17 | INFO: client schema installed or not (not needed) |
 | P11–P13 | no open liability, no live authorization, nothing claimable in the queue |
 | P14 | model-call rows must name their model |
 | P05–P06 | INFO: billing migrations installed or not (decision) |
@@ -74,7 +80,7 @@ OPENAI_API_KEY=<TEST project key> deno run --allow-env --allow-net=api.openai.co
 
 ## Step 3 — ⛔ Start the worker, then run the kickoff transaction (starts the 300 s clock)
 
-Dispatch `discovery-test-worker.yml` on the dispatch SHA (`confirm_project_ref` = `TEST_PROJECT_REF`, `session_minutes` = 10, `providers` = `openai-only`, the default: the worker step then unsets any Apify token and Deno denies `api.apify.com:443`, so Apify is unreachable even if the secret exists). Once the job is running (the worker idles; nothing is queued):
+Dispatch `discovery-test-worker.yml` from the owner-allowed ref (`confirm_project_ref` = `TEST_PROJECT_REF`, `session_minutes` = 10, `expected_sha` = the dispatch commit, refused otherwise, `providers` = `openai-only`, the default: the worker step then unsets any Apify token and Deno denies `api.apify.com:443`, so Apify is unreachable even if the secret exists). Once the job is running (the worker idles; nothing is queued):
 
 ```sh
 psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -f ./real-gpt-run/kickoff.sql     # as an administrator
@@ -125,6 +131,13 @@ deno run --allow-read scripts/test-project/real-gpt/judge-real-gpt-run.ts ./real
 
 **PASS** = every automatic row PASS **and** R4 and M6 signed off. Then stop the
 authorization (if still active) and run Step 1 again: P11–P13 must hold.
+
+Reconciliation (read-only, per mission):
+
+```sh
+psql "$TEST_DB_URL" -X -v queue_id='<queue_id>' -f scripts/test-project/smoke-reconciliation.sql
+psql "$TEST_DB_URL" -X -v queue_id='<queue_id>' -f scripts/test-project/smoke-credit-reconciliation.sql
+```
 
 ## Evidence that this procedure works (offline, model scripted)
 

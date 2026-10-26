@@ -51,3 +51,14 @@ Deno.test("preflight: without Candidate B's security migrations P15/P16 fail", o
   }).catch((e) => { if (e.message !== "rollback") throw e; });
   assertEquals((await sql`select count(*)::int n from pg_trigger where tgname = 'tasks_commit_boundary'`)[0].n, 1, "restored");
 });
+
+Deno.test("preflight: a security trigger that exists but is disabled fails P15", opts, async () => {
+  const ws = await seedWorkspace();
+  await sql.begin(async (tx) => {
+    await tx`alter table public.task_plans disable trigger task_plans_parent_identity`;
+    const r = Object.fromEntries(([...await tx.unsafe(preflight.replaceAll(":'workspace_id'", `'${ws}'`))] as Array<Record<string, string>>)
+      .map((x) => [x.id, `${x.result}:${x.actual}`]));
+    assertEquals(r.P15, "FAIL:3");
+    throw new Error("rollback");
+  }).catch((e) => { if (e.message !== "rollback") throw e; });
+});
