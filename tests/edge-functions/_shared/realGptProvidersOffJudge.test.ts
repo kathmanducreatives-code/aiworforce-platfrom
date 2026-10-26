@@ -3,7 +3,7 @@
 // migrations, real worker process): `providers: none` (no key, OpenAI and Apify
 // denied) and the scripted-GPT zero-Apify run. Synthetic workspace; no secrets.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { judgeProvidersOff, judgeRealGptRun, overall } from "../../../scripts/test-project/real-gpt/realGptJudge.ts";
+import { type Json, judgeProvidersOff, judgeRealGptRun, overall } from "../../../scripts/test-project/real-gpt/realGptJudge.ts";
 
 const load = (f: string) => JSON.parse(Deno.readTextFileSync(new URL(`./fixtures/${f}`, import.meta.url)));
 const off = load("providers-off-evidence.json"), gpt = load("scripted-gpt-evidence.json");
@@ -24,7 +24,7 @@ Deno.test("providers-off judge: a run that called a model fails it — and the r
 
 Deno.test("providers-off judge: each breach is caught on its own", () => {
   const clone = () => structuredClone(off);
-  const with_ = (f: (e: Record<string, any>) => void) => { const e = clone(); f(e); return failed(judgeProvidersOff(e)); };
+  const with_ = (f: (e: Json) => void) => { const e = clone(); f(e); return failed(judgeProvidersOff(e)); };
   assertEquals(with_((e) => { e.queue.status = "resumable"; }), ["O1"]);
   assertEquals(with_((e) => { e.terminal = []; }), ["O2"]);
   assertEquals(with_((e) => { e.terminal = ["budget_exhausted"]; }), ["O2"]);

@@ -70,7 +70,7 @@
  "src/components/chat/workspace/workbench/normalize.ts|@typescript-eslint/no-explicit-any": 18,
  "src/components/collaboration/AttachCandidateDialog.tsx|@typescript-eslint/no-explicit-any": 4,
  "src/components/collaboration/StartDiscussionDialog.tsx|@typescript-eslint/no-explicit-any": 2,
- "src/components/company-brain/CompanyBrainEditDrawer.tsx|@typescript-eslint/no-explicit-any": 9,
+ "src/components/company-brain/CompanyBrainEditDrawer.tsx|@typescript-eslint/no-explicit-any": 7,
  "src/components/competitor-intel/CompetitorProfileCard.tsx|@typescript-eslint/no-explicit-any": 7,
  "src/components/competitors/AddCompetitorModal.tsx|@typescript-eslint/no-explicit-any": 8,
  "src/components/competitors/CompetitorCard.tsx|@typescript-eslint/no-explicit-any": 5,
