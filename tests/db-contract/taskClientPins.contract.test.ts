@@ -79,6 +79,9 @@ Deno.test("pins: a task created with valid pins commits with all five; an unpinn
 Deno.test("pins: inconsistent pins are refused by the database itself", opts, async () => {
   const w = await world();
   const p = await w.pinOf(w.editor), pv = await w.pinOf(w.viewer);
+  // A member of the other workspace too, so the case reaches the pins check
+  // (where #179's commit boundary is present it refuses non-members first).
+  await sql`insert into public.workspace_members (workspace_id, user_id, role) values (${w.other}, ${w.editor.id}, 'editor')`;
   const cases: Array<[string, Record<string, unknown>, string]> = [
     ["some pins, not all", { origin_session_id: null }, "23514"],
     ["a client of another workspace", { workspace_id: w.other }, "23503"],
