@@ -77,6 +77,7 @@ echo "database ready"
 # message above so it merges cleanly with the other held loops.)
 held_execution=(
   20261025130000_tasks_commit_boundary.sql
+  20261025150000_task_plans_parent_identity.sql
 )
 for f in "${held_execution[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
