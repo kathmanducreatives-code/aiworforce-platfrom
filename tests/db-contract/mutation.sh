@@ -634,6 +634,88 @@ prove_killed "merge dropped the in-transaction version check (every save an upse
 prove_killed "a versioned first save upserts over a Brain another device created" "$brain_draft_ts" \
   '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "insert",' '          mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "upsert",' \
   "$e2e_tests" "15. a versioned first save never overwrites a Brain another device created in flight"
+# ── Backend's membership writers (held 20261025140000; #174 O3 A, §9.4) ──────
+mw_sql="$root/supabase/migrations-held/20261025140000_workspace_member_writers.sql"
+cp "$mw_sql" "$mw_sql.mutation-backup"; restore_list+=("$mw_sql")
+mw_tests="$root/tests/db-contract/workspaceMemberWriters.contract.test.ts"
+mw_policy="policy: who may remove and demote whom; each refusal leaves memberships and grants unchanged"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025140000_workspace_member_writers.sql "$root/tests/db-contract/run.sh" "$mw_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "remove: the member is gone and every grant of theirs is revoked 'membership_removed' in the same transaction ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: membership writer tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the held membership writers nothing removes or demotes"
+ran=$((ran + 1))
+fi
+prove_killed "membership writers: only the actor and target rows are locked, not every owner" "$mw_sql" \
+  "and (m.user_id in (p_actor_id, p_target_user_id) or lower(btrim(coalesce(m.role, ''))) = 'owner')" \
+  "and m.user_id in (p_actor_id, p_target_user_id)" \
+  "$mw_tests" "race: the only two owners leave at once — one succeeds, the other is refused 'last_owner', one owner remains"
+prove_killed "membership writers: the last owner can be removed" "$mw_sql" \
+  "    return 'last_owner';" "    null;" "$mw_tests" "$mw_policy"
+prove_killed "membership writers: an admin may remove an owner" "$mw_sql" \
+  "  if v_target = 'owner' and p_actor_id <> p_target_user_id and v_actor <> 'owner' then return 'owner_protected'; end if;" "" \
+  "$mw_tests" "$mw_policy"
+prove_killed "membership writers: any member may remove others" "$mw_sql" \
+  "  if p_actor_id <> p_target_user_id and v_actor not in ('owner', 'admin') then return 'forbidden_role'; end if;" "" \
+  "$mw_tests" "$mw_policy"
+prove_killed "membership writers: promotion is allowed" "$mw_sql" \
+  "then return 'promotion_unsupported'; end if;" "then null; end if;" "$mw_tests" "$mw_policy"
+prove_killed "membership writers: an expired or foreign session is accepted" "$mw_sql" \
+  "                    and (s.not_after is null or s.not_after > clock_timestamp())) then
+    return 'session_invalid';" \
+  "                    and (s.not_after is null or s.not_after > clock_timestamp())) and false then
+    return 'session_invalid';" \
+  "$mw_tests" "$mw_policy"
+prove_killed "membership writers: browsers may call them" "$mw_sql" \
+  "revoke all on function public.workspace_member_remove(uuid, uuid, uuid, uuid) from public, anon, authenticated;" \
+  "grant execute on function public.workspace_member_remove(uuid, uuid, uuid, uuid) to authenticated;" \
+  "$mw_tests" "surface: browsers cannot call the writers; the service role cannot call the internal check"
+
+# ── The membership write boundary (held 20261025160000, Codex MEMBER-SURFACE) ──
+ms_sql="$root/supabase/migrations-held/20261025160000_workspace_members_app_surface.sql"
+cp "$ms_sql" "$ms_sql.mutation-backup"; restore_list+=("$ms_sql")
+ms_tests="$root/tests/db-contract/workspaceMembersAppSurface.contract.test.ts"
+ms_raw="surface: the service role cannot promote, demote or delete a membership directly"
+ms_regrant="surface: the invariant holds even if the service role is re-granted the writes (the trigger, not just the grant)"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261025160000_workspace_members_app_surface.sql "$root/tests/db-contract/run.sh" "$ms_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "$ms_raw ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: membership surface tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the boundary the service role promotes and removes the last owner directly"
+ran=$((ran + 1))
+fi
+prove_killed "membership surface: the service role keeps its direct writes (trigger only)" "$ms_sql" \
+  "revoke update, delete, truncate on public.workspace_members from service_role;" "select 1;" "$ms_tests" "$ms_raw"
+prove_killed "membership surface: the trigger lets application roles through" "$ms_sql" \
+  "  if current_user::text not in ('service_role', 'authenticated', 'anon') then" "  if true then" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: the trigger runs as its owner (definer), so it sees no application role" "$ms_sql" \
+  "language plpgsql
+set search_path = ''
+as \$\$
+begin
+  if current_user::text" "language plpgsql
+security definer
+set search_path = ''
+as \$\$
+begin
+  if current_user::text" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: a raw role change is allowed" "$ms_sql" \
+  "  elsif new.role is distinct from old.role then" "  elsif false then" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: a raw delete is allowed" "$ms_sql" \
+  "  elsif tg_op = 'DELETE' then" "  elsif false then" "$ms_tests" "$ms_regrant"
+prove_killed "membership surface: TRUNCATE is not guarded" "$ms_sql" \
+  "create trigger workspace_members_app_surface_truncate
+  before truncate on public.workspace_members
+  for each statement execute function public.workspace_members_app_surface();" "" \
+  "$ms_tests" "surface: TRUNCATE is refused for application roles, by grant and by trigger"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
