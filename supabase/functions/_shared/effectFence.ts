@@ -35,16 +35,37 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { classifyRequest, refusal } from "./smokeAdmission.ts";
 
 type Read = PromiseLike<{ data: unknown; error: unknown }>;
-/** The one read the fence needs, against the service client (structurally typed). */
+/** The reads the fence needs, against the service client (structurally typed). */
 export interface EffectPrincipalDb {
   from(table: string): {
     select(cols: string): { eq(col: string, v: string): { eq(col: string, v: string): { maybeSingle(): Read } } };
   };
 }
+/**
+ * A client task's immutable pins (held 20261025170000, #174 §9.1), written once
+ * when the task was created. Present only for client-scoped work — which every
+ * entry still refuses (#179's guard) until the owner enables client Brains.
+ */
+export interface EffectPins {
+  clientId: string;
+  grantId: string;
+  generation: number;
+  permissionRevision: number | string;
+  originSessionId: string;
+}
 export interface EffectPrincipal {
   db: EffectPrincipalDb;
   workspaceId: string;
   userId: string;
+  pins?: EffectPins | null;
+  /**
+   * §9.2 for a pinned task: Brain's rule, task intent, for exactly these pins
+   * and the original session — `client_brain_authorization(...)` through
+   * Brain's own `_shared/clientBrain.ts` helper, supplied by whoever binds a
+   * client run (only once the owner enables client Brains). Returns 'ok' or
+   * Brain's refusal. Pins without it fail closed.
+   */
+  authorizeTask?: (pins: EffectPins) => Promise<string>;
 }
 export interface EffectScope {
   principal: EffectPrincipal | null;
@@ -70,15 +91,25 @@ export function bindEffectPrincipal(p: EffectPrincipal): void {
   if (s) s.principal = p;
 }
 
-export type EffectVerdict = "ok" | "principal_not_member" | "effect_authorization_unavailable";
+export type EffectVerdict = "ok" | "principal_not_member" | "effect_authorization_unavailable" | `client_${string}`;
 
-/** Is the principal a member of the workspace RIGHT NOW? Fails closed. */
+/**
+ * May this principal start a new operation RIGHT NOW? A member of the
+ * workspace — and, for a pinned client task, still authorized for exactly the
+ * pinned grant generation, permission revision and original session (§9.2:
+ * Brain's own rule, task intent; any refusal stops the task, it never re-pins).
+ * Fails closed.
+ */
 export async function liveEffectAuthorization(p: EffectPrincipal): Promise<EffectVerdict> {
   try {
     const { data, error } = await p.db.from("workspace_members").select("user_id")
       .eq("workspace_id", p.workspaceId).eq("user_id", p.userId).maybeSingle();
     if (error) return "effect_authorization_unavailable";
-    return data ? "ok" : "principal_not_member";
+    if (!data) return "principal_not_member";
+    if (!p.pins) return "ok";
+    if (!p.authorizeTask) return "effect_authorization_unavailable";
+    const outcome = await p.authorizeTask(p.pins);
+    return outcome === "ok" ? "ok" : `client_${typeof outcome === "string" && outcome ? outcome : "refused"}`;
   } catch {
     return "effect_authorization_unavailable";
   }

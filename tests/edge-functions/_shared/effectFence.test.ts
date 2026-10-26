@@ -144,3 +144,37 @@ Deno.test("scope: each request gets a fresh scope; a re-entry for the same reque
   assertEquals(seen, ["u", null]);
   assertEquals(effectScope.getStore(), undefined, "nothing leaks outside the request");
 });
+
+Deno.test("pins (§9.2): a pinned client run also needs the task authorization for exactly its pins, per operation", async () => {
+  const seen: unknown[] = [];
+  const answers = ["ok", "grant_changed"];
+  const m = membership(["member", "member", "member"]);
+  const t = transport();
+  const f = createEffectFence(t.base, OWN, quiet);
+  const pins = { clientId: "c", grantId: "g", generation: 3, permissionRevision: 41, originSessionId: "s" };
+  const [a, b] = await effectScope.run({ principal: null }, async () => {
+    bindEffectPrincipal({ db: m.db, workspaceId: "ws", userId: "u", pins,
+      authorizeTask: (p) => { seen.push(p); return Promise.resolve(answers.shift() ?? "ok"); } });
+    return [await model(f), await model(f)];
+  });
+  assertEquals([a.status, b.status, t.sent.length], [200, 409, 1], "the second operation is refused once the grant changed");
+  assertEquals((await b.json()).error.decision, "client_grant_changed");
+  assertEquals(seen, [pins, pins], "asked for exactly the pinned authorization, every operation (never re-pinned)");
+});
+
+Deno.test("pins: a pinned run fails closed without an authorizer, or when it throws", async () => {
+  const m = membership(["member", "member"]);
+  const t = transport();
+  const f = createEffectFence(t.base, OWN, quiet);
+  const pins = { clientId: "c", grantId: "g", generation: 1, permissionRevision: 1, originSessionId: "s" };
+  const none = await effectScope.run({ principal: null }, async () => {
+    bindEffectPrincipal({ db: m.db, workspaceId: "ws", userId: "u", pins });
+    return await model(f);
+  });
+  const thrown = await effectScope.run({ principal: null }, async () => {
+    bindEffectPrincipal({ db: m.db, workspaceId: "ws", userId: "u", pins, authorizeTask: () => Promise.reject(new Error("down")) });
+    return await model(f);
+  });
+  assertEquals([none.status, thrown.status, t.sent.length], [409, 409, 0]);
+  assertEquals((await thrown.json()).error.decision, "effect_authorization_unavailable");
+});

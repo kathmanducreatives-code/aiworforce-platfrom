@@ -166,3 +166,13 @@ Deno.test("source: every entry asks the guard BEFORE its first effect", () => {
   const main = src("worker/main.ts");
   assert(/guard: \(m\) => legacyExecutionGuard\(/.test(main), "worker/main.ts wires the runner's guard");
 });
+
+Deno.test("guard: a stored task pinned in COLUMNS (held task pins, #174 §9.1) is client-scoped even with a clean payload", async () => {
+  const f = fakeDb({ members: [A], tasks: [{ id: "t9", workspace_id: WS, user_id: A, payload: { instruction: "clean" },
+    client_id: "c1", client_grant_id: "g1", client_grant_generation: 2, permission_revision: 7, origin_session_id: "s1" }] });
+  const r = await legacyExecutionGuard({ db: f.db, workspaceId: WS, principalUserId: A, body: { resume_task_id: "t9" }, taskIds: { resume: ["t9"], related: [] } });
+  assertEquals(r.ok ? null : [r.status, r.code], [403, "client_scope_unsupported"]);
+  const agency = fakeDb({ members: [A], tasks: [{ id: "t8", workspace_id: WS, user_id: A, payload: {}, client_id: null, client_grant_id: null }] });
+  const ok = await legacyExecutionGuard({ db: agency.db, workspaceId: WS, principalUserId: A, body: {}, taskIds: { resume: ["t8"], related: [] } });
+  assertEquals(ok.ok, true, "null pin columns are an agency task");
+});
