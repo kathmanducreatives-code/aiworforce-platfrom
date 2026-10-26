@@ -1,0 +1,14 @@
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 3b0f7c1e-9a2d-4c5b-8e6f-1a2b3c4d5e6f | 7d9e2f4a-6b8c-4d1e-9f3a-5b6c7d8e9f01
+(1 row)
+
+DO
+    item     |                 state                  
+-------------+----------------------------------------
+ workspace   | Agentory TEST (synthetic, agency-only)
+ member role | owner
+ scout agent | 1
+ credits     | balance=10, reserved=0
+(4 rows)
+

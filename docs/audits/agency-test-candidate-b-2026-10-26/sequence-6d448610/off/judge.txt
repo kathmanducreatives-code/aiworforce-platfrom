@@ -1,0 +1,16 @@
+PASS   O1  the queue row ended terminally (failed or complete), never left claimable
+         observed: failed
+PASS   O2  exactly one contained terminal verdict (unhandled_exception / refused_before_execution / execution_planner_unavailable)
+         observed: ["unhandled_exception"]
+PASS   O3  no admitted operation of any kind (model, provider, poll)
+         observed: []
+PASS   O4  no ledger row: no model call (the compile was offline) and no provider call
+         observed: []
+PASS   O5  no credit charged or held; balance 10, 0 reserved
+         observed: {"credits":[],"balance":{"balance_credits":10,"reserved_credits":0}}
+PASS   O6  nothing persisted or qualified
+         observed: {"leads":0}
+PASS   O7  the credit check lists nothing
+         observed: []
+
+AUTOMATIC: PASS

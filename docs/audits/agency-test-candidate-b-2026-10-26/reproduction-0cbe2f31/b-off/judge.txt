@@ -1,0 +1,52 @@
+PASS   I1  requested_count is 1
+         observed: 1
+PASS   I2  a hard industry criterion naming "b2b software"
+         observed: ["B2B software"]
+PASS   I3  a hard geography criterion: United States, scope headquarters
+         observed: [{"value":"United States","scope":"headquarters"}]
+PASS   I4  a hard company-size criterion 11–50
+         observed: [{"max":50,"min":11}]
+PASS   I5  a hard hiring criterion for "account executive" within 30 days
+         observed: [{"terms":["account executive"],"days":30}]
+PASS   I6  no hard criterion the request does not state
+         observed: []
+PASS   I7  broadening disallowed for geography, role, size
+         observed: ["geography","role","size"]
+PASS   I8  no people or contact purchase requested (contact_enrichment, founder_discovery prohibited)
+         observed: ["founder_discovery","employer_verification","contact_enrichment"]
+FAIL   P1  the plan came from the model and passed validation (no deterministic fallback, no violations)
+         observed: {"source":null,"violations":null}
+FAIL   P2  every provider step uses an approved actor
+         observed: []
+FAIL   P3  the first purchase is job_discovery on apify_linkedin_job_search: titles ["Account Executive"], locations ["United States"], ≤ 3 items, posted "month"
+         observed: null
+FAIL   P4  the plan qualifies companies against the stated requirements before persisting
+         observed: []
+PASS   R1  no provider purchase and no provider read was admitted
+         observed: {"provider":0,"poll":0}
+PASS   R2  no provider call names a run (nothing started at the vendor)
+         observed: []
+PASS   R3  no credit charged or held; every reservation refunded
+         observed: {"credits":[],"balance":{"balance_credits":10,"reserved_credits":0}}
+MANUAL R4  the Apify console shows no run on the test account during the window
+         observed: operator: Apify → Runs, filtered to the window; expected none
+FAIL   M1  ≤ 4 model calls admitted, each at the template's committed maximum (12480 µ$), total ≤ 50000 µ$
+         observed: []
+FAIL   M2  every admitted model call has exactly one ledger row (and the compilation has its own)
+         observed: {"admitted":0,"run_rows":0,"compile_rows":0}
+FAIL   M3  every model row names gpt-5.6-luna and the provider's token counts
+         observed: []
+FAIL   M4  every row is priced from its token counts at the price card (event_priced; no invented figure)
+         observed: []
+PASS   M5  recorded run spend never exceeds what admission committed
+         observed: {"recorded_microusd":0,"committed_microusd":0}
+MANUAL M6  OpenAI's usage for the test project and window equals these token totals; its billed cost is within the ledger estimate plus cache writes
+         observed: {"ledger_tokens":{"input":0,"cached":0,"output":0},"ledger_usd":0,"note":"the price card has no cache-write rate: allow billed ≤ ledger + 0.05 $/1M × input tokens"}
+PASS   T1  the mission ended with exactly one terminal verdict
+         observed: ["unhandled_exception"]
+PASS   T2  nothing was persisted or qualified without evidence
+         observed: {"leads":0}
+PASS   T3  the credit check lists nothing
+         observed: []
+
+AUTOMATIC: FAIL   MANUAL sign-off still required: R4, M6

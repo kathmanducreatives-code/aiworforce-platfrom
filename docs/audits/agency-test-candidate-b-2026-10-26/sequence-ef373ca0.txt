@@ -1,0 +1,22 @@
+== tree ef373ca04ad3f81ad42ad16cb6e107e6f0d0258d
+build: 56 applied; test schema ready on agyb_seq
+ member role | owner
+ credits     | balance=10, reserved=0
+preflight 1-initial: 14 PASS, 3 INFO, 0 FAIL 
+== providers-off
+queue 96c20e24-8c45-4c31-be76-b62a47dfb7e6
+queue: failed
+AUTOMATIC: PASS
+== vendor traffic: 0 vendor, 0 Apify, 0 forbidden
+balance=10 reserved=0
+preflight 2-after-off: 13 PASS, 3 INFO, 1 FAIL P12
+stopped authorization of 96c20e24-8c45-4c31-be76-b62a47dfb7e6
+preflight 3-after-stop: 14 PASS, 3 INFO, 0 FAIL 
+== scripted-GPT zero-Apify
+queue 28b9913c-7d52-4ab1-b3f5-4f2640651baf
+queue: complete
+AUTOMATIC: PASS   MANUAL sign-off still required: R4, M6
+== vendor traffic: 1 vendor, 0 Apify, 0 forbidden
+balance=10 reserved=0
+stopped authorization of 28b9913c-7d52-4ab1-b3f5-4f2640651baf
+preflight 4-final: 14 PASS, 3 INFO, 0 FAIL 

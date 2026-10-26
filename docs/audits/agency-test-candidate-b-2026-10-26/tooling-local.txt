@@ -1,0 +1,123 @@
+## 1. fresh build with --with-held-security (ref testrefb001)
+applied supabase/migrations-held/20260816120000_baseline_schema.sql
+applied supabase/migrations-held/20260910140000_lead_mission_v2_claim.sql
+applied supabase/migrations-held/20260915120000_sweep_skips_v2_queue_tasks.sql
+applied supabase/migrations-held/20261003120000_lead_mission_v2_continuations_not_retries.sql
+applied supabase/migrations-held/20261011120000_lead_mission_v2_productive_continuation_no_backoff.sql
+applied supabase/migrations-held/20261019120000_lead_mission_v2_exhausted_lease_terminal.sql
+applied supabase/migrations-held/20261015140000_discovery_smoke_admission.sql
+applied scripts/test-project/sql/20261017120000_discovery_test_no_company_brain.sql
+  preflight: BEGIN
+  preflight: columns present
+  preflight: INFO  foreign-plan tasks 0
+  preflight: INFO  live tasks of non-members 0
+  preflight: OK
+  preflight: ROLLBACK
+applied supabase/migrations-held/20261025130000_tasks_commit_boundary.sql
+applied supabase/migrations-held/20261025150000_task_plans_parent_identity.sql
+applied supabase/migrations-held/20261025160000_workspace_members_app_surface.sql
+security migrations installed on testrefb001 (P15 4, P16 ok)
+cron jobs left (in-database only):
+  release-stale-credit-reservations
+  sweep-stuck-runs
+test schema ready on testrefb001
+exit=0
+## 2. installer on an existing schema without the three (ref testrefb002)
+built=0
+  preflight: BEGIN
+  preflight: columns present
+  preflight: INFO  foreign-plan tasks 0
+  preflight: INFO  live tasks of non-members 0
+  preflight: OK
+  preflight: ROLLBACK
+applied supabase/migrations-held/20261025130000_tasks_commit_boundary.sql
+applied supabase/migrations-held/20261025150000_task_plans_parent_identity.sql
+applied supabase/migrations-held/20261025160000_workspace_members_app_surface.sql
+security migrations installed on testrefb002 (P15 4, P16 ok)
+exit=0
+-- rerun:
+already installed: all four security triggers are present; nothing written
+security migrations installed on testrefb002 (P15 4, P16 ok)
+exit=0
+-- partial (drop one trigger):
+refusing: a partial installation (3 of 4 security triggers present); resolve it by hand, with approval
+exit=1
+-- refusals before connecting:
+refusing: ohsdatpvfdjdemstoiuj is the live or the abandoned project, never a test target
+exit=1
+refusing: --confirm must repeat TEST_PROJECT_REF exactly
+exit=1
+refusing: TEST_DB_URL must be a postgres URL that names testrefb002
+exit=1
+## 3. seed on the fresh build
+psql:scripts/test-project/seed-agency-test.sql:49: ERROR:  seed: user 7d9e2f4a-6b8c-4d1e-9f3a-5b6c7d8e9f01 is not in auth.users; create it through Supabase Auth first
+missing user exit=3
+ 40e2512f-09b6-433e-97fe-f9999a1f1897 | 7d9e2f4a-6b8c-4d1e-9f3a-5b6c7d8e9f01
+DO
+    item     |                 state                  
+ workspace   | Agentory TEST (synthetic, agency-only)
+ member role | owner
+ scout agent | 1
+ credits     | balance=10, reserved=0
+exit=0
+-- rerun (idempotent):
+ credits     | balance=10, reserved=0
+exit=0
+-- reserved credits refused:
+seed: workspace 40e2512f-09b6-433e-97fe-f9999a1f1897 has reserved credits; settle them first
+-- Company Brain refused, never deleted:
+CONTEXT:  PL/pgSQL function public.discovery_test_refuse_company_brain() line 3 at RAISE
+0 brain row(s) kept
+-- Company Brain refused, never deleted (guard disabled only to stage the row):
+seed: workspace 40e2512f-09b6-433e-97fe-f9999a1f1897 has a Company Brain row; it is never deleted here, use another synthetic workspace
+1 brain row(s) kept
+## 4. preflight on the seeded fresh build (read-only session)
+ P01 | held smoke admission tables exist | 3 | 3 | PASS
+ P02 | smoke admission functions exist | 5 | 5 | PASS
+ P03 | service_role may admit/record/stop, never authorize/reconcile; anon/authenticated nothing | ok | ok | PASS
+ P04 | Lead V2 queue: table and claim/bind functions exist | 3 | 3 | PASS
+ P05 | credit re-arm fix (held 20261015130000) installed | decision | not installed | INFO
+ P06 | credit reaper fix (held 20261022120000) installed | decision | not installed | INFO
+ P07 | no cron job calls a hosted project | 0 | 0 | PASS
+ P08 | the test workspace exists with the Scout agent | 1 | 1 | PASS
+ P09 | the test workspace holds exactly 10 credits, none reserved | balance=10, reserved=0 | balance=10, reserved=0 | PASS
+ P10 | the test workspace has no Company Brain (the planner request was measured without one) | 0 | 0 | PASS
+ P11 | zero open provider liability from earlier smokes | 0 | 0 | PASS
+ P12 | no live smoke authorization | 0 | 0 | PASS
+ P13 | nothing in the V2 queue a worker could claim (queued / running / resumable) | 0 | 0 | PASS
+ P14 | model calls must name their model (the evidence relies on it) | 1 | 1 | PASS
+ P15 | security triggers installed: task commit boundary, plan parent identity, membership app surface (row + truncate) | 4 | 4 | PASS
+ P16 | service_role cannot update, delete or truncate memberships; it keeps select and insert (provisioning) | ok | ok | PASS
+ P17 | client Brain schema (held 20261024160000) installed | decision | not installed | INFO
+## 5. schema-verify (read-only session)
+ S01 | Lead V2 queue + lineage functions (claim, bind, heartbeat, release, cancel, lineage lease) | 9 | 9 | PASS
+ S02 | credit functions (reserve, finalize, release_stale) | 3 | 3 | PASS
+ S03 | the requesting user is a member of the test workspace | 1 | 1 | PASS
+ S04 | no pilot-marked task in the test workspace | 0 | 0 | PASS
+ S05 | OWN-01: lead-graph rows whose parent is in another workspace | 0 | 0 | PASS
+ S06 | OWN-01 composite keys installed (26 = held #177 applied; 0 = not applied) | decision | 0 | INFO
+ S07 | canonical client tables (#176, held) present | decision | 0 | INFO
+ S08 | execution ledger and credit tables exist | 2 | 2 | PASS
+## 6. read-only session refuses a write
+ERROR:  cannot execute UPDATE in a read-only transaction
+## 7. rollback round trip (reverse order) on testrefb002
+-- before (partial: plan trigger dropped above):
+tasks_commit_boundary,workspace_members_app_surface,workspace_members_app_surface_truncate
+svc U/D/T=false/false/false
+fns=3
+down 20261025160000_workspace_members_app_surface exit=0
+down 20261025150000_task_plans_parent_identity exit=0
+down 20261025130000_tasks_commit_boundary exit=0
+-- after all downs:
+
+svc U/D/T=true/true/true
+fns=0
+applied supabase/migrations-held/20261025130000_tasks_commit_boundary.sql
+applied supabase/migrations-held/20261025150000_task_plans_parent_identity.sql
+applied supabase/migrations-held/20261025160000_workspace_members_app_surface.sql
+security migrations installed on testrefb002 (P15 4, P16 ok)
+reinstall exit=0
+-- after reinstall:
+task_plans_parent_identity,tasks_commit_boundary,workspace_members_app_surface,workspace_members_app_surface_truncate
+svc U/D/T=false/false/false
+fns=3

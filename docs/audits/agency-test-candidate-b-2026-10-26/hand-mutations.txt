@@ -1,0 +1,10 @@
+killed: providers=none keeps the OpenAI key
+killed: providers=none leaves OpenAI reachable
+killed: expected_sha not compared with GITHUB_SHA
+killed: Apify secret reaches openai-only dispatches
+killed: compile gate without the text-only allowlist
+killed: compile gate allows n>1
+killed: providers-off judge ignores admitted operations
+killed: providers-off judge accepts any terminal
+killed: P09 back to >= 1 credit
+killed: P15 counts disabled triggers

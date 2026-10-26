@@ -1,0 +1,16 @@
+PASS I1 requested_count is 1
+     observed: 1
+PASS I2 a hard industry criterion naming "b2b software"
+     observed: ["B2B software"]
+PASS I3 a hard geography criterion: United States, scope headquarters
+     observed: [{"value":"United States","scope":"headquarters"}]
+PASS I4 a hard company-size criterion 11–50
+     observed: [{"min":11,"max":50}]
+PASS I5 a hard hiring criterion for "account executive" within 30 days
+     observed: [{"terms":["account executive"],"days":30}]
+PASS I6 no hard criterion the request does not state
+     observed: []
+PASS I7 broadening disallowed for geography, role, size
+     observed: ["geography","role","size"]
+PASS I8 no people or contact purchase requested (contact_enrichment, founder_discovery prohibited)
+     observed: ["founder_discovery","employer_verification","contact_enrichment"]

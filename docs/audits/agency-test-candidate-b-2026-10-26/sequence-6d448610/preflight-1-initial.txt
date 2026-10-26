@@ -1,0 +1,21 @@
+ id  |                                                       what                                                       |        expected        |         actual         | result 
+-----+------------------------------------------------------------------------------------------------------------------+------------------------+------------------------+--------
+ P01 | held smoke admission tables exist                                                                                | 3                      | 3                      | PASS
+ P02 | smoke admission functions exist                                                                                  | 5                      | 5                      | PASS
+ P03 | service_role may admit/record/stop, never authorize/reconcile; anon/authenticated nothing                        | ok                     | ok                     | PASS
+ P04 | Lead V2 queue: table and claim/bind functions exist                                                              | 3                      | 3                      | PASS
+ P05 | credit re-arm fix (held 20261015130000) installed                                                                | decision               | not installed          | INFO
+ P06 | credit reaper fix (held 20261022120000) installed                                                                | decision               | not installed          | INFO
+ P07 | no cron job calls a hosted project                                                                               | 0                      | 0                      | PASS
+ P08 | the test workspace exists with the Scout agent                                                                   | 1                      | 1                      | PASS
+ P09 | the test workspace holds exactly 10 credits, none reserved                                                       | balance=10, reserved=0 | balance=10, reserved=0 | PASS
+ P10 | the test workspace has no Company Brain (the planner request was measured without one)                           | 0                      | 0                      | PASS
+ P11 | zero open provider liability from earlier smokes                                                                 | 0                      | 0                      | PASS
+ P12 | no live smoke authorization                                                                                      | 0                      | 0                      | PASS
+ P13 | nothing in the V2 queue a worker could claim (queued / running / resumable)                                      | 0                      | 0                      | PASS
+ P14 | model calls must name their model (the evidence relies on it)                                                    | 1                      | 1                      | PASS
+ P15 | security triggers installed: task commit boundary, plan parent identity, membership app surface (row + truncate) | 4                      | 4                      | PASS
+ P16 | service_role cannot update, delete or truncate memberships; it keeps select and insert (provisioning)            | ok                     | ok                     | PASS
+ P17 | client Brain schema (held 20261024160000) installed                                                              | decision               | not installed          | INFO
+(17 rows)
+
