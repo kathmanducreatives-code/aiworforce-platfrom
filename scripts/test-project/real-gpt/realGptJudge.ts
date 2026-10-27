@@ -22,7 +22,7 @@ export interface Expectations {
   industry_includes: string;
   geography: { value: string; scope: string };
   company_size: { min: number; max: number };
-  hiring: { role_term: string; window_days: number };
+  hiring: { role_term: string; window_days: number; role_families: readonly string[] };
   disallowed_broadening: readonly string[];
   /** Capabilities the request must not buy (no people search, no contact data). */
   prohibited_capabilities: readonly string[];
@@ -44,7 +44,7 @@ export const A7_EXPECTATIONS: Expectations = {
   industry_includes: "b2b software",
   geography: { value: "United States", scope: "headquarters" },
   company_size: { min: 11, max: 50 },
-  hiring: { role_term: "account executive", window_days: 30 },
+  hiring: { role_term: "account executive", window_days: 30, role_families: ["gtm_sales"] },
   disallowed_broadening: ["geography", "role", "size"],
   prohibited_capabilities: ["contact_enrichment", "founder_discovery"],
   approved_actor_keys: ["apify_linkedin_job_search", "apify_linkedin_company"],
@@ -110,6 +110,18 @@ export function judgeRealGptRun(ev: Json, x: Expectations = A7_EXPECTATIONS): Ve
   const prohibited: string[] = mission.prohibited_capabilities ?? [];
   v("I8", "I", `no people or contact purchase requested (${x.prohibited_capabilities.join(", ")} prohibited)`,
     x.prohibited_capabilities.every((p) => prohibited.includes(p)), prohibited);
+  // I9 — STRICTER THAN I5, NEVER INSTEAD OF IT (independent review of PR #194).
+  // I5 asks that the requested role be present; it cannot see a role ADDED
+  // beside it ("Account Executive or SDR"), which would let SDR postings
+  // qualify. Every hard hiring role term must be the requested one (a regular
+  // plural allowed), and every role family one the request's role belongs to.
+  const singular = (t: string) => lower(t).trim().replace(/s$/, "");
+  const extraTerms = terms.filter((t) => singular(t) !== singular(x.hiring.role_term));
+  const families: string[] = hiring.flatMap((c) => c.value?.qualifier?.role_families ?? []);
+  const extraFamilies = families.filter((f) => !x.hiring.role_families.includes(f));
+  v("I9", "I", `no hard hiring role beyond "${x.hiring.role_term}" (families ${x.hiring.role_families.join(", ")})`,
+    hiring.length >= 1 && extraTerms.length === 0 && extraFamilies.length === 0,
+    { extra_terms: extraTerms, extra_families: extraFamilies });
 
   // ── P. RESEARCH PLAN ──────────────────────────────────────────────────────
   const plan: Json = ev.execution_plan ?? {};

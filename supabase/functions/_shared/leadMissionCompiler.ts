@@ -50,7 +50,7 @@
 // model call and passes its raw output in.
 
 import { compileMissionSemantics } from "./missionCriteria.ts";
-import { readSignalPhrase } from "./missionSignalDescriptor.ts";
+import { readRoleQualifier, readSignalPhrase } from "./missionSignalDescriptor.ts";
 import {
   runtimeIdentity, LEAD_INTELLIGENCE_CONTRACT_VERSION,
 } from "./leadRuntimeIdentity.ts";
@@ -1127,6 +1127,12 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   }
 
   mission = { ...mission, hard_constraints: hard, soft_preferences: soft, directives };
+  // Model-proposed roles the user never named are removed, then restated
+  // constraints that are exactly equivalent are deduplicated (both recorded).
+  if (p) {
+    mission = authorizeHiringRoles(mission, query, changes);
+    mission = dedupeEquivalentConstraints(mission, changes);
+  }
   if ((hedged.length > 0 || negated.length > 0) && statedLocations.length === 0) delete mission.geography_is_hard;
 
   // ── P1: THE MEANING, MADE EXPLICIT — AND THE CARRIERS KEPT HONEST ─────────
@@ -1243,36 +1249,210 @@ const MISSION_TYPE_FOR_OUTPUT: Record<RequestedOutput, MissionType> = {
 export const BROADENING_DIMENSIONS = Object.freeze([
   "geography", "industry", "business_model", "stage", "size", "role", "recency",
 ] as const);
-const BROADENING_ALIASES: ReadonlyArray<readonly [string, RegExp]> = [
-  ["recency", /\b(?:recen\w*|\d+\s*days?|window|dated|freshness|timeframe)\b/],
-  ["size", /\b(?:sizes?|employees?|employee range|headcount|bands?)\b/],
-  ["geography", /\b(?:geograph\w*|locations?|countr(?:y|ies)|regions?|headquarters?|hq|geo)\b/],
-  ["business_model", /\bbusiness models?\b/],
-  ["industry", /\b(?:industr(?:y|ies)|verticals?|company types?|sectors?)\b/],
-  ["stage", /\b(?:stages?)\b/],
-  ["role", /\b(?:roles?|role famil(?:y|ies)|titles?|positions?|seniority)\b/],
+// ── ONLY AN ENTRY THAT NAMES A DIMENSION, AND NOTHING THAT MERELY MENTIONS ONE ─
+//
+// The first cut matched any word anywhere ("Windows developers" read as a
+// recency ban, "seniority" as a whole-role ban: independent review of PR
+// #194). An entry is read only when it IS a dimension's name, or a short
+// phrase whose head noun is one ("Account Executive role", "30-day posting
+// recency"). Anything else is kept verbatim and unread.
+const BROADENING_NAMES: Readonly<Record<string, string>> = Object.freeze(Object.fromEntries([
+  ["geography", ["geography", "geographies", "geo", "location", "locations", "country", "countries", "region", "regions",
+    "hq", "headquarters", "hq location", "hq country", "headquarters location", "company location", "territory",
+    "company profile.locations"]],
+  ["industry", ["industry", "industries", "vertical", "verticals", "sector", "sectors", "company type", "company types",
+    "business type", "business types"]],
+  ["business_model", ["business model", "business models"]],
+  ["stage", ["stage", "stages", "company stage", "funding stage"]],
+  ["size", ["size", "company size", "employee range", "employee count", "employee band", "employees", "headcount",
+    "size band", "employee size"]],
+  ["role", ["role", "roles", "role family", "role families", "job title", "job titles", "title", "titles", "job function",
+    "hiring role", "hiring roles"]],
+  ["recency", ["recency", "posting recency", "posting age", "posting date", "hiring window", "time window",
+    "signal recency", "signal window", "freshness", "hiring signal recency"]],
+].flatMap(([dim, names]) => (names as string[]).map((n) => [n, dim as string]))));
+const BROADENING_HEADS: ReadonlyArray<readonly [string, RegExp]> = [
+  ["role", /\s(?:roles?|titles?)$/],
+  ["recency", /\s(?:recency|posting age|posting date)$/],
+  ["geography", /\s(?:locations?|geography)$/],
+  ["size", /\s(?:employee range|headcount|employee band)$/],
+  ["industry", /\s(?:industry|company type)$/],
 ];
 /**
- * Each entry the model wrote, read onto the canonical dimension(s) it names.
- * Nothing is dropped and nothing is added: an entry naming a dimension becomes
- * that dimension's canonical word, and an entry naming none (a company type
- * such as "consumer apps", a signal name) is kept verbatim, because the round
- * planner compares those values literally. Each rewrite is recorded.
+ * Each entry the model wrote, read onto the canonical dimension it names.
+ *
+ * ADDITIVE: every entry is kept exactly as written (the round planner compares
+ * company types and signal names literally) and the canonical name is added
+ * beside it, so normalisation can only add a ban the model stated, never lose
+ * one. Each reading is recorded in `changes`.
  */
 export function canonicalDisallowedBroadening(entries: readonly string[], changes?: string[]): string[] {
   const out: string[] = [];
+  const add = (v: string) => { if (!out.includes(v)) out.push(v); };
+  const canon: string[] = [];
   for (const raw of entries) {
     const entry = String(raw ?? "").trim();
     if (!entry) continue;
-    const t = entry.toLowerCase().replace(/[_-]+/g, " ");
-    const dims = BROADENING_ALIASES.filter(([, re]) => re.test(t)).map(([d]) => d);
-    const read = dims.length ? dims : [entry];
-    if (dims.length && !(dims.length === 1 && dims[0] === entry)) {
-      changes?.push(`disallowed_broadening_canonical:${entry}->${dims.join("+")}`);
+    add(entry);
+    const t = entry.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ")
+      // "do not broaden the location or headcount" names two dimensions.
+      .replace(/^(?:do not|don't|never|no)\s+(?:broaden|widen|expand|relax|loosen|change)\s+(?:the\s+)?/, "");
+    const items = t.split(/\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or|&)\s+/).map((x) => x.replace(/^the\s+/, "").trim());
+    const dims = items.map((x) => BROADENING_NAMES[x] ??
+      (x.split(" ").length <= 5 ? BROADENING_HEADS.find(([, re]) => re.test(x))?.[0] : undefined));
+    // Read only when EVERY item names a dimension; a partly-readable entry stays verbatim only.
+    if (dims.length && dims.every(Boolean)) {
+      for (const dim of dims as string[]) {
+        if (dim === entry) continue;
+        changes?.push(`disallowed_broadening_canonical:${entry}->${dim}`);
+        canon.push(dim);
+      }
     }
-    for (const d of read) if (!out.includes(d)) out.push(d);
   }
+  for (const d of canon) add(d);
   return out;
+}
+
+/** A role word and its regular singular/plural, for reading it in the user's own sentence. */
+function roleWordForms(term: string): string[] {
+  const t = term.trim().toLowerCase();
+  return [...new Set([t, t.replace(/(?<=[a-z]{2})(?:es|s)$/, ""), t.replace(/s$/, ""), `${t}s`])];
+}
+const inSentence = (sentence: string, phrase: string) =>
+  new RegExp(`(?:^|[^a-z0-9])${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}(?:$|[^a-z0-9])`)
+    .test(sentence);
+
+/**
+ * ONLY THE ROLES THE USER NAMED (independent review of PR #194, blocking 1).
+ *
+ * The model restates the request, and a restatement can add a role: "Account
+ * Executive" came back as "Account Executive or SDR", the reader kept both
+ * terms, and SDR postings would then have qualified. A hiring signal's role
+ * terms and exclusions are therefore kept only when the user's own sentence
+ * names them (allowing a regular plural), and its role families only when the
+ * sentence or a kept term names them. What is removed is recorded; a signal
+ * left with fewer than two terms carries no AND/OR reading.
+ */
+export function authorizeHiringRoles(
+  mission: LeadMissionV1, query: string, changes: string[],
+): LeadMissionV1 {
+  const q = query.toLowerCase();
+  const named = (term: string) => roleWordForms(term).some((f) => f.length > 1 && inSentence(q, f));
+  const familiesOfQuery = readRoleQualifier(query).role_families ?? [];
+  const required_signals = (mission.required_signals ?? []).map((sig) => {
+    if ((sig.event ?? sig.type) !== "hiring") return sig;
+    const qual = { ...((sig.qualifier ?? {}) as Record<string, unknown>) } as {
+      role_terms?: string[]; role_families?: string[]; role_match?: string; excluded_role_terms?: string[];
+    };
+    // A kept term takes the user's own spelling ("account executives" →
+    // "account executive" when the request wrote the singular).
+    const asWritten = (t: string) => roleWordForms(t).find((f) => f.length > 1 && inSentence(q, f));
+    const terms = [...new Set((qual.role_terms ?? []).flatMap((t) => {
+      const f = asWritten(t);
+      if (!f) { changes.push(`hiring_role_not_in_request:${t}`); return []; }
+      if (f !== t.trim().toLowerCase()) changes.push(`hiring_role_spelled_as_request:${t}->${f}`);
+      return [f];
+    }))];
+    const excluded = (qual.excluded_role_terms ?? []).filter((t) => {
+      if (named(t)) return true;
+      changes.push(`excluded_role_not_in_request:${t}`);
+      return false;
+    });
+    const allowed = new Set([...familiesOfQuery, ...terms.flatMap((t) => readRoleQualifier(t).role_families ?? [])]);
+    const families = [...new Set([...(qual.role_families ?? []), ...(sig.role_families ?? [])])].filter((f) => {
+      if (allowed.has(f)) return true;
+      changes.push(`hiring_role_family_not_in_request:${f}`);
+      return false;
+    });
+    const next = { ...qual };
+    delete next.role_terms; delete next.role_families; delete next.role_match; delete next.excluded_role_terms;
+    if (terms.length) next.role_terms = terms;
+    if (families.length) next.role_families = families;
+    if (terms.length > 1 && qual.role_match) next.role_match = qual.role_match;
+    if (excluded.length) next.excluded_role_terms = excluded;
+    const out = { ...sig, qualifier: next } as typeof sig;
+    if (families.length) out.role_families = families; else delete out.role_families;
+    return out;
+  });
+  return { ...mission, required_signals };
+}
+
+/**
+ * ONLY A CONSTRAINT THAT SAYS EXACTLY WHAT ITS CRITERION SAYS IS A DUPLICATE
+ * (independent review of PR #194, blocking 2).
+ *
+ * The model restates size, hiring role and hiring window in `hard_constraints`
+ * beside the fields that already carry them, and each restatement became a
+ * second hard criterion (real run 1, check I6). The first cut matched field
+ * WORDS and value NUMBERS and so also discarded "employee_count greater_than
+ * 50", "outside [11,50]", "older_than_days 30", "except Account Executive",
+ * "sales_headcount >= 11". Now a constraint is removed only when its field is
+ * one of a closed list for that dimension, its operator is an equality-like
+ * one from a closed list, and its value equals the mission's own value for the
+ * dimension. Everything else — another operator, another field, another
+ * value, no operator — is kept, and so still reaches the interpretation gate.
+ * Every removal is recorded.
+ */
+const SAME_SIZE = {
+  fields: new Set(["employee_range", "employee_count_range", "employees_range", "company_size", "company_size_range",
+    "employee_band", "size_band", "headcount_range", "declared_employee_band", "employee_size_band"]),
+  ops: new Set(["equals", "equal", "eq", "=", "==", "is", "in", "between", "range", "declared_band_equals", "band_equals",
+    "within_range"]),
+};
+const SAME_ROLE = {
+  fields: new Set(["hiring_signal", "hiring_role", "hiring_roles", "open_role", "open_roles", "open_role_type",
+    "hiring_activity", "job_title", "job_titles", "hiring_role_title"]),
+  ops: new Set(["has_open_role", "has_open_roles", "equals", "equal", "eq", "=", "==", "is", "in", "includes", "matches",
+    "contains", "has"]),
+};
+const SAME_WINDOW = {
+  fields: new Set(["hiring_signal_recency", "hiring_recency", "posting_recency", "job_posting_recency",
+    "hiring_window_days", "posting_window_days", "signal_recency_days", "posting_age_days"]),
+  ops: new Set(["within_days", "within", "within_last_days", "posted_within", "posted_within_days", "max_age_days",
+    "at_most_days", "<=", "lte"]),
+};
+function rangeOf(v: unknown): { min: number; max: number } | null {
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    const o = v as { min?: unknown; max?: unknown };
+    return typeof o.min === "number" && typeof o.max === "number" ? { min: o.min, max: o.max } : null;
+  }
+  if (Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === "number")) return { min: v[0], max: v[1] };
+  const s = Array.isArray(v) && v.length === 1 ? String(v[0]) : typeof v === "string" ? v : null;
+  const m = s?.trim().match(/^(\d{1,6})\s*(?:-|–|—|to)\s*(\d{1,6})(?:\s*employees?)?$/i);
+  return m ? { min: Number(m[1]), max: Number(m[2]) } : null;
+}
+export function dedupeEquivalentConstraints(mission: LeadMissionV1, changes: string[]): LeadMissionV1 {
+  const hard = { ...(mission.hard_constraints ?? {}) } as Record<string, { operator?: unknown; value?: unknown }>;
+  const er = mission.company_profile?.employee_range ?? {};
+  const hiring = (mission.required_signals ?? []).filter((s) => (s.event ?? s.type) === "hiring");
+  const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+  const sameRoles = (a: string[], b: string[]) => {
+    const fa = new Set(a.map((x) => roleWordForms(x)[1] ?? norm(x))), fb = new Set(b.map((x) => roleWordForms(x)[1] ?? norm(x)));
+    return fa.size > 0 && fa.size === fb.size && [...fa].every((x) => fb.has(x));
+  };
+  for (const [field, raw] of Object.entries(hard)) {
+    if (!raw || typeof raw !== "object") continue;
+    const op = norm(raw.operator);
+    const f = field.toLowerCase();
+    let dim: string | null = null;
+    if (SAME_SIZE.fields.has(f) && SAME_SIZE.ops.has(op)) {
+      const r = rangeOf(raw.value);
+      if (r && typeof er.min === "number" && typeof er.max === "number" && r.min === er.min && r.max === er.max) dim = "company_size";
+    } else if (SAME_ROLE.fields.has(f) && SAME_ROLE.ops.has(op)) {
+      const vals = (Array.isArray(raw.value) ? raw.value : [raw.value]).map(norm).filter(Boolean);
+      if (hiring.length === 1 && sameRoles(vals, ((hiring[0].qualifier ?? {}) as { role_terms?: string[] }).role_terms ?? [])) {
+        dim = "hiring";
+      }
+    } else if (SAME_WINDOW.fields.has(f) && SAME_WINDOW.ops.has(op)) {
+      const n = typeof raw.value === "number" ? raw.value : /^\d{1,4}$/.test(norm(raw.value)) ? Number(norm(raw.value)) : NaN;
+      if (hiring.length === 1 && Number.isFinite(n) && n === hiring[0].timeframe_days) dim = "hiring";
+    }
+    if (dim) {
+      changes.push(`hard_constraint_deduplicated:${field}:${op}:${JSON.stringify(raw.value)}->${dim}`);
+      delete hard[field];
+    }
+  }
+  return { ...mission, hard_constraints: hard };
 }
 
 /**

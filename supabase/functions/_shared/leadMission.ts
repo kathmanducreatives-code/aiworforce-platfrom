@@ -967,27 +967,44 @@ export function excludedCompanyTypes(query: string, proposed: readonly string[] 
  *     ("fintech and software") stay apart.
  * Anything else is returned untouched.
  */
-const ENTITY_NOUN_RE =
-  /^(?:the\s+)?(?:compan(?:y|ies)|business(?:es)?|firms?|organi[sz]ations?|orgs?|enterprises?|employers?)$/i;
+// Only nouns that name the RECORD, never a kind of company. "enterprise",
+// "business" and "employer" are not here: "enterprise software", "business
+// services" and "employer branding" are types (independent review of PR #194).
+const ENTITY_NOUN_RE = /^(?:compan(?:y|ies)|firms?|organi[sz]ations?)$/i;
+// A conjunction means alternatives (or a list): never fused into one phrase.
+const CONJUNCTION_RE = /(?:^|\s)(?:or|and|nor)(?:\s|$)|[&,/|]/i;
 export function normalizeProposedVerticals(query: string, proposed: readonly string[]): string[] {
   const q = String(query ?? "");
-  const kept = proposed.map((v) => String(v ?? "").trim()).filter((v) => v && !ENTITY_NOUN_RE.test(v));
+  const all = proposed.map((v) => String(v ?? "").trim()).filter(Boolean);
   const words = (v: string) => v.split(/\s+/).map(escapeRe).join("\\s+");
   const contiguous = (parts: string[]) =>
     q.match(new RegExp(`(?<![A-Za-z0-9])${parts.map(words).join("[\\s-]+")}(?![A-Za-z0-9])`, "i"))?.[0];
-  const out: string[] = [];
-  for (let i = 0; i < kept.length;) {
-    let j = kept.length;
+  // 1. Rejoin first, over every fragment, so a noun that is part of a type
+  //    ("law" + "firm") is joined rather than dropped. Never across a
+  //    conjunction, in a fragment or in the joined span.
+  const joined: string[] = [];
+  for (let i = 0; i < all.length;) {
+    let j = all.length;
     let phrase: string | undefined;
-    for (; j > i + 1; j--) if ((phrase = contiguous(kept.slice(i, j)))) break;
+    for (; j > i + 1; j--) {
+      phrase = contiguous(all.slice(i, j));
+      if (phrase && !CONJUNCTION_RE.test(phrase)) break;
+      phrase = undefined;
+    }
     if (j > i + 1 && phrase) {
-      out.push(phrase.replace(/\s+/g, " "));
+      joined.push(phrase.replace(/\s+/g, " "));
       i = j;
     } else {
-      out.push(kept[i]);
+      joined.push(all[i]);
       i++;
     }
   }
+  // 2. A bare record noun left on its own is no type; a trailing "company" /
+  //    "companies" on a rejoined phrase is the same noun.
+  const out = joined
+    .filter((v) => !ENTITY_NOUN_RE.test(v))
+    .map((v) => v.replace(/\s+compan(?:y|ies)$/i, "").trim())
+    .filter(Boolean);
   return [...new Set(out)];
 }
 

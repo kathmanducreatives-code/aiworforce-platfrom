@@ -11,6 +11,10 @@ import {
 } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 import { normalizeProposedVerticals } from "../../../supabase/functions/_shared/leadMission.ts";
 import { readSignalPhrase } from "../../../supabase/functions/_shared/missionSignalDescriptor.ts";
+import {
+  jobProvesRequestedHiring,
+  requestedHiringFromSignals,
+} from "../../../supabase/functions/_shared/hiringActorNormalizers.ts";
 import { judgeRealGptRun, type Json } from "../../../scripts/test-project/real-gpt/realGptJudge.ts";
 import { A7_MISSION as A7, prepareKickoff } from "../../../scripts/test-project/real-gpt/prepareKickoff.ts";
 
@@ -65,7 +69,7 @@ const withChange = (f: (p: Json) => void) => {
 
 Deno.test("real run: the first real-GPT proposal now compiles to I1–I8 PASS", () => {
   const v = verdicts(compile(realProposal()));
-  for (const id of ["I1", "I2", "I3", "I4", "I5", "I6", "I7", "I8"]) {
+  for (const id of ["I1", "I2", "I3", "I4", "I5", "I6", "I7", "I8", "I9"]) {
     assertEquals(v[id]?.result, "PASS", `${id}: ${v[id]?.observed}`);
   }
 });
@@ -104,7 +108,8 @@ Deno.test("I2 negative: fragments the request writes apart stay apart; nothing i
 
 Deno.test("I2: a bare entity noun is no industry and is dropped; real types beside it are kept", () => {
   assertEquals(normalizeProposedVerticals("Find companies hiring", ["companies"]), []);
-  assertEquals(normalizeProposedVerticals("Find a fintech firm", ["fintech", "firm"]), ["fintech"]);
+  assertEquals(normalizeProposedVerticals("Find firms in fintech", ["firms", "fintech"]), ["fintech"]);
+  assertEquals(normalizeProposedVerticals("Find a law firm", ["law", "firm"]), ["law firm"], "a noun that is part of the type is joined, not dropped");
   assertEquals(normalizeProposedVerticals("Find a staffing business", ["staffing business"]), ["staffing business"],
     "a noun inside a real type is not stripped");
 });
@@ -223,34 +228,42 @@ Deno.test("I6 negative: a request-stated constraint on another dimension still m
 
 // ── I7: broadening vocabulary ────────────────────────────────────────────────
 
-Deno.test("I7: the real run's prose is read onto the canonical dimensions", () => {
+Deno.test("I7: the real run's prose is kept and the canonical dimensions are added beside it", () => {
   const changes: string[] = [];
   assertEquals(
     canonicalDisallowedBroadening(
       ["geography", "company type", "employee range", "Account Executive role", "30-day posting recency"], changes),
-    ["geography", "industry", "size", "role", "recency"],
+    ["geography", "company type", "employee range", "Account Executive role", "30-day posting recency",
+      "industry", "size", "role", "recency"],
   );
-  assert(changes.includes("disallowed_broadening_canonical:Account Executive role->role"), "every rewrite is recorded");
+  assert(changes.includes("disallowed_broadening_canonical:Account Executive role->role"), "every reading is recorded");
   assert(!changes.some((c) => c.startsWith("disallowed_broadening_canonical:geography")), "a canonical word is not a rewrite");
 });
 
-Deno.test("I7: names already in use elsewhere map onto the same vocabulary", () => {
+Deno.test("I7: names already in use elsewhere map onto the same vocabulary, additively", () => {
   assertEquals(canonicalDisallowedBroadening(["geographies", "company_types", "employee_range", "role_families"]),
-    ["geography", "industry", "size", "role"]);
+    ["geographies", "company_types", "employee_range", "role_families", "geography", "industry", "size", "role"]);
   assertEquals(canonicalDisallowedBroadening(["geography", "business_model"]), ["geography", "business_model"]);
+  assertEquals(canonicalDisallowedBroadening(["do not broaden the location or headcount"]),
+    ["do not broaden the location or headcount", "geography", "size"]);
 });
 
-Deno.test("I7 negative: an entry naming no dimension is kept verbatim; nothing is added", () => {
+Deno.test("I7 negative: an entry naming no dimension is kept verbatim and nothing is read into it", () => {
   assertEquals(canonicalDisallowedBroadening(["consumer apps"]), ["consumer apps"]);
   assertEquals(canonicalDisallowedBroadening(["company_types", "geographies", "hiring_status"]),
-    ["industry", "geography", "hiring_status"]);
+    ["company_types", "geographies", "hiring_status", "industry", "geography"]);
   assertEquals(canonicalDisallowedBroadening([]), []);
+  // Words that merely MENTION a dimension are not bans on it (review of PR #194).
+  for (const e of ["Windows developers", "seniority", "regional expansion", "enterprise accounts", "30 days",
+    "no broadening at all", "location or enterprise accounts"]) {
+    assertEquals(canonicalDisallowedBroadening([e]), [e], e);
+  }
 });
 
 Deno.test("I7 negative: a proposal that never forbade role broadening still fails I7", () => {
   const v = verdicts(compile(withChange((p) => { p.disallowed_broadening = ["geography", "company type", "employee range"]; })));
   assertEquals(v.I7.result, "FAIL");
-  assertEquals(JSON.parse(v.I7.observed), ["geography", "industry", "size"]);
+  assertEquals(JSON.parse(v.I7.observed), ["geography", "company type", "employee range", "industry", "size"]);
 });
 
 // ── THE OTHER CHECKS STILL CATCH A WIDENED SIZE OR PLACE ─────────────────────
@@ -275,4 +288,185 @@ Deno.test("preparer: the real proposal passes the interpretation gate, and kicko
   assertEquals(k.interpretation.filter((v) => v.result !== "PASS"), []);
   assertEquals((k.gpt_proposal as Json).company_types, ["B2B", "software", "company"], "the raw proposal, not the repaired one");
   assert(k.validator_changes.includes("disallowed_broadening_canonical:employee range->size"));
+});
+
+// ══ INDEPENDENT REVIEW OF PR #194 (FAIL on 3ff911d3): the reproduced probes ══
+
+const changesOf = (p: GptMissionProposal, query = A7) =>
+  compileLeadMission({ originalUserQuery: query, proposal: p, requestedCount: 1 }).validator_changes as string[];
+const gate = (m: Json) => judgeRealGptRun({ lead_mission: m }).filter((v) => v.question === "I").every((v) => v.result === "PASS");
+const constraintFields = (m: Json) =>
+  (m.criteria as Json[]).filter((c) => c.dimension === "constraint" || c.dimension === "exclusion").map((c) => c.value.field);
+
+// ── Blocking 1: a role the user never named ──────────────────────────────────
+
+for (const phrase of ["open Account Executive or SDR posting", "open Account Executive and SDR postings",
+  "hiring Account Executives or SDRs"]) {
+  Deno.test(`R1 blocking: "${phrase}" — SDR, never requested, is removed and recorded`, () => {
+    const p = withChange((x) => { x.preferred_signals = [phrase]; });
+    const m = compile(p);
+    const h = hard(m).find((c) => c.dimension === "hiring")!;
+    assertEquals(h.value.qualifier.role_terms, ["account executive"], "only the user's role, in the user's spelling");
+    assertEquals(h.value.qualifier.role_match, undefined, "one term carries no AND/OR reading");
+    assert(changesOf(p).some((c) => /^hiring_role_not_in_request:sdrs?$/.test(c)), "the removal is recorded");
+    const req = requestedHiringFromSignals(m.required_signals.filter((s: Json) => s.type === "hiring"), true)!;
+    assertEquals(jobProvesRequestedHiring({ title: "SDR", posted_date: new Date().toISOString() }, req), false,
+      "an SDR posting cannot prove the hiring at runtime");
+  });
+}
+
+Deno.test("R1 blocking: a role from another family the user never named takes its family with it", () => {
+  const p = withChange((x) => { x.preferred_signals = ["open Account Executive or Growth Marketer posting"]; });
+  const m = compile(p);
+  const h = hard(m).find((c) => c.dimension === "hiring")!;
+  assertEquals(h.value.qualifier.role_terms, ["account executive"]);
+  assertEquals(h.value.qualifier.role_families, ["gtm_sales"]);
+  assert(changesOf(p).includes("hiring_role_family_not_in_request:marketing_growth"));
+  assertEquals(verdicts(m).I9.result, "PASS");
+});
+
+Deno.test("R1 blocking: I9 refuses a hard hiring role beyond the requested one, even when I5 passes", () => {
+  const m = compile(realProposal());
+  const h = hard(m).find((c) => c.dimension === "hiring")!;
+  h.value.qualifier.role_terms = ["account executive", "sdr"];
+  const v = verdicts(m);
+  assertEquals(v.I5.result, "PASS", "I5 alone cannot see the added role");
+  assertEquals(v.I9.result, "FAIL");
+  h.value.qualifier.role_terms = ["account executive"];
+  h.value.qualifier.role_families = ["gtm_sales", "marketing_growth"];
+  assertEquals(verdicts(m).I9.result, "FAIL", "an added role family is refused too");
+});
+
+Deno.test("R1: roles the user DID name are kept, with AND and OR recorded as written", () => {
+  const q = (j: string) => `Find 1 US B2B software company hiring Account Executives ${j} SDRs within 30 days.`;
+  for (const [j, match] of [["or", "any"], ["and", "all"]] as const) {
+    const m = compile(withChange((x) => { x.preferred_signals = [`hiring Account Executives ${j} SDRs`]; }), q(j));
+    const h = hard(m).find((c) => c.dimension === "hiring")!;
+    assertEquals(h.value.qualifier.role_terms, ["account executives", "sdrs"]);
+    assertEquals(h.value.qualifier.role_match, match);
+  }
+});
+
+Deno.test("R1 negative: an exclusion the user never stated is removed (it would narrow), one they stated is kept and enforced", () => {
+  const invented = withChange((x) => { x.preferred_signals = ["open Account Executive posting, not SDRs"]; });
+  const m = compile(invented);
+  assertEquals(hard(m).find((c) => c.dimension === "hiring")!.value.qualifier.excluded_role_terms, undefined);
+  assert(changesOf(invented).some((c) => c.startsWith("excluded_role_not_in_request:")));
+  const q = "Find 1 US B2B software company hiring sales roles, not SDRs, posted within 30 days.";
+  const stated = compile(withChange((x) => { x.preferred_signals = ["hiring sales roles, not SDRs"]; }), q);
+  const sig = stated.required_signals.find((s: Json) => s.type === "hiring");
+  assertEquals(sig.qualifier.excluded_role_terms, ["sdrs"]);
+  const req = requestedHiringFromSignals([sig])!;
+  const now = new Date().toISOString();
+  assertEquals(jobProvesRequestedHiring({ title: "Senior SDR", posted_date: now }, req), false);
+  assertEquals(jobProvesRequestedHiring({ title: "Account Executive", posted_date: now }, req), true);
+});
+
+// ── Blocking 2: deduplication may remove only an exact restatement ───────────
+
+const DISTINCT: Array<[string, string | undefined, unknown]> = [
+  ["employee_count", "greater_than", 50], ["employee_range", "outside", [11, 50]],
+  ["hiring_signal_recency", "older_than_days", 30], ["hiring_role", "except", "Account Executive"],
+  ["sales_headcount", ">=", 11], ["engineering_team_size", "equals", 50],
+  ["employee_range", "declared_band_equals", ["11–200"]], ["hiring_signal", "has_open_role", ["Account Executive", "SDR"]],
+  ["hiring_signal_recency", "within_days", 60], ["employee_range", "", ["11–50"]],
+  // Same operator and value, another field: only the field tells them apart.
+  ["engineering_team_size_range", "equals", ["11–50"]], ["previous_employer_role", "equals", "Account Executive"],
+  ["company_age_days", "within_days", 30],
+];
+for (const [field, operator, value] of DISTINCT) {
+  Deno.test(`R2 blocking: ${field} ${operator ?? "(no operator)"} ${JSON.stringify(value)} is kept and the gate refuses`, () => {
+    const p = withChange((x) => { x.hard_constraints = [{ field, operator, value, reason: "" }]; });
+    const m = compile(p);
+    assertEquals(constraintFields(m), [field], "a distinct or contradictory constraint survives");
+    assertEquals(changesOf(p).filter((c) => c.startsWith("hard_constraint_deduplicated:")), []);
+    const c = (m.criteria as Json[]).find((x) => x.value?.field === field)!;
+    const stated = (Array.isArray(value) ? value : [value]).some((v) => A7.toLowerCase().includes(String(v).toLowerCase()));
+    if (stated || c.kind === "hard") {
+      assertEquals(gate(m), false, "a hard one the request's words touch is refused by the gate, never queued");
+    } else {
+      assertEquals(c.kind, "target", "a value the request never states can rank, never reject");
+    }
+  });
+}
+
+Deno.test("R2: a constraint with no operator is read as the parser reads it (equals), and its removal recorded", () => {
+  const p = withChange((x) => { x.hard_constraints = [{ field: "hiring_signal", value: "Account Executive", reason: "" }]; });
+  assertEquals(constraintFields(compile(p)), []);
+  assert(changesOf(p).includes('hard_constraint_deduplicated:hiring_signal:equals:"Account Executive"->hiring'));
+});
+
+Deno.test("R2: an exact restatement is deduplicated and every removal is recorded", () => {
+  const changes = changesOf(realProposal());
+  assertEquals(changes.filter((c) => c.startsWith("hard_constraint_deduplicated:")).sort(), [
+    'hard_constraint_deduplicated:employee_range:declared_band_equals:["11–50"]->company_size',
+    'hard_constraint_deduplicated:hiring_signal:has_open_role:"Account Executive"->hiring',
+    "hard_constraint_deduplicated:hiring_signal_recency:within_days:30->hiring",
+  ]);
+});
+
+Deno.test("R2: deriving criteria is unchanged from Candidate B — a persisted mission's duplicates are not rewritten", async () => {
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/missionCriteria.ts", import.meta.url));
+  assert(!src.includes("representedElsewhere"), "no dedupe inside deriveMissionCriteria");
+});
+
+// ── High: industry words are not disposable ──────────────────────────────────
+
+Deno.test("R3: 'enterprise', 'business' and 'employer' are kept as parts of a type", () => {
+  assertEquals(normalizeProposedVerticals("Find enterprise software companies", ["enterprise", "software"]), ["enterprise software"]);
+  assertEquals(normalizeProposedVerticals("Find business services firms", ["business", "services"]), ["business services"]);
+  assertEquals(normalizeProposedVerticals("Find enterprise companies", ["enterprise"]), ["enterprise"]);
+  assertEquals(normalizeProposedVerticals("Find business companies", ["business"]), ["business"]);
+  assertEquals(normalizeProposedVerticals("Find employer branding agencies", ["employer", "branding"]), ["employer branding"]);
+});
+
+Deno.test("R3 negative: alternatives are never fused into one industry", () => {
+  assertEquals(normalizeProposedVerticals("Find B2B or B2C software companies", ["B2B or B2C", "software"]),
+    ["B2B or B2C", "software"]);
+  assertEquals(normalizeProposedVerticals("Find fintech or software companies", ["fintech", "or", "software"]),
+    ["fintech", "or", "software"], "a bare conjunction joins nothing (and is left for the gate to see)");
+  assertEquals(normalizeProposedVerticals("Find healthcare & software companies", ["healthcare &", "software"]),
+    ["healthcare &", "software"]);
+});
+
+// ── Additional findings ──────────────────────────────────────────────────────
+
+Deno.test("plural role terms match their singular title, and only regular plurals are reduced", () => {
+  const now = new Date().toISOString();
+  const req = (t: string) => ({ role_families: [], window_days: null, exact_role_terms: [t] });
+  assertEquals(jobProvesRequestedHiring({ title: "Account Executive", posted_date: now }, req("account executives")), true);
+  assertEquals(jobProvesRequestedHiring({ title: "SDR", posted_date: now }, req("sdrs")), true);
+  assertEquals(jobProvesRequestedHiring({ title: "Sales Manager", posted_date: now }, req("sales")), true);
+  assertEquals(jobProvesRequestedHiring({ title: "Sale Associate", posted_date: now }, req("sales")), false,
+    "'sales' is not a plural of 'sale'");
+  assertEquals(jobProvesRequestedHiring({ title: "Sales Development Representative", posted_date: now }, req("account executives")), false);
+});
+
+Deno.test("negated roles are exclusions, never roles", () => {
+  for (const [p, terms, excluded] of [
+    ["hiring Account Executives, not SDRs", ["account executives"], ["sdrs"]],
+    ["hiring sales roles but not SDRs", ["sales roles"], ["sdrs"]],
+    ["hiring marketing roles, not sales", ["marketing roles"], ["sales"]],
+  ] as const) {
+    const q = readSignalPhrase(p)!.qualifier;
+    assertEquals(q.role_terms, [...terms], p);
+    assertEquals(q.excluded_role_terms, [...excluded], p);
+  }
+  assertEquals(readSignalPhrase("hiring marketing roles, not sales")!.qualifier.role_families, ["marketing_growth"],
+    "the negated role's family is not requested");
+});
+
+Deno.test("negation that is about the company or the sentence is left exactly as before", () => {
+  for (const [p, terms] of [
+    ["Find 1 fintech company not yet profitable hiring Account Executives.", ["account executives"]],
+    ["Find 1 company, not necessarily fintech, hiring Account Executives.", ["account executives"]],
+    ["Find 1 company in the US that is not a recruiting agency, hiring Account Executives.", undefined],
+    ["Find companies that are not just hiring engineers.", ["engineers"]],
+  ] as const) {
+    const q = readSignalPhrase(p)!.qualifier;
+    assertEquals(q.excluded_role_terms, undefined, p);
+    if (terms) assertEquals(q.role_terms, [...terms], p);
+  }
+  assertEquals(readSignalPhrase("hiring engineers except for interns")!.qualifier.excluded_role_terms, undefined,
+    "an exclusion is recorded only for a named role");
 });

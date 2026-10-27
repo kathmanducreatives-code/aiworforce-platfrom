@@ -199,6 +199,15 @@ export interface SignalQualifier {
    * a different one.
    */
   first_in_function?: { phrase: string; source: "user_explicit" };
+  /**
+   * How several `role_terms` combine, as the user joined them: "AEs or SDRs"
+   * is `any` (one opening of either proves it), "AEs and SDRs" is `all` (the
+   * company hires both). Absent with fewer than two terms. Not a
+   * `QUALIFIER_KEYS` member, like `first_in_function`.
+   */
+  role_match?: "any" | "all";
+  /** Roles the user excluded in their own words ("not SDRs"): an opening for one never proves the hiring. */
+  excluded_role_terms?: string[];
 }
 
 export const QUALIFIER_KEYS = [
@@ -362,7 +371,41 @@ const TOPIC_RE = /\b(?:about|around|regarding|on the topic of|discussing|discuss
  * reaches the provider's title search and the evaluator's prompt, where
  * "enterprise sellers" carries a seniority the family key does not.
  */
-function extractRoleQualifier(t: string): Pick<SignalQualifier, "role_families" | "role_terms"> {
+const LIST_SEP = String.raw`(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or|&)\s+)`;
+const ROLE_NAMED_RE = new RegExp(String.raw`\b(?:${ROLE_ALIAS_SOURCE})(?:e?s)?\b`);
+/** Text names a role: the shared alias table, or the family reader. */
+function namesRole(s: string): boolean {
+  const fam = classifyRoleFamily(s);
+  return ROLE_NAMED_RE.test(s) || (!!fam && fam !== "custom");
+}
+
+function extractRoleQualifier(
+  text: string,
+): Pick<SignalQualifier, "role_families" | "role_terms" | "role_match" | "excluded_role_terms"> {
+  // ── A NEGATED ROLE IS AN EXCLUSION, NEVER A ROLE ──────────────────────────
+  //
+  // "hiring Account Executives, not SDRs" read "not sdrs" as a second role term
+  // (independent review of PR #194). The negated clause is cut out before any
+  // role is read — families included, so "marketing roles, not sales" is not
+  // also a sales request — and what it names, when it names a role, is kept as
+  // an exclusion the job filter enforces.
+  const NEGATION =
+    /(?:\s*,\s*|\s+)(?:but\s+)?(?:not|except(?:\s+for)?|excluding|other than|apart from|rather than)\s+([a-z][a-z0-9 ,/&-]*?)(?=\s*[.;]|\s+(?:who|whose|in|at|with|within|dated|posted)\b|$)/g;
+  // Only a negation that FOLLOWS the hiring clause and names a ROLE, briefly:
+  // "hiring AEs, not SDRs". "a company not yet profitable hiring AEs", "not a
+  // recruiting agency", "excluding recruiting agencies" and "not just hiring
+  // engineers" are about the company or the sentence, and are left alone.
+  const HIRING_BEFORE = /\b(?:hiring|recruiting|hire|hires|open|opening|openings|postings?|roles?)\b/;
+  const ORG_TAIL = /\b(?:agenc(?:y|ies)|compan(?:y|ies)|firms?|startups?|vendors?|consultanc(?:y|ies)|businesses|providers?|partners?)$/;
+  const negated: string[] = [];
+  const t = text.replace(NEGATION, (m: string, what: string, at: number) => {
+    const w = what.trim();
+    const isRole = w.split(/\s+/).length <= 4 && !HIRING_BEFORE.test(w) && !ORG_TAIL.test(w) &&
+      HIRING_BEFORE.test(text.slice(0, at)) && w.split(new RegExp(LIST_SEP)).every((x) => namesRole(x.trim()));
+    if (!isRole) return m;
+    negated.push(w);
+    return " ";
+  }).replace(/\s+/g, " ").trim();
   // ── LONGEST ALIAS WINS, AND SHORTER OVERLAPS ARE DROPPED ──────────────────
   //
   // Plain substring matching widens a request the repo explicitly forbids
@@ -424,17 +467,16 @@ function extractRoleQualifier(t: string): Pick<SignalQualifier, "role_families" 
   // taken only when EVERY item names a role (the shared alias table, or the
   // family reader), and each item is kept as its own term. "hiring AEs and
   // based in Texas" is not a list of roles and falls through unchanged.
-  const ROLE_NAMED_RE = new RegExp(String.raw`\b(?:${ROLE_ALIAS_SOURCE})(?:e?s)?\b`);
-  const namesRole = (s: string) => {
-    const fam = classifyRoleFamily(s);
-    return ROLE_NAMED_RE.test(s) || (!!fam && fam !== "custom");
-  };
   const ITEM = String.raw`(?:[a-z][a-z0-9/&-]*\s+){0,2}?[a-z][a-z0-9/&-]*`;
-  const SEP = String.raw`(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or|&)\s+)`;
+  const SEP = LIST_SEP;
   const LIST = String.raw`(${ITEM}(?:${SEP}${ITEM})+)`;
+  let role_match: "any" | "all" | undefined;
   const keepList = (raw: string | undefined): boolean => {
     const parts = (raw ?? "").split(new RegExp(SEP)).map((p) => p.trim()).filter(Boolean);
     if (parts.length < 2 || !parts.every(namesRole)) return false;
+    // AND and OR are different requirements and are recorded as written. A
+    // list joined only by commas, or by both words, is read as alternatives.
+    role_match = /\bor\b/.test(raw!) || !/\band\b|&/.test(raw!) ? "any" : "all";
     // Each item as a title would read: "for Sales Operations" → "sales operations",
     // "other sales roles" → "sales", "RevOps roles" → "revops".
     for (const p of parts) {
@@ -483,10 +525,24 @@ function extractRoleQualifier(t: string): Pick<SignalQualifier, "role_families" 
     }
   }
 
+  const excluded = [...new Set(negated
+    .flatMap((n) => n.split(new RegExp(SEP)))
+    .map((n) => n.trim().replace(/\s+(?:jobs?|roles?|positions?|openings?|postings?)$/, ""))
+    .filter((n) => n && namesRole(n)))];
+
   return {
     ...(families.length ? { role_families: families } : {}),
     ...(terms.length ? { role_terms: terms } : {}),
+    ...(terms.length > 1 && role_match ? { role_match } : {}),
+    ...(excluded.length ? { excluded_role_terms: excluded } : {}),
   };
+}
+
+/** The role a piece of text names (families, terms, exclusions), read by the same rules a hiring phrase is. */
+export function readRoleQualifier(
+  text: string,
+): Pick<SignalQualifier, "role_families" | "role_terms" | "role_match" | "excluded_role_terms"> {
+  return extractRoleQualifier(lc(text));
 }
 
 /** Regions the signal may be ABOUT. Never read as a company location. */
