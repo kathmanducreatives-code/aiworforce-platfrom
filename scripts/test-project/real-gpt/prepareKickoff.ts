@@ -50,6 +50,10 @@ export interface KickoffInput {
 export interface KickoffArtifacts {
   request: Json;
   compiled_mission: Json;
+  /** The model's proposal as it arrived, and what the compiler changed in it: read the
+   *  interpretation against these, not against a reconstruction (first real-GPT run). */
+  gpt_proposal: Json;
+  validator_changes: string[];
   interpretation: Verdict[];
   compile_ledger_rows: Json[];
   authorization: { quotes: Json; actor_limits: Json; window_seconds: number };
@@ -128,7 +132,8 @@ select public.authorize_discovery_smoke(${str(i.queue_id)}, ${str(i.pricing_vers
   ${lit(quotes)}::jsonb, ${lit(actor_limits)}::jsonb, 300);
 commit;
 `;
-  return { request, compiled_mission: compiled, interpretation, compile_ledger_rows: ledgerRows,
+  return { request, compiled_mission: compiled, gpt_proposal: raw as Json, validator_changes: [...c.validator_changes],
+    interpretation, compile_ledger_rows: ledgerRows,
     authorization: { quotes, actor_limits, window_seconds: 300 }, sql };
 }
 

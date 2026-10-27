@@ -948,6 +948,49 @@ export function excludedCompanyTypes(query: string, proposed: readonly string[] 
   return [...new Set(out)];
 }
 
+/**
+ * The model's company types, read back as the request wrote them.
+ *
+ * ── WHY (first real-GPT A7 run, 2026-10-27, check I2) ───────────────────────
+ *
+ * "a US B2B software company" came back as `["B2B", "software", "company"]`.
+ * Each fragment is in the request, so each became its own HARD industry
+ * criterion — including "company", which is no industry at all — and none of
+ * them was the phrase the user asked for.
+ *
+ * Two repairs, and neither changes what a company must be:
+ *   * a bare entity noun ("company", "firms") is dropped: it names the kind of
+ *     record, not a type of company, so it constrains nothing the user meant;
+ *   * fragments the request writes CONTIGUOUSLY, in this order, as whole words
+ *     ("B2B" + "software" → "B2B software") are rejoined into that phrase,
+ *     spelled as the request spells it. Fragments the request writes apart
+ *     ("fintech and software") stay apart.
+ * Anything else is returned untouched.
+ */
+const ENTITY_NOUN_RE =
+  /^(?:the\s+)?(?:compan(?:y|ies)|business(?:es)?|firms?|organi[sz]ations?|orgs?|enterprises?|employers?)$/i;
+export function normalizeProposedVerticals(query: string, proposed: readonly string[]): string[] {
+  const q = String(query ?? "");
+  const kept = proposed.map((v) => String(v ?? "").trim()).filter((v) => v && !ENTITY_NOUN_RE.test(v));
+  const words = (v: string) => v.split(/\s+/).map(escapeRe).join("\\s+");
+  const contiguous = (parts: string[]) =>
+    q.match(new RegExp(`(?<![A-Za-z0-9])${parts.map(words).join("[\\s-]+")}(?![A-Za-z0-9])`, "i"))?.[0];
+  const out: string[] = [];
+  for (let i = 0; i < kept.length;) {
+    let j = kept.length;
+    let phrase: string | undefined;
+    for (; j > i + 1; j--) if ((phrase = contiguous(kept.slice(i, j)))) break;
+    if (j > i + 1 && phrase) {
+      out.push(phrase.replace(/\s+/g, " "));
+      i = j;
+    } else {
+      out.push(kept[i]);
+      i++;
+    }
+  }
+  return [...new Set(out)];
+}
+
 /** One type per conjunct: "agencies or consultancies" excludes both, "recruiting agencies" one. */
 function conjunctTypes(span: string): string[] {
   const phrase = span.replace(EXCLUSION_CUE, " ").trim();
@@ -1459,7 +1502,9 @@ export function validateLeadMission(
       // Q4 — and a type the request names only to exclude it ("excluding
       // recruiting agencies") is never a vertical, whoever proposed it.
       verticals: base.company_profile.verticals.length
-        ? base.company_profile.verticals : strArray(cp.verticals).filter((v) => !excluded.includes(v.toLowerCase())),
+        ? base.company_profile.verticals
+        : normalizeProposedVerticals(ctx.originalUserQuery,
+          strArray(cp.verticals).filter((v) => !excluded.includes(v.toLowerCase()))),
       stages: base.company_profile.stages.length
         ? base.company_profile.stages : strArray(cp.stages),
       // Q4 — a location the request only hopes for is kept beside the stated

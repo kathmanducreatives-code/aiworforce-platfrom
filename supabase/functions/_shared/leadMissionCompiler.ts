@@ -517,7 +517,7 @@ export function buildMissionCompilerPayload(
         role_families: "string[]", company_types: "string[]", geographies: "string[]",
         employee_range: { min: "number|null", max: "number|null" },
       },
-      disallowed_broadening: "string[]",
+      disallowed_broadening: "names from: geography, industry, business_model, stage, size, role, recency",
       required_evidence: "string[]",
       required_capabilities: "capability names from capability_catalogue",
       preferred_source_strategy: "values from source_strategy_vocabulary",
@@ -1071,7 +1071,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
       role_families: [], company_types: [], geographies: [],
       employee_range: { min: null, max: null },
     },
-    disallowed_broadening: p?.disallowed_broadening ?? [],
+    disallowed_broadening: canonicalDisallowedBroadening(p?.disallowed_broadening ?? [], changes),
     evaluation_instructions: (p?.evaluation_instructions ?? "").trim() || requestedExplanationOf(i.originalUserQuery),
     source_strategy: p?.preferred_source_strategy ?? [],
     requested_contact_ready_count: p?.requested_contact_ready_count ?? null,
@@ -1228,6 +1228,52 @@ const MISSION_TYPE_FOR_OUTPUT: Record<RequestedOutput, MissionType> = {
   job_listings: "job_research",
   social_posts: "qualified_lead_sourcing",
 };
+
+/**
+ * The dimension names `directives.disallowed_broadening` is read by.
+ *
+ * Consumers test exact words — `leadCapabilityEngine` asks
+ * `disallowed_broadening.includes("role")` before it lets a run widen the
+ * requested role — but the schema never said which words, so the first
+ * real-GPT A7 run (2026-10-27, check I7) wrote prose: "geography",
+ * "company type", "employee range", "Account Executive role", "30-day posting
+ * recency". "role" was never there, so role broadening stayed allowed although
+ * the model meant to forbid it.
+ */
+export const BROADENING_DIMENSIONS = Object.freeze([
+  "geography", "industry", "business_model", "stage", "size", "role", "recency",
+] as const);
+const BROADENING_ALIASES: ReadonlyArray<readonly [string, RegExp]> = [
+  ["recency", /\b(?:recen\w*|\d+\s*days?|window|dated|freshness|timeframe)\b/],
+  ["size", /\b(?:sizes?|employees?|employee range|headcount|bands?)\b/],
+  ["geography", /\b(?:geograph\w*|locations?|countr(?:y|ies)|regions?|headquarters?|hq|geo)\b/],
+  ["business_model", /\bbusiness models?\b/],
+  ["industry", /\b(?:industr(?:y|ies)|verticals?|company types?|sectors?)\b/],
+  ["stage", /\b(?:stages?)\b/],
+  ["role", /\b(?:roles?|role famil(?:y|ies)|titles?|positions?|seniority)\b/],
+];
+/**
+ * Each entry the model wrote, read onto the canonical dimension(s) it names.
+ * Nothing is dropped and nothing is added: an entry naming a dimension becomes
+ * that dimension's canonical word, and an entry naming none (a company type
+ * such as "consumer apps", a signal name) is kept verbatim, because the round
+ * planner compares those values literally. Each rewrite is recorded.
+ */
+export function canonicalDisallowedBroadening(entries: readonly string[], changes?: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of entries) {
+    const entry = String(raw ?? "").trim();
+    if (!entry) continue;
+    const t = entry.toLowerCase().replace(/[_-]+/g, " ");
+    const dims = BROADENING_ALIASES.filter(([, re]) => re.test(t)).map(([d]) => d);
+    const read = dims.length ? dims : [entry];
+    if (dims.length && !(dims.length === 1 && dims[0] === entry)) {
+      changes?.push(`disallowed_broadening_canonical:${entry}->${dims.join("+")}`);
+    }
+    for (const d of read) if (!out.includes(d)) out.push(d);
+  }
+  return out;
+}
 
 /**
  * Read the model's signal prose into requirements, REJOINING fragments.

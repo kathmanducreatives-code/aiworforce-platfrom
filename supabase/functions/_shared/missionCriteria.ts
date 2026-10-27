@@ -1190,6 +1190,47 @@ export function deriveMissionCriteria(
   // ── Other constraints the model proposed ──
   const handled = new Set(["company_profile.locations", "stage", "geography", "location", "locations",
     "company_type", "company_types", "industry", "industries", "vertical", "verticals"]);
+  // ── A DIMENSION ALREADY REPRESENTED IS NOT REPEATED AS A "CONSTRAINT" ──
+  //
+  // The first real-GPT A7 run (2026-10-27, check I6) restated three things the
+  // mission already held as their own criteria — `employee_range: "11–50"`,
+  // `hiring_signal: "Account Executive"`, `hiring_signal_recency: 30` — and each
+  // became a second, generic hard "constraint" beside company_size and hiring.
+  // A field is skipped ONLY when the criterion that represents it carries the
+  // same values: the same numbers as the size range, the hiring signal's own
+  // window, a role the hiring signal names as a term or family. Anything that
+  // differs, or cannot be compared, is kept exactly as before — so a duplicate
+  // is removed and a requirement never is.
+  const hiringSignals = (mission.required_signals ?? []).filter((s) => kindOfSignal(s) === "hiring");
+  const numbersIn = (vs: string[]) => vs.flatMap((v) => v.match(/\d+/g) ?? []).map(Number);
+  const representedElsewhere = (field: string, values: string[]): boolean => {
+    const f = field.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    const tokens = new Set(f.split("_"));
+    const has = (...ws: string[]) => ws.some((w) => tokens.has(w));
+    // Another fact that happens to carry a number ("founded_within_days: 30",
+    // "revenue_size") is never read as the size range or the hiring window.
+    if (has("founded", "founding", "age", "funding", "funded", "raised", "revenue", "arr")) return false;
+    const hiringWords = ["hiring", "role", "roles", "posting", "postings", "job", "jobs"];
+    if (has("recency", "window", "days", "dated")) {
+      const own = ["recency", "window", "days", "dated", "time", "signal"];
+      if (!has(...hiringWords) && [...tokens].some((w) => !own.includes(w))) return false;
+      const ns = numbersIn(values);
+      return ns.length > 0 && hiringSignals.some((s) => ns.every((n) => n === s.timeframe_days));
+    }
+    if (has("employee", "employees", "headcount", "size")) {
+      const ns = numbersIn(values);
+      return !!er && ns.length > 0 && ns.every((n) => n === er.min || n === er.max);
+    }
+    if (has(...hiringWords)) {
+      return values.length > 0 && hiringSignals.some((s) => {
+        const q = (s.qualifier ?? {}) as { role_terms?: string[]; role_families?: string[] };
+        const named = [...(q.role_terms ?? []), ...(q.role_families ?? []), ...(s.role_families ?? [])]
+          .map((v) => String(v).toLowerCase().trim());
+        return values.every((v) => named.includes(v.toLowerCase().trim()));
+      });
+    }
+    return false;
+  };
   for (const [field, raw] of Object.entries(mission.hard_constraints ?? {})) {
     if (handled.has(field)) continue;
     const c = (raw ?? {}) as { operator?: string; value?: unknown; reason?: string };
@@ -1197,6 +1238,7 @@ export function deriveMissionCriteria(
     const values = Array.isArray(value) ? value.map(String) : [String(value ?? "")];
     const stated = values.some(inQuery);
     const excluding = /not|exclud/i.test(String(c.operator ?? ""));
+    if (!excluding && representedElsewhere(field, values)) continue;
     push({
       kind: stated || excluding ? "hard" : "target",
       dimension: excluding ? "exclusion" : "constraint", value: { field, value },
