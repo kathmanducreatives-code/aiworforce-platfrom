@@ -12,6 +12,7 @@ byte for byte; the wrapper only adds checks around them, inside the same transac
   * AFTER the writes, before COMMIT: the queue row is `queued` in the TEST workspace
     and its authorization is active with zero starts for both actors and a <= 300 s
     window. Otherwise it raises and the whole transaction rolls back.
+  * The compile's ledger row(s), when the kickoff records a real compile, must exist.
   * After COMMIT, a final SELECT (the only result the Supabase SQL Editor shows):
     one row, KICKOFF_COMMITTED, with the queue id, statuses and seconds left.
 """
@@ -23,6 +24,12 @@ body = s.split("begin;\n", 1)[1].rsplit("commit;", 1)[0]
 queue = re.search(r"authorize_discovery_smoke\('([0-9a-f-]{36})'", body).group(1)
 ws = re.search(r"insert into public\.lead_mission_queue \(id, workspace_id, request, status\)\s+values \('[0-9a-f-]{36}', '([0-9a-f-]{36})'", body).group(1)
 src_hash = hashlib.sha256(s.encode()).hexdigest()
+compile_rows = body.count("insert into public.lead_execution_calls")
+compile_check = (f"""
+  if (select count(*) from public.lead_execution_calls where workspace_id = '{ws}' and record_kind = 'model_call'
+        and logical_call_key like 'kickoff:{queue}:%') <> {compile_rows} then
+    raise exception 'KICKOFF NOT VERIFIED: the compile ledger row is missing; rolled back, nothing written';
+  end if;""" if compile_rows else "")
 
 pre = f"""-- SELF-VERIFYING KICKOFF (wraps reviewed kickoff.sql sha256 {src_hash}).
 -- Run the WHOLE file once in the SQL Editor of project tlvnfrxzjhsjgdofwehb, role postgres.
@@ -62,13 +69,15 @@ begin
        and a.status = 'active' and a.deadline_at <= now() + interval '300 seconds'
        and a.actor_limits = '{{"apify:harvestapi~linkedin-job-search":0,"apify:harvestapi~linkedin-company":0}}'::jsonb) then
     raise exception 'KICKOFF NOT VERIFIED: queue/authorization not as reviewed; rolled back, nothing written';
-  end if;
+  end if;{compile_check}
 end
 $verify$;
 commit;
 select 'KICKOFF_COMMITTED' as result, q.id as queue_id, q.status as queue_status,
        a.id as authorization_id, a.status as authorization_status, a.actor_limits,
-       a.deadline_at, greatest(0, extract(epoch from a.deadline_at - now()))::int as seconds_left
+       a.deadline_at, greatest(0, extract(epoch from a.deadline_at - now()))::int as seconds_left,
+       (select count(*) from public.lead_execution_calls e where e.workspace_id = q.workspace_id
+          and e.logical_call_key like 'kickoff:' || q.id::text || ':%') as compile_ledger_rows
   from public.lead_mission_queue q join public.discovery_smoke_authorizations a on a.queue_id = q.id
  where q.id = '{queue}';
 """
