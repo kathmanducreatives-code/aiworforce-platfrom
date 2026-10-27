@@ -75,7 +75,7 @@ OPENAI_API_KEY=<TEST project key> deno run --allow-env --allow-net=api.openai.co
 ```
 
 - It writes `kickoff.sql`, `kickoff.json` and `interpretation.txt`, and connects to no database.
-- It prints I1–I8 and the compile's token counts and cost, and exits 1 if any interpretation check fails. **A misread mission is never queued.**
+- It prints I1–I9 and the compile's token counts and cost, and exits 1 if any interpretation check fails. **A misread mission is never queued.**
 - Review `kickoff.sql`: the plan row, the compile's ledger row, the queue row (`queued`), and `authorize_discovery_smoke(…, {"apify:harvestapi~linkedin-job-search": 0, "apify:harvestapi~linkedin-company": 0}, 300)`.
 
 ## Step 3 — ⛔ Start the worker, then run the kickoff transaction (starts the 300 s clock)
@@ -111,6 +111,7 @@ deno run --allow-read scripts/test-project/real-gpt/judge-real-gpt-run.ts ./real
 | I6 | no hard criterion the request does not state |
 | I7 | broadening disallowed for geography, role, size |
 | I8 | contact_enrichment and founder_discovery prohibited |
+| I9 | no hard hiring role term or family beyond the requested one, in the criteria **and** in the fields the runtime reads (`required_signals[].role_families`, `qualifier.role_terms`), top-level and qualifier families equal, and no excluded role that rules the requested role out (added after the independent review of PR #194; I1–I8 unchanged) |
 | P1 | the plan is `model_validated` with no violations (the real model planned; no deterministic fallback) |
 | P2 | every provider step uses an approved actor |
 | P3 | the first purchase is job_discovery on the job-search actor: ["Account Executive"], ["United States"], ≤ 3 items, posted "month" |

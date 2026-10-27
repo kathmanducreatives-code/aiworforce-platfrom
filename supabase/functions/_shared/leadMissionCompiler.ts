@@ -1323,6 +1323,18 @@ const inSentence = (sentence: string, phrase: string) =>
     .test(sentence);
 
 /**
+ * Whether excluding `excluded` rules out every posting for `required`: the
+ * excluded words (a regular plural allowed) appear whole inside the required
+ * role. "account executive" excludes "enterprise account executive"; the
+ * reverse does not hold.
+ */
+export function roleExcludes(excluded: string, required: string): boolean {
+  const words = (s: string) => ` ${s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+  const req = roleWordForms(required).map(words);
+  return roleWordForms(excluded).some((f) => f.trim().length > 1 && req.some((r) => r.includes(words(f))));
+}
+
+/**
  * ONLY THE ROLES THE USER NAMED (independent review of PR #194, blocking 1).
  *
  * The model restates the request, and a restatement can add a role: "Account
@@ -1358,6 +1370,19 @@ export function authorizeHiringRoles(
       changes.push(`excluded_role_not_in_request:${t}`);
       return false;
     });
+    // ── A REQUIRED ROLE THAT IS ALSO EXCLUDED IS A CONTRADICTION, KEPT AS ONE ──
+    //
+    // "open Account Executive posting, not Account Executives" (second review
+    // of PR #194, N1) requires a role and excludes every posting that could
+    // prove it. Nothing is deleted to make that pass: both stay on the
+    // mission, the contradiction is recorded here, and the interpretation gate
+    // (I9) refuses it. An exclusion that is narrower than the role ("Account
+    // Executives, not Enterprise Account Executives") is a consistent
+    // alternative and is not a contradiction.
+    for (const e of excluded) {
+      const r = terms.find((t) => roleExcludes(e, t));
+      if (r) changes.push(`hiring_role_excluded_and_required:${e}~${r}`);
+    }
     const allowed = new Set([...familiesOfQuery, ...terms.flatMap((t) => readRoleQualifier(t).role_families ?? [])]);
     const families = [...new Set([...(qual.role_families ?? []), ...(sig.role_families ?? [])])].filter((f) => {
       if (allowed.has(f)) return true;

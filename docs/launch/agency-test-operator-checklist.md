@@ -156,7 +156,7 @@ deno run --allow-env --allow-read --allow-write=./run-off scripts/test-project/r
   --proposal docs/launch/proposals/a7-reviewed-mission-proposal.json
 ```
 
-Exit 0 with I1–I8 PASS. Review `run-off/kickoff.sql`: plan row, queue row
+Exit 0 with I1–I9 PASS. Review `run-off/kickoff.sql`: plan row, queue row
 `queued`, and `authorize_discovery_smoke(…, '{"apify:harvestapi~linkedin-job-search":0,"apify:harvestapi~linkedin-company":0}'::jsonb, 300)`.
 Note the queue id (`grep -A1 'insert into public.lead_mission_queue' run-off/kickoff.sql`).
 
@@ -222,7 +222,7 @@ OPENAI_API_KEY=<a key of the capped TEST project> deno run --allow-env --allow-n
     --pricing-version <v> --jobs-max <µ$> --details-max <µ$> --observed-at <ISO> --price-source "<where read>"
 ```
 
-It prints I1–I8 and the compile's tokens and cost and exits 1 on any
+It prints I1–I9 and the compile's tokens and cost and exits 1 on any
 misreading (**a misread mission is never queued**). Review `run-gpt/kickoff.sql`:
 the plan row, the compile's ledger row, the queue row, the zero-start
 authorization.
@@ -233,7 +233,7 @@ authorization.
 
 **C4. Evidence and judge** as B6 without `--providers-off`, into `./run-gpt`.
 
-**C PASS** = 23 automatic rows PASS (I1–I8, P1–P4, R1–R3, M1–M5, T1–T3; the
+**C PASS** = 24 automatic rows PASS (I1–I9, P1–P4, R1–R3, M1–M5, T1–T3; the
 honest terminal is `budget_exhausted`, 0 leads) **and** the owner signs:
 - **R4**: the Apify console shows no run in the window;
 - **M6**: OpenAI usage for the project and window equals the ledger's token

@@ -399,7 +399,8 @@ function extractRoleQualifier(
   const ORG_TAIL = /\b(?:agenc(?:y|ies)|compan(?:y|ies)|firms?|startups?|vendors?|consultanc(?:y|ies)|businesses|providers?|partners?)$/;
   const negated: string[] = [];
   const t = text.replace(NEGATION, (m: string, what: string, at: number) => {
-    const w = what.trim();
+    // "not Account Executive roles": the opening noun names no role of its own.
+    const w = what.trim().replace(/\s+(?:jobs?|roles?|positions?|openings?|postings?)$/, "");
     const isRole = w.split(/\s+/).length <= 4 && !HIRING_BEFORE.test(w) && !ORG_TAIL.test(w) &&
       HIRING_BEFORE.test(text.slice(0, at)) && w.split(new RegExp(LIST_SEP)).every((x) => namesRole(x.trim()));
     if (!isRole) return m;

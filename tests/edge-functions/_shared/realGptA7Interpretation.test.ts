@@ -7,6 +7,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   canonicalDisallowedBroadening,
   compileLeadMission,
+  roleExcludes,
   type GptMissionProposal,
 } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 import { normalizeProposedVerticals } from "../../../supabase/functions/_shared/leadMission.ts";
@@ -54,8 +55,10 @@ function realProposal(): GptMissionProposal {
   } as unknown as GptMissionProposal;
 }
 
+// A JSON round trip, as the mission reaches the judge from the database: the
+// criteria and the runtime's signals are then independent objects.
 const compile = (p: GptMissionProposal, query = A7) =>
-  compileLeadMission({ originalUserQuery: query, proposal: p, requestedCount: 1 }).final_mission as unknown as Json;
+  JSON.parse(JSON.stringify(compileLeadMission({ originalUserQuery: query, proposal: p, requestedCount: 1 }).final_mission)) as Json;
 const verdicts = (m: Json) =>
   Object.fromEntries(judgeRealGptRun({ lead_mission: m }).filter((v) => v.question === "I").map((v) => [v.id, v]));
 const hard = (m: Json) => (m.criteria as Json[]).filter((c) => c.kind === "hard");
@@ -469,4 +472,84 @@ Deno.test("negation that is about the company or the sentence is left exactly as
   }
   assertEquals(readSignalPhrase("hiring engineers except for interns")!.qualifier.excluded_role_terms, undefined,
     "an exclusion is recorded only for a named role");
+});
+
+// ══ SECOND REVIEW OF PR #194 (2a07d23f): N1 and N2 ══════════════════════════
+
+const hiringSig = (m: Json) => (m.required_signals as Json[]).find((s) => (s.event ?? s.type) === "hiring")!;
+const failedI = (m: Json) => judgeRealGptRun({ lead_mission: m }).filter((v) => v.question === "I" && v.result !== "PASS").map((v) => v.id);
+
+// ── N1: the requested role is also excluded ──────────────────────────────────
+
+for (const phrase of ["open Account Executive posting, not Account Executives",
+  "open Account Executive posting, not Account Executive roles"]) {
+  Deno.test(`N1: "${phrase}" — the contradiction is kept, recorded and refused by I9`, () => {
+    const p = withChange((x) => { x.preferred_signals = [phrase]; });
+    const m = compile(p);
+    const q = hiringSig(m).qualifier;
+    assertEquals(q.role_terms, ["account executive"]);
+    assert((q.excluded_role_terms ?? []).length === 1, "the exclusion is NOT silently deleted");
+    assert(changesOf(p).some((c) => c.startsWith("hiring_role_excluded_and_required:")), "the contradiction is recorded");
+    assertEquals(failedI(m), ["I9"], "I1–I8 cannot see it; I9 refuses it");
+  });
+}
+
+Deno.test("N1: an exclusion injected straight into the mission (qualifier or criterion) is refused by I9", () => {
+  const sigOnly = compile(realProposal());
+  hiringSig(sigOnly).qualifier.excluded_role_terms = ["account executive"];
+  assertEquals(failedI(sigOnly), ["I9"]);
+  const critOnly = compile(realProposal());
+  hard(critOnly).find((c) => c.dimension === "hiring")!.value.qualifier.excluded_role_terms = ["Account Executives"];
+  assertEquals(failedI(critOnly), ["I9"]);
+});
+
+Deno.test("N1: a consistent alternative the user stated is not a contradiction", () => {
+  assertEquals(roleExcludes("enterprise account executives", "account executive"), false, "narrower than the role");
+  assertEquals(roleExcludes("sdrs", "sales roles"), false);
+  assertEquals(roleExcludes("account executives", "account executive"), true);
+  assertEquals(roleExcludes("account executive", "enterprise account executives"), true, "wider than the role");
+  const q = "Find 1 US B2B software company hiring Account Executives, not Enterprise Account Executives, posted within 30 days.";
+  const p = withChange((x) => { x.preferred_signals = ["hiring Account Executives, not Enterprise Account Executives"]; });
+  const m = compile(p, q);
+  assertEquals(hiringSig(m).qualifier.excluded_role_terms, ["enterprise account executives"]);
+  assert(!changesOf(p, q).some((c) => c.startsWith("hiring_role_excluded_and_required:")));
+  assert(!failedI(m).includes("I9"), "I9 accepts a consistent exclusion");
+  const now = new Date().toISOString();
+  const req = requestedHiringFromSignals([hiringSig(m)], true)!;
+  assertEquals(jobProvesRequestedHiring({ title: "Account Executive", posted_date: now }, req), true);
+  assertEquals(jobProvesRequestedHiring({ title: "Enterprise Account Executive", posted_date: now }, req), false);
+});
+
+// ── N2: the runtime reads the signal's top-level role_families ───────────────
+
+for (const [name, mutate] of [
+  ["an extra top-level family", (s: Json) => { s.role_families = ["gtm_sales", "marketing_growth"]; }],
+  ["a top-level family different from the qualifier's", (s: Json) => { s.role_families = ["marketing_growth"]; }],
+  ["a missing top-level family", (s: Json) => { delete s.role_families; }],
+  ["an extra qualifier family only", (s: Json) => { s.qualifier.role_families = ["gtm_sales", "marketing_growth"]; }],
+  ["an extra runtime role term only", (s: Json) => { s.qualifier.role_terms = ["account executive", "sdr"]; }],
+  ["an extra family on BOTH runtime fields (criteria untouched)", (s: Json) => {
+    s.role_families = ["gtm_sales", "marketing_growth"]; s.qualifier.role_families = ["gtm_sales", "marketing_growth"];
+  }],
+] as const) {
+  Deno.test(`N2: ${name} on the runtime's signal is refused by I9`, () => {
+    const m = compile(realProposal());
+    mutate(hiringSig(m));
+    assertEquals(failedI(m), ["I9"]);
+  });
+}
+
+Deno.test("N2: the compiled run-1 mission keeps top-level and qualifier families equal, and passes I1–I9", () => {
+  const m = compile(realProposal());
+  const s = hiringSig(m);
+  assertEquals(s.role_families, ["gtm_sales"]);
+  assertEquals(s.qualifier.role_families, ["gtm_sales"]);
+  assertEquals(failedI(m), []);
+  assertEquals(requestedHiringFromSignals([s], true)!.role_families, ["gtm_sales"], "what the runtime actually reads");
+});
+
+Deno.test("N2: a hiring criterion with no hiring signal for the runtime to read is refused by I9", () => {
+  const m = compile(realProposal());
+  m.required_signals = (m.required_signals as Json[]).filter((x) => (x.event ?? x.type) !== "hiring");
+  assert(failedI(m).includes("I9"));
 });

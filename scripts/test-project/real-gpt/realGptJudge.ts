@@ -119,9 +119,32 @@ export function judgeRealGptRun(ev: Json, x: Expectations = A7_EXPECTATIONS): Ve
   const extraTerms = terms.filter((t) => singular(t) !== singular(x.hiring.role_term));
   const families: string[] = hiring.flatMap((c) => c.value?.qualifier?.role_families ?? []);
   const extraFamilies = families.filter((f) => !x.hiring.role_families.includes(f));
-  v("I9", "I", `no hard hiring role beyond "${x.hiring.role_term}" (families ${x.hiring.role_families.join(", ")})`,
-    hiring.length >= 1 && extraTerms.length === 0 && extraFamilies.length === 0,
-    { extra_terms: extraTerms, extra_families: extraFamilies });
+  // Second review (N1, N2): the RUNTIME reads `required_signals[]` — its
+  // top-level `role_families` and `qualifier.role_terms` /
+  // `excluded_role_terms` — not the criteria. So those exact fields are
+  // checked too, the top-level families must equal the qualifier's, and no
+  // excluded role may rule out the requested one (or any required term).
+  const sigs: Json[] = (Array.isArray(mission.required_signals) ? mission.required_signals : [])
+    .filter((s: Json) => (s.event ?? s.type) === "hiring");
+  const sigTerms: string[] = sigs.flatMap((s) => s.qualifier?.role_terms ?? []).map(lower);
+  const extraSigTerms = sigTerms.filter((t) => singular(t) !== singular(x.hiring.role_term));
+  const topFamilies: string[] = sigs.flatMap((s) => s.role_families ?? []);
+  const extraTopFamilies = topFamilies.filter((f) => !x.hiring.role_families.includes(f));
+  const sameSet = (a: readonly string[], b: readonly string[]) =>
+    new Set(a).size === new Set(b).size && a.every((f) => b.includes(f));
+  const familyMismatch = sigs.filter((s) => !sameSet(s.role_families ?? [], s.qualifier?.role_families ?? []))
+    .map((s) => ({ top: s.role_families ?? null, qualifier: s.qualifier?.role_families ?? null }));
+  const wordsOf = (t: string) => ` ${lower(t).replace(/[^a-z0-9]+/g, " ").trim().split(" ").map((w) => w.replace(/s$/, "")).join(" ")} `;
+  const required = [x.hiring.role_term, ...terms, ...sigTerms];
+  const excluded: string[] = [...hiring.flatMap((c) => c.value?.qualifier?.excluded_role_terms ?? []),
+    ...sigs.flatMap((s) => s.qualifier?.excluded_role_terms ?? [])].map(lower);
+  const contradictions = excluded.filter((e) => required.some((r) => wordsOf(r).includes(wordsOf(e))));
+  v("I9", "I", `no hard hiring role beyond "${x.hiring.role_term}" (families ${x.hiring.role_families.join(", ")}), ` +
+      "the runtime's own role fields agree, and no exclusion rules the requested role out",
+    hiring.length >= 1 && sigs.length >= 1 && extraTerms.length === 0 && extraFamilies.length === 0 &&
+      extraSigTerms.length === 0 && extraTopFamilies.length === 0 && familyMismatch.length === 0 && contradictions.length === 0,
+    { extra_terms: extraTerms, extra_families: extraFamilies, runtime_extra_terms: extraSigTerms,
+      runtime_extra_families: extraTopFamilies, family_mismatch: familyMismatch, excluded_contradictions: contradictions });
 
   // ── P. RESEARCH PLAN ──────────────────────────────────────────────────────
   const plan: Json = ev.execution_plan ?? {};
