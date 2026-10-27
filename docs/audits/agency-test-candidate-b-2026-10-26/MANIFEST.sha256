@@ -5,9 +5,12 @@ e1c2adee4f36510d4f2e28a5e71b90d5f12d745049e140a7969f06a7ba6fb8e8  ./harness/dres
 096f67b9d7e9303d7df0c5deeaf3c64cbaa6a424a41ab635e6560cd42b8ae76a  ./harness/mint.ts
 1c3ebcc01350f137de13a2c167bf5a708488385763e5a39af9e15a4435c7c795  ./harness/operator-sequence.sh
 77534429c357e646c07b1a2f1e6ecb62242898ad16d25e6da929d3ac73cb1826  ./harness/rebuild.sh
+8541332aa235e33d1d1b59e04f57ca07aab09cfa9390a8ef9156dae75897c6fa  ./harness/wrap_kickoff.py
 59a038e9436eaf738eb41730ab623d14dfae59238774ca2dc9f18e280bc0d3cb  ./hosted-preflight-A-2026-10-26.md
+96b62645406752fec6053151f87cce9386297a8d207c044355a71a70009bcfe7  ./hosted-providers-off-attempt-2-2026-10-26.md
 a07f88b8ca7de16c40aa65f4ea1817ac46d3fa5d4611f46665e11014af1e4aeb  ./hosted-providers-off-attempt-2026-10-26.md
 bdaee6b4e12a83d3a37ef8edb05c3a43a80fc6223aa82e0b19b685ae669aa2b3  ./hosted-security-install-2026-10-26.md
+f3c8827083d0ac412e65691a9cffde501fabc84f0da09b2592645ecb649c454d  ./kickoff-wrapper-local-test.txt
 ecd32e9d323db245148a0ae2ddbf05b79b53190ea068ef0f81e054f45ef10bbe  ./reproduction-0cbe2f31/b-gpt/events.jsonl
 3daad1ebee70676e3fd523b3607368fdc1b575701537181ee4e6a159f79b0725  ./reproduction-0cbe2f31/b-gpt/evidence.json
 0e996bb754228ccc8fcc128983332c3c650ba536ccb38862c1ed2179a014743f  ./reproduction-0cbe2f31/b-gpt/judge.txt

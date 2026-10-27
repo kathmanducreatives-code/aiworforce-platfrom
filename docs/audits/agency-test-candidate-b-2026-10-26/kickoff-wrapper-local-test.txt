@@ -1,0 +1,17 @@
+### A. role authenticated
+ERROR:  KICKOFF REFUSED: role authenticated cannot authorize (choose role postgres in the SQL Editor); nothing written
+rows: 0
+### D. wrong project (no TEST guard / security triggers)
+ERROR:  KICKOFF REFUSED: the TEST-only no-Brain guard is absent (wrong project); nothing written
+rows: 0
+### E. another mission claimable
+ERROR:  KICKOFF REFUSED: another mission is claimable; nothing written
+rows: 0
+### B. success
+(1 row)
+ KICKOFF_COMMITTED | 40f52e39-7f7b-45ce-b88d-9af23cde4629 | queued       | 7a293e84-5a9b-4a09-852a-63c0d9e0aebb | active               | {"apify:harvestapi~linkedin-company": 0, "apify:harvestapi~linkedin-job-search": 0} | 2026-10-27 06:51:23.072242+00 |          300
+(1 row)
+rows: 1
+### C. run twice
+ERROR:  KICKOFF REFUSED: queue 40f52e39-7f7b-45ce-b88d-9af23cde4629 already exists (this kickoff already ran); nothing written
+rows: 1

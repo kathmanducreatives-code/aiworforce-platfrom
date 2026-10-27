@@ -1,0 +1,7 @@
+# Providers-off attempt 2 (2026-10-26) and the kickoff-procedure fix
+
+Run [40334938231](https://github.com/kathmanducreatives-code/aiworforce-platfrom/actions/runs/40334938231), commit 6d448610: guard PASS, checkout at the approved SHA, worker `providers=none` 14:01:07–14:26:10 UTC, success. The operator pasted kickoff.sql (sha256 587d9f31…) in the SQL Editor, but **nothing reached TEST**: no queue 40f52e39…, no plan db5405d0…, no queue row, authorization, plan, task, ledger or credit row since attempt 1 (13:36:35). Cause not determinable from the database (rolled-back error, another project's editor, non-postgres role, or not executed). Credits 10/0; P11–P13 0; P15 4. Verdict: NOT EXECUTED.
+
+Root cause of the ambiguity: the SQL Editor shows only the LAST statement's result; kickoff.sql ends with `commit;`, so success displays "Success. No rows returned" and gives no proof the mission landed.
+
+Fix (operator-side only; the dispatch commit is unchanged): `harness/wrap_kickoff.py` wraps a reviewed kickoff, byte for byte, with in-transaction refusals before any write (role cannot authorize; not the TEST workspace; TEST-only no-Brain guard or security triggers absent; queue id already used; another mission claimable) and a post-write check (queued + active, 0 starts, ≤ 300 s) before COMMIT, then a final SELECT that the editor shows: one row `KICKOFF_COMMITTED`. Local rehearsal of every case: `kickoff-wrapper-local-test.txt`.
