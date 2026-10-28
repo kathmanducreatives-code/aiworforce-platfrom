@@ -16,6 +16,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   GPT_MISSION_SCHEMA,
+  GPT_MISSION_SCHEMA_V2,
   MISSION_PROPOSAL_FIELDS,
 } from "../../../supabase/functions/_shared/gptMissionSchema.ts";
 import {
@@ -56,7 +57,14 @@ Deno.test("1. every field the parser reads is present in the GPT schema", () => 
   // emitted under `strict: true` — so the parser's handling of it becomes dead
   // code and the constraint vanishes from every mission, silently. That is how
   // "AI" would go missing again one refactor from now.
-  const missing = parserFields().filter((f) => !MISSION_PROPOSAL_FIELDS.includes(f));
+  //
+  // A field only interpretation contract v2 sends (AGENTORY_MISSION_CONTRACT=v2)
+  // must then be in the v2 schema instead — the same guard, per contract.
+  const v2Only = new Set(Object.keys(
+    (GPT_MISSION_SCHEMA_V2.schema as { properties: Record<string, unknown> }).properties,
+  ).filter((f) => !MISSION_PROPOSAL_FIELDS.includes(f)));
+  assertEquals([...v2Only], ["signal_windows"], "v2 adds exactly one field");
+  const missing = parserFields().filter((f) => !MISSION_PROPOSAL_FIELDS.includes(f) && !v2Only.has(f));
   assertEquals(
     missing, [],
     "these fields are read by parseMissionProposal but absent from " +

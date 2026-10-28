@@ -33,7 +33,8 @@
 import { routeModel } from "./gptModelRouter.ts";
 import { gptStructured, GPT_MODEL, type GptDeps } from "./gptProvider.ts";
 import type { ModelRoute } from "./gptModelRouter.ts";
-import { GPT_MISSION_SCHEMA } from "./gptMissionSchema.ts";
+import { gptMissionSchemaFor } from "./gptMissionSchema.ts";
+import { activeMissionContract } from "./missionInterpretationContract.ts";
 import type { GenerateOpts, GenerateResult } from "./aiProvider.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 
@@ -95,7 +96,8 @@ export function createGptMissionGenerateJson(
       purpose: route.stage,
       system,
       user,
-      schema: GPT_MISSION_SCHEMA,
+      // v1 unless AGENTORY_MISSION_CONTRACT=v2 — the same switch the payload reads.
+      schema: gptMissionSchemaFor(activeMissionContract()),
       // THE ROUTER'S MODEL, NOT A TIER LOOKUP. `route` may be the primary
       // (Luna) or the escalation (Terra) — this function does not know or care
       // which, which is what keeps the ladder in one place.

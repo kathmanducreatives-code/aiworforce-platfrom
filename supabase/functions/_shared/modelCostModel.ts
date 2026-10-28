@@ -116,6 +116,21 @@ export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = Object.freeze(
   },
   "gpt-5.6-terra": { input_per_1m: 2.00, cached_input_per_1m: 0.20, output_per_1m: 12.00 },
   "gpt-5.6-sol": { input_per_1m: 5.00, cached_input_per_1m: 0.50, output_per_1m: 30.00 },
+  // ── THE GPT-6 FAMILY (`AGENTORY_GPT_MODEL_FAMILY=gpt-6`) ────────────────
+  //
+  // Priced BEFORE it can be routed to: an unpriced model counts $0 against the
+  // spend ceiling (`unpriced_calls`), so routing to it first would take every
+  // call out of budget enforcement. OpenAI model pages, read 2026-10-28.
+  // gpt-6.1-sol bills 2x input / 1.5x output for a whole request above 272K
+  // input tokens; no Agentory prompt is within 5x of that, so it is not modelled.
+  "gpt-6-luna": {
+    input_per_1m: 0.10, cached_input_per_1m: 0.01, output_per_1m: 0.50,
+    billed_by: "openai", price_source: "published list price", effective: "2026-10-28",
+  },
+  "gpt-6.1-sol": {
+    input_per_1m: 2.00, cached_input_per_1m: 0.10, output_per_1m: 10.00,
+    billed_by: "openai", price_source: "published list price", effective: "2026-10-28",
+  },
   "gpt-4.1": { input_per_1m: 2.00, cached_input_per_1m: 0.50, output_per_1m: 8.00 },
   "gpt-4.1-mini": { input_per_1m: 0.40, cached_input_per_1m: 0.10, output_per_1m: 1.60 },
 

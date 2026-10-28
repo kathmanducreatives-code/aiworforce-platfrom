@@ -440,6 +440,14 @@ export interface SemanticsInput {
   mission: LeadMissionV1;
   /** The validated model proposal's signal-level facts, when a model ran. */
   proposal?: { signal_recency_days: number | null; confidence: number } | null;
+  /**
+   * CONTRACT v2: each signal's window as the model attributed it and the
+   * compiler validated it against the request (`missionInterpretationContract`).
+   * Present ⇒ it is the ONLY source of a stated window: a kind absent here was
+   * stated without one, and this pass's own sentence reader is recorded where
+   * it disagrees, never applied. Absent ⇒ v1, unchanged.
+   */
+  signalWindows?: Readonly<Record<string, number>> | null;
 }
 
 /**
@@ -491,7 +499,11 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
   signals = signals.map((s) => {
     const k = kindOfSignal(s);
     if (!k || k === "technology") return s;
-    const statedForK = lang.window_days_by_kind[k];
+    const readerForK = lang.window_days_by_kind[k];
+    const statedForK = i.signalWindows ? i.signalWindows[k] ?? null : readerForK;
+    if (i.signalWindows && (readerForK ?? null) !== statedForK) {
+      changes.push(`window_reader_disagrees_with_contract:${k}:reader=${readerForK ?? "none"}:contract=${statedForK ?? "none"}`);
+    }
     if (statedForK != null) {
       windowSources[k] = { source: "user_explicit" };
       if (s.timeframe_days !== statedForK) {
@@ -501,7 +513,7 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
     }
     // A window the user stated for ANOTHER signal is not this one's: the
     // default applies, and a carried copy of that window is replaced.
-    if (lang.explicit_window_days != null && s.timeframe_days != null &&
+    if (!i.signalWindows && lang.explicit_window_days != null && s.timeframe_days != null &&
         sameWindow(s.timeframe_days, lang.explicit_window_days) && DEFAULT_SIGNAL_WINDOWS[k]) {
       windowSources[k] = { source: "system_default", rule: DEFAULT_SIGNAL_WINDOWS[k]!.rule };
       changes.push(`window_belongs_to_another_signal:${k}:${DEFAULT_SIGNAL_WINDOWS[k]!.days}d`);
@@ -510,7 +522,7 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
     // The sentence dates the COMPANY ("founded in the last 3 years") and this
     // signal's own clause names no window: a carried one is the model filing
     // the company's age under the signal, not a window the user gave it.
-    if (lang.company_age_window_days != null && s.timeframe_days != null && DEFAULT_SIGNAL_WINDOWS[k] &&
+    if (!i.signalWindows && lang.company_age_window_days != null && s.timeframe_days != null && DEFAULT_SIGNAL_WINDOWS[k] &&
         !FUNDING_WINDOW_WORDS_RE.test(signalClause(k, query) ?? "")) {
       windowSources[k] = { source: "system_default", rule: DEFAULT_SIGNAL_WINDOWS[k]!.rule };
       changes.push(`window_belongs_to_company_age:${k}:${DEFAULT_SIGNAL_WINDOWS[k]!.days}d`);

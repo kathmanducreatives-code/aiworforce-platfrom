@@ -141,6 +141,12 @@ export async function runWithEscalation<T>(
     validate: (value: T) => ValidationVerdict;
     signals?: RoutingSignals;
     onEvent?: (r: EscalationRecord) => void;
+    /**
+     * A run's allowance of escalations, shared across its stages. Absent means
+     * no run-level cap (the per-call ladder is still one rung). Present and
+     * spent, a rejected result fails safely instead of escalating.
+     */
+    escalationBudget?: EscalationBudget;
   },
 ): Promise<EscalationResult<T>> {
   const signals = deps.signals ?? {};
@@ -242,6 +248,26 @@ async function escalate<T>(
     };
   }
 
+  // A RUN-LEVEL CAP, on top of the one-rung ladder. Every escalating stage is
+  // bounded per call; without this a run whose amendments are each rejected
+  // escalates once per amendment. Spent, it fails safely like a stage with no
+  // escalation path, and says why.
+  if (deps.escalationBudget && !deps.escalationBudget.tryConsume(stage)) {
+    return {
+      ok: false,
+      record: emit({
+        ...base, event: "final_failure",
+        actual_model: primary.model,
+        escalation_reason: `escalation_budget_exhausted (${deps.escalationBudget.max} per run): ${reason}`.slice(0, 500),
+        provider_failure_code: primaryFailureCode,
+        attempts: 1,
+      }),
+      route: primary,
+      failureCode: "escalation_budget_exhausted",
+      failureDetail: reason,
+    };
+  }
+
   emit({
     ...base, event: "terra_escalation",
     actual_model: route.model,
@@ -306,4 +332,26 @@ async function escalate<T>(
     }),
     route,
   };
+}
+
+/**
+ * How many escalations one run may make, across all of its stages.
+ *
+ * Deterministic and counted, never a model's judgement. `max` 0 disables
+ * escalation for the run. One instance per run, passed to every
+ * `runWithEscalation` call that run makes.
+ */
+export class EscalationBudget {
+  readonly max: number;
+  private readonly spent: GptStage[] = [];
+  constructor(max: number) {
+    this.max = Number.isFinite(max) && max >= 0 ? Math.floor(max) : 0;
+  }
+  /** Spend one escalation for `stage`; false when none is left. */
+  tryConsume(stage: GptStage): boolean {
+    if (this.spent.length >= this.max) return false;
+    this.spent.push(stage);
+    return true;
+  }
+  get used(): readonly GptStage[] { return this.spent; }
 }

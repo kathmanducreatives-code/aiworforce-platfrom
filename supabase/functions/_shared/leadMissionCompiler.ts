@@ -53,6 +53,10 @@ import { compileMissionSemantics } from "./missionCriteria.ts";
 import { readRoleQualifier, readSignalPhrase } from "./missionSignalDescriptor.ts";
 import { explicitWindowDays } from "./signalKinds.ts";
 import {
+  activeMissionContract, type MissionContractVersion, parseSignalWindows, type ProposedSignalWindow,
+  SIGNAL_WINDOWS_INSTRUCTION, type SignalWindowTrace, validateSignalWindows,
+} from "./missionInterpretationContract.ts";
+import {
   runtimeIdentity, LEAD_INTELLIGENCE_CONTRACT_VERSION,
 } from "./leadRuntimeIdentity.ts";
 import {
@@ -64,6 +68,7 @@ import {
   type MissionDirectives, type RequestedOutput, type TargetEntity, type MissionType,
 } from "./leadMission.ts";
 import { buildMissionBriefing } from "./agentoryBriefing.ts";
+import { CAPABILITY_AVAILABILITY_INSTRUCTION, capabilityContextForPrompt } from "./capabilityContext.ts";
 import { isCapabilityId, type CapabilityId } from "./leadCapabilityGraph.ts";
 import {
   catalogueForPrompt, isPublicCapability, offersFrom, toInternalCapabilities,
@@ -139,6 +144,11 @@ export interface GptMissionProposal {
   known_companies: string[];
   /** Recency window the request implies, in days. Null when it implies none. */
   signal_recency_days: number | null;
+  /**
+   * CONTRACT v2 only: each signal's own timeframe, with the user's words for it
+   * (`missionInterpretationContract`). Absent on a v1 proposal.
+   */
+  signal_windows?: ProposedSignalWindow[];
   /**
    * The literal role/signal words the user typed ("RevOps", "SDR"), preserved
    * verbatim rather than mapped to a taxonomy key. A plan that drifts entirely
@@ -429,6 +439,8 @@ export interface CompilerPromptContext {
   } | null;
   /** Count an upstream intake already resolved, if any. */
   requestedCount?: number | null;
+  /** Interpretation contract; defaults to AGENTORY_MISSION_CONTRACT (v1 when unset). */
+  contract?: MissionContractVersion;
 }
 
 /**
@@ -440,6 +452,36 @@ export interface CompilerPromptContext {
  * and no Actor appears anywhere in this object.
  */
 export function buildMissionCompilerPayload(
+  ctx: CompilerPromptContext,
+): Record<string, unknown> {
+  const v1 = buildMissionCompilerPayloadV1(ctx);
+  if ((ctx.contract ?? activeMissionContract()) !== "v2") return v1;
+  // ── CONTRACT v2 ─────────────────────────────────────────────────────────
+  //
+  // Same payload, three changes, each with its own evidence:
+  //   * every signal's timeframe is its own (`signal_windows`) — review R1;
+  //   * the catalogue says which capabilities this deployment can execute —
+  //     `capabilityExecutability`, read rather than restated;
+  //   * the request goes LAST. Everything before it is identical on every
+  //     call, so the provider's prompt cache can serve it. In v1 the request
+  //     sat fourth and roughly 9k characters of fixed text followed it.
+  const { user_query, company_brain_context, response_shape, ...fixed } = v1;
+  return {
+    ...fixed,
+    contract_version: "v2",
+    instruction: [MISSION_COMPILER_SYSTEM_PROMPT, SIGNAL_WINDOWS_INSTRUCTION, CAPABILITY_AVAILABILITY_INSTRUCTION].join(" "),
+    capability_catalogue: capabilityContextForPrompt(),
+    response_shape: {
+      ...(response_shape as Record<string, unknown>),
+      signal_recency_days: "null — use signal_windows",
+      signal_windows: "[{ event, days: number|null, phrase: the user's exact words }] — one per signal with a stated timeframe",
+    },
+    company_brain_context,
+    user_query,
+  };
+}
+
+function buildMissionCompilerPayloadV1(
   ctx: CompilerPromptContext,
 ): Record<string, unknown> {
   return {
@@ -719,6 +761,8 @@ export function parseMissionProposal(raw: unknown, userText = ""): ParsedProposa
       // gets the empty/false reading, never a fabricated constraint.
       known_companies: strArray(c.known_companies),
       signal_recency_days: recencyDays(c.signal_recency_days, repairs),
+      // Only a v2 proposal carries the key, so a v1 proposal parses unchanged.
+      ...(Array.isArray(c.signal_windows) ? { signal_windows: parseSignalWindows(c.signal_windows) ?? [] } : {}),
       required_signal_terms: strArray(c.required_signal_terms),
       no_broadening_requested: c.no_broadening_requested === true,
       geography_is_hard: c.geography_is_hard === true,
@@ -804,6 +848,8 @@ export interface CompiledMissionResult {
   unknowns: string[];
   /** Present only when a proposal was refused outright. */
   safety_violations: ProposalViolation[];
+  /** Contract v2 only: how each stated timeframe reached (or did not reach) a signal. */
+  interpretation_trace?: { contract: "v2"; signal_windows: SignalWindowTrace[] };
 }
 
 export interface CompileMissionInput {
@@ -898,6 +944,8 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   let source: ParserSource = "deterministic_fallback";
   let mission: LeadMissionV1;
   let requestedCaps: string[] = [];
+  /** Contract v2's validated windows; null on a v1 proposal. */
+  let contractWindows: ReturnType<typeof validateSignalWindows> | null = null;
   let approvedCaps: PublicCapabilityId[] = [];
   const rejectedCaps: CapabilityDecisionRecord["rejected"] = [];
 
@@ -942,8 +990,17 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
       approvedCaps = [...parsed.proposal.required_capabilities];
       const internal = toInternalCapabilities(approvedCaps);
 
+      // CONTRACT v2: the model said which signal each timeframe belongs to;
+      // code checks the words are the user's and computes the days. A caller's
+      // own per-event windows (the Chat Brain path) still win.
+      if (parsed.proposal.signal_windows) {
+        contractWindows = validateSignalWindows(query, parsed.proposal.signal_windows);
+        for (const c of contractWindows.changes) changes.push(c);
+      }
+
       const validated = validateLeadMission(
-        proposalToMissionCandidate(parsed.proposal, internal, deterministic(), i.signalRecencyByEvent ?? null),
+        proposalToMissionCandidate(parsed.proposal, internal, deterministic(),
+          i.signalRecencyByEvent ?? contractWindows?.byEvent ?? null),
         { originalUserQuery: query, isCapabilityId, requestedCount: i.requestedCount },
       );
       for (const r of validated.repairs) changes.push(r);
@@ -1132,7 +1189,17 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   // constraints that are exactly equivalent are deduplicated (both recorded).
   if (p) {
     mission = authorizeHiringRoles(mission, query, changes);
-    mission = preserveStatedHiringWindow(mission, query, changes);
+    // v1 recovers the hiring window by reading the sentence (review W1). Under
+    // contract v2 the model has already attributed every window and code has
+    // validated it, so that reader is consulted only to RECORD a disagreement:
+    // it reads "funding closed within 6 months" as a hiring window (review R1).
+    if (!contractWindows) {
+      mission = preserveStatedHiringWindow(mission, query, changes);
+    } else {
+      const reader = statedHiringWindowDays(query);
+      const contract = contractWindows.byEvent.hiring ?? null;
+      if (reader !== contract) changes.push(`hiring_window_reader_disagrees_with_contract:reader=${reader ?? "none"}:contract=${contract ?? "none"}`);
+    }
     mission = dedupeEquivalentConstraints(mission, changes);
   }
   if ((hedged.length > 0 || negated.length > 0) && statedLocations.length === 0) delete mission.geography_is_hard;
@@ -1148,6 +1215,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   const semantics = compileMissionSemantics({
     query, mission,
     proposal: p ? { signal_recency_days: p.signal_recency_days, confidence: p.confidence } : null,
+    ...(contractWindows ? { signalWindows: contractWindows.byEvent } : {}),
   });
   mission = semantics.mission;
   for (const c of semantics.changes) changes.push(c);
@@ -1187,6 +1255,8 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
     gpt_proposal: parsed.proposal,
     validator_changes: changes,
     final_mission: mission,
+    // From the request to the runtime signal: which timeframe went where, and why.
+    ...(contractWindows ? { interpretation_trace: { contract: "v2" as const, signal_windows: contractWindows.trace } } : {}),
     schema_version: MISSION_COMPILER_SCHEMA_VERSION,
     workspace_context: workspace,
     capability_decision: {
