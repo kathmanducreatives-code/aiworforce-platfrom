@@ -285,6 +285,8 @@ import { canonicalJson } from "./planHash.ts";
 import { sha256Hex } from "./providerInputFingerprint.ts";
 import { PENDING_RUN_MAX_POLLS, PENDING_RUN_MAX_WAIT_MS } from "./leadAutoContinuation.ts";
 import { tightenCeilings, type RunBudget } from "./runBudget.ts";
+import { missionEscalationCap } from "./modelEscalation.ts";
+import { activeModelFamily } from "./gptModelRouter.ts";
 import {
   nextUnreadPage, screenAdmissionOrder, type FundingScreenPlan, type ScreenVerdict,
 } from "./fundingPoolScreen.ts";
@@ -634,6 +636,11 @@ export interface CapabilityExecutionState {
    * continuation does not ask again. See providerAvailability.ts.
    */
   unavailable_providers?: UnavailableProvider[];
+  /**
+   * Repair rounds (escalations) this MISSION has made, across slices. Counted
+   * only when a mission escalation cap applies (`missionEscalationCap`).
+   */
+  escalations_used?: number;
   /**
    * Claim-verifier provider runs still executing when a slice ended — adopted
    * by run id on the next slice, never bought twice (`claimVerifier`).
@@ -2631,6 +2638,23 @@ export async function runCapabilityPlan(
       ? { ...opts.state!, provider_attempts: [...opts.state!.provider_attempts] }
       : newExecutionState(opts.plan, hash, bindingPrint);
 
+  // ── A REPAIR ROUND IS AN ESCALATION, AND A MISSION HAS A FEW ──────────────
+  //
+  // Null on the default model family (no cap; unchanged). Under gpt-6 a repair
+  // runs on Sol, and the count rides on the checkpointed state so a later
+  // slice cannot spend the allowance again. See `missionEscalationCap`.
+  const escalationCap = missionEscalationCap(activeModelFamily(opts.readEnv), opts.readEnv);
+  const spendEscalation = (stage: string): boolean => {
+    if (escalationCap === null) return true;
+    const used = state.escalations_used ?? 0;
+    if (used >= escalationCap) {
+      log("mission_escalation_budget_exhausted", { stage, used, cap: escalationCap });
+      return false;
+    }
+    state.escalations_used = used + 1;
+    return true;
+  };
+
   // ── REPAIR A CHECKPOINT AN OLDER BUILD POISONED ──────────────────────────
   //
   // The rule in `finish` stops this state being created. This undoes the ones
@@ -3251,6 +3275,8 @@ export async function runCapabilityPlan(
       }
 
       const blocking = first.violations.filter((v) => v.severity === "block");
+      // Past the mission's escalation cap the refusal stands, as a failed repair does.
+      if (!spendEscalation("discovery_actor_selection_repair")) return first;
       log("discovery_strategy_repair_attempt", {
         violations: blocking.map((v) => v.code),
         actors: blocking.map((v) => v.actor_key ?? null),
@@ -4784,6 +4810,15 @@ export async function runCapabilityPlan(
         executionPlan = first;
       } else {
         const blocking = first.violations.filter((v) => v.severity === "block");
+        if (!spendEscalation("execution_plan_repair")) {
+          state.terminal_reason = "execution_plan_blocked";
+          state.fallback_reason = "escalation_budget_exhausted";
+          log("execution_plan_blocked", {
+            first: blocking.map((v) => ({ code: v.code, actor_key: v.actor_key, message: v.message })),
+            reason: "mission escalation budget exhausted",
+          });
+          throw new ExecutionPlanBlockedError(first.violations);
+        }
         // THE MESSAGE, NOT ONLY THE CODE. `no_valid_step` on its own says a
         // plan was refused and nothing about why; the message now carries the
         // proposed steps and the reasons each was dropped, and a log that

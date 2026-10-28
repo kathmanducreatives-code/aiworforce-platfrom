@@ -62,10 +62,11 @@
 // absence rather than merely that it is unused.
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import {
-  buildMissionCompilerPayload, MISSION_COMPILER_SYSTEM_PROMPT,
+  buildMissionCompilerPayload, compileLeadMission, MISSION_COMPILER_SYSTEM_PROMPT, MissionCompilationBlockedError,
   type CompilerPromptContext,
 } from "./leadMissionCompiler.ts";
 import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
+import { activeMissionContract } from "./missionInterpretationContract.ts";
 import { createGptMissionGenerateJson, GPT_MISSION_MODEL_ID } from "./gptMissionModel.ts";
 import type { GptDeps } from "./gptProvider.ts";
 import {
@@ -219,14 +220,18 @@ export function buildMissionCompilerBinding(input: {
     diagnostics: base,
     lastModelFailure: () => lastFailure,
     proposeMission: async (ctx: CompilerPromptContext) => {
-      const payload = JSON.stringify(buildMissionCompilerPayload(ctx));
+      const payloadObject = buildMissionCompilerPayload(ctx);
+      let payload = JSON.stringify(payloadObject);
+      const contract = ctx.contract ?? activeMissionContract();
 
       // BOUNDED RETRY, NOT A LOOP. The bound is a constant, so the worst case
       // is two calls whatever happens inside. A second attempt is made only when
       // the first produced nothing usable — a timeout, a refused model id, a
-      // truncated or unparseable body. A model that misread the sentence
-      // successfully returns a proposal and is never retried; `compileLeadMission`
-      // judges that proposal, not this function.
+      // truncated or unparseable body. Under contract v1 a model that misread
+      // the sentence successfully returns a proposal and is never retried;
+      // `compileLeadMission` judges that proposal, not this function. Under v2
+      // a proposal the compiler would refuse for its timeframes is the one
+      // other reason for the second call (below).
       lastFailure = null;
       for (let attempt = 1; attempt <= MAX_COMPILATION_ATTEMPTS; attempt++) {
         try {
@@ -235,7 +240,24 @@ export function buildMissionCompilerBinding(input: {
             messages: [{ role: "user", content: payload }],
           } as never);
           const r = result as { ok?: boolean; json?: unknown } | null | undefined;
-          if (r?.ok && r.json != null) return r.json;
+          if (r?.ok && r.json != null) {
+            // ── CONTRACT v2: ONE BOUNDED REPAIR, INSIDE THE SAME TWO CALLS ──
+            //
+            // A readable proposal whose timeframes conflict with the request
+            // would be refused by `compileLeadMission`. When a call is left, the
+            // model is asked once more with the compiler's exact objections;
+            // the last answer is returned whatever it is, and the compile then
+            // accepts it or fails closed. v1 is unchanged: returned as before.
+            const problems = contract === "v2" && attempt < MAX_COMPILATION_ATTEMPTS
+              ? interpretationProblems(ctx.originalUserQuery, r.json, ctx.requestedCount ?? null) : [];
+            if (problems.length === 0) return r.json;
+            console.log("[mission-compiler][v2-repair]", { attempt, problems });
+            payload = JSON.stringify({ ...payloadObject, repair_feedback: {
+              note: "Your previous proposal could not be compiled. Correct exactly these problems and answer again.",
+              problems,
+            } });
+            continue;
+          }
 
           // ── WHY IT FAILED, NOT JUST THAT IT DID ─────────────────────────
           //
@@ -301,4 +323,22 @@ export function buildMissionCompilerBinding(input: {
       return null;
     },
   };
+}
+
+/**
+ * The compiler's objections to a v2 proposal, without compiling for real: the
+ * same `compileLeadMission`, pure, whose `interpretation_conflict:` refusals are
+ * returned. Anything else it throws is not a timeframe problem and is left to
+ * the real compile.
+ */
+export function interpretationProblems(query: string, proposal: unknown, requestedCount: number | null): string[] {
+  try {
+    compileLeadMission({ originalUserQuery: query, proposal, requestedCount, contract: "v2" });
+    return [];
+  } catch (e) {
+    if (e instanceof MissionCompilationBlockedError) {
+      return e.reasons.filter((x) => x.startsWith("interpretation_conflict:")).map((x) => x.slice("interpretation_conflict:".length));
+    }
+    return [];
+  }
 }

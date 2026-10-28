@@ -67,7 +67,7 @@
 // PURE. No network, model or database access.
 
 import type { GptTier } from "./gptProvider.ts";
-import type { ReasoningEffort } from "./modelRequestBody.ts";
+import { minimumReasoningEffort, type ReasoningEffort } from "./modelRequestBody.ts";
 
 export const GPT_MODEL_ROUTER_VERSION = "gpt-model-router-v2" as const;
 
@@ -87,6 +87,55 @@ export const TERRA = "gpt-5.6-terra" as const;
  * test assert that no stage resolves to it, which an omitted constant could not.
  */
 export const SOL = "gpt-5.6-sol" as const;
+
+/**
+ * WHICH GENERATION THE LADDER RUNS ON — a deployment setting, never a model's.
+ *
+ *   gpt-5.6 (default)  Luna → Terra       the ladder above, unchanged
+ *   gpt-6              gpt-6-luna → gpt-6.1-sol
+ *
+ * The POLICY below does not change with the family: the same stages escalate,
+ * on the same validator rejections, at most once. Only the two model ids move.
+ * In gpt-6 the escalation rung is Sol because OpenAI offers no GPT-6 Terra, and
+ * gpt-6.1-sol ($2 / $10 per 1M) is cheaper than gpt-5.6-terra ($2 / $12) — so the
+ * rung costs less, not more. Sol rejects `reasoning_effort: "none"`; a route to
+ * it is raised to its floor and the raise is stated in the route's reason.
+ *
+ * Read from AGENTORY_GPT_MODEL_FAMILY. Unset or unrecognised resolves to the
+ * default: a typo must never reach a model nobody priced or chose.
+ */
+export const MODEL_FAMILY_ENV = "AGENTORY_GPT_MODEL_FAMILY";
+export const MODEL_FAMILIES = Object.freeze({
+  "gpt-5.6": Object.freeze({ primary: LUNA as string, escalation: TERRA as string }),
+  "gpt-6": Object.freeze({ primary: "gpt-6-luna", escalation: "gpt-6.1-sol" }),
+});
+export type ModelFamilyId = keyof typeof MODEL_FAMILIES;
+export const DEFAULT_MODEL_FAMILY: ModelFamilyId = "gpt-5.6";
+
+/** The configured family. The router's one read of its environment. */
+export function activeModelFamily(
+  read: (k: string) => string | undefined = (k) => {
+    try { return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get(k); }
+    catch { return undefined; }
+  },
+): ModelFamilyId {
+  const v = String(read(MODEL_FAMILY_ENV) ?? "").trim();
+  return Object.hasOwn(MODEL_FAMILIES, v) ? v as ModelFamilyId : DEFAULT_MODEL_FAMILY;
+}
+
+/** A policy model id, read in a family: Luna and Terra are roles, not ids. */
+function inFamily(model: string, family: ModelFamilyId): string {
+  const f = MODEL_FAMILIES[family];
+  return model === LUNA ? f.primary : model === TERRA ? f.escalation : model;
+}
+
+/** Raise an effort a model cannot accept to the lowest one it can. */
+function effortFor(model: string, effort: ReasoningEffort | null): {
+  effort: ReasoningEffort | null; raised: boolean;
+} {
+  const floor = minimumReasoningEffort(model);
+  return floor && (effort === null || effort === "none") ? { effort: floor, raised: true } : { effort, raised: false };
+}
 
 /**
  * Every GPT decision point in the lead pipeline.
@@ -211,6 +260,8 @@ export interface ModelRoute {
    */
   tier: GptTier;
   signals: RoutingSignals;
+  /** Present only when a non-default family is configured (AGENTORY_GPT_MODEL_FAMILY). */
+  model_family?: ModelFamilyId;
 }
 
 interface StagePolicy {
@@ -439,20 +490,24 @@ export function isDeterministicStage(stage: GptStage): boolean {
  * compiler refuses it, which is the point.
  */
 export function routeModel(
-  stage: GptStage, signals: RoutingSignals = {},
+  stage: GptStage, signals: RoutingSignals = {}, family: ModelFamilyId = activeModelFamily(),
 ): ModelRoute {
   const policy = POLICY[stage];
   if (policy.primary === null) throw new DeterministicStageError(stage, policy.reason);
+  const model = inFamily(policy.primary, family);
+  const e = effortFor(model, policy.effort);
   return {
     version: GPT_MODEL_ROUTER_VERSION,
     stage,
-    model: policy.primary,
-    reasoning_effort: policy.effort,
+    model,
+    reasoning_effort: e.effort,
     slot: "primary",
-    reason: policy.reason,
+    reason: policy.reason + (e.raised ? ` — effort raised to "${e.effort}", the lowest ${model} accepts` : ""),
     escalation_reason: null,
     tier: policy.effort === "none" ? "fast" : "reasoning",
     signals,
+    // Recorded only off the default, so a default route is unchanged byte for byte.
+    ...(family !== DEFAULT_MODEL_FAMILY ? { model_family: family } : {}),
   };
 }
 
@@ -464,26 +519,30 @@ export function routeModel(
  * second attempt.
  */
 export function escalationRoute(
-  stage: GptStage, reason: string, signals: RoutingSignals = {},
+  stage: GptStage, reason: string, signals: RoutingSignals = {}, family: ModelFamilyId = activeModelFamily(),
 ): ModelRoute | null {
   const policy = POLICY[stage];
   if (!policy.escalation) return null;
+  const model = inFamily(policy.escalation, family);
+  const e = effortFor(model, policy.effort);
   return {
     version: GPT_MODEL_ROUTER_VERSION,
     stage,
-    model: policy.escalation,
-    reasoning_effort: policy.effort,
+    model,
+    reasoning_effort: e.effort,
     slot: "escalation",
-    reason: `${policy.reason} — ESCALATED after validation rejected the primary result`,
+    reason: `${policy.reason} — ESCALATED after validation rejected the primary result` +
+      (e.raised ? ` — effort raised to "${e.effort}", the lowest ${model} accepts` : ""),
     escalation_reason: reason,
     tier: "reasoning",
     signals,
+    ...(family !== DEFAULT_MODEL_FAMILY ? { model_family: family } : {}),
   };
 }
 
 /** Every stage's default route, for a preflight card or a cost estimate. */
-export function routingTable(): ModelRoute[] {
-  return GPT_STAGES.filter((s) => !isDeterministicStage(s)).map((s) => routeModel(s));
+export function routingTable(family: ModelFamilyId = activeModelFamily()): ModelRoute[] {
+  return GPT_STAGES.filter((s) => !isDeterministicStage(s)).map((s) => routeModel(s, {}, family));
 }
 
 /**
