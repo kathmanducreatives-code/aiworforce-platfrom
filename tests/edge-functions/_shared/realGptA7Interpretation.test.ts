@@ -8,6 +8,7 @@ import {
   canonicalDisallowedBroadening,
   compileLeadMission,
   roleExcludes,
+  statedHiringWindowDays,
   type GptMissionProposal,
 } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 import { normalizeProposedVerticals } from "../../../supabase/functions/_shared/leadMission.ts";
@@ -166,13 +167,15 @@ Deno.test("I5: list items read as titles — no leading 'for'/'other', no traili
   assertEquals(readSignalPhrase("companies hiring Sales Operations and RevOps roles")?.qualifier?.role_terms, ["sales operations", "revops"]);
 });
 
-Deno.test("I5 negative: a wrong date window still fails I5", () => {
+Deno.test("negative: a wrong date window in the proposal is still refused by the gate (I9, W1)", () => {
   for (const days of [60, 7]) {
     const v = verdicts(compile(withChange((p) => {
       p.signal_recency_days = days;
       p.hard_constraints = (p.hard_constraints as Json[]).filter((c) => c.field !== "hiring_signal_recency");
     })));
-    assertEquals(v.I5.result, "FAIL", `a ${days}-day window is not the user's 30`);
+    // The runtime now runs the user's 30 days and the conflict is marked; the
+    // mission is refused either way — by I9 since W1 (it was I5 before).
+    assertEquals(v.I9.result, "FAIL", `a ${days}-day window is not the user's 30`);
   }
 });
 
@@ -552,4 +555,91 @@ Deno.test("N2: a hiring criterion with no hiring signal for the runtime to read 
   const m = compile(realProposal());
   m.required_signals = (m.required_signals as Json[]).filter((x) => (x.event ?? x.type) !== "hiring");
   assert(failedI(m).includes("I9"));
+});
+
+// ══ REVIEW OF b9ba84c7: W1 — the runtime hiring window ══════════════════════
+
+const STALE = () => new Date(Date.now() - 200 * 86_400_000).toISOString();
+const FRESH = () => new Date(Date.now() - 5 * 86_400_000).toISOString();
+const runtime = (m: Json) => requestedHiringFromSignals([hiringSig(m)], true)!;
+
+for (const [name, omit] of [
+  ["signal_recency_days omitted", (x: Json) => { delete x.signal_recency_days; }],
+  ["signal_recency_days null", (x: Json) => { x.signal_recency_days = null; }],
+  ["signal_recency_days AND the recency constraint omitted", (x: Json) => {
+    delete x.signal_recency_days;
+    x.hard_constraints = (x.hard_constraints as Json[]).filter((c) => c.field !== "hiring_signal_recency");
+  }],
+] as const) {
+  Deno.test(`W1: ${name} — the user's 30 days reach the runtime signal and a stale posting cannot prove hiring`, () => {
+    const p = withChange(omit);
+    const m = compile(p);
+    assertEquals(hiringSig(m).timeframe_days, 30, "the runtime's own field");
+    assertEquals(runtime(m).window_days, 30);
+    assertEquals(jobProvesRequestedHiring({ title: "Account Executive", posted_date: STALE() }, runtime(m)), false);
+    assertEquals(jobProvesRequestedHiring({ title: "Account Executive", posted_date: FRESH() }, runtime(m)), true);
+    assert(changesOf(p).includes("hiring_window_from_request:30"), "the fill is recorded");
+    assertEquals(failedI(m), []);
+  });
+}
+
+for (const days of [90, 7]) {
+  Deno.test(`W1: a proposal window of ${days} days contradicting the user's 30 runs on 30, is recorded, and is refused`, () => {
+    const p = withChange((x) => { x.signal_recency_days = days; });
+    const m = compile(p);
+    assertEquals(hiringSig(m).timeframe_days, 30, "never the model's window");
+    assertEquals(hiringSig(m).window_conflict, { proposed: days, requested: 30 });
+    assert(changesOf(p).includes(`hiring_window_contradiction:proposal=${days}:request=30`));
+    assertEquals(failedI(m), ["I9"], "fail closed");
+  });
+}
+
+Deno.test("W1: I9 reads the runtime signal's window, not the criterion's display window", () => {
+  for (const [label, mutate] of [
+    ["no runtime window", (s: Json) => { delete s.timeframe_days; }],
+    ["null runtime window", (s: Json) => { s.timeframe_days = null; }],
+    ["a wider runtime window", (s: Json) => { s.timeframe_days = 90; }],
+    ["a narrower runtime window", (s: Json) => { s.timeframe_days = 7; }],
+    ["a recorded window conflict", (s: Json) => { s.window_conflict = { proposed: 90, requested: 30 }; }],
+    ["no runtime role term", (s: Json) => { delete s.qualifier.role_terms; }],
+  ] as const) {
+    const m = compile(realProposal());
+    mutate(hiringSig(m));
+    const v = verdicts(m);
+    assertEquals(v.I5.result, "PASS", `${label}: the criterion alone still looks right`);
+    assertEquals(failedI(m), ["I9"], label);
+  }
+});
+
+Deno.test("W1: the request's hiring window is read only from the hiring clause", () => {
+  assertEquals(statedHiringWindowDays(A7), 30);
+  assertEquals(statedHiringWindowDays("Find companies hiring AEs posted in the last 2 weeks"), 14);
+  assertEquals(statedHiringWindowDays("Find companies hiring AEs within thirty days"), 30);
+  for (const q of ["Find companies hiring AEs", "Find companies hiring AEs that raised funding in the last 2 years",
+    "Find companies founded in the last 3 years hiring AEs", "Find companies hiring AEs, founded in the last 3 years",
+    "Find companies posted in the last 2 weeks about AI, hiring AEs"]) {
+    assertEquals(statedHiringWindowDays(q), null, q);
+  }
+});
+
+Deno.test("W1: with no window in the request, nothing is invented", () => {
+  const q = "Find 1 US B2B software company with a current declared 11–50 employee band hiring an Account Executive.";
+  const p = withChange((x) => {
+    delete x.signal_recency_days;
+    x.hard_constraints = (x.hard_constraints as Json[]).filter((c) => c.field !== "hiring_signal_recency");
+  });
+  const m = compile(p, q);
+  assertEquals(hiringSig(m).timeframe_days ?? null, null);
+  assert(!changesOf(p, q).some((c) => c.startsWith("hiring_window_")));
+});
+
+Deno.test("W1: a window never becomes part of the role term, so the runtime signal keeps the user's role", () => {
+  assertEquals(readSignalPhrase("hiring account executives dated within 30 days")!.qualifier.role_terms, ["account executives"]);
+  const p = withChange((x) => {
+    x.preferred_signals = ["hiring Account Executive"];
+    x.required_signal_terms = ["dated within 30 days"];
+  });
+  const m = compile(p);
+  assertEquals(hiringSig(m).qualifier.role_terms, ["account executive"]);
+  assertEquals(failedI(m), []);
 });

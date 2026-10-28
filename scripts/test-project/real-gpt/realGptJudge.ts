@@ -139,12 +139,24 @@ export function judgeRealGptRun(ev: Json, x: Expectations = A7_EXPECTATIONS): Ve
   const excluded: string[] = [...hiring.flatMap((c) => c.value?.qualifier?.excluded_role_terms ?? []),
     ...sigs.flatMap((s) => s.qualifier?.excluded_role_terms ?? [])].map(lower);
   const contradictions = excluded.filter((e) => required.some((r) => wordsOf(r).includes(wordsOf(e))));
+  // W1: the window and the role the RUNTIME enforces are the signal's own —
+  // `timeframe_days` and `qualifier.role_terms` — not the criterion's display
+  // window (a default the criterion shows even when the runtime has none).
+  // Every hiring signal must carry exactly the requested window and the
+  // requested role, and no recorded window conflict.
+  const runtimeWindowWrong = sigs.filter((s) => s.timeframe_days !== x.hiring.window_days || s.window_conflict != null)
+    .map((s) => ({ timeframe_days: s.timeframe_days ?? null, window_conflict: s.window_conflict ?? null }));
+  const runtimeRoleMissing = sigs.filter((s) =>
+    !(s.qualifier?.role_terms ?? []).some((t: string) => singular(t) === singular(x.hiring.role_term))).length;
   v("I9", "I", `no hard hiring role beyond "${x.hiring.role_term}" (families ${x.hiring.role_families.join(", ")}), ` +
-      "the runtime's own role fields agree, and no exclusion rules the requested role out",
+      `the runtime's own role fields agree and carry the requested role and ${x.hiring.window_days}-day window, ` +
+      "and no exclusion rules the requested role out",
     hiring.length >= 1 && sigs.length >= 1 && extraTerms.length === 0 && extraFamilies.length === 0 &&
-      extraSigTerms.length === 0 && extraTopFamilies.length === 0 && familyMismatch.length === 0 && contradictions.length === 0,
+      extraSigTerms.length === 0 && extraTopFamilies.length === 0 && familyMismatch.length === 0 && contradictions.length === 0 &&
+      runtimeWindowWrong.length === 0 && runtimeRoleMissing === 0,
     { extra_terms: extraTerms, extra_families: extraFamilies, runtime_extra_terms: extraSigTerms,
-      runtime_extra_families: extraTopFamilies, family_mismatch: familyMismatch, excluded_contradictions: contradictions });
+      runtime_extra_families: extraTopFamilies, family_mismatch: familyMismatch, excluded_contradictions: contradictions,
+      runtime_window_wrong: runtimeWindowWrong, runtime_signals_missing_role: runtimeRoleMissing });
 
   // ── P. RESEARCH PLAN ──────────────────────────────────────────────────────
   const plan: Json = ev.execution_plan ?? {};

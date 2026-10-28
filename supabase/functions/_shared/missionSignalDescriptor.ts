@@ -491,7 +491,9 @@ function extractRoleQualifier(
     keepList(t.match(new RegExp(String.raw`\b(?:open|post(?:ed|s|ing)?(?:\s+(?:new|open))?)\s+${LIST}\s+${OPENING_NOUN}\b`))?.[1]);
   }
   if (terms.length === 0) {
-    keep(t.match(/\b(?:hiring|recruiting|hire|hiring for|looking for)\s+([a-z][a-z0-9 /&-]{2,40}?)(?:\s*[.,;]|\s+(?:and|who|whose|in|at|with)\b|$)/)?.[1]);
+    // A window ("… dated within 30 days", "… posted in the last 2 weeks") ends
+    // the role: those words are never part of a job title (review W1).
+    keep(t.match(/\b(?:hiring|recruiting|hire|hiring for|looking for)\s+([a-z][a-z0-9 /&-]{2,40}?)(?:\s*[.,;]|\s+(?:and|who|whose|in|at|with|within|dated|posted|over|during|since)\b|$)/)?.[1]);
   }
   // THE ROLE SITS IMMEDIATELY BEFORE THE VERB, AT MOST A FEW WORDS OF IT.
   //

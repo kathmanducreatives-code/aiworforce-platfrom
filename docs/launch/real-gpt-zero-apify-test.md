@@ -111,7 +111,7 @@ deno run --allow-read scripts/test-project/real-gpt/judge-real-gpt-run.ts ./real
 | I6 | no hard criterion the request does not state |
 | I7 | broadening disallowed for geography, role, size |
 | I8 | contact_enrichment and founder_discovery prohibited |
-| I9 | no hard hiring role term or family beyond the requested one, in the criteria **and** in the fields the runtime reads (`required_signals[].role_families`, `qualifier.role_terms`), top-level and qualifier families equal, and no excluded role that rules the requested role out (added after the independent review of PR #194; I1–I8 unchanged) |
+| I9 | no hard hiring role term or family beyond the requested one, in the criteria **and** in the fields the runtime reads (`required_signals[].role_families`, `qualifier.role_terms`), top-level and qualifier families equal, no excluded role that rules the requested role out, and every runtime hiring signal carries the requested role term and exactly the requested window in `timeframe_days` with no recorded `window_conflict` (added after the independent reviews of PR #194; I1–I8 unchanged) |
 | P1 | the plan is `model_validated` with no violations (the real model planned; no deterministic fallback) |
 | P2 | every provider step uses an approved actor |
 | P3 | the first purchase is job_discovery on the job-search actor: ["Account Executive"], ["United States"], ≤ 3 items, posted "month" |

@@ -51,6 +51,7 @@
 
 import { compileMissionSemantics } from "./missionCriteria.ts";
 import { readRoleQualifier, readSignalPhrase } from "./missionSignalDescriptor.ts";
+import { explicitWindowDays } from "./signalKinds.ts";
 import {
   runtimeIdentity, LEAD_INTELLIGENCE_CONTRACT_VERSION,
 } from "./leadRuntimeIdentity.ts";
@@ -1131,6 +1132,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   // constraints that are exactly equivalent are deduplicated (both recorded).
   if (p) {
     mission = authorizeHiringRoles(mission, query, changes);
+    mission = preserveStatedHiringWindow(mission, query, changes);
     mission = dedupeEquivalentConstraints(mission, changes);
   }
   if ((hedged.length > 0 || negated.length > 0) && statedLocations.length === 0) delete mission.geography_is_hard;
@@ -1321,6 +1323,72 @@ function roleWordForms(term: string): string[] {
 const inSentence = (sentence: string, phrase: string) =>
   new RegExp(`(?:^|[^a-z0-9])${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}(?:$|[^a-z0-9])`)
     .test(sentence);
+
+/**
+ * The hiring window the user's own sentence states, or null.
+ *
+ * Read narrowly, because a window handed to the wrong signal is worse than
+ * none: only a window that FOLLOWS a hiring or posting word in the SAME clause
+ * ("an open Account Executive posting dated within 30 days", "hiring AEs
+ * posted in the last 2 weeks"), and only before another signal's or the
+ * company's own clause begins ("… and raised funding in the last 2 years",
+ * "… founded in the last 3 years"). The general window reader does not see
+ * "within 30 days" at all and files "posted in the last 2 weeks" under social
+ * activity, so it cannot answer this question.
+ */
+const HIRING_ANCHOR_RE =
+  /\b(?:hiring|hires|recruiting|job\s+postings?|(?:open|posted|new)\s+(?:[a-z][\w-]*\s+){0,4}?(?:postings?|roles?|positions?|openings?|jobs?|reqs?|vacanc(?:y|ies)))\b/i;
+const CLAUSE_END_RE =
+  /[.;]|\b(?:and|that|who|which|with|while)\s+(?:has\s+|have\s+|had\s+|recently\s+)?(?:raised|funded|founded|launched|announced|expanded|acquired|posted\s+about)\b|\b(?:founded|established|incorporated|funded|raised)\b/i;
+export function statedHiringWindowDays(query: string): number | null {
+  const q = String(query ?? "");
+  const anchor = q.match(HIRING_ANCHOR_RE);
+  if (!anchor || anchor.index == null) return null;
+  const after = q.slice(anchor.index + anchor[0].length);
+  const end = after.search(CLAUSE_END_RE);
+  const clause = (end >= 0 ? after.slice(0, end) : after)
+    // "within 30 days" and "in 30 days" name the same window as "within the last 30 days".
+    .replace(/\b(within|in|over|during)\s+(?!the\b)(?=(?:\d|a\b|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|ninety))/gi,
+      "$1 the last ");
+  return explicitWindowDays(clause.toLowerCase());
+}
+
+/**
+ * THE USER'S STATED HIRING WINDOW REACHES THE RUNTIME (review W1, PR #194).
+ *
+ * The job filter reads `required_signals[].timeframe_days`, which came only
+ * from the proposal's `signal_recency_days`. A proposal that omitted it left
+ * the runtime with no window — a 200-day-old posting proved "dated within 30
+ * days" — while the criterion still displayed the 30-day default, so I5
+ * passed. Now:
+ *   * a window the user stated and the proposal omitted is set from the
+ *     request (recorded `hiring_window_from_request`);
+ *   * a proposal window that DIFFERS from the user's is a contradiction: the
+ *     user's window is what the runtime uses (never the model's wider or
+ *     narrower one), the conflict is recorded, and it is marked on the signal
+ *     (`window_conflict`) so the interpretation gate refuses the mission.
+ * Nothing changes when the user stated no window.
+ */
+export function preserveStatedHiringWindow(
+  mission: LeadMissionV1, query: string, changes: string[],
+): LeadMissionV1 {
+  const stated = statedHiringWindowDays(query);
+  if (stated == null) return mission;
+  const required_signals = (mission.required_signals ?? []).map((sig) => {
+    if ((sig.event ?? sig.type) !== "hiring") return sig;
+    const proposed = sig.timeframe_days;
+    if (proposed == null) {
+      changes.push(`hiring_window_from_request:${stated}`);
+      return { ...sig, timeframe_days: stated };
+    }
+    if (proposed !== stated) {
+      changes.push(`hiring_window_contradiction:proposal=${proposed}:request=${stated}`);
+      return { ...sig, timeframe_days: stated, window_conflict: { proposed, requested: stated } } as typeof sig;
+    }
+    return sig;
+  });
+  return { ...mission, required_signals };
+}
 
 /**
  * Whether excluding `excluded` rules out every posting for `required`: the
