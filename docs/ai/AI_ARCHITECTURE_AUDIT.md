@@ -12,6 +12,12 @@ and every earlier review probe set). The agency-only A7 TEST and its I1–I9 gat
 
 Offline report: `deno run --allow-read --allow-env scripts/model-routing-eval/interpretationEval.ts`.
 
+> **Corrected after a failed self-review of `da3c0b08`.** The first cut of contract v2 could drop or
+> invert a stated requirement, advertised capabilities that cannot run, and left the escalation budget
+> unwired. §11 lists each defect, its fix and its regression test. All results below are
+> **self-verified by the author only**. They are not an independent review, and nothing here claims
+> production readiness.
+
 ---
 
 ## 1. What runs where (measured from code)
@@ -109,42 +115,87 @@ text.
 2. **Configurable Luna-first routing** (`AGENTORY_GPT_MODEL_FAMILY`). The policy is unchanged: the
    same stages escalate, on validator rejection only, one rung only. A typo falls back to the
    default. Routes on a non-default family record `model_family`.
-3. **Bounded escalation per run** (`EscalationBudget`). Optional and shared across a run's stages.
-   When spent, a rejected result fails safely with `escalation_budget_exhausted` instead of
-   escalating.
-4. **Interpretation contract v2.**
-   * The model writes each stated timeframe under its own signal (`signal_windows`), quoting the user.
-   * Code refuses quotes not in the request, unknown events and company-age windows, and computes
-     the days itself.
-   * A signal with no window gets none.
-   * C's hiring regex and the semantics reader are *recorded* where they disagree, never applied.
-   * Every decision is in `validator_changes` and in `interpretation_trace`, which traces each
-     timeframe from the request to the runtime signal.
-5. **Dynamic capability context** (v2). Availability is derived from the code-owned executability
-   table, with an instruction to report a dependency on an unavailable capability in `unknowns`.
+3. **Bounded escalation.**
+   * One repair per decision, as before.
+   * A **mission-level cap** under `gpt-6`: `AGENTORY_MAX_ESCALATIONS_PER_MISSION`, default 3, with
+     0 disabling escalation. It is counted on the engine's checkpointed state (`escalations_used`)
+     and spent by the engine's real repair rounds (`discovery_actor_selection_repair`,
+     `execution_plan_repair`).
+   * Past the cap, the refusal stands: discovery keeps the first selection's refusal, and the
+     execution plan is blocked with `escalation_budget_exhausted`.
+   * There is no cap on the default family, so behaviour there is unchanged. `EscalationBudget`
+     remains an optional per-run helper for `runWithEscalation`, which still has no production
+     caller.
+4. **Interpretation contract v2** (only when `AGENTORY_MISSION_CONTRACT=v2`; under v1
+   `signal_windows` is ignored and recorded as `signal_windows_ignored:contract_v1`).
+   * **The model attributes.** It writes each stated timeframe under its signal (`signal_windows`),
+     quoting the user, and names the `signal` when one event carries two windows.
+   * **Code counts.** Code parses the quote: past windows only. Older-than, future, negated and
+     undirected quotes are conflicts. A quote with no time expression in it is refused. Windows are
+     capped at 730 days, and the cap is recorded.
+   * **The reader checks independently.** The deterministic sentence reader (`window_days_by_kind`)
+     is restored as an independent check:
+     * The model omits a window the reader reads → the reader's window is applied
+       (`window_from_reader_contract_omitted`).
+     * They disagree → conflict.
+     * The model puts on a signal a window the reader assigns to another signal → conflict.
+   * **The R1 hiring regex is record-only**
+     (`hiring_regex_disagrees_with_contract`). It is the one reader not allowed to override.
+   * **Every past timeframe must be accounted for.** Every past time expression in the request must
+     be quoted by a window, be a company-age or tenure window, or be carried by the reader. Otherwise
+     `timeframe_unaccounted` is raised. A negated one gives `timeframe_negated`.
+   * **Other conflicts.** A global `signal_recency_days` that disagrees with `signal_windows` is a
+     conflict. So is a window whose signal is missing at runtime (`signal_missing_for_window`).
+   * **Two windows for one event are refused.** `per_signal_windows_not_enforced_at_runtime` is
+     raised because the runtime job filter (`requestedHiringFromSignals`) enforces the shortest
+     hiring window on every posting. Without names, `signal_window_ambiguous` is raised.
+   * **Conflicts fail closed.** Any conflict throws `MissionCompilationBlockedError`
+     (`interpretation_conflict:*`) before spend. The compiler binding first spends its existing
+     second call on one repair, sending the exact problems as `repair_feedback`. There is never a
+     third call.
+   * **Trace.** `interpretation_trace` is built from the **final** runtime signals: event, runtime
+     days and source. It sits alongside every proposed window's decision.
+5. **Dynamic capability context** (v2). Availability is derived from the executability table **and**
+   `PRODUCTION_READINESS` over the stage's providers, with configuration by credential *presence*.
+   Values are `available`, `verification_only`, `partially_available`, `not_available` and
+   `offer_requires_user_approval`. Funding-event discovery, expansion and product-launch evidence are
+   `not_available`: their providers are carded but not live.
 6. **Cache-friendly payload** (v2). All fixed parts come first and the request comes last.
 7. **Reusable offline evaluation.**
-   * `interpretationCorpus.ts`: 9 cases, 5 seeded model errors.
-   * `interpretationEval.ts`: compiler-versus-model errors, routing tables, cost.
-   * Tests `missionContractV2.test.ts` (25) and `aiModelFamilyRouting.test.ts` (8).
+   * `interpretationCorpus.ts`: 19 cases and 16 seeded model errors.
+   * `interpretationEval.ts`: compiler-versus-model errors and refusals, routing tables, cost.
+   * Tests:
+     * `missionContractV2.test.ts` (63)
+     * `aiRoutingBudgetFixes.test.ts` (12)
+     * `aiModelFamilyRouting.test.ts` (8)
 
 Not implemented, because there is no evidence of a problem or the risk is too high for this branch:
 * changing the Claude task models
 * renaming AI employees
 * fixing MC-9
-* wiring mission compilation into the escalation ladder
+* wiring mission compilation into the escalation ladder (its bounded repair re-asks the routed
+  model; it does not escalate to Sol)
+* per-signal windows at runtime (the job filter change is a separate piece of work; refused until
+  then)
 * prompt changes to the two large planning prompts (see §8)
 
 ## 6. Offline evaluation results
 
 | | v1 (today) | v2 |
 |---|---|---|
-| Correct proposal → correct runtime windows (9 cases) | **3/9** | **8/9** (T8 = MC-9, a reader defect) |
+| Correct proposal → correct runtime (12 cases) | **5/12** | **12/12** |
+| Requests that must be refused (older-than, future, negated, MC-9, per-signal, non-signal timeframe: 7) | compiled **silently** (e.g. "over 90 days ago" → 90) | **7/7 refused before spend** |
 | The example from the brief: "hiring AEs whose funding closed within six months" | hiring **30** (a default the user never stated), funding 180 | hiring **none**, funding **180** ✅ |
-| Seeded model errors code can catch (wrong days, invented window, age-as-funding) | not expressible | **3/3 caught and recorded** |
-| Model errors code cannot see (right words on the wrong signal; omitted window) | — | 2: passed through, documented, measured only by a live comparison |
-| Structured output | v1 schema unchanged | v2 schema strict, `signal_windows` required |
-| A7 runtime (hiring 30, Account Executive) | ✅ | ✅ identical |
+| Seeded model errors | not expressible | **15/16 caught** (corrected or refused); 1 documented as invisible to code (T19-E) |
+| 873 requests, every window **omitted** by the model | — | 861 identical hard criteria, 9 refused, 3 narrowed by the 730 cap, **0 downgraded** |
+| 873 requests, every timeframe misfiled under hiring / under funding | — | **0 downgraded** (62 / 34 refused) |
+| Flags off vs `121d8e1` | — | **byte-identical** (see §11) |
+| A7 runtime (hiring 30, Account Executive), I1–I9 on a correct v2 proposal | ✅ | ✅ identical, I1–I9 pass |
+
+**Known costs of failing closed.**
+* "who should I contact **this week**" is refused (T19), because the contract has no safe way to say
+  a timeframe qualifies no signal.
+* The A7 sentence with the window omitted is refused rather than repaired by the R1 regex.
 
 ## 7. Recommended routing (GPT-6 family, after the live comparison confirms it)
 
@@ -155,14 +206,23 @@ Not implemented, because there is no evidence of a problem or the risk is too hi
 | Triage, evaluation, qualification, extraction, evidence planning, summaries | `gpt-6-luna` none | none: an undecidable verdict is already a handled outcome |
 | Pool ranking | deterministic | — |
 | Filtering, dedup, dates, validation, accounting, credits | code | — |
-| Run escalation budget | 3 per run (proposed) | `escalation_budget_exhausted` beyond it |
+| Mission escalation cap | 3 per mission under `gpt-6` (`AGENTORY_MAX_ESCALATIONS_PER_MISSION`) | blocked with `escalation_budget_exhausted` beyond it |
 
 Official prices, from the OpenAI model pages read 2026-10-28:
 
-| Model | Input / cached / output per 1M tokens | Reasoning effort | Notes |
+| Model | Input / cached / cache write / output per 1M tokens | Reasoning effort | Notes |
 |---|---|---|---|
-| `gpt-6-luna` | $0.10 / $0.01 / $0.50 | `none`–`max`, default `medium` | Chat Completions function calling only at effort `none` |
-| `gpt-6.1-sol` | $2 / $0.10 / $10 | `low`–`max` (**no `none`**) | 2× input / 1.5× output above 272K input tokens; tools need the Responses API |
+| `gpt-6-luna` | $0.10 / $0.01 / $0.125 / $0.50 | `none`–`max`, default `medium` | Chat Completions function calling only at effort `none` |
+| `gpt-6.1-sol` | $2 / $0.10 / $2.50 / $10 | `low`–`max` (**no `none`**) | 2× input / 1.5× output above 272K input tokens; tools need the Responses API |
+
+**Cache writes.**
+* On GPT-5.6 and later, cache writes are billed at 1.25× input for the 30-minute write and 2.5× for
+  the 12-hour write. They are reported as `cache_write_tokens`, with `ttl_12h_tokens` broken out.
+* `readModelUsage` carries them when reported, and `priceModelCall` charges them for the two GPT-6
+  models.
+* **Pre-existing gap, deliberately left:** `gpt-5.6-*` writes are still priced as plain input, to keep
+  Candidate C's accounting byte-identical. That under-states 5.6 spend by at most 0.25× of the
+  written tokens.
 
 Sol is **cheaper than today's escalation model**, `gpt-5.6-terra` ($2 / $12).
 
@@ -175,7 +235,7 @@ different model emits a different number of tokens, so these are estimates, not 
 |---|---|---|---|---|
 | `4250f181` (13 calls, 237k input tokens) | $0.051 | **$0.025** | $0.485 | +$0.080 |
 | `1e52d43c` (43 calls, 355k input tokens) | $0.092 | **$0.044** | $0.868 | +$0.079 |
-| Mission compilation alone (one call) | $0.0030 | **$0.0013** (v2 with a warm cache ≈ $0.0010) | $0.027 | — |
+| Mission compilation alone (one call) | $0.0030 | **$0.0014** cold, including the cache write (v2 with a warm cache ≈ $0.0010) | $0.028 | — |
 
 **The largest remaining cost lever is not routing.** Plan amendments (5 calls of about 26.5k tokens
 each, 20–40% cached) and discovery selection (2 calls of about 36k tokens each, **0% cached**) are
@@ -189,12 +249,12 @@ not changed here.
   telemetry in the existing `[model-telemetry]` format.
 * **Stage.** Mission compilation only; it is the decision every later stage inherits.
 * **Inputs.**
-  * The 9 interpretation cases
+  * The 19 interpretation cases
   * The A7 request
   * The 7 `corpus.ts` cases
   * The real run-1 A7 request
 
-  18 requests in total.
+  28 requests in total.
 * **Arms.**
 
   | Arm | Model | Effort | Contract |
@@ -204,11 +264,11 @@ not changed here.
   | C | `gpt-6-luna` | medium | v2 |
   | D | `gpt-6.1-sol` | low | v2 |
 
-  Three repeats each: 18 × 4 × 3 = **216 calls**.
+  Three repeats each: 28 × 4 × 3 = **336 calls**, plus up to one v2 repair call each.
 * **Cap.**
-  * Estimated cost: about 162 Luna calls at ≈$0.0014 (≈$0.23) and 54 Sol calls at ≈$0.028
-    (≈$1.51), **≈$1.74 in total**.
-  * Hard stop at **$3.00**. Use a TEST-project key with its own OpenAI usage cap.
+  * Estimated cost: about 252 Luna calls at ≈$0.0015 (≈$0.38) and 84 Sol calls at ≈$0.031
+    (≈$2.60), about **$3.0**, and up to twice that if every v2 call repairs.
+  * Hard stop at **$6.00**. Use a TEST-project key with its own OpenAI usage cap.
   * No provider calls, no worker, no database.
 * **Scoring** (all offline, from the saved outputs):
   * `interpretationCorpus.evaluate`, which separates model errors from compiler errors: a correct
@@ -222,17 +282,69 @@ not changed here.
 
 ## 10. Remaining blockers before enabling
 
-1. **v2 has one omission path code cannot see**: GPT leaves out a stated window (T2-E). Before
-   enabling v2, wire `hiring_window_reader_disagrees_with_contract` (and the semantics reader's
-   equivalent) as a **validator rejection** in a production escalation path. That means mission
-   compilation through `runWithEscalation` with the run's `EscalationBudget`, so one bounded Sol
-   re-read resolves the disagreement instead of an unconfirmed regex.
-2. **Live comparison** (§9): needs approval and the `run.ts --live` implementation.
-3. **The TEST gate on v2**: I9 is unchanged and checks the runtime window. Any future paid TEST on v2
+1. **An independent review** of the corrected commit. Everything here is the author's own
+   verification.
+2. **Live comparison** (§9): needs approval and the `run.ts --live` implementation. The refusal rate
+   of v2 on real model output, and how often the bounded repair resolves a refusal, are unmeasured.
+3. **Per-signal windows at runtime.** `requestedHiringFromSignals` takes the shortest hiring window,
+   so v2 refuses "AEs in 2 weeks or SDRs in 90 days" instead of collapsing it. Supporting it needs a
+   role-aware job filter.
+4. **No safe way to declare a timeframe that qualifies no signal** (T19), and no "older-than" or
+   exclusion window at runtime. Both are refused today.
+5. **The TEST gate on v2**: I9 is unchanged and checks the runtime window. Any future paid TEST on v2
    needs its own review; this branch must not reach the A7 TEST.
-4. **AI-employee roster**: a product decision on Lisa/Lyra/Mira/Nova/Orion roles before any prompt
+6. **AI-employee roster**: a product decision on Lisa/Lyra/Mira/Nova/Orion roles before any prompt
    names them.
-5. **MC-9** ("roles posted" read as a social post) and the open MC-1…MC-8 issues from PR #194's
-   reviews.
-6. **Stacked on PR #194.** This draft targets `test/agency-candidate-c-compiler` so its diff is
+7. **MC-9** ("roles posted" read as a social post) is now refused under v2, not fixed. The open MC-1…MC-8
+   issues from PR #194's reviews remain.
+8. **Stacked on PR #194.** This draft targets `test/agency-candidate-c-compiler` so its diff is
    reviewable; retarget it after #194 lands. **Do not merge it into the Candidate C branch.**
+
+## 11. Corrections after the failed self-review of `da3c0b08`
+
+| # | Defect in `da3c0b08` | Fix | Regression test |
+|---|---|---|---|
+| 1 | v2 omission downgraded hard funding (42/873) and hiring windows | Reader restored as an independent check. An omitted window it reads is applied; one it cannot place fails closed | `DEFECT 1` (×4), corpus T5-E, T10-E, T2-E |
+| 2 | Any quote accepted ("posting", "days" took the model's days) | Quote must contain a time expression; only a quote that *contains* an expression accounts for it | `DEFECT 2`, trivial-quote tests, T2-E-quote-* |
+| 3 | "over 90 days ago" → 90, "not in the last 90" → 90, "in 6 months" → 180 | Direction-aware parser; older-than / negated / future / undirected are conflicts | `DEFECT 3`, `readTimeframePhrase`, T11–T14 |
+| 4 | v2 fields processed with the flag off | `signal_windows` processed only under contract v2; recorded and ignored under v1 | `DEFECT 4` |
+| 5 | Funding / expansion / product launch advertised as usable | Availability from `PRODUCTION_READINESS` + configuration | `DEFECT 5`, availability tests |
+| 6 | Global `signal_recency_days` silently ignored | Must agree with `signal_windows` or the compile is refused | `DEFECT 6` |
+| 7 | Trace said "applied" with no runtime signal (MC-9) | Trace built from final signals; missing signal → `signal_missing_for_window` | `DEFECT 7`, trace test |
+| 8 | Same-event windows collapsed to the minimum | Named → refused (runtime cannot enforce); unnamed → ambiguous, refused | `DEFECT 8`, T15 |
+| 9 | `EscalationBudget` not connected to production | Mission cap spent by the engine's repair rounds (gpt-6 only) | `ENGINE` tests (cap 0 → no repair call) |
+| 10 | Strategist sent Sol `none` (rejected); body-build throw leaked the abort timer | Effort floor applied; build failure is a `request_build_failed` result, timer cleared | `STRATEGIST`, `GPT PROVIDER` tests |
+| 11 | Cache writes unpriced on GPT-6 | Priced at the write rate when reported | `PRICING` tests |
+
+Found while re-running the probes against the first correction:
+* A trivial quote still "covered" the expression it sat in.
+* Calendar funding windows ("this month") were refused.
+* A window copied from one signal onto another was invisible to code.
+
+All three are fixed and tested.
+
+**Which call sites the family flag covers.** `AGENTORY_GPT_MODEL_FAMILY` changes only what
+`gptModelRouter` routes:
+
+| Call site | Covered | Note |
+|---|---|---|
+| Router stages (mission compilation, discovery and execution planning and repairs, triage, evaluation, qualification, pool, grounded evidence, signal relevance, chat brain) | ✅ | Luna → `gpt-6-luna`, escalation → `gpt-6.1-sol` |
+| Lead strategist adapters (`LEAD_STRATEGIST_*` model config) | ❌ | Configured separately; Sol's effort floor now applies if it is configured |
+| `aiProvider` Claude tasks (`TASK_MODELS`) and their `gpt-4.1-mini` fallbacks | ❌ | Not GPT-5.6 routing |
+| `gptProvider.GPT_MODEL` default (`gpt-4.1`) for callers that pass a tier, not a route | ❌ | Unchanged |
+| `run-monitoring-scan` literal model label | ❌ | A label, not a call |
+
+**Escalations per mission.**
+* The engine's two repair rounds are capped under gpt-6.
+* The only other production escalation, `signal_relevance` (its own code, not `runWithEscalation`),
+  escalates at most once per decision. It is **not** counted against the mission cap, because it is
+  outside the lead engine's state.
+
+**Flags-off equivalence with `121d8e1`** (re-run on the corrected tree):
+* The whole `compileLeadMission` result is byte-identical for 873 requests × 4 proposal variants
+  (3,492 results).
+* The 3,000-wording sweep, the criteria corpus and all 15 earlier probe scripts give identical output.
+* The v1 payload, system prompt, schema, default routes and request body are identical.
+* `buildModelTelemetry` output is identical for every default-family model.
+* The one internal difference: `readModelUsage` now returns `cache_write_input_tokens` when OpenAI
+  reports it. No telemetry, log, row or price reads it for a `gpt-5.6` model.

@@ -150,6 +150,13 @@ export interface MissionSemanticsRecord {
   window_sources: Record<string, { source: CriterionSource; confidence?: number; rule?: string }>;
   /** Named rewrites of legacy carriers, also pushed to `validator_changes`. */
   corrections: string[];
+  /**
+   * CONTRACT v2 only: the window each kind carries because the user stated it
+   * (validated contract window, or the reader's where the contract omitted it).
+   * Read by criteria derivation, which otherwise recognises a stated window
+   * only when this pass's own reader can read it.
+   */
+  stated_windows?: Record<string, number>;
 }
 
 // ── READING THE USER'S WORDS ────────────────────────────────────────────────
@@ -448,6 +455,12 @@ export interface SemanticsInput {
    * it disagrees, never applied. Absent ⇒ v1, unchanged.
    */
   signalWindows?: Readonly<Record<string, number>> | null;
+  /**
+   * CONTRACT v2: kinds whose signals already carry their OWN window, set per
+   * signal by the compiler ("AEs in the last 2 weeks, SDRs in the last 90
+   * days"). This pass leaves those windows alone and only checks the reader.
+   */
+  contractPerSignalKinds?: readonly string[] | null;
 }
 
 /**
@@ -496,13 +509,53 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
 
   // 4. Every signal with a temporal meaning gets a visible window.
   const windowSources: MissionSemanticsRecord["window_sources"] = {};
+  const statedWindows: Record<string, number> = {};
   signals = signals.map((s) => {
     const k = kindOfSignal(s);
     if (!k || k === "technology") return s;
     const readerForK = lang.window_days_by_kind[k];
-    const statedForK = i.signalWindows ? i.signalWindows[k] ?? null : readerForK;
-    if (i.signalWindows && (readerForK ?? null) !== statedForK) {
-      changes.push(`window_reader_disagrees_with_contract:${k}:reader=${readerForK ?? "none"}:contract=${statedForK ?? "none"}`);
+    let statedForK: number | null = readerForK ?? null;
+    if (i.signalWindows) {
+      // ── CONTRACT v2: THE MODEL ATTRIBUTES, THE READER CHECKS ────────────
+      //
+      // The reader is an INDEPENDENT check, not a record: where the model
+      // omitted a window the reader reads, the reader's window is kept (so a
+      // stated requirement is never downgraded by an omission); where both
+      // read a window and disagree, the conflict is named and the compiler
+      // refuses the mission. Both are capped at the compiler's 730-day limit.
+      const cap = (d: number | null | undefined) => d == null ? null : Math.min(d, 730);
+      const reader = cap(readerForK);
+      const once = (c: string) => { if (!changes.includes(c)) changes.push(c); };
+      if (i.contractPerSignalKinds?.includes(k)) {
+        windowSources[k] = { source: "user_explicit" };
+        const own = signals.filter((x) => kindOfSignal(x) === k).map((x) => x.timeframe_days);
+        if (reader != null && !own.some((d) => d != null && sameWindow(d, reader))) {
+          once(`window_conflict:${k}:contract=per_signal:reader=${readerForK}`);
+        }
+        return s;
+      }
+      const contract = cap(i.signalWindows[k]);
+      // The reader puts this window on ANOTHER signal and none on this one:
+      // the model copied one signal's timeframe onto a second (review R1's
+      // shape, "hiring AEs whose funding closed within 6 months" read as a
+      // hiring window too). A disagreement like any other.
+      const elsewhere = contract != null && reader == null
+        ? Object.entries(lang.window_days_by_kind).find(([other, d]) => other !== k && d != null && sameWindow(cap(d)!, contract))?.[0]
+        : undefined;
+      if (contract != null && reader != null && !sameWindow(contract, reader)) {
+        once(`window_conflict:${k}:contract=${contract}:reader=${readerForK}`);
+        statedForK = contract;
+      } else if (elsewhere) {
+        once(`window_conflict:${k}:contract=${contract}:reader=none:reader_assigns_it_to=${elsewhere}`);
+        statedForK = contract;
+      } else if (contract == null && reader != null) {
+        once(`window_from_reader_contract_omitted:${k}:${reader}d`);
+        statedForK = reader;
+      } else {
+        statedForK = contract;
+      }
+      if (readerForK != null && readerForK > 730 && statedForK === 730) once(`window_capped:${k}:${readerForK}->730`);
+      if (statedForK != null) statedWindows[k] = statedForK;
     }
     if (statedForK != null) {
       windowSources[k] = { source: "user_explicit" };
@@ -540,6 +593,9 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
     if (calendar) {
       windowSources[k] = { source: "user_explicit", rule: calendar.rule };
       changes.push(`window_from_calendar:${k}:${calendar.days}d`);
+      // Under contract v2 it is a stated window like any other: the timeframe
+      // audit must see it accounted for.
+      if (i.signalWindows) statedWindows[k] = calendar.days;
       return { ...s, timeframe_days: calendar.days };
     }
     const d = DEFAULT_SIGNAL_WINDOWS[k];
@@ -637,6 +693,7 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
     stage: lang.stage,
     window_sources: windowSources,
     corrections: changes,
+    ...(i.signalWindows ? { stated_windows: statedWindows } : {}),
   };
   const mission: LeadMissionV1 = {
     ...i.mission,
@@ -1309,6 +1366,9 @@ export function deriveMissionCriteria(
     const fundingWindow = fundingCandidate &&
       time_window?.source === "user_explicit" &&
       sameWindow(time_window.days,
+        // Contract v2: the validated window IS the user's, even in a form the
+        // reader cannot read ("within 6 months").
+        sem?.stated_windows?.funding ??
         (lang ?? readMissionLanguage(query)).window_days_by_kind.funding ?? explicitWindowDays(query));
     // ── "RECENT FUNDING" IS A REQUIREMENT TOO, ON THE CANONICAL DEFAULT ─────
     //

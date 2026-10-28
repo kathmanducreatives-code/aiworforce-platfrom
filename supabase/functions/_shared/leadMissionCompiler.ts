@@ -51,10 +51,11 @@
 
 import { compileMissionSemantics } from "./missionCriteria.ts";
 import { readRoleQualifier, readSignalPhrase } from "./missionSignalDescriptor.ts";
-import { explicitWindowDays } from "./signalKinds.ts";
+import { explicitWindowDays, kindForEvent } from "./signalKinds.ts";
 import {
-  activeMissionContract, type MissionContractVersion, parseSignalWindows, type ProposedSignalWindow,
-  SIGNAL_WINDOWS_INSTRUCTION, type SignalWindowTrace, validateSignalWindows,
+  activeMissionContract, MAX_CONTRACT_WINDOW_DAYS, type MissionContractVersion, parseSignalWindows,
+  type ProposedSignalWindow, SIGNAL_WINDOWS_INSTRUCTION, type SignalWindowDecision, timeframeAudit,
+  validateSignalWindows,
 } from "./missionInterpretationContract.ts";
 import {
   runtimeIdentity, LEAD_INTELLIGENCE_CONTRACT_VERSION,
@@ -474,7 +475,7 @@ export function buildMissionCompilerPayload(
     response_shape: {
       ...(response_shape as Record<string, unknown>),
       signal_recency_days: "null — use signal_windows",
-      signal_windows: "[{ event, days: number|null, phrase: the user's exact words }] — one per signal with a stated timeframe",
+      signal_windows: "[{ event, days: number|null, phrase: the user's exact words, signal: the signal phrase it qualifies or null }] — one per signal with a stated timeframe",
     },
     company_brain_context,
     user_query,
@@ -849,7 +850,7 @@ export interface CompiledMissionResult {
   /** Present only when a proposal was refused outright. */
   safety_violations: ProposalViolation[];
   /** Contract v2 only: how each stated timeframe reached (or did not reach) a signal. */
-  interpretation_trace?: { contract: "v2"; signal_windows: SignalWindowTrace[] };
+  interpretation_trace?: InterpretationTrace;
 }
 
 export interface CompileMissionInput {
@@ -866,6 +867,24 @@ export interface CompileMissionInput {
    * signal, as before.
    */
   signalRecencyByEvent?: Record<string, number> | null;
+  /**
+   * The interpretation contract the proposal was produced under. Defaults to
+   * AGENTORY_MISSION_CONTRACT (v1 when unset). `signal_windows` is read ONLY
+   * under v2: a v1 compile ignores the field and records that it did.
+   */
+  contract?: MissionContractVersion;
+}
+
+/** Contract v2: from each FINAL runtime signal back to the words that set its window. */
+export interface InterpretationTrace {
+  contract: "v2";
+  signals: Array<{
+    event: string;
+    signal_phrase: string | null;
+    runtime_days: number | null;
+    source: "contract" | "contract_per_signal" | "reader_contract_omitted" | "default" | "none" | "other";
+  }>;
+  proposed_windows: SignalWindowDecision[];
 }
 
 /**
@@ -946,6 +965,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   let requestedCaps: string[] = [];
   /** Contract v2's validated windows; null on a v1 proposal. */
   let contractWindows: ReturnType<typeof validateSignalWindows> | null = null;
+  const contract: MissionContractVersion = i.contract ?? activeMissionContract();
   let approvedCaps: PublicCapabilityId[] = [];
   const rejectedCaps: CapabilityDecisionRecord["rejected"] = [];
 
@@ -993,9 +1013,12 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
       // CONTRACT v2: the model said which signal each timeframe belongs to;
       // code checks the words are the user's and computes the days. A caller's
       // own per-event windows (the Chat Brain path) still win.
-      if (parsed.proposal.signal_windows) {
+      if (parsed.proposal.signal_windows && contract === "v2") {
         contractWindows = validateSignalWindows(query, parsed.proposal.signal_windows);
         for (const c of contractWindows.changes) changes.push(c);
+      } else if (parsed.proposal.signal_windows) {
+        // A v2-only field under v1 is never acted on, whoever produced it.
+        changes.push("signal_windows_ignored:contract_v1");
       }
 
       const validated = validateLeadMission(
@@ -1196,9 +1219,28 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
     if (!contractWindows) {
       mission = preserveStatedHiringWindow(mission, query, changes);
     } else {
+      // Review R1: this regex reads "funding closed within 6 months" and "who
+      // joined within 90 days" as hiring windows. Recorded, never applied.
       const reader = statedHiringWindowDays(query);
-      const contract = contractWindows.byEvent.hiring ?? null;
-      if (reader !== contract) changes.push(`hiring_window_reader_disagrees_with_contract:reader=${reader ?? "none"}:contract=${contract ?? "none"}`);
+      const hiring = contractWindows.byEvent.hiring ?? null;
+      if (reader !== hiring) changes.push(`hiring_regex_disagrees_with_contract:regex=${reader ?? "none"}:contract=${hiring ?? "none"}`);
+      // Two windows for one event, each naming its signal ("AEs in the last 2
+      // weeks or SDRs in the last 90 days"), are two requirements. The runtime
+      // cannot hold them apart: `requestedHiringFromSignals` enforces the
+      // SHORTEST hiring window on every posting, so the 90-day SDR requirement
+      // would silently become 14 days. Refused until the runtime carries
+      // per-signal windows; never collapsed.
+      for (const [event, assigned] of Object.entries(contractWindows.perSignal)) {
+        contractWindows.conflicts.push(
+          `per_signal_windows_not_enforced_at_runtime:${event}:${assigned.map((a) => `${a.signal}=${a.days}`).join("|")}`);
+      }
+      // A global window beside per-signal ones must agree with one of them.
+      const global = p.signal_recency_days;
+      if (global != null) {
+        const days = contractWindows.decisions.map((d) => d.days).filter((d): d is number => d != null);
+        if (days.some((d) => d === Math.min(global, MAX_CONTRACT_WINDOW_DAYS))) changes.push(`signal_recency_days_redundant:${global}`);
+        else contractWindows.conflicts.push(`global_window_conflict:signal_recency_days=${global}:signal_windows=${days.join("|") || "none"}`);
+      }
     }
     mission = dedupeEquivalentConstraints(mission, changes);
   }
@@ -1215,10 +1257,66 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   const semantics = compileMissionSemantics({
     query, mission,
     proposal: p ? { signal_recency_days: p.signal_recency_days, confidence: p.confidence } : null,
-    ...(contractWindows ? { signalWindows: contractWindows.byEvent } : {}),
+    ...(contractWindows
+      ? {
+        signalWindows: Object.fromEntries(Object.entries(contractWindows.byEvent)
+          .map(([event, d]) => [kindForEvent(event) ?? event, d])),
+        contractPerSignalKinds: Object.keys(contractWindows.perSignal).map((e) => kindForEvent(e) ?? e),
+      }
+      : {}),
   });
   mission = semantics.mission;
   for (const c of semantics.changes) changes.push(c);
+
+  // ── CONTRACT v2: FAIL CLOSED ON ANY TIMEFRAME NOBODY CAN VOUCH FOR ────────
+  //
+  // Conflicts between the model and the reader, timeframes the request states
+  // that no window accounts for, negated timeframes no signal can carry, a
+  // window whose signal is missing from the runtime: each would compile into
+  // a mission that is wider, narrower or inverted relative to the words. The
+  // mission is refused instead; the compiler binding's bounded second attempt
+  // is what repairs it.
+  let trace: InterpretationTrace | null = null;
+  if (contractWindows) {
+    const stated = mission.mission_semantics?.stated_windows ?? {};
+    const audit = timeframeAudit(query, p?.signal_windows ?? [], Object.values(stated));
+    for (const u of audit.undirected) changes.push(`timeframe_without_direction_not_checked:${u}`);
+    const signals = mission.required_signals ?? [];
+    const runtimeEvents = new Set(signals.map((x) => String(x.event ?? x.type)));
+    const missing = contractWindows.decisions
+      .filter((d) => d.days != null && !runtimeEvents.has(d.event))
+      .map((d) => `signal_missing_for_window:${d.event}`);
+    const conflicts = [...new Set([
+      ...contractWindows.conflicts,
+      ...semantics.changes.filter((c) => c.startsWith("window_conflict:")),
+      ...audit.unaccounted.map((u) => `timeframe_unaccounted:${u}`),
+      ...audit.negated.map((u) => `timeframe_negated:${u}`),
+      ...missing,
+    ])];
+    if (conflicts.length) {
+      throw new MissionCompilationBlockedError(query, conflicts.map((c) => `interpretation_conflict:${c}`));
+    }
+    const sourceOf = (x: { event?: unknown; type?: unknown; timeframe_days?: number | null }): InterpretationTrace["signals"][number]["source"] => {
+      const e = String(x.event ?? x.type);
+      const k = kindForEvent(e) ?? e;
+      if (x.timeframe_days == null) return "none";
+      if (contractWindows!.perSignal[e]?.some((a) => a.days === x.timeframe_days)) return "contract_per_signal";
+      if (contractWindows!.byEvent[e] != null && Math.min(contractWindows!.byEvent[e], MAX_CONTRACT_WINDOW_DAYS) === x.timeframe_days) return "contract";
+      if (semantics.changes.includes(`window_from_reader_contract_omitted:${k}:${x.timeframe_days}d`)) return "reader_contract_omitted";
+      if (semantics.changes.some((c) => c.startsWith(`window_defaulted:${k}:`))) return "default";
+      return "other";
+    };
+    trace = {
+      contract: "v2",
+      signals: signals.map((x) => ({
+        event: String(x.event ?? x.type),
+        signal_phrase: typeof (x as { phrase?: unknown }).phrase === "string" ? (x as { phrase: string }).phrase : null,
+        runtime_days: x.timeframe_days ?? null,
+        source: sourceOf(x),
+      })),
+      proposed_windows: contractWindows.decisions,
+    };
+  }
 
   // ── STAMPED WHERE MISSIONS ARE MADE, NOT WHERE THEY ARE USED ─────────────
   //
@@ -1256,7 +1354,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
     validator_changes: changes,
     final_mission: mission,
     // From the request to the runtime signal: which timeframe went where, and why.
-    ...(contractWindows ? { interpretation_trace: { contract: "v2" as const, signal_windows: contractWindows.trace } } : {}),
+    ...(trace ? { interpretation_trace: trace } : {}),
     schema_version: MISSION_COMPILER_SCHEMA_VERSION,
     workspace_context: workspace,
     capability_decision: {
@@ -1390,6 +1488,7 @@ function roleWordForms(term: string): string[] {
   const t = term.trim().toLowerCase();
   return [...new Set([t, t.replace(/(?<=[a-z]{2})(?:es|s)$/, ""), t.replace(/s$/, ""), `${t}s`])];
 }
+
 const inSentence = (sentence: string, phrase: string) =>
   new RegExp(`(?:^|[^a-z0-9])${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}(?:$|[^a-z0-9])`)
     .test(sentence);

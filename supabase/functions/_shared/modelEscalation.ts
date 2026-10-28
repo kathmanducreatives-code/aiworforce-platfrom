@@ -50,7 +50,10 @@
 //
 // PURE. No network, model or database access — the model call is injected.
 
-import { escalationRoute, type GptStage, type ModelRoute, routeModel, type RoutingSignals } from "./gptModelRouter.ts";
+import {
+  activeModelFamily, DEFAULT_MODEL_FAMILY, escalationRoute, type GptStage, type ModelFamilyId, type ModelRoute, routeModel,
+  type RoutingSignals,
+} from "./gptModelRouter.ts";
 import { isUnrecoverableModelFailure } from "./modelFailureContract.ts";
 
 export const MODEL_ESCALATION_VERSION = "model-escalation-v1" as const;
@@ -354,4 +357,34 @@ export class EscalationBudget {
     return true;
   }
   get used(): readonly GptStage[] { return this.spent; }
+}
+
+/**
+ * THE MISSION-LEVEL ESCALATION CAP (Luna → Sol under the gpt-6 family).
+ *
+ * The production escalations of a lead mission are the engine's repair rounds
+ * — a refused discovery selection or execution plan asked once more, on the
+ * escalation model. Each DECISION already gets at most one. Across a mission,
+ * though, discovery is re-planned per wave and slice, so the number of repairs
+ * was unbounded. Under gpt-6 each one is a Sol call, so the mission carries a
+ * count (`escalations_used`, checkpointed with the engine state) and stops at
+ * this cap: a refused plan past it is blocked, exactly as a failed repair is.
+ *
+ * Null — no cap, today's behaviour — on the default family, which the review
+ * required to stay byte-identical. AGENTORY_MAX_ESCALATIONS_PER_MISSION
+ * overrides the default of 3; 0 disables escalation for the mission.
+ */
+export const MISSION_ESCALATION_CAP_ENV = "AGENTORY_MAX_ESCALATIONS_PER_MISSION";
+export const DEFAULT_MISSION_ESCALATION_CAP = 3;
+export function missionEscalationCap(
+  family: ModelFamilyId = activeModelFamily(),
+  read: (k: string) => string | undefined = (k) => {
+    try { return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get(k); }
+    catch { return undefined; }
+  },
+): number | null {
+  if (family === DEFAULT_MODEL_FAMILY) return null;
+  const raw = String(read(MISSION_ESCALATION_CAP_ENV) ?? "").trim();
+  const n = raw === "" ? NaN : Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : DEFAULT_MISSION_ESCALATION_CAP;
 }

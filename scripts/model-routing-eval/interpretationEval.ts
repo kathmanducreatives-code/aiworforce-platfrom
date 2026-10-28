@@ -4,8 +4,10 @@
 //
 // 1. COMPILER ERRORS: each corpus case's correct (reference) proposal compiled
 //    under contract v1 and v2; a wrong runtime window is the compiler's or the
-//    contract's fault, never a model's.
-// 2. MODEL ERRORS: deliberately wrong v2 proposals — which ones code catches.
+//    contract's fault, never a model's. Under v2 some requests must be REFUSED
+//    before spend (older-than, future, negated, unenforceable per-signal).
+// 2. MODEL ERRORS: deliberately wrong v2 proposals — which ones code catches,
+//    by correcting the runtime or by refusing the compile.
 // 3. ROUTING: every stage's model, effort and escalation, per model family.
 // 4. COST: the token profile of two REAL runs (tests/fixtures/lead-v2, harvested)
 //    re-priced per family, plus the mission-compilation call itself. These are
@@ -22,24 +24,30 @@ const pad = (s: unknown, n: number) => String(s).padEnd(n);
 const usd = (n: number | null) => n == null ? "n/a" : `$${n.toFixed(4)}`;
 
 // ── 1. compiler errors ──────────────────────────────────────────────────────
-console.log("## 1. Correct proposal → compiled runtime (compiler / contract errors)\n");
+console.log("## 1. Correct proposal → compiled runtime, or a refusal before spend (compiler / contract errors)\n");
 const tally = { v1: 0, v2: 0 };
+const show = (o: ReturnType<typeof evaluate>) => o.refused ? `REFUSED ${o.refused.map((r) => r.replace("interpretation_conflict:", "")).join(", ")}` : JSON.stringify(o.runtime);
 for (const c of INTERPRETATION_CORPUS) {
   const row = (["v1", "v2"] as const).map((v) => {
-    const o = evaluate(compileLeadMission, c.id, c.request, proposalFor(c, c.windows, v), c.expect, v);
+    // A refusal is the expected outcome only under v2; v1 has no refusal for timeframes.
+    const o = evaluate(compileLeadMission, c.id, c.request, proposalFor(c, c.windows, v), c.expect, v, v === "v2" ? c.expect_refusal : undefined);
+    // v1 cannot refuse for a timeframe: it compiles these silently, which is the defect.
+    if (v === "v1" && c.expect_refusal) return `v1 SILENT ${show(o)}`;
     if (o.ok) tally[v]++;
-    return `${v} ${o.ok ? "ok  " : "FAIL"} ${JSON.stringify(o.runtime)}`;
+    return `${v} ${o.ok ? "ok  " : "FAIL"} ${show(o)}`;
   });
-  console.log(`${pad(c.id, 40)} expect ${pad(JSON.stringify(c.expect), 30)} | ${row.join(" | ")}`);
+  const want = c.expect_refusal ? `refuse ${c.expect_refusal.source}` : JSON.stringify(c.expect);
+  console.log(`${pad(c.id, 36)} expect ${pad(want, 44)} | ${row.join(" | ")}`);
 }
-console.log(`\nv1 ${tally.v1}/${INTERPRETATION_CORPUS.length}   v2 ${tally.v2}/${INTERPRETATION_CORPUS.length}\n`);
+const mustRefuse = INTERPRETATION_CORPUS.filter((c) => c.expect_refusal).length;
+console.log(`\nv1 ${tally.v1}/${INTERPRETATION_CORPUS.length - mustRefuse} (and compiles all ${mustRefuse} must-refuse requests silently)   v2 ${tally.v2}/${INTERPRETATION_CORPUS.length}\n`);
 
 // ── 2. model errors ─────────────────────────────────────────────────────────
-console.log("## 2. Wrong v2 proposals: does code catch the model's error?\n");
+console.log("## 2. Wrong v2 proposals: does code catch the model's error (correct runtime, or refusal)?\n");
 for (const c of INTERPRETATION_CORPUS) for (const e of c.model_errors ?? []) {
-  const o = evaluate(compileLeadMission, e.id, c.request, proposalFor(c, e.windows, "v2"), e.expect ?? c.expect, "v2");
-  const caught = e.detectable && o.ok && o.changes.some((x) => e.expect_change!.test(x));
-  console.log(`${pad(e.id, 32)} ${e.detectable ? (caught ? "CAUGHT by code     " : "MISSED (defect!)   ") : "model error, code cannot see it"}  runtime ${JSON.stringify(o.runtime)}`);
+  const o = evaluate(compileLeadMission, e.id, c.request, proposalFor(c, e.windows, "v2"), e.expect ?? c.expect, "v2", e.expect_refusal);
+  const caught = e.detectable && o.ok && (!e.expect_change || o.changes.some((x) => e.expect_change!.test(x)));
+  console.log(`${pad(e.id, 32)} ${e.detectable ? (caught ? "CAUGHT by code     " : "MISSED (defect!)   ") : "model error, code cannot see it"}  ${show(o)}`);
 }
 
 // ── 3. routing ──────────────────────────────────────────────────────────────
@@ -61,8 +69,9 @@ const familyModels: Record<string, { primary: string; escalation: string }> = {
   "gpt-6 Luna-first": { primary: "gpt-6-luna", escalation: "gpt-6.1-sol" },
   "Sol everywhere (for scale)": { primary: "gpt-6.1-sol", escalation: "gpt-6.1-sol" },
 };
-const price = (model: string, i: number, c: number, o: number) =>
-  priceModelCall({ model, usage: { input_tokens: i, cached_input_tokens: c, output_tokens: o } }).estimated_usd ?? 0;
+const price = (model: string, i: number, c: number, o: number, writes = 0) =>
+  priceModelCall({ model, usage: { input_tokens: i, cached_input_tokens: c, output_tokens: o,
+    ...(writes ? { cache_write_input_tokens: writes } : {}) } }).estimated_usd ?? 0;
 for (const run of runs) {
   const rows: Row[] = JSON.parse(Deno.readTextFileSync(new URL(`../../tests/fixtures/lead-v2/${run}/lead_model_calls.json`, import.meta.url)));
   const tot = rows.reduce((a, r) => ({ i: a.i + r.input_tokens, c: a.c + (r.cached_input_tokens ?? 0), o: a.o + r.output_tokens }), { i: 0, c: 0, o: 0 });
@@ -91,6 +100,6 @@ for (const contract of ["v1", "v2"] as const) {
     schema_version: p.schema_version, agentory_briefing: p.agentory_briefing, instruction: p.instruction,
   }).length / 4);
   for (const m of ["gpt-5.6-luna", "gpt-6-luna", "gpt-6.1-sol"]) {
-    console.log(`  ${contract} ${pad(m, 13)} ≈${inTok} in / 1500 out: cold ${usd(price(m, inTok, 0, 1500))}, warm cache ≈${usd(price(m, inTok, Math.min(cacheable, inTok), 1500))}`);
+    console.log(`  ${contract} ${pad(m, 13)} ≈${inTok} in / 1500 out: cold ${usd(price(m, inTok, 0, 1500, Math.min(cacheable, inTok)))} (incl. the cache write, where priced), warm cache ≈${usd(price(m, inTok, Math.min(cacheable, inTok), 1500))}`);
   }
 }

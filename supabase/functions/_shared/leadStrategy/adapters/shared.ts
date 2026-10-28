@@ -9,7 +9,7 @@ import { extractJson } from "../../aiProvider.ts";
 import {
   buildModelTelemetry, readModelUsage, type ModelCallTelemetry,
 } from "../../modelCostModel.ts";
-import { buildChatCompletionsBody } from "../../modelRequestBody.ts";
+import { buildChatCompletionsBody, minimumReasoningEffort } from "../../modelRequestBody.ts";
 import {
   DEFAULT_MAX_COMPLETION_TOKENS, DEFAULT_TIMEOUT_MS,
 } from "../config.ts";
@@ -45,7 +45,9 @@ export function buildStrategistRequestBody(
     model: wireModel,
     systemPrompt: call.systemPrompt,
     userMessage: call.userMessage,
-    reasoningEffort: "none",
+    // `none`, as always — except for a model that cannot take it (gpt-6.1-sol),
+    // which gets its floor rather than a refused request.
+    reasoningEffort: minimumReasoningEffort(wireModel) ?? "none",
     maxOutputTokens: call.maxCompletionTokens ?? DEFAULT_MAX_COMPLETION_TOKENS,
     schema: null,
   });
@@ -99,7 +101,19 @@ export async function completeOpenAiCompatible(
   // BUILT ONCE. Telemetry reports the effort that was actually SENT rather
   // than one it assumes, and rebuilding the body to read it back would make
   // those two things capable of disagreeing.
-  const requestBody = buildStrategistRequestBody(call, opts.wireModel ?? call.model);
+  // A body the builder refuses is a failed call, and the timer is released.
+  let requestBody: Record<string, unknown>;
+  try {
+    requestBody = buildStrategistRequestBody(call, opts.wireModel ?? call.model);
+  } catch (e) {
+    clearTimeout(timer);
+    return {
+      ok: false, model: call.model, provider: opts.provider, content: "",
+      latencyMs: Date.now() - started,
+      error: `request could not be built: ${String((e as Error)?.message ?? e).slice(0, 200)}`,
+      errorCode: "request_build_failed",
+    };
+  }
   const sentEffort = typeof requestBody.reasoning_effort === "string"
     ? requestBody.reasoning_effort
     : null;

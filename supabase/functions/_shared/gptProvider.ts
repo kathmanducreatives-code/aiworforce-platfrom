@@ -200,6 +200,8 @@ export type GptFailureCode =
   | "empty_response"
   | "unparseable_json"
   | "schema_refused"
+  /** The request body could not be built for this model (e.g. an effort it refuses). Never retried. */
+  | "request_build_failed"
   | typeof TERMINAL_COMPLETION_FAILURE_CODES[number];
 
 export function isProviderFailure(code: GptFailureCode): boolean {
@@ -460,10 +462,12 @@ export async function gptStructured<T>(
   // `buildChatCompletionsBody` decides the shape from the model id, so this
   // transport can now reach either family. No model and no effort changes
   // here — see `reasoningEffort` on the request.
-  const requestInit = {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify(buildChatCompletionsBody({
+  // BUILT BEFORE THE REQUEST, AND A FAILURE TO BUILD IS A RESULT, NOT A THROW.
+  // The builder refuses an effort a model cannot take (gpt-6.1-sol and
+  // `none`); that refusal reaches the caller as a failed call it can handle.
+  let bodyText: string;
+  try {
+    bodyText = JSON.stringify(buildChatCompletionsBody({
       model,
       systemPrompt: req.system,
       userMessage: req.user,
@@ -473,7 +477,17 @@ export async function gptStructured<T>(
       // this is inert until routing actually moves a stage to GPT-5.
       reasoningEffort: (req.reasoningEffort as ReasoningEffort | null | undefined) ?? null,
       schema: req.schema ?? null,
-    })),
+    }));
+  } catch (e) {
+    return {
+      ok: false, code: "request_build_failed", detail: String((e as Error)?.message ?? e).slice(0, 300),
+      latency_ms: elapsed(), retryable: false, attempts: 0,
+    };
+  }
+  const requestInit = {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: bodyText,
   } satisfies RequestInit;
 
   // BOUNDED RETRY, NOT A LOOP. The bound is a constant, so the worst case is
