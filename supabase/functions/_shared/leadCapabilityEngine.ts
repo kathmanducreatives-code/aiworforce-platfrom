@@ -11982,14 +11982,42 @@ export function canonicalHardEvidence(
   const out = new Map<string, RequirementEvidence[]>();
   for (const c of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
     const e = evaluateEligibility(criteria, c.graph, c.criterion_verdicts, c.holds);
-    out.set(c.company_key, e.checks.filter((x) => x.kind === "hard").map((x) => ({
-      dimension: x.dimension, result: x.result, reason: x.reason,
-      source: x.provenance?.actor ?? null, method: x.provenance?.method ?? null,
-      status: x.provenance?.status ?? null, confidence: x.provenance?.confidence ?? null,
-      url: x.provenance?.url ?? null, excerpt: x.provenance?.excerpt ?? null,
-    })));
+    out.set(c.company_key, e.checks.filter((x) => x.kind === "hard").map((x) => {
+      const claim = x.provenance ? c.graph.claims.find((cl) => cl.dimension === x.provenance!.dimension) ?? null : null;
+      const providers = (claim?.sources ?? []).filter((a) => originOfActor(a) !== null);
+      // Who said it, by data ORIGIN: two LinkedIn scrapes are one source.
+      const agreeing = claim ? [claim.current, ...claim.supporting].filter((i) => i && i.status === "proven") : [];
+      const origins = new Set(agreeing.map((i) => originOfActor(i!.source.actor)).filter((o): o is string => o !== null));
+      const actor = x.provenance?.actor ?? null;
+      return {
+        dimension: x.dimension, result: x.result, reason: x.reason,
+        source: actor && originOfActor(actor) !== null ? actor : providers[0] ?? null,
+        providers,
+        corroborated: origins.has(CORROBORATED_ORIGIN) || origins.size >= 2,
+        checked_by_rule: x.provenance?.method === "deterministic_derivation",
+        method: x.provenance?.method ?? null,
+        status: x.provenance?.status ?? null, confidence: x.provenance?.confidence ?? null,
+        url: x.provenance?.url ?? null, excerpt: x.provenance?.excerpt ?? null,
+      };
+    }));
   }
   return out;
+}
+
+/** Engine rules, not sources: they read other items and never add an origin. */
+const ENGINE_RULE_ACTORS: ReadonlySet<string> = new Set(["deterministic_verdict", "engine"]);
+const CORROBORATED_ORIGIN = "corroborated";
+
+/**
+ * The data origin behind an actor, so agreement is counted by independent
+ * source rather than by scraper: every LinkedIn actor (and the LinkedIn
+ * registry) is one origin. Null for an engine rule.
+ */
+function originOfActor(actor: string): string | null {
+  if (ENGINE_RULE_ACTORS.has(actor)) return null;
+  if (actor === "linkedin" || actor.startsWith("apify_linkedin_")) return "linkedin";
+  if (actor === "funding_corroboration") return CORROBORATED_ORIGIN;
+  return actor;
 }
 
 /**

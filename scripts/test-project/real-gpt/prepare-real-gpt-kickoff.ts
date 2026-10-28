@@ -20,12 +20,24 @@
 // compiler's changes to it, ledger rows, authorization) and
 // <out>/interpretation.txt (I1–I8). Exits 1 if any interpretation check fails:
 // a misread mission is never queued.
+//
+// THE FIVE-COMPANY DEMO (`--scenario demo_funding`): "Find 5 US companies
+// hiring Account Executives that raised funding within the last six months."
+// Also requires `--project-ref <isolated TEST ref>` (production refs are
+// refused) and the funding verifiers' observed maxima `--atomus-max` and
+// `--pvalyou-max` (µ$); uses docs/launch/proposals/smoke-catalog-demo-funding.json;
+// judges D1–D7 instead of I1–I8. Every window the request did not state (the
+// 30-day hiring default) is printed and written as ASSUMED; the run exits 3
+// until `--acknowledge-defaults` records that the operator accepted it. Every
+// actor is still authorized for ZERO starts.
 import { parseArgs } from "https://deno.land/std@0.224.0/cli/parse_args.ts";
 import { buildMissionCompilerBinding } from "../../../supabase/functions/_shared/leadMissionCompilerBinding.ts";
 import { lunaOnlyFetch, prepareKickoff } from "./prepareKickoff.ts";
 
 const a = parseArgs(Deno.args, {
-  string: ["approved-by", "out", "workspace", "user", "pricing-version", "jobs-max", "details-max", "observed-at", "price-source", "queue", "plan", "proposal"],
+  string: ["approved-by", "out", "workspace", "user", "pricing-version", "jobs-max", "details-max", "observed-at", "price-source", "queue", "plan", "proposal",
+    "scenario", "project-ref", "atomus-max", "pvalyou-max"],
+  boolean: ["acknowledge-defaults"],
 });
 const need = (k: string) => { const v = a[k]; if (!v) { console.error(`--${k} is required`); Deno.exit(2); } return String(v); };
 need("approved-by");
@@ -33,28 +45,36 @@ const out = need("out");
 const proposalFile = a.proposal ? String(a.proposal) : null;
 if (!proposalFile && !Deno.env.get("OPENAI_API_KEY")) { console.error("OPENAI_API_KEY (the TEST project's key) is required, or --proposal for a dry run"); Deno.exit(2); }
 const workspaceId = need("workspace");
-const catalog = JSON.parse(Deno.readTextFileSync(new URL("../../../docs/launch/proposals/smoke-catalog-two-actor.json", import.meta.url))).approved_quotes;
+const scenario = (a.scenario ?? "a7") as "a7" | "demo_funding";
+if (scenario !== "a7" && scenario !== "demo_funding") { console.error("--scenario must be a7 or demo_funding"); Deno.exit(2); }
+const catalogFile = scenario === "demo_funding" ? "smoke-catalog-demo-funding.json" : "smoke-catalog-two-actor.json";
+const catalog = JSON.parse(Deno.readTextFileSync(new URL(`../../../docs/launch/proposals/${catalogFile}`, import.meta.url))).approved_quotes;
 
 // Luna only, ≤ 2 calls, the Luna template's bounds: refused before sending otherwise.
 // A dry run allows ZERO calls: the gate refuses anything at all.
 const gate = lunaOnlyFetch(globalThis.fetch.bind(globalThis), proposalFile ? { maxCalls: 0 } : {});
 globalThis.fetch = gate.fetch;
 const k = await prepareKickoff({
+  scenario, project_ref: scenario === "demo_funding" ? need("project-ref") : a["project-ref"],
   workspace_id: workspaceId, user_id: need("user"),
   queue_id: a.queue ?? crypto.randomUUID(), plan_id: a.plan ?? crypto.randomUUID(),
   pricing_version: need("pricing-version"), catalog,
   prices: { jobs_maximum_microusd: Number(need("jobs-max")), details_maximum_microusd: Number(need("details-max")),
-    observed_at: need("observed-at"), source: need("price-source") },
+    observed_at: need("observed-at"), source: need("price-source"),
+    ...(scenario === "demo_funding" ? { atomus_maximum_microusd: Number(need("atomus-max")), pvalyou_maximum_microusd: Number(need("pvalyou-max")) } : {}) },
   compile: proposalFile
     ? () => Promise.resolve(JSON.parse(Deno.readTextFileSync(proposalFile)))
     : (mission, onModelCall) =>
-      buildMissionCompilerBinding({ workspaceId, onModelCall }).proposeMission!({ originalUserQuery: mission, requestedCount: 1 }),
+      buildMissionCompilerBinding({ workspaceId, onModelCall }).proposeMission!({ originalUserQuery: mission,
+        requestedCount: scenario === "demo_funding" ? 5 : 1 }),
 });
 console.log(`compile gate: ${gate.sent.length} request(s) sent ${JSON.stringify(gate.sent)}; refused ${JSON.stringify(gate.refused)}`);
 Deno.mkdirSync(out, { recursive: true });
 Deno.writeTextFileSync(`${out}/kickoff.sql`, k.sql);
 Deno.writeTextFileSync(`${out}/kickoff.json`, JSON.stringify(k, null, 2));
-const report = k.interpretation.map((v) => `${v.result.padEnd(4)} ${v.id} ${v.criterion}\n     observed: ${v.observed}`).join("\n");
+const assumed = k.disclosures.map((d) => `ASSUMED  ${d}`).join("\n");
+const report = k.interpretation.map((v) => `${v.result.padEnd(4)} ${v.id} ${v.criterion}\n     observed: ${v.observed}`).join("\n") +
+  (assumed ? `\n\n${assumed}` : "");
 Deno.writeTextFileSync(`${out}/interpretation.txt`, report + "\n");
 console.log(report);
 for (const r of k.compile_ledger_rows) {
@@ -62,5 +82,11 @@ for (const r of k.compile_ledger_rows) {
   console.log(`compile: ${m.model} in=${m.input_tokens} cached=${m.cached_input_tokens} out=${m.output_tokens} est=$${r.estimated_cost_usd}`);
 }
 const ok = k.interpretation.every((v) => v.result === "PASS");
-console.log(ok ? `\nINTERPRETATION PASS — review ${out}/kickoff.sql before running it` : "\nINTERPRETATION FAIL — do not queue");
-Deno.exit(ok ? 0 : 1);
+if (!ok) { console.log("\nINTERPRETATION FAIL — do not queue"); Deno.exit(1); }
+if (k.disclosures.length && !a["acknowledge-defaults"]) {
+  console.log("\nINTERPRETATION PASS, BUT IT ASSUMES WHAT THE REQUEST DID NOT STATE (above). " +
+    "Re-run with --acknowledge-defaults once that is accepted; do not queue until then.");
+  Deno.exit(3);
+}
+console.log(`\nINTERPRETATION PASS — review ${out}/kickoff.sql before running it`);
+Deno.exit(0);

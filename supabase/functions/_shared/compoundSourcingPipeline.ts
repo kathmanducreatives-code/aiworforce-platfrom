@@ -124,8 +124,22 @@ export interface RequirementEvidence {
   dimension: string;
   result: string;
   reason: string;
-  /** The provider actor or engine rule that produced the evidence; null when nothing answered. */
+  /**
+   * The EXTERNAL provider the answer rests on (an actor key such as
+   * `apify_linkedin_job_search`); never an engine rule. Null when nothing
+   * external answered.
+   */
   source: string | null;
+  /** Every external provider that contributed to this requirement's evidence. */
+  providers?: string[];
+  /**
+   * Two independent sources agree (different data origins, e.g. Atomus and
+   * Pvalyou), or a corroboration step confirmed it. One provider's record,
+   * however it was checked, is NOT corroborated.
+   */
+  corroborated?: boolean;
+  /** Agentory applied its own rule to the provider's data (role/date match). */
+  checked_by_rule?: boolean;
   method: string | null;
   status: string | null;
   confidence: string | null;

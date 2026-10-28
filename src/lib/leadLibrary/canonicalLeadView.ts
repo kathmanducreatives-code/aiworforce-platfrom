@@ -583,13 +583,14 @@ export function deriveCanonicalLeadView(input: DeriveCanonicalLeadInput): Canoni
   // ---- provenance -----------------------------------------------------------
   const discoverySources = rows.map(collectSource).filter((s): s is CanonicalDiscoverySource => !!s);
   // What each hard requirement rests on — hiring posting, funding record —
-  // shown as sources with its standing (verified / provider record / missing).
+  // shown as sources with its standing (independently confirmed / reported by
+  // a named provider / missing / not met).
   for (const lc of rows) {
     for (const line of requirementEvidenceLines(jsonbOf(lc))) {
       discoverySources.push({
-        sourceType: `${line.dimension} evidence`, discoveryMethod: line.source, sourceUrl: line.url,
+        sourceType: `${line.dimension} evidence`, discoveryMethod: line.providers.join(", ") || null, sourceUrl: line.url,
         providerReference: null, planId: str(lc.plan_id), taskId: null, observedAt: null,
-        confidence: line.confidence, provenanceCompleteness: line.standing === "missing" ? "partial" : "complete",
+        confidence: line.confidence, provenanceCompleteness: line.standing === "missing" || line.providers.length === 0 ? "partial" : "complete",
         headline: `${line.headline} — ${line.detail}`,
       });
     }

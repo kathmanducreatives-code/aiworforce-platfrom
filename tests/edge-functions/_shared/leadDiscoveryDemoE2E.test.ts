@@ -380,13 +380,23 @@ Deno.test("DEMO 5: the qualified company becomes one Lead Library row carrying i
   assertEquals(raw.contact_eligible, false, "no person was verified: nothing is contactable");
   const lines = requirementEvidenceLines(raw);
   const by = (d: string) => lines.find((l) => l.dimension === d)!;
-  assertEquals(by("hiring").standing, "verified");
+  // Every requirement names the PROVIDER it rests on — never an engine rule —
+  // and none is claimed as independently confirmed: one provider each.
+  assertEquals(lines.map((l) => [l.dimension, l.standing]),
+    [["geography", "provider_reported"], ["hiring", "provider_reported"], ["funding", "provider_reported"]]);
+  assertEquals(by("hiring").providers, ["LinkedIn job posting (via Apify)"]);
   assertEquals(by("hiring").url, "https://www.linkedin.com/jobs/view/acmely");
-  // A funding round reported by a provider is that provider's record — never "independently verified".
-  assertEquals(by("funding").standing, "provider_record");
-  assertEquals(by("funding").source, "apify_funding_atomus");
+  assert(by("hiring").headline.includes("checked against the requirement by Agentory, not independently confirmed"), by("hiring").headline);
+  assertEquals(by("funding").providers, ["Atomus funding data (via Apify)"]);
   assert(/series_a/.test(by("funding").detail) && /60 day/.test(by("funding").detail), by("funding").detail);
-  assertEquals(by("geography").standing, "provider_record");
+  for (const l of lines) {
+    assertFalse(/deterministic_verdict|\bengine\b/.test(`${l.headline} ${l.detail} ${l.providers}`), `internal rule shown: ${l.headline} ${l.detail}`);
+    assertFalse(/\bverified\b|\bproven\b/i.test(l.detail), `claims verification: ${l.detail}`);
+  }
+  // What the row carries for it.
+  const ev = (raw.canonical_decision as { hard_evidence: Array<Row> }).hard_evidence;
+  assertEquals(ev.map((e) => [e.dimension, e.source, e.corroborated]),
+    [["geography", "apify_linkedin_company_details", false], ["hiring", "apify_linkedin_job_search", false], ["funding", "apify_funding_atomus", false]]);
 });
 
 Deno.test("DEMO 6: re-running the same mission, and duplicate rows within a run, create no duplicate leads", async () => {
@@ -418,7 +428,7 @@ Deno.test("DEMO 8: missing evidence is marked missing on the Leads page, never s
     { dimension: "hiring", result: "fail", reason: "posting older than 30 days", source: "deterministic_verdict",
       method: "deterministic_derivation", status: "proven", confidence: "high", url: null, excerpt: null },
   ] } };
-  assertEquals(requirementEvidenceLines(raw).map((l) => l.standing), ["missing", "failed"]);
+  assertEquals(requirementEvidenceLines(raw).map((l) => l.standing), ["missing", "not_met"]);
 });
 
 Deno.test("DEMO 9: a role being HIRED is not a request for people; real person requests are unchanged", () => {

@@ -7,6 +7,10 @@
 > reaches **production**. There is no non-production Supabase project today.
 > A test deployment needs a new one: see `docs/launch/test-worker-hosting.md`.
 > The rest of this page predates that and is kept as written.
+>
+> **Guard (demo/lead-discovery-e2e):** while the two refs are equal, `supabase:test`
+> allows only read-only commands (`testTargetRefusal` in `scripts/supabase-target.mjs`);
+> a deploy, secret or migration through the "test" target is refused.
 
 ## The default was production
 

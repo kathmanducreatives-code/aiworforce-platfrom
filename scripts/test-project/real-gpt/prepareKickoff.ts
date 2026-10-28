@@ -17,11 +17,28 @@ import { LEAD_INTELLIGENCE_CONTRACT_VERSION, runtimeIdentity } from "../../../su
 import { createLedgerWriter, type LedgerDb, ModelCallCollector } from "../../../supabase/functions/_shared/executionLedger.ts";
 import { A7_EXPECTATIONS, judgeRealGptRun, type Json, type Verdict } from "./realGptJudge.ts";
 import { textOnlyModelRequest } from "../../../supabase/functions/_shared/smokeAdmission.ts";
+import { assumedWindowDisclosures, DEMO_FUNDING_MISSION, judgeDemoFundingInterpretation } from "./demoFundingJudge.ts";
+
+export { DEMO_FUNDING_MISSION };
 
 export const A7_MISSION =
   "Find 1 US B2B software company with a current declared 11–50 employee band and an open Account Executive posting dated within 30 days.";
 export const JOBS_ACTOR = "apify:harvestapi~linkedin-job-search";
 export const DETAILS_ACTOR = "apify:harvestapi~linkedin-company";
+export const ATOMUS_ACTOR = "apify:atomus~linkedin-company-scraper";
+export const PVALYOU_ACTOR = "apify:pvalyou~company-record";
+
+/**
+ * Which request the kickoff prepares. `a7` (the default) is exactly the A7
+ * smoke as before. `demo_funding` is the five-company hiring-and-funding demo:
+ * its own interpretation checks, its assumed windows disclosed, the funding
+ * verifiers' templates in the catalog — and, like A7, every actor at ZERO
+ * starts: preparing it authorizes no purchase.
+ */
+export type KickoffScenario = "a7" | "demo_funding";
+
+/** Projects a kickoff is never prepared for: production, and the abandoned one. */
+export const NON_TEST_PROJECT_REFS: readonly string[] = ["ohsdatpvfdjdemstoiuj", "wqnigjhcwjxtmordrwno"];
 
 export interface ObservedPrices {
   /** Each template's maximum, observed on the test account (µ$). Required: nothing is invented. */
@@ -31,9 +48,15 @@ export interface ObservedPrices {
   observed_at: string;
   /** Where they were read (an account page, a run receipt, an export). */
   source: string;
+  /** demo_funding only: the funding verifiers' maxima for this mission (µ$), observed like the rest. */
+  atomus_maximum_microusd?: number;
+  pvalyou_maximum_microusd?: number;
 }
 
 export interface KickoffInput {
+  scenario?: KickoffScenario;
+  /** The TEST project the SQL is for. Refused when it is production; required for `demo_funding`. */
+  project_ref?: string;
   mission?: string;
   workspace_id: string;
   user_id: string;
@@ -55,6 +78,9 @@ export interface KickoffArtifacts {
   gpt_proposal: Json;
   validator_changes: string[];
   interpretation: Verdict[];
+  /** Windows the request did not state, for the operator to acknowledge before queueing. */
+  disclosures: string[];
+  scenario: KickoffScenario;
   compile_ledger_rows: Json[];
   authorization: { quotes: Json; actor_limits: Json; window_seconds: number };
   sql: string;
@@ -68,19 +94,32 @@ export async function prepareKickoff(i: KickoffInput): Promise<KickoffArtifacts>
   for (const [k, v] of Object.entries({ workspace_id: i.workspace_id, user_id: i.user_id, queue_id: i.queue_id, plan_id: i.plan_id })) {
     if (!UUID.test(v)) throw new Error(`${k} must be a uuid`);
   }
+  const scenario: KickoffScenario = i.scenario ?? "a7";
+  const ref = (i.project_ref ?? "").trim();
+  if (ref && NON_TEST_PROJECT_REFS.includes(ref)) {
+    throw new Error(`project ${ref} is not a non-production project; a kickoff is never prepared for it`);
+  }
+  if (scenario === "demo_funding" && !/^[a-z0-9]{20}$/.test(ref)) {
+    throw new Error("demo_funding needs project_ref: the 20-character ref of the isolated TEST project");
+  }
   const p = i.prices;
-  for (const k of ["jobs_maximum_microusd", "details_maximum_microusd"] as const) {
-    if (!Number.isSafeInteger(p[k]) || p[k] <= 0) throw new Error(`${k} must be an observed positive integer (µ$); nothing is invented`);
+  const priced = scenario === "demo_funding"
+    ? ["jobs_maximum_microusd", "details_maximum_microusd", "atomus_maximum_microusd", "pvalyou_maximum_microusd"] as const
+    : ["jobs_maximum_microusd", "details_maximum_microusd"] as const;
+  for (const k of priced) {
+    const n = p[k];
+    if (n === undefined || !Number.isSafeInteger(n) || n <= 0) throw new Error(`${k} must be an observed positive integer (µ$); nothing is invented`);
   }
   if (!Number.isFinite(Date.parse(p.observed_at))) throw new Error("observed_at must be an ISO timestamp");
   if (!p.source?.trim()) throw new Error("prices.source must say where the prices were read");
-  const mission = i.mission ?? A7_MISSION;
+  const mission = i.mission ?? (scenario === "demo_funding" ? DEMO_FUNDING_MISSION : A7_MISSION);
+  const requestedCount = scenario === "demo_funding" ? 5 : 1;
 
   // 1. THE ONE COMPILATION, its model spend captured exactly as production records it.
   const collector = new ModelCallCollector();
   const raw = await i.compile(mission, collector.sink);
   if (!raw) throw new Error("the compiler proposed no mission");
-  const c = compileLeadMission({ originalUserQuery: mission, proposal: raw as never, requestedCount: 1 });
+  const c = compileLeadMission({ originalUserQuery: mission, proposal: raw as never, requestedCount });
   const compiled = { ...c.final_mission, mission_parser_source: c.parser_source,
     lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION, planner_runtime: runtimeIdentity("planner", "real-gpt-kickoff") } as Json;
   const rows = new Map<string, Json>();
@@ -96,29 +135,45 @@ export async function prepareKickoff(i: KickoffInput): Promise<KickoffArtifacts>
   const ledgerRows = [...rows.values()];
 
   // 2. THE INTERPRETATION, judged before anything is queued.
-  const interpretation = judgeRealGptRun({ lead_mission: compiled }, A7_EXPECTATIONS).filter((v) => v.question === "I");
+  const interpretation = scenario === "demo_funding"
+    ? judgeDemoFundingInterpretation(compiled)
+    : judgeRealGptRun({ lead_mission: compiled }, A7_EXPECTATIONS).filter((v) => v.question === "I");
+  const disclosures = assumedWindowDisclosures(compiled);
 
   // 3. THE KICKOFF BODY (validateV2KickoffBody's shape; the authorization binds to its hash).
   const request = {
     plan_id: i.plan_id, step_index: 0, agent_slug: "scout", workspace_id: i.workspace_id, user_id: i.user_id, instruction: mission,
-    requested_lead_count: 1, workflow_kind: "qualified_lead_sourcing", execution_mode: "company_first", tool_needed: "source_with_apify",
-    lead_mission: compiled, tool_input: { lead_mission: compiled, source_type: "jobs" }, run_budget: { provider_usd: 0.20, max_candidates: 3 },
+    requested_lead_count: requestedCount, workflow_kind: "qualified_lead_sourcing", execution_mode: "company_first", tool_needed: "source_with_apify",
+    lead_mission: compiled, tool_input: { lead_mission: compiled, source_type: "jobs" },
+    run_budget: { provider_usd: 0.20, max_candidates: scenario === "demo_funding" ? 5 : 3 },
   };
 
   // 4. THE AUTHORIZATION: the catalog with observed prices, every actor at ZERO starts.
   const evidence = { observed_at: p.observed_at, source: p.source };
   const q = i.catalog;
-  const quotes = {
+  const quotes: Json = {
     jobs: { ...q.jobs, ...evidence, maximum_microusd: p.jobs_maximum_microusd },
     details: { ...q.details, ...evidence, maximum_microusd: p.details_maximum_microusd },
     reads: { ...q.reads, ...evidence },
     model: { ...q.luna, ...evidence },
   };
-  const actor_limits = { [JOBS_ACTOR]: 0, [DETAILS_ACTOR]: 0 };
+  const actor_limits: Record<string, number> = { [JOBS_ACTOR]: 0, [DETAILS_ACTOR]: 0 };
+  if (scenario === "demo_funding") {
+    if (!q.atomus || !q.pvalyou) throw new Error("demo_funding needs a catalog with atomus and pvalyou templates");
+    quotes.atomus = { ...q.atomus, ...evidence, maximum_microusd: p.atomus_maximum_microusd };
+    quotes.pvalyou = { ...q.pvalyou, ...evidence, maximum_microusd: p.pvalyou_maximum_microusd };
+    actor_limits[ATOMUS_ACTOR] = 0;
+    actor_limits[PVALYOU_ACTOR] = 0;
+  }
 
+  const header = scenario === "demo_funding"
+    ? `-- DEMO (five companies, hiring + funding) for TEST project ${ref}. NEVER run on ${NON_TEST_PROJECT_REFS.join(" or ")}.
+${disclosures.map((d) => `-- ASSUMED, NOT STATED BY THE USER: ${d}`).join("\n")}
+`
+    : "";
   const sql = `-- ZERO-APIFY REAL-GPT KICKOFF for queue ${i.queue_id}. Generated, then REVIEWED, then run once
 -- on the TEST project as an administrator. Every actor is authorized for ZERO starts.
-begin;
+${header}begin;
 insert into public.task_plans (id, workspace_id, user_id, user_instruction, status)
   values (${str(i.plan_id)}, ${str(i.workspace_id)}, ${str(i.user_id)}, ${str(mission)}, 'running');
 ${ledgerRows.map((r) => {
@@ -133,7 +188,7 @@ select public.authorize_discovery_smoke(${str(i.queue_id)}, ${str(i.pricing_vers
 commit;
 `;
   return { request, compiled_mission: compiled, gpt_proposal: raw as Json, validator_changes: [...c.validator_changes],
-    interpretation, compile_ledger_rows: ledgerRows,
+    interpretation, disclosures, scenario, compile_ledger_rows: ledgerRows,
     authorization: { quotes, actor_limits, window_seconds: 300 }, sql };
 }
 
