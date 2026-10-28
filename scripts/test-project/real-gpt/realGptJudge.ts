@@ -22,7 +22,7 @@ export interface Expectations {
   industry_includes: string;
   geography: { value: string; scope: string };
   company_size: { min: number; max: number };
-  hiring: { role_term: string; window_days: number };
+  hiring: { role_term: string; window_days: number; role_families: readonly string[] };
   disallowed_broadening: readonly string[];
   /** Capabilities the request must not buy (no people search, no contact data). */
   prohibited_capabilities: readonly string[];
@@ -44,7 +44,7 @@ export const A7_EXPECTATIONS: Expectations = {
   industry_includes: "b2b software",
   geography: { value: "United States", scope: "headquarters" },
   company_size: { min: 11, max: 50 },
-  hiring: { role_term: "account executive", window_days: 30 },
+  hiring: { role_term: "account executive", window_days: 30, role_families: ["gtm_sales"] },
   disallowed_broadening: ["geography", "role", "size"],
   prohibited_capabilities: ["contact_enrichment", "founder_discovery"],
   approved_actor_keys: ["apify_linkedin_job_search", "apify_linkedin_company"],
@@ -110,6 +110,53 @@ export function judgeRealGptRun(ev: Json, x: Expectations = A7_EXPECTATIONS): Ve
   const prohibited: string[] = mission.prohibited_capabilities ?? [];
   v("I8", "I", `no people or contact purchase requested (${x.prohibited_capabilities.join(", ")} prohibited)`,
     x.prohibited_capabilities.every((p) => prohibited.includes(p)), prohibited);
+  // I9 — STRICTER THAN I5, NEVER INSTEAD OF IT (independent review of PR #194).
+  // I5 asks that the requested role be present; it cannot see a role ADDED
+  // beside it ("Account Executive or SDR"), which would let SDR postings
+  // qualify. Every hard hiring role term must be the requested one (a regular
+  // plural allowed), and every role family one the request's role belongs to.
+  const singular = (t: string) => lower(t).trim().replace(/s$/, "");
+  const extraTerms = terms.filter((t) => singular(t) !== singular(x.hiring.role_term));
+  const families: string[] = hiring.flatMap((c) => c.value?.qualifier?.role_families ?? []);
+  const extraFamilies = families.filter((f) => !x.hiring.role_families.includes(f));
+  // Second review (N1, N2): the RUNTIME reads `required_signals[]` — its
+  // top-level `role_families` and `qualifier.role_terms` /
+  // `excluded_role_terms` — not the criteria. So those exact fields are
+  // checked too, the top-level families must equal the qualifier's, and no
+  // excluded role may rule out the requested one (or any required term).
+  const sigs: Json[] = (Array.isArray(mission.required_signals) ? mission.required_signals : [])
+    .filter((s: Json) => (s.event ?? s.type) === "hiring");
+  const sigTerms: string[] = sigs.flatMap((s) => s.qualifier?.role_terms ?? []).map(lower);
+  const extraSigTerms = sigTerms.filter((t) => singular(t) !== singular(x.hiring.role_term));
+  const topFamilies: string[] = sigs.flatMap((s) => s.role_families ?? []);
+  const extraTopFamilies = topFamilies.filter((f) => !x.hiring.role_families.includes(f));
+  const sameSet = (a: readonly string[], b: readonly string[]) =>
+    new Set(a).size === new Set(b).size && a.every((f) => b.includes(f));
+  const familyMismatch = sigs.filter((s) => !sameSet(s.role_families ?? [], s.qualifier?.role_families ?? []))
+    .map((s) => ({ top: s.role_families ?? null, qualifier: s.qualifier?.role_families ?? null }));
+  const wordsOf = (t: string) => ` ${lower(t).replace(/[^a-z0-9]+/g, " ").trim().split(" ").map((w) => w.replace(/s$/, "")).join(" ")} `;
+  const required = [x.hiring.role_term, ...terms, ...sigTerms];
+  const excluded: string[] = [...hiring.flatMap((c) => c.value?.qualifier?.excluded_role_terms ?? []),
+    ...sigs.flatMap((s) => s.qualifier?.excluded_role_terms ?? [])].map(lower);
+  const contradictions = excluded.filter((e) => required.some((r) => wordsOf(r).includes(wordsOf(e))));
+  // W1: the window and the role the RUNTIME enforces are the signal's own —
+  // `timeframe_days` and `qualifier.role_terms` — not the criterion's display
+  // window (a default the criterion shows even when the runtime has none).
+  // Every hiring signal must carry exactly the requested window and the
+  // requested role, and no recorded window conflict.
+  const runtimeWindowWrong = sigs.filter((s) => s.timeframe_days !== x.hiring.window_days || s.window_conflict != null)
+    .map((s) => ({ timeframe_days: s.timeframe_days ?? null, window_conflict: s.window_conflict ?? null }));
+  const runtimeRoleMissing = sigs.filter((s) =>
+    !(s.qualifier?.role_terms ?? []).some((t: string) => singular(t) === singular(x.hiring.role_term))).length;
+  v("I9", "I", `no hard hiring role beyond "${x.hiring.role_term}" (families ${x.hiring.role_families.join(", ")}), ` +
+      `the runtime's own role fields agree and carry the requested role and ${x.hiring.window_days}-day window, ` +
+      "and no exclusion rules the requested role out",
+    hiring.length >= 1 && sigs.length >= 1 && extraTerms.length === 0 && extraFamilies.length === 0 &&
+      extraSigTerms.length === 0 && extraTopFamilies.length === 0 && familyMismatch.length === 0 && contradictions.length === 0 &&
+      runtimeWindowWrong.length === 0 && runtimeRoleMissing === 0,
+    { extra_terms: extraTerms, extra_families: extraFamilies, runtime_extra_terms: extraSigTerms,
+      runtime_extra_families: extraTopFamilies, family_mismatch: familyMismatch, excluded_contradictions: contradictions,
+      runtime_window_wrong: runtimeWindowWrong, runtime_signals_missing_role: runtimeRoleMissing });
 
   // ── P. RESEARCH PLAN ──────────────────────────────────────────────────────
   const plan: Json = ev.execution_plan ?? {};

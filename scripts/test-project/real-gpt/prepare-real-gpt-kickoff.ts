@@ -16,7 +16,8 @@
 // and the compile ledger is empty.
 //
 // Writes <out>/kickoff.sql (the one transaction to review and run),
-// <out>/kickoff.json (body, compiled mission, ledger rows, authorization) and
+// <out>/kickoff.json (body, compiled mission, the raw model proposal and the
+// compiler's changes to it, ledger rows, authorization) and
 // <out>/interpretation.txt (I1–I8). Exits 1 if any interpretation check fails:
 // a misread mission is never queued.
 import { parseArgs } from "https://deno.land/std@0.224.0/cli/parse_args.ts";

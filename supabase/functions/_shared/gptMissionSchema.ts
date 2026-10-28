@@ -139,7 +139,10 @@ export const MISSION_PROPOSAL_PROPERTIES = {
       employee_range: employeeRange(""),
     },
   },
-  disallowed_broadening: strings("Dimensions that must never be widened."),
+  disallowed_broadening: strings(
+    "Dimensions that must never be widened, by these names: geography, industry, business_model, " +
+      "stage, size, role, recency.",
+  ),
   required_evidence: strings("Evidence a candidate must carry to qualify."),
   required_capabilities: {
     ...strings("Pipeline stages this request needs, from the catalogue only."),

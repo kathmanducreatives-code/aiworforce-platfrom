@@ -29,7 +29,7 @@ Deno.test("real-GPT judge: the zero-provider run passes every automatic criterio
   assertEquals(failed(vs), [], JSON.stringify(vs.filter((v) => v.result === "FAIL"), null, 1));
   assertEquals(overall(vs), "PASS");
   assertEquals(vs.filter((v) => v.result === "MANUAL").map((v) => v.id), ["R4", "M6"], "the vendors' consoles stay the operator's");
-  assertEquals(vs.length, 25);
+  assertEquals(vs.length, 26, "I1–I9, P1–P4, R1–R4, M1–M6, T1–T3");
 
   // A mispriced row is caught (M4); a missing compilation row is caught (M2).
   const mispriced = structuredClone(ev);
@@ -43,6 +43,11 @@ Deno.test("real-GPT judge: the zero-provider run passes every automatic criterio
   misread.lead_mission.criteria = misread.lead_mission.criteria.filter((c: Json) => c.dimension !== "company_size");
   misread.lead_mission.criteria.push({ kind: "hard", dimension: "stage", value: "seed", label: "Stage: seed" });
   assertEquals(failed(judgeRealGptRun(misread)).filter((id) => id.startsWith("I")), ["I4", "I6"]);
+  // An added hiring role is caught by I9 even though I5 still passes (review of PR #194).
+  const extraRole = structuredClone(ev);
+  const h = extraRole.lead_mission.criteria.find((c: Json) => c.dimension === "hiring" && c.kind === "hard");
+  h.value.qualifier.role_terms = [...(h.value.qualifier.role_terms ?? []), "sdr"];
+  assertEquals(failed(judgeRealGptRun(extraRole)).filter((id) => id.startsWith("I")), ["I9"]);
 });
 
 Deno.test("real-GPT judge: a run that buys from Apify fails the provider restriction", opts, async () => {

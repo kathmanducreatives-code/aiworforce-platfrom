@@ -948,6 +948,66 @@ export function excludedCompanyTypes(query: string, proposed: readonly string[] 
   return [...new Set(out)];
 }
 
+/**
+ * The model's company types, read back as the request wrote them.
+ *
+ * ── WHY (first real-GPT A7 run, 2026-10-27, check I2) ───────────────────────
+ *
+ * "a US B2B software company" came back as `["B2B", "software", "company"]`.
+ * Each fragment is in the request, so each became its own HARD industry
+ * criterion — including "company", which is no industry at all — and none of
+ * them was the phrase the user asked for.
+ *
+ * Two repairs, and neither changes what a company must be:
+ *   * a bare entity noun ("company", "firms") is dropped: it names the kind of
+ *     record, not a type of company, so it constrains nothing the user meant;
+ *   * fragments the request writes CONTIGUOUSLY, in this order, as whole words
+ *     ("B2B" + "software" → "B2B software") are rejoined into that phrase,
+ *     spelled as the request spells it. Fragments the request writes apart
+ *     ("fintech and software") stay apart.
+ * Anything else is returned untouched.
+ */
+// Only nouns that name the RECORD, never a kind of company. "enterprise",
+// "business" and "employer" are not here: "enterprise software", "business
+// services" and "employer branding" are types (independent review of PR #194).
+const ENTITY_NOUN_RE = /^(?:compan(?:y|ies)|firms?|organi[sz]ations?)$/i;
+// A conjunction means alternatives (or a list): never fused into one phrase.
+const CONJUNCTION_RE = /(?:^|\s)(?:or|and|nor)(?:\s|$)|[&,/|]/i;
+export function normalizeProposedVerticals(query: string, proposed: readonly string[]): string[] {
+  const q = String(query ?? "");
+  const all = proposed.map((v) => String(v ?? "").trim()).filter(Boolean);
+  const words = (v: string) => v.split(/\s+/).map(escapeRe).join("\\s+");
+  const contiguous = (parts: string[]) =>
+    q.match(new RegExp(`(?<![A-Za-z0-9])${parts.map(words).join("[\\s-]+")}(?![A-Za-z0-9])`, "i"))?.[0];
+  // 1. Rejoin first, over every fragment, so a noun that is part of a type
+  //    ("law" + "firm") is joined rather than dropped. Never across a
+  //    conjunction, in a fragment or in the joined span.
+  const joined: string[] = [];
+  for (let i = 0; i < all.length;) {
+    let j = all.length;
+    let phrase: string | undefined;
+    for (; j > i + 1; j--) {
+      phrase = contiguous(all.slice(i, j));
+      if (phrase && !CONJUNCTION_RE.test(phrase)) break;
+      phrase = undefined;
+    }
+    if (j > i + 1 && phrase) {
+      joined.push(phrase.replace(/\s+/g, " "));
+      i = j;
+    } else {
+      joined.push(all[i]);
+      i++;
+    }
+  }
+  // 2. A bare record noun left on its own is no type; a trailing "company" /
+  //    "companies" on a rejoined phrase is the same noun.
+  const out = joined
+    .filter((v) => !ENTITY_NOUN_RE.test(v))
+    .map((v) => v.replace(/\s+compan(?:y|ies)$/i, "").trim())
+    .filter(Boolean);
+  return [...new Set(out)];
+}
+
 /** One type per conjunct: "agencies or consultancies" excludes both, "recruiting agencies" one. */
 function conjunctTypes(span: string): string[] {
   const phrase = span.replace(EXCLUSION_CUE, " ").trim();
@@ -1459,7 +1519,9 @@ export function validateLeadMission(
       // Q4 — and a type the request names only to exclude it ("excluding
       // recruiting agencies") is never a vertical, whoever proposed it.
       verticals: base.company_profile.verticals.length
-        ? base.company_profile.verticals : strArray(cp.verticals).filter((v) => !excluded.includes(v.toLowerCase())),
+        ? base.company_profile.verticals
+        : normalizeProposedVerticals(ctx.originalUserQuery,
+          strArray(cp.verticals).filter((v) => !excluded.includes(v.toLowerCase()))),
       stages: base.company_profile.stages.length
         ? base.company_profile.stages : strArray(cp.stages),
       // Q4 — a location the request only hopes for is kept beside the stated
