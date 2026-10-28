@@ -4,6 +4,8 @@ Status: **built and tested offline; every flag is off; the migration is held.**
 Nothing here has called a provider, used a real key, touched a hosted database
 or been deployed.
 
+Independent-review handoff: `docs/PROVIDER_DISCOVERY_REVIEW.md`.
+
 ## 1. Existing Apollo work (audit)
 
 - No Apollo **API** integration exists on any branch. Nothing calls `api.apollo.io`.
@@ -34,7 +36,7 @@ compiler, the capability engine, the guards or the judges.
 | `adapters/apollo.ts` | People API Search (0 credits, no contact values, `include_similar_titles: false`) and Organization Search (1 credit per page). The key is verified with a one-row free search. |
 | `adapters/apify.ts` | Web research (`apify_google_search`), what a company's own site says (`apify_website_content`) and open roles (`apify_ats_verification`), all through the existing invoker. Token checks use `GET /v2/users/me` with the token in a header. |
 | `normalize.ts` | Merges companies and people across providers. Every field keeps every provider's claim, disagreements are recorded as conflicts, and an identity conflict is kept as two records. |
-| `verify.ts` | Checks each lead against the original hard requirements. Outcomes are `matched`, `provider_filter`, `contradicted`, `conflicting` or `unknown`, and each carries its evidence (provider, record id, field, value, retrievedAt). Lead status is `qualified` (verification `evidence` or `provider_attested`), `needs_verification` or `rejected`. |
+| `verify.ts` | Checks each lead against the original hard requirements. Outcomes are `matched`, `provider_filter`, `contradicted`, `conflicting` or `unknown`, and each carries its evidence (provider, record id, field, value, retrievedAt). Lead status is `qualified` (verification `evidence` or `provider_attested`), `needs_verification` or `rejected`. A provider filter with no returned value satisfies a requirement only if that provider and key are on `TRUSTED_PROVIDER_FILTERS` in `providers.ts`, which is empty; otherwise the lead needs verification. |
 | `budget.ts` | `DiscoveryApproval` covers the plan hash, workspace, mission and per-provider ceilings. `EnrichmentAuthorization` is separate and lists people by name. Usage goes through an idempotent ledger: settled entries replay, uncertain ones block, in-flight ones refuse, and there are provider and mission caps. |
 | `orchestrator.ts` | Runs an approved plan with bounded pages and rows and stops once enough leads qualify. Each failure kind maps to a defined action, and the Apify verification step is bounded. **No enrichment.** |
 | `enrich.ts` | Enrichment needs its own authorization and is idempotent. **Phones are never verified**; only `attachIndependentEvidence` with non-provider evidence can raise that. |

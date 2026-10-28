@@ -39,6 +39,9 @@ grant select (id, workspace_id, provider, status, key_fingerprint, usage, last_v
   on public.workspace_provider_connections to authenticated;
 create policy workspace_provider_connections_member_read on public.workspace_provider_connections
   for select to authenticated using (public.has_workspace_access(auth.uid(), workspace_id));
+-- The edge function's service client reads status through PostgREST; it never
+-- writes rows directly (only the functions below do).
+grant select on public.workspace_provider_connections to service_role;
 
 create table public.provider_usage_ledger (
   id uuid primary key default gen_random_uuid(),
@@ -63,6 +66,7 @@ grant select (id, workspace_id, mission_id, provider, credits_reserved, credits_
   on public.provider_usage_ledger to authenticated;
 create policy provider_usage_ledger_member_read on public.provider_usage_ledger
   for select to authenticated using (public.has_workspace_access(auth.uid(), workspace_id));
+grant select on public.provider_usage_ledger to service_role;
 
 -- ── Connections (service role only) ─────────────────────────────────────────
 

@@ -27,13 +27,14 @@ Deno.test("offline demo (Apollo + Apify): free search, site reads settle industr
   const { plan, run, rows } = await runOfflineDemo(["apollo", "apify"]);
   assertEquals(plan.steps.map((s) => [s.provider, s.estimatedCredits]), [["apollo", 0]]);
   const by = Object.fromEntries(run.leads.map((l) => [l.company.name[0].value, l]));
-  assertEquals(by["Stonebridge Fabrication"].status, "qualified");
-  assertEquals(by["Stonebridge Fabrication"].verification, "provider_attested");
+  // Industry and exclusion matched on the site; size and HQ rest on Apollo's filter alone.
+  assertEquals(by["Stonebridge Fabrication"].status, "needs_verification");
+  assertEquals(by["Stonebridge Fabrication"].checks.filter((c) => c.outcome === "provider_filter").map((c) => c.trusted), [false, false]);
   // The software shop's own site does not say "manufacturing": unknown, not qualified, not rejected.
   assertEquals(by["Patel Software"].status, "needs_verification");
   assertEquals(by["Rivers Staffing"].status, "rejected");
   assert(by["Rivers Staffing"].reasons[0].startsWith("Excluding: staffing agencies: contradicted"));
   // Apollo search carries no contact values at all.
   assertFalse(run.leads.some((l) => l.contacts.some((c) => c.person.contactPoints.length)));
-  assertEquals(rows.length, 2);
+  assertEquals(rows.length, 2, "needs-verification leads are written, labelled; the rejected one is not");
 });

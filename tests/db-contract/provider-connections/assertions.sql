@@ -106,4 +106,32 @@ do $$ begin
   if exists (select 1 from vault.secrets) then raise exception 'disconnect left the key in Vault'; end if;
   if exists (select 1 from public.workspace_provider_connections) then raise exception 'disconnect left the row'; end if;
 end $$;
+-- 5. A member can neither update nor delete status rows; the service role can read them.
+set role service_role;
+select public.provider_connection_store('11111111-1111-4111-8111-111111111111', 'apollo', 'ap_test_KEY_123456', 'abcdef012345', null, 'aaaaaaaa-0000-4000-8000-000000000001');
+do $$ begin
+  if (select count(*) from public.workspace_provider_connections where provider = 'apollo') <> 1 then raise exception 'service role cannot read status'; end if;
+end $$;
+reset role;
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-000000000001","role":"authenticated"}', false);
+do $$ begin
+  begin update public.workspace_provider_connections set status = 'connected'; raise exception 'member updated a row';
+  exception when insufficient_privilege then null; end;
+  begin delete from public.workspace_provider_connections; raise exception 'member deleted a row';
+  exception when insufficient_privilege then null; end;
+  begin update public.provider_usage_ledger set state = 'released'; raise exception 'member released a ledger entry';
+  exception when insufficient_privilege then null; end;
+  begin perform public.provider_usage_finish('11111111-1111-4111-8111-111111111111', 'k4', 'released', null, null); raise exception 'member finished a ledger entry';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+-- anon reaches nothing.
+set role anon;
+do $$ begin
+  begin perform 1 from public.workspace_provider_connections; raise exception 'anon read connections';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+
 select 'provider_connections assertions: all passed' as result;

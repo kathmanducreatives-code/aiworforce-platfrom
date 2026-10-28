@@ -114,5 +114,14 @@ export const PROVIDERS: Record<ProviderId, ProviderDescriptor> = {
   },
 };
 
+/**
+ * Provider filters trusted to satisfy a requirement WITHOUT a returned value.
+ * EMPTY: no filter is trusted until a live, approved check shows the provider
+ * applies it (and reports when it does not) — LeadOcean's industry vocabulary,
+ * for one, is unconfirmed, and Apollo never reports an ignored filter. Adding
+ * an entry is a reviewed change, never a runtime setting.
+ */
+export const TRUSTED_PROVIDER_FILTERS: Readonly<Partial<Record<ProviderId, FilterKey[]>>> = Object.freeze({});
+
 /** Requirements a signal-verification provider can settle after discovery. */
 export const SIGNAL_VERIFIABLE: FilterKey[] = ["signal"];

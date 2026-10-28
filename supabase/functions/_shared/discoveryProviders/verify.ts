@@ -3,13 +3,18 @@
 // Each requirement gets one outcome, with its evidence:
 //   matched          a provider-reported value (or the company's own site) satisfies it
 //   provider_filter  no value came back, but the provider applied the filter itself
-//                    and did not report ignoring it
+//                    and did not report ignoring it. It SATISFIES the requirement only
+//                    when that provider's filter for that key is on the reviewed trust
+//                    list (TRUSTED_PROVIDER_FILTERS, empty by default): a provider can
+//                    silently ignore a value outside its vocabulary, and Apollo reports
+//                    nothing either way. Untrusted, the lead needs verification.
 //   contradicted     the values that came back violate it
 //   conflicting      providers disagree (one satisfies, another violates)
 //   unknown          nothing to decide it with
 // A lead is `rejected` on any contradiction, `qualified` when every
-// requirement is matched or provider-filtered, and `needs_verification`
-// otherwise. It is never qualified on a requirement nobody checked.
+// requirement is matched (or provider-filtered by a TRUSTED filter), and
+// `needs_verification` otherwise. It is never qualified on a requirement
+// nobody checked.
 //
 // `verification` says how a qualified lead was established: `evidence` when
 // every requirement was matched against a returned value, `provider_attested`
@@ -18,6 +23,7 @@
 // Pure.
 
 import type { SiteEvidence } from "./adapters/apify.ts";
+import { TRUSTED_PROVIDER_FILTERS } from "./providers.ts";
 import { geoLevel, normCountry } from "./adapter.ts";
 import { normDomain, type CanonicalCompany, type CanonicalPerson, type MergeResult } from "./normalize.ts";
 import type { Claim, DiscoveryRequirements, FilterKey, HardRequirement, ProviderId, Range } from "./types.ts";
@@ -40,6 +46,13 @@ export interface RequirementCheck {
   outcome: CheckOutcome;
   evidence: CheckEvidence[];
   note: string;
+  /** For provider_filter only: the filter is on the reviewed trust list, so it counts. */
+  trusted?: boolean;
+}
+
+export interface VerifyOptions {
+  /** Provider filters that may satisfy a requirement without a returned value. */
+  trustedFilters?: Partial<Record<ProviderId, FilterKey[]>>;
 }
 
 export type LeadStatus = "qualified" | "needs_verification" | "rejected";
@@ -214,32 +227,42 @@ function checkPerson(h: HardRequirement, p: CanonicalPerson): { outcome: CheckOu
   return { outcome: null, evidence: [], note: "" };
 }
 
-function asserted(key: FilterKey, sources: { assertedFilters: string[]; ignoredFilters: string[] }[]): boolean {
-  return sources.some((s) => s.assertedFilters.includes(key) && !s.ignoredFilters.includes(key));
+type SourceLike = { provider: ProviderId; assertedFilters: string[]; ignoredFilters: string[] };
+
+function asserting(key: FilterKey, sources: SourceLike[]): SourceLike[] {
+  return sources.filter((s) => s.assertedFilters.includes(key) && !s.ignoredFilters.includes(key));
 }
 
-function finish(h: HardRequirement, r: { outcome: CheckOutcome | null; evidence: CheckEvidence[]; note: string }, sources: { assertedFilters: string[]; ignoredFilters: string[] }[]): RequirementCheck {
+function finish(h: HardRequirement, r: { outcome: CheckOutcome | null; evidence: CheckEvidence[]; note: string }, sources: SourceLike[], trust: Partial<Record<ProviderId, FilterKey[]>>): RequirementCheck {
   let outcome = r.outcome;
   let note = r.note;
+  let trusted: boolean | undefined;
   if (!outcome) {
-    if (asserted(h.key, sources)) { outcome = "provider_filter"; note = `${note}; the provider applied this filter`; }
-    else {
+    const by = asserting(h.key, sources);
+    if (by.length) {
+      outcome = "provider_filter";
+      trusted = by.some((s) => trust[s.provider]?.includes(h.key) ?? false);
+      note = `${note}; the provider applied this filter${trusted ? "" : " (not independently confirmed)"}`;
+    } else {
       outcome = "unknown";
       if (sources.some((s) => s.ignoredFilters.includes(h.key))) note = `${note}; the provider reported ignoring this filter`;
     }
   }
-  return { criterionId: h.criterionId, key: h.key, label: h.label, outcome, evidence: r.evidence, note };
+  return { criterionId: h.criterionId, key: h.key, label: h.label, outcome, evidence: r.evidence, note, ...(trusted === undefined ? {} : { trusted }) };
 }
+
+const satisfied = (c: RequirementCheck) => c.outcome === "matched" || (c.outcome === "provider_filter" && c.trusted === true);
 
 function statusOf(checks: RequirementCheck[]): LeadStatus {
   if (checks.some((c) => c.outcome === "contradicted")) return "rejected";
-  if (checks.every((c) => c.outcome === "matched" || c.outcome === "provider_filter")) return "qualified";
+  if (checks.every(satisfied)) return "qualified";
   return "needs_verification";
 }
 
 const PERSON_KEYS: FilterKey[] = ["roles", "geography_person"];
 
-export function verifyLeads(req: DiscoveryRequirements, merged: MergeResult, siteEvidence: SiteEvidence[] = []): VerifiedLead[] {
+export function verifyLeads(req: DiscoveryRequirements, merged: MergeResult, siteEvidence: SiteEvidence[] = [], opts: VerifyOptions = {}): VerifiedLead[] {
+  const trust = opts.trustedFilters ?? TRUSTED_PROVIDER_FILTERS;
   const companyHard = req.hard.filter((h) => !PERSON_KEYS.includes(h.key));
   const personHard = req.hard.filter((h) => PERSON_KEYS.includes(h.key));
   // Roles of a company-target mission are checked on its contacts, not owed by the company.
@@ -248,18 +271,18 @@ export function verifyLeads(req: DiscoveryRequirements, merged: MergeResult, sit
   const out: VerifiedLead[] = [];
   for (const c of merged.companies) {
     const site = siteEvidence.filter((s) => c.domain.some((d) => d.value === s.domain));
-    const checks = companyHard.map((h) => finish(h, checkCompany(h, c, site), c.sources));
+    const checks = companyHard.map((h) => finish(h, checkCompany(h, c, site), c.sources, trust));
     if (c.identityConflicts.length) {
       checks.push({ criterionId: "identity", key: "known_companies", label: "Identity", outcome: "conflicting", evidence: [], note: c.identityConflicts.join("; ") });
     }
     const contacts: VerifiedContact[] = merged.people.filter((p) => p.companyKey === c.key).map((p) => {
-      const pc = rolesForContacts.map((h) => finish(h, checkPerson(h, p), p.sources));
+      const pc = rolesForContacts.map((h) => finish(h, checkPerson(h, p), p.sources, trust));
       if (p.identityConflicts.length) pc.push({ criterionId: "identity", key: "roles", label: "Identity", outcome: "conflicting", evidence: [], note: p.identityConflicts.join("; ") });
       return { person: p, checks: pc, status: statusOf(pc) };
     });
     let status = statusOf(checks);
     const order: Record<CheckOutcome, number> = { contradicted: 0, conflicting: 1, unknown: 2, provider_filter: 3, matched: 4 };
-    const reasons = checks.filter((x) => x.outcome !== "matched" && x.outcome !== "provider_filter")
+    const reasons = checks.filter((x) => !satisfied(x))
       .sort((a, b) => order[a.outcome] - order[b.outcome]).map((x) => `${x.label}: ${x.outcome} — ${x.note}`);
     // A people mission needs at least one person who passes.
     if (req.targetEntity === "person" && status !== "rejected") {

@@ -21,3 +21,4 @@ PGOPTIONS="-c client_min_messages=warning" apply "$root/supabase/migrations-held
 apply "$here/vault_shim.sql"
 apply "$root/supabase/migrations-held/20261027120000_provider_connections.sql"
 psql "$url" -X -q -v ON_ERROR_STOP=1 -At -f "$here/assertions.sql"
+( cd "$root" && psql "$url" -X -q -At -f "$here/rollback_check.sql" 2>&1 | grep -v "^ERROR:  provider usage ledger rows exist\|^psql:.*provider usage ledger rows exist\|CONTEXT\|PL/pgSQL\|current transaction is aborted\|^$" )

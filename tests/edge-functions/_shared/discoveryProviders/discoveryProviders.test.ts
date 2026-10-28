@@ -177,12 +177,34 @@ Deno.test("search: a filter LeadOcean reports ignoring is never treated as appli
   assertEquals(run.steps[0].ignoredFilters, ["employee_range"]);
 });
 
-Deno.test("search: a native filter with no value returned is provider-attested, not evidence", async () => {
+Deno.test("search: a native filter with no value returned does NOT qualify a lead by default (fail closed)", async () => {
   const { run } = await runLeadOcean([loPerson({ ...MARKET[0], employees: undefined })]);
   const lead = run.leads[0];
-  assertEquals(lead.checks.find((c) => c.key === "employee_range")!.outcome, "provider_filter");
-  assertEquals(lead.status, "qualified");
-  assertEquals(lead.verification, "provider_attested");
+  const size = lead.checks.find((c) => c.key === "employee_range")!;
+  assertEquals(size.outcome, "provider_filter");
+  assertEquals(size.trusted, false);
+  assertEquals(lead.status, "needs_verification");
+  assertEquals(lead.verification, null);
+  assert(lead.reasons.some((r) => r.includes("not independently confirmed")));
+});
+
+Deno.test("search: only a reviewed trust entry lets a provider filter stand in for a value — and only for that provider and key", async () => {
+  const rows = [loPerson({ ...MARKET[0], employees: undefined })];
+  const merged = mergeRecords([], normalizeLeadOceanPage(loPage(rows), planDiscovery({ requirements: req(), connections: [conn("leadocean")], selection: ["leadocean"] }).steps[0], "t").people);
+  assertEquals(verifyLeads(req(), merged, [], { trustedFilters: { apollo: ["employee_range"] } })[0].status, "needs_verification", "another provider's trust does not count");
+  assertEquals(verifyLeads(req(), merged, [], { trustedFilters: { leadocean: ["industry"] } })[0].status, "needs_verification", "another key's trust does not count");
+  const [ok] = verifyLeads(req(), merged, [], { trustedFilters: { leadocean: ["employee_range"] } });
+  assertEquals(ok.status, "qualified");
+  assertEquals(ok.verification, "provider_attested");
+});
+
+Deno.test("search: a trusted filter the provider reported ignoring is unknown, never trusted", async () => {
+  const rows = [loPerson({ ...MARKET[0], employees: undefined })];
+  const step = planDiscovery({ requirements: req(), connections: [conn("leadocean")], selection: ["leadocean"] }).steps[0];
+  const merged = mergeRecords([], normalizeLeadOceanPage(loPage(rows, { unsupportedFilters: ["maxEmployees"] }), step, "t").people);
+  const [lead] = verifyLeads(req(), merged, [], { trustedFilters: { leadocean: ["employee_range"] } });
+  assertEquals(lead.checks.find((c) => c.key === "employee_range")!.outcome, "unknown");
+  assertEquals(lead.status, "needs_verification");
 });
 
 Deno.test("search: pagination is bounded by maxRecords and stops when enough leads qualify", async () => {
@@ -221,8 +243,9 @@ Deno.test("failure: auth failure on the primary fails over to the fallback; noth
   assertEquals(Object.fromEntries(lead.checks.map((c) => [c.key, c.outcome])), {
     industry: "matched", geography_hq: "provider_filter", employee_range: "provider_filter", excluded_company_types: "matched",
   });
-  assertEquals(lead.status, "qualified");
-  assertEquals(lead.verification, "provider_attested");
+  // Apollo's own size / HQ filters are not independently confirmed: not qualified.
+  assertEquals(lead.status, "needs_verification");
+  assertEquals(lead.verification, null);
   assertEquals(run.verification?.checked, 1);
 });
 

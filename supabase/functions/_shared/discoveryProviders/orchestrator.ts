@@ -23,7 +23,8 @@ import { mergeRecords, type MergeResult } from "./normalize.ts";
 import { PROVIDERS } from "./providers.ts";
 import type { DiscoveryPlan, PlanStep } from "./routing.ts";
 import { ProviderError, type DiscoveryRequirements, type FilterKey, type ProviderCompany, type ProviderId, type ProviderPerson } from "./types.ts";
-import { verifyLeads, type VerifiedLead } from "./verify.ts";
+import { verifyLeads, type VerifiedLead, type VerifyOptions } from "./verify.ts";
+import { stableHash } from "./routing.ts";
 
 export interface StepOutcome {
   provider: ProviderId;
@@ -62,6 +63,25 @@ export interface RunInput {
   verifier?: ReturnType<typeof apifyAdapter> | null;
   ledger: UsageLedger;
   now?: () => Date;
+  /** Reviewed provider-filter trust (verify.ts); defaults to TRUSTED_PROVIDER_FILTERS (none). */
+  verifyOptions?: VerifyOptions;
+}
+
+/**
+ * Discovery keeps NO contact values: a search row's emails and phones are
+ * replaced, the moment the page arrives, by an opaque digest that still lets
+ * duplicates merge. Status, type and the provider's verification date stay.
+ * Neither the ledger, the run, nor the Leads rows ever hold a value; only
+ * enrichment, under its own authorization, returns one.
+ */
+export function redactContactValues(page: SearchPage): SearchPage {
+  return {
+    ...page,
+    people: page.people.map((p) => ({
+      ...p,
+      contactPoints: (p.contactPoints ?? []).map((c) => ({ ...c, value: `redacted:${c.kind}:${stableHash(c.value.toLowerCase())}` })),
+    })),
+  };
 }
 
 function pageCredits(step: PlanStep, limit: number): number {
@@ -83,9 +103,14 @@ export async function runDiscovery(input: RunInput): Promise<DiscoveryRun> {
   const approved = checkDiscoveryApproval(plan, input.approval, scope);
   if (!approved.ok) return empty("blocked", approved.reason);
 
-  const approvalCap = (p: ProviderId) => input.approval?.maxCredits[p] ?? (plan.requiresApproval ? 0 : plan.estimatedCredits[p] ?? 0);
+  // The ceiling is the SERVER's estimate: an approval that names more (the
+  // client sends it) never raises what a run may spend; one that names less lowers it.
+  const approvalCap = (p: ProviderId) => Math.min(
+    input.approval?.maxCredits[p] ?? (plan.requiresApproval ? 0 : Infinity),
+    plan.estimatedCredits[p] ?? 0);
   const missionCap = Math.min(plan.limits.maxCreditsPerMission,
-    input.approval ? Object.values(input.approval.maxCredits).reduce((a: number, b) => a + (b ?? 0), 0) : 0);
+    Object.keys(plan.estimatedCredits).reduce((a, p) => a + approvalCap(p as ProviderId), 0));
+  const verify = (m: ReturnType<typeof mergeRecords>, ev: SiteEvidence[] = []) => verifyLeads(req, m, ev, input.verifyOptions);
 
   const companyRows: ProviderCompany[] = [];
   const personRows: ProviderPerson[] = [];
@@ -113,9 +138,11 @@ export async function runDiscovery(input: RunInput): Promise<DiscoveryRun> {
         out.replayedPages++;
       } else {
         try {
-          res = await adapter.search(step, req, cursor, limit);
+          res = redactContactValues(await adapter.search(step, req, cursor, limit));
         } catch (e) {
-          const pe = e instanceof ProviderError ? e : new ProviderError(step.provider, "outage", String((e as Error)?.message ?? e));
+          // An unexpected failure after a paid call may still have billed it.
+          const pe = e instanceof ProviderError ? e
+            : new ProviderError(step.provider, cost > 0 ? "charge_uncertain" : "outage", "adapter failed after the request");
           if (pe.kind === "charge_uncertain") await input.ledger.markUncertain(key);
           else await input.ledger.release(key);
           out.status = out.pages === 0 ? "failed" : "stopped";
@@ -134,7 +161,7 @@ export async function runDiscovery(input: RunInput): Promise<DiscoveryRun> {
       if (!res.nextCursor) break;
       cursor = res.nextCursor;
       // Enough already? Stop paying for more pages.
-      const soFar = verifyLeads(req, mergeRecords(companyRows, personRows));
+      const soFar = verify(mergeRecords(companyRows, personRows));
       if (soFar.filter((l) => l.status === "qualified").length >= req.requestedCount) break;
     }
     credits[step.provider] = (credits[step.provider] ?? 0) + out.credits;
@@ -148,7 +175,7 @@ export async function runDiscovery(input: RunInput): Promise<DiscoveryRun> {
   if (plan.verification && input.verifier && merged.companies.length) {
     const v = plan.verification;
     verification = { provider: v.provider, checked: 0, credits: 0, stopped: null };
-    const pending = verifyLeads(req, merged).filter((l) => l.status === "needs_verification"
+    const pending = verify(merged).filter((l) => l.status === "needs_verification"
       && l.checks.some((c) => v.keys.includes(c.key) && c.outcome === "unknown"));
     for (const lead of pending.slice(0, v.maxRuns)) {
       const domain = lead.company.domain[0]?.value;
@@ -164,7 +191,8 @@ export async function runDiscovery(input: RunInput): Promise<DiscoveryRun> {
         verification.checked++;
         verification.credits++;
       } catch (e) {
-        if (e instanceof ProviderError && e.kind === "charge_uncertain") { await input.ledger.markUncertain(key); verification.stopped = "charge_uncertain"; break; }
+        // An actor run that failed in an unknown way may still have been billed.
+        if (!(e instanceof ProviderError) || e.kind === "charge_uncertain") { await input.ledger.markUncertain(key); verification.stopped = "charge_uncertain"; break; }
         await input.ledger.release(key);
       }
     }
@@ -172,7 +200,7 @@ export async function runDiscovery(input: RunInput): Promise<DiscoveryRun> {
     merged = mergeRecords(companyRows, personRows);
   }
 
-  const ranked = verifyLeads(req, merged, siteEvidence).sort((a, b) => rank(a) - rank(b));
+  const ranked = verify(merged, siteEvidence).sort((a, b) => rank(a) - rank(b));
   const qualified = ranked.filter((l) => l.status === "qualified");
   const leads = [...qualified.slice(0, req.requestedCount), ...ranked.filter((l) => l.status !== "qualified")];
   const anyOk = steps.some((s) => s.status === "completed" || s.status === "stopped");
