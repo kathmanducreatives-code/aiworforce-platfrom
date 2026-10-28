@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { Mail, Calendar, Plug } from "lucide-react";
+import { ProviderConnections } from "@/components/integrations/ProviderConnections";
+import { providerDiscoveryUiEnabled } from "@/lib/providerDiscovery";
 
 const ITEMS = [
   { to: "/email-sequences", icon: Mail, title: "Email Sequences", desc: "Configure outreach sequences and reply tracking." },
@@ -32,6 +34,7 @@ export default function SettingsIntegrations() {
             </div>
           </div>
         </div>
+        {providerDiscoveryUiEnabled() && <ProviderConnections />}
       </div>
     </div>
   );

@@ -157,6 +157,9 @@ export interface LeadRow {
    * re-deriving. Optional so any legacy construction path still type-checks.
    */
   canonical?: import("./canonicalLeadView").CanonicalLeadView;
+
+  /** Which data providers found this lead and how it was verified (provider discovery). */
+  providerDiscovery?: import("../providerDiscovery").LeadAttribution | null;
 }
 
 // ---------- labels ----------

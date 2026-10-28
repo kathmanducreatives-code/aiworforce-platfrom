@@ -11,6 +11,7 @@ import type {
   AccountStatus, ContactReadiness, OutreachStatus,
 } from "./types";
 import { fitTierFromScore } from "./types";
+import { readLeadAttribution } from "../providerDiscovery";
 import type {
   CanonicalLeadView, CanonicalAccount, CanonicalSelectedRecipient,
   CanonicalDiscoverySource, CanonicalAccountStatus, CanonicalOutreachStatus,
@@ -163,5 +164,6 @@ export function canonicalToLeadRow(
     possibleDuplicateOf: null,
 
     canonical: view,
+    providerDiscovery: readLeadAttribution(account.raw),
   };
 }
