@@ -259,6 +259,7 @@ import type { MapSelection } from "./webEvidenceRunner.ts";
 import { atomusInput, FUNDING_STAGE_VERIFIER_KEY } from "./fundingStageVerifier.ts";
 import { bucketOf, candidateDecision, decisionCounts, decisionSummary, type CandidateDecision, type MissionCandidate } from "./workbenchMissionView.ts";
 import { evaluateEligibility } from "./candidateEligibility.ts";
+import type { RequirementEvidence } from "./compoundSourcingPipeline.ts";
 import { canStillQualify, evidenceGapsFor } from "./evidenceGapRouter.ts";
 import { deriveMissionCriteria } from "./missionCriteria.ts";
 import { fundingRecordEvidenceItem, fundingRecordFromDiscoveredRound } from "./fundingCorroboration.ts";
@@ -11964,6 +11965,29 @@ export function canonicalDecisions(
   const out = new Map<string, CandidateDecision>();
   for (const candidate of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
     out.set(candidate.company_key, candidateDecision({ criteria, candidate, anchor }));
+  }
+  return out;
+}
+
+/**
+ * WHAT EACH HARD ANSWER RESTS ON, per company, from the same eligibility read
+ * `canonicalDecisions` makes. A separate map (not a field on the decision) so
+ * nothing that compares decisions changes; the persistence projection carries
+ * it onto the lead row for the Leads page.
+ */
+export function canonicalHardEvidence(
+  companies: readonly EngineCompany[], opts: Parameters<typeof canonicalDecisions>[1],
+): Map<string, RequirementEvidence[]> {
+  const criteria = deriveMissionCriteria(opts.mission, opts.readiness ?? PRODUCTION_READINESS);
+  const out = new Map<string, RequirementEvidence[]>();
+  for (const c of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
+    const e = evaluateEligibility(criteria, c.graph, c.criterion_verdicts, c.holds);
+    out.set(c.company_key, e.checks.filter((x) => x.kind === "hard").map((x) => ({
+      dimension: x.dimension, result: x.result, reason: x.reason,
+      source: x.provenance?.actor ?? null, method: x.provenance?.method ?? null,
+      status: x.provenance?.status ?? null, confidence: x.provenance?.confidence ?? null,
+      url: x.provenance?.url ?? null, excerpt: x.provenance?.excerpt ?? null,
+    })));
   }
   return out;
 }

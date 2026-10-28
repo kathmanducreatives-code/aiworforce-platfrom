@@ -110,7 +110,27 @@ export interface PendingDecisionMaker {
     bucket: string;
     label: string | null;
     hard_checks: Record<string, string>;
+    /**
+     * What each hard requirement's answer rests on (`canonicalHardEvidence`):
+     * the provider or rule, how it was read, and where. Carried so the Leads
+     * page can show the proof and its uncertainty instead of a bare "pass".
+     */
+    hard_evidence?: RequirementEvidence[];
   } | null;
+}
+
+/** One hard requirement's answer and the evidence it rests on, as persisted on a lead row. */
+export interface RequirementEvidence {
+  dimension: string;
+  result: string;
+  reason: string;
+  /** The provider actor or engine rule that produced the evidence; null when nothing answered. */
+  source: string | null;
+  method: string | null;
+  status: string | null;
+  confidence: string | null;
+  url: string | null;
+  excerpt: string | null;
 }
 
 

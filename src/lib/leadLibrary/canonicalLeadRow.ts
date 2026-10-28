@@ -74,7 +74,7 @@ function toSource(s: CanonicalDiscoverySource): LeadSource {
   return {
     discoveryMethod: s.discoveryMethod,
     sourceType: s.sourceType,
-    headline: null,
+    headline: s.headline ?? null,
     url: s.sourceUrl,
     author: null,
     publishedAt: null,

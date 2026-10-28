@@ -1259,14 +1259,23 @@ export function parseLeadMissionDeterministic(
   // contact-ready mission. So a person noun counts only where a person noun
   // stands: after a verb of retrieval, or in front of a relative clause that
   // describes them.
-  const PERSON_NOUN = "people|persons?|prospects?|buyers?|executives?|" +
-    "decision[- ]makers?|contacts?|leads?";
+  // A ROLE BEING HIRED IS NOT A PERSON REQUEST. "companies hiring Account
+  // Executives that raised funding" read `executives that` as people and
+  // compiled the demo request into a Founder/CEO contact mission; "company
+  // hiring Account Executives in the last 7 days" did the same. A noun that
+  // can be HIRED (executives, people) right after a hiring verb, up to three
+  // title words between, names the opening, never the deliverable. Nouns that
+  // are not hired ("hiring contacts", "hiring leads") are untouched.
+  const NOT_HIRED = "(?<!\\b(?:hiring|recruiting|hire|hires|hired|recruit|recruits)\\s+(?:[a-z&/-]+\\s+){0,3})";
+  const HIREABLE = "people|persons?|executives?";
+  const NOT_HIREABLE = "prospects?|buyers?|decision[- ]makers?|contacts?|leads?";
+  const personNoun = `(?:${NOT_HIRED}\\b(?:${HIREABLE})|\\b(?:${NOT_HIREABLE}))`;
   const personObject = new RegExp(
     // "find / get / show / give me [N] people ..."
-    `\\b(?:find|get|show|give|list|source|surface)\\b[^.]{0,24}?\\b(?:${PERSON_NOUN})\\b`,
+    `\\b(?:find|get|show|give|list|source|surface)\\b[^.]{0,24}?${personNoun}\\b`,
   ).test(t) ||
     // "... people who / whose / that / at / matching / working ..."
-    new RegExp(`\\b(?:${PERSON_NOUN})\\s+(?:who|whose|that|at|in|matching|working|showing)\\b`)
+    new RegExp(`${personNoun}\\s+(?:who|whose|that|at|in|matching|working|showing)\\b`)
       .test(t);
   // A HEADCOUNT PHRASE VETOES IT. "with 500 people", "a team of 20 people",
   // "under 100 people" are all sizes, never a request for individuals.

@@ -112,7 +112,7 @@ import { makeGptDiscoveryPlanner } from "../_shared/gptDiscoveryPlanner.ts";
 import { DiscoveryStrategyBlockedError } from "../_shared/leadDiscoveryStrategy.ts";
 import { makeGptExecutionPlanner } from "../_shared/gptExecutionPlanner.ts";
 import { makeGptRouteController } from "../_shared/gptRouteController.ts";
-import { canonicalDecisions, canonicalQualifiedKeys, projectResearchFabric, researchFabricSummary } from "../_shared/leadCapabilityEngine.ts";
+import { canonicalDecisions, canonicalHardEvidence, canonicalQualifiedKeys, projectResearchFabric, researchFabricSummary } from "../_shared/leadCapabilityEngine.ts";
 import { requiredEvidenceDimensions } from "../_shared/evidenceGraph.ts";
 import { criteriaSections, deriveMissionCriteria } from "../_shared/missionCriteria.ts";
 import { effectiveRequestedCount as p5RequestedCount } from "../_shared/leadMission.ts";
@@ -5832,6 +5832,13 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // Lead V2: leads are exactly the canonical P5 qualified set.
                 (p2Specs && missionPlan)
                   ? canonicalDecisions(capabilityRun.companies, {
+                    mission: persistedMission, plan: missionPlan, identity: { task_id: String(task.id) },
+                    readiness: leadReadiness,
+                  })
+                  : undefined,
+                // What each hard answer rests on, for the Leads page's sources.
+                (p2Specs && missionPlan)
+                  ? canonicalHardEvidence(capabilityRun.companies, {
                     mission: persistedMission, plan: missionPlan, identity: { task_id: String(task.id) },
                     readiness: leadReadiness,
                   })
