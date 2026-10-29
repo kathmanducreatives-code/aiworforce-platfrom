@@ -121,8 +121,11 @@ The launch approval phrase names that limitation. An uncertain charge is never r
 attempt is authorized while any purchase is unreconciled. `verify`, `prepare` and `reconcile` open read-only database
 sessions (`default_transaction_read_only`).
 
-One gap is not tracked: a `prepare` whose kickoff is never launched leaves its compile cost (at most $0.025) outside the
-database, so B4 does not count it. A kickoff also expires 24 h after its prices were observed.
+**Kickoff compiles are counted from the workflow runs.** Every run's title carries its stage
+(`run-name`). The budget counts every earlier `prepare` run through the GitHub API, at the compile's worst case of
+$0.02496, whether or not it was ever launched. The database's compile rows are not added on top, so a launched compile
+is not counted twice. If the count cannot be read, the check fails and no paid stage runs. 117 earlier prepares would
+exhaust the $3 on their own. A kickoff also expires 24 h after its prices were observed.
 
 Why launch is a single step: `authorize_discovery_smoke` sets the deadline to the queue row's `created_at + 300 s`. A
 kickoff executed in one run and a worker approved later in another would expire before buying anything. So the kickoff

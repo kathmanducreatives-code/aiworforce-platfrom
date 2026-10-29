@@ -44,7 +44,8 @@ Deno.test("canary: one workflow — `none` (the default) is the worker; the othe
   assertStringIncludes(canary.if!, `contains(fromJSON('["verify","migrate","prepare","reconcile"]'), inputs.canary_stage)`);
   assertEquals(canary.environment, "discovery-test", "the same Environment and required reviewer");
   assertEquals(worker.permissions, { contents: "read", actions: "read" }, "actions: read only, to download the prepare artifact");
-  assert(!("permissions" in canary), "the canary job keeps the workflow's read-only token");
+  assertEquals(canary.permissions, { contents: "read", actions: "read" }, "actions: read only, to count earlier prepare runs");
+  assertStringIncludes(RAW, `run-name: "Discovery test worker — \${{ inputs.canary_stage || 'none' }} @ \${{ inputs.expected_sha }}"`);
 });
 
 async function guard(job: Job, env: Record<string, string>) {
@@ -191,8 +192,9 @@ const APIFY = { account: { room_usd: 18.99987, max_monthly_usage_usd: 19 }, acto
   { template: "details", available: true, pricing_model: "PAY_PER_EVENT", worst_case_usd: 0.00405 },
   { template: "atomus", available: true, pricing_model: "PAY_PER_EVENT", worst_case_usd: 0.01055 },
 ] };
-const budget = (over: { stage?: string; apify?: unknown; spent?: number } = {}) => canaryBudget({
-  stage: over.stage ?? "prepare", apify: (over.apify ?? APIFY) as never, spentMicrousd: over.spent ?? 0, catalog: CATALOG.approved_quotes });
+const budget = (over: { stage?: string; apify?: unknown; spent?: number; prepares?: number } = {}) => canaryBudget({
+  stage: over.stage ?? "prepare", apify: (over.apify ?? APIFY) as never, spentMicrousd: over.spent ?? 0,
+  priorPrepares: over.prepares ?? 0, catalog: CATALOG.approved_quotes });
 const failing = (r: ReturnType<typeof canaryBudget>) => r.checks.filter((c) => c.result === "FAIL").map((c) => c.id);
 
 Deno.test("budget: the observed account (a $19 limit) passes the $3 canary gate, and the limitation is stated, never a PASS", () => {
@@ -219,6 +221,22 @@ Deno.test("budget: too little left of the $3, a price above its reservation, a n
   const poor = structuredClone(APIFY); poor.account.room_usd = 0.01;
   assertEquals(failing(budget({ apify: poor })), ["B5"]);
   assertEquals(budget({ apify: { account: {}, actors: [] } }).ok, false, "no Apify record: refused");
+});
+
+Deno.test("budget: every earlier prepare's compile counts against the $3, launched or not (the unlaunched-compile gap)", () => {
+  // Each prepare may spend up to 2 × $0.01248 before any database row exists.
+  assertEquals(budget({ prepares: 3 }).spent_microusd, 3 * 24_960);
+  assertEquals(budget({ stage: "launch", prepares: 1, spent: 68_520 }).spent_microusd, 68_520 + 24_960);
+  // 116 abandoned prepares leave room for one more prepare; 117 do not.
+  assertEquals(budget({ prepares: 116 }).ok, true);
+  assertEquals(failing(budget({ prepares: 117 })), ["B4"]);
+  assertEquals(budget({ prepares: -1 }).ok, false, "an unreadable count refuses");
+  assertEquals(budget({ prepares: 1.5 }).ok, false);
+  const stage = STAGE.slice(STAGE.indexOf("prior_prepares() {"), STAGE.indexOf("check_budget() {"));
+  assertStringIncludes(stage, '[ -n "${GITHUB_TOKEN:-}" ] || return 1', "fails closed without a token");
+  assertStringIncludes(stage, 'contains(" — prepare @ ")', "counted by the run title the workflow sets");
+  assertStringIncludes(stage, "!= $self", "the current run is the next stage's worst case, not counted twice");
+  assert(!/estimated_cost_usd/.test(STAGE), "compiles are counted from the runs, never also from the ledger");
 });
 
 // ── TEST_DB_URL, checked before psql (db-url-check.ts) ───────────────────────

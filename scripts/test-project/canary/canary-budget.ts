@@ -1,7 +1,7 @@
 // THE CANARY'S $3 BUDGET, CHECKED BEFORE EVERY PAID STAGE. Pure; reads files.
 //
 //   deno run --allow-read --allow-write=<audit> scripts/test-project/canary/canary-budget.ts \
-//     --stage verify|prepare|launch --apify <apify.json> --spent-microusd <n> --json <file>
+//     --stage verify|prepare|launch --apify <apify.json> --spent-microusd <n> --prior-prepares <n> --json <file>
 //
 // ── WHAT ENFORCES THE $3, AND WHAT DOES NOT ──────────────────────────────────
 //
@@ -16,9 +16,13 @@
 //   3. Request limits pinned by the gate (≤ 3 jobs, 1 company, ≤ 3 companies).
 //   4. OpenAI calls bounded by request bytes and max output tokens.
 // This script adds the canary-level ceiling over all attempts: what the canary
-// already spent (from the database, at the vendor's reconciled figure or the
-// committed worst case) plus the next stage's worst case must fit $3, and the
-// next attempt's worst case must fit the stricter $0.25 combined authorization.
+// already spent plus the next stage's worst case must fit $3, and the next
+// attempt's worst case must fit the stricter $0.25 combined authorization.
+// "Already spent" is (a) every provider and model operation in the database, at
+// the vendor's reconciled figure or its committed worst case, plus (b) EVERY
+// earlier `prepare` run of the canary workflow at the kickoff compile's worst
+// case (2 × $0.01248), launched or not — a compile spends money before any
+// database row exists, so its record is the workflow run itself.
 //
 // THE LIMITATION, reported on every run: (2) is Apify's documented per-run
 // behaviour and is not provable before a run; the first launch's receipts are
@@ -48,7 +52,7 @@ const usd = (micro: number) => `$${(micro / 1e6).toFixed(6)}`;
  * canary already spent: reconciled vendor figures, or committed worst cases
  * where not yet reconciled, plus recorded kickoff compiles.
  */
-export function canaryBudget(i: { stage: string; apify: Json; spentMicrousd: number; catalog: Json }): { ok: boolean; checks: BudgetCheck[]; next_worst_microusd: number } {
+export function canaryBudget(i: { stage: string; apify: Json; spentMicrousd: number; priorPrepares: number; catalog: Json }): { ok: boolean; checks: BudgetCheck[]; next_worst_microusd: number; spent_microusd: number } {
   const checks: BudgetCheck[] = [];
   const add = (id: string, what: string, ok: boolean | null, observed: string) =>
     checks.push({ id, what, result: ok === null ? "INFO" : ok ? "PASS" : "FAIL", observed });
@@ -78,9 +82,11 @@ export function canaryBudget(i: { stage: string; apify: Json; spentMicrousd: num
   // B4 — the canary-level $3 ceiling over all attempts.
   const compile = COMPILE_CALLS * MODEL_TEMPLATE_MICROUSD;
   const next = i.stage === "prepare" || i.stage === "verify" ? compile + attempt : i.stage === "launch" ? attempt : 0;
-  const spent = Math.max(0, Math.round(i.spentMicrousd));
-  add("B4", "spent so far + the next stage's worst case fit the $3 canary budget", spent + next <= CANARY_BUDGET_MICROUSD,
-    `spent ${usd(spent)} + next ${usd(next)} (${i.stage === "launch" ? "the paid run" : "compile + the paid run"}) ` +
+  const db = Math.max(0, Math.round(i.spentMicrousd));
+  const prepares = Number.isInteger(i.priorPrepares) && i.priorPrepares >= 0 ? i.priorPrepares : NaN;
+  const spent = db + prepares * compile;
+  add("B4", "spent so far + the next stage's worst case fit the $3 canary budget", Number.isFinite(spent) && spent + next <= CANARY_BUDGET_MICROUSD,
+    `spent ${usd(spent)} (operations ${usd(db)} + ${prepares} earlier prepare compile(s) × ${usd(compile)}) + next ${usd(next)} (${i.stage === "launch" ? "the paid run" : "compile + the paid run"}) ` +
       `= ${usd(spent + next)} of ${usd(CANARY_BUDGET_MICROUSD)}; remaining after: ${usd(CANARY_BUDGET_MICROUSD - spent - next)}`);
 
   // B5 — the account can absorb the next attempt, so its limit never cuts a run mid-purchase.
@@ -96,16 +102,18 @@ export function canaryBudget(i: { stage: string; apify: Json; spentMicrousd: num
       `maxTotalChargeUsd is unproven until the first run's receipts (reconcile FAILs any run above its cap). If every ` +
       `software layer failed at once, exposure would be bounded only by the account limit.`);
 
-  return { ok: checks.every((c) => c.result !== "FAIL"), checks, next_worst_microusd: next };
+  return { ok: checks.every((c) => c.result !== "FAIL"), checks, next_worst_microusd: next, spent_microusd: spent };
 }
 
 if (import.meta.main) {
-  const a = parseArgs(Deno.args, { string: ["stage", "apify", "spent-microusd", "json"] });
+  const a = parseArgs(Deno.args, { string: ["stage", "apify", "spent-microusd", "prior-prepares", "json"] });
   const apify = JSON.parse(Deno.readTextFileSync(a.apify!));
   const catalog = JSON.parse(Deno.readTextFileSync(new URL("../../../docs/launch/proposals/smoke-catalog-canary-funding.json", import.meta.url))).approved_quotes;
   const spent = Number(a["spent-microusd"]);
   if (!Number.isFinite(spent)) { console.error("--spent-microusd must be a number"); Deno.exit(2); }
-  const r = canaryBudget({ stage: String(a.stage), apify, spentMicrousd: spent, catalog });
+  const prior = Number(a["prior-prepares"]);
+  if (!Number.isInteger(prior) || prior < 0) { console.error("--prior-prepares must be a count"); Deno.exit(2); }
+  const r = canaryBudget({ stage: String(a.stage), apify, spentMicrousd: spent, priorPrepares: prior, catalog });
   for (const c of r.checks) console.log(`${c.result.padEnd(5)} ${c.id} ${c.what}: ${c.observed}`);
   if (a.json) Deno.writeTextFileSync(a.json, JSON.stringify(r, null, 2) + "\n");
   console.log(r.ok ? "BUDGET OK" : "BUDGET REFUSED — no paid operation runs");

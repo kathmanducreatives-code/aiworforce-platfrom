@@ -57,7 +57,7 @@ run() {   # run <name> <expect 0|1> <stage> [env…]
   local out="$tmp/$name"; mkdir -p "$out"
   set +e
   env -i PATH="$PATH" HOME="$HOME" TEST_DB_URL="$url" APIFY_API_TOKEN="$token" APIFY_API_BASE="http://127.0.0.1:$port" \
-    CANARY_APIFY_NET="127.0.0.1:$port" CANARY_LOCAL_REHEARSAL=1 EXPECTED_SHA="$SHA" CANARY_AUDIT_DIR="$out/audit" "$@" \
+    CANARY_APIFY_NET="127.0.0.1:$port" CANARY_LOCAL_REHEARSAL=1 CANARY_PRIOR_PREPARES=0 EXPECTED_SHA="$SHA" CANARY_AUDIT_DIR="$out/audit" "$@" \
     scripts/test-project/canary/canary-stage.sh "$stage" > "$out/log" 2>&1
   local code=$?
   set -e
@@ -172,6 +172,14 @@ run prepare-budget-spent 1 prepare APIFY_USERNAME=canaryaccount CANARY_APPROVER=
   CANARY_APPROVAL="compile canary kickoff at $SHA" CANARY_OFFLINE_PROPOSAL=docs/launch/proposals/canary-funding-reviewed-mission-proposal.json
 expect prepare-budget-spent "FAIL  B4"
 psql "$url" -XAtq -c "delete from public.discovery_smoke_operations where operation_key = 'rehearsal-spent'" > /dev/null
+
+# ── unlaunched compiles count: an unknown count refuses; 117 earlier prepares exhaust the $3 ──
+run budget-unknown-prepares 1 verify APIFY_USERNAME=canaryaccount CANARY_PRIOR_PREPARES=
+expect budget-unknown-prepares "could not count earlier prepare runs"
+run budget-many-prepares 1 prepare APIFY_USERNAME=canaryaccount CANARY_APPROVER="rehearsal operator" CANARY_PRIOR_PREPARES=117 \
+  CANARY_APPROVAL="compile canary kickoff at $SHA" CANARY_OFFLINE_PROPOSAL=docs/launch/proposals/canary-funding-reviewed-mission-proposal.json
+expect budget-many-prepares "117 earlier prepare compile"
+expect budget-many-prepares "FAIL  B4"
 
 # ── a price above the approved maximum blocks every paid stage ──
 kill "$server"; FAKE_APIFY_TOKEN="$token" FAKE_APIFY_PRICE_BUMP=0.0001 deno run --allow-net=127.0.0.1 --allow-env tests/infra/fixtures/fake-apify.ts "$port" > "$tmp/apify2.log" 2>&1 &

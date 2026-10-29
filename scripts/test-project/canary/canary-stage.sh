@@ -126,10 +126,12 @@ check_permissions() {
   [ "$DB_WRITES" = "1" ] || { [ "$ro" = "on" ] && pass "this $STAGE session is read-only (default_transaction_read_only)" || fail "this $STAGE session is not read-only"; }
 }
 
-# What the canary already spent, in µ$, across every attempt at this request in
-# the canary workspace: each operation at the vendor's reconciled figure, or at
-# its committed worst case until reconciled (model attempts stay at their
-# committed reservation), plus every recorded kickoff compile.
+# What the canary's OPERATIONS already spent, in µ$, across every attempt at
+# this request in the canary workspace: each operation at the vendor's
+# reconciled figure, or at its committed worst case until reconciled (model
+# attempts stay at their committed reservation). Kickoff compiles are counted
+# from the workflow's prepare runs instead (prior_prepares), so a compile that
+# was never launched is still counted and a launched one is not counted twice.
 spent_microusd() {
   q -c "with attempts as (
       select a.id as auth_id, q.id as queue_id from public.discovery_smoke_authorizations a
@@ -138,18 +140,43 @@ spent_microusd() {
     select (coalesce((select sum(coalesce(r.vendor_microusd, o.committed_microusd)) from public.discovery_smoke_operations o
                join attempts t on t.auth_id = o.authorization_id
                left join public.discovery_smoke_reconciliations r on r.authorization_id = o.authorization_id and r.operation_key = o.operation_key
-              where o.kind in ('provider', 'model')), 0)
-          + coalesce((select ceil(sum(c.estimated_cost_usd) * 1e6) from public.lead_execution_calls c
-               join attempts t on c.logical_call_key = 'kickoff:' || t.queue_id::text), 0))::bigint"
+              where o.kind in ('provider', 'model')), 0))::bigint"
+}
+
+# Every earlier `prepare` run of this workflow, any outcome — each may have
+# spent its compile before anything reached the database. Read from the
+# GitHub API (the run's display title carries its stage); fails closed.
+prior_prepares() {
+  if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+    [ -n "${GITHUB_TOKEN:-}" ] || return 1
+    local page=1 count=0 total r n
+    while :; do
+      r="$(curl -fsS -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+        "${GITHUB_API_URL:-https://api.github.com}/repos/$GITHUB_REPOSITORY/actions/workflows/discovery-test-worker.yml/runs?per_page=100&page=$page")" || return 1
+      n="$(jq --arg self "${GITHUB_RUN_ID:-}" '[.workflow_runs[] | select((.display_title | contains(" — prepare @ ")) and ((.id | tostring) != $self))] | length' <<< "$r")" || return 1
+      total="$(jq '.total_count' <<< "$r")" || return 1
+      count=$((count + n))
+      [ $((page * 100)) -lt "$total" ] || break
+      page=$((page + 1))
+    done
+    echo "$count"
+  else
+    # Local rehearsal only: the count is given.
+    [[ "${CANARY_PRIOR_PREPARES:-}" =~ ^[0-9]+$ ]] || return 1
+    echo "$CANARY_PRIOR_PREPARES"
+  fi
 }
 
 check_budget() {
   local spent
   spent="$(spent_microusd)" || { fail "budget: could not read what the canary spent"; return; }
   [[ "$spent" =~ ^[0-9]+$ ]] || { fail "budget: unreadable spend '$spent'"; return; }
+  local prior
+  prior="$(prior_prepares)" || { fail "budget: could not count earlier prepare runs (their compiles count against the \$3)"; return; }
+  [[ "$prior" =~ ^[0-9]+$ ]] || { fail "budget: unreadable prepare count '$prior'"; return; }
   [ -f "$AUDIT/apify.json" ] || { fail "budget: no Apify account record to check against"; return; }
   if "$DENO" run --no-prompt --allow-read --allow-write="$AUDIT" scripts/test-project/canary/canary-budget.ts \
-      --stage "$STAGE" --apify "$AUDIT/apify.json" --spent-microusd "$spent" --json "$AUDIT/budget.json" > "$AUDIT/budget.txt" 2>&1; then
+      --stage "$STAGE" --apify "$AUDIT/apify.json" --spent-microusd "$spent" --prior-prepares "$prior" --json "$AUDIT/budget.json" > "$AUDIT/budget.txt" 2>&1; then
     cat "$AUDIT/budget.txt" | tee -a "$SUMMARY" > /dev/null; cat "$AUDIT/budget.txt"
     pass "budget: the \$3 canary ceiling and the \$0.25 per-attempt authorization hold for the next paid stage (software-enforced; see B6)"
   else
