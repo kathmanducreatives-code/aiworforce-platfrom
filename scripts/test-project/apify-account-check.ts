@@ -3,6 +3,11 @@
 //   APIFY_API_TOKEN=<canary account token> deno run --allow-net=api.apify.com --allow-env=APIFY_API_TOKEN \
 //     --allow-read=docs/launch/proposals scripts/test-project/apify-account-check.ts [--expect-username <name>]
 //
+// `--json <file>` also writes the result (no secret) for the canary workflow's
+// audit (.github/workflows/discovery-test-worker.yml, canary stages).
+// `APIFY_API_BASE` (local tests only) points it at a stand-in server; in the
+// workflow Deno's --allow-net=api.apify.com refuses any other host.
+//
 // AFTER THE CANARY, the vendor's side of reconciliation (also free GETs):
 //   … apify-account-check.ts --runs <run id>,<run id>,…
 // prints each run's actor, status and the USD Apify charged (`usageTotalUsd`)
@@ -24,7 +29,10 @@ import { parseArgs } from "https://deno.land/std@0.224.0/cli/parse_args.ts";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const args = parseArgs(Deno.args, { string: ["expect-username", "runs"] });
+const args = parseArgs(Deno.args, { string: ["expect-username", "runs", "json"], boolean: ["mask-identity"] });
+/** `--mask-identity` (the workflow; its logs and artifacts are public): the username is shown as a+++z (n chars). */
+const shown = (u: string) => !args["mask-identity"] || u.length < 3 ? u : `${u[0]}${"*".repeat(u.length - 2)}${u.at(-1)} (${u.length} chars)`;
+const BASE = (Deno.env.get("APIFY_API_BASE") ?? "https://api.apify.com").replace(/\/$/, "");
 const token = Deno.env.get("APIFY_API_TOKEN")?.trim();
 if (!token) {
   console.error("APIFY_API_TOKEN is not set. Export it in your own shell; never paste it into a chat or a file in the repository.");
@@ -40,7 +48,7 @@ const CANARY: Array<{ template: string; actor: string; units: number }> = [
 const catalog = JSON.parse(Deno.readTextFileSync("docs/launch/proposals/smoke-catalog-canary-funding.json")).approved_quotes;
 
 async function get(path: string): Promise<Json> {
-  const res = await fetch(`https://api.apify.com/v2${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(`${BASE}/v2${path}`, { headers: { Authorization: `Bearer ${token}` } });
   // The body of an error never echoes the token; only the status and Apify's error type are shown.
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`GET ${path} → HTTP ${res.status} ${body?.error?.type ?? ""}`.trim());
@@ -49,6 +57,8 @@ async function get(path: string): Promise<Json> {
 
 const results: Array<{ check: string; result: "PASS" | "REVIEW" | "FAIL"; detail: string }> = [];
 const record = (check: string, result: "PASS" | "REVIEW" | "FAIL", detail: string) => results.push({ check, result, detail });
+/** The non-secret audit record (`--json`). */
+const audit: Json = { observed_at: new Date().toISOString(), account: {}, actors: [] as Json[] };
 
 // ── reconciliation mode: what Apify charged for each canary run ──────────────
 if (args.runs) {
@@ -79,12 +89,14 @@ if (args.runs) {
 try {
   const me = await get("/users/me");
   const username = String(me.username ?? "");
-  console.log(`account: username=${username} plan=${me.plan?.id ?? "unknown"}`);
+  console.log(`account: username=${shown(username)} plan=${me.plan?.id ?? "unknown"}`);
+  audit.account = { username: shown(username), user_id: args["mask-identity"] ? null : me.id ?? null, plan: me.plan?.id ?? null,
+    plan_monthly_credits_usd: me.plan?.monthlyUsageCreditsUsd ?? null };
   if (args["expect-username"]) {
     record("account identity", username === args["expect-username"] ? "PASS" : "FAIL",
-      `username ${username}, expected ${args["expect-username"]} (the old account must not be used)`);
+      `username ${shown(username)}, expected ${shown(String(args["expect-username"]))} (the old account must not be used)`);
   } else {
-    record("account identity", "REVIEW", `username ${username}: confirm it is the canary account, not the old one (--expect-username)`);
+    record("account identity", "REVIEW", `username ${shown(username)}: confirm it is the canary account, not the old one (--expect-username)`);
   }
   const limits = await get("/users/me/limits");
   const max = Number(limits.limits?.maxMonthlyUsageUsd);
@@ -92,6 +104,8 @@ try {
   const cycle = limits.monthlyUsageCycle ?? {};
   console.log(`usage: $${used} of $${max} this cycle (${cycle.startAt ?? "?"} → ${cycle.endAt ?? "?"})`);
   const room = max - used;
+  Object.assign(audit.account, { monthly_usage_usd: used, max_monthly_usage_usd: max, room_usd: room,
+    cycle_start: cycle.startAt ?? null, cycle_end: cycle.endAt ?? null });
   record("account spending room", Number.isFinite(room) && room >= 0.25 ? "PASS" : "FAIL",
     `$${Number.isFinite(room) ? room.toFixed(4) : "unknown"} left; the canary's combined cap is $0.25`);
   // A low account limit is a second, vendor-side ceiling. Recommended, not required.
@@ -105,6 +119,9 @@ try {
 for (const { template, actor, units } of CANARY) {
   try {
     const act = await get(`/acts/${actor}`);
+    // Available: it exists for this account and is not deprecated. A registry entry is not proof.
+    const available = !!act.id && act.isDeprecated !== true;
+    record(`${template} actor available`, available ? "PASS" : "FAIL", `${actor}: id=${act.id ?? "none"} deprecated=${act.isDeprecated ?? false}`);
     const infos = (act.pricingInfos ?? []) as Json[];
     const now = Date.now();
     const current = infos.filter((i) => !i.startedAt || Date.parse(i.startedAt) <= now)
@@ -122,10 +139,13 @@ for (const { template, actor, units } of CANARY) {
     for (const [k, e] of events) console.log(`  ${actor}: ${k} = $${priceOf(e)} (dearest tier) — ${e.eventTitle ?? ""}`);
     const worst = start.reduce((a, [, e]) => a + priceOf(e), 0) + units * Math.max(0, ...perUnit.map(([, e]) => priceOf(e)));
     const reserved = Number(catalog[template]?.maximum_microusd) / 1e6;
+    audit.actors.push({ template, actor, available, pricing_model: current.pricingModel, units,
+      events: Object.fromEntries(events.map(([k, e]) => [k, priceOf(e)])), worst_case_usd: worst, reserved_usd: reserved });
     if (perUnit.length !== 1) {
       record(`${template} price`, "REVIEW", `${actor}: ${perUnit.length} chargeable events besides the start; decide which apply to ${units} unit(s) (bound by the dearest: $${worst.toFixed(6)} vs reserved $${reserved})`);
     } else {
-      record(`${template} price`, worst <= reserved ? "PASS" : "FAIL",
+      // In whole micro-dollars: 0.00005 + 3 × 0.0035 must not fail on a floating-point remainder.
+      record(`${template} price`, Math.round(worst * 1e6) <= Math.round(reserved * 1e6) ? "PASS" : "FAIL",
         `${actor}: worst case $${worst.toFixed(6)} for 1 start + ${units} unit(s); the catalog reserves $${reserved}`);
     }
   } catch (e) {
@@ -137,5 +157,10 @@ console.log("");
 for (const r of results) console.log(`${r.result.padEnd(6)} ${r.check}: ${r.detail}`);
 console.log("MANUAL  maxTotalChargeUsd enforcement on this account is not provable without a run; " +
   "the first canary start's receipt (usageTotalUsd ≤ its cap) is the check, reconciled after the run.");
-console.log(`\nobserved_at=${new Date().toISOString()} — use as --observed-at (valid for 24 h) when every price PASSES.`);
+console.log(`\nobserved_at=${audit.observed_at} — use as --observed-at (valid for 24 h) when every price PASSES.`);
+if (args.json) {
+  audit.results = results;
+  audit.all_pass = results.every((r) => r.result === "PASS");
+  Deno.writeTextFileSync(String(args.json), JSON.stringify(audit, null, 2) + "\n");
+}
 Deno.exit(results.every((r) => r.result === "PASS") ? 0 : 1);

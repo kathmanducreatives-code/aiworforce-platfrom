@@ -13,6 +13,27 @@
 # It never deploys anything, never applies a migration, and never reads a
 # production secret: every secret comes from the `discovery-test` Environment,
 # which must hold the test project's values only.
+#
+# THE FIRST REAL-APIFY CANARY (input `canary_stage`, docs/demo/FIRST_APIFY_CANARY.md)
+# runs through this same workflow, Environment, reviewer, refusal step and
+# concurrency group — never a parallel path. `none` (the default) is the worker
+# exactly as before. Each other stage is one operation, run by
+# scripts/test-project/canary/canary-stage.sh against the isolated project
+# tlvnfrxzjhsjgdofwehb and the canary workspace only, and every operation that
+# writes or spends needs its own exact approval phrase (`canary_approval`):
+#   verify     read-only and free (Apify account and prices, identity, migration
+#              state, conflicts, preflight, an offline kickoff validated)
+#   migrate    applies ONLY the reviewed read-cap migration         (DB write)
+#   prepare    the kickoff compile (≈ $0.006) and the PAID kickoff SQL,
+#              validated and saved as an artifact, NOT executed        (paid)
+#   launch     the worker job: executes the prepared kickoff (its sha256 is the
+#              approval) seconds before the worker step, inside the
+#              authorization's 300 s window              (DB write + paid run)
+#   reconcile  read-only post-run checks and the reconciliation SQL to review
+# Each stage saves its non-secret audit as an artifact. The `migrate` and
+# `launch` stages also need the Environment secret TEST_DB_URL: the isolated
+# project's administrator connection (authorize_discovery_smoke is not granted
+# to the service role).
 
 name: Discovery test worker (non-production, manual)
 
@@ -41,6 +62,43 @@ on:
         description: "The full 40-character commit SHA approved for this run; the job refuses any other checkout"
         required: true
         type: string
+      canary_stage:
+        description: "none = the worker as always. Canary: verify (read-only) | migrate | prepare (paid compile) | launch (kickoff + paid run) | reconcile (read-only)"
+        required: true
+        default: none
+        type: choice
+        options:
+          - none
+          - verify
+          - migrate
+          - prepare
+          - launch
+          - reconcile
+      canary_approval:
+        description: "Canary stages that write or spend: the exact approval phrase the stage names (see the runbook)"
+        required: false
+        default: ""
+        type: string
+      canary_approver:
+        description: "prepare: who approved the paid canary (written into the kickoff SQL)"
+        required: false
+        default: ""
+        type: string
+      apify_username:
+        description: "prepare/launch: the canary Apify account's username (confirmed, never assumed)"
+        required: false
+        default: ""
+        type: string
+      kickoff_run_id:
+        description: "launch: the id of the prepare run whose kickoff artifact is executed"
+        required: false
+        default: ""
+        type: string
+      kickoff_sha256:
+        description: "launch: the approved kickoff.sql sha256 (printed by prepare)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -52,7 +110,14 @@ concurrency:
 
 jobs:
   worker:
+    # The worker, as always — and the canary's launch, whose kickoff must run
+    # seconds before the worker step (the authorization's window is 300 s).
+    if: ${{ !contains(fromJSON('["verify","migrate","prepare","reconcile"]'), inputs.canary_stage) }}
     runs-on: ubuntu-latest
+    # actions: read lets launch download the prepare run's kickoff artifact.
+    permissions:
+      contents: read
+      actions: read
     # Holds ONLY the test project's secrets, behind a required reviewer.
     environment: discovery-test
     # Session (<= 25 min) + drain of one slice (LEAD_WORKER_MAX_RUNTIME_MS, 2.5 min)
@@ -64,6 +129,11 @@ jobs:
       PROVIDERS: ${{ inputs.providers }}
       EXPECTED_SHA: ${{ inputs.expected_sha }}
       TEST_PROJECT_REF: ${{ vars.TEST_PROJECT_REF }}
+      CANARY_STAGE: ${{ inputs.canary_stage }}
+      CANARY_APPROVAL: ${{ inputs.canary_approval }}
+      APIFY_USERNAME: ${{ inputs.apify_username }}
+      KICKOFF_RUN_ID: ${{ inputs.kickoff_run_id }}
+      KICKOFF_SHA256: ${{ inputs.kickoff_sha256 }}
       # NO SECRET AT JOB LEVEL. A job-level secret reaches every step, including
       # the third-party actions below; each secret is set on the one step that
       # reads it (the guard: the URL only; the worker: all five).
@@ -128,6 +198,22 @@ jobs:
           # after approval never runs (GITHUB_SHA is what checkout fetches).
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$EXPECTED_SHA" = "$GITHUB_SHA" ] \
             || { echo "refusing: this run's commit $GITHUB_SHA is not the approved expected_sha" >&2; exit 1; }
+          # THE CANARY LAUNCH: only the isolated canary project and workspace,
+          # only a paid dispatch, only a prepared kickoff named by run and sha256.
+          case "${CANARY_STAGE:-none}" in
+            none) ;;
+            launch)
+              [ "$CONFIRM_REF" = "tlvnfrxzjhsjgdofwehb" ] \
+                || { echo "refusing: the canary runs on tlvnfrxzjhsjgdofwehb only" >&2; exit 1; }
+              [ "$LEAD_V2_WORKER_WORKSPACES" = "40e2512f-09b6-433e-97fe-f9999a1f1897" ] \
+                || { echo "refusing: the canary runs in the discovery-test workspace only" >&2; exit 1; }
+              [ "$PROVIDERS" = "openai-and-apify" ] \
+                || { echo "refusing: launch is the paid canary; providers must be openai-and-apify" >&2; exit 1; }
+              [[ "$KICKOFF_RUN_ID" =~ ^[0-9]+$ ]] && [[ "$KICKOFF_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+                || { echo "refusing: launch needs the prepare run id and the approved kickoff sha256" >&2; exit 1; }
+              ;;
+            *) echo "refusing: canary stage '$CANARY_STAGE' does not run the worker" >&2; exit 1 ;;
+          esac
 
       # Pinned to full commit SHAs: a moved tag cannot change what runs here.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
@@ -137,6 +223,26 @@ jobs:
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed   # v2.0.5
         with:
           deno-version: v2.8.2   # worker/Dockerfile's version
+
+      - name: "Canary launch: the prepare run's kickoff, by run id"
+        if: ${{ inputs.canary_stage == 'launch' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093   # v4.3.0
+        with:
+          name: canary-prepare
+          path: ${{ runner.temp }}/canary-prepare
+          run-id: ${{ inputs.kickoff_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: "Canary launch: re-verify, then execute the approved kickoff (the worker starts next)"
+        if: ${{ inputs.canary_stage == 'launch' }}
+        env:
+          TEST_DB_URL: ${{ secrets.TEST_DB_URL }}
+          APIFY_API_TOKEN: ${{ secrets.TEST_APIFY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          export KICKOFF_DIR="$RUNNER_TEMP/canary-prepare/kickoff"
+          export CANARY_AUDIT_DIR="$RUNNER_TEMP/canary-audit"
+          scripts/test-project/canary/canary-stage.sh launch
 
       - name: One bounded worker session (drains on SIGTERM, then exits)
         env:
@@ -192,3 +298,92 @@ jobs:
           # 124: the session ended on schedule and the worker drained. Anything
           # else non-zero is a real failure and fails the job.
           [ $status -eq 0 ] || [ $status -eq 124 ] || exit $status
+
+      - name: "Canary launch: post-run checks and the reconciliation to review (read-only)"
+        if: ${{ always() && inputs.canary_stage == 'launch' }}
+        env:
+          TEST_DB_URL: ${{ secrets.TEST_DB_URL }}
+          APIFY_API_TOKEN: ${{ secrets.TEST_APIFY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          export CANARY_AUDIT_DIR="$RUNNER_TEMP/canary-audit/post-run"
+          export CANARY_QUEUE_ID="$(cat "$RUNNER_TEMP/canary-audit/queue_id" 2>/dev/null || true)"
+          [ -n "$CANARY_QUEUE_ID" ] || { echo "no kickoff was executed; nothing to reconcile"; exit 0; }
+          scripts/test-project/canary/canary-stage.sh reconcile
+
+      - name: "Canary launch: save the non-secret audit"
+        if: ${{ always() && inputs.canary_stage == 'launch' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
+        with:
+          name: canary-launch
+          path: ${{ runner.temp }}/canary-audit
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # ── THE CANARY'S OTHER STAGES: one approved operation each, no worker ───────
+  canary:
+    if: ${{ contains(fromJSON('["verify","migrate","prepare","reconcile"]'), inputs.canary_stage) }}
+    runs-on: ubuntu-latest
+    environment: discovery-test
+    timeout-minutes: 20
+    env:
+      CONFIRM_REF: ${{ inputs.confirm_project_ref }}
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      TEST_PROJECT_REF: ${{ vars.TEST_PROJECT_REF }}
+      TEST_WORKSPACE_ID: ${{ vars.TEST_WORKSPACE_ID }}
+      CANARY_STAGE: ${{ inputs.canary_stage }}
+      CANARY_APPROVAL: ${{ inputs.canary_approval }}
+      CANARY_APPROVER: ${{ inputs.canary_approver }}
+      APIFY_USERNAME: ${{ inputs.apify_username }}
+    steps:
+      - name: Refuse anything but the canary project, workspace and approved commit
+        env:
+          SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+        run: |
+          set -euo pipefail
+          case "$CONFIRM_REF" in
+            ""|ohsdatpvfdjdemstoiuj|wqnigjhcwjxtmordrwno)
+              echo "refusing: '$CONFIRM_REF' is not a non-production project" >&2; exit 1 ;;
+          esac
+          [ "$CONFIRM_REF" = "tlvnfrxzjhsjgdofwehb" ] \
+            || { echo "refusing: the canary runs on tlvnfrxzjhsjgdofwehb only" >&2; exit 1; }
+          [ "$CONFIRM_REF" = "$TEST_PROJECT_REF" ] \
+            || { echo "refusing: typed ref does not match the Environment's TEST_PROJECT_REF" >&2; exit 1; }
+          [ "$SUPABASE_URL" = "https://$CONFIRM_REF.supabase.co" ] \
+            || { echo "refusing: TEST_SUPABASE_URL does not name the confirmed project" >&2; exit 1; }
+          [ "$TEST_WORKSPACE_ID" = "40e2512f-09b6-433e-97fe-f9999a1f1897" ] \
+            || { echo "refusing: the Environment's workspace is not the canary workspace" >&2; exit 1; }
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$EXPECTED_SHA" = "$GITHUB_SHA" ] \
+            || { echo "refusing: this run's commit $GITHUB_SHA is not the approved expected_sha" >&2; exit 1; }
+          case "$CANARY_STAGE" in
+            verify|migrate|prepare|reconcile) ;;
+            *) echo "refusing: unknown canary stage" >&2; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed   # v2.0.5
+        with:
+          deno-version: v2.8.2
+
+      - name: Canary stage (stops at the first failed check; verify reports every check)
+        env:
+          TEST_DB_URL: ${{ secrets.TEST_DB_URL }}
+          APIFY_API_TOKEN: ${{ secrets.TEST_APIFY_API_TOKEN }}
+          # Only the paid kickoff compile reads the model key.
+          OPENAI_API_KEY: ${{ inputs.canary_stage == 'prepare' && secrets.TEST_OPENAI_API_KEY || '' }}
+        run: |
+          set -euo pipefail
+          export CANARY_AUDIT_DIR="$RUNNER_TEMP/canary-audit"
+          scripts/test-project/canary/canary-stage.sh "$CANARY_STAGE"
+
+      - name: Save the non-secret audit
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
+        with:
+          name: canary-${{ inputs.canary_stage }}
+          path: ${{ runner.temp }}/canary-audit
+          if-no-files-found: ignore
+          retention-days: 30

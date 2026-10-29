@@ -1,4 +1,4 @@
-# The first real-Apify canary — prepared, not run
+# The first real-Apify canary — automated, gated, not run
 
 > "Find one US company hiring Account Executives that raised funding within the last six months."
 
@@ -74,65 +74,52 @@ these hold (`fundingResolvesAbstention`, `fundingAbstentionAfterVerifier.test.ts
 
 Anything else stays unresolved.
 
-## Approvals needed, in order (none given yet)
+## One execution procedure: the guarded workflow
 
-1. **Independent review of the reviewed commit** on `demo/lead-discovery-e2e` (see "Reviewed commit" below), after CI is
-   green: `gh workflow run ci.yml --ref demo/lead-discovery-e2e -f level=full`. There is no merge.
-2. **Apply the held read-cap migration to the isolated project only:**
-   `psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -f supabase/migrations-held/20261029120000_smoke_read_cap_seven.sql`
-   (rollback: `supabase/migrations-held/rollback/20261029120000_smoke_read_cap_seven.down.sql`).
-3. **Canary Apify account**:
-   * a token created on the new account (never the old one), stored only as the GitHub Environment secret
-     `discovery-test` → `TEST_APIFY_API_TOKEN`, and in your own shell for the check;
-   * an account usage limit of ≤ $5;
-   * then, in your own terminal (never paste the token into chat):
-     ```
-     APIFY_API_TOKEN=… deno run --allow-net=api.apify.com --allow-env=APIFY_API_TOKEN --allow-read=docs/launch/proposals \
-       scripts/test-project/apify-account-check.ts --expect-username <canary account username>
-     ```
-     Every line must be PASS (exit 0). Use its `observed_at` for step 4.
-4. **The kickoff compile** (≈ $0.006, ≤ 2 Luna calls) and the paid authorization:
-   ```
-   OPENAI_API_KEY=<TEST key> deno run --allow-env --allow-read --allow-write=out/canary --allow-net=api.openai.com \
-     scripts/test-project/real-gpt/prepare-real-gpt-kickoff.ts --scenario canary_funding \
-     --project-ref tlvnfrxzjhsjgdofwehb --workspace 40e2512f-09b6-433e-97fe-f9999a1f1897 --user <TEST user uuid> \
-     --pricing-version canary-2026-10 --jobs-max 4000 --details-max 4050 --atomus-max 10550 \
-     --observed-at <from step 3> --price-source "apify-account-check.ts on <username>, <date>" \
-     --approved-by "<name, date>" --authorize-paid "<name, date>" --acknowledge-defaults --out out/canary \
-     --expected-sha <REVIEWED_SHA>   # refuses any other checkout; stamped into planner_runtime
-   ```
-   A dry run first: the same command with `--proposal docs/launch/proposals/canary-funding-reviewed-mission-proposal.json`
-   and without `OPENAI_API_KEY` sends nothing. Review `out/canary/kickoff.sql`: its header must say `PAID: APPROVED BY …`,
-   `worst-case provider 18600 µ$` and the ASSUMED hiring window.
-5. **Run the reviewed kickoff SQL once on the TEST project:** run
-   `psql "$TEST_DB_URL" -X -v workspace_id='40e2512f-09b6-433e-97fe-f9999a1f1897' -v project_ref='tlvnfrxzjhsjgdofwehb' -f scripts/test-project/real-gpt/preflight.sql`
-   first. Every row must PASS, including P00, which checks that the connection is the isolated project and not
-   production. Then run
-   `psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -f out/canary/kickoff.sql`.
-6. **Dispatch the TEST worker** (a required reviewer approves the Environment):
-   ```
-   gh workflow run discovery-test-worker.yml --ref demo/lead-discovery-e2e \
-     -f confirm_project_ref=tlvnfrxzjhsjgdofwehb -f providers=openai-and-apify -f session_minutes=5 -f expected_sha=<REVIEWED_SHA>
-   ```
+Every step runs through `.github/workflows/discovery-test-worker.yml` (input `canary_stage`), in the
+`discovery-test` Environment and behind its required reviewer. Both jobs start with a refusal step that refuses
+production, refuses any project other than `tlvnfrxzjhsjgdofwehb`, any workspace other than `discovery-test`, and any
+commit other than `expected_sha`. Stage logic lives in `scripts/test-project/canary/canary-stage.sh`. Each stage stops at
+the first failed check and saves a non-secret audit artifact. The Apify username is masked and no secret is printed.
 
-## After the run (read-only, then the administrator's reconciliation)
+**One-time prerequisite (only you can do it).** Add Environment secret `TEST_DB_URL` to `discovery-test`. It is the
+isolated project's administrator connection string: the Supabase pooler URL (`postgres.tlvnfrxzjhsjgdofwehb@…`) or the
+direct one (`db.tlvnfrxzjhsjgdofwehb.supabase.co`). The migration and `authorize_discovery_smoke` are not granted to the
+service role, so the existing `TEST_SUPABASE_*` keys cannot do either. The stage refuses a URL that does not name
+`tlvnfrxzjhsjgdofwehb` or that names production. Preflight check P00 then re-checks the identity from the live connection.
+
+Every dispatch below uses the same base:
 
 ```
-psql "$TEST_DB_URL" -X -v workspace_id='40e2512f-09b6-433e-97fe-f9999a1f1897' -v queue_id='<queue>' \
-  -f scripts/test-project/canary-funding-verify.sql            # C01–C10: any FAIL = not a success
-psql "$TEST_DB_URL" -X -v queue_id='<queue>' -f scripts/test-project/smoke-reconciliation.sql
-APIFY_API_TOKEN=… deno run --allow-net=api.apify.com --allow-env=APIFY_API_TOKEN --allow-read=docs/launch/proposals \
-  scripts/test-project/apify-account-check.ts --runs <run ids from the reconciliation list>
-# then, per purchase, with Apify's own figure:
-select public.stop_discovery_smoke('<queue>', 'canary finished');
-select public.reconcile_discovery_smoke_operation('<queue>', '<operation_key>', <vendor µ$>, '<Apify run URL>', '<status>');
+gh workflow run discovery-test-worker.yml --ref demo/lead-discovery-e2e \
+  -f confirm_project_ref=tlvnfrxzjhsjgdofwehb -f expected_sha=<REVIEWED_SHA> -f session_minutes=5 \
+  -f providers=<as below> -f canary_stage=<stage> …
 ```
+
+| # | Stage | What it does | Extra inputs | Writes / spends |
+|---|---|---|---|---|
+| 1 | `verify` | Apify identity, plan, usage and limit, actor availability, current prices against the approved maxima; project identity; read cap (5/7); migration and rollback checksums; no conflicting work; preflight; an offline kickoff validated K01–K19 | `providers=openai-only`, `apify_username=<name>` | nothing, free |
+| 2 | `migrate` | re-checks identity and checksums; refuses if already applied; applies **only** `20261029120000_smoke_read_cap_seven.sql`; post-checks cap 7; preflight | `canary_approval="apply 20261029120000_smoke_read_cap_seven to tlvnfrxzjhsjgdofwehb"` | **DB write** (reversible: rollback file) |
+| 3 | `prepare` | re-verifies, then the real kickoff compile and the PAID kickoff SQL (one start each, approver named), validated K01–K19; saved as artifact `canary-prepare`; **not executed**; prints its sha256 | `canary_approval="compile canary kickoff at <REVIEWED_SHA>"`, `canary_approver="<name, date>"`, `apify_username` | **≈ $0.006 GPT** (≤ 2 Luna calls, ≤ $0.025 reserved) |
+| 4 | `launch` | downloads that artifact, checks its sha256, re-validates, re-verifies account, prices, identity, cap and conflicts; **executes the kickoff SQL**; verifies the queue row and authorization; then the existing worker step runs at once, within the 300 s window; then post-run checks and the reconciliation to review | `providers=openai-and-apify`, `kickoff_run_id=<prepare run>`, `kickoff_sha256=<sha>`, `canary_approval="launch canary <sha> on tlvnfrxzjhsjgdofwehb"`, `apify_username` | **DB write + Apify ≤ $0.0186 + worker GPT ≤ $0.0499** |
+| 5 | `reconcile` | read-only re-run of the post-run checks: C01–C10, the reconciliation list, Apify's own charge per run, and `reconcile-to-review.sql` (not executed) | `providers=openai-only` | nothing |
+
+Why launch is a single step: `authorize_discovery_smoke` sets the deadline to the queue row's `created_at + 300 s`. A
+kickoff executed in one run and a worker approved later in another would expire before buying anything. So the kickoff
+write, the paid Apify run and the worker run under one approval, with the kickoff SQL fixed in advance by its sha256.
+
+Closing reconciliation, done by the administrator after reviewing the audit: run `reconcile-to-review.sql`. Fill each
+Apify figure from `apify-runs.txt`, then run `stop_discovery_smoke` and `reconcile_discovery_smoke_operation` once
+per purchase.
+
+Locally, `scripts/test-project/canary/local-rehearsal.sh` drives all five stages and every refusal against a
+throwaway database and a stand-in Apify API (`tests/infra/fixtures/fake-apify.ts`). The workflow itself is pinned by
+`tests/infra/canaryWorkflow.test.ts`.
 
 ## Reviewed commit
 
-* **Reviewed code:** `becd52c76d934002e110d26142473967b7d25bbd`. It closes review blockers B1 and B2 on `fed35777`.
-* **`<REVIEWED_SHA>`** is the head of `demo/lead-discovery-e2e` that the independent reviewer approves and CI ran on: the
-  commit that adds this section. It is used for `--expected-sha` and the worker's `expected_sha`. Its only change from
-  the reviewed code is this section, which you can check with
-  `git diff --stat becd52c76d934002e110d26142473967b7d25bbd <REVIEWED_SHA>`.
-  A later commit is not reviewed and must not run.
+* **Approved application code:** `ce67c1fc334715daae36715f54765093119f6f50`. It passed independent review and full CI.
+* **`<REVIEWED_SHA>`** is the head of `demo/lead-discovery-e2e` that carries this automation. It is the
+  `expected_sha` of every stage, and the kickoff's `planner_runtime`. The automation commit adds no application code:
+  `git diff --stat ce67c1fc334715daae36715f54765093119f6f50 <REVIEWED_SHA> -- supabase/functions worker src supabase/migrations supabase/migrations-held`
+  is empty. Every stage must use the same `<REVIEWED_SHA>`. Launch refuses a kickoff that `prepare` compiled at another commit (check K08).
