@@ -1,5 +1,7 @@
 # First end-to-end lead discovery demo
 
+> The one-company paid canary that comes before this demo is prepared in [FIRST_APIFY_CANARY.md](FIRST_APIFY_CANARY.md).
+
 Branch `demo/lead-discovery-e2e`, stacked on PR #196 (`d437d108`) with **both #196 flags off**. Everything
 below is verified offline (mocked providers, local Postgres) only. **No live run has happened.**
 

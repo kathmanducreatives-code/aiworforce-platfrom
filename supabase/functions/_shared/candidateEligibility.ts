@@ -662,7 +662,9 @@ function anyOfResolved(criteria: readonly MissionCriterion[], checks: CriterionC
  * Hard criteria decide it; everything else is checked for the record and
  * cannot change the outcome.
  *
- *   - The evaluator's per-criterion verdicts can only lower a check (#113).
+ *   - The evaluator's per-criterion verdicts can only lower a check (#113) —
+ *     except that an abstention citing nothing never lowers a funding window
+ *     already decided from dated round records.
  *   - A `hold` (`qualificationHold.ts`) can only stop an otherwise ELIGIBLE
  *     candidate: it becomes pending with a blocked `qualification_hold` check.
  */
@@ -716,6 +718,16 @@ export function evaluateEligibility(
         evidence_ids: verdict.evidence.map((e) => e.evidence_id), provenance: null };
     }
     if (verdict?.result === "pass") return check; // never upgrades missing facts
+    // A DATED ROUND IS NOT LOWERED BY AN ABSTENTION. On the job-first route the
+    // funding verifier runs AFTER the evaluator, so the evaluator answered
+    // "unknown" before any round existed, and that stale abstention held a
+    // company Atomus had just proven funded inside the window as pending (the
+    // first-canary rehearsal). The window was decided above by
+    // `decideRecentlyFunded` / `decideHasRaised` over dated records, not read
+    // from text. Only an abstention that cites nothing yields; a `fail`, or an
+    // `unknown` with receipts, still lowers it.
+    if (c.dimension === "funding" && check.result === "pass" && verdict?.result === "unknown" &&
+      verdict.evidence.length === 0 && fundingRecordsInGraph(graph).length > 0) return check;
     return { ...check, result: verdict?.result === "fail" ? "fail" as const : "unknown" as const,
       reason: verdict?.reason ?? "the evaluator did not establish this criterion",
       evidence_ids: verdict?.evidence.map((e) => e.evidence_id) ?? [] };

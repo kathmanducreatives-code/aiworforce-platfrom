@@ -234,6 +234,17 @@ export interface Scenario {
   effectFence?: boolean;
   /** Remove the requester's membership (committed) when this vendor request arrives. */
   removeMemberAt?: "jobs_post";
+  // ── THE FUNDING CANARY (scripts/test-project/real-gpt, `canary_funding`) ──
+  /** The authorization's templates, when not the two-actor A7 catalog. */
+  quotes?: Json;
+  /** Each actor's start limit, when not A7's one job search and one details. */
+  actorLimits?: Record<string, number>;
+  /** The request's count (default 1, as A7). */
+  requestedCount?: number;
+  /** The kickoff's run budget (default A7's). */
+  runBudget?: Json;
+  /** Atomus's record for each requested LinkedIn URL (null: not found, which is free). */
+  atomus?: (url: string) => Json | null;
 }
 export interface Run {
   trace: Json; operations: Json[]; leads: Json[]; credits: Json[]; tasks: Json[]; refused: string[];
@@ -259,6 +270,7 @@ export function vendorResponder(s: Scenario, o: {
   const jobs = s.jobs ?? [job("ae", base)];
   const detailsFor = s.details ?? ((url: string) => jobs.map((j) => j.company).find((c) => c.linkedinUrl === url) ?? null);
   let detailsUrl: string | null = null;
+  let atomusUrls: string[] = [];
   let models = 0;
   return (url, init, worker) => {
     const body = typeof init?.body === "string" ? (() => { try { return JSON.parse(init.body as string); } catch { return init.body; } })() : null;
@@ -286,7 +298,8 @@ export function vendorResponder(s: Scenario, o: {
     }
     assertEquals(url.hostname, "api.apify.com", `unexpected vendor ${url.hostname}`);
     o.vendorRequests.push({ method: init?.method ?? "GET", path: url.pathname.replace(/^\/v2\//, ""), body });
-    const kind = url.pathname.includes("linkedin-company") || url.pathname.includes("details") ? "details" : "jobs";
+    const kind = url.pathname.includes("atomus") ? "atomus"
+      : url.pathname.includes("linkedin-company") || url.pathname.includes("details") ? "details" : "jobs";
     const method = init?.method ?? "GET";
     const at = method === "POST" ? `${kind}_post` : url.pathname.includes("/actor-runs/run-jobs") ? "jobs_status" : null;
     if (o.interruptAt?.(at, worker)) return new Promise<Response>(() => {});
@@ -295,6 +308,7 @@ export function vendorResponder(s: Scenario, o: {
       const refused = kind === "jobs" ? s.jobsStartStatus : s.detailsStartStatus;
       if (refused) return json({ error: { type: "offline", message: "offline: Apify refused the run" } }, refused);
       if (kind === "details") detailsUrl = (body as Json)?.companies?.[0] ?? null;
+      if (kind === "atomus") atomusUrls = ((body as Json)?.companies ?? []).map(String);
       return json({ data: { id: `run-${kind}`, defaultDatasetId: `dataset-${kind}`, status: "RUNNING" } }, 201);
     }
     if (url.pathname.includes("/actor-runs/")) {
@@ -303,9 +317,13 @@ export function vendorResponder(s: Scenario, o: {
       if (run === "run-jobs" && s.jobsStatus === "running") return json({ data: { id: run, defaultDatasetId: "dataset-jobs", status: "RUNNING" } });
       if (run === "run-jobs" && s.jobsStatus === "failed") return json({ data: { id: run, defaultDatasetId: "dataset-jobs", status: "FAILED" } });
       return json({ data: { id: run, defaultDatasetId: run.replace("run-", "dataset-"), status: "SUCCEEDED",
-        finishedAt: new Date(Date.now() - 1000).toISOString(), usageTotalUsd: run === "run-jobs" ? 0.004 : 0.00405 } });
+        finishedAt: new Date(Date.now() - 1000).toISOString(),
+        usageTotalUsd: run === "run-jobs" ? 0.004 : run === "run-atomus" ? 0.00005 + 0.0035 * atomusUrls.filter((u) => s.atomus?.(u)).length : 0.00405 } });
     }
     assert(url.pathname.includes("/datasets/"), url.pathname);
+    if (url.pathname.includes("dataset-atomus")) {
+      return json(atomusUrls.map((u) => s.atomus?.(u)).filter((r): r is Json => !!r).map((r) => structuredClone(r)));
+    }
     if (url.pathname.includes("dataset-details")) {
       const rec = detailsUrl ? detailsFor(detailsUrl) : null;
       return json(rec ? [structuredClone(rec)] : []);
@@ -344,8 +362,12 @@ export async function runScenario(s: Scenario): Promise<Run> {
   const evidence = { observed_at: new Date(Date.now() - 60_000).toISOString(), source: "synthetic offline fixture; not an approved vendor quote", liability_bound_ref: "offline rehearsal" };
   const p = CATALOG.approved_quotes as Json;
   const fill = (t: Json) => ({ ...t, ...evidence });
-  const quotes = { jobs: fill(p.jobs), model: fill(p.luna), reads: fill(p.reads), details: { ...fill(p.details), maximum_microusd: SYNTHETIC_DETAILS_MAXIMUM } };
-  const m = await seedSmokeMission({ quotes, actorLimits: s.modelOnly ? { [JOBS]: 0, [DETAILS]: 0 } : { [JOBS]: 1, [DETAILS]: 1 } });
+  const quotes = s.quotes
+    ? Object.fromEntries(Object.entries(s.quotes).map(([k, t]) => [k, fill(t as Json)]))
+    : { jobs: fill(p.jobs), model: fill(p.luna), reads: fill(p.reads), details: { ...fill(p.details), maximum_microusd: SYNTHETIC_DETAILS_MAXIMUM } };
+  const m = await seedSmokeMission({ quotes,
+    actorLimits: s.actorLimits ?? (s.modelOnly ? { [JOBS]: 0, [DETAILS]: 0 } : { [JOBS]: 1, [DETAILS]: 1 }) });
+  const requestedCount = s.requestedCount ?? 1;
   const user = uuid(), plan = uuid();
   await sql`insert into auth.users (id, email) values (${user}, ${"scenario-" + user + "@example.invalid"})`;
   // The requester is a member: run-agent re-checks the forwarded principal (legacyExecutionGuard).
@@ -408,10 +430,10 @@ export async function runScenario(s: Scenario): Promise<Run> {
     const compilerCalls = new ModelCallCollector();
     const binding = buildMissionCompilerBinding({ workspaceId: m.ws, onModelCall: compilerCalls.sink });
     const raw = await missionAdmission.run({ queueId: m.queueId, workerId: m.workerId, taskId: m.taskId, generation: m.generation },
-      () => binding.proposeMission!({ originalUserQuery: missionGoal, requestedCount: 1 }));
+      () => binding.proposeMission!({ originalUserQuery: missionGoal, requestedCount }));
     assert(raw, JSON.stringify({ compiler_failure: binding.lastModelFailure() }));
     await compilerCalls.drain(createLedgerWriter(client as never), { workspace_id: m.ws, task_id: m.taskId, plan_id: plan, logical_call_key: "offline:mission_compilation" });
-    const c = compileLeadMission({ originalUserQuery: missionGoal, proposal: raw, requestedCount: 1 });
+    const c = compileLeadMission({ originalUserQuery: missionGoal, proposal: raw, requestedCount });
     const mission = { ...c.final_mission, mission_parser_source: c.parser_source,
       lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION, planner_runtime: runtimeIdentity("planner", "offline-rehearsal") };
     trace.compiled_mission = mission;
@@ -419,8 +441,8 @@ export async function runScenario(s: Scenario): Promise<Run> {
     globalThis.fetch = gate;
     if (s.effectFence) installEffectFence(REST_URL);
     const request = { plan_id: plan, step_index: 0, agent_slug: "scout", workspace_id: m.ws, user_id: user, instruction: missionGoal,
-      requested_lead_count: 1, workflow_kind: "qualified_lead_sourcing", execution_mode: "company_first", tool_needed: "source_with_apify",
-      lead_mission: mission, tool_input: { lead_mission: mission, source_type: "jobs" }, run_budget: { provider_usd: 0.20, max_candidates: 3 } };
+      requested_lead_count: requestedCount, workflow_kind: "qualified_lead_sourcing", execution_mode: "company_first", tool_needed: "source_with_apify",
+      lead_mission: mission, tool_input: { lead_mission: mission, source_type: "jobs" }, run_budget: s.runBudget ?? { provider_usd: 0.20, max_candidates: 3 } };
     await sql`update public.tasks set status = 'complete' where id = ${m.taskId}`;
     await sql`update public.lead_mission_queue set task_id = null, lineage_id = null, request = ${sql.json(request as never)} where id = ${m.queueId}`;
     await sql`update public.discovery_smoke_authorizations a set criteria_hash = encode(sha256(convert_to(q.request::text, 'UTF8')), 'hex')

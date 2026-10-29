@@ -96,3 +96,63 @@ Deno.test("TEST worker isolation: exactly one Lead V2 workspace, no unproven-pro
   assertStringIncludes(wf, "ohsdatpvfdjdemstoiuj|wqnigjhcwjxtmordrwno)");
   assertStringIncludes(wf, "DISCOVERY_SMOKE_ADMISSION: enforce");
 });
+
+// ── THE FIRST REAL-APIFY CANARY (`--scenario canary_funding`) ────────────────
+const CANARY_CATALOG = JSON.parse(read("docs/launch/proposals/smoke-catalog-canary-funding.json"));
+const CANARY_PROPOSAL = JSON.parse(read("docs/launch/proposals/canary-funding-reviewed-mission-proposal.json"));
+const canaryInput = (over: Partial<KickoffInput> = {}): KickoffInput => input({
+  scenario: "canary_funding", catalog: CANARY_CATALOG.approved_quotes,
+  prices: { jobs_maximum_microusd: 4000, details_maximum_microusd: 4050, atomus_maximum_microusd: 10550,
+    observed_at: "2026-10-28T00:00:00Z", source: "test" },
+  compile: () => Promise.resolve(structuredClone(CANARY_PROPOSAL)),
+  ...over,
+});
+const PAID = Object.fromEntries(Object.entries(CANARY_CATALOG.actor_limits_proposed_for_paid_canary).filter(([k]) => k !== "note")) as Record<string, number>;
+
+Deno.test("canary kickoff: the user's sentence, ONE company, D1–D7 pass, both windows kept, the hiring default disclosed", async () => {
+  const k = await prepareKickoff(canaryInput());
+  assertEquals((k.request as { instruction: string }).instruction,
+    "Find one US company hiring Account Executives that raised funding within the last six months.");
+  assertEquals((k.request as { requested_lead_count: number }).requested_lead_count, 1);
+  assertEquals(k.interpretation.map((v) => `${v.id}:${v.result}`), ["D1:PASS", "D2:PASS", "D3:PASS", "D4:PASS", "D5:PASS", "D6:PASS", "D7:PASS"]);
+  assertEquals(k.interpretation.find((v) => v.id === "D2")!.criterion, "1 company is requested");
+  const signals = (k.compiled_mission.required_signals as Array<{ event?: string; type?: string; timeframe_days?: number }>)
+    .map((s) => [s.event ?? s.type, s.timeframe_days]);
+  assertEquals(signals, [["hiring", 30], ["funding", 180]], "nothing dropped, the windows are not merged");
+  assertStringIncludes(k.sql, "-- ASSUMED, NOT STATED BY THE USER: Hiring");
+  // A five-company reading of the one-company request fails D2.
+  const five = { ...k.compiled_mission, requested_count: 5 };
+  assertEquals(judgeDemoFundingInterpretation(five as never, 1).find((v) => v.id === "D2")!.result, "FAIL");
+});
+
+Deno.test("canary kickoff: ZERO starts by default — jobs, details and Atomus only, no Pvalyou template", async () => {
+  const k = await prepareKickoff(canaryInput());
+  assertEquals(k.authorization.actor_limits, { [JOBS_ACTOR]: 0, [DETAILS_ACTOR]: 0, [ATOMUS_ACTOR]: 0 });
+  const q = k.authorization.quotes as Record<string, unknown>;
+  assertEquals(Object.keys(q).sort(), ["atomus", "details", "jobs", "model", "reads"]);
+  assertStringIncludes(k.sql, "-- ZERO STARTS: this authorization purchases nothing.");
+  assert(!k.sql.includes(PVALYOU_ACTOR), "no paid fallback can be authorized");
+});
+
+Deno.test("canary kickoff: a PAID authorization needs a named approval, and allows at most one start per approved actor", async () => {
+  const k = await prepareKickoff(canaryInput({ paid: { approved_by: "Operator, 2026-10-29", actor_limits: PAID } }));
+  assertEquals(k.authorization.actor_limits, { [JOBS_ACTOR]: 1, [DETAILS_ACTOR]: 1, [ATOMUS_ACTOR]: 1 });
+  assertStringIncludes(k.sql, "-- PAID: APPROVED BY Operator, 2026-10-29.");
+  assertStringIncludes(k.sql, "worst-case provider 18600 µ$");
+  await assertRejects(() => prepareKickoff(canaryInput({ paid: { approved_by: " ", actor_limits: PAID } })), Error, "names who approved");
+  await assertRejects(() => prepareKickoff(canaryInput({ paid: { approved_by: "x", actor_limits: { ...PAID, [ATOMUS_ACTOR]: 2 } } })),
+    Error, "at most one start");
+  await assertRejects(() => prepareKickoff(canaryInput({ paid: { approved_by: "x", actor_limits: { ...PAID, [PVALYOU_ACTOR]: 1 } } })),
+    Error, "at most one start");
+  await assertRejects(() => prepareKickoff(input({ paid: { approved_by: "x", actor_limits: PAID } })), Error, "only canary_funding");
+});
+
+Deno.test("canary kickoff: production refs refused, an explicit TEST ref and the Atomus price required, a Pvalyou template refused", async () => {
+  for (const ref of ["ohsdatpvfdjdemstoiuj", "wqnigjhcwjxtmordrwno"]) {
+    await assertRejects(() => prepareKickoff(canaryInput({ project_ref: ref })), Error, "not a non-production project");
+  }
+  await assertRejects(() => prepareKickoff(canaryInput({ project_ref: undefined })), Error, "needs project_ref");
+  await assertRejects(() => prepareKickoff(canaryInput({ prices: { ...canaryInput().prices, atomus_maximum_microusd: undefined } })),
+    Error, "atomus_maximum_microusd");
+  await assertRejects(() => prepareKickoff(canaryInput({ catalog: CATALOG.approved_quotes })), Error, "must not carry a Pvalyou template");
+});

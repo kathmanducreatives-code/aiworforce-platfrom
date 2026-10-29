@@ -14,6 +14,9 @@ import type { Json, Verdict } from "./realGptJudge.ts";
 
 export const DEMO_FUNDING_MISSION =
   "Find 5 US companies hiring Account Executives that raised funding within the last six months.";
+/** The first real-Apify canary: the same request, for one company. */
+export const CANARY_FUNDING_MISSION =
+  "Find one US company hiring Account Executives that raised funding within the last six months.";
 
 const lower = (v: unknown) => String(v ?? "").toLowerCase();
 const crit = (m: Json, dim: string) => ((m.criteria ?? []) as Json[]).find((c) => c.dimension === dim && c.kind === "hard") ?? null;
@@ -27,7 +30,8 @@ export function assumedWindowDisclosures(m: Json): string[] {
       `"${c.time_window.rule ?? "recent"}" — the request states no ${c.dimension} timeframe`);
 }
 
-export function judgeDemoFundingInterpretation(m: Json): Verdict[] {
+/** `count`: the companies the request asks for (5 for the demo, 1 for the canary). */
+export function judgeDemoFundingInterpretation(m: Json, count = 5): Verdict[] {
   const v = (id: string, criterion: string, ok: boolean, observed: string): Verdict =>
     ({ id, question: "I", criterion, result: ok ? "PASS" : "FAIL", observed });
   const hiring = crit(m, "hiring"), funding = crit(m, "funding"), geo = crit(m, "geography");
@@ -38,7 +42,7 @@ export function judgeDemoFundingInterpretation(m: Json): Verdict[] {
   return [
     v("D1", "the deliverable is companies, not people", m.target_entity === "company" && m.requested_output === "qualified_companies" && roles.length === 0,
       `target=${m.target_entity} output=${m.requested_output} roles=${JSON.stringify(roles)}`),
-    v("D2", "five companies are requested", m.requested_count === 5, `requested_count=${m.requested_count}`),
+    v("D2", `${count} compan${count === 1 ? "y is" : "ies are"} requested`, m.requested_count === count, `requested_count=${m.requested_count}`),
     v("D3", "United States is a hard requirement", !!geo && JSON.stringify(geo.value ?? "").toLowerCase().includes("united states"),
       `geography=${JSON.stringify(geo?.value ?? null)}`),
     v("D4", "hiring Account Executives is hard, on the AE role", !!hiring && roleTerms.some((t) => /account executive/.test(t)),
