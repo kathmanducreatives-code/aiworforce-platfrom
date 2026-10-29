@@ -16,6 +16,7 @@ import { assert, assertEquals, assertStringIncludes } from "https://deno.land/st
 import { parse } from "https://deno.land/std@0.224.0/yaml/mod.ts";
 import { prepareKickoff } from "../../scripts/test-project/real-gpt/prepareKickoff.ts";
 import { validateKickoff } from "../../scripts/test-project/canary/validate-kickoff.ts";
+import { canaryBudget, CANARY_BUDGET_MICROUSD } from "../../scripts/test-project/canary/canary-budget.ts";
 
 const ROOT = new URL("../../", import.meta.url);
 const RAW = Deno.readTextFileSync(new URL(".github/workflows/discovery-test-worker.yml", ROOT));
@@ -129,7 +130,14 @@ Deno.test("stage script: the one target, the reviewed checksums and the exact ap
   assertStringIncludes(STAGE, `ROLLBACK_SHA256=${await sha256(ROLLBACK)}`);
   assertStringIncludes(STAGE, 'require_approval "apply 20261029120000_smoke_read_cap_seven to $REF"');
   assertStringIncludes(STAGE, 'require_approval "compile canary kickoff at $EXPECTED_SHA"');
-  assertStringIncludes(STAGE, 'require_approval "launch canary $sha on $REF"');
+  assertStringIncludes(STAGE, 'require_approval "launch canary $sha on $REF with a software-enforced \\$3 budget"');
+  // Every paid stage runs the $3 budget gate; read-only stages open read-only sessions.
+  for (const stage of ["verify)", "prepare)", "launch)"]) {
+    const body = STAGE.slice(STAGE.indexOf(`  ${stage}\n`), STAGE.indexOf(";;", STAGE.indexOf(`  ${stage}\n`)));
+    assertStringIncludes(body, "check_budget", stage);
+  }
+  assertStringIncludes(STAGE, 'case "$STAGE" in migrate|launch) DB_WRITES=1 ;; *) DB_WRITES=0 ;; esac');
+  assertStringIncludes(STAGE, '-c "set default_transaction_read_only = on"');
   // The database URL is only ever handed to psql; nothing echoes it.
   assert(!/echo[^\n]*\$TEST_DB_URL/.test(STAGE) && !/echo[^\n]*\$\{?APIFY_API_TOKEN/.test(STAGE) && !/echo[^\n]*\$\{?OPENAI_API_KEY/.test(STAGE));
   // Read-only stages write nothing: no psql -f of anything but the reviewed migration, the kickoff and read-only SQL.
@@ -174,4 +182,40 @@ Deno.test("kickoff validator: every drift the approval rests on is refused", asy
     "an extra statement");
   const other = structuredClone(k); other.request.workspace_id = "9d09038b-2d39-49ca-b687-e3946ea7266d";
   assert(failed(other, k.sql).includes("K04"), "another workspace");
+});
+
+// ── the $3 canary budget (canary-budget.ts) ──────────────────────────────────
+const APIFY = { account: { room_usd: 18.99987, max_monthly_usage_usd: 19 }, actors: [
+  { template: "jobs", available: true, pricing_model: "PAY_PER_EVENT", worst_case_usd: 0.004 },
+  { template: "details", available: true, pricing_model: "PAY_PER_EVENT", worst_case_usd: 0.00405 },
+  { template: "atomus", available: true, pricing_model: "PAY_PER_EVENT", worst_case_usd: 0.01055 },
+] };
+const budget = (over: { stage?: string; apify?: unknown; spent?: number } = {}) => canaryBudget({
+  stage: over.stage ?? "prepare", apify: (over.apify ?? APIFY) as never, spentMicrousd: over.spent ?? 0, catalog: CATALOG.approved_quotes });
+const failing = (r: ReturnType<typeof canaryBudget>) => r.checks.filter((c) => c.result === "FAIL").map((c) => c.id);
+
+Deno.test("budget: the observed account (a $19 limit) passes the $3 canary gate, and the limitation is stated, never a PASS", () => {
+  const r = budget();
+  assertEquals([r.ok, failing(r)], [true, []]);
+  assertEquals(r.next_worst_microusd, 93_480, "compile 2 × $0.01248 + provider $0.0186 + worker model 4 × $0.01248");
+  const b6 = r.checks.find((c) => c.id === "B6")!;
+  assertEquals(b6.result, "INFO");
+  assertStringIncludes(b6.observed, "account hard limit $19");
+  assertStringIncludes(b6.observed, "unproven until the first run's receipts");
+  assertEquals(budget({ stage: "launch" }).next_worst_microusd, 68_520, "launch: the compile is already spent");
+});
+
+Deno.test("budget: too little left of the $3, a price above its reservation, a non-PPE actor or too little account room each refuse", () => {
+  assertEquals(failing(budget({ spent: CANARY_BUDGET_MICROUSD - 93_479 })), ["B4"], "one micro-dollar short");
+  assertEquals(budget({ spent: CANARY_BUDGET_MICROUSD - 93_480 }).ok, true, "exactly fits");
+  assertEquals(failing(budget({ stage: "launch", spent: 2_950_000 })), ["B4"]);
+  const dear = structuredClone(APIFY); dear.actors[2].worst_case_usd = 0.0106;
+  assertEquals(failing(budget({ apify: dear })), ["B2"]);
+  const flat = structuredClone(APIFY); (flat.actors[0] as Record<string, unknown>).pricing_model = "FLAT_PRICE_PER_MONTH";
+  assertEquals(failing(budget({ apify: flat })), ["B1"], "no per-run charge cap on a non-PPE actor");
+  const gone = structuredClone(APIFY); gone.actors[1].available = false;
+  assertEquals(failing(budget({ apify: gone })), ["B1"]);
+  const poor = structuredClone(APIFY); poor.account.room_usd = 0.01;
+  assertEquals(failing(budget({ apify: poor })), ["B5"]);
+  assertEquals(budget({ apify: { account: {}, actors: [] } }).ok, false, "no Apify record: refused");
 });

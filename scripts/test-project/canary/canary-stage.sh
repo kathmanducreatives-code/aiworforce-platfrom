@@ -61,7 +61,15 @@ fail() {
 }
 stop() { note "STOPPED: $1"; exit 1; }
 
-q() { psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -At "$@"; }
+# READ-ONLY BY CONSTRUCTION: every stage but migrate and launch opens its
+# database session with default_transaction_read_only, so no statement it runs
+# can write, whatever the SQL says.
+case "$STAGE" in migrate|launch) DB_WRITES=1 ;; *) DB_WRITES=0 ;; esac
+q() {
+  if [ "$DB_WRITES" = "1" ]; then psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -Atq "$@"
+  else psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -Atq -c "set default_transaction_read_only = on" "$@"; fi
+}
+CANARY_MISSION="Find one US company hiring Account Executives that raised funding within the last six months."
 
 # ── checks ────────────────────────────────────────────────────────────────────
 check_inputs() {
@@ -83,6 +91,57 @@ check_identity() {
   n="$(q -c "select count(*) from public.workspaces where id = '$WS' and name = '$WS_NAME'")" || stop "cannot read the project"
   [ "$n" = "1" ] && pass "project: the connection names $REF and holds workspace $WS_NAME ($WS)" \
     || fail "project: workspace $WS_NAME ($WS) is not in this database"
+}
+
+check_permissions() {
+  # What migrate and launch need: ownership of the admission table and function
+  # (ALTER, CREATE OR REPLACE) and EXECUTE on authorize_discovery_smoke, which the
+  # service role does not have. Read here; nothing is exercised.
+  local r
+  r="$(q -F '|' -c "select current_user,
+      has_function_privilege(current_user, 'public.authorize_discovery_smoke(uuid,text,jsonb,jsonb,integer)', 'EXECUTE'),
+      pg_has_role(current_user, (select relowner from pg_class where oid = 'public.discovery_smoke_authorizations'::regclass), 'USAGE'),
+      pg_has_role(current_user, (select proowner from pg_proc where oid = 'public.authorize_discovery_smoke(uuid,text,jsonb,jsonb,integer)'::regprocedure), 'USAGE'),
+      current_setting('transaction_read_only')")" || { fail "permissions: could not read"; return; }
+  echo "$r" > "$AUDIT/permissions.txt"
+  local user exec_ok tbl_owner fn_owner ro
+  IFS='|' read -r user exec_ok tbl_owner fn_owner ro <<< "$r"
+  [ "$exec_ok" = "t" ] && [ "$tbl_owner" = "t" ] && [ "$fn_owner" = "t" ] \
+    && pass "permissions: role $user may execute authorize_discovery_smoke and owns the admission table and function (needed by migrate and launch)" \
+    || fail "permissions: role $user lacks execute=$exec_ok table-owner=$tbl_owner function-owner=$fn_owner"
+  [ "$DB_WRITES" = "1" ] || { [ "$ro" = "on" ] && pass "this $STAGE session is read-only (default_transaction_read_only)" || fail "this $STAGE session is not read-only"; }
+}
+
+# What the canary already spent, in µ$, across every attempt at this request in
+# the canary workspace: each operation at the vendor's reconciled figure, or at
+# its committed worst case until reconciled (model attempts stay at their
+# committed reservation), plus every recorded kickoff compile.
+spent_microusd() {
+  q -c "with attempts as (
+      select a.id as auth_id, q.id as queue_id from public.discovery_smoke_authorizations a
+        join public.lead_mission_queue q on q.id = a.queue_id
+       where q.workspace_id = '$WS' and q.request->>'instruction' = '$CANARY_MISSION')
+    select (coalesce((select sum(coalesce(r.vendor_microusd, o.committed_microusd)) from public.discovery_smoke_operations o
+               join attempts t on t.auth_id = o.authorization_id
+               left join public.discovery_smoke_reconciliations r on r.authorization_id = o.authorization_id and r.operation_key = o.operation_key
+              where o.kind in ('provider', 'model')), 0)
+          + coalesce((select ceil(sum(c.estimated_cost_usd) * 1e6) from public.lead_execution_calls c
+               join attempts t on c.logical_call_key = 'kickoff:' || t.queue_id::text), 0))::bigint"
+}
+
+check_budget() {
+  local spent
+  spent="$(spent_microusd)" || { fail "budget: could not read what the canary spent"; return; }
+  [[ "$spent" =~ ^[0-9]+$ ]] || { fail "budget: unreadable spend '$spent'"; return; }
+  [ -f "$AUDIT/apify.json" ] || { fail "budget: no Apify account record to check against"; return; }
+  if "$DENO" run --no-prompt --allow-read --allow-write="$AUDIT" scripts/test-project/canary/canary-budget.ts \
+      --stage "$STAGE" --apify "$AUDIT/apify.json" --spent-microusd "$spent" --json "$AUDIT/budget.json" > "$AUDIT/budget.txt" 2>&1; then
+    cat "$AUDIT/budget.txt" | tee -a "$SUMMARY" > /dev/null; cat "$AUDIT/budget.txt"
+    pass "budget: the \$3 canary ceiling and the \$0.25 per-attempt authorization hold for the next paid stage (software-enforced; see B6)"
+  else
+    cat "$AUDIT/budget.txt" | tee -a "$SUMMARY" > /dev/null; cat "$AUDIT/budget.txt"
+    fail "budget: $(grep '^FAIL' "$AUDIT/budget.txt" | tr '\n' ';')"
+  fi
 }
 
 check_preflight() {
@@ -224,6 +283,8 @@ case "$STAGE" in
     cap="$(read_cap)"; note "INFO  read cap now: $cap (the canary needs 7; migrate applies it)"
     [ "$cap" = "5" ] || [ "$cap" = "7" ] || fail "read cap is in an unexpected state"
     check_conflicts
+    check_permissions
+    check_budget
     check_preflight
     if generate_kickoff offline "$AUDIT/kickoff-offline" "verify dry run (not executed)"; then
       validate_kickoff "$AUDIT/kickoff-offline"
@@ -240,6 +301,7 @@ case "$STAGE" in
     [ "$cap" = "5" ] || stop "the read cap is in an unexpected state; nothing applied"
     pass "read cap is 5: the migration has not been applied"
     check_conflicts
+    check_permissions
     note "APPLYING $MIGRATION to $REF"
     q -f "$MIGRATION" > "$AUDIT/migration.txt"
     [ "$(read_cap)" = "7" ] && pass "applied: constraint, default and authorize_discovery_smoke all say 7" || stop "post-check failed after the migration"
@@ -256,6 +318,8 @@ case "$STAGE" in
     check_migration_files
     [ "$(read_cap)" = "7" ] || stop "the read cap is not 7: run migrate first"
     check_conflicts
+    check_permissions
+    check_budget
     check_preflight
     note "COMPILING the kickoff mission (paid: <= 2 Luna calls)"
     generate_kickoff paid "$AUDIT/kickoff" "$CANARY_APPROVER" || stop "kickoff not generated"
@@ -263,12 +327,13 @@ case "$STAGE" in
     sha="$(sha256sum "$AUDIT/kickoff/kickoff.sql" | cut -d' ' -f1)"
     echo "$sha" > "$AUDIT/kickoff.sha256"
     note "KICKOFF READY (not executed). kickoff.sql sha256: $sha"
-    note "Launch approval phrase: launch canary $sha on $REF"
+    note "Launch approval phrase: launch canary $sha on $REF with a software-enforced \$3 budget"
     ;;
 
   launch)
     sha="${KICKOFF_SHA256:?KICKOFF_SHA256 is required}"
-    require_approval "launch canary $sha on $REF"
+    # The approval names the limitation: the $3 is software-enforced, not Apify's account limit.
+    require_approval "launch canary $sha on $REF with a software-enforced \$3 budget"
     dir="${KICKOFF_DIR:?KICKOFF_DIR is required}"
     [ "$(sha256sum "$dir/kickoff.sql" | cut -d' ' -f1)" = "$sha" ] && pass "kickoff.sql is the approved file (sha256 $sha)" \
       || stop "kickoff.sql is not the approved file"
@@ -279,6 +344,8 @@ case "$STAGE" in
     check_identity
     [ "$(read_cap)" = "7" ] || stop "the read cap is not 7"
     check_conflicts
+    check_permissions
+    check_budget
     check_preflight
     qid="$(jq -r '.queue_id' "$dir/validation.json")"
     note "EXECUTING the approved kickoff SQL: queue $qid"

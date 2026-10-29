@@ -93,6 +93,11 @@ expect verify-no-username "PASS  kickoff valid"
 run verify 0 verify APIFY_USERNAME=canaryaccount
 expect verify "PASS  apify"
 expect verify "PASS  no conflicting work"
+expect verify "PASS  budget"
+expect verify "INFO  B6 LIMITATION"
+expect verify "PASS  permissions"
+expect verify "this verify session is read-only"
+expect verify "INFO   account hard limit"
 
 # ── migrate ──
 run migrate-no-approval 1 migrate CANARY_APPROVAL="yes"
@@ -118,13 +123,16 @@ ksha="$(cat "$tmp/prepare/audit/kickoff.sha256")"
 # ── launch ──
 run launch-wrong-phrase 1 launch APIFY_USERNAME=canaryaccount KICKOFF_DIR="$kick" KICKOFF_SHA256="$ksha" CANARY_APPROVAL="launch"
 cp -r "$kick" "$tmp/tampered"; sed -i 's/"apify:atomus~linkedin-company-scraper":1/"apify:atomus~linkedin-company-scraper":2/' "$tmp/tampered/kickoff.sql"
-run launch-tampered 1 launch APIFY_USERNAME=canaryaccount KICKOFF_DIR="$tmp/tampered" KICKOFF_SHA256="$ksha" CANARY_APPROVAL="launch canary $ksha on $REF"
+run launch-tampered 1 launch APIFY_USERNAME=canaryaccount KICKOFF_DIR="$tmp/tampered" KICKOFF_SHA256="$ksha" CANARY_APPROVAL="launch canary $ksha on $REF with a software-enforced \$3 budget"
 expect launch-tampered "not the approved file"
 [ "$(psql "$url" -XAt -c "select count(*) from public.lead_mission_queue")" = "0" ] || { echo "FAIL: a refused launch wrote"; exit 1; }
-run launch 0 launch APIFY_USERNAME=canaryaccount KICKOFF_DIR="$kick" KICKOFF_SHA256="$ksha" CANARY_APPROVAL="launch canary $ksha on $REF"
+run launch 0 launch APIFY_USERNAME=canaryaccount KICKOFF_DIR="$kick" KICKOFF_SHA256="$ksha" CANARY_APPROVAL="launch canary $ksha on $REF with a software-enforced \$3 budget"
 expect launch "PASS  queue:"
-run launch-again 1 launch APIFY_USERNAME=canaryaccount KICKOFF_DIR="$kick" KICKOFF_SHA256="$ksha" CANARY_APPROVAL="launch canary $ksha on $REF"
+run launch-again 1 launch APIFY_USERNAME=canaryaccount KICKOFF_DIR="$kick" KICKOFF_SHA256="$ksha" CANARY_APPROVAL="launch canary $ksha on $REF with a software-enforced \$3 budget"
 expect launch-again "conflicting work"
+
+run launch-old-phrase 1 launch APIFY_USERNAME=canaryaccount KICKOFF_DIR="$kick" KICKOFF_SHA256="$ksha" CANARY_APPROVAL="launch canary $ksha on $REF"
+expect launch-old-phrase "software-enforced"
 
 # ── reconcile (as after a run: the mission ended, its authorization stopped) ──
 qid="$(cat "$tmp/launch/audit/queue_id")"
@@ -133,6 +141,19 @@ psql "$url" -XAtq -c "update public.lead_mission_queue set status = 'complete' w
 run reconcile 0 reconcile
 expect reconcile "PASS  post-run checks C01–C10"
 expect reconcile "reconciliation SQL generated for review (not executed)"
+
+# ── the $3 canary budget: an attempt that already spent $2.95 leaves too little for another ──
+auth="$(psql "$url" -XAt -c "select id from public.discovery_smoke_authorizations where queue_id = '$qid'")"
+psql "$url" -XAtq -v ON_ERROR_STOP=1 -c "insert into public.discovery_smoke_operations
+    (authorization_id, operation_key, task_id, generation, kind, actor, template_id, payload_hash, committed_microusd)
+  values ('$auth', 'rehearsal-spent', gen_random_uuid(), 1, 'model', 'openai:gpt-5.6-luna', 'model', repeat('a', 64), 2950000)" > /dev/null
+run verify-budget-spent 1 verify APIFY_USERNAME=canaryaccount
+expect verify-budget-spent "FAIL  B4"
+expect verify-budget-spent "INFO  B6"
+run prepare-budget-spent 1 prepare APIFY_USERNAME=canaryaccount CANARY_APPROVER="rehearsal operator" \
+  CANARY_APPROVAL="compile canary kickoff at $SHA" CANARY_OFFLINE_PROPOSAL=docs/launch/proposals/canary-funding-reviewed-mission-proposal.json
+expect prepare-budget-spent "FAIL  B4"
+psql "$url" -XAtq -c "delete from public.discovery_smoke_operations where operation_key = 'rehearsal-spent'" > /dev/null
 
 # ── a price above the approved maximum blocks every paid stage ──
 kill "$server"; FAKE_APIFY_TOKEN="$token" FAKE_APIFY_PRICE_BUMP=0.0001 deno run --allow-net=127.0.0.1 --allow-env tests/infra/fixtures/fake-apify.ts "$port" > "$tmp/apify2.log" 2>&1 &

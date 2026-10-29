@@ -55,8 +55,11 @@ async function get(path: string): Promise<Json> {
   return body.data ?? {};
 }
 
-const results: Array<{ check: string; result: "PASS" | "REVIEW" | "FAIL"; detail: string }> = [];
-const record = (check: string, result: "PASS" | "REVIEW" | "FAIL", detail: string) => results.push({ check, result, detail });
+type Result = "PASS" | "REVIEW" | "FAIL" | "INFO";
+const results: Array<{ check: string; result: Result; detail: string }> = [];
+const record = (check: string, result: Result, detail: string) => results.push({ check, result, detail });
+/** INFO is stated, never a pass and never a block: the decision it informs is made elsewhere. */
+const allPass = () => results.every((r) => r.result === "PASS" || r.result === "INFO");
 /** The non-secret audit record (`--json`). */
 const audit: Json = { observed_at: new Date().toISOString(), account: {}, actors: [] as Json[] };
 
@@ -108,9 +111,14 @@ try {
     cycle_start: cycle.startAt ?? null, cycle_end: cycle.endAt ?? null });
   record("account spending room", Number.isFinite(room) && room >= 0.25 ? "PASS" : "FAIL",
     `$${Number.isFinite(room) ? room.toFixed(4) : "unknown"} left; the canary's combined cap is $0.25`);
-  // A low account limit is a second, vendor-side ceiling. Recommended, not required.
-  record("account limit as a backstop", Number.isFinite(max) && max <= 5 ? "PASS" : "REVIEW",
-    `maxMonthlyUsageUsd=${Number.isFinite(max) ? max : "unknown"}; a small account limit (≤ $5) bounds any failure of the other caps`);
+  // THE ACCOUNT LIMIT IS REPORTED, NOT RELIED ON. The canary's $3 ceiling is
+  // enforced by its own gates (scripts/test-project/canary/canary-budget.ts,
+  // which blocks every paid stage); an account limit above it is a stated
+  // limitation of that ceiling, never a pass.
+  record("account hard limit", "INFO", Number.isFinite(max) && max <= 3
+    ? `maxMonthlyUsageUsd=${max}: Apify itself also stops the account at or below the $3 canary budget`
+    : `maxMonthlyUsageUsd=${Number.isFinite(max) ? max : "unknown"} is above the $3 canary budget: the $3 is software-enforced ` +
+      `(canary-budget.ts B1–B6), not an Apify hard limit`);
 } catch (e) {
   record("account", "FAIL", String((e as Error).message));
 }
@@ -160,7 +168,7 @@ console.log("MANUAL  maxTotalChargeUsd enforcement on this account is not provab
 console.log(`\nobserved_at=${audit.observed_at} — use as --observed-at (valid for 24 h) when every price PASSES.`);
 if (args.json) {
   audit.results = results;
-  audit.all_pass = results.every((r) => r.result === "PASS");
+  audit.all_pass = allPass();
   Deno.writeTextFileSync(String(args.json), JSON.stringify(audit, null, 2) + "\n");
 }
-Deno.exit(results.every((r) => r.result === "PASS") ? 0 : 1);
+Deno.exit(allPass() ? 0 : 1);

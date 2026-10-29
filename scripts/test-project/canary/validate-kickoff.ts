@@ -72,6 +72,7 @@ export function validateKickoff(k: Json, sql: string, expectedSha: string): Chec
   c("K12", `worst-case provider spend ≤ ${PROVIDER_CAP_MICROUSD} µ$ ($0.20)`, provider <= PROVIDER_CAP_MICROUSD && provider === 18_600, provider);
   const model = MODEL_ATTEMPTS * Number(quotes.model?.maximum_microusd ?? Infinity);
   c("K13", `worst-case worker model spend ≤ ${MODEL_CAP_MICROUSD} µ$ ($0.05)`, model <= MODEL_CAP_MICROUSD, model);
+  c("K20", "provider + worker model worst case ≤ the $0.25 combined authorization", provider + model <= 250_000, provider + model);
   c("K14", "the mission's own run budget is $0.20", req.run_budget?.provider_usd === 0.2, req.run_budget);
   const ledger = (k.compile_ledger_rows ?? []) as Json[];
   const compileUsd = ledger.reduce((a, r) => a + Number(r.estimated_cost_usd ?? 0), 0);

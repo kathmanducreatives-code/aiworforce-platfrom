@@ -101,8 +101,28 @@ gh workflow run discovery-test-worker.yml --ref demo/lead-discovery-e2e \
 | 1 | `verify` | Apify identity, plan, usage and limit, actor availability, current prices against the approved maxima; project identity; read cap (5/7); migration and rollback checksums; no conflicting work; preflight; an offline kickoff validated K01–K19 | `providers=openai-only`, `apify_username=<name>` | nothing, free |
 | 2 | `migrate` | re-checks identity and checksums; refuses if already applied; applies **only** `20261029120000_smoke_read_cap_seven.sql`; post-checks cap 7; preflight | `canary_approval="apply 20261029120000_smoke_read_cap_seven to tlvnfrxzjhsjgdofwehb"` | **DB write** (reversible: rollback file) |
 | 3 | `prepare` | re-verifies, then the real kickoff compile and the PAID kickoff SQL (one start each, approver named), validated K01–K19; saved as artifact `canary-prepare`; **not executed**; prints its sha256 | `canary_approval="compile canary kickoff at <REVIEWED_SHA>"`, `canary_approver="<name, date>"`, `apify_username` | **≈ $0.006 GPT** (≤ 2 Luna calls, ≤ $0.025 reserved) |
-| 4 | `launch` | downloads that artifact, checks its sha256, re-validates, re-verifies account, prices, identity, cap and conflicts; **executes the kickoff SQL**; verifies the queue row and authorization; then the existing worker step runs at once, within the 300 s window; then post-run checks and the reconciliation to review | `providers=openai-and-apify`, `kickoff_run_id=<prepare run>`, `kickoff_sha256=<sha>`, `canary_approval="launch canary <sha> on tlvnfrxzjhsjgdofwehb"`, `apify_username` | **DB write + Apify ≤ $0.0186 + worker GPT ≤ $0.0499** |
+| 4 | `launch` | downloads that artifact, checks its sha256, re-validates, re-verifies account, prices, identity, cap and conflicts; **executes the kickoff SQL**; verifies the queue row and authorization; then the existing worker step runs at once, within the 300 s window; then post-run checks and the reconciliation to review | `providers=openai-and-apify`, `kickoff_run_id=<prepare run>`, `kickoff_sha256=<sha>`, `canary_approval="launch canary <sha> on tlvnfrxzjhsjgdofwehb with a software-enforced $3 budget"`, `apify_username` | **DB write + Apify ≤ $0.0186 + worker GPT ≤ $0.0499** |
 | 5 | `reconcile` | read-only re-run of the post-run checks: C01–C10, the reconciliation list, Apify's own charge per run, and `reconcile-to-review.sql` (not executed) | `providers=openai-only` | nothing |
+
+**The $3 canary budget** (`scripts/test-project/canary/canary-budget.ts`) gates `verify`, `prepare` and `launch`:
+
+* **B1:** every paid start is a pay-per-event Apify run carrying Apify's per-run `maxTotalChargeUsd`, pinned by the gate.
+* **B2:** today's prices fit each reserved maximum.
+* **B3:** one attempt fits $0.20 provider, $0.05 model and $0.25 combined.
+* **B4:** what the canary already spent plus the next stage's worst case fits **$3**. "Spent" means every attempt at
+  this request in the canary workspace, at Apify's reconciled figure or the committed worst case, plus recorded
+  kickoff compiles. The next stage's worst case is $0.0935 for prepare and $0.0685 for launch.
+* **B5:** the Apify account's remaining room covers the next attempt.
+* **B6** is reported on every run and is never a PASS. **The $3 is software-enforced.** The account's $19 hard limit is
+  not the enforcer. Apify's per-run cap is unproven until the first run's receipts. If every software layer failed at
+  once, exposure would be bounded only by the account limit.
+
+The launch approval phrase names that limitation. An uncertain charge is never retried: the gate holds it, and no new
+attempt is authorized while any purchase is unreconciled. `verify`, `prepare` and `reconcile` open read-only database
+sessions (`default_transaction_read_only`).
+
+One gap is not tracked: a `prepare` whose kickoff is never launched leaves its compile cost (at most $0.025) outside the
+database, so B4 does not count it. A kickoff also expires 24 h after its prices were observed.
 
 Why launch is a single step: `authorize_discovery_smoke` sets the deadline to the queue row's `created_at + 300 s`. A
 kickoff executed in one run and a worker approved later in another would expire before buying anything. So the kickoff

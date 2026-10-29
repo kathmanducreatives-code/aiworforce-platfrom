@@ -29,7 +29,7 @@ Deno.serve({ port, hostname: "127.0.0.1", onListen: () => console.log(`fake apif
   const path = new URL(req.url).pathname;
   const data = path === "/v2/users/me" ? { id: "user-canary", username: "canaryaccount", plan: { id: "STARTER", monthlyUsageCreditsUsd: 29 } }
     : path === "/v2/users/me/limits" ? { monthlyUsageCycle: { startAt: "2026-10-01T00:00:00Z", endAt: "2026-10-31T23:59:59Z" },
-      limits: { maxMonthlyUsageUsd: 5 }, current: { monthlyUsageUsd: 0.31 } }
+      limits: { maxMonthlyUsageUsd: Number(Deno.env.get("FAKE_APIFY_LIMIT") ?? 19) }, current: { monthlyUsageUsd: Number(Deno.env.get("FAKE_APIFY_USAGE") ?? 0.00013) } }
     : path.startsWith("/v2/acts/") ? ACTS[decodeURIComponent(path.slice("/v2/acts/".length))]
     : path.startsWith("/v2/actor-runs/") ? RUNS[decodeURIComponent(path.slice("/v2/actor-runs/".length))]
     : undefined;
