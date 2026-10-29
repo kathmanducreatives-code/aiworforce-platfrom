@@ -28,7 +28,7 @@ The dispatch SHA is the merged `launch/hardening` head that contains:
 ## 1. Schema verification (read-only)
 
 ```sh
-psql "$TEST_DB_URL" -X -v workspace_id='<TEST_WORKSPACE_ID>' -f scripts/test-project/real-gpt/preflight.sql
+psql "$TEST_DB_URL" -X -v workspace_id='<TEST_WORKSPACE_ID>' -v project_ref='<TEST project ref>' -f scripts/test-project/real-gpt/preflight.sql
 psql "$TEST_DB_URL" -X -v workspace_id='<TEST_WORKSPACE_ID>' -v user_id='<TEST_USER_ID>' \
   -f scripts/test-project/acceptance/schema-verify.sql
 ```

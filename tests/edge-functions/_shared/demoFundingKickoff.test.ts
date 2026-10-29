@@ -156,3 +156,14 @@ Deno.test("canary kickoff: production refs refused, an explicit TEST ref and the
     Error, "atomus_maximum_microusd");
   await assertRejects(() => prepareKickoff(canaryInput({ catalog: CATALOG.approved_quotes })), Error, "must not carry a Pvalyou template");
 });
+
+Deno.test("canary kickoff: planner_runtime names the checkout's commit, not the last edge deploy's buildInfo", async () => {
+  const sha = "fed35777b0034c32be1952ca7faa6ea8a8d5bc60";
+  const k = await prepareKickoff(canaryInput({ planner_commit: sha }));
+  const r = k.compiled_mission.planner_runtime as Record<string, unknown>;
+  assertEquals([r.git_sha, r.git_short, r.dirty], [sha, "fed35777", null], "dirty is unknown, never asserted clean");
+  assertEquals(r.function, "real-gpt-kickoff");
+  await assertRejects(() => prepareKickoff(canaryInput({ planner_commit: "fed35777" })), Error, "40-character");
+  const cli = read("scripts/test-project/real-gpt/prepare-real-gpt-kickoff.ts");
+  assertStringIncludes(cli, "not the reviewed --expected-sha");
+});

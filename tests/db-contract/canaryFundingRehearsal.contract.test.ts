@@ -16,9 +16,9 @@ import { reconcilePriorLiability } from "./lib/smokeMission.ts";
 import { prepareKickoff } from "../../scripts/test-project/real-gpt/prepareKickoff.ts";
 
 const opts = { sanitizeOps: false, sanitizeResources: false };
-const read = (p: string) => JSON.parse(Deno.readTextFileSync(new URL(`../../${p}`, import.meta.url)));
-const CATALOG = read("docs/launch/proposals/smoke-catalog-canary-funding.json");
-const PROPOSAL = read("docs/launch/proposals/canary-funding-reviewed-mission-proposal.json");
+// Literal paths, so the CI dependency scanner (scripts/ci/planCore.mjs) can name every read.
+const CATALOG = JSON.parse(Deno.readTextFileSync(new URL("../../docs/launch/proposals/smoke-catalog-canary-funding.json", import.meta.url)));
+const PROPOSAL = JSON.parse(Deno.readTextFileSync(new URL("../../docs/launch/proposals/canary-funding-reviewed-mission-proposal.json", import.meta.url)));
 export const CANARY_GOAL = "Find one US company hiring Account Executives that raised funding within the last six months.";
 
 /** The catalog as the operator completes it (synthetic prices standing in for observed ones). */

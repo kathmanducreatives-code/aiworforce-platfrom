@@ -7,7 +7,12 @@ import { reconcilePriorLiability } from "./lib/smokeMission.ts";
 
 const opts = { sanitizeOps: false, sanitizeResources: false };
 const preflight = Deno.readTextFileSync(new URL("../../scripts/test-project/real-gpt/preflight.sql", import.meta.url));
-const run = async (ws: string) => Object.fromEntries(([...await sql.unsafe(preflight.replaceAll(":'workspace_id'", `'${ws}'`))] as Array<Record<string, string>>)
+/** psql's variables, as a direct connection to the isolated project sets them. */
+const REF = "tlvnfrxzjhsjgdofwehb";
+const bind = (ws: string, conn: { ref?: string; host?: string; user?: string } = {}) => preflight
+  .replaceAll(":'workspace_id'", `'${ws}'`).replaceAll(":'project_ref'", `'${conn.ref ?? REF}'`)
+  .replaceAll(":'HOST'", `'${conn.host ?? `db.${REF}.supabase.co`}'`).replaceAll(":'USER'", `'${conn.user ?? "postgres"}'`);
+const run = async (ws: string, conn?: Parameters<typeof bind>[1]) => Object.fromEntries(([...await sql.unsafe(bind(ws, conn))] as Array<Record<string, string>>)
   .map((r) => [r.id, `${r.result}:${r.actual}`]));
 
 Deno.test("preflight: a prepared TEST workspace passes; each unsafe state fails its check", opts, async () => {
@@ -22,11 +27,21 @@ Deno.test("preflight: a prepared TEST workspace passes; each unsafe state fails 
   await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${ws}, 'scout', 'Scout', 'x', 'research')`;
   await sql`insert into public.workspace_credit_balances (workspace_id, balance_credits) values (${ws}, 10)`;
   const ok = await run(ws);
-  for (const id of ["P01", "P02", "P03", "P04", "P07", "P08", "P09", "P10", "P11", "P12", "P13", "P14", "P15", "P16"]) {
+  for (const id of ["P00", "P01", "P02", "P03", "P04", "P07", "P08", "P09", "P10", "P11", "P12", "P13", "P14", "P15", "P16"]) {
     assertEquals(ok[id].split(":")[0], "PASS", `${id}: ${ok[id]}`);
   }
   // The billing fixes are a decision, never a failure: reported INFO, installed or not (held until approved).
   for (const id of ["P05", "P06", "P17"]) assertEquals(ok[id].split(":")[0], "INFO", `${id}: ${ok[id]}`);
+
+  // P00: the project's identity, from psql's connection variables (pooler form too).
+  assertEquals((await run(ws, { host: "aws-0-us-east-1.pooler.supabase.com", user: `postgres.${REF}` })).P00, "PASS:ok");
+  assertEquals((await run(ws, { ref: "ohsdatpvfdjdemstoiuj", host: "db.ohsdatpvfdjdemstoiuj.supabase.co" })).P00, "FAIL:a production ref");
+  assertEquals((await run(ws, { host: "db.ohsdatpvfdjdemstoiuj.supabase.co" })).P00, "FAIL:connected to production");
+  assertEquals((await run(ws, { user: "postgres.ohsdatpvfdjdemstoiuj", host: "aws-0-us-east-1.pooler.supabase.com" })).P00,
+    "FAIL:connected to production");
+  assertEquals((await run(ws, { host: "db.abcdefghijklmnopqrst.supabase.co" })).P00, "FAIL:connected elsewhere");
+  assertEquals((await run(ws, { ref: "" })).P00, "FAIL:not a project ref");
+  assertEquals((await run(uuid())).P00, "FAIL:workspace not in this project");
 
   await sql`insert into public.lead_mission_queue (id, workspace_id, request, status) values (${uuid()}, ${ws}, ${sql.json({})}, 'queued')`;
   await sql`update public.workspace_credit_balances set reserved_credits = 1 where workspace_id = ${ws}`;
@@ -44,7 +59,7 @@ Deno.test("preflight: without Candidate B's security migrations P15/P16 fail", o
   await sql.begin(async (tx) => {
     await tx`drop trigger tasks_commit_boundary on public.tasks`;
     await tx`grant update on public.workspace_members to service_role`;
-    const r = Object.fromEntries(([...await tx.unsafe(preflight.replaceAll(":'workspace_id'", `'${ws}'`))] as Array<Record<string, string>>)
+    const r = Object.fromEntries(([...await tx.unsafe(bind(ws))] as Array<Record<string, string>>)
       .map((x) => [x.id, `${x.result}:${x.actual}`]));
     assertEquals([r.P15, r.P16], ["FAIL:3", "FAIL:mismatch"]);
     throw new Error("rollback");
@@ -56,7 +71,7 @@ Deno.test("preflight: a security trigger that exists but is disabled fails P15",
   const ws = await seedWorkspace();
   await sql.begin(async (tx) => {
     await tx`alter table public.task_plans disable trigger task_plans_parent_identity`;
-    const r = Object.fromEntries(([...await tx.unsafe(preflight.replaceAll(":'workspace_id'", `'${ws}'`))] as Array<Record<string, string>>)
+    const r = Object.fromEntries(([...await tx.unsafe(bind(ws))] as Array<Record<string, string>>)
       .map((x) => [x.id, `${x.result}:${x.actual}`]));
     assertEquals(r.P15, "FAIL:3");
     throw new Error("rollback");

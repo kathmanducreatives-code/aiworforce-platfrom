@@ -1,6 +1,12 @@
 -- HOSTED TEST PREFLIGHT FOR THE ZERO-APIFY REAL-GPT RUN. Read-only.
 --
---   psql "$TEST_DB_URL" -X -v workspace_id='<TEST_WORKSPACE_ID>' -f scripts/test-project/real-gpt/preflight.sql
+--   psql "$TEST_DB_URL" -X -v workspace_id='<TEST_WORKSPACE_ID>' -v project_ref='<isolated TEST ref>' \
+--     -f scripts/test-project/real-gpt/preflight.sql
+--
+-- P00 IS THE PROJECT'S IDENTITY. The database records no project ref, so it is
+-- read from psql's own connection variables: a direct connection's HOST is
+-- db.<ref>.supabase.co, a pooler's USER is postgres.<ref>. The ref given must
+-- appear there, and must not be production's or the abandoned project's.
 --
 -- One row per check: expected, actual, PASS / FAIL / INFO. Any FAIL: stop.
 -- INFO rows record a state that is a decision, not a defect (the billing
@@ -9,6 +15,14 @@
 with
 fn(name) as (select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public'),
 checks(id, what, expected, actual) as (
+  select 'P00', 'connected to the named isolated TEST project, never production', 'ok',
+         case when :'project_ref' !~ '^[a-z0-9]{20}$' then 'not a project ref'
+              when :'project_ref' in ('ohsdatpvfdjdemstoiuj', 'wqnigjhcwjxtmordrwno') then 'a production ref'
+              when (:'HOST' || ' ' || :'USER') ~ '(ohsdatpvfdjdemstoiuj|wqnigjhcwjxtmordrwno)' then 'connected to production'
+              when position(:'project_ref' in (:'HOST' || ' ' || :'USER')) = 0 then 'connected elsewhere'
+              when not exists (select 1 from public.workspaces where id = :'workspace_id'::uuid) then 'workspace not in this project'
+              else 'ok' end
+  union all
   select 'P01', 'held smoke admission tables exist', '3',
          ((to_regclass('public.discovery_smoke_authorizations') is not null)::int + (to_regclass('public.discovery_smoke_operations') is not null)::int
           + (to_regclass('public.discovery_smoke_reconciliations') is not null)::int)::text

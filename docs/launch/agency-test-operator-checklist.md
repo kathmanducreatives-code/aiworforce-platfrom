@@ -105,7 +105,7 @@ WS=40e2512f-09b6-433e-97fe-f9999a1f1897
 | # | Check | Command | Expected |
 |---|---|---|---|
 | A1 | Inventory | `psql "$TEST_DB_URL" -XAtc "select current_database(), (select count(*) from information_schema.tables where table_schema='public'), (select string_agg(tgname, ',') from pg_trigger where not tgisinternal and tgname in ('tasks_commit_boundary','task_plans_parent_identity','workspace_members_app_surface','workspace_members_app_surface_truncate'))"` | records which path B1 takes: 0 tables (empty) or the existing schema |
-| A2 | Preflight | `psql "$TEST_DB_URL" -X -v workspace_id=$WS -f scripts/test-project/real-gpt/preflight.sql` | before B: record. After B: P01–P04, P07–P16 PASS; P05/P06/P17 INFO |
+| A2 | Preflight | `psql "$TEST_DB_URL" -X -v workspace_id=$WS -v project_ref=$TEST_PROJECT_REF -f scripts/test-project/real-gpt/preflight.sql` | before B: record. After B: P00–P04, P07–P16 PASS; P05/P06/P17 INFO |
 | A3 | Schema | `psql "$TEST_DB_URL" -X -v workspace_id=$WS -v user_id=<TEST_USER_ID> -f scripts/test-project/acceptance/schema-verify.sql` | S01–S05, S08 PASS; S06/S07 INFO |
 | A4 | Commit boundary | `psql "$TEST_DB_URL" -X -At -F ' ' -f scripts/test-project/tasks-commit-boundary-preflight.sql` | last line `OK`; no `BLOCK` |
 | A5 | Environment (GitHub, owner) | Settings → Environments → `discovery-test` | required reviewer; admins cannot bypass; branch policy; secret and variable **names** (Codex snapshot 2026-10-26: only `launch/hardening` allowed; `TEST_APIFY_API_TOKEN` exists) |

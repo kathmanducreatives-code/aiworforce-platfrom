@@ -240,6 +240,25 @@ export interface CriterionVerdict {
   result: "pass" | "fail" | "unknown";
   reason: string;
   evidence: Array<{ evidence_id: string; excerpt: string }>;
+  /**
+   * WHAT THE STRICT PARSER DID TO THE MODEL'S ANSWER — provenance, so an
+   * `unknown` the parser MADE is never read as one the model GAVE:
+   *   `answered`         the model's pass/fail survived with its receipts;
+   *   `abstained`        the model itself said unknown and offered no receipt;
+   *   `downgraded`       the model said pass/fail (or an unrecognised result)
+   *                      and the parser lowered it: receipts missing or rejected;
+   *   `receipts_rejected` the model said unknown but cited receipts the parser
+   *                      rejected (stale, conflicting, invalid, foreign, unquoted);
+   *   `missing`          no single row for this criterion;
+   *   `unparsed`         the whole answer failed to parse.
+   * Absent on verdicts written before this field existed: treated as unknown
+   * provenance, never as an abstention.
+   */
+  origin?: "answered" | "abstained" | "downgraded" | "receipts_rejected" | "missing" | "unparsed";
+  /** The result the model gave before parsing, when it gave a string. */
+  model_result?: string | null;
+  /** Receipts the model offered that the parser rejected. */
+  rejected_receipts?: number;
 }
 
 /** Evidence types that describe the company itself (Q3): the only receipts for industry or business model. */
@@ -1018,7 +1037,7 @@ export function parseMissionEvaluationStrict(
   const fail = (why: string): ParsedMissionEvaluation => ({
     evaluation: { ...FALLBACK_INSUFFICIENT,
       ...(criteria.length ? { criterion_verdicts: criteria.filter(judged).map((c) => ({
-        criterion_id: c.id, result: "unknown" as const, reason: why, evidence: [],
+        criterion_id: c.id, result: "unknown" as const, reason: why, evidence: [], origin: "unparsed" as const,
       })) } : {}) },
     parse_status: "invalid_insufficient_evidence",
     raw_shape: {
@@ -1167,6 +1186,7 @@ export function parseMissionEvaluationStrict(
     const v = rows.length === 1 ? rows[0] : null;
     const evidence: CriterionVerdict["evidence"] = [];
     let invalid = false;
+    let rejected = 0;
     for (const receipt of Array.isArray(v?.evidence) ? v.evidence : []) {
       const id = typeof receipt?.evidence_id === "string" ? receipt.evidence_id : "";
       const excerpt = typeof receipt?.excerpt === "string" ? receipt.excerpt : "";
@@ -1197,13 +1217,21 @@ export function parseMissionEvaluationStrict(
         (c.time_window?.days && c.dimension !== "hiring" && c.dimension !== "funding" &&
           !eventWithinWindow(item.occurred_at, c.time_window.days).inside)) {
         invalid = true;
+        rejected++;
       } else evidence.push({ evidence_id: id, excerpt });
     }
     const geography_scope = v?.geography_scope === "headquarters" || v?.geography_scope === "presence" ? v.geography_scope : undefined;
     if (c.dimension === "geography" && (!geography_scope || (c.geography_scope && geography_scope !== c.geography_scope))) invalid = true;
     const result = !invalid && evidence.length > 0 && ["pass", "fail"].includes(v?.result)
       ? v.result as "pass" | "fail" : "unknown";
+    const said = typeof v?.result === "string" ? v.result : null;
+    const origin: NonNullable<CriterionVerdict["origin"]> = !v ? "missing"
+      : result !== "unknown" ? "answered"
+      : said !== "unknown" ? "downgraded"
+      : rejected > 0 || invalid ? "receipts_rejected"
+      : "abstained";
     return { criterion_id: c.id, result, evidence, ...(geography_scope ? { geography_scope } : {}),
+      origin, model_result: said, ...(rejected > 0 ? { rejected_receipts: rejected } : {}),
       reason: (result !== "unknown" || (v?.result === "unknown" && !invalid)) && typeof v?.reason === "string" && v.reason.trim()
         ? v.reason : "criterion evidence is missing or unusable" };
   });

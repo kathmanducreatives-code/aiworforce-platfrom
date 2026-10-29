@@ -82,6 +82,12 @@ export interface KickoffInput {
    * actor — instead of zero. Names the approval; absent, nothing is purchasable.
    */
   paid?: { approved_by: string; actor_limits: Record<string, number> };
+  /**
+   * The commit the kickoff runs from (40 hex). `buildInfo.ts` is written only
+   * at edge-deploy time, so without this the mission's `planner_runtime`
+   * names whatever commit was last deployed, not the reviewed one.
+   */
+  planner_commit?: string;
 }
 
 export interface KickoffArtifacts {
@@ -140,8 +146,14 @@ export async function prepareKickoff(i: KickoffInput): Promise<KickoffArtifacts>
   const raw = await i.compile(mission, collector.sink);
   if (!raw) throw new Error("the compiler proposed no mission");
   const c = compileLeadMission({ originalUserQuery: mission, proposal: raw as never, requestedCount });
+  if (i.planner_commit !== undefined && !/^[0-9a-f]{40}$/.test(i.planner_commit)) throw new Error("planner_commit must be a 40-character commit sha");
+  const planner = runtimeIdentity("planner", "real-gpt-kickoff") as unknown as Json;
+  const planner_runtime = i.planner_commit
+    // The checkout's commit; `dirty` is not observable without git, so it is unknown, never asserted clean.
+    ? { ...planner, git_sha: i.planner_commit, git_short: i.planner_commit.slice(0, 8), build_timestamp: new Date().toISOString(), dirty: null }
+    : planner;
   const compiled = { ...c.final_mission, mission_parser_source: c.parser_source,
-    lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION, planner_runtime: runtimeIdentity("planner", "real-gpt-kickoff") } as Json;
+    lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION, planner_runtime } as Json;
   const rows = new Map<string, Json>();
   const capture: LedgerDb = {
     from: () => ({

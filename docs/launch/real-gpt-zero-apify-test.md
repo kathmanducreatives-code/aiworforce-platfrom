@@ -42,7 +42,7 @@ approval. Nothing here merges, deploys, migrates or buys from Apify.
 ## Step 1 — Preflight (read-only)
 
 ```sh
-psql "$TEST_DB_URL" -X -v workspace_id='<TEST_WORKSPACE_ID>' -f scripts/test-project/real-gpt/preflight.sql
+psql "$TEST_DB_URL" -X -v workspace_id='<TEST_WORKSPACE_ID>' -v project_ref='<TEST project ref>' -f scripts/test-project/real-gpt/preflight.sql
 ```
 
 | Check | Expected |

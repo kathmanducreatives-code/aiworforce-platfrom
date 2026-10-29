@@ -43,7 +43,7 @@ import { lunaOnlyFetch, prepareKickoff } from "./prepareKickoff.ts";
 
 const a = parseArgs(Deno.args, {
   string: ["approved-by", "out", "workspace", "user", "pricing-version", "jobs-max", "details-max", "observed-at", "price-source", "queue", "plan", "proposal",
-    "scenario", "project-ref", "atomus-max", "pvalyou-max", "authorize-paid"],
+    "scenario", "project-ref", "atomus-max", "pvalyou-max", "authorize-paid", "expected-sha"],
   boolean: ["acknowledge-defaults"],
 });
 const need = (k: string) => { const v = a[k]; if (!v) { console.error(`--${k} is required`); Deno.exit(2); } return String(v); };
@@ -65,12 +65,33 @@ const paid = a["authorize-paid"]
     Object.entries(catalogDoc.actor_limits_proposed_for_paid_canary).filter(([k]) => k !== "note")) as Record<string, number> }
   : undefined;
 
+// THE COMMIT THIS KICKOFF RUNS FROM, read from .git (no subprocess), stamped
+// into the mission's planner_runtime. With --expected-sha (the reviewed SHA)
+// any other checkout is refused.
+function checkoutCommit(): string | null {
+  try {
+    const git = new URL("../../../.git/", import.meta.url);
+    const head = Deno.readTextFileSync(new URL("HEAD", git)).trim();
+    if (!head.startsWith("ref: ")) return head;
+    const ref = head.slice(5);
+    try { return Deno.readTextFileSync(new URL(ref, git)).trim(); } catch { /* packed */ }
+    const line = Deno.readTextFileSync(new URL("packed-refs", git)).split("\n").find((l) => l.endsWith(` ${ref}`));
+    return line ? line.split(" ")[0] : null;
+  } catch { return null; }
+}
+const commit = checkoutCommit();
+if (a["expected-sha"] && commit !== a["expected-sha"]) {
+  console.error(`checkout is ${commit ?? "unknown"}, not the reviewed --expected-sha ${a["expected-sha"]}`);
+  Deno.exit(2);
+}
+
 // Luna only, ≤ 2 calls, the Luna template's bounds: refused before sending otherwise.
 // A dry run allows ZERO calls: the gate refuses anything at all.
 const gate = lunaOnlyFetch(globalThis.fetch.bind(globalThis), proposalFile ? { maxCalls: 0 } : {});
 globalThis.fetch = gate.fetch;
 const k = await prepareKickoff({
   scenario, project_ref: funding ? need("project-ref") : a["project-ref"], paid,
+  ...(commit && /^[0-9a-f]{40}$/.test(commit) ? { planner_commit: commit } : {}),
   workspace_id: workspaceId, user_id: need("user"),
   queue_id: a.queue ?? crypto.randomUUID(), plan_id: a.plan ?? crypto.randomUUID(),
   pricing_version: need("pricing-version"), catalog,

@@ -663,8 +663,9 @@ function anyOfResolved(criteria: readonly MissionCriterion[], checks: CriterionC
  * cannot change the outcome.
  *
  *   - The evaluator's per-criterion verdicts can only lower a check (#113) —
- *     except that an abstention citing nothing never lowers a funding window
- *     already decided from dated round records.
+ *     except that the model's own evidence-free abstention does not lower a
+ *     funding window a clean, dated round record has decided
+ *     (`fundingResolvesAbstention`).
  *   - A `hold` (`qualificationHold.ts`) can only stop an otherwise ELIGIBLE
  *     candidate: it becomes pending with a blocked `qualification_hold` check.
  */
@@ -718,16 +719,12 @@ export function evaluateEligibility(
         evidence_ids: verdict.evidence.map((e) => e.evidence_id), provenance: null };
     }
     if (verdict?.result === "pass") return check; // never upgrades missing facts
-    // A DATED ROUND IS NOT LOWERED BY AN ABSTENTION. On the job-first route the
-    // funding verifier runs AFTER the evaluator, so the evaluator answered
-    // "unknown" before any round existed, and that stale abstention held a
-    // company Atomus had just proven funded inside the window as pending (the
-    // first-canary rehearsal). The window was decided above by
-    // `decideRecentlyFunded` / `decideHasRaised` over dated records, not read
-    // from text. Only an abstention that cites nothing yields; a `fail`, or an
-    // `unknown` with receipts, still lowers it.
-    if (c.dimension === "funding" && check.result === "pass" && verdict?.result === "unknown" &&
-      verdict.evidence.length === 0 && fundingRecordsInGraph(graph).length > 0) return check;
+    // A DATED ROUND RESOLVES A GENUINE ABSTENTION — AND NOTHING ELSE.
+    // On the job-first route the funding verifier runs AFTER the evaluator, so
+    // the evaluator answered "unknown" before any round existed, and that
+    // stale abstention held a company Atomus had just proven funded inside the
+    // window as pending (the first-canary rehearsal). See `fundingResolvesAbstention`.
+    if (fundingResolvesAbstention(c, check, verdict, graph)) return check;
     return { ...check, result: verdict?.result === "fail" ? "fail" as const : "unknown" as const,
       reason: verdict?.reason ?? "the evaluator did not establish this criterion",
       evidence_ids: verdict?.evidence.map((e) => e.evidence_id) ?? [] };
@@ -770,4 +767,32 @@ export function evaluateEligibility(
     .map((h) => CRITERION_EVIDENCE_DIMENSION[h.dimension])
     .filter((d): d is EvidenceDimension => !!d))];
   return { version: ELIGIBILITY_VERSION, eligibility, checks, hard_checks, disproven, gaps, held };
+}
+
+/**
+ * May a dated funding record resolve the evaluator's earlier `unknown`?
+ *
+ * Only when ALL hold — otherwise the verdict lowers the check as #113 says:
+ *   - the verdict is a GENUINE abstention: the model itself answered
+ *     "unknown" and offered no receipt (`origin: "abstained"`). An `unknown`
+ *     the parser made — a pass/fail whose receipts were missing, stale,
+ *     conflicting, invalid or foreign (`downgraded`), an unknown citing
+ *     rejected receipts, a missing row, an unparsed answer, or a verdict with
+ *     no recorded origin — is unresolved, never an abstention;
+ *   - the criterion is a WINDOWED funding requirement and the check passed
+ *     through `decideRecentlyFunded` over dated round records (a window and at
+ *     least one record leave no other path to `pass` above);
+ *   - the funding evidence is clean: its current item is proven (null when all are stale), and
+ *     the graph holds no conflicting, stale or disproven funding item.
+ */
+function fundingResolvesAbstention(
+  c: MissionCriterion, check: CriterionCheck, verdict: CriterionVerdict | null, graph: CompanyEvidenceGraph,
+): boolean {
+  if (c.dimension !== "funding" || !c.time_window?.days || check.result !== "pass") return false;
+  if (!verdict || verdict.result !== "unknown" || verdict.origin !== "abstained" || verdict.evidence.length > 0) return false;
+  if (fundingRecordsInGraph(graph).length === 0 || graph.conflicts.includes("funding")) return false;
+  const claim = graph.claims.find((x) => x.dimension === "funding");
+  if (!claim || claim.current?.status !== "proven") return false;
+  if (claim.conflicting.length > 0 || claim.stale.length > 0) return false;
+  return ![claim.current, ...claim.supporting].some((i) => i?.status === "disproven");
 }

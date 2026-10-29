@@ -50,16 +50,34 @@ end to end; finding a company is likely, not guaranteed.
    verification SQL passes on it.
 3. **The generated paid kickoff SQL** executes on the cap-7 schema with limits 1/1/1, and is refused on today's.
 
-**Found and fixed during this rehearsal** (`candidateEligibility.ts`): on the job-first route Atomus runs *after* the
-evaluator. The evaluator's earlier "unknown" for funding, which cited nothing, held the funded company pending. The data
-was bought and nothing qualified. Now an abstention citing nothing no longer lowers a funding window decided from dated
-round records. A `fail`, or an `unknown` with receipts, still does (`fundingAbstentionAfterVerifier.test.ts`).
-**This change needs review before the canary runs**: the worker runs the approved commit's code.
+**Found and fixed during this rehearsal** (`candidateEligibility.ts`, `missionEvaluation.ts`): on the job-first route
+Atomus runs *after* the evaluator. The evaluator's earlier "unknown" for funding held the funded company pending, so the
+data was bought and nothing qualified.
+
+**Review blocker B1 (on `fed35777`)**: that first fix keyed on the *parsed* verdict (unknown, no receipts). The strict
+parser produces exactly that shape when it rejects a model's `fail` with stale, conflicting, invalid or foreign receipts,
+so a rejected `fail` could be promoted to eligible. Every parsed verdict now records its `origin`:
+
+* `answered`
+* `abstained`
+* `downgraded`
+* `receipts_rejected`
+* `missing`
+* `unparsed`
+
+It also records `model_result` and `rejected_receipts`. A dated round resolves the earlier unknown only when all of
+these hold (`fundingResolvesAbstention`, `fundingAbstentionAfterVerifier.test.ts`):
+
+* the model itself abstained, citing nothing;
+* the funding criterion is windowed and was decided pass by `decideRecentlyFunded`;
+* the funding evidence is clean: the current item is proven, and there is no conflicting, stale or disproven funding item.
+
+Anything else stays unresolved.
 
 ## Approvals needed, in order (none given yet)
 
-1. **Review and merge-free approval of commit `<SHA>`** on `demo/lead-discovery-e2e`, after CI is green:
-   `gh workflow run ci.yml --ref demo/lead-discovery-e2e -f level=full`.
+1. **Independent review of the reviewed commit** on `demo/lead-discovery-e2e` (see "Reviewed commit" below), after CI is
+   green: `gh workflow run ci.yml --ref demo/lead-discovery-e2e -f level=full`. There is no merge.
 2. **Apply the held read-cap migration to the isolated project only:**
    `psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -f supabase/migrations-held/20261029120000_smoke_read_cap_seven.sql`
    (rollback: `supabase/migrations-held/rollback/20261029120000_smoke_read_cap_seven.down.sql`).
@@ -80,18 +98,21 @@ round records. A `fail`, or an `unknown` with receipts, still does (`fundingAbst
      --project-ref tlvnfrxzjhsjgdofwehb --workspace 40e2512f-09b6-433e-97fe-f9999a1f1897 --user <TEST user uuid> \
      --pricing-version canary-2026-10 --jobs-max 4000 --details-max 4050 --atomus-max 10550 \
      --observed-at <from step 3> --price-source "apify-account-check.ts on <username>, <date>" \
-     --approved-by "<name, date>" --authorize-paid "<name, date>" --acknowledge-defaults --out out/canary
+     --approved-by "<name, date>" --authorize-paid "<name, date>" --acknowledge-defaults --out out/canary \
+     --expected-sha <REVIEWED_SHA>   # refuses any other checkout; stamped into planner_runtime
    ```
    A dry run first: the same command with `--proposal docs/launch/proposals/canary-funding-reviewed-mission-proposal.json`
    and without `OPENAI_API_KEY` sends nothing. Review `out/canary/kickoff.sql`: its header must say `PAID: APPROVED BY …`,
    `worst-case provider 18600 µ$` and the ASSUMED hiring window.
 5. **Run the reviewed kickoff SQL once on the TEST project:** run
-   `scripts/test-project/real-gpt/preflight.sql` first (every row PASS), then
+   `psql "$TEST_DB_URL" -X -v workspace_id='40e2512f-09b6-433e-97fe-f9999a1f1897' -v project_ref='tlvnfrxzjhsjgdofwehb' -f scripts/test-project/real-gpt/preflight.sql`
+   first. Every row must PASS, including P00, which checks that the connection is the isolated project and not
+   production. Then run
    `psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -f out/canary/kickoff.sql`.
 6. **Dispatch the TEST worker** (a required reviewer approves the Environment):
    ```
    gh workflow run discovery-test-worker.yml --ref demo/lead-discovery-e2e \
-     -f confirm_project_ref=tlvnfrxzjhsjgdofwehb -f providers=openai-and-apify -f session_minutes=5 -f expected_sha=<SHA>
+     -f confirm_project_ref=tlvnfrxzjhsjgdofwehb -f providers=openai-and-apify -f session_minutes=5 -f expected_sha=<REVIEWED_SHA>
    ```
 
 ## After the run (read-only, then the administrator's reconciliation)
@@ -106,3 +127,8 @@ APIFY_API_TOKEN=… deno run --allow-net=api.apify.com --allow-env=APIFY_API_TOK
 select public.stop_discovery_smoke('<queue>', 'canary finished');
 select public.reconcile_discovery_smoke_operation('<queue>', '<operation_key>', <vendor µ$>, '<Apify run URL>', '<status>');
 ```
+
+## Reviewed commit
+
+`<REVIEWED_SHA>` is the commit the independent reviewer approves, and the one CI ran on. It is recorded here in a
+follow-up commit, because a file cannot name its own commit.
