@@ -17,6 +17,7 @@ import { parse } from "https://deno.land/std@0.224.0/yaml/mod.ts";
 import { prepareKickoff } from "../../scripts/test-project/real-gpt/prepareKickoff.ts";
 import { validateKickoff } from "../../scripts/test-project/canary/validate-kickoff.ts";
 import { canaryBudget, CANARY_BUDGET_MICROUSD } from "../../scripts/test-project/canary/canary-budget.ts";
+import { checkDbUrl } from "../../scripts/test-project/canary/db-url-check.ts";
 
 const ROOT = new URL("../../", import.meta.url);
 const RAW = Deno.readTextFileSync(new URL(".github/workflows/discovery-test-worker.yml", ROOT));
@@ -218,4 +219,76 @@ Deno.test("budget: too little left of the $3, a price above its reservation, a n
   const poor = structuredClone(APIFY); poor.account.room_usd = 0.01;
   assertEquals(failing(budget({ apify: poor })), ["B5"]);
   assertEquals(budget({ apify: { account: {}, actors: [] } }).ok, false, "no Apify record: refused");
+});
+
+// ── TEST_DB_URL, checked before psql (db-url-check.ts) ───────────────────────
+// Regression: the first verify with TEST_DB_URL set failed with psql's
+// local-socket fallback ("/var/run/postgresql/.s.PGSQL.5432"): any value not
+// starting exactly with postgresql:// is read as a database name.
+const PW = "s3cr3t-Pa55";
+const POOLER = `postgresql://postgres.tlvnfrxzjhsjgdofwehb:${PW}@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres`;
+const DIRECT = `postgresql://postgres:${PW}@db.tlvnfrxzjhsjgdofwehb.supabase.co:5432/postgres`;
+const verdict = (raw: string | undefined, local = false) => {
+  const c = checkDbUrl(raw, "tlvnfrxzjhsjgdofwehb", local);
+  return { ok: c.length >= 8 && c.every((x) => x.ok), failed: c.filter((x) => !x.ok).map((x) => `${x.id}: ${x.detail}`), all: c };
+};
+
+Deno.test("TEST_DB_URL: the session pooler and the direct URI of the isolated project pass", () => {
+  assertEquals(verdict(POOLER).failed, []);
+  assertEquals(verdict(DIRECT).failed, []);
+  assertEquals(verdict(POOLER.replace("postgresql://", "postgres://")).ok, true);
+  assertEquals(verdict(POOLER + "?sslmode=require").ok, true);
+});
+
+Deno.test("TEST_DB_URL: every shape psql would read as a database name is named precisely (the socket-fallback regression)", () => {
+  const cases: Array<[string, string]> = [
+    [" " + POOLER, "remove 1 leading and 0 trailing whitespace"],
+    ["\n" + POOLER, "remove 1 leading and 0 trailing whitespace"],
+    [POOLER + "\n", "remove 0 leading and 1 trailing whitespace"],
+    [`"${POOLER}"`, "remove the quotes"],
+    [`'${POOLER}'`, "remove the quotes"],
+    [`psql "${POOLER}"`, "a pasted psql command"],
+    [`jdbc:${POOLER}`, "a jdbc: prefix"],
+    [`TEST_DB_URL=${POOLER}`, "a NAME= prefix"],
+    [POOLER.replace("postgresql://", ""), "no postgresql:// scheme"],
+    ["host=aws-1-ap-northeast-2.pooler.supabase.com user=postgres.tlvnfrxzjhsjgdofwehb dbname=postgres", "key=value conninfo"],
+    [undefined as unknown as string, "empty or not passed"],
+  ];
+  for (const [raw, why] of cases) {
+    const v = verdict(raw);
+    assertEquals(v.ok, false, JSON.stringify(raw));
+    assert(v.failed.some((f) => f.includes(why)), `${JSON.stringify(raw)} → ${JSON.stringify(v.failed)}`);
+  }
+});
+
+Deno.test("TEST_DB_URL: only the isolated project, the session pooler (5432), database postgres, a real password", () => {
+  const fails = (raw: string, why: string) => assert(verdict(raw).failed.some((f) => f.includes(why)), `${raw} → ${verdict(raw).failed}`);
+  fails(POOLER.replaceAll("tlvnfrxzjhsjgdofwehb", "ohsdatpvfdjdemstoiuj"), "PRODUCTION");
+  fails(DIRECT.replaceAll("tlvnfrxzjhsjgdofwehb", "ohsdatpvfdjdemstoiuj"), "PRODUCTION");
+  fails(POOLER.replaceAll("tlvnfrxzjhsjgdofwehb", "abcdefghijklmnopqrst"), "the user must be exactly postgres.tlvnfrxzjhsjgdofwehb");
+  fails(POOLER.replace("postgres.tlvnfrxzjhsjgdofwehb:", "postgres:"), "the user must be exactly postgres.tlvnfrxzjhsjgdofwehb");
+  fails(POOLER.replace(":5432/", ":6543/"), "TRANSACTION pooler");
+  fails(POOLER.replace(":5432/postgres", ":5432/other"), "use postgres");
+  fails(POOLER.replace(PW, "[YOUR-PASSWORD]"), "placeholder");
+  fails(POOLER.replace(PW, "pa@ss"), "unencoded special character");
+  fails(POOLER.replace(PW, "pa#ss"), "unencoded special character");
+  fails(POOLER.replace(PW, "pa/ss"), "unencoded special character");
+  assertEquals(verdict(POOLER.replace(PW, "pa%40ss%23")).ok, true, "an encoded password passes");
+  fails(POOLER.replace(`:${PW}`, ""), "no password");
+  fails(DIRECT.replace("db.tlvnfrxzjhsjgdofwehb.supabase.co", "127.0.0.1"), "is not the isolated project");
+  // Nothing printed carries the password.
+  for (const raw of [POOLER, " " + POOLER, `psql "${POOLER}"`, POOLER.replace(":5432/", ":6543/")]) {
+    assert(!JSON.stringify(verdict(raw).all).includes(PW), "the password never appears in a check");
+  }
+});
+
+Deno.test("TEST_DB_URL: the loopback exception is the local rehearsal's alone — the workflow never enables it", () => {
+  const local = `postgresql://postgres.tlvnfrxzjhsjgdofwehb:${PW}@127.0.0.1:5432/canary_rehearsal_x`;
+  assertEquals(verdict(local, true).ok, true);
+  assertEquals(verdict(local, false).ok, false, "without the flag a loopback host is refused");
+  assertEquals(verdict(local.replace("127.0.0.1", "db.example.com"), true).ok, false, "the flag accepts loopback only");
+  assert(!RAW.includes("CANARY_LOCAL_REHEARSAL"), "the workflow never sets the rehearsal flag");
+  // Every psql call is behind the check.
+  assertStringIncludes(STAGE, 'scripts/test-project/canary/db-url-check.ts');
+  assertStringIncludes(STAGE, '[ "$DB_URL_OK" = "1" ] || stop "internal: database call before TEST_DB_URL was checked"');
 });

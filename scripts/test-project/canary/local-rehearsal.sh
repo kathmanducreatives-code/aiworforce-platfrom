@@ -57,7 +57,7 @@ run() {   # run <name> <expect 0|1> <stage> [env…]
   local out="$tmp/$name"; mkdir -p "$out"
   set +e
   env -i PATH="$PATH" HOME="$HOME" TEST_DB_URL="$url" APIFY_API_TOKEN="$token" APIFY_API_BASE="http://127.0.0.1:$port" \
-    CANARY_APIFY_NET="127.0.0.1:$port" EXPECTED_SHA="$SHA" CANARY_AUDIT_DIR="$out/audit" "$@" \
+    CANARY_APIFY_NET="127.0.0.1:$port" CANARY_LOCAL_REHEARSAL=1 EXPECTED_SHA="$SHA" CANARY_AUDIT_DIR="$out/audit" "$@" \
     scripts/test-project/canary/canary-stage.sh "$stage" > "$out/log" 2>&1
   local code=$?
   set -e
@@ -73,9 +73,27 @@ cap() { psql "$url" -XAt -c "select pg_get_constraintdef(oid) from pg_constraint
 
 # ── identity refusals, before anything else ──
 run identity-prod 1 verify TEST_DB_URL="postgres://postgres.ohsdatpvfdjdemstoiuj:x@127.0.0.1:1/postgres"
-expect identity-prod "names a production project"
+expect identity-prod "names a PRODUCTION project"
 run identity-other 1 migrate CANARY_APPROVAL="apply 20261029120000_smoke_read_cap_seven to $REF" TEST_DB_URL="${admin%/*}/$db"
-expect identity-other "does not name the canary project"
+expect identity-other "local rehearsal on 127.0.0.1, user postgres"
+expect identity-other "is malformed or not the isolated project"
+
+# ── a malformed TEST_DB_URL is named precisely, before psql — never a local-socket fallback ──
+good="$url"
+run url-leading-space 1 verify APIFY_USERNAME=canaryaccount TEST_DB_URL=" $good"
+expect url-leading-space "remove 1 leading and 0 trailing whitespace"
+run url-quoted 1 verify APIFY_USERNAME=canaryaccount TEST_DB_URL="\"$good\""
+expect url-quoted "remove the quotes"
+run url-psql-pasted 1 verify APIFY_USERNAME=canaryaccount TEST_DB_URL="psql $good"
+expect url-psql-pasted "a pasted psql command"
+run url-jdbc 1 verify APIFY_USERNAME=canaryaccount TEST_DB_URL="jdbc:$good"
+expect url-jdbc "a jdbc: prefix"
+run url-placeholder 1 verify APIFY_USERNAME=canaryaccount TEST_DB_URL="postgresql://postgres.$REF:[YOUR-PASSWORD]@127.0.0.1:5432/postgres"
+expect url-placeholder "placeholder"
+for n in url-leading-space url-quoted url-psql-pasted url-jdbc url-placeholder; do
+  ! grep -q "s.PGSQL" "$tmp/$n/log" || { echo "FAIL $n: psql fell back to a local socket"; exit 1; }
+  expect "$n" "PASS  apify"   # the free Apify checks still ran
+done
 
 # ── verify without the database secret: the free Apify checks still run, then it stops ──
 run verify-no-db 1 verify APIFY_USERNAME=canaryaccount TEST_DB_URL=

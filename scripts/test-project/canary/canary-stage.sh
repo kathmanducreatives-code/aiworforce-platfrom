@@ -66,6 +66,8 @@ stop() { note "STOPPED: $1"; exit 1; }
 # can write, whatever the SQL says.
 case "$STAGE" in migrate|launch) DB_WRITES=1 ;; *) DB_WRITES=0 ;; esac
 q() {
+  # Never a psql call on an unchecked URL (and so never a local-socket fallback).
+  [ "$DB_URL_OK" = "1" ] || stop "internal: database call before TEST_DB_URL was checked"
   if [ "$DB_WRITES" = "1" ]; then psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -Atq "$@"
   else psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -Atq -c "set default_transaction_read_only = on" "$@"; fi
 }
@@ -76,10 +78,22 @@ check_inputs() {
   [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || stop "EXPECTED_SHA is not a commit sha"
 }
 has_db() {
-  [ -n "${TEST_DB_URL:-}" ] && return 0
-  fail "TEST_DB_URL is not set in the discovery-test Environment (the isolated project's administrator connection)"
+  [ -n "${TEST_DB_URL:-}" ] || { fail "TEST_DB_URL is not set in the discovery-test Environment (the isolated project's administrator connection)"; return 1; }
+  # The URI's structure and target, checked BEFORE psql sees it: psql takes any
+  # value not starting with postgresql:// as a database name and silently falls
+  # back to a local socket. Nothing here prints the URL or the password.
+  if "$DENO" run --no-prompt --allow-env=TEST_DB_URL,CANARY_LOCAL_REHEARSAL scripts/test-project/canary/db-url-check.ts \
+      > "$AUDIT/db-url.txt" 2>&1; then
+    tee -a "$SUMMARY" < "$AUDIT/db-url.txt"
+    pass "TEST_DB_URL: a postgresql:// URI for $REF (session pooler or direct), port 5432, database postgres"
+    DB_URL_OK=1
+    return 0
+  fi
+  tee -a "$SUMMARY" < "$AUDIT/db-url.txt"
+  fail "TEST_DB_URL is malformed or not the isolated project: fix the FAIL lines above in GitHub → Settings → Environments → discovery-test"
   return 1
 }
+DB_URL_OK=0
 
 check_identity() {
   # The URL is never printed; only whether it names the canary project.
@@ -277,7 +291,7 @@ check_inputs
 case "$STAGE" in
   verify)
     check_apify
-    if ! has_db; then note "INFO  database checks skipped: no TEST_DB_URL"; [ "$failures" -eq 0 ] || stop "$failures check(s) failed"; fi
+    if ! has_db; then note "INFO  database checks skipped: TEST_DB_URL missing or unusable"; [ "$failures" -eq 0 ] || stop "$failures check(s) failed"; fi
     check_identity
     check_migration_files
     cap="$(read_cap)"; note "INFO  read cap now: $cap (the canary needs 7; migrate applies it)"
