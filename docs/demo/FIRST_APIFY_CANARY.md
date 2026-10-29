@@ -130,5 +130,9 @@ select public.reconcile_discovery_smoke_operation('<queue>', '<operation_key>', 
 
 ## Reviewed commit
 
-`<REVIEWED_SHA>` is the commit the independent reviewer approves, and the one CI ran on. It is recorded here in a
-follow-up commit, because a file cannot name its own commit.
+* **Reviewed code:** `becd52c76d934002e110d26142473967b7d25bbd`. It closes review blockers B1 and B2 on `fed35777`.
+* **`<REVIEWED_SHA>`** is the head of `demo/lead-discovery-e2e` that the independent reviewer approves and CI ran on: the
+  commit that adds this section. It is used for `--expected-sha` and the worker's `expected_sha`. Its only change from
+  the reviewed code is this section, which you can check with
+  `git diff --stat becd52c76d934002e110d26142473967b7d25bbd <REVIEWED_SHA>`.
+  A later commit is not reviewed and must not run.
