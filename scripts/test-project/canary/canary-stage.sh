@@ -20,13 +20,27 @@
 #   reconcile  read-only: the post-run checks, the reconciliation list, Apify's
 #              own figures, and the reconciliation SQL to review (not run).
 #
+# FAST CANARY MODE — one approval for one bounded session (the stages above
+# stay as the fallback):
+#   session        verify (Apify account checked CONCURRENTLY with the database
+#                  checks), the paid compile, validation K01–K20, then the
+#                  approved contract (docs/launch/proposals/canary-session-
+#                  contract.json, session-contract.ts S01–S17). Only a plan
+#                  that satisfies the contract exactly — and only when the
+#                  contract says auto_execute — reaches the kickoff, written
+#                  under the contract's single-use queue id; the worker step
+#                  runs next, inside the 300 s window.          PAID + WRITE
+#   session-close  after the worker: the post-run checks, stop_discovery_smoke,
+#                  reconciliation of every provider purchase against Apify's
+#                  own terminal figure, and one report.                WRITE
+#
 # Every mutating stage needs its exact approval phrase (`CANARY_APPROVAL`).
 # Any failed check stops the stage before its operation. Secrets are never
 # printed: the database URL is only ever passed to psql, the tokens only to
 # the scripts that send them to their own vendor.
 set -euo pipefail
 
-STAGE="${1:?usage: canary-stage.sh verify|migrate|prepare|launch|reconcile}"
+STAGE="${1:?usage: canary-stage.sh verify|migrate|prepare|launch|reconcile|session|session-close}"
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$ROOT"
 
@@ -56,20 +70,25 @@ pass() { note "PASS  $1"; }
 fail() {
   note "FAIL  $1"
   failures=$((failures + 1))
-  # verify reports every check; every other stage stops at the first failure.
-  [ "$STAGE" = "verify" ] || { note "STOPPED: $STAGE did not run its operation"; exit 1; }
+  # verify and session-close report every check (a closing session always
+  # writes its report); every other stage stops at the first failure.
+  [ "$STAGE" = "verify" ] || [ "$STAGE" = "session-close" ] || { note "STOPPED: $STAGE did not run its operation"; exit 1; }
 }
 stop() { note "STOPPED: $1"; exit 1; }
 
 # READ-ONLY BY CONSTRUCTION: every stage but migrate and launch opens its
 # database session with default_transaction_read_only, so no statement it runs
 # can write, whatever the SQL says.
-case "$STAGE" in migrate|launch) DB_WRITES=1 ;; *) DB_WRITES=0 ;; esac
+# A session's verification is read-only too: it becomes writable only at the
+# one boundary where the validated, in-contract kickoff is executed.
+case "$STAGE" in migrate|launch|session-close) DB_WRITES=1 ;; *) DB_WRITES=0 ;; esac
+# Bounded waits: a connection or statement that hangs fails the stage.
+export PGCONNECT_TIMEOUT=15
 q() {
   # Never a psql call on an unchecked URL (and so never a local-socket fallback).
   [ "$DB_URL_OK" = "1" ] || stop "internal: database call before TEST_DB_URL was checked"
-  if [ "$DB_WRITES" = "1" ]; then psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -Atq "$@"
-  else psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -Atq -c "set default_transaction_read_only = on" "$@"; fi
+  if [ "$DB_WRITES" = "1" ]; then psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -Atq -c "set statement_timeout = '60s'" "$@"
+  else psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -Atq -c "set statement_timeout = '60s'" -c "set default_transaction_read_only = on" "$@"; fi
 }
 CANARY_MISSION="Find one US company hiring Account Executives that raised funding within the last six months."
 
@@ -151,9 +170,10 @@ prior_prepares() {
     [ -n "${GITHUB_TOKEN:-}" ] || return 1
     local page=1 count=0 total r n
     while :; do
-      r="$(curl -fsS -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+      r="$(curl -fsS --max-time 20 -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
         "${GITHUB_API_URL:-https://api.github.com}/repos/$GITHUB_REPOSITORY/actions/workflows/discovery-test-worker.yml/runs?per_page=100&page=$page")" || return 1
-      n="$(jq --arg self "${GITHUB_RUN_ID:-}" '[.workflow_runs[] | select((.display_title | contains(" — prepare @ ")) and ((.id | tostring) != $self))] | length' <<< "$r")" || return 1
+      # prepare and session runs both compile; every one counts, whatever its outcome.
+      n="$(jq --arg self "${GITHUB_RUN_ID:-}" '[.workflow_runs[] | select(((.display_title | contains(" — prepare @ ")) or (.display_title | contains(" — session @ "))) and ((.id | tostring) != $self))] | length' <<< "$r")" || return 1
       total="$(jq '.total_count' <<< "$r")" || return 1
       count=$((count + n))
       [ $((page * 100)) -lt "$total" ] || break
@@ -231,13 +251,23 @@ check_conflicts() {
     || fail "conflicting work (claimable|live authorizations|unreconciled purchases|reserved credits): $r"
 }
 
-check_apify() {
+check_apify() { start_apify && finish_apify; }
+# The Apify account check is read-only and independent of the database: a
+# session starts it first and collects it after the database checks.
+APIFY_PID=""
+start_apify() {
   local args=(--json "$AUDIT/apify.json" --mask-identity)
   [ -n "${APIFY_USERNAME:-}" ] && args+=(--expect-username "$APIFY_USERNAME")
-  [ -n "${APIFY_API_TOKEN:-}" ] || { fail "apify: TEST_APIFY_API_TOKEN is not set in the discovery-test Environment"; return; }
-  if "$DENO" run --no-prompt --allow-net="$APIFY_NET" --allow-env=APIFY_API_TOKEN,APIFY_API_BASE \
-      --allow-read=docs/launch/proposals --allow-write="$AUDIT" scripts/test-project/apify-account-check.ts "${args[@]}" \
-      > "$AUDIT/apify.txt" 2>&1; then
+  [ -n "${APIFY_API_TOKEN:-}" ] || { fail "apify: TEST_APIFY_API_TOKEN is not set in the discovery-test Environment"; return 1; }
+  "$DENO" run --no-prompt --allow-net="$APIFY_NET" --allow-env=APIFY_API_TOKEN,APIFY_API_BASE \
+    --allow-read=docs/launch/proposals --allow-write="$AUDIT" scripts/test-project/apify-account-check.ts "${args[@]}" \
+    > "$AUDIT/apify.txt" 2>&1 &
+  APIFY_PID=$!
+}
+finish_apify() {
+  [ -n "$APIFY_PID" ] || return 0
+  local pid="$APIFY_PID"; APIFY_PID=""
+  if wait "$pid"; then
     cat "$AUDIT/apify.txt"
     pass "apify: account, limits, actor availability and current prices fit the approved budget"
   else
@@ -278,7 +308,8 @@ generate_kickoff() {
     --pricing-version "canary-$(date -u +%Y%m%d)" --jobs-max 4000 --details-max 4050 --atomus-max 10550 \
     --observed-at "$observed" --price-source "apify-account-check.ts on the discovery-test account at $observed" \
     --approved-by "$approver" --authorize-paid "$approver" --acknowledge-defaults \
-    --expected-sha "$EXPECTED_SHA" --out "$out" "${src[@]}" > "$out/console.txt" 2>&1 \
+    --expected-sha "$EXPECTED_SHA" --out "$out" "${src[@]}" ${SESSION_QUEUE_ID:+--queue "$SESSION_QUEUE_ID" --plan "$SESSION_PLAN_ID"} \
+    > "$out/console.txt" 2>&1 \
     || { cat "$out/console.txt"; fail "kickoff: the preparer refused (interpretation, prices or checkout)"; return 1; }
   grep -E '^(PASS|FAIL|ASSUMED|compile)' "$out/console.txt" | tee -a "$SUMMARY"
 }
@@ -427,6 +458,107 @@ case "$STAGE" in
     { echo "-- REVIEW, fill the vendor figures, then run as administrator AFTER:"; echo "select public.stop_discovery_smoke('$qid', 'canary finished');"
       cat "$AUDIT/reconcile-to-review.sql"; } > "$AUDIT/reconcile-to-review.sql.tmp" && mv "$AUDIT/reconcile-to-review.sql.tmp" "$AUDIT/reconcile-to-review.sql"
     pass "reconciliation SQL generated for review (not executed)"
+    ;;
+
+  session)
+    CONTRACT=docs/launch/proposals/canary-session-contract.json
+    # Local rehearsal only (never set by the workflow): another contract file. Its
+    # own hash is still what the approval phrase must name, and A01–A09 still apply.
+    [ "${CANARY_LOCAL_REHEARSAL:-}" = "1" ] && [ -n "${CANARY_SESSION_CONTRACT:-}" ] && CONTRACT="$CANARY_SESSION_CONTRACT"
+    csha="$(sha256sum "$CONTRACT" | cut -d' ' -f1)"
+    # One approval: this exact contract, at this exact commit.
+    require_approval "run canary session $csha at $EXPECTED_SHA"
+    [ -n "${CANARY_APPROVER:-}" ] || stop "CANARY_APPROVER (who approved the session) is required"
+    [ -n "${APIFY_USERNAME:-}" ] || stop "apify_username is required: the canary account is confirmed by name, never assumed"
+    "$DENO" run --no-prompt --allow-read scripts/test-project/canary/session-contract.ts contract "$CONTRACT" > "$AUDIT/contract.txt" 2>&1 \
+      && { tee -a "$SUMMARY" < "$AUDIT/contract.txt" > /dev/null; pass "contract $csha: well-formed, unexpired, never wider than the existing caps"; } \
+      || { cat "$AUDIT/contract.txt"; stop "the contract is invalid or expired: $(grep '^FAIL' "$AUDIT/contract.txt" | tr '\n' ';')"; }
+    read -r SESSION_QUEUE_ID SESSION_PLAN_ID < <("$DENO" run --no-prompt scripts/test-project/canary/session-contract.ts ids "$csha")
+    [[ "${SESSION_QUEUE_ID:-}" =~ ^[0-9a-f-]{36}$ && "${SESSION_PLAN_ID:-}" =~ ^[0-9a-f-]{36}$ ]] || stop "could not derive the contract's single-use ids"
+    export SESSION_QUEUE_ID SESSION_PLAN_ID
+    note "INFO  single-use ids from the contract: queue $SESSION_QUEUE_ID, plan $SESSION_PLAN_ID"
+    # Read-only checks, the Apify account concurrently with the database.
+    start_apify || true
+    has_db || { finish_apify; stop "TEST_DB_URL unusable"; }
+    check_identity
+    check_migration_files
+    [ "$(read_cap)" = "7" ] || stop "the read cap is not 7"
+    [ "$(q -c "select count(*) from public.lead_mission_queue where id = '$SESSION_QUEUE_ID'")" = "0" ] \
+      && pass "the contract is unused: no queue row $SESSION_QUEUE_ID" \
+      || stop "this contract has already been used (queue $SESSION_QUEUE_ID exists); another session needs a new, separately approved contract"
+    check_conflicts
+    check_permissions
+    check_preflight
+    finish_apify
+    check_budget
+    note "COMPILING the mission (paid: <= 2 Luna calls)"
+    generate_kickoff paid "$AUDIT/kickoff" "$CANARY_APPROVER (session contract $csha)" || stop "kickoff not generated"
+    validate_kickoff "$AUDIT/kickoff"
+    if "$DENO" run --no-prompt --allow-read --allow-write="$AUDIT" scripts/test-project/canary/session-contract.ts kickoff \
+        "$CONTRACT" "$AUDIT/kickoff" "$csha" --json "$AUDIT/kickoff/contract-check.json" > "$AUDIT/kickoff/contract-check.txt" 2>&1; then
+      tee -a "$SUMMARY" < "$AUDIT/kickoff/contract-check.txt" > /dev/null
+      pass "the generated plan satisfies the contract exactly: S01–S17"
+    else
+      cat "$AUDIT/kickoff/contract-check.txt"
+      stop "the generated plan is OUTSIDE the contract ($(grep '^FAIL' "$AUDIT/kickoff/contract-check.txt" | tr '\n' ';')) — nothing executed; it needs a separate approval"
+    fi
+    sha="$(sha256sum "$AUDIT/kickoff/kickoff.sql" | cut -d' ' -f1)"
+    echo "$sha" > "$AUDIT/kickoff.sha256"
+    if [ "$(jq -r '.auto_execute' "$CONTRACT")" != "true" ]; then
+      note "KICKOFF READY (not executed: the contract does not authorize automatic execution). sha256 $sha"
+    else
+      # The write boundary: re-check the one fact that can change in the last
+      # seconds, then switch this session to writable for the kickoff alone.
+      check_conflicts
+      DB_WRITES=1
+      note "EXECUTING the in-contract kickoff: queue $SESSION_QUEUE_ID (kickoff.sql sha256 $sha)"
+      q -f "$AUDIT/kickoff/kickoff.sql" > "$AUDIT/kickoff-exec.txt" || stop "the kickoff failed; the transaction rolled back"
+      DB_WRITES=0
+      verify_queue "$SESSION_QUEUE_ID"
+      echo "$SESSION_QUEUE_ID" > "$AUDIT/queue_id"
+      [ -n "${GITHUB_OUTPUT:-}" ] && echo "kickoff=executed" >> "$GITHUB_OUTPUT"
+      note "READY FOR THE WORKER: the authorization's 300 s window is running"
+    fi
+    ;;
+
+  session-close)
+    has_db || stop "TEST_DB_URL unusable"
+    qid="${CANARY_QUEUE_ID:?CANARY_QUEUE_ID is required}"
+    [[ "$qid" =~ ^[0-9a-f-]{36}$ ]] || stop "unreadable queue id"
+    check_identity
+    note "INFO  closing session queue $qid"
+    sed '/^-- The funding record each qualified company rests on/,$d' scripts/test-project/canary-funding-verify.sql > "$AUDIT/verify-checks.sql"
+    q -F '|' -v workspace_id="$WS" -v queue_id="$qid" -f "$AUDIT/verify-checks.sql" > "$AUDIT/canary-verify.txt"
+    cat "$AUDIT/canary-verify.txt"
+    if awk -F'|' '$1 != "C10" && $5 == "FAIL"' "$AUDIT/canary-verify.txt" | grep -q .; then fail "post-run checks: a C-check FAILED"; else pass "post-run checks C01–C09"; fi
+    # The authorization ends here: nothing more can be admitted under it.
+    q -c "select public.stop_discovery_smoke('$qid', 'canary session closed') where exists (
+      select 1 from public.discovery_smoke_authorizations where queue_id = '$qid' and status = 'active')" > /dev/null
+    pass "authorization stopped: nothing more can be bought under it"
+    runs="$(q -c "select coalesce(string_agg(o.provider_run_id, ','), '') from public.discovery_smoke_operations o
+      join public.discovery_smoke_authorizations a on a.id = o.authorization_id where a.queue_id = '$qid' and o.kind = 'provider' and o.provider_run_id is not null")"
+    if [ -n "$runs" ]; then
+      "$DENO" run --no-prompt --allow-net="$APIFY_NET" --allow-env=APIFY_API_TOKEN,APIFY_API_BASE --allow-read=docs/launch/proposals \
+        --allow-write="$AUDIT" scripts/test-project/apify-account-check.ts --runs "$runs" --json "$AUDIT/receipts.json" > "$AUDIT/apify-runs.txt" 2>&1 || true
+      cat "$AUDIT/apify-runs.txt"
+      # Reconcile ONLY what Apify itself reports as terminal with a figure; an
+      # uncertain purchase stays open and blocks every later paid operation.
+      jq -r '.receipts[] | select(.status != null and (.status | IN("SUCCEEDED","FAILED","ABORTED","TIMED-OUT")) and .usage_total_usd != null)
+        | "\(.run_id) \(.status) \(.usage_total_usd * 1000000 | ceil)"' "$AUDIT/receipts.json" > "$AUDIT/reconcile.txt" 2>/dev/null || : > "$AUDIT/reconcile.txt"
+      while read -r run status micro; do
+        q -c "select public.reconcile_discovery_smoke_operation('$qid', o.operation_key, $micro, 'https://console.apify.com/actors/runs/$run', '$status')
+          from public.discovery_smoke_operations o join public.discovery_smoke_authorizations a on a.id = o.authorization_id
+          where a.queue_id = '$qid' and o.kind = 'provider' and o.provider_run_id = '$run'" > /dev/null < /dev/null \
+          && note "RECONCILED run $run: $status, \$$(awk "BEGIN{printf \"%.6f\", $micro/1e6}") (Apify's own figure)"
+      done < "$AUDIT/reconcile.txt"
+    fi
+    open="$(q -c "select count(*) from public.discovery_smoke_operations o join public.discovery_smoke_authorizations a on a.id = o.authorization_id
+      where a.queue_id = '$qid' and o.kind = 'provider' and not exists (select 1 from public.discovery_smoke_reconciliations r
+        where r.authorization_id = o.authorization_id and r.operation_key = o.operation_key)")"
+    [ "$open" = "0" ] && pass "every provider purchase reconciled against Apify's receipt" \
+      || fail "$open provider purchase(s) UNCERTAIN: not reconciled automatically; every later paid operation is blocked until an administrator reconciles them"
+    q -F '|' -v queue_id="$qid" -f scripts/test-project/canary/session-summary.sql > "$AUDIT/session-summary.txt"
+    cat "$AUDIT/session-summary.txt"
     ;;
 
   *) stop "unknown stage $STAGE" ;;

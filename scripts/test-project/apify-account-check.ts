@@ -48,7 +48,8 @@ const CANARY: Array<{ template: string; actor: string; units: number }> = [
 const catalog = JSON.parse(Deno.readTextFileSync("docs/launch/proposals/smoke-catalog-canary-funding.json")).approved_quotes;
 
 async function get(path: string): Promise<Json> {
-  const res = await fetch(`${BASE}/v2${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  // Bounded: a hung request fails the check instead of stalling the session.
+  const res = await fetch(`${BASE}/v2${path}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20_000) });
   // The body of an error never echoes the token; only the status and Apify's error type are shown.
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`GET ${path} → HTTP ${res.status} ${body?.error?.type ?? ""}`.trim());
@@ -67,6 +68,7 @@ const audit: Json = { observed_at: new Date().toISOString(), account: {}, actors
 if (args.runs) {
   const caps: Record<string, number> = Object.fromEntries(CANARY.map((c) => [c.actor, Number(catalog[c.template]?.maximum_microusd) / 1e6]));
   let total = 0, ok = true;
+  const receipts: Json[] = [];
   for (const id of String(args.runs).split(",").map((r) => r.trim()).filter(Boolean)) {
     try {
       const run = await get(`/actor-runs/${encodeURIComponent(id)}`);
@@ -77,13 +79,16 @@ if (args.runs) {
       const within = Number.isFinite(usd) && cap !== undefined && usd <= cap;
       ok &&= within && ["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"].includes(run.status);
       total += Number.isFinite(usd) ? usd : 0;
+      receipts.push({ run_id: id, actor, status: run.status, usage_total_usd: Number.isFinite(usd) ? usd : null, cap_usd: cap ?? null, within });
       console.log(`${within ? "PASS  " : "FAIL  "} run ${id}: ${actor} ${run.status} charged $${usd} (cap ${cap ?? "NOT A CANARY ACTOR"}, ` +
         `chargedEventCounts ${JSON.stringify(run.chargedEventCounts ?? {})})`);
     } catch (e) {
       ok = false;
+      receipts.push({ run_id: id, error: (e as Error).message });
       console.log(`FAIL   run ${id}: ${(e as Error).message}`);
     }
   }
+  if (args.json) Deno.writeTextFileSync(String(args.json), JSON.stringify({ total_usd: total, ok: ok && total <= 0.20, receipts }, null, 2) + "\n");
   console.log(`total charged $${total.toFixed(6)} of the $0.20 provider cap — enter each run in reconcile_discovery_smoke_operation with this vendor amount`);
   Deno.exit(ok && total <= 0.20 ? 0 : 1);
 }

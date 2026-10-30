@@ -30,7 +30,7 @@ server=""
 cleanup() {
   [ -n "$server" ] && kill "$server" 2>/dev/null || true
   psql "$admin" -XAtq -c "drop database if exists \"$db\" with (force)" -c "drop role if exists \"$role\"" >/dev/null 2>&1 || true
-  rm -rf "$tmp"
+  [ -n "${KEEP_REHEARSAL:-}" ] && cp -r "$tmp" "$KEEP_REHEARSAL"; rm -rf "$tmp"
 }
 trap cleanup EXIT
 
@@ -180,6 +180,77 @@ run budget-many-prepares 1 prepare APIFY_USERNAME=canaryaccount CANARY_APPROVER=
   CANARY_APPROVAL="compile canary kickoff at $SHA" CANARY_OFFLINE_PROPOSAL=docs/launch/proposals/canary-funding-reviewed-mission-proposal.json
 expect budget-many-prepares "117 earlier prepare compile"
 expect budget-many-prepares "FAIL  B4"
+
+# ══ FAST CANARY MODE: one approved contract, end to end ══════════════════════
+C="$tmp/contracts"; mkdir -p "$C"
+mkc() { jq "$2" docs/launch/proposals/canary-session-contract.json > "$C/$1.json"; sha256sum "$C/$1.json" | cut -d' ' -f1; }
+sess() {   # sess <name> <expect> <contract> [env…]
+  local name="$1" want="$2" file="$C/$3.json"; shift 3
+  local h; h="$(sha256sum "$file" | cut -d' ' -f1)"
+  run "$name" "$want" session APIFY_USERNAME=canaryaccount CANARY_APPROVER="rehearsal operator" CANARY_SESSION_CONTRACT="$file" \
+    CANARY_APPROVAL="run canary session $h at $SHA" CANARY_OFFLINE_PROPOSAL=docs/launch/proposals/canary-funding-reviewed-mission-proposal.json "$@"
+}
+mkc fresh '.id = "rehearsal-1"' > /dev/null
+mkc expired '.id = "rehearsal-expired" | .expires_at = "2026-01-01T00:00:00Z"' > /dev/null
+mkc manual '.id = "rehearsal-manual" | .auto_execute = false' > /dev/null
+mkc narrow '.id = "rehearsal-narrow" | del(.actors["apify:atomus~linkedin-company-scraper"]) | .spending.max_provider_microusd = 8050 | .spending.max_session_microusd = 82930' > /dev/null
+mkc wide '.id = "rehearsal-wide" | .actors["apify:atomus~linkedin-company-scraper"].max_starts = 2' > /dev/null
+mkc pvalyou '.id = "rehearsal-pvalyou" | .actors["apify:pvalyou~company-record"] = {"max_starts":1,"max_units":1,"unit":"company","max_microusd":40050}' > /dev/null
+
+run session-wrong-phrase 1 session APIFY_USERNAME=canaryaccount CANARY_APPROVER=x CANARY_SESSION_CONTRACT="$C/fresh.json" CANARY_APPROVAL="run canary session"
+expect session-wrong-phrase "approval phrase does not match"
+sess session-expired 1 expired
+expect session-expired "FAIL  A03 not expired"
+sess session-wider-than-caps 1 wide
+expect session-wider-than-caps "FAIL  A05"
+sess session-unapproved-actor 1 pvalyou
+expect session-unapproved-actor "FAIL  A05"
+sess session-plan-outside-contract 1 narrow
+expect session-plan-outside-contract "FAIL  S06"
+expect session-plan-outside-contract "OUTSIDE the contract"
+sess session-history-unreadable 1 fresh CANARY_PRIOR_PREPARES=
+expect session-history-unreadable "could not count earlier prepare runs"
+[ "$(psql "$url" -XAt -c "select count(*) from public.lead_mission_queue where status = 'queued'")" = "0" ] || { echo "FAIL: a refused session wrote"; exit 1; }
+sess session-manual 0 manual
+expect session-manual "KICKOFF READY (not executed: the contract does not authorize automatic execution)"
+[ "$(psql "$url" -XAt -c "select count(*) from public.lead_mission_queue where status = 'queued'")" = "0" ] || { echo "FAIL: a manual contract executed"; exit 1; }
+
+sess session 0 fresh
+expect session "PASS  the generated plan satisfies the contract exactly"
+expect session "PASS  queue:"
+expect session "READY FOR THE WORKER"
+squeue="$(cat "$tmp/session/audit/queue_id")"
+# Interrupted: the worker never ran. The kickoff is single-use and blocks any other paid start.
+sess session-duplicate 1 fresh
+expect session-duplicate "has already been used"
+mkc fresh2 '.id = "rehearsal-2"' > /dev/null
+sess session-while-interrupted 1 fresh2
+expect session-while-interrupted "conflicting work"
+
+# Partially completed: two purchases, one Apify reports, one with no run id (uncertain).
+sauth="$(psql "$url" -XAt -c "select id from public.discovery_smoke_authorizations where queue_id = '$squeue'")"
+psql "$url" -XAtq -v ON_ERROR_STOP=1 -c "update public.lead_mission_queue set status = 'complete' where id = '$squeue'" \
+  -c "insert into public.discovery_smoke_operations (authorization_id, operation_key, task_id, generation, kind, actor, template_id, payload_hash, committed_microusd, provider_run_id)
+      values ('$sauth', 'rehearsal-jobs', gen_random_uuid(), 1, 'provider', 'apify:harvestapi~linkedin-job-search', 'jobs', repeat('b', 64), 4000, 'run-jobs'),
+             ('$sauth', 'rehearsal-uncertain', gen_random_uuid(), 1, 'provider', 'apify:harvestapi~linkedin-company', 'details', repeat('c', 64), 4050, null)" > /dev/null
+run session-close-partial 1 session-close CANARY_QUEUE_ID="$squeue"
+expect session-close-partial "authorization stopped"
+expect session-close-partial "RECONCILED run run-jobs: SUCCEEDED"
+expect session-close-partial "1 provider purchase(s) UNCERTAIN"
+expect session-close-partial "provider charged (Apify receipts)"
+# The uncertain purchase blocks every later paid operation, a new contract included.
+sess session-after-uncertain 1 fresh2
+expect session-after-uncertain "unreconciled purchase"
+[ "$(psql "$url" -XAt -c "select count(*) from public.discovery_smoke_reconciliations r join public.discovery_smoke_authorizations a on a.id = r.authorization_id where a.queue_id = '$squeue'")" = "1" ] \
+  || { echo "FAIL: exactly one purchase must be reconciled"; exit 1; }
+# The administrator reconciles the uncertain one (NO_RUN); then a new, approved contract may run.
+psql "$url" -XAtq -c "select public.reconcile_discovery_smoke_operation('$squeue', 'rehearsal-uncertain', 0, 'rehearsal: Apify shows no run', 'NO_RUN')" > /dev/null
+sess session-second-contract 0 fresh2
+expect session-second-contract "READY FOR THE WORKER"
+s2="$(cat "$tmp/session-second-contract/audit/queue_id")"
+psql "$url" -XAtq -c "update public.lead_mission_queue set status = 'complete' where id = '$s2'" > /dev/null
+run session-close-clean 0 session-close CANARY_QUEUE_ID="$s2"
+expect session-close-clean "every provider purchase reconciled"
 
 # ── a price above the approved maximum blocks every paid stage ──
 kill "$server"; FAKE_APIFY_TOKEN="$token" FAKE_APIFY_PRICE_BUMP=0.0001 deno run --allow-net=127.0.0.1 --allow-env tests/infra/fixtures/fake-apify.ts "$port" > "$tmp/apify2.log" 2>&1 &

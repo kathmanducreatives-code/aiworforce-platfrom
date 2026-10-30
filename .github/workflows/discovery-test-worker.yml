@@ -30,6 +30,13 @@
 #              approval) seconds before the worker step, inside the
 #              authorization's 300 s window              (DB write + paid run)
 #   reconcile  read-only post-run checks and the reconciliation SQL to review
+#   session    FAST CANARY MODE, one approval for one bounded session in the
+#              worker job: verify, compile, validate K01–K20, check the plan
+#              against the approved contract (docs/launch/proposals/canary-
+#              session-contract.json) S01–S17, and only then — if the contract
+#              authorizes automatic execution — kickoff, the existing worker
+#              step, stop, reconcile against Apify's receipts, one report.
+#              Approval phrase: "run canary session <contract sha256> at <sha>".
 # Each stage saves its non-secret audit as an artifact. The `migrate` and
 # `launch` stages also need the Environment secret TEST_DB_URL: the isolated
 # project's administrator connection (authorize_discovery_smoke is not granted
@@ -66,7 +73,7 @@ on:
         required: true
         type: string
       canary_stage:
-        description: "none = the worker as always. Canary: verify (read-only) | migrate | prepare (paid compile) | launch (kickoff + paid run) | reconcile (read-only)"
+        description: "none = the worker as always. Canary: verify (read-only) | migrate | prepare (paid compile) | launch (kickoff + paid run) | reconcile (read-only) | session (one approved contract, end to end)"
         required: true
         default: none
         type: choice
@@ -77,6 +84,7 @@ on:
           - prepare
           - launch
           - reconcile
+          - session
       canary_approval:
         description: "Canary stages that write or spend: the exact approval phrase the stage names (see the runbook)"
         required: false
@@ -134,6 +142,7 @@ jobs:
       TEST_PROJECT_REF: ${{ vars.TEST_PROJECT_REF }}
       CANARY_STAGE: ${{ inputs.canary_stage }}
       CANARY_APPROVAL: ${{ inputs.canary_approval }}
+      CANARY_APPROVER: ${{ inputs.canary_approver }}
       APIFY_USERNAME: ${{ inputs.apify_username }}
       KICKOFF_RUN_ID: ${{ inputs.kickoff_run_id }}
       KICKOFF_SHA256: ${{ inputs.kickoff_sha256 }}
@@ -215,6 +224,16 @@ jobs:
               [[ "$KICKOFF_RUN_ID" =~ ^[0-9]+$ ]] && [[ "$KICKOFF_SHA256" =~ ^[0-9a-f]{64}$ ]] \
                 || { echo "refusing: launch needs the prepare run id and the approved kickoff sha256" >&2; exit 1; }
               ;;
+            session)
+              [ "$CONFIRM_REF" = "tlvnfrxzjhsjgdofwehb" ] \
+                || { echo "refusing: the canary runs on tlvnfrxzjhsjgdofwehb only" >&2; exit 1; }
+              [ "$LEAD_V2_WORKER_WORKSPACES" = "40e2512f-09b6-433e-97fe-f9999a1f1897" ] \
+                || { echo "refusing: the canary runs in the discovery-test workspace only" >&2; exit 1; }
+              [ "$PROVIDERS" = "openai-and-apify" ] \
+                || { echo "refusing: a session may run the paid canary; providers must be openai-and-apify" >&2; exit 1; }
+              [[ "$CANARY_APPROVAL" =~ ^run\ canary\ session\ [0-9a-f]{64}\ at\ [0-9a-f]{40}$ ]] \
+                || { echo "refusing: a session needs its approval phrase: run canary session <contract sha256> at <commit sha>" >&2; exit 1; }
+              ;;
             *) echo "refusing: canary stage '$CANARY_STAGE' does not run the worker" >&2; exit 1 ;;
           esac
 
@@ -226,6 +245,15 @@ jobs:
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed   # v2.0.5
         with:
           deno-version: v2.8.2   # worker/Dockerfile's version
+
+      # Dependencies cached per EXACT commit: only a run of the same approved
+      # commit restores them (no deno.json, so the lockfile does not verify a
+      # cached module; a commit-scoped key keeps that out of reach).
+      - name: Cache Deno dependencies for this commit
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830   # v4.3.0
+        with:
+          path: ~/.cache/deno
+          key: deno-v2.8.2-${{ runner.os }}-${{ github.sha }}
 
       - name: "Canary launch: the prepare run's kickoff, by run id"
         if: ${{ inputs.canary_stage == 'launch' }}
@@ -248,7 +276,23 @@ jobs:
           export CANARY_AUDIT_DIR="$RUNNER_TEMP/canary-audit"
           scripts/test-project/canary/canary-stage.sh launch
 
+      - name: "Canary session: verify, compile, check against the contract, kickoff (the worker starts next)"
+        id: session
+        if: ${{ inputs.canary_stage == 'session' }}
+        timeout-minutes: 8
+        env:
+          TEST_DB_URL: ${{ secrets.TEST_DB_URL }}
+          APIFY_API_TOKEN: ${{ secrets.TEST_APIFY_API_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          export CANARY_AUDIT_DIR="$RUNNER_TEMP/canary-audit"
+          scripts/test-project/canary/canary-stage.sh session
+
       - name: One bounded worker session (drains on SIGTERM, then exits)
+        # A session runs the worker only after its in-contract kickoff executed.
+        if: ${{ inputs.canary_stage != 'session' || steps.session.outputs.kickoff == 'executed' }}
         env:
           # ── Supabase: the TEST project only ──────────────────────────────
           SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
@@ -315,6 +359,27 @@ jobs:
           [ -n "$CANARY_QUEUE_ID" ] || { echo "no kickoff was executed; nothing to reconcile"; exit 0; }
           scripts/test-project/canary/canary-stage.sh reconcile
 
+      - name: "Canary session: stop, reconcile against Apify's receipts, report"
+        if: ${{ always() && inputs.canary_stage == 'session' && steps.session.outputs.kickoff == 'executed' }}
+        timeout-minutes: 5
+        env:
+          TEST_DB_URL: ${{ secrets.TEST_DB_URL }}
+          APIFY_API_TOKEN: ${{ secrets.TEST_APIFY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          export CANARY_AUDIT_DIR="$RUNNER_TEMP/canary-audit/close"
+          export CANARY_QUEUE_ID="$(cat "$RUNNER_TEMP/canary-audit/queue_id")"
+          scripts/test-project/canary/canary-stage.sh session-close
+
+      - name: "Canary session: save the non-secret audit and report"
+        if: ${{ always() && inputs.canary_stage == 'session' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
+        with:
+          name: canary-session
+          path: ${{ runner.temp }}/canary-audit
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: "Canary launch: save the non-secret audit"
         if: ${{ always() && inputs.canary_stage == 'launch' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
@@ -375,6 +440,12 @@ jobs:
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed   # v2.0.5
         with:
           deno-version: v2.8.2
+
+      - name: Cache Deno dependencies for this commit
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830   # v4.3.0
+        with:
+          path: ~/.cache/deno
+          key: deno-v2.8.2-${{ runner.os }}-${{ github.sha }}
 
       - name: Canary stage (stops at the first failed check; verify reports every check)
         env:

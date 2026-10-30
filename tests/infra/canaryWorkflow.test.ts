@@ -38,8 +38,9 @@ const SHA = "0123456789abcdef0123456789abcdef01234567";
 Deno.test("canary: one workflow — `none` (the default) is the worker; the other stages are one Environment-guarded job", () => {
   const i = wf.on.workflow_dispatch.inputs;
   assertEquals(i.canary_stage.default, "none");
-  assertEquals(i.canary_stage.options, ["none", "verify", "migrate", "prepare", "launch", "reconcile"]);
+  assertEquals(i.canary_stage.options, ["none", "verify", "migrate", "prepare", "launch", "reconcile", "session"]);
   assertEquals(Object.keys(wf.jobs).sort(), ["canary", "worker"]);
+  // `session` runs in the worker job (its kickoff must precede the worker step), never the canary job.
   assertStringIncludes(worker.if!, `!contains(fromJSON('["verify","migrate","prepare","reconcile"]'), inputs.canary_stage)`);
   assertStringIncludes(canary.if!, `contains(fromJSON('["verify","migrate","prepare","reconcile"]'), inputs.canary_stage)`);
   assertEquals(canary.environment, "discovery-test", "the same Environment and required reviewer");
@@ -116,7 +117,9 @@ Deno.test("canary: each secret reaches only its step; the model key only the pai
   // The launch: its kickoff executes immediately before the worker step, inside the 300 s window.
   const names = worker.steps.map((s) => s.name ?? s.uses ?? "");
   const exec = names.findIndex((n) => n.startsWith("Canary launch: re-verify"));
-  assertEquals(names[exec + 1], "One bounded worker session (drains on SIGTERM, then exits)");
+  const workerAt = names.indexOf("One bounded worker session (drains on SIGTERM, then exits)");
+  // Between the launch's kickoff and the worker only the session's own (skipped on launch) step may sit.
+  assert(workerAt > exec && workerAt - exec <= 2 && names.slice(exec + 1, workerAt).every((n) => n.startsWith("Canary session:")), names.join(" | "));
   for (const s of worker.steps.filter((s) => (s.name ?? "").startsWith("Canary launch:"))) assertStringIncludes(s.if!, "inputs.canary_stage == 'launch'");
 });
 
@@ -138,13 +141,14 @@ Deno.test("stage script: the one target, the reviewed checksums and the exact ap
     const body = STAGE.slice(STAGE.indexOf(`  ${stage}\n`), STAGE.indexOf(";;", STAGE.indexOf(`  ${stage}\n`)));
     assertStringIncludes(body, "check_budget", stage);
   }
-  assertStringIncludes(STAGE, 'case "$STAGE" in migrate|launch) DB_WRITES=1 ;; *) DB_WRITES=0 ;; esac');
+  assertStringIncludes(STAGE, 'case "$STAGE" in migrate|launch|session-close) DB_WRITES=1 ;; *) DB_WRITES=0 ;; esac');
   assertStringIncludes(STAGE, '-c "set default_transaction_read_only = on"');
   // The database URL is only ever handed to psql; nothing echoes it.
   assert(!/echo[^\n]*\$TEST_DB_URL/.test(STAGE) && !/echo[^\n]*\$\{?APIFY_API_TOKEN/.test(STAGE) && !/echo[^\n]*\$\{?OPENAI_API_KEY/.test(STAGE));
   // Read-only stages write nothing: no psql -f of anything but the reviewed migration, the kickoff and read-only SQL.
   const files = [...STAGE.matchAll(/q (?:-F '\|' )?(?:-v [^ ]+ )*-f "?([^"\s]+)"?/g)].map((m) => m[1]);
-  assertEquals(files.sort(), ['$AUDIT/verify-checks.sql', '$MIGRATION', '$dir/kickoff.sql', "scripts/test-project/real-gpt/preflight.sql",
+  assertEquals([...new Set(files)].sort(), ['$AUDIT/kickoff/kickoff.sql', '$AUDIT/verify-checks.sql', '$MIGRATION', '$dir/kickoff.sql',
+    "scripts/test-project/canary/session-summary.sql", "scripts/test-project/real-gpt/preflight.sql",
     "scripts/test-project/smoke-reconciliation.sql"].sort());
 });
 

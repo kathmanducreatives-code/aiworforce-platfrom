@@ -139,6 +139,48 @@ Locally, `scripts/test-project/canary/local-rehearsal.sh` drives all five stages
 throwaway database and a stand-in Apify API (`tests/infra/fixtures/fake-apify.ts`). The workflow itself is pinned by
 `tests/infra/canaryWorkflow.test.ts`.
 
+## Fast Canary Mode: one approval, one bounded session
+
+`canary_stage=session` runs the whole canary in the guarded worker job, behind **one** `discovery-test` reviewer
+approval. The stages above remain as the fallback.
+
+**The contract.** Approval binds an exact contract, `docs/launch/proposals/canary-session-contract.json`, to an exact
+commit. The contract sets:
+
+* the mission, verbatim, with its allowed interpretation;
+* one company;
+* the three approved actors, each with at most one start, a unit limit and a per-start maximum;
+* the model bounds;
+* every spend figure, which must be within the existing $0.20 / $0.05 / $0.25 / $3 caps;
+* the four allowed kickoff statements, and no migration;
+* the project and workspace;
+* an expiry;
+* whether automatic execution is authorized.
+
+The approval phrase is `run canary session <the contract file's sha256> at <commit sha>`. A contract may only
+narrow the reviewed caps (A01–A09). The session's queue and plan ids derive from the contract's hash, so the queue's
+primary key refuses a second kickoff under the same contract. Each contract is single-use.
+
+**One run.** After the refusal step, the run checks out the code and restores the commit-scoped dependency cache. Then:
+
+1. It runs the Apify account check **concurrently** with the database checks: URL, identity, checksums, read limit 7,
+   contract unused, no conflicting work, permissions, preflight. All of these use read-only sessions.
+2. It runs the $3 budget gate, with every earlier prepare and session compile counted.
+3. It compiles the mission (≤ 2 Luna calls) and validates the result: K01–K20, then the contract S01–S17.
+4. **Only a plan that satisfies the contract exactly**, under a contract that authorizes automatic execution, goes
+   further. The run re-checks for conflicting work, switches to a writable session for the kickoff alone, executes it
+   and verifies the queue.
+5. The existing worker step runs at once, inside the 300 s window.
+6. After the worker, the run stops the authorization and reconciles each purchase against Apify's own terminal figure.
+   An uncertain purchase stays open and blocks every later paid operation. The run then writes one report.
+
+Anything outside the contract stops before the kickoff, with nothing executed, and needs a separate approval.
+
+**Watching it.** Dispatch, then `scripts/test-project/canary/watch-session.sh <run id>`. It waits through the reviewer
+gate, follows the run and prints the one report. The public artifact holds counts, decisions, receipts and spend.
+The companies and their evidence stay in the isolated database: run `scripts/test-project/canary/session-report.sql`
+against it.
+
 ## Reviewed commit
 
 * **Approved application code:** `ce67c1fc334715daae36715f54765093119f6f50`. It passed independent review and full CI.
