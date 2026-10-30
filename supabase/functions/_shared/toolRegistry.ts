@@ -836,6 +836,18 @@ function normalizeApifyPeopleItem(raw: any) {
   };
 }
 
+/**
+ * APIFY'S OWN ERROR CODE, SANITISED — evidence of WHY a start was refused.
+ *
+ * Only `error.type` (a short machine code such as `insufficient-permissions`),
+ * and only if it is that shape: Apify's message text can echo inputs or account
+ * details, so it is never kept. Anything else is null.
+ */
+export function apifyErrorType(body: unknown): string | null {
+  const t = (body as { error?: { type?: unknown } } | null)?.error?.type;
+  return typeof t === "string" && /^[a-z0-9][a-z0-9_-]{0,63}$/i.test(t) ? t.toLowerCase() : null;
+}
+
 async function apifyFetch(
   path: string,
   init: RequestInit & { timeoutMs?: number } = {},
@@ -1224,12 +1236,19 @@ async function execSourceWithApify(
         actor_id,
         source_type,
         status: startRes.status,
+        vendor_error_type: apifyErrorType(startRes.data),
+        // A refused START (POST) created no run. A refused resume GET says
+        // nothing about the run it was reading, so it is never a refusal.
+        start_refused: !resumeRunId,
         hint: "Apify rejected the request (401/403). Check that this token's account has access to / has rented the actor, and that APIFY_API_TOKEN is valid.",
       },
     };
   }
   if (startRes.status === 402) {
-    return { ok: false, unavailable: true, error: "apify_insufficient_credits", ...resumeFailure };
+    return {
+      ok: false, unavailable: true, error: "apify_insufficient_credits",
+      data: { ...resumeFailure.data, actor_id, status: 402, vendor_error_type: apifyErrorType(startRes.data), start_refused: !resumeRunId },
+    };
   }
   if (startRes.status === 400) {
     // Malformed actor input. Log the SHAPE only (keys), never values or the
@@ -1251,6 +1270,9 @@ async function execSourceWithApify(
         source_type,
         payload_keys: Object.keys(actorInput),
         apify_message: apifyMessage,
+        status: 400,
+        vendor_error_type: apifyErrorType(startRes.data),
+        start_refused: !resumeRunId,
         hint: "Apify rejected the actor input (400). The input payload shape does not match the actor's schema.",
       },
     };
@@ -2362,7 +2384,16 @@ function outcomeFromToolResult(
       run: (d.provider_usage ?? null) as ProviderRunUsage | null,
       started: runId !== null,
     }),
-    metadata: { resumable: d.resumable ?? null, status: d.status ?? null },
+    metadata: {
+      resumable: d.resumable ?? null, status: d.status ?? null,
+      // Evidence that a START was definitely refused (Apify 400–403 on the
+      // POST): no run exists. Recorded only when present, so every other row
+      // is unchanged. Reconciliation may record NO_RUN only with this AND
+      // Apify's own run list showing no run (scripts/test-project/canary).
+      ...(d.start_refused === true && typeof d.status === "number" && d.status >= 400 && d.status <= 403
+        ? { start_refused: true, vendor_error_type: typeof d.vendor_error_type === "string" ? apifyErrorType({ error: { type: d.vendor_error_type } }) : null }
+        : {}),
+    },
   };
 }
 

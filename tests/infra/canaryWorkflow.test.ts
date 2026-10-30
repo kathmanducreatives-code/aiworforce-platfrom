@@ -38,11 +38,11 @@ const SHA = "0123456789abcdef0123456789abcdef01234567";
 Deno.test("canary: one workflow — `none` (the default) is the worker; the other stages are one Environment-guarded job", () => {
   const i = wf.on.workflow_dispatch.inputs;
   assertEquals(i.canary_stage.default, "none");
-  assertEquals(i.canary_stage.options, ["none", "verify", "migrate", "prepare", "launch", "reconcile", "session"]);
+  assertEquals(i.canary_stage.options, ["none", "verify", "migrate", "prepare", "launch", "reconcile", "session", "evidence"]);
   assertEquals(Object.keys(wf.jobs).sort(), ["canary", "worker"]);
   // `session` runs in the worker job (its kickoff must precede the worker step), never the canary job.
-  assertStringIncludes(worker.if!, `!contains(fromJSON('["verify","migrate","prepare","reconcile"]'), inputs.canary_stage)`);
-  assertStringIncludes(canary.if!, `contains(fromJSON('["verify","migrate","prepare","reconcile"]'), inputs.canary_stage)`);
+  assertStringIncludes(worker.if!, `!contains(fromJSON('["verify","migrate","prepare","reconcile","evidence"]'), inputs.canary_stage)`);
+  assertStringIncludes(canary.if!, `contains(fromJSON('["verify","migrate","prepare","reconcile","evidence"]'), inputs.canary_stage)`);
   assertEquals(canary.environment, "discovery-test", "the same Environment and required reviewer");
   assertEquals(worker.permissions, { contents: "read", actions: "read" }, "actions: read only, to download the prepare artifact");
   assertEquals(canary.permissions, { contents: "read", actions: "read" }, "actions: read only, to count earlier prepare runs");
@@ -62,7 +62,7 @@ const CANARY_ENV = { CONFIRM_REF: "tlvnfrxzjhsjgdofwehb", TEST_PROJECT_REF: "tlv
 Deno.test("canary job guard, executed: the canary project, workspace and commit only; production refused before checkout", async () => {
   assert(canary.steps[0].name!.startsWith("Refuse"), "the guard is the first step");
   assertEquals((await guard(canary, CANARY_ENV)).code, 0);
-  for (const stage of ["verify", "migrate", "prepare", "reconcile"]) assertEquals((await guard(canary, { ...CANARY_ENV, CANARY_STAGE: stage })).code, 0);
+  for (const stage of ["verify", "migrate", "prepare", "reconcile", "evidence"]) assertEquals((await guard(canary, { ...CANARY_ENV, CANARY_STAGE: stage })).code, 0);
   const refused: Array<[Record<string, string>, string]> = [
     [{ CONFIRM_REF: "ohsdatpvfdjdemstoiuj", TEST_PROJECT_REF: "ohsdatpvfdjdemstoiuj", SUPABASE_URL: "https://ohsdatpvfdjdemstoiuj.supabase.co" }, "not a non-production project"],
     [{ CONFIRM_REF: "abcdefghijklmnopqrst", TEST_PROJECT_REF: "abcdefghijklmnopqrst", SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co" }, "tlvnfrxzjhsjgdofwehb only"],

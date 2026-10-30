@@ -40,7 +40,7 @@
 # the scripts that send them to their own vendor.
 set -euo pipefail
 
-STAGE="${1:?usage: canary-stage.sh verify|migrate|prepare|launch|reconcile|session|session-close}"
+STAGE="${1:?usage: canary-stage.sh verify|migrate|prepare|launch|reconcile|session|session-close|evidence}"
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$ROOT"
 
@@ -365,6 +365,74 @@ verify_queue() {
     || stop "queue verification failed: $r"
 }
 
+# ── NO_RUN: a purchase with no run id, decided only on two independent records ─
+#
+# A start the gate admitted but Apify REFUSED (the first live canary, run
+# 41038537870: HTTP 403) leaves a reservation with no run to read a receipt
+# from. It is reconciled as NO_RUN (vendor figure 0) only when BOTH hold:
+#   1. the worker's own ledger holds exactly ONE start for that task and actor,
+#      near the admission, recorded as a definite refusal (Apify 400–403 on the
+#      POST, no run id) — never a dropped connection, a 5xx or a resume;
+#   2. Apify's own run list for that actor, complete over the window around the
+#      admission, shows NO run.
+# Anything else stays open and blocks every later paid operation.
+# Writes $AUDIT/no-run.txt (one line per open purchase without a run id:
+# key|actor|verdict|vendor_ref|detail) and $AUDIT/no-run.sql (the statements).
+no_run_verdicts() {
+  local scope="$1"   # a queue id, or "all"
+  : > "$AUDIT/no-run.txt"; : > "$AUDIT/no-run.sql"
+  qp_ro "select o.operation_key, o.actor, o.task_id,
+      to_char(o.admitted_at at time zone 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'),
+      to_char((o.admitted_at - interval '120 seconds') at time zone 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'),
+      to_char((o.admitted_at + interval '300 seconds') at time zone 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'),
+      a.queue_id
+    from public.discovery_smoke_operations o join public.discovery_smoke_authorizations a on a.id = o.authorization_id
+   where o.kind = 'provider' and o.provider_run_id is null and (:'scope' = 'all' or a.queue_id::text = :'scope')
+     and not exists (select 1 from public.discovery_smoke_reconciliations r where r.authorization_id = o.authorization_id
+                       and r.operation_key = o.operation_key and r.vendor_microusd <= o.committed_microusd)
+   order by o.admitted_at" -F '|' -v scope="$scope" > "$AUDIT/no-run-candidates.txt"
+  [ -s "$AUDIT/no-run-candidates.txt" ] || return 0
+  local specs="" key actor task admitted from to qid cap
+  while IFS='|' read -r key actor task admitted from to qid; do
+    specs="${specs:+$specs,}${actor#apify:}@$from@$to"
+  done < "$AUDIT/no-run-candidates.txt"
+  "$DENO" run --no-prompt --allow-net="$APIFY_NET" --allow-env=APIFY_API_TOKEN,APIFY_API_BASE --allow-read=docs/launch/proposals \
+    --allow-write="$AUDIT" scripts/test-project/apify-account-check.ts --no-run-evidence "$specs" --json "$AUDIT/no-run-evidence.json" \
+    > "$AUDIT/no-run-evidence.txt" 2>&1 || true
+  cat "$AUDIT/no-run-evidence.txt"
+  while IFS='|' read -r key actor task admitted from to qid; do
+    case "$actor" in
+      apify:harvestapi~linkedin-job-search) cap=apify_linkedin_job_search ;;
+      apify:harvestapi~linkedin-company) cap=apify_linkedin_company_details ;;
+      apify:atomus~linkedin-company-scraper) cap=apify_funding_atomus ;;
+      *) echo "$key|$actor|OPEN|-|not a canary actor" >> "$AUDIT/no-run.txt"; continue ;;
+    esac
+    # 1. the worker's own record of the start
+    local led
+    led="$(qp_ro "select count(*), coalesce(max(c.metadata->>'status'), ''), coalesce(max(c.metadata->>'vendor_error_type'), ''),
+        bool_and(c.provider_run_id is null and c.status = 'failed'), coalesce(bool_or(c.metadata->>'start_refused' = 'true'), false)
+      from public.lead_execution_calls c
+      where c.task_id = :'task'::uuid and c.record_kind = 'provider_call' and c.logical_call_key like :'task' || ':' || :'cap' || ':%'
+        and c.started_at between :'admitted'::timestamptz - interval '60 seconds' and :'admitted'::timestamptz + interval '60 seconds'" \
+      -F '|' -v task="$task" -v cap="$cap" -v admitted="$admitted")"
+    local n status vtype allnorun
+    IFS='|' read -r n status vtype allnorun _ <<< "$led"
+    # 2. Apify's own run list
+    local ev complete inwin
+    ev="$(jq -c --arg a "${actor#apify:}" --arg f "$from" '.evidence[]? | select(.actor == $a and .from == ($f | sub("Z$"; ".000Z")))' "$AUDIT/no-run-evidence.json" 2>/dev/null | head -1)"
+    [ -n "$ev" ] || ev=null
+    complete="$(jq -r '.complete // false' <<< "$ev" 2>/dev/null || echo false)"
+    inwin="$(jq -r '(.runs_in_window // [1]) | length' <<< "$ev" 2>/dev/null || echo 1)"
+    if [ "$n" = "1" ] && [[ "$status" =~ ^40[0-3]$ ]] && [ "$allnorun" = "t" ] && [ "$complete" = "true" ] && [ "$inwin" = "0" ]; then
+      local ref="Apify run list for ${actor#apify:} ${from}..${to}: no run (complete listing); start refused HTTP ${status}${vtype:+ ($vtype)}"
+      echo "$key|$actor|NO_RUN|$ref|ledger: 1 refused start, HTTP $status; Apify: 0 runs in window" >> "$AUDIT/no-run.txt"
+      printf "select public.reconcile_discovery_smoke_operation('%s', '%s', 0, '%s', 'NO_RUN');\n" "$qid" "$key" "${ref//\'/\'\'}" >> "$AUDIT/no-run.sql"
+    else
+      echo "$key|$actor|OPEN|-|ledger rows $n, HTTP '${status:-none}', refused-without-run $allnorun; Apify listing complete $complete, runs in window $inwin" >> "$AUDIT/no-run.txt"
+    fi
+  done < "$AUDIT/no-run-candidates.txt"
+}
+
 # ── stages ────────────────────────────────────────────────────────────────────
 note "canary stage: $STAGE at $EXPECTED_SHA on $REF ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
 check_inputs
@@ -594,6 +662,16 @@ case "$STAGE" in
         fi
       done < "$AUDIT/purchases.txt"
     fi
+    # Purchases with no run id: NO_RUN only on the two independent records.
+    no_run_verdicts "$qid"
+    while IFS='|' read -r key actor verdict ref detail; do
+      if [ "$verdict" = "NO_RUN" ]; then
+        qp "select public.reconcile_discovery_smoke_operation(:'qid'::uuid, :'key', 0, :'ref', 'NO_RUN')" \
+          -v qid="$qid" -v key="$key" -v ref="$ref" > /dev/null && note "RECONCILED $actor as NO_RUN: $detail"
+      else
+        note "OPEN  $actor: $detail"
+      fi
+    done < "$AUDIT/no-run.txt"
     # Open liability, by the gate's own rule: unreconciled, or reconciled above its maximum.
     open="$(qp_ro "select count(*) from public.discovery_smoke_operations o join public.discovery_smoke_authorizations a on a.id = o.authorization_id
       where a.queue_id = :'qid'::uuid and o.kind = 'provider' and not exists (select 1 from public.discovery_smoke_reconciliations r
@@ -602,6 +680,25 @@ case "$STAGE" in
       || fail "$open provider purchase(s) UNCERTAIN or over their cap: every later paid operation is blocked until an administrator reconciles them"
     q_ro -F '|' -v queue_id="$qid" -f scripts/test-project/canary/session-summary.sql > "$AUDIT/session-summary.txt"
     cat "$AUDIT/session-summary.txt"
+    ;;
+
+  evidence)
+    # READ-ONLY: every open purchase without a run id, with the worker's record
+    # of its start and Apify's own run list, and the reconciliation each would
+    # take — printed for review, never executed here.
+    has_db || stop "TEST_DB_URL unusable"
+    check_identity
+    [ "$(q_ro -c "show default_transaction_read_only")" = "on" ] \
+      && pass "this $STAGE session is read-only (default_transaction_read_only)" || stop "this $STAGE session is not read-only"
+    start_apify || true
+    finish_apify
+    no_run_verdicts all
+    if [ -s "$AUDIT/no-run.txt" ]; then
+      while IFS='|' read -r key actor verdict ref detail; do note "$verdict  $actor ($key): $detail"; done < "$AUDIT/no-run.txt"
+      [ -s "$AUDIT/no-run.sql" ] && { note "PROPOSED (not executed):"; tee -a "$SUMMARY" < "$AUDIT/no-run.sql"; }
+    else
+      note "INFO  no open purchase without a run id"
+    fi
     ;;
 
   *) stop "unknown stage $STAGE" ;;

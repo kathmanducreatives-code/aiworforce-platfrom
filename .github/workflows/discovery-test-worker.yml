@@ -73,7 +73,7 @@ on:
         required: true
         type: string
       canary_stage:
-        description: "none = the worker as always. Canary: verify (read-only) | migrate | prepare (paid compile) | launch (kickoff + paid run) | reconcile (read-only) | session (one approved contract, end to end)"
+        description: "none = the worker as always. Canary: verify (read-only) | migrate | prepare (paid compile) | launch (kickoff + paid run) | reconcile (read-only) | session (one approved contract, end to end) | evidence (read-only: proposes NO_RUN reconciliations, writes nothing)"
         required: true
         default: none
         type: choice
@@ -85,6 +85,7 @@ on:
           - launch
           - reconcile
           - session
+          - evidence
       canary_approval:
         description: "Canary stages that write or spend: the exact approval phrase the stage names (see the runbook)"
         required: false
@@ -123,7 +124,7 @@ jobs:
   worker:
     # The worker, as always — and the canary's launch, whose kickoff must run
     # seconds before the worker step (the authorization's window is 300 s).
-    if: ${{ !contains(fromJSON('["verify","migrate","prepare","reconcile"]'), inputs.canary_stage) }}
+    if: ${{ !contains(fromJSON('["verify","migrate","prepare","reconcile","evidence"]'), inputs.canary_stage) }}
     runs-on: ubuntu-latest
     # actions: read lets launch download the prepare run's kickoff artifact.
     permissions:
@@ -394,7 +395,7 @@ jobs:
 
   # ── THE CANARY'S OTHER STAGES: one approved operation each, no worker ───────
   canary:
-    if: ${{ contains(fromJSON('["verify","migrate","prepare","reconcile"]'), inputs.canary_stage) }}
+    if: ${{ contains(fromJSON('["verify","migrate","prepare","reconcile","evidence"]'), inputs.canary_stage) }}
     runs-on: ubuntu-latest
     environment: discovery-test
     timeout-minutes: 20
@@ -432,7 +433,7 @@ jobs:
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$EXPECTED_SHA" = "$GITHUB_SHA" ] \
             || { echo "refusing: this run's commit $GITHUB_SHA is not the approved expected_sha" >&2; exit 1; }
           case "$CANARY_STAGE" in
-            verify|migrate|prepare|reconcile) ;;
+            verify|migrate|prepare|reconcile|evidence) ;;
             *) echo "refusing: unknown canary stage" >&2; exit 1 ;;
           esac
 

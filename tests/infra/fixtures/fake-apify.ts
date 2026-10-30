@@ -4,7 +4,11 @@
 // request without the expected bearer token, so the rehearsal proves the token
 // is sent — and it never echoes one.
 //
-//   FAKE_APIFY_TOKEN=<t> FAKE_APIFY_PRICE_BUMP=<usd added per unit, optional> deno run --allow-net=127.0.0.1 --allow-env tests/infra/fixtures/fake-apify.ts <port>
+// Run lists (`/v2/acts/{actor}/runs`) come from FAKE_APIFY_RUN_LIST, a JSON file
+// `{ "<actor>": [{ id, startedAt, status }] }` read on every request (none: empty).
+//
+//   FAKE_APIFY_TOKEN=<t> FAKE_APIFY_PRICE_BUMP=<usd added per unit, optional> FAKE_APIFY_RUN_LIST=<file, optional> \
+//     deno run --allow-net=127.0.0.1 --allow-env --allow-read tests/infra/fixtures/fake-apify.ts <port>
 
 const port = Number(Deno.args[0] ?? 8787);
 const token = Deno.env.get("FAKE_APIFY_TOKEN") ?? "";
@@ -14,6 +18,7 @@ const ppe = (start: number, unitKey: string, unit: number) => ({
     "actor-start": { eventTitle: "Actor start", eventPriceUsd: start },
     [unitKey]: { eventTitle: unitKey, eventPriceUsd: unit + bump },
   } } }],
+  actorPermissionLevel: "LIMITED_PERMISSIONS",
 });
 const ACTS: Record<string, Record<string, unknown>> = {
   "harvestapi~linkedin-job-search": { id: "act-jobs", username: "harvestapi", name: "linkedin-job-search", ...ppe(0.001, "job", 0.001) },
@@ -30,7 +35,18 @@ const RUNS: Record<string, Record<string, unknown>> = {
 
 Deno.serve({ port, hostname: "127.0.0.1", onListen: () => console.log(`fake apify on ${port}`) }, (req) => {
   if (req.headers.get("authorization") !== `Bearer ${token}`) return Response.json({ error: { type: "token-not-valid" } }, { status: 401 });
-  const path = new URL(req.url).pathname;
+  const url = new URL(req.url), path = url.pathname;
+  const runList = path.match(/^\/v2\/acts\/([^/]+)\/runs$/);
+  if (runList) {
+    const actor = decodeURIComponent(runList[1]);
+    if (!ACTS[actor]) return Response.json({ error: { type: "record-not-found" } }, { status: 404 });
+    const file = Deno.env.get("FAKE_APIFY_RUN_LIST");
+    let all: Record<string, unknown>[] = [];
+    try { all = file ? (JSON.parse(Deno.readTextFileSync(file))[actor] ?? []) : []; } catch { all = []; }
+    all = [...all].sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
+    const offset = Number(url.searchParams.get("offset") ?? 0), limit = Number(url.searchParams.get("limit") ?? 1000);
+    return Response.json({ data: { total: all.length, offset, limit, count: Math.min(limit, Math.max(0, all.length - offset)), items: all.slice(offset, offset + limit) } });
+  }
   const data = path === "/v2/users/me" ? { id: "user-canary", username: "canaryaccount", plan: { id: "STARTER", monthlyUsageCreditsUsd: 29 } }
     : path === "/v2/users/me/limits" ? { monthlyUsageCycle: { startAt: "2026-10-01T00:00:00Z", endAt: "2026-10-31T23:59:59Z" },
       limits: { maxMonthlyUsageUsd: Number(Deno.env.get("FAKE_APIFY_LIMIT") ?? 19) }, current: { monthlyUsageUsd: Number(Deno.env.get("FAKE_APIFY_USAGE") ?? 0.00013) } }

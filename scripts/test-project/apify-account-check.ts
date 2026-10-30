@@ -29,7 +29,7 @@ import { parseArgs } from "https://deno.land/std@0.224.0/cli/parse_args.ts";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const args = parseArgs(Deno.args, { string: ["expect-username", "runs", "json"], boolean: ["mask-identity"] });
+const args = parseArgs(Deno.args, { string: ["expect-username", "runs", "json", "no-run-evidence"], boolean: ["mask-identity"] });
 /** `--mask-identity` (the workflow; its logs and artifacts are public): the username is shown as a+++z (n chars). */
 const shown = (u: string) => !args["mask-identity"] || u.length < 3 ? u : `${u[0]}${"*".repeat(u.length - 2)}${u.at(-1)} (${u.length} chars)`;
 const BASE = (Deno.env.get("APIFY_API_BASE") ?? "https://api.apify.com").replace(/\/$/, "");
@@ -63,6 +63,55 @@ const record = (check: string, result: Result, detail: string) => results.push({
 const allPass = () => results.every((r) => r.result === "PASS" || r.result === "INFO");
 /** The non-secret audit record (`--json`). */
 const audit: Json = { observed_at: new Date().toISOString(), account: {}, actors: [] as Json[] };
+
+// ── NO-RUN EVIDENCE: Apify's own run list for an actor in a time window ──────
+// `--no-run-evidence <actor>@<fromISO>@<toISO>[,…]`. Read-only. For each actor,
+// pages Apify's run list for THIS account (newest first) until it reaches runs
+// older than the window; `complete` is true only when the listing provably
+// covers the whole window. Also states the actor's permission level, which is
+// what a 403 on a start most often turns on. No message text is kept.
+if (args["no-run-evidence"]) {
+  const out: Json[] = [];
+  let ok = true;
+  for (const spec of String(args["no-run-evidence"]).split(",").filter(Boolean)) {
+    const [actor, fromIso, toIso] = spec.split("@");
+    const from = Date.parse(fromIso), to = Date.parse(toIso);
+    if (!/^[a-z0-9_.-]+~[a-z0-9_.-]+$/i.test(actor ?? "") || !Number.isFinite(from) || !Number.isFinite(to) || from >= to) {
+      console.log(`FAIL   evidence ${spec}: not <actor>@<fromISO>@<toISO>`); ok = false; continue;
+    }
+    try {
+      const act = await get(`/acts/${actor}`);
+      const inWindow: Json[] = [];
+      let offset = 0, listed = 0, complete = false;
+      for (let page = 0; page < 20 && !complete; page++) {
+        const r = await get(`/acts/${actor}/runs?desc=1&limit=100&offset=${offset}`);
+        const items = (r.items ?? []) as Json[];
+        listed += items.length;
+        for (const it of items) {
+          const t = Date.parse(it.startedAt ?? "");
+          if (Number.isFinite(t) && t >= from && t <= to) {
+            inWindow.push({ id: it.id, status: it.status, startedAt: it.startedAt, usage_total_usd: it.usageTotalUsd ?? null });
+          }
+        }
+        const oldest = Date.parse(items.at(-1)?.startedAt ?? "");
+        if (items.length < 100 || (Number.isFinite(oldest) && oldest < from)) complete = true;
+        offset += items.length;
+      }
+      const rec = { actor, from: new Date(from).toISOString(), to: new Date(to).toISOString(), listed, complete,
+        runs_in_window: inWindow, permission_level: act.actorPermissionLevel ?? null, deprecated: act.isDeprecated ?? false };
+      out.push(rec);
+      console.log(`${complete ? "PASS  " : "FAIL  "} evidence ${actor} ${rec.from} → ${rec.to}: ${inWindow.length} run(s) in the window ` +
+        `(${listed} listed, listing ${complete ? "complete" : "INCOMPLETE"}; actor permission level ${rec.permission_level ?? "not stated"})`);
+      ok &&= complete;
+    } catch (e) {
+      ok = false;
+      out.push({ actor, error: (e as Error).message });
+      console.log(`FAIL   evidence ${actor}: ${(e as Error).message}`);
+    }
+  }
+  if (args.json) Deno.writeTextFileSync(String(args.json), JSON.stringify({ ok, evidence: out }, null, 2) + "\n");
+  Deno.exit(ok ? 0 : 1);
+}
 
 // ── reconciliation mode: what Apify charged for each canary run ──────────────
 if (args.runs) {
