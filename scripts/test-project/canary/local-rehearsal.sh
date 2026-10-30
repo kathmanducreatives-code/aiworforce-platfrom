@@ -275,30 +275,52 @@ expect session-close-clean "every provider purchase reconciled"
 # Each purchase below has no run id. NO_RUN needs BOTH the worker's ledger
 # showing exactly one refused start (400–403, no run) AND Apify's complete run
 # list showing no run in the window. Every other shape stays open.
-nr_purchase() {   # nr_purchase <key> <actor> <template> <committed> → task id; admitted now
+nr_purchase() {   # nr_purchase <key> <actor> <template> <committed> [admitted at, default 10 minutes ago] → task id
   local t; t="$(cat /proc/sys/kernel/random/uuid)"
-  psql "$url" -XAtq -v ON_ERROR_STOP=1 -c "insert into public.discovery_smoke_operations (authorization_id, operation_key, task_id, generation, kind, actor, template_id, payload_hash, committed_microusd)
-    values ('$s2auth', '$1', '$t', 1, 'provider', '$2', '$3', encode(sha256(convert_to('$1', 'utf8')), 'hex'), $4)" > /dev/null
+  psql "$url" -XAtq -v ON_ERROR_STOP=1 -c "insert into public.discovery_smoke_operations (authorization_id, operation_key, task_id, generation, kind, actor, template_id, payload_hash, committed_microusd, admitted_at)
+    values ('$s2auth', '$1', '$t', 1, 'provider', '$2', '$3', encode(sha256(convert_to('$1', 'utf8')), 'hex'), $4, ${5:-now() - interval '10 minutes'})" > /dev/null
   echo "$t"
 }
-nr_ledger() {     # nr_ledger <task> <capability> <status> <metadata json>
-  psql "$url" -XAtq -v ON_ERROR_STOP=1 -c "insert into public.lead_execution_calls (workspace_id, task_id, stage, reason, provider_id, logical_call_key, status, provider_run_id, metadata)
-    values ('$WS', '$1', 'discovery', 'canary', 'apify', '$1:$2:' || gen_random_uuid(), '$3', null, '$4'::jsonb)" > /dev/null
+nr_ledger() {     # nr_ledger <task> <capability> <status> <metadata json> [started at, default 10 minutes ago]
+  psql "$url" -XAtq -v ON_ERROR_STOP=1 -c "insert into public.lead_execution_calls (workspace_id, task_id, stage, reason, provider_id, logical_call_key, status, provider_run_id, metadata, started_at)
+    values ('$WS', '$1', 'discovery', 'canary', 'apify', '$1:$2:' || gen_random_uuid(), '$3', null, '$4'::jsonb, ${5:-now() - interval '10 minutes'})" > /dev/null
 }
 s2auth="$(psql "$url" -XAt -c "select id from public.discovery_smoke_authorizations where queue_id = '$s2'")"
 t1="$(nr_purchase nr-refused apify:harvestapi~linkedin-job-search jobs 4000)"
 nr_ledger "$t1" apify_linkedin_job_search failed '{"status":403,"start_refused":true,"vendor_error_type":"insufficient-permissions"}'
 t2="$(nr_purchase nr-run-exists apify:harvestapi~linkedin-company details 4050)"
-nr_ledger "$t2" apify_linkedin_company_details failed '{"status":403}'
+nr_ledger "$t2" apify_linkedin_company_details failed '{"status":403,"start_refused":true}'
 t3="$(nr_purchase nr-ambiguous apify:atomus~linkedin-company-scraper atomus 10550)"
 nr_ledger "$t3" apify_funding_atomus failed '{"status":0}'
 nr_purchase nr-no-ledger apify:harvestapi~linkedin-job-search jobs 4000 > /dev/null
-now="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+# A 403 without the start_refused flag, written after the flag existed: not proof of a refused START.
+t4="$(nr_purchase nr-unflagged apify:atomus~linkedin-company-scraper atomus 10550)"
+nr_ledger "$t4" apify_funding_atomus failed '{"status":403}'
+# The first live session's shape: a 403 row from before the flag existed (named as LEGACY).
+t5="$(nr_purchase nr-legacy apify:harvestapi~linkedin-company details 4050 "'2026-10-30T10:20:28.879Z'")"
+nr_ledger "$t5" apify_linkedin_company_details failed '{"status":403}' "'2026-10-30T10:20:27.962Z'"
+# Admitted just now: the window has not settled, so the listing is never complete.
+t6="$(nr_purchase nr-unsettled apify:harvestapi~linkedin-job-search jobs 4000 "now()")"
+nr_ledger "$t6" apify_linkedin_job_search failed '{"status":403,"start_refused":true}' "now()"
+ago="$(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S.000Z)"
 # Apify lists a run for the company-details actor inside the window (the 403 was not the whole story).
-printf '{"harvestapi~linkedin-company":[{"id":"run-surprise","startedAt":"%s","status":"SUCCEEDED"}]}\n' "$now" > "$tmp/run-list.json"
+printf '{"harvestapi~linkedin-company":[{"id":"run-surprise","startedAt":"%s","status":"SUCCEEDED"}]}\n' "$ago" > "$tmp/run-list.json"
+# Bound to the account that made the start: another account's empty list proves nothing.
+run evidence-other-account 0 evidence APIFY_USERNAME=oldaccount
+expect evidence-other-account "INCOMPLETE: not the expected account"
+! grep -q "^NO_RUN\|PROPOSED" "$tmp/evidence-other-account/log" || { echo "FAIL evidence-other-account: proposed a NO_RUN"; exit 1; }
+run evidence-no-username 1 evidence
+expect evidence-no-username "evidence needs apify_username"
 # Read-only: proposes, writes nothing.
 run evidence 0 evidence APIFY_USERNAME=canaryaccount
 expect evidence "this evidence session is read-only"
+expect evidence "evidence account: username"
+expect evidence "OPEN  apify:atomus~linkedin-company-scraper (nr-unflagged)"
+expect evidence "flagged 'no'"
+expect evidence "NO_RUN  apify:harvestapi~linkedin-company (nr-legacy)"
+expect evidence "LEGACY row: no start_refused flag"
+expect evidence "OPEN  apify:harvestapi~linkedin-job-search (nr-unsettled)"
+expect evidence "the window has not settled"
 expect evidence "NO_RUN  apify:harvestapi~linkedin-job-search (nr-refused): ledger: 1 refused start, HTTP 403"
 expect evidence "OPEN  apify:harvestapi~linkedin-company (nr-run-exists)"
 expect evidence "runs in window 1"
@@ -309,24 +331,25 @@ expect evidence "ledger rows 0"
 expect evidence "PROPOSED (not executed):"
 expect evidence "select public.reconcile_discovery_smoke_operation('$s2', 'nr-refused', 0, 'Apify run list for harvestapi~linkedin-job-search"
 expect evidence "permission level LIMITED_PERMISSIONS"
-[ "$(grep -c "reconcile_discovery_smoke_operation" "$tmp/evidence/audit/no-run.sql")" = "1" ] || { echo "FAIL evidence: exactly one NO_RUN proposal"; exit 1; }
+[ "$(grep -c "reconcile_discovery_smoke_operation" "$tmp/evidence/audit/no-run.sql")" = "2" ] || { echo "FAIL evidence: exactly two NO_RUN proposals"; exit 1; }
 [ "$(psql "$url" -XAt -c "select count(*) from public.discovery_smoke_reconciliations where operation_key like 'nr-%'")" = "0" ] \
   || { echo "FAIL evidence: the read-only stage wrote a reconciliation"; exit 1; }
 # session-close applies only the NO_RUN that both records support.
-run session-close-no-run 1 session-close CANARY_QUEUE_ID="$s2"
+run session-close-no-run 1 session-close CANARY_QUEUE_ID="$s2" APIFY_USERNAME=canaryaccount
 expect session-close-no-run "RECONCILED apify:harvestapi~linkedin-job-search as NO_RUN"
 expect session-close-no-run "OPEN  apify:harvestapi~linkedin-company"
-expect session-close-no-run "3 provider purchase(s) UNCERTAIN or over their cap"
-[ "$(psql "$url" -XAt -c "select string_agg(operation_key || '=' || vendor_status || '/' || vendor_microusd, ',') from public.discovery_smoke_reconciliations where operation_key like 'nr-%'")" = "nr-refused=NO_RUN/0" ] \
-  || { echo "FAIL session-close-no-run: only nr-refused may be reconciled, as NO_RUN at 0"; exit 1; }
+expect session-close-no-run "RECONCILED apify:harvestapi~linkedin-company as NO_RUN"
+expect session-close-no-run "5 provider purchase(s) UNCERTAIN or over their cap"
+[ "$(psql "$url" -XAt -c "select string_agg(operation_key || '=' || vendor_status || '/' || vendor_microusd, ',' order by operation_key) from public.discovery_smoke_reconciliations where operation_key like 'nr-%'")" = "nr-legacy=NO_RUN/0,nr-refused=NO_RUN/0" ] \
+  || { echo "FAIL session-close-no-run: only nr-refused and nr-legacy may be reconciled, as NO_RUN at 0"; exit 1; }
 # An incomplete Apify listing (more than 20 pages of newer runs) is not proof of absence.
 psql "$url" -XAtq -c "delete from public.discovery_smoke_reconciliations where operation_key = 'nr-refused'" > /dev/null
-jq -n --arg now "$now" '{"harvestapi~linkedin-job-search": [range(0; 2001) | {id: "r\(.)", startedAt: "2099-01-01T00:00:00.000Z", status: "SUCCEEDED"}]}' > "$tmp/run-list.json"
+jq -n '{"harvestapi~linkedin-job-search": [range(0; 2001) | {id: "r\(.)", startedAt: "2099-01-01T00:00:00.000Z", status: "SUCCEEDED"}]}' > "$tmp/run-list.json"
 run evidence-incomplete-listing 0 evidence APIFY_USERNAME=canaryaccount
 expect evidence-incomplete-listing "listing INCOMPLETE"
 expect evidence-incomplete-listing "OPEN  apify:harvestapi~linkedin-job-search (nr-refused)"
 psql "$url" -XAtq -c "delete from public.discovery_smoke_operations where operation_key like 'nr-%'" \
-  -c "delete from public.lead_execution_calls where task_id in ('$t1', '$t2', '$t3')" > /dev/null
+  -c "delete from public.lead_execution_calls where task_id in ('$t1', '$t2', '$t3', '$t4', '$t5', '$t6')" > /dev/null
 rm -f "$tmp/run-list.json"
 
 # ── a price above the approved maximum blocks every paid stage ──

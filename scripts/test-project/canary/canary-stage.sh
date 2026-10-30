@@ -378,9 +378,13 @@ verify_queue() {
 # Anything else stays open and blocks every later paid operation.
 # Writes $AUDIT/no-run.txt (one line per open purchase without a run id:
 # key|actor|verdict|vendor_ref|detail) and $AUDIT/no-run.sql (the statements).
+# Ledger rows from before start_refused existed qualify only with no flag at all
+# and only if written before this instant: the first live session (run 41038537870,
+# its one start at 10:20:27Z) and nothing after it.
+NO_RUN_LEGACY_BEFORE="2026-10-30T10:30:00Z"
 no_run_verdicts() {
   local scope="$1"   # a queue id, or "all"
-  : > "$AUDIT/no-run.txt"; : > "$AUDIT/no-run.sql"
+  : > "$AUDIT/no-run.txt"; : > "$AUDIT/no-run.sql"; : > "$AUDIT/no-run-evidence.json"
   qp_ro "select o.operation_key, o.actor, o.task_id,
       to_char(o.admitted_at at time zone 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'),
       to_char((o.admitted_at - interval '120 seconds') at time zone 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'),
@@ -397,7 +401,7 @@ no_run_verdicts() {
     specs="${specs:+$specs,}${actor#apify:}@$from@$to"
   done < "$AUDIT/no-run-candidates.txt"
   "$DENO" run --no-prompt --allow-net="$APIFY_NET" --allow-env=APIFY_API_TOKEN,APIFY_API_BASE --allow-read=docs/launch/proposals \
-    --allow-write="$AUDIT" scripts/test-project/apify-account-check.ts --no-run-evidence "$specs" --json "$AUDIT/no-run-evidence.json" \
+    --allow-write="$AUDIT" scripts/test-project/apify-account-check.ts --mask-identity --expect-username "${APIFY_USERNAME:-}" --no-run-evidence "$specs" --json "$AUDIT/no-run-evidence.json" \
     > "$AUDIT/no-run-evidence.txt" 2>&1 || true
   cat "$AUDIT/no-run-evidence.txt"
   while IFS='|' read -r key actor task admitted from to qid; do
@@ -410,25 +414,32 @@ no_run_verdicts() {
     # 1. the worker's own record of the start
     local led
     led="$(qp_ro "select count(*), coalesce(max(c.metadata->>'status'), ''), coalesce(max(c.metadata->>'vendor_error_type'), ''),
-        bool_and(c.provider_run_id is null and c.status = 'failed'), coalesce(bool_or(c.metadata->>'start_refused' = 'true'), false)
+        bool_and(c.provider_run_id is null and c.status = 'failed'), coalesce(bool_and(c.metadata->>'start_refused' = 'true'), false),
+        coalesce(bool_and(not (c.metadata ? 'start_refused') and c.started_at < :'legacy'::timestamptz), false)
       from public.lead_execution_calls c
       where c.task_id = :'task'::uuid and c.record_kind = 'provider_call' and c.logical_call_key like :'task' || ':' || :'cap' || ':%'
         and c.started_at between :'admitted'::timestamptz - interval '60 seconds' and :'admitted'::timestamptz + interval '60 seconds'" \
-      -F '|' -v task="$task" -v cap="$cap" -v admitted="$admitted")"
-    local n status vtype allnorun
-    IFS='|' read -r n status vtype allnorun _ <<< "$led"
+      -F '|' -v task="$task" -v cap="$cap" -v admitted="$admitted" -v legacy="$NO_RUN_LEGACY_BEFORE")"
+    local n status vtype allnorun refused legacy
+    IFS='|' read -r n status vtype allnorun refused legacy <<< "$led"
+    [[ "$vtype" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || vtype=""
+    # The start must be flagged a refused start. One exception, named in every
+    # verdict: rows written before the flag existed (the first live session).
+    local flagged="" 
+    if [ "$refused" = "t" ]; then flagged=refused; elif [ "$legacy" = "t" ]; then flagged=legacy; fi
     # 2. Apify's own run list
     local ev complete inwin
     ev="$(jq -c --arg a "${actor#apify:}" --arg f "$from" '.evidence[]? | select(.actor == $a and .from == ($f | sub("Z$"; ".000Z")))' "$AUDIT/no-run-evidence.json" 2>/dev/null | head -1)"
     [ -n "$ev" ] || ev=null
     complete="$(jq -r '.complete // false' <<< "$ev" 2>/dev/null || echo false)"
     inwin="$(jq -r '(.runs_in_window // [1]) | length' <<< "$ev" 2>/dev/null || echo 1)"
-    if [ "$n" = "1" ] && [[ "$status" =~ ^40[0-3]$ ]] && [ "$allnorun" = "t" ] && [ "$complete" = "true" ] && [ "$inwin" = "0" ]; then
+    if [ "$n" = "1" ] && [[ "$status" =~ ^40[0-3]$ ]] && [ "$allnorun" = "t" ] && [ -n "$flagged" ] && [ "$complete" = "true" ] && [ "$inwin" = "0" ]; then
       local ref="Apify run list for ${actor#apify:} ${from}..${to}: no run (complete listing); start refused HTTP ${status}${vtype:+ ($vtype)}"
-      echo "$key|$actor|NO_RUN|$ref|ledger: 1 refused start, HTTP $status; Apify: 0 runs in window" >> "$AUDIT/no-run.txt"
-      printf "select public.reconcile_discovery_smoke_operation('%s', '%s', 0, '%s', 'NO_RUN');\n" "$qid" "$key" "${ref//\'/\'\'}" >> "$AUDIT/no-run.sql"
+      [ "$flagged" = "legacy" ] && ref="$ref; legacy ledger row without start_refused"
+      echo "$key|$actor|NO_RUN|$ref|ledger: 1 refused start, HTTP $status$([ "$flagged" = legacy ] && echo ' (LEGACY row: no start_refused flag, written before it existed)'); Apify: 0 runs in window" >> "$AUDIT/no-run.txt"
+      printf "select public.reconcile_discovery_smoke_operation('%s', '%s', 0, '%s', 'NO_RUN');\n" "${qid//\'/\'\'}" "${key//\'/\'\'}" "${ref//\'/\'\'}" >> "$AUDIT/no-run.sql"
     else
-      echo "$key|$actor|OPEN|-|ledger rows $n, HTTP '${status:-none}', refused-without-run $allnorun; Apify listing complete $complete, runs in window $inwin" >> "$AUDIT/no-run.txt"
+      echo "$key|$actor|OPEN|-|ledger rows $n, HTTP '${status:-none}', refused-without-run $allnorun, flagged '${flagged:-no}'; Apify listing complete $complete, runs in window $inwin" >> "$AUDIT/no-run.txt"
     fi
   done < "$AUDIT/no-run-candidates.txt"
 }
@@ -690,8 +701,9 @@ case "$STAGE" in
     check_identity
     [ "$(q_ro -c "show default_transaction_read_only")" = "on" ] \
       && pass "this $STAGE session is read-only (default_transaction_read_only)" || stop "this $STAGE session is not read-only"
-    start_apify || true
-    finish_apify
+    # The account binding is checked by the evidence itself (--expect-username);
+    # the full account check would stop this stage on an unrelated price or room FAIL.
+    [ -n "${APIFY_USERNAME:-}" ] || stop "evidence needs apify_username: the run list must be the account that made the start"
     no_run_verdicts all
     if [ -s "$AUDIT/no-run.txt" ]; then
       while IFS='|' read -r key actor verdict ref detail; do note "$verdict  $actor ($key): $detail"; done < "$AUDIT/no-run.txt"

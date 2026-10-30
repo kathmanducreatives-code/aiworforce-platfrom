@@ -73,6 +73,18 @@ const audit: Json = { observed_at: new Date().toISOString(), account: {}, actors
 if (args["no-run-evidence"]) {
   const out: Json[] = [];
   let ok = true;
+  // The listing proves nothing unless it is the account that made the start:
+  // the expected username is required, and a mismatch fails every verdict.
+  const me = await get("/users/me").catch(() => ({} as Json));
+  const lim = await get("/users/me/limits").catch(() => ({} as Json));
+  const who = String(me.username ?? "");
+  const expected = String(args["expect-username"] ?? "");
+  const sameAccount = expected !== "" && who === expected;
+  console.log(`${sameAccount ? "PASS  " : "FAIL  "} evidence account: username ${shown(who || "unreadable")}, expected ${expected ? shown(expected) : "(not given)"}; ` +
+    `this cycle's usage $${lim.current?.monthlyUsageUsd ?? "unknown"} (cycle ${lim.monthlyUsageCycle?.startAt ?? "?"} → ${lim.monthlyUsageCycle?.endAt ?? "?"})`);
+  ok &&= sameAccount;
+  // A window still open (or just closed: Apify's list may lag) is never complete.
+  const SETTLE_MS = 60_000;
   for (const spec of String(args["no-run-evidence"]).split(",").filter(Boolean)) {
     const [actor, fromIso, toIso] = spec.split("@");
     const from = Date.parse(fromIso), to = Date.parse(toIso);
@@ -89,7 +101,8 @@ if (args["no-run-evidence"]) {
         listed += items.length;
         for (const it of items) {
           const t = Date.parse(it.startedAt ?? "");
-          if (Number.isFinite(t) && t >= from && t <= to) {
+          // A run with no readable start time counts as in the window: unknown is not absent.
+          if (!Number.isFinite(t) || (t >= from && t <= to)) {
             inWindow.push({ id: it.id, status: it.status, startedAt: it.startedAt, usage_total_usd: it.usageTotalUsd ?? null });
           }
         }
@@ -97,11 +110,14 @@ if (args["no-run-evidence"]) {
         if (items.length < 100 || (Number.isFinite(oldest) && oldest < from)) complete = true;
         offset += items.length;
       }
-      const rec = { actor, from: new Date(from).toISOString(), to: new Date(to).toISOString(), listed, complete,
+      const settled = Date.now() > to + SETTLE_MS;
+      complete &&= settled && sameAccount;
+      const rec = { actor, from: new Date(from).toISOString(), to: new Date(to).toISOString(), listed, complete, settled, same_account: sameAccount,
         runs_in_window: inWindow, permission_level: act.actorPermissionLevel ?? null, deprecated: act.isDeprecated ?? false };
       out.push(rec);
       console.log(`${complete ? "PASS  " : "FAIL  "} evidence ${actor} ${rec.from} → ${rec.to}: ${inWindow.length} run(s) in the window ` +
-        `(${listed} listed, listing ${complete ? "complete" : "INCOMPLETE"}; actor permission level ${rec.permission_level ?? "not stated"})`);
+        `(${listed} listed, listing ${complete ? "complete" : `INCOMPLETE${settled ? "" : ": the window has not settled"}${sameAccount ? "" : ": not the expected account"}`}; ` +
+        `actor permission level ${rec.permission_level ?? "not stated"})`);
       ok &&= complete;
     } catch (e) {
       ok = false;
