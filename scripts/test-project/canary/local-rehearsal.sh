@@ -250,12 +250,20 @@ sess session-after-uncertain 1 fresh2
 expect session-after-uncertain "unreconciled purchase"
 [ "$(psql "$url" -XAt -c "select count(*) from public.discovery_smoke_reconciliations r join public.discovery_smoke_authorizations a on a.id = r.authorization_id where a.queue_id = '$squeue'")" = "1" ] \
   || { echo "FAIL: exactly one purchase must be reconciled"; exit 1; }
-# The administrator decides the open ones (the over-cap one is recorded as Apify charged it,
-# which the gate still treats as open liability, so it is then re-recorded as the rehearsal's
-# administrator correcting the cap's record); then a new, approved contract may run.
+# The administrator records what Apify reports. A run WITHOUT a run id that Apify
+# has no record of is NO_RUN; the others at Apify's own figures — never at the cap.
 psql "$url" -XAtq -c "select public.reconcile_discovery_smoke_operation('$squeue', 'rehearsal-uncertain', 0, 'rehearsal: Apify shows no run', 'NO_RUN')" \
-  -c "select public.reconcile_discovery_smoke_operation('$squeue', 'rehearsal-wrong', 1000, 'rehearsal: reviewed by the administrator', 'SUCCEEDED')" \
-  -c "select public.reconcile_discovery_smoke_operation('$squeue', 'rehearsal-over', 10550, 'rehearsal: reviewed by the administrator', 'SUCCEEDED')" > /dev/null
+  -c "select public.reconcile_discovery_smoke_operation('$squeue', 'rehearsal-wrong', 1000, 'rehearsal: Apify run-wrong, reviewed', 'SUCCEEDED')" \
+  -c "select public.reconcile_discovery_smoke_operation('$squeue', 'rehearsal-over', 20000, 'rehearsal: Apify run-over at its own figure', 'SUCCEEDED')" > /dev/null
+# Recorded truthfully above its maximum, the over-cap purchase STAYS open liability:
+# the approved bound was wrong, and no new paid operation may start on top of it.
+sess session-after-over-cap 1 fresh2
+expect session-after-over-cap "unreconciled purchase"
+# THROWAWAY DATABASE ONLY, not an operator procedure: the rehearsal removes its
+# own synthetic purchases to go on. On the real project an over-cap purchase is
+# resolved by the database owner reviewing the catalog, never by entering a lower figure.
+psql "$url" -XAtq -c "delete from public.discovery_smoke_reconciliations where operation_key like 'rehearsal-%'" \
+  -c "delete from public.discovery_smoke_operations where operation_key like 'rehearsal-%'" > /dev/null
 sess session-second-contract 0 fresh2
 expect session-second-contract "READY FOR THE WORKER"
 s2="$(cat "$tmp/session-second-contract/audit/queue_id")"

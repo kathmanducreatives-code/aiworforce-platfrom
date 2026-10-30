@@ -44,6 +44,16 @@ STAGE="${1:?usage: canary-stage.sh verify|migrate|prepare|launch|reconcile|sessi
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$ROOT"
 
+# LOCAL-REHEARSAL OVERRIDES NEVER APPLY IN ACTIONS (review hardening): none of
+# these can be set from workflow inputs, and this refuses them outright if any
+# step ever exported one.
+if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  for v in CANARY_LOCAL_REHEARSAL CANARY_SESSION_CONTRACT CANARY_OFFLINE_PROPOSAL CANARY_PRIOR_PREPARES CANARY_APIFY_NET APIFY_API_BASE; do
+    [ -z "${!v:-}" ] || { echo "STOPPED: $v is a local-rehearsal override and is refused in GitHub Actions" >&2; exit 1; }
+  done
+  DENO=deno   # the runner's own Deno (setup-deno), never an inherited path
+fi
+
 # ── the one target ────────────────────────────────────────────────────────────
 REF=tlvnfrxzjhsjgdofwehb
 WS=40e2512f-09b6-433e-97fe-f9999a1f1897
@@ -64,15 +74,6 @@ EXPECTED_SHA="${EXPECTED_SHA:?EXPECTED_SHA is required}"
 APIFY_NET="${CANARY_APIFY_NET:-api.apify.com}"
 DENO="${DENO:-deno}"
 
-# LOCAL-REHEARSAL OVERRIDES NEVER APPLY IN ACTIONS (review hardening): none of
-# these can be set from workflow inputs, and this refuses them outright if any
-# step ever exported one.
-if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-  for v in CANARY_LOCAL_REHEARSAL CANARY_SESSION_CONTRACT CANARY_OFFLINE_PROPOSAL CANARY_PRIOR_PREPARES CANARY_APIFY_NET APIFY_API_BASE; do
-    [ -z "${!v:-}" ] || { echo "STOPPED: $v is a local-rehearsal override and is refused in GitHub Actions" >&2; exit 1; }
-  done
-  DENO=deno   # the runner's own Deno (setup-deno), never an inherited path
-fi
 
 failures=0
 note() { printf '%s\n' "$*" | tee -a "$SUMMARY"; }

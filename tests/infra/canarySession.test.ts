@@ -198,7 +198,8 @@ Deno.test("stage, executed: local-rehearsal overrides are refused under GitHub A
   for (const v of ["CANARY_LOCAL_REHEARSAL", "CANARY_SESSION_CONTRACT", "CANARY_OFFLINE_PROPOSAL", "CANARY_PRIOR_PREPARES", "CANARY_APIFY_NET", "APIFY_API_BASE"]) {
     const out = await new Deno.Command("bash", {
       args: [new URL("../../scripts/test-project/canary/canary-stage.sh", import.meta.url).pathname, "session"], clearEnv: true,
-      env: { PATH: Deno.env.get("PATH") ?? "", GITHUB_ACTIONS: "true", [v]: "x", CANARY_AUDIT_DIR: Deno.makeTempDirSync(), EXPECTED_SHA: SHA },
+      // No audit directory: the refusal comes before anything is created or read.
+      env: { PATH: Deno.env.get("PATH") ?? "", GITHUB_ACTIONS: "true", [v]: "x", EXPECTED_SHA: SHA },
       stdout: "piped", stderr: "piped",
     }).output();
     assertEquals(out.code, 1, v);
