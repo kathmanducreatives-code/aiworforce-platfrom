@@ -9,6 +9,7 @@
 // Pure.
 
 import type { DiscoveryRequirements, FilterKey, HardRequirement, Range } from "./types.ts";
+import { sharedCriteria } from "./sharedQualification.ts";
 
 interface CriterionLike {
   id?: string; kind?: string; dimension?: string; value?: unknown; label?: string;
@@ -162,6 +163,7 @@ export function requirementsFromMission(mission: MissionLike): DiscoveryRequirem
     hard,
     preferences,
     roles,
+    criteria: sharedCriteria(mission as { criteria?: unknown[] }),
     ...(() => {
       const b = canonicalBroadening(mission.directives?.disallowed_broadening ?? []);
       return { forbidBroadening: b.dims, forbidBroadeningUnread: b.unread };

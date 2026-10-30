@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { runOfflineDemo } from "../../../../scripts/provider-discovery-offline-demo.ts";
 
-Deno.test("offline demo (auto): LeadOcean primary, five qualified leads with evidence, Apollo fallback unused", async () => {
+Deno.test("offline demo (auto): LeadOcean primary, five leads pass the provider checks and await canonical evidence, Apollo fallback unused", async () => {
   const realFetch = globalThis.fetch;
   globalThis.fetch = () => { throw new Error("network is not allowed in the offline demo"); };
   try {
@@ -15,9 +15,11 @@ Deno.test("offline demo (auto): LeadOcean primary, five qualified leads with evi
     assertEquals(plan.steps.map((s) => s.provider), ["leadocean", "apollo"]);
     assertEquals(calls.length, 1);
     assertEquals(run.status, "completed");
-    assertEquals(run.counts, { qualified: 5, needsVerification: 0, rejected: 5 });
+    assertEquals(run.counts, { qualified: 0, needsVerification: 5, rejected: 5 });
+    assertEquals(run.leads.filter((l) => l.providerStatus === "qualified").length, 5);
     assertEquals(rows.length, 5);
-    assert(rows.every((r) => (r!.account.raw.agentory_discovery as { verification: string }).verification === "evidence"));
+    assert(rows.every((r) => (r!.account.raw.agentory_discovery as { provider_status: string }).provider_status === "qualified"));
+    assert(rows.every((r) => r!.lead_candidate.status === "new"), "no lead is labelled qualified on a provider's word");
   } finally {
     globalThis.fetch = realFetch;
   }

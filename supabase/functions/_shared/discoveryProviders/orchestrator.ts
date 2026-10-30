@@ -110,7 +110,7 @@ export async function runDiscovery(input: RunInput): Promise<DiscoveryRun> {
     plan.estimatedCredits[p] ?? 0);
   const missionCap = Math.min(plan.limits.maxCreditsPerMission,
     Object.keys(plan.estimatedCredits).reduce((a, p) => a + approvalCap(p as ProviderId), 0));
-  const verify = (m: ReturnType<typeof mergeRecords>, ev: SiteEvidence[] = []) => verifyLeads(req, m, ev, input.verifyOptions);
+  const verify = (m: ReturnType<typeof mergeRecords>, ev: SiteEvidence[] = []) => verifyLeads(req, m, ev, { now, ...input.verifyOptions });
 
   const companyRows: ProviderCompany[] = [];
   const personRows: ProviderPerson[] = [];
@@ -160,9 +160,11 @@ export async function runDiscovery(input: RunInput): Promise<DiscoveryRun> {
       personRows.push(...res.people);
       if (!res.nextCursor) break;
       cursor = res.nextCursor;
-      // Enough already? Stop paying for more pages.
+      // Enough already? Stop paying for more pages. Counted on the PROVIDER
+      // status: more search pages cannot prove what only canonical evidence
+      // can, so waiting for shared qualification here would only buy pages.
       const soFar = verify(mergeRecords(companyRows, personRows));
-      if (soFar.filter((l) => l.status === "qualified").length >= req.requestedCount) break;
+      if (soFar.filter((l) => l.providerStatus === "qualified").length >= req.requestedCount) break;
     }
     credits[step.provider] = (credits[step.provider] ?? 0) + out.credits;
     if (step.role === "primary" && out.status !== "failed") primaryOk = true;

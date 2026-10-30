@@ -11,10 +11,18 @@
 //   contradicted     the values that came back violate it
 //   conflicting      providers disagree (one satisfies, another violates)
 //   unknown          nothing to decide it with
-// A lead is `rejected` on any contradiction, `qualified` when every
-// requirement is matched (or provider-filtered by a TRUSTED filter), and
-// `needs_verification` otherwise. It is never qualified on a requirement
-// nobody checked.
+// Those outcomes give the PROVIDER status (`providerStatus`): `rejected` on any
+// contradiction, `qualified` when every requirement is matched (or
+// provider-filtered by a TRUSTED filter), `needs_verification` otherwise.
+//
+// The lead's STATUS is then decided with Agentory's shared qualification
+// engine (`sharedQualification.ts` → `evaluateEligibility`), the same one the
+// Apify engine uses. A lead is `qualified` only when BOTH agree; `rejected`
+// when the shared engine disproves a hard criterion (`rejectionBasis:
+// "proven"`) or a provider reports a contradiction (`"provider_reported"`:
+// discarded, not disproven); `needs_verification` otherwise. A provider's
+// claim alone is a discovery row, which proves nothing, so a provider-only
+// lead stays `needs_verification` until canonical evidence answers it.
 //
 // `verification` says how a qualified lead was established: `evidence` when
 // every requirement was matched against a returned value, `provider_attested`
@@ -27,6 +35,7 @@ import { TRUSTED_PROVIDER_FILTERS } from "./providers.ts";
 import { geoLevel, normCountry } from "./adapter.ts";
 import { normDomain, type CanonicalCompany, type CanonicalPerson, type MergeResult } from "./normalize.ts";
 import type { Claim, DiscoveryRequirements, FilterKey, HardRequirement, ProviderId, Range } from "./types.ts";
+import { qualifyCompany, type SharedQualification, type SharedQualificationInput } from "./sharedQualification.ts";
 
 export type CheckOutcome = "matched" | "provider_filter" | "contradicted" | "conflicting" | "unknown";
 
@@ -53,6 +62,12 @@ export interface RequirementCheck {
 export interface VerifyOptions {
   /** Provider filters that may satisfy a requirement without a returned value. */
   trustedFilters?: Partial<Record<ProviderId, FilterKey[]>>;
+  /** The clock the shared engine judges freshness and windows against. */
+  now?: () => Date;
+  /** The Apify engine's canonical evidence for a company (the documented boundary). */
+  canonicalEvidence?: SharedQualificationInput["canonicalEvidence"];
+  /** Holds the platform placed: historical outreach, CRM relationship, an existing Lead. */
+  holds?: SharedQualificationInput["holds"];
 }
 
 export type LeadStatus = "qualified" | "needs_verification" | "rejected";
@@ -65,7 +80,15 @@ export interface VerifiedContact {
 
 export interface VerifiedLead {
   company: CanonicalCompany;
+  /** The final status: the provider checks AND the shared engine. */
   status: LeadStatus;
+  /** What the provider checks alone would say. Never shown as a qualification. */
+  providerStatus: LeadStatus;
+  /** Why a rejected lead is rejected: disproven by evidence, or discarded on a provider's report. */
+  rejectionBasis: "proven" | "provider_reported" | null;
+  /** The shared engine's verdict. Null only when the mission carried no criteria (then nothing qualifies). */
+  shared: SharedQualification | null;
+  /** `evidence` when qualified: always the shared engine's. (`provider_attested` is retired: no provider's word qualifies.) */
   verification: "evidence" | "provider_attested" | null;
   checks: RequirementCheck[];
   contacts: VerifiedContact[];
@@ -280,18 +303,56 @@ export function verifyLeads(req: DiscoveryRequirements, merged: MergeResult, sit
       if (p.identityConflicts.length) pc.push({ criterionId: "identity", key: "roles", label: "Identity", outcome: "conflicting", evidence: [], note: p.identityConflicts.join("; ") });
       return { person: p, checks: pc, status: statusOf(pc) };
     });
-    let status = statusOf(checks);
+    const companyStatus = statusOf(checks);
     const order: Record<CheckOutcome, number> = { contradicted: 0, conflicting: 1, unknown: 2, provider_filter: 3, matched: 4 };
     const reasons = checks.filter((x) => !satisfied(x))
       .sort((a, b) => order[a.outcome] - order[b.outcome]).map((x) => `${x.label}: ${x.outcome} — ${x.note}`);
-    // A people mission needs at least one person who passes.
-    if (req.targetEntity === "person" && status !== "rejected") {
-      const best = contacts.some((x) => x.status === "qualified") ? "qualified" : contacts.some((x) => x.status === "needs_verification") ? "needs_verification" : "rejected";
-      if (best === "rejected") reasons.push("no contact meets the person requirements");
-      if (best !== "qualified" && status === "qualified") status = best;
+    // A people mission needs at least one person who passes (provider-reported titles).
+    const contactsBest: LeadStatus | null = req.targetEntity !== "person" ? null
+      : contacts.some((x) => x.status === "qualified") ? "qualified"
+      : contacts.some((x) => x.status === "needs_verification") ? "needs_verification" : "rejected";
+    if (contactsBest === "rejected" && companyStatus !== "rejected") reasons.push("no contact meets the person requirements");
+    const withContacts = (s: LeadStatus): LeadStatus =>
+      contactsBest === null || s === "rejected" ? s
+      : contactsBest === "rejected" ? "rejected"
+      : s === "qualified" ? contactsBest : s;
+    const providerStatus = withContacts(companyStatus);
+
+    // ── THE SHARED ENGINE DECIDES THE COMPANY ─────────────────────────────
+    //
+    // A definite verdict from evidence outranks a discovery row in BOTH
+    // directions: a proven disqualification rejects whatever a provider said,
+    // and a company the evidence proves eligible is not discarded on a
+    // provider's contradicting report (recorded in `checks`, not acted on).
+    // While the engine is still pending, the provider checks may discard a
+    // lead (`provider_reported`) but never qualify one.
+    const shared = req.criteria.length
+      ? qualifyCompany(c, site, {
+        criteria: req.criteria, missionId: null, now: (opts.now ?? (() => new Date()))(),
+        canonicalEvidence: opts.canonicalEvidence, holds: opts.holds,
+      })
+      : null;
+    let status: LeadStatus;
+    let rejectionBasis: VerifiedLead["rejectionBasis"] = null;
+    if (shared?.eligibility === "ineligible") {
+      status = "rejected";
+      rejectionBasis = "proven";
+      reasons.unshift(...shared.checks.filter((x) => x.result === "fail").map((x) => `${x.dimension}: disproven — ${x.reason}`));
+    } else if (shared?.eligibility === "eligible") {
+      status = withContacts("qualified");
+      if (status === "rejected") rejectionBasis = "provider_reported";
+      if (companyStatus !== "qualified") reasons.unshift("the shared engine established every hard criterion from evidence; provider-reported disagreements are recorded, not acted on");
+    } else {
+      status = providerStatus === "qualified" ? "needs_verification" : providerStatus;
+      if (status === "rejected") rejectionBasis = "provider_reported";
+      // After the provider's own reasons: a discarded lead leads with why it was discarded.
+      reasons.push(...(shared
+        ? shared.checks.filter((x) => x.result === "unknown").map((x) => `${x.dimension}: not established — ${x.reason}`)
+        : ["the mission carried no compiled criteria for the shared qualification engine"]));
     }
-    const verification = status === "qualified" ? (checks.every((x) => x.outcome === "matched") ? "evidence" : "provider_attested") : null;
-    out.push({ company: c, status, verification, checks, contacts, reasons });
+    // Qualified now always rests on the shared engine's evidence.
+    const verification = status === "qualified" ? "evidence" as const : null;
+    out.push({ company: c, status, providerStatus, rejectionBasis, shared, verification, checks, contacts, reasons });
   }
   return out;
 }

@@ -69,7 +69,10 @@ export function projectLead(lead: VerifiedLead, ctx: { workspaceId: string; miss
     mission_id: ctx.missionId,
     plan_hash: ctx.run.planHash,
     status: lead.status,
+    provider_status: lead.providerStatus,
     verification: lead.verification,
+    // The shared engine's verdict: what qualification rests on, and what is still open.
+    shared_qualification: lead.shared,
     discovered_at: ctx.run.finishedAt,
     providers: providersOf(c),
     checks: checksOut(lead.checks),

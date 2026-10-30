@@ -69,6 +69,12 @@ export interface DiscoveryRequirements {
   forbidBroadening: string[];
   /** Entries that name no dimension: kept for audit, never read as a ban or a permission. */
   forbidBroadeningUnread: string[];
+  /**
+   * The compiler's own criteria, untouched. The shared qualification engine
+   * (`sharedQualification.ts` → `evaluateEligibility`) decides on these, not
+   * on the provider-facing `hard` list above.
+   */
+  criteria: import("../missionCriteria.ts").MissionCriterion[];
 }
 
 // ── Provider-side records ───────────────────────────────────────────────────
