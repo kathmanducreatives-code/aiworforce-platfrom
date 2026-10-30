@@ -7,7 +7,7 @@
 //     start, more output units, a higher maximum, more companies, a model or
 //     spend beyond the caps, other SQL, a migration — is refused (A01–A09);
 //   - a generated plan executes only if it satisfies the contract exactly
-//     (S01–S17): a malformed or wider plan cannot execute;
+//     (S01–S18): a malformed or wider plan cannot execute;
 //   - single use: the queue and plan ids derive from the contract's sha256;
 //   - the workflow: the session's guard, secret scoping, the commit-scoped
 //     dependency cache, the worker only after an executed kickoff, session
@@ -34,8 +34,10 @@ type J = Record<string, any>; // eslint-disable-line @typescript-eslint/no-expli
 const failedA = (c: J, now = NOW) => contractChecks(c, now).filter((x) => !x.ok).map((x) => x.id);
 const variant = (f: (c: J) => void) => { const c = structuredClone(CONTRACT); f(c); return c; };
 
-Deno.test("contract: the proposed first-session contract passes A01–A09 and states automatic execution", () => {
-  assertEquals(failedA(CONTRACT), []);
+Deno.test("contract: Contract 2 (consumed) passes A01–A09 and fails exactly the pool-coverage checks it ran into", () => {
+  // Canary session 2: 3 companies discovered, details for 1, 4 worker attempts —
+  // the third evaluation was refused and two companies were never enriched.
+  assertEquals(failedA(CONTRACT), ["A10", "A11"]);
   assertEquals(CONTRACT.auto_execute, true);
   assertEquals(CONTRACT.mission.instruction, "Find one US company hiring Account Executives that raised funding within the last six months.");
   assertEquals(CONTRACT.spending.max_session_microusd, 93_480, "compile $0.02496 + provider $0.0186 + worker model $0.04992");
@@ -91,9 +93,44 @@ async function kickoff(over: J = {}) {
 const failedS = (k: J, sql: string, ids: { queue_id: string; plan_id: string }, c: J = CONTRACT) =>
   kickoffWithinContract(k, sql, c, ids).filter((x) => !x.ok).map((x) => x.id);
 
-Deno.test("plan: the reviewed plan under the contract's ids satisfies S01–S17", async () => {
+Deno.test("plan: the reviewed plan under the contract's ids satisfies S01–S18", async () => {
   const { ids, k } = await kickoff();
   assertEquals(failedS(k, k.sql, ids), []);
+});
+
+// ── CONTRACT 3 (PROPOSED; not wired into the workflow) ──────────────────────
+const CONTRACT3 = JSON.parse(Deno.readTextFileSync(new URL("../../docs/launch/proposals/canary-session-contract-3.json", import.meta.url)));
+const CATALOG3 = JSON.parse(Deno.readTextFileSync(new URL("../../docs/launch/proposals/smoke-catalog-canary-funding-3.json", import.meta.url)));
+const REAL2 = JSON.parse(Deno.readTextFileSync(new URL("../../docs/launch/proposals/canary-session-2-real-gpt-proposal.json", import.meta.url)));
+
+Deno.test("contract 3: passes A01–A11 within every reviewed cap, and covers its own pool", () => {
+  assertEquals(failedA(CONTRACT3), []);
+  assertEquals(CONTRACT3.spending.max_session_microusd, 84_480, "provider $0.0096 + worker model $0.04992 + compile $0.02496");
+  assert(CONTRACT3.spending.max_session_microusd <= CONTRACT.spending.max_session_microusd, "narrower than Contract 2");
+  // Its catalog only narrows Contract 2's.
+  for (const k of ["jobs", "details", "atomus", "reads", "luna"]) {
+    assert(Number(CATALOG3.approved_quotes[k].maximum_microusd) <= Number(CATALOG.approved_quotes[k].maximum_microusd), k);
+  }
+  // Widening the pool without the limits to finish it is refused.
+  const wide = structuredClone(CONTRACT3);
+  wide.actors["apify:harvestapi~linkedin-job-search"].max_units = 3;
+  assertEquals(failedA(wide).filter((x) => x === "A10" || x === "A11"), ["A10", "A11"]);
+  assert(CONTRACT3.status.includes("NOT wired"), "a proposal, never the contract the stage reads");
+});
+
+Deno.test("contract 3: the REAL Contract 2 GPT proposal, compiled today under the narrowed catalog, satisfies S01–S18", async () => {
+  const ids = await sessionIds(CSHA);
+  const k = await prepareKickoff({
+    scenario: "canary_funding", project_ref: "tlvnfrxzjhsjgdofwehb", workspace_id: CONTRACT3.workspace_id,
+    user_id: "22222222-2222-4222-8222-222222222222", queue_id: ids.queue_id, plan_id: ids.plan_id,
+    pricing_version: "test", catalog: CATALOG3.approved_quotes, planner_commit: SHA,
+    prices: { jobs_maximum_microusd: 2000, details_maximum_microusd: 4050, atomus_maximum_microusd: 3550, observed_at: "2026-10-30T00:00:00Z", source: "test" },
+    compile: () => Promise.resolve(structuredClone(REAL2)),
+    paid: { approved_by: "test", actor_limits: { "apify:harvestapi~linkedin-job-search": 1, "apify:harvestapi~linkedin-company": 1, "apify:atomus~linkedin-company-scraper": 1 } },
+  } as never) as unknown as J & { sql: string };
+  assertEquals(failedS(k, k.sql, ids, CONTRACT3), []);
+  assert(!((k.compiled_mission.criteria ?? []) as J[]).some((c) => c.dimension === "constraint" && c.kind === "hard"));
+  assertEquals(k.request.run_budget.max_candidates, 1, "the engine asks for the one job the gate allows");
 });
 
 Deno.test("plan: a malformed or wider generated plan cannot execute", async () => {
@@ -117,6 +154,7 @@ Deno.test("plan: a malformed or wider generated plan cannot execute", async () =
     ["random ids (not single-use)", k, k.sql.replaceAll(ids.queue_id, "33333333-3333-4333-8333-333333333333"), "S15"],
     ["another workspace", m((x) => { x.request.workspace_id = "9d09038b-2d39-49ca-b687-e3946ea7266d"; }), k.sql, "S16"],
     ["a raised run budget", m((x) => { x.request.run_budget.provider_usd = 0.5; }), k.sql, "S17"],
+    ["a pool wider than the gate's pinned job count", m((x) => { x.request.run_budget.max_candidates = 5; }), k.sql, "S18"],
     ["no plan at all", {}, "", "S01"],
   ];
   for (const [label, x, sql, id] of cases) assert(failedS(x, sql, ids).includes(id), `${label} → ${failedS(x, sql, ids)}`);

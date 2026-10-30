@@ -221,6 +221,8 @@ export interface EvaluationCounters {
   calls_remaining?: number;
   budget_exhausted?: boolean;
   companies_evaluated?: number;
+  /** Calls that returned no usable answer (HTTP error, admission refusal, unparseable). */
+  calls_failed?: number;
 }
 
 /** Task-level diagnostics: what was allowed, and what actually happened. */
@@ -237,6 +239,8 @@ export function evaluationTaskDiagnostics(
     calls_remaining: remaining,
     // Zero evaluations is a REAL outcome, not a missing measurement.
     companies_evaluated: Number(observed?.companies_evaluated ?? 0),
+    // A failed call is never an evaluation (canary session 2 counted one).
+    calls_failed: Number(observed?.calls_failed ?? 0),
     budget_exhausted: observed?.budget_exhausted ?? (allowed > 0 && remaining <= 0),
   };
 }

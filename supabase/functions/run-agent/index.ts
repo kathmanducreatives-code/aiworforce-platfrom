@@ -118,7 +118,7 @@ import { criteriaSections, deriveMissionCriteria } from "../_shared/missionCrite
 import { effectiveRequestedCount as p5RequestedCount } from "../_shared/leadMission.ts";
 import { buildWorkbenchMissionView, decisionSummary, missionCostFromLedgers } from "../_shared/workbenchMissionView.ts";
 import { makeGptOpportunityReasoner, reasonForCandidates } from "../_shared/opportunityReasoningRun.ts";
-import { missionCandidatesFrom } from "../_shared/leadCapabilityEngine.ts";
+import { missionCandidatesFrom, verifiableCandidatesFrom } from "../_shared/leadCapabilityEngine.ts";
 import { anchorForCapability } from "../_shared/retrievalPlan.ts";
 import { criteriaExecutionPolicy } from "../_shared/criteriaExecutionPolicy.ts";
 import { ModelRoutingLedger } from "../_shared/gptModelRouter.ts";
@@ -184,7 +184,7 @@ import {
 import { emptyEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
 import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
 import { applyVerifierFinding, markRouteUnaffordable } from "../_shared/leadCapabilityEngine.ts";
-import { attemptedRoutes, ledgerAffordability, ledgerBoundCall } from "../_shared/claimVerifier.ts";
+import { attemptedRoutes, ledgerAffordability, ledgerBoundCall, verificationDecisions } from "../_shared/claimVerifier.ts";
 import { verifierSpecCompiler } from "../_shared/verifierCallSpec.ts";
 import { runClaimVerificationPhase } from "../_shared/claimVerificationPhase.ts";
 import { verificationStopGate, type VerificationStop } from "../_shared/verificationStop.ts";
@@ -378,7 +378,7 @@ import {
 import {
   buildMissionTriageBinding, triageTaskDiagnostics,
 } from "../_shared/missionTriageBinding.ts";
-import { evaluationCriteria, parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
+import { evaluationCriteria, evaluatorAnswered, parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
 // The SAME sizing function the engine shortlists with, so the evaluation budget
 // and the set of companies that can be evaluated are derived from one rule
 // rather than two that may drift.
@@ -2909,6 +2909,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // spend, which is the number the diagnostics report.
         let evaluationCallsMade = 0;
         let evaluationCompaniesEvaluated = 0;
+        let evaluationCallsFailed = 0;
         let evaluationBudgetExhausted = false;
 
         // ── STAGE 2: GPT MISSION INTELLIGENCE ────────────────────────────────
@@ -3702,7 +3703,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   // the parser refuses any citation that is not in it, which is
                   // what stops the evaluator inventing evidence.
                   const parsed = parseMissionEvaluationStrict(raw, registry, evaluationCriteria(input));
-                  evaluationCompaniesEvaluated++;
+                  // A call that produced no answer is counted as FAILED, never as
+                  // an evaluated company; the engine holds the company as never
+                  // evaluated (`evaluatorAnswered`).
+                  if (evaluatorAnswered(parsed.evaluation)) evaluationCompaniesEvaluated++;
+                  else evaluationCallsFailed++;
                   console.log("[run-agent][mission-evaluation]", {
                     task_id: task.id, company_key,
                     parse_status: parsed.parse_status,
@@ -5495,20 +5500,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // the engine: a round stage is hard exactly when a verifier this
                 // mission may run can prove it.
                 const vCriteria = deriveMissionCriteria(vMission, leadReadiness);
-                const vCandidates = () => missionCandidatesFrom(engineRun, { missionId: String(task.id) }).map((cand) => {
-                  // The canonical decision (Q1): a held or vetoed candidate is
-                  // not a verification target, and the same verdicts decide.
-                  const e = evaluateEligibility(vCriteria, cand.graph, cand.criterion_verdicts, cand.holds);
-                  return {
-                    company_key: cand.company_key, name: cand.name, domain: cand.domain, linkedin_url: cand.linkedin_url,
-                    graph: cand.graph, eligibility: e.eligibility,
-                    hard_checks: e.checks.filter((x) => x.kind === "hard"),
-                    attempted_routes: cand.attempted_routes ?? [],
-                    unaffordable_routes: cand.unaffordable_routes ?? [],
-                    // Triage withheld paid verification: `verificationTargets` skips it.
-                    paid_verification_blocked: cand.paid_verification_blocked ?? null,
-                  };
-                });
+                // The canonical decision (Q1): a held or vetoed candidate is not a
+                // verification target, and the same verdicts decide. Shared with
+                // the Replay Lab so the two cannot drift (`verifiableCandidatesFrom`).
+                const vCandidates = () => verifiableCandidatesFrom(engineRun, vCriteria, String(task.id));
                 const verifierLog = (event: string, meta?: Record<string, unknown>) =>
                   console.log(`[run-agent][claim-verifier][${event}]`, { task_id: task.id, ...(meta ?? {}) });
                 {
@@ -5691,6 +5686,14 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // ONE compiler for the purchase AND the affordability gate.
                 const vSpec = await verifierSpecFor(vState);
                 verificationWaitStop = () => verificationGate.check() !== null;
+                // THE DECISION TRACE: every candidate, every verifier, and why it
+                // was or was not taken — persisted on the checkpointed state.
+                {
+                  const traced = vCandidates();
+                  vState.verification_decisions = [fundingStageVerifier(), businessModel, ...(hiringVerifier ? [hiringVerifier] : [])]
+                    .flatMap((v) => verificationDecisions(v, traced, (id) => vCriteria.find((c) => c.id === id)?.value ?? null,
+                      undefined, leadReadiness, (id) => vCriteria.find((c) => c.id === id)?.time_window?.days ?? null).decisions);
+                }
                 const phase = await runClaimVerificationPhase({
                   mission_id: String(task.id),
                   claim_plan: claimPlan,
@@ -6148,6 +6151,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                         calls_remaining: Math.max(
                           0, missionEvaluationBinding.callsRemaining - evaluationCallsMade),
                         companies_evaluated: evaluationCompaniesEvaluated,
+                        calls_failed: evaluationCallsFailed,
                         budget_exhausted: evaluationBudgetExhausted,
                       }),
                     // USER-FACING, AND VALIDATED-ONLY. A rejected claim cannot

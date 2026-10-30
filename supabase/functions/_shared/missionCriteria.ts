@@ -468,6 +468,29 @@ export function restatesHiringSignal(field: string, raw: unknown, signals: reado
   return stated.size > 0 && stated.size === carried.size && [...stated].every((t) => carried.has(t));
 }
 
+/**
+ * The same restatement for the funding WINDOW: canary session 2's proposal also
+ * carried `funding_event announced_within_last_days 180` beside the funding
+ * signal's own 180-day window. It compiled to a second, unanswerable
+ * `constraint` row. Skipped only for a funding field and a within-days operator
+ * from closed lists, one funding signal, and the SAME number of days; a
+ * different window, a minimum amount or any other operator is kept.
+ */
+const RESTATED_FUNDING_FIELDS = new Set(["funding_event", "funding", "funding_round", "recent_funding", "funding_recency",
+  "funding_recency_days", "last_funding_days", "funding_window_days"]);
+const RESTATED_FUNDING_OPS = new Set(["announced_within_last_days", "within_last_days", "within_days", "within",
+  "raised_within_days", "announced_within_days", "max_age_days", "at_most_days", "<=", "lte"]);
+export function restatesFundingWindow(field: string, raw: unknown, signals: readonly Partial<MissionSignal>[]): boolean {
+  if (!RESTATED_FUNDING_FIELDS.has(field.toLowerCase())) return false;
+  const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { value: raw }) as
+    { operator?: unknown; value?: unknown };
+  if (!RESTATED_FUNDING_OPS.has(String(c.operator ?? "").trim().toLowerCase())) return false;
+  const funding = signals.filter((s) => kindOfSignal(s) === "funding");
+  if (funding.length !== 1 || typeof funding[0].timeframe_days !== "number") return false;
+  const days = typeof c.value === "number" ? c.value : /^\d{1,4}$/.test(String(c.value ?? "").trim()) ? Number(c.value) : NaN;
+  return days === funding[0].timeframe_days;
+}
+
 function signalWords(s: Partial<MissionSignal>): string {
   return [
     s.phrase ?? "", ...(s.qualifier?.role_terms ?? []), ...(s.role_families ?? []),
@@ -1296,11 +1319,20 @@ export function deriveMissionCriteria(
   for (const [field, raw] of Object.entries(mission.hard_constraints ?? {})) {
     if (handled.has(field)) continue;
     if (restatesHiringSignal(field, raw, mission.required_signals ?? [])) continue;
+    if (restatesFundingWindow(field, raw, mission.required_signals ?? [])) continue;
     const c = (raw ?? {}) as { operator?: string; value?: unknown; reason?: string };
     const value = c.value ?? raw;
     const values = Array.isArray(value) ? value.map(String) : [String(value ?? "")];
     const stated = values.some(inQuery);
     const excluding = /not|exclud/i.test(String(c.operator ?? ""));
+    // A HARD `constraint` IS A REQUIREMENT NO EVIDENCE DIMENSION ANSWERS. It used
+    // to compile as status "ok", so the approval card called it provable, the
+    // interpretation gate passed it, and every candidate stayed unknown on it
+    // with no route — the shape that held canary session 2 at zero. Marked
+    // `unprovable_today` like every other requirement no source establishes:
+    // disclosed at approval (`assessRequestFeasibility`), answerable only by the
+    // evaluator citing the company's own words, and never silently "ok".
+    const unprovable = stated && !excluding;
     push({
       kind: stated || excluding ? "hard" : "target",
       dimension: excluding ? "exclusion" : "constraint", value: { field, value },
@@ -1310,6 +1342,7 @@ export function deriveMissionCriteria(
       user_phrase: stated ? values.find(inQuery) ?? "" : "",
       rationale: stated ? "stated in the request"
         : "proposed by the model without the request's words; never a hard requirement",
+      ...(unprovable ? { status: "unprovable_today" as const } : {}),
     });
   }
   for (const [field, raw] of Object.entries(mission.soft_preferences ?? {})) {

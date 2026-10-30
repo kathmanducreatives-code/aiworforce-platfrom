@@ -193,6 +193,15 @@ export const PROVIDER_FAILURE_CODES = [
    * already established and thrown away.
    */
   "quota_exhausted",
+  /**
+   * The mission's own spend gate refused the call before it reached OpenAI
+   * (`smokeAdmission.refusal`, header `x-agentory-admission: refused`) — a
+   * budget or attempt limit, not a provider fault. Canary session 2's fifth
+   * worker call was this, reported as `http_error`. Never retried: the gate
+   * answers the same question the same way, and a 503 "purchase may exist"
+   * refusal is the gate's own uncertainty, not OpenAI's.
+   */
+  "admission_refused",
 ] as const;
 
 export type GptFailureCode =
@@ -504,7 +513,8 @@ export async function gptStructured<T>(
         // A 429 that says the balance is gone is not a rate limit. Retrying it
         // burns the caller's clock on a condition only a human can clear.
         const quotaExhausted = bodyIsQuotaExhausted(body);
-        const transient = statusIsTransient(res.status) && !quotaExhausted;
+        const admissionRefused = res.headers?.get?.("x-agentory-admission") === "refused";
+        const transient = statusIsTransient(res.status) && !quotaExhausted && !admissionRefused;
         // The status and a bounded excerpt only. A provider error body can echo
         // request content, and this string is persisted into task results.
         failure = {
@@ -512,8 +522,10 @@ export async function gptStructured<T>(
           // NAMED, NOT BURIED. The distinction already existed one line above
           // and only reached `retryable`; a caller cannot branch on a boolean
           // that says "do not retry" without knowing WHY not.
-          code: quotaExhausted ? "quota_exhausted" : "http_error",
-          detail: redact(`OpenAI returned HTTP ${res.status}: ${body.slice(0, 300)}`, key),
+          code: admissionRefused ? "admission_refused" : quotaExhausted ? "quota_exhausted" : "http_error",
+          detail: admissionRefused
+            ? redact(`the mission's spend gate refused the call (HTTP ${res.status}): ${body.slice(0, 300)}`, key)
+            : redact(`OpenAI returned HTTP ${res.status}: ${body.slice(0, 300)}`, key),
           latency_ms: elapsed(), retryable: transient, attempts,
         };
         if (quotaExhausted) {

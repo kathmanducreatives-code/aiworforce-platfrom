@@ -110,6 +110,20 @@ const lit = (v: unknown) => `'${JSON.stringify(v).replace(/'/g, "''")}'`;
 const str = (v: string) => `'${v.replace(/'/g, "''")}'`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * THE ENGINE'S POOL IS THE GATE'S PINNED JOB COUNT. The engine asks the job
+ * search for `max_candidates` rows and the smoke gate REFUSES a start whose
+ * `maxItems` exceeds the catalog's pin (`field_unbounded:maxItems`). The count
+ * was hard-coded (3 for the canary) beside a catalog that pinned 3 by
+ * coincidence; a narrower catalog would have had its first purchase refused.
+ * Never above the scenario's own default.
+ */
+export function maxCandidates(scenario: string, catalog: Json): number {
+  const fallback = scenario === "demo_funding" ? 5 : 3;
+  const pinned = Number(catalog?.jobs?.request_limits?.max_fields?.maxItems);
+  return Number.isInteger(pinned) && pinned >= 1 ? Math.min(pinned, fallback) : fallback;
+}
+
 export async function prepareKickoff(i: KickoffInput): Promise<KickoffArtifacts> {
   for (const [k, v] of Object.entries({ workspace_id: i.workspace_id, user_id: i.user_id, queue_id: i.queue_id, plan_id: i.plan_id })) {
     if (!UUID.test(v)) throw new Error(`${k} must be a uuid`);
@@ -177,7 +191,7 @@ export async function prepareKickoff(i: KickoffInput): Promise<KickoffArtifacts>
     plan_id: i.plan_id, step_index: 0, agent_slug: "scout", workspace_id: i.workspace_id, user_id: i.user_id, instruction: mission,
     requested_lead_count: requestedCount, workflow_kind: "qualified_lead_sourcing", execution_mode: "company_first", tool_needed: "source_with_apify",
     lead_mission: compiled, tool_input: { lead_mission: compiled, source_type: "jobs" },
-    run_budget: { provider_usd: 0.20, max_candidates: scenario === "demo_funding" ? 5 : 3 },
+    run_budget: { provider_usd: 0.20, max_candidates: maxCandidates(scenario, i.catalog) },
   };
 
   // 4. THE AUTHORIZATION: the catalog with observed prices, every actor at ZERO starts.

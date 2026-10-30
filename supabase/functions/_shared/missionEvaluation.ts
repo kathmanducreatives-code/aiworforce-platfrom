@@ -1273,6 +1273,26 @@ export function parseMissionEvaluationStrict(
 }
 
 /** The evaluation for a company the evaluator never received. */
+/**
+ * Did the evaluator actually ANSWER, or is this a placeholder for a call that
+ * produced nothing?
+ *
+ * A failed call (HTTP error, an admission refusal, a timeout) reaches the
+ * strict parser as `null`, which returns `insufficient_evidence` with every
+ * verdict `origin: "unparsed"`. That is a safe HOLD — but canary session 2
+ * recorded it as `model_evaluated`, restored it as a decision the next slice
+ * never revisits, and let its fabricated `unknown` rows lower Oscilar's
+ * evidence-proven hiring check. A placeholder (`notEvaluated`) is the same.
+ * Only an answer the model gave counts.
+ */
+export function evaluatorAnswered(e: MissionEvaluation | null | undefined): boolean {
+  if (!e) return false;
+  if ((e.unknown_fields ?? []).includes("not_evaluated")) return false;
+  const verdicts = e.criterion_verdicts ?? [];
+  if (verdicts.length > 0 && verdicts.every((v) => v.origin === "unparsed")) return false;
+  return !(verdicts.length === 0 && e.reasoning === FALLBACK_INSUFFICIENT.reasoning);
+}
+
 export function notEvaluated(reason: string): MissionEvaluation {
   return {
     ...FALLBACK_INSUFFICIENT,

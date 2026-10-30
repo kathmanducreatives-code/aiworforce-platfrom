@@ -725,6 +725,7 @@ export function evaluateEligibility(
     // stale abstention held a company Atomus had just proven funded inside the
     // window as pending (the first-canary rehearsal). See `fundingResolvesAbstention`.
     if (fundingResolvesAbstention(c, check, verdict, graph)) return check;
+    if (authorityResolvesAbstention(c, check, verdict, graph)) return check;
     return { ...check, result: verdict?.result === "fail" ? "fail" as const : "unknown" as const,
       reason: verdict?.reason ?? "the evaluator did not establish this criterion",
       evidence_ids: verdict?.evidence.map((e) => e.evidence_id) ?? [] };
@@ -785,6 +786,45 @@ export function evaluateEligibility(
  *   - the funding evidence is clean: its current item is proven (null when all are stale), and
  *     the graph holds no conflicting, stale or disproven funding item.
  */
+/**
+ * May a PROVEN AUTHORITY RULE resolve the evaluator's evidence-free `unknown`?
+ *
+ * Canary session 2, LangChain: the company record flagged exactly one
+ * headquarters, San Francisco, United States — `li_record_flagged_headquarters`,
+ * level proven — so the headquarters check passed on structured evidence. The
+ * evaluator, shown the office list as well, answered "unknown" with no receipt,
+ * and that abstention lowered the proven check: the company could never
+ * qualify on geography. The same rule `fundingResolvesAbstention` states for a
+ * dated round applies to every authority-proven fact:
+ *   - the verdict is a GENUINE abstention: the model itself answered
+ *     "unknown" (`origin: "abstained"`). It may cite what made it hesitate —
+ *     LangChain's answer cited the office list — but an `unknown` asserts no
+ *     fact; a contradiction comes back as `fail` with receipts, and a fail, a
+ *     downgraded or rejected answer, a missing row or an unparsed answer still
+ *     lowers the check as before;
+ *   - the check PASSED on the graph, from an item a registered authority rule
+ *     PROVES (`evidenceAuthority.ts`) — a plausible provider field, a job-row
+ *     location or a model reading never qualifies here;
+ *   - no proven item for the dimension disagrees with it.
+ * Funding has its own, stricter rule above; interpretive dimensions (industry,
+ * business model) are the evaluator's to answer and are never resolved here.
+ */
+function authorityResolvesAbstention(
+  c: MissionCriterion, check: CriterionCheck, verdict: CriterionVerdict | null, graph: CompanyEvidenceGraph,
+): boolean {
+  if (check.result !== "pass" || c.dimension === "funding" || interpretive(c)) return false;
+  if (!verdict || verdict.result !== "unknown" || verdict.origin !== "abstained") return false;
+  const dim = CRITERION_EVIDENCE_DIMENSION[c.dimension];
+  const claim = dim ? graph.claims.find((x) => x.dimension === dim) : undefined;
+  if (!claim) return false;
+  const proven = (e: EvidenceItem | null | undefined) =>
+    !!e && e.status === "proven" && e.authority?.level === "proven";
+  const authoritative = [claim.current, ...claim.supporting].filter(proven);
+  if (!authoritative.some((e) => check.evidence_ids.includes(e!.evidence_id) ||
+    (c.dimension === "geography" && e!.authority?.claim === "headquarters"))) return false;
+  return !claim.conflicting.some(proven);
+}
+
 function fundingResolvesAbstention(
   c: MissionCriterion, check: CriterionCheck, verdict: CriterionVerdict | null, graph: CompanyEvidenceGraph,
 ): boolean {

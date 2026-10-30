@@ -93,7 +93,7 @@ import {
   type QualificationContext,
 } from "./missionQualificationContext.ts";
 import {
-  buildMissionEvaluationInput, notEvaluated, reevaluationContextFrom,
+  buildMissionEvaluationInput, evaluatorAnswered, notEvaluated, reevaluationContextFrom,
   type MissionReevaluationContextV1,
   type MissionEvaluation, type MissionEvaluationInput,
   type ParsedMissionEvaluation, type DecisionSource,
@@ -253,7 +253,7 @@ import { PRODUCTION_READINESS, routeActorReady, type ReadinessPolicy } from "./r
 import { markProviderUnavailable, unavailableProvider, type UnavailableProvider } from "./providerAvailability.ts";
 import {
   attemptedRoutes, unaffordableOpKey, unaffordableRoutes, verifyOpKey, type ClaimVerifier, type PendingVerifierRun, type VerificationTarget,
-  type VerifierFinding,
+  type VerifiableCandidate, type VerificationDecision, type VerifierFinding,
 } from "./claimVerifier.ts";
 import type { MapSelection } from "./webEvidenceRunner.ts";
 import { atomusInput, FUNDING_STAGE_VERIFIER_KEY } from "./fundingStageVerifier.ts";
@@ -261,7 +261,7 @@ import { bucketOf, candidateDecision, decisionCounts, decisionSummary, type Cand
 import { evaluateEligibility } from "./candidateEligibility.ts";
 import type { RequirementEvidence } from "./compoundSourcingPipeline.ts";
 import { canStillQualify, evidenceGapsFor } from "./evidenceGapRouter.ts";
-import { deriveMissionCriteria } from "./missionCriteria.ts";
+import { deriveMissionCriteria, type MissionCriterion } from "./missionCriteria.ts";
 import { fundingRecordEvidenceItem, fundingRecordFromDiscoveredRound } from "./fundingCorroboration.ts";
 import {
   decideFundingStage, fundingStageEvidenceItem, normalizeRoundType, requiredStagesOf, stageRank,
@@ -653,6 +653,13 @@ export interface CapabilityExecutionState {
    * next slice. Never provider runs, so never read as work in flight.
    */
   verifier_deferred_steps?: PendingVerifierRun[];
+  /**
+   * Each candidate's verification decision for each verifier at the start of
+   * the last verification phase, with its reason (`verificationDecisions`):
+   * why a purchase was or was not made, kept on the checkpoint rather than in
+   * a worker log nobody keeps.
+   */
+  verification_decisions?: VerificationDecision[];
   /**
    * The pages each bought site map selected, by domain and intent set
    * (`webEvidenceRunner.recordMapMemory`), so a later collection for the same
@@ -9032,7 +9039,9 @@ export async function runCapabilityPlan(
         eligibleOrdered
           .filter((c) =>
             c.brain !== null &&
-            (c.brain.outcome === "QUALIFIED" || c.mission_evaluation !== null))
+            // Only an evaluation the model GAVE is a decision to keep. A failed
+            // call's placeholder is not: the company is evaluated again.
+            (c.brain.outcome === "QUALIFIED" || evaluatorAnswered(c.mission_evaluation)))
           .map((c) => c.key));
       for (let qIndex = 0; qIndex < eligibleOrdered.length; qIndex++) {
         const c = eligibleOrdered[qIndex];
@@ -9457,7 +9466,9 @@ export async function runCapabilityPlan(
           break;
         }
 
-        if (evaluation) {
+        // A CALL THAT RETURNED NOTHING IS NOT AN EVALUATION (canary session 2,
+        // Oscilar): it falls through to the held, never-evaluated path below.
+        if (evaluation && evaluatorAnswered(evaluation.evaluation)) {
           c.evaluation_path = "model_evaluated";
           c.decision_source = "gpt_evaluation";
           c.mission_evaluation = evaluation.evaluation;
@@ -11919,6 +11930,31 @@ export function missionCandidatesFrom(
       // withhold further PAID verification — never a verdict
       // (`missionTriage.paidVerificationBlockedBy`).
       paid_verification_blocked: paidVerificationBlockedBy(c.triage, (c.enriched ?? c.company).provider_industry),
+    };
+  });
+}
+
+/**
+ * The verification phase's candidates, decided exactly as the canonical view
+ * decides them: the same graph, the evaluator's verdicts and the engine's
+ * holds (Q1). It lived inline in run-agent, and the Replay Lab carried a
+ * "verbatim" copy that had lost the verdicts and holds — so no replay could
+ * reproduce an evaluator abstention lowering a proven check (canary session 2).
+ * One function now, called by both.
+ */
+export function verifiableCandidatesFrom(
+  run: { companies: readonly EngineCompany[] }, criteria: readonly MissionCriterion[], missionId: string,
+): VerifiableCandidate[] {
+  return missionCandidatesFrom(run, { missionId: String(missionId) }).map((cand) => {
+    const e = evaluateEligibility(criteria as MissionCriterion[], cand.graph, cand.criterion_verdicts, cand.holds);
+    return {
+      company_key: cand.company_key, name: cand.name, domain: cand.domain, linkedin_url: cand.linkedin_url,
+      graph: cand.graph, eligibility: e.eligibility,
+      hard_checks: e.checks.filter((x) => x.kind === "hard"),
+      attempted_routes: cand.attempted_routes ?? [],
+      unaffordable_routes: cand.unaffordable_routes ?? [],
+      // Triage withheld paid verification: `verificationTargets` skips it.
+      paid_verification_blocked: cand.paid_verification_blocked ?? null,
     };
   });
 }

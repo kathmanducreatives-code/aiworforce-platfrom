@@ -26,6 +26,8 @@ export const APPROVED_ACTORS: Readonly<Record<string, { template: string; max_mi
   "apify:atomus~linkedin-company-scraper": { template: "atomus", max_microusd: 10550, max_units: 3, units_field: "max_array_items.companies" },
 };
 const CAPS = { provider: 200_000, model: 50_000, attempt: 250_000, budget: 3_000_000, perCall: 12_480 };
+/** Worker model calls a session makes before any company: the execution plan and the pool evaluation (canary 2's ledger). */
+export const WORKER_FIXED_CALLS = 2;
 const KICKOFF_STATEMENTS: Readonly<Record<string, RegExp>> = {
   "insert task_plans": /^insert into public\.task_plans \(/,
   "insert lead_execution_calls": /^insert into public\.lead_execution_calls \(/,
@@ -68,6 +70,21 @@ export function contractChecks(c: Json, now: Date): Check[] {
   add("A08", "kickoff SQL limited to the four reviewed statements; no migration", stmts.length > 0 && stmts.every((x) => x in KICKOFF_STATEMENTS) &&
     c?.database?.migrations === "none", stmts);
   add("A09", "automatic execution is stated explicitly", typeof c?.auto_execute === "boolean", c?.auto_execute);
+  // ── THE CONTRACT MUST COVER ITS OWN POOL (canary session 2) ─────────────────
+  //
+  // Contract 2 discovered 3 companies (jobs max_units 3) but allowed company
+  // details for 1 and 4 worker model attempts — the plan and the pool
+  // evaluation take 2, so the third company's evaluation was refused (HTTP
+  // error) and two companies were never enriched. Neither limit is a reason to
+  // spend more: a contract whose limits cannot finish the pool it buys is
+  // refused, and the pool is narrowed or the limits re-approved.
+  const pool = Number(c?.actors?.["apify:harvestapi~linkedin-job-search"]?.max_units ?? 0);
+  const details = Number(c?.actors?.["apify:harvestapi~linkedin-company"]?.max_units ?? 0);
+  const needed = WORKER_FIXED_CALLS + pool;
+  add("A10", `worker model attempts cover the plan, the pool evaluation and one evaluation per discovered company (${WORKER_FIXED_CALLS} + pool)`,
+    Number(c?.model?.worker_attempts) >= needed, { worker_attempts: c?.model?.worker_attempts ?? null, pool, needed });
+  add("A11", "company details can read every discovered company (its headquarters is a hard claim only the record proves)",
+    pool >= 1 && details >= pool, { pool, details });
   return out;
 }
 
@@ -129,6 +146,11 @@ export function kickoffWithinContract(k: Json, sql: string, c: Json, ids: { queu
     [ids.queue_id, req.plan_id]);
   add("S16", "the contract's workspace and project", req.workspace_id === c.workspace_id && sql.includes(`for TEST project ${c.project_ref}.`), req.workspace_id);
   add("S17", "the mission's own run budget within the provider cap", Number(req.run_budget?.provider_usd) * 1e6 <= c.spending.provider_cap_microusd, req.run_budget);
+  // The engine asks for `max_candidates` jobs; the gate refuses more than the pin.
+  add("S18", "the engine's candidate pool equals the job units the contract and the gate allow",
+    Number(req.run_budget?.max_candidates) === Number(get(templateOf("apify:harvestapi~linkedin-job-search")?.request_limits ?? {}, "max_fields.maxItems")) &&
+      Number(req.run_budget?.max_candidates) <= Number(actors["apify:harvestapi~linkedin-job-search"]?.max_units ?? 0),
+    { max_candidates: req.run_budget?.max_candidates ?? null, contract_units: actors["apify:harvestapi~linkedin-job-search"]?.max_units ?? null });
   return out;
 }
 

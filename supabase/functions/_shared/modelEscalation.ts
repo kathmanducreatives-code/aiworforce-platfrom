@@ -67,6 +67,8 @@ export const MODEL_ESCALATION_VERSION = "model-escalation-v1" as const;
  */
 const PROVIDER_FAILURE_CODES = new Set([
   "quota_exhausted", "no_api_key", "http_error", "transport_error", "timeout",
+  // The spend gate said no: a dearer model is the one thing that must not follow.
+  "admission_refused",
 ]);
 
 export function isProviderSideFailure(code: string | null | undefined): boolean {

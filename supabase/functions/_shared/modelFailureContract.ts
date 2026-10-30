@@ -143,7 +143,9 @@ export class TerminalModelCompletionError extends Error {
  * need human intervention; incomplete/unexpected completions must not buy a
  * repair or escalation. A separately authorized future run is a new decision.
  */
-const UNRECOVERABLE = new Set(["quota_exhausted", "no_api_key"]);
+// `admission_refused`: the mission's spend gate refused the call — a budget
+// decision no repair or escalation may buy its way past.
+const UNRECOVERABLE = new Set(["quota_exhausted", "no_api_key", "admission_refused"]);
 
 export function isUnrecoverableModelFailure(code: string): boolean {
   return UNRECOVERABLE.has(code) || isTerminalCompletionFailure(code);

@@ -25,7 +25,7 @@
 #   session        verify (Apify account checked CONCURRENTLY with the database
 #                  checks), the paid compile, validation K01–K20, then the
 #                  approved contract (docs/launch/proposals/canary-session-
-#                  contract.json, session-contract.ts S01–S17). Only a plan
+#                  contract.json, session-contract.ts S01–S18). Only a plan
 #                  that satisfies the contract exactly — and only when the
 #                  contract says auto_execute — reaches the kickoff, written
 #                  under the contract's single-use queue id; the worker step
@@ -599,7 +599,7 @@ case "$STAGE" in
     if "$DENO" run --no-prompt --allow-read --allow-write="$AUDIT" scripts/test-project/canary/session-contract.ts kickoff \
         "$CONTRACT" "$AUDIT/kickoff" "$csha" --json "$AUDIT/kickoff/contract-check.json" > "$AUDIT/kickoff/contract-check.txt" 2>&1; then
       tee -a "$SUMMARY" < "$AUDIT/kickoff/contract-check.txt" > /dev/null
-      pass "the generated plan satisfies the contract exactly: S01–S17"
+      pass "the generated plan satisfies the contract exactly: S01–S18"
     else
       cat "$AUDIT/kickoff/contract-check.txt"
       stop "the generated plan is OUTSIDE the contract ($(grep '^FAIL' "$AUDIT/kickoff/contract-check.txt" | tr '\n' ';')) — nothing executed; it needs a separate approval"
