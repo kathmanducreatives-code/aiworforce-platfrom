@@ -81,11 +81,16 @@ export function canaryBudget(i: { stage: string; apify: Json; spentMicrousd: num
 
   // B4 — the canary-level $3 ceiling over all attempts.
   const compile = COMPILE_CALLS * MODEL_TEMPLATE_MICROUSD;
-  const next = i.stage === "prepare" || i.stage === "verify" ? compile + attempt : i.stage === "launch" ? attempt : 0;
+  // The next stage's worst case. A stage that compiles reserves the compile AND
+  // the paid run after it; launch only the run. An unknown stage fails closed
+  // (review blocker: a session was once treated as costing nothing).
+  const NEXT: Readonly<Record<string, number>> = { verify: compile + attempt, prepare: compile + attempt, session: compile + attempt, launch: attempt };
+  const next = NEXT[i.stage] ?? NaN;
+  add("B0", "the stage's worst case is known", Number.isFinite(next), `${i.stage}: ${Number.isFinite(next) ? usd(next) : "unknown stage"}`);
   const db = Math.max(0, Math.round(i.spentMicrousd));
   const prepares = Number.isInteger(i.priorPrepares) && i.priorPrepares >= 0 ? i.priorPrepares : NaN;
   const spent = db + prepares * compile;
-  add("B4", "spent so far + the next stage's worst case fit the $3 canary budget", Number.isFinite(spent) && spent + next <= CANARY_BUDGET_MICROUSD,
+  add("B4", "spent so far + the next stage's worst case fit the $3 canary budget", Number.isFinite(spent) && Number.isFinite(next) && spent + next <= CANARY_BUDGET_MICROUSD,
     `spent ${usd(spent)} (operations ${usd(db)} + ${prepares} earlier prepare compile(s) × ${usd(compile)}) + next ${usd(next)} (${i.stage === "launch" ? "the paid run" : "compile + the paid run"}) ` +
       `= ${usd(spent + next)} of ${usd(CANARY_BUDGET_MICROUSD)}; remaining after: ${usd(CANARY_BUDGET_MICROUSD - spent - next)}`);
 

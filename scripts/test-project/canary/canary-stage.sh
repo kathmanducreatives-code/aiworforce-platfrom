@@ -64,6 +64,16 @@ EXPECTED_SHA="${EXPECTED_SHA:?EXPECTED_SHA is required}"
 APIFY_NET="${CANARY_APIFY_NET:-api.apify.com}"
 DENO="${DENO:-deno}"
 
+# LOCAL-REHEARSAL OVERRIDES NEVER APPLY IN ACTIONS (review hardening): none of
+# these can be set from workflow inputs, and this refuses them outright if any
+# step ever exported one.
+if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  for v in CANARY_LOCAL_REHEARSAL CANARY_SESSION_CONTRACT CANARY_OFFLINE_PROPOSAL CANARY_PRIOR_PREPARES CANARY_APIFY_NET APIFY_API_BASE; do
+    [ -z "${!v:-}" ] || { echo "STOPPED: $v is a local-rehearsal override and is refused in GitHub Actions" >&2; exit 1; }
+  done
+  DENO=deno   # the runner's own Deno (setup-deno), never an inherited path
+fi
+
 failures=0
 note() { printf '%s\n' "$*" | tee -a "$SUMMARY"; }
 pass() { note "PASS  $1"; }
@@ -84,6 +94,16 @@ stop() { note "STOPPED: $1"; exit 1; }
 case "$STAGE" in migrate|launch|session-close) DB_WRITES=1 ;; *) DB_WRITES=0 ;; esac
 # Bounded waits: a connection or statement that hangs fails the stage.
 export PGCONNECT_TIMEOUT=15
+# Always read-only, whatever the stage: session-close reads through this.
+q_ro() {
+  [ "$DB_URL_OK" = "1" ] || stop "internal: database call before TEST_DB_URL was checked"
+  psql "$TEST_DB_URL" -X -v ON_ERROR_STOP=1 -Atq -c "set statement_timeout = '60s'" -c "set default_transaction_read_only = on" "$@"
+}
+# Parameterised SQL: psql substitutes :'var' only in SQL it READS (a file or
+# stdin), never in -c strings, so values from the database or Apify reach the
+# server as quoted literals, never as SQL. Usage: qp "<sql>" -v name=value …
+qp() { local sql="$1"; shift; q "$@" -f - <<< "$sql"; }
+qp_ro() { local sql="$1"; shift; q_ro "$@" -f - <<< "$sql"; }
 q() {
   # Never a psql call on an unchecked URL (and so never a local-socket fallback).
   [ "$DB_URL_OK" = "1" ] || stop "internal: database call before TEST_DB_URL was checked"
@@ -244,7 +264,8 @@ check_conflicts() {
       (select count(*) from public.lead_mission_queue where status in ('queued', 'running', 'resumable')),
       (select count(*) from public.discovery_smoke_authorizations where status = 'active' and deadline_at > clock_timestamp()),
       (select count(*) from public.discovery_smoke_operations o where o.kind = 'provider' and not exists (
-         select 1 from public.discovery_smoke_reconciliations x where x.authorization_id = o.authorization_id and x.operation_key = o.operation_key)),
+         select 1 from public.discovery_smoke_reconciliations x where x.authorization_id = o.authorization_id and x.operation_key = o.operation_key
+           and x.vendor_microusd <= o.committed_microusd)),
       (select coalesce(sum(reserved_credits), 0) from public.workspace_credit_balances where workspace_id = '$WS')")"
   echo "$r" > "$AUDIT/conflicts.txt"
   [ "$r" = "0|0|0|0" ] && pass "no conflicting work: no claimable mission, live authorization, unreconciled purchase or reserved credit" \
@@ -300,8 +321,9 @@ generate_kickoff() {
     [ -n "${OPENAI_API_KEY:-}" ] || stop "TEST_OPENAI_API_KEY is not set for the kickoff compile"
   fi
   mkdir -p "$out"
-  local env=(env)
-  [ "$mode" = "paid" ] || env=(env -u OPENAI_API_KEY)
+  # The preparer sees the model key and nothing else secret (review hardening).
+  local env=(env -u TEST_DB_URL -u APIFY_API_TOKEN -u GITHUB_TOKEN)
+  [ "$mode" = "paid" ] || env+=(-u OPENAI_API_KEY)
   "${env[@]}" "$DENO" run --no-prompt --allow-env --allow-read --allow-write="$out" "${net[@]}" \
     scripts/test-project/real-gpt/prepare-real-gpt-kickoff.ts --scenario canary_funding \
     --project-ref "$REF" --workspace "$WS" --user "$user" \
@@ -524,40 +546,60 @@ case "$STAGE" in
   session-close)
     has_db || stop "TEST_DB_URL unusable"
     qid="${CANARY_QUEUE_ID:?CANARY_QUEUE_ID is required}"
-    [[ "$qid" =~ ^[0-9a-f-]{36}$ ]] || stop "unreadable queue id"
-    check_identity
+    [[ "$qid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || stop "unreadable queue id"
+    # Identity must hold before any write here: a failure stops, it is not just reported.
+    [ "$(q_ro -c "select count(*) from public.workspaces where id = '$WS' and name = '$WS_NAME'")" = "1" ] \
+      && pass "project: the connection holds workspace $WS_NAME ($WS)" || stop "the workspace is not in this database; nothing closed"
+    [ "$(q_ro -c "select count(*) from public.lead_mission_queue where id = '$qid' and workspace_id = '$WS'")" = "1" ] \
+      || stop "queue $qid is not the canary workspace's; nothing closed"
     note "INFO  closing session queue $qid"
     sed '/^-- The funding record each qualified company rests on/,$d' scripts/test-project/canary-funding-verify.sql > "$AUDIT/verify-checks.sql"
-    q -F '|' -v workspace_id="$WS" -v queue_id="$qid" -f "$AUDIT/verify-checks.sql" > "$AUDIT/canary-verify.txt"
+    q_ro -F '|' -v workspace_id="$WS" -v queue_id="$qid" -f "$AUDIT/verify-checks.sql" > "$AUDIT/canary-verify.txt"
     cat "$AUDIT/canary-verify.txt"
     if awk -F'|' '$1 != "C10" && $5 == "FAIL"' "$AUDIT/canary-verify.txt" | grep -q .; then fail "post-run checks: a C-check FAILED"; else pass "post-run checks C01–C09"; fi
-    # The authorization ends here: nothing more can be admitted under it.
-    q -c "select public.stop_discovery_smoke('$qid', 'canary session closed') where exists (
-      select 1 from public.discovery_smoke_authorizations where queue_id = '$qid' and status = 'active')" > /dev/null
+    # The authorization ends here: nothing more can be admitted under it.  (WRITE)
+    qp "select public.stop_discovery_smoke(:'qid'::uuid, 'canary session closed') where exists (
+      select 1 from public.discovery_smoke_authorizations where queue_id = :'qid'::uuid and status = 'active')" -v qid="$qid" > /dev/null
     pass "authorization stopped: nothing more can be bought under it"
-    runs="$(q -c "select coalesce(string_agg(o.provider_run_id, ','), '') from public.discovery_smoke_operations o
-      join public.discovery_smoke_authorizations a on a.id = o.authorization_id where a.queue_id = '$qid' and o.kind = 'provider' and o.provider_run_id is not null")"
+    qp_ro "select o.provider_run_id, o.actor, o.committed_microusd from public.discovery_smoke_operations o
+      join public.discovery_smoke_authorizations a on a.id = o.authorization_id
+      where a.queue_id = :'qid'::uuid and o.kind = 'provider' and o.provider_run_id is not null" -F '|' -v qid="$qid" > "$AUDIT/purchases.txt"
+    runs="$(cut -d'|' -f1 "$AUDIT/purchases.txt" | paste -sd, -)"
     if [ -n "$runs" ]; then
       "$DENO" run --no-prompt --allow-net="$APIFY_NET" --allow-env=APIFY_API_TOKEN,APIFY_API_BASE --allow-read=docs/launch/proposals \
-        --allow-write="$AUDIT" scripts/test-project/apify-account-check.ts --runs "$runs" --json "$AUDIT/receipts.json" > "$AUDIT/apify-runs.txt" 2>&1 || true
+        --allow-write="$AUDIT" scripts/test-project/apify-account-check.ts --runs "$runs" --json "$AUDIT/receipts.json" > "$AUDIT/apify-runs.txt" 2>&1 \
+        || fail "apify receipts: a run was over its cap, not terminal, not a canary actor, or unreadable"
       cat "$AUDIT/apify-runs.txt"
-      # Reconcile ONLY what Apify itself reports as terminal with a figure; an
-      # uncertain purchase stays open and blocks every later paid operation.
-      jq -r '.receipts[] | select(.status != null and (.status | IN("SUCCEEDED","FAILED","ABORTED","TIMED-OUT")) and .usage_total_usd != null)
-        | "\(.run_id) \(.status) \(.usage_total_usd * 1000000 | ceil)"' "$AUDIT/receipts.json" > "$AUDIT/reconcile.txt" 2>/dev/null || : > "$AUDIT/reconcile.txt"
-      while read -r run status micro; do
-        q -c "select public.reconcile_discovery_smoke_operation('$qid', o.operation_key, $micro, 'https://console.apify.com/actors/runs/$run', '$status')
-          from public.discovery_smoke_operations o join public.discovery_smoke_authorizations a on a.id = o.authorization_id
-          where a.queue_id = '$qid' and o.kind = 'provider' and o.provider_run_id = '$run'" > /dev/null < /dev/null \
-          && note "RECONCILED run $run: $status, \$$(awk "BEGIN{printf \"%.6f\", $micro/1e6}") (Apify's own figure)"
-      done < "$AUDIT/reconcile.txt"
+      # Reconcile ONLY a run Apify itself reports terminal, for the SAME actor the
+      # purchase was admitted for, at or below its cap. Anything else stays open
+      # and blocks every later paid operation until an administrator decides.
+      while IFS='|' read -r run actor committed; do
+        [[ "$run" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || { fail "purchase with an unreadable run id: left open"; continue; }
+        rec="$(jq -c --arg run "$run" '.receipts[] | select(.run_id == $run)' "$AUDIT/receipts.json" 2>/dev/null || true)"
+        status="$(jq -r '.status // empty' <<< "$rec" 2>/dev/null || true)"
+        r_actor="$(jq -r '.actor // empty' <<< "$rec" 2>/dev/null || true)"
+        within="$(jq -r '.within // false' <<< "$rec" 2>/dev/null || true)"
+        micro="$(jq -r 'if .usage_total_usd == null then empty else (.usage_total_usd * 1000000 | ceil) end' <<< "$rec" 2>/dev/null || true)"
+        if [[ "$status" =~ ^(SUCCEEDED|FAILED|ABORTED|TIMED-OUT)$ ]] && [ "apify:$r_actor" = "$actor" ] && [ "$within" = "true" ] \
+            && [[ "$micro" =~ ^[0-9]+$ ]] && [ "$micro" -le "$committed" ]; then
+          qp "select public.reconcile_discovery_smoke_operation(:'qid'::uuid, o.operation_key,
+              :'micro'::bigint, 'https://console.apify.com/actors/runs/' || :'run', :'status')
+            from public.discovery_smoke_operations o join public.discovery_smoke_authorizations a on a.id = o.authorization_id
+            where a.queue_id = :'qid'::uuid and o.kind = 'provider' and o.provider_run_id = :'run'" \
+            -v qid="$qid" -v run="$run" -v micro="$micro" -v status="$status" > /dev/null \
+            && note "RECONCILED run $run: $status, \$$(awk "BEGIN{printf \"%.6f\", $micro/1e6}") (Apify's own figure, within its cap)"
+        else
+          fail "run $run ($actor): not reconciled automatically (status '${status:-?}', receipt actor '${r_actor:-?}', within cap '${within}'): left open"
+        fi
+      done < "$AUDIT/purchases.txt"
     fi
-    open="$(q -c "select count(*) from public.discovery_smoke_operations o join public.discovery_smoke_authorizations a on a.id = o.authorization_id
-      where a.queue_id = '$qid' and o.kind = 'provider' and not exists (select 1 from public.discovery_smoke_reconciliations r
-        where r.authorization_id = o.authorization_id and r.operation_key = o.operation_key)")"
-    [ "$open" = "0" ] && pass "every provider purchase reconciled against Apify's receipt" \
-      || fail "$open provider purchase(s) UNCERTAIN: not reconciled automatically; every later paid operation is blocked until an administrator reconciles them"
-    q -F '|' -v queue_id="$qid" -f scripts/test-project/canary/session-summary.sql > "$AUDIT/session-summary.txt"
+    # Open liability, by the gate's own rule: unreconciled, or reconciled above its maximum.
+    open="$(qp_ro "select count(*) from public.discovery_smoke_operations o join public.discovery_smoke_authorizations a on a.id = o.authorization_id
+      where a.queue_id = :'qid'::uuid and o.kind = 'provider' and not exists (select 1 from public.discovery_smoke_reconciliations r
+        where r.authorization_id = o.authorization_id and r.operation_key = o.operation_key and r.vendor_microusd <= o.committed_microusd)" -v qid="$qid")"
+    [ "$open" = "0" ] && pass "every provider purchase reconciled against Apify's receipt, within its cap" \
+      || fail "$open provider purchase(s) UNCERTAIN or over their cap: every later paid operation is blocked until an administrator reconciles them"
+    q_ro -F '|' -v queue_id="$qid" -f scripts/test-project/canary/session-summary.sql > "$AUDIT/session-summary.txt"
     cat "$AUDIT/session-summary.txt"
     ;;
 

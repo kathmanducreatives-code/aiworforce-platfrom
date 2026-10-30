@@ -173,6 +173,7 @@ Deno.test("workflow guard, executed: a session needs the canary project and work
     [{ LEAD_V2_WORKER_WORKSPACES: "9d09038b-2d39-49ca-b687-e3946ea7266d" }, "discovery-test workspace only"],
     [{ CONFIRM_REF: "ohsdatpvfdjdemstoiuj", TEST_PROJECT_REF: "ohsdatpvfdjdemstoiuj", SUPABASE_URL: "https://ohsdatpvfdjdemstoiuj.supabase.co" }, "not a non-production project"],
     [{ EXPECTED_SHA: "f".repeat(40) }, "not the approved expected_sha"],
+    [{ SESSION_MINUTES: "11" }, "at most 10 minutes"],
   ];
   for (const [over, why] of refused) {
     const r = await guard({ ...SESSION_ENV, ...over });
@@ -191,4 +192,29 @@ Deno.test("stage: the session's approval binds the contract hash and the commit;
   assert(body.indexOf("DB_WRITES=1") > body.indexOf("the generated plan satisfies the contract exactly"), "no write before the contract check");
   assertStringIncludes(STAGE, '[ "${CANARY_LOCAL_REHEARSAL:-}" = "1" ] && [ -n "${CANARY_SESSION_CONTRACT:-}" ]');
   assert(!RAW.includes("CANARY_SESSION_CONTRACT"), "the workflow never overrides the contract");
+});
+
+Deno.test("stage, executed: local-rehearsal overrides are refused under GitHub Actions before anything runs", async () => {
+  for (const v of ["CANARY_LOCAL_REHEARSAL", "CANARY_SESSION_CONTRACT", "CANARY_OFFLINE_PROPOSAL", "CANARY_PRIOR_PREPARES", "CANARY_APIFY_NET", "APIFY_API_BASE"]) {
+    const out = await new Deno.Command("bash", {
+      args: [new URL("../../scripts/test-project/canary/canary-stage.sh", import.meta.url).pathname, "session"], clearEnv: true,
+      env: { PATH: Deno.env.get("PATH") ?? "", GITHUB_ACTIONS: "true", [v]: "x", CANARY_AUDIT_DIR: Deno.makeTempDirSync(), EXPECTED_SHA: SHA },
+      stdout: "piped", stderr: "piped",
+    }).output();
+    assertEquals(out.code, 1, v);
+    assertStringIncludes(new TextDecoder().decode(out.stderr), `${v} is a local-rehearsal override and is refused in GitHub Actions`);
+  }
+});
+
+Deno.test("session-close: receipts reconcile only within cap and for the same actor; open liability uses the gate's own rule", () => {
+  const close = STAGE.slice(STAGE.indexOf("  session-close)\n"), STAGE.indexOf('  *) stop "unknown stage'));
+  assertStringIncludes(close, '[ "apify:$r_actor" = "$actor" ] && [ "$within" = "true" ]');
+  assertStringIncludes(close, '[ "$micro" -le "$committed" ]');
+  assertStringIncludes(close, '[[ "$run" =~ ^[A-Za-z0-9_-]{1,64}$ ]]');
+  assertStringIncludes(close, "|| fail \"apify receipts:");
+  assertStringIncludes(close, "r.vendor_microusd <= o.committed_microusd");
+  assertStringIncludes(STAGE, "and x.vendor_microusd <= o.committed_microusd", "check_conflicts uses the same rule");
+  assert(!/-v [a-z]+="\$[a-z]+"[^\n]*-c "/.test(close), "no -v variables with -c (psql does not substitute them there)");
+  assert(!/q -c "[^"]*'\$run'/.test(close), "no Apify value interpolated into SQL text");
+  assertStringIncludes(close, "|| stop \"the workspace is not in this database; nothing closed\"");
 });

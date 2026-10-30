@@ -182,6 +182,9 @@ expect budget-many-prepares "117 earlier prepare compile"
 expect budget-many-prepares "FAIL  B4"
 
 # ══ FAST CANARY MODE: one approved contract, end to end ══════════════════════
+# Local-rehearsal overrides are refused outright under GitHub Actions.
+run override-under-actions 1 verify GITHUB_ACTIONS=true CANARY_OFFLINE_PROPOSAL=docs/launch/proposals/canary-funding-reviewed-mission-proposal.json
+expect override-under-actions "is a local-rehearsal override and is refused in GitHub Actions"
 C="$tmp/contracts"; mkdir -p "$C"
 mkc() { jq "$2" docs/launch/proposals/canary-session-contract.json > "$C/$1.json"; sha256sum "$C/$1.json" | cut -d' ' -f1; }
 sess() {   # sess <name> <expect> <contract> [env…]
@@ -232,19 +235,27 @@ sauth="$(psql "$url" -XAt -c "select id from public.discovery_smoke_authorizatio
 psql "$url" -XAtq -v ON_ERROR_STOP=1 -c "update public.lead_mission_queue set status = 'complete' where id = '$squeue'" \
   -c "insert into public.discovery_smoke_operations (authorization_id, operation_key, task_id, generation, kind, actor, template_id, payload_hash, committed_microusd, provider_run_id)
       values ('$sauth', 'rehearsal-jobs', gen_random_uuid(), 1, 'provider', 'apify:harvestapi~linkedin-job-search', 'jobs', repeat('b', 64), 4000, 'run-jobs'),
-             ('$sauth', 'rehearsal-uncertain', gen_random_uuid(), 1, 'provider', 'apify:harvestapi~linkedin-company', 'details', repeat('c', 64), 4050, null)" > /dev/null
+             ('$sauth', 'rehearsal-uncertain', gen_random_uuid(), 1, 'provider', 'apify:harvestapi~linkedin-company', 'details', repeat('c', 64), 4050, null),
+             ('$sauth', 'rehearsal-over', gen_random_uuid(), 1, 'provider', 'apify:atomus~linkedin-company-scraper', 'atomus', repeat('d', 64), 10550, 'run-over'),
+             ('$sauth', 'rehearsal-wrong', gen_random_uuid(), 1, 'provider', 'apify:harvestapi~linkedin-company', 'details', repeat('e', 64), 4050, 'run-wrong')" > /dev/null
 run session-close-partial 1 session-close CANARY_QUEUE_ID="$squeue"
 expect session-close-partial "authorization stopped"
 expect session-close-partial "RECONCILED run run-jobs: SUCCEEDED"
-expect session-close-partial "1 provider purchase(s) UNCERTAIN"
+expect session-close-partial "run run-over (apify:atomus~linkedin-company-scraper): not reconciled automatically"
+expect session-close-partial "run run-wrong (apify:harvestapi~linkedin-company): not reconciled automatically"
+expect session-close-partial "3 provider purchase(s) UNCERTAIN or over their cap"
 expect session-close-partial "provider charged (Apify receipts)"
 # The uncertain purchase blocks every later paid operation, a new contract included.
 sess session-after-uncertain 1 fresh2
 expect session-after-uncertain "unreconciled purchase"
 [ "$(psql "$url" -XAt -c "select count(*) from public.discovery_smoke_reconciliations r join public.discovery_smoke_authorizations a on a.id = r.authorization_id where a.queue_id = '$squeue'")" = "1" ] \
   || { echo "FAIL: exactly one purchase must be reconciled"; exit 1; }
-# The administrator reconciles the uncertain one (NO_RUN); then a new, approved contract may run.
-psql "$url" -XAtq -c "select public.reconcile_discovery_smoke_operation('$squeue', 'rehearsal-uncertain', 0, 'rehearsal: Apify shows no run', 'NO_RUN')" > /dev/null
+# The administrator decides the open ones (the over-cap one is recorded as Apify charged it,
+# which the gate still treats as open liability, so it is then re-recorded as the rehearsal's
+# administrator correcting the cap's record); then a new, approved contract may run.
+psql "$url" -XAtq -c "select public.reconcile_discovery_smoke_operation('$squeue', 'rehearsal-uncertain', 0, 'rehearsal: Apify shows no run', 'NO_RUN')" \
+  -c "select public.reconcile_discovery_smoke_operation('$squeue', 'rehearsal-wrong', 1000, 'rehearsal: reviewed by the administrator', 'SUCCEEDED')" \
+  -c "select public.reconcile_discovery_smoke_operation('$squeue', 'rehearsal-over', 10550, 'rehearsal: reviewed by the administrator', 'SUCCEEDED')" > /dev/null
 sess session-second-contract 0 fresh2
 expect session-second-contract "READY FOR THE WORKER"
 s2="$(cat "$tmp/session-second-contract/audit/queue_id")"

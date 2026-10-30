@@ -233,6 +233,9 @@ jobs:
                 || { echo "refusing: a session may run the paid canary; providers must be openai-and-apify" >&2; exit 1; }
               [[ "$CANARY_APPROVAL" =~ ^run\ canary\ session\ [0-9a-f]{64}\ at\ [0-9a-f]{40}$ ]] \
                 || { echo "refusing: a session needs its approval phrase: run canary session <contract sha256> at <commit sha>" >&2; exit 1; }
+              # 8 (session) + 10 (worker) + 10 (kill grace) + 5 (close) + setup fits the job's 45.
+              [ "$SESSION_MINUTES" -le 10 ] \
+                || { echo "refusing: a session's worker runs at most 10 minutes, so stop and reconcile always fit the job" >&2; exit 1; }
               ;;
             *) echo "refusing: canary stage '$CANARY_STAGE' does not run the worker" >&2; exit 1 ;;
           esac

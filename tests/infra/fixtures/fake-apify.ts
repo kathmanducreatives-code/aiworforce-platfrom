@@ -22,6 +22,10 @@ const ACTS: Record<string, Record<string, unknown>> = {
 };
 const RUNS: Record<string, Record<string, unknown>> = {
   "run-jobs": { actId: "harvestapi~linkedin-job-search", status: "SUCCEEDED", usageTotalUsd: 0.004, chargedEventCounts: { "actor-start": 1, job: 3 } },
+  // Above Atomus's $0.01055 cap: must never be reconciled automatically.
+  "run-over": { actId: "atomus~linkedin-company-scraper", status: "SUCCEEDED", usageTotalUsd: 0.02, chargedEventCounts: { "actor-start": 1 } },
+  // Apify says it is an Atomus run; the purchase was admitted as company details.
+  "run-wrong": { actId: "atomus~linkedin-company-scraper", status: "SUCCEEDED", usageTotalUsd: 0.001, chargedEventCounts: { "actor-start": 1 } },
 };
 
 Deno.serve({ port, hostname: "127.0.0.1", onListen: () => console.log(`fake apify on ${port}`) }, (req) => {

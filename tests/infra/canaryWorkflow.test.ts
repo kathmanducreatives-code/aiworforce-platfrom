@@ -146,10 +146,16 @@ Deno.test("stage script: the one target, the reviewed checksums and the exact ap
   // The database URL is only ever handed to psql; nothing echoes it.
   assert(!/echo[^\n]*\$TEST_DB_URL/.test(STAGE) && !/echo[^\n]*\$\{?APIFY_API_TOKEN/.test(STAGE) && !/echo[^\n]*\$\{?OPENAI_API_KEY/.test(STAGE));
   // Read-only stages write nothing: no psql -f of anything but the reviewed migration, the kickoff and read-only SQL.
-  const files = [...STAGE.matchAll(/q (?:-F '\|' )?(?:-v [^ ]+ )*-f "?([^"\s]+)"?/g)].map((m) => m[1]);
-  assertEquals([...new Set(files)].sort(), ['$AUDIT/kickoff/kickoff.sql', '$AUDIT/verify-checks.sql', '$MIGRATION', '$dir/kickoff.sql',
+  const runs = [...STAGE.matchAll(/\b(q|q_ro) (?:-F '\|' )?(?:-v [^ ]+ )*-f "?([^"\s]+)"?/g)].map((m) => [m[1], m[2]]);
+  assertEquals([...new Set(runs.map(([, f]) => f))].sort(), ['$AUDIT/kickoff/kickoff.sql', '$AUDIT/verify-checks.sql', '$MIGRATION', '$dir/kickoff.sql',
     "scripts/test-project/canary/session-summary.sql", "scripts/test-project/real-gpt/preflight.sql",
     "scripts/test-project/smoke-reconciliation.sql"].sort());
+  // The only files a session-capable (q) call may run that write: the reviewed migration and the validated kickoffs.
+  for (const [fn, f] of runs) {
+    if (fn === "q" && !["$MIGRATION", "$dir/kickoff.sql", "$AUDIT/kickoff/kickoff.sql"].includes(f)) {
+      assert(["scripts/test-project/real-gpt/preflight.sql", "$AUDIT/verify-checks.sql", "scripts/test-project/smoke-reconciliation.sql"].includes(f), f);
+    }
+  }
 });
 
 const kickoff = (over: Record<string, unknown> = {}) => prepareKickoff({
@@ -225,6 +231,15 @@ Deno.test("budget: too little left of the $3, a price above its reservation, a n
   const poor = structuredClone(APIFY); poor.account.room_usd = 0.01;
   assertEquals(failing(budget({ apify: poor })), ["B5"]);
   assertEquals(budget({ apify: { account: {}, actors: [] } }).ok, false, "no Apify record: refused");
+});
+
+Deno.test("budget: a session reserves the compile AND the paid run; an unknown stage fails closed (review blocker)", () => {
+  assertEquals(budget({ stage: "session" }).next_worst_microusd, 93_480);
+  assertEquals(failing(budget({ stage: "session", spent: 2_990_000 })), ["B4"], "$2.99 spent leaves no room for a session");
+  assertEquals(budget({ stage: "session", spent: CANARY_BUDGET_MICROUSD - 93_480 }).ok, true);
+  for (const stage of ["", "launch-and-more", "close"]) {
+    assert(failing(budget({ stage })).includes("B0") && failing(budget({ stage })).includes("B4"), stage);
+  }
 });
 
 Deno.test("budget: every earlier prepare's compile counts against the $3, launched or not (the unlaunched-compile gap)", () => {
