@@ -1,7 +1,7 @@
 {
   "contract": "agentory-canary-session",
   "version": 1,
-  "id": "first-funding-canary-1",
+  "id": "first-funding-canary-2",
   "status": "PROPOSED — authorizes nothing until approved by its exact phrase (see approval_phrase)",
   "approval_phrase": "run canary session <this file's sha256> at <commit sha>",
   "project_ref": "tlvnfrxzjhsjgdofwehb",
@@ -39,6 +39,6 @@
     "migrations": "none"
   },
   "auto_execute": true,
-  "expires_at": "2026-11-02T00:00:00Z",
+  "expires_at": "2026-11-06T00:00:00Z",
   "single_use": "the queue and plan ids are derived from this file's sha256, so the queue's primary key refuses a second kickoff under the same contract"
 }
