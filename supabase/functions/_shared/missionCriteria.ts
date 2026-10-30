@@ -434,6 +434,40 @@ const kindOfSignal = (s: Partial<MissionSignal>): CanonicalSignalKind | null => 
   return kindForEvent(readSignalPhrase(label)?.event) ?? aliasKindFor(label);
 };
 
+/**
+ * A `hard_constraints` entry that only RESTATES the mission's one hiring signal.
+ *
+ * Canary session 2 (queue 763fc2b9…, "Find one US company hiring Account
+ * Executives…"): the model put `hiring: {operator: "currently_hiring", value:
+ * "Account Executives"}` in `hard_constraints` beside the hiring signal that
+ * already carries those role terms. The value is in the query, so it became a
+ * second HARD criterion with dimension `constraint` — which no evidence
+ * dimension answers. Every candidate stayed `unknown` on it, `canStillQualify`
+ * found a hard gap with no route, and the funding verifier was never run for
+ * any of the three companies.
+ *
+ * Skipped only when all of it is the same: a hiring field from a closed list,
+ * a non-excluding operator from a closed list, exactly one hiring signal, and
+ * the same set of role terms (case and a plural "s" aside). Any other field,
+ * operator or role is kept exactly as before.
+ */
+const RESTATED_HIRING_FIELDS = new Set(["hiring", "hiring_role", "hiring_roles", "hiring_signal", "open_role",
+  "open_roles", "job_title", "job_titles"]);
+const RESTATED_HIRING_OPS = new Set(["", "currently_hiring", "actively_hiring", "is_hiring", "hiring", "has_open_role",
+  "has_open_roles", "equals", "eq", "is", "in", "includes", "contains", "matches"]);
+export function restatesHiringSignal(field: string, raw: unknown, signals: readonly Partial<MissionSignal>[]): boolean {
+  if (!RESTATED_HIRING_FIELDS.has(field.toLowerCase())) return false;
+  const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { value: raw }) as
+    { operator?: unknown; value?: unknown };
+  if (!RESTATED_HIRING_OPS.has(String(c.operator ?? "").trim().toLowerCase())) return false;
+  const hiring = signals.filter((s) => kindOfSignal(s) === "hiring");
+  if (hiring.length !== 1) return false;
+  const form = (v: unknown) => String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ").replace(/s$/, "");
+  const stated = new Set((Array.isArray(c.value) ? c.value : [c.value]).map(form).filter(Boolean));
+  const carried = new Set((hiring[0].qualifier?.role_terms ?? []).map(form).filter(Boolean));
+  return stated.size > 0 && stated.size === carried.size && [...stated].every((t) => carried.has(t));
+}
+
 function signalWords(s: Partial<MissionSignal>): string {
   return [
     s.phrase ?? "", ...(s.qualifier?.role_terms ?? []), ...(s.role_families ?? []),
@@ -1261,6 +1295,7 @@ export function deriveMissionCriteria(
     "company_type", "company_types", "industry", "industries", "vertical", "verticals"]);
   for (const [field, raw] of Object.entries(mission.hard_constraints ?? {})) {
     if (handled.has(field)) continue;
+    if (restatesHiringSignal(field, raw, mission.required_signals ?? [])) continue;
     const c = (raw ?? {}) as { operator?: string; value?: unknown; reason?: string };
     const value = c.value ?? raw;
     const values = Array.isArray(value) ? value.map(String) : [String(value ?? "")];

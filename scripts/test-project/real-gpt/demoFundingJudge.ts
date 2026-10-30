@@ -38,7 +38,12 @@ export function judgeDemoFundingInterpretation(m: Json, count = 5): Verdict[] {
   const hs = sig(m, "hiring"), fs = sig(m, "funding");
   const roleTerms = ((hs?.qualifier?.role_terms ?? []) as string[]).map(lower);
   const roles = (m.decision_makers?.roles ?? []) as string[];
-  const unsupported = ((m.criteria ?? []) as Json[]).filter((c) => c.kind === "hard" && (c.status ?? "ok") !== "ok");
+  // A hard criterion is representable only when its status is ok AND some
+  // evidence dimension answers it. `constraint` is the catch-all no evidence
+  // answers: canary session 2 compiled a hard `constraint` restating the hiring
+  // role, every candidate stayed unknown on it, and D7 still passed.
+  const unsupported = ((m.criteria ?? []) as Json[]).filter((c) => c.kind === "hard" &&
+    ((c.status ?? "ok") !== "ok" || c.dimension === "constraint"));
   return [
     v("D1", "the deliverable is companies, not people", m.target_entity === "company" && m.requested_output === "qualified_companies" && roles.length === 0,
       `target=${m.target_entity} output=${m.requested_output} roles=${JSON.stringify(roles)}`),

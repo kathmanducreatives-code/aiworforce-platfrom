@@ -1,0 +1,94 @@
+{
+  "requested_opportunity_count": 1,
+  "requested_contact_ready_count": null,
+  "company_types": [],
+  "geographies": [
+    "US"
+  ],
+  "geography_scope": null,
+  "employee_range": {
+    "min": null,
+    "max": null
+  },
+  "decision_maker_roles": [],
+  "hard_constraints": [
+    {
+      "field": "geography",
+      "operator": "is_in",
+      "value": [
+        "US"
+      ],
+      "reason": "The company must be in the US."
+    },
+    {
+      "field": "hiring",
+      "operator": "currently_hiring",
+      "value": "Account Executives",
+      "reason": "The company must be hiring Account Executives."
+    },
+    {
+      "field": "funding_event",
+      "operator": "announced_within_last_days",
+      "value": 180,
+      "reason": "The company must have raised funding within the last six months."
+    }
+  ],
+  "soft_preferences": [],
+  "preferred_signals": [
+    "hiring",
+    "funding round"
+  ],
+  "adjacent_signals": [],
+  "excluded_signals": [],
+  "allowed_broadening": {
+    "role_families": [],
+    "company_types": [],
+    "geographies": [],
+    "employee_range": {
+      "min": null,
+      "max": null
+    }
+  },
+  "disallowed_broadening": [
+    "geography",
+    "recency",
+    "role"
+  ],
+  "required_evidence": [
+    "A dated funding round announced within the last 180 days",
+    "Evidence that the company is currently hiring Account Executives",
+    "Evidence establishing the company's US location",
+    "Resolved company identity"
+  ],
+  "required_capabilities": [
+    "funding_event_discovery",
+    "embedded_hiring_evidence",
+    "company_details_enrichment",
+    "company_semantic_evaluation",
+    "portfolio_ranking"
+  ],
+  "preferred_source_strategy": [
+    "job_signal_first",
+    "evidence_reuse_first"
+  ],
+  "evaluation_instructions": "Qualify only companies with a resolved identity that are located in the US, have a funding round announced within the last 180 days, and carry current hiring evidence specifically for Account Executives. Reject companies lacking any hard-constraint evidence. Rank qualifying companies by strength and recency of the funding and hiring evidence, then return one company.",
+  "founder_unlock_recommended": false,
+  "confidence": 0.98,
+  "unknowns": [
+    "Whether US means US headquarters, incorporation, or any substantial US presence."
+  ],
+  "known_companies": [],
+  "signal_recency_days": 180,
+  "required_signal_terms": [
+    "Account Executives"
+  ],
+  "no_broadening_requested": false,
+  "geography_is_hard": true,
+  "prohibitions": [],
+  "strategies": [
+    "funding",
+    "hiring",
+    "multi_signal"
+  ],
+  "output_intent": "qualified_companies"
+}
