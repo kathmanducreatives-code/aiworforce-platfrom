@@ -61,8 +61,14 @@ export interface DiscoveryRequirements {
   preferences: { criterionId: string; label: string; key: FilterKey; values: string[] }[];
   /** Decision-maker titles. Required only when the mission is for people. */
   roles: string[];
-  /** Dimensions the user forbade relaxing (the compiler's disallowed_broadening). */
+  /**
+   * Dimensions the user forbade relaxing, in the compiler's canonical vocabulary
+   * (geography, industry, business_model, stage, size, role, recency), whichever
+   * compiler version produced `disallowed_broadening`.
+   */
   forbidBroadening: string[];
+  /** Entries that name no dimension: kept for audit, never read as a ban or a permission. */
+  forbidBroadeningUnread: string[];
 }
 
 // ── Provider-side records ───────────────────────────────────────────────────

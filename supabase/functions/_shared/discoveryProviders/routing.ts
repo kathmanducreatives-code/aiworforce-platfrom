@@ -16,6 +16,7 @@
 // Pure.
 
 import { PROVIDERS, type SearchKind } from "./providers.ts";
+import { BROADENING_FILTER_KEYS, type BroadeningDimension } from "./requirements.ts";
 import type { DiscoveryRequirements, FilterKey, HardRequirement, ProviderId } from "./types.ts";
 
 export type Selection = "auto" | ProviderId[];
@@ -191,7 +192,8 @@ export function planDiscovery(input: {
     const routes = req.hard.filter((h) => relevant(h, kind)).map((h) => routeRequirement(h, p, kind, verifier));
     const unsupported = routes.filter((r) => r.handling === "unsupported");
     if (unsupported.length) {
-      const forbidden = unsupported.filter((u) => req.forbidBroadening.some((f) => u.key.startsWith(f.split("_")[0])));
+      const forbidden = unsupported.filter((u) => req.forbidBroadening.some((f) =>
+        (BROADENING_FILTER_KEYS[f as BroadeningDimension] ?? []).includes(u.key)));
       refused.push({
         provider: p,
         reason: forbidden.length

@@ -86,6 +86,49 @@ function mapHard(c: CriterionLike): HardRequirement | null {
   }
 }
 
+// The broadening dimensions, in the compiler's canonical vocabulary
+// (`BROADENING_DIMENSIONS` on the newer compiler). The newer compiler keeps
+// each entry as written and ADDS its canonical name ("employee_range" and
+// "size"); the older one passes entries through. Both read the same here: an
+// entry is folded onto the dimension it names, an unreadable one is kept in
+// `forbidBroadeningUnread` and never dropped silently.
+export type BroadeningDimension = "geography" | "industry" | "business_model" | "stage" | "size" | "role" | "recency";
+const BROADENING_ALIASES: Readonly<Record<string, BroadeningDimension>> = Object.freeze({
+  "geography": "geography", "geo": "geography", "location": "geography", "locations": "geography", "country": "geography",
+  "countries": "geography", "region": "geography", "hq": "geography", "headquarters": "geography", "geography hq": "geography",
+  "industry": "industry", "industries": "industry", "vertical": "industry", "sector": "industry", "company type": "industry",
+  "company types": "industry",
+  "business model": "business_model",
+  "stage": "stage", "company stage": "stage", "funding stage": "stage",
+  "size": "size", "company size": "size", "employee range": "size", "employee count": "size", "employees": "size",
+  "headcount": "size", "employee max": "size", "employee min": "size",
+  "role": "role", "roles": "role", "title": "role", "titles": "role", "job title": "role", "job titles": "role",
+  "recency": "recency", "posting recency": "recency", "hiring window": "recency", "freshness": "recency",
+});
+/** The provider filters a broadening ban protects. */
+export const BROADENING_FILTER_KEYS: Readonly<Record<BroadeningDimension, readonly FilterKey[]>> = Object.freeze({
+  geography: ["geography_hq", "geography_person", "excluded_geography"],
+  industry: ["industry", "excluded_company_types"],
+  business_model: ["business_model"],
+  stage: ["company_stage"],
+  size: ["employee_range"],
+  role: ["roles"],
+  recency: ["signal"],
+});
+
+export function canonicalBroadening(entries: readonly unknown[]): { dims: BroadeningDimension[]; unread: string[] } {
+  const dims: BroadeningDimension[] = [];
+  const unread: string[] = [];
+  for (const raw of entries) {
+    const entry = str(raw);
+    if (!entry) continue;
+    const dim = BROADENING_ALIASES[entry.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ")];
+    if (!dim) { if (!unread.includes(entry)) unread.push(entry); continue; }
+    if (!dims.includes(dim)) dims.push(dim);
+  }
+  return { dims, unread };
+}
+
 /** Fold a compiled mission into provider-facing requirements. */
 export function requirementsFromMission(mission: MissionLike): DiscoveryRequirements {
   const hard: HardRequirement[] = [];
@@ -119,7 +162,10 @@ export function requirementsFromMission(mission: MissionLike): DiscoveryRequirem
     hard,
     preferences,
     roles,
-    forbidBroadening: [...(mission.directives?.disallowed_broadening ?? [])],
+    ...(() => {
+      const b = canonicalBroadening(mission.directives?.disallowed_broadening ?? []);
+      return { forbidBroadening: b.dims, forbidBroadeningUnread: b.unread };
+    })(),
   };
 }
 

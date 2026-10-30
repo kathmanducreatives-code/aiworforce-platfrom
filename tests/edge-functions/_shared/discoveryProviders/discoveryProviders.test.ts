@@ -41,8 +41,27 @@ Deno.test("requirements: every hard criterion the compiler emits survives, none 
   const r = req();
   assertEquals(r.hard.map((h) => h.key).sort(), ["employee_range", "excluded_company_types", "geography_hq", "industry", "roles"]);
   assertEquals(r.hard.find((h) => h.key === "employee_range")!.values, { min: null, max: 100 });
-  assertEquals(r.forbidBroadening.sort(), ["employee_range", "geography"]);
+  assertEquals(r.forbidBroadening.sort(), ["geography", "size"]);
+  assertEquals(r.forbidBroadeningUnread, []);
   assertEquals(r.requestedCount, 5);
+});
+
+Deno.test("requirements: both compilers' broadening bans read the same (verbatim, or verbatim plus canonical)", () => {
+  const read = (d: string[]) => {
+    const m = structuredClone(compileManufacturerMission().final_mission) as unknown as { directives: { disallowed_broadening: string[] } };
+    m.directives.disallowed_broadening = d;
+    return requirementsFromMission(m as never);
+  };
+  // Older compiler: entries pass through as written.
+  const older = read(["geography", "employee_range"]);
+  // Newer compiler (canonicalDisallowedBroadening): each entry kept, its canonical name added beside it.
+  const newer = read(["geography", "employee_range", "size"]);
+  assertEquals(older.forbidBroadening.sort(), ["geography", "size"]);
+  assertEquals(newer.forbidBroadening.sort(), older.forbidBroadening.sort());
+  // Prose the model wrote and a dimension name with a typo: kept, never read as a ban or a permission.
+  const prose = read(["Account Executive role", "geograhpy"]);
+  assertEquals(prose.forbidBroadening, []);
+  assertEquals(prose.forbidBroadeningUnread, ["Account Executive role", "geograhpy"]);
 });
 
 Deno.test("requirements: an unrepresentable hard criterion becomes unmappable and blocks every plan", () => {
