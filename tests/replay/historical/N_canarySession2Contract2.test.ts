@@ -15,8 +15,9 @@
 //      "already answered" for Baseten and Oscilar, never enriched;
 //   3. the evaluator's evidence-free abstention lowered LangChain's
 //      authority-proven headquarters (company record, one flagged HQ);
-//   4. Oscilar's failed fifth model call was recorded as `model_evaluated`,
-//      restored as a decision, and its fabricated rows lowered every check.
+//   4. Oscilar's failed fifth model call (the spend gate's attempt limit,
+//      reported as an HTTP error) was recorded as `model_evaluated`, and its
+//      fabricated rows lowered every check.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { loadFixture } from "../lib/fixture.ts";
@@ -81,7 +82,7 @@ Deno.test("[historical] N Baseten: a job row's US location is NOT headquarters; 
   assert(canStillQualify(gapsOf(b)), "Baseten is viable: every open hard claim has an executable route");
 });
 
-Deno.test("[historical] N Oscilar: the failed fifth call is no evaluation — it is re-evaluated, not restored as a decision", () => {
+Deno.test("[historical] N Oscilar: the failed fifth call is recognised as NO evaluation (never `model_evaluated`)", () => {
   const o = companiesAt(fx, "end_of_slice").find((c) => c.key === OSCILAR)!;
   assert(o.mission_evaluation, "the checkpoint carries the placeholder");
   assert(o.mission_evaluation!.criterion_verdicts!.every((v) => v.origin === "unparsed"));
@@ -122,7 +123,7 @@ Deno.test("[historical] N decision trace: the persisted reason per company — a
       .map((d) => [d.company_key.split("/").at(-1), d.reason]));
   assertEquals(reasons(asItRan()), { langchain: "cannot_still_qualify", baseten: "cannot_still_qualify", "oscilar-inc": "cannot_still_qualify" });
   assertEquals(reasons(today()), { langchain: "targeted", baseten: "cheap_stage_first", "oscilar-inc": "cannot_still_qualify" },
-    "Oscilar waits for the re-evaluation its failed call owes (evaluatorAnswered)");
+    "Oscilar: its only evaluation failed, so every check stays unknown — see the report's open decision on re-evaluation");
   const ran = verificationDecisions(ATOMUS, candidates(asItRan()), () => null, undefined, replayReadiness()).decisions;
   assert(ran.every((d) => d.gaps.some((g) => g.dimension === "constraint" && g.next === "blocked" && g.route === null)),
     "the trace names the blocker: the hard `constraint` with no route");

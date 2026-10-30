@@ -5683,9 +5683,6 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   hard: claimPlan.hard.map((h) => ({ claim: h.claim, dimension: h.dimension, status: h.status, routes: h.routes.map((r) => r.actor) })),
                   targets: claimPlan.targets.map((t) => t.dimension), unprovable: claimPlan.unprovable.map((u) => u.label),
                 });
-                // ONE compiler for the purchase AND the affordability gate.
-                const vSpec = await verifierSpecFor(vState);
-                verificationWaitStop = () => verificationGate.check() !== null;
                 // THE DECISION TRACE: every candidate, every verifier, and why it
                 // was or was not taken — persisted on the checkpointed state.
                 {
@@ -5694,6 +5691,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     .flatMap((v) => verificationDecisions(v, traced, (id) => vCriteria.find((c) => c.id === id)?.value ?? null,
                       undefined, leadReadiness, (id) => vCriteria.find((c) => c.id === id)?.time_window?.days ?? null).decisions);
                 }
+                // ONE compiler for the purchase AND the affordability gate.
+                const vSpec = await verifierSpecFor(vState);
+                verificationWaitStop = () => verificationGate.check() !== null;
                 const phase = await runClaimVerificationPhase({
                   mission_id: String(task.id),
                   claim_plan: claimPlan,

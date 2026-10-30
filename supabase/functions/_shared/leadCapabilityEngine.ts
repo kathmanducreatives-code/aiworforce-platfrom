@@ -9039,9 +9039,7 @@ export async function runCapabilityPlan(
         eligibleOrdered
           .filter((c) =>
             c.brain !== null &&
-            // Only an evaluation the model GAVE is a decision to keep. A failed
-            // call's placeholder is not: the company is evaluated again.
-            (c.brain.outcome === "QUALIFIED" || evaluatorAnswered(c.mission_evaluation)))
+            (c.brain.outcome === "QUALIFIED" || c.mission_evaluation !== null))
           .map((c) => c.key));
       for (let qIndex = 0; qIndex < eligibleOrdered.length; qIndex++) {
         const c = eligibleOrdered[qIndex];
