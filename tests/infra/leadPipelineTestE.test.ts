@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { approvalsFor, approvalString, ERefusal, loGuard, testEIcp } from "../../scripts/lead-pipeline-test-e.ts";
+import { accountRecords, approvalsFor, approvalString, ERefusal, loGuard, testEIcp } from "../../scripts/lead-pipeline-test-e.ts";
 import { compileIcp } from "../../supabase/functions/_shared/leadPipeline/icp.ts";
 import { planDiscovery } from "../../supabase/functions/_shared/discoveryProviders/routing.ts";
 import { worstCase } from "../../supabase/functions/_shared/leadPipeline/pipeline.ts";
@@ -43,4 +43,11 @@ Deno.test("test E guard: other paths, hosts, repeats and extra lookups are refus
   await assertRejects(() => post("/v1/search", { limit: 11 }), ERefusal, "page size");
   await g.fetch("https://api.leadocean.io/v1/account", { method: "GET", headers: {} });
   assertEquals(sent, 2);
+});
+
+Deno.test("test E preflight: the live account body is wrapped in data (regression: refused a valid account)", () => {
+  assertEquals(accountRecords({ success: true, data: { records: { ceiling: 1000, used: 15, remaining: 985, overLimit: false } } }), { remaining: 985, used: 15, overLimit: false });
+  assertEquals(accountRecords({ records: { used: 1, remaining: 2 } }), { remaining: 2, used: 1, overLimit: false });
+  assertEquals(accountRecords({ success: false }), null);
+  assertEquals(accountRecords({ data: { records: { remaining: "985" } } }), null, "a malformed body refuses");
 });

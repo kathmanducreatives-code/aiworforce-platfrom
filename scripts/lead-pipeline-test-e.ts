@@ -56,6 +56,14 @@ export const approvalString = (w: { leadoceanRecords: number; apifyUsd: number }
 
 export class ERefusal extends Error {}
 
+/** GET /v1/account → records. The live response is {success, data:{records}} (seen 2026-10-31); a bare body is accepted too. */
+export function accountRecords(json: unknown): { remaining: number; used: number; overLimit: boolean } | null {
+  const j = (json ?? {}) as { data?: { records?: Record<string, unknown> }; records?: Record<string, unknown> };
+  const r = j.data?.records ?? j.records;
+  if (!r || typeof r.remaining !== "number" || typeof r.used !== "number") return null;
+  return { remaining: r.remaining, used: r.used, overLimit: r.overLimit === true };
+}
+
 /** LeadOcean wire guard for test E. */
 export function loGuard(inner: FetchLike, plan: { maxPages: number; pageSize: number; lookups: number }) {
   let pages = 0, lookups = 0;
@@ -123,8 +131,8 @@ async function main() {
   if (arg("--approve") !== approvalString(wc)) throw new ERefusal(`refused: --approve must equal "${approvalString(wc)}"`);
   if (!args.includes("--key-injected")) throw new ERefusal("refused: keys must be proxy-injected Network Secrets (--key-injected)");
   // Preflight, free.
-  const acct = await (await lo.fetch(`${LO}/v1/account`, { method: "GET", headers: { "x-api-key": "injected-by-proxy" } })).json() as { records?: { remaining?: number; overLimit?: boolean }; account?: { plan?: string } };
-  if (!acct.records || (acct.records.remaining ?? 0) < wc.leadoceanRecords || acct.records.overLimit) throw new ERefusal("refused: LeadOcean account cannot cover the worst case");
+  const acct = accountRecords(await (await lo.fetch(`${LO}/v1/account`, { method: "GET", headers: { "x-api-key": "injected-by-proxy" } })).json());
+  if (!acct || acct.remaining < wc.leadoceanRecords || acct.overLimit) throw new ERefusal("refused: LeadOcean account cannot cover the worst case");
   const ap = await fetch("https://api.apify.com/v2/users/me", { headers: { Authorization: "Bearer injected-by-proxy" } });
   if (ap.status !== 200) throw new ERefusal(`refused: Apify account not authenticated (${ap.status})`);
   const apUser = (await ap.json() as { data?: { username?: string } }).data?.username ?? null;
@@ -142,10 +150,10 @@ async function main() {
   // Apify's usage counter can lag: re-read until it moves past the start value or ~60 s pass.
   let apUsageAfter = await apifyUsage();
   for (let i = 0; i < 6 && apUsageAfter.used <= apUsageBefore.used && apify.runs.length; i++) { await new Promise((r) => setTimeout(r, 10_000)); apUsageAfter = await apifyUsage(); }
-  const after = await (await lo.fetch(`${LO}/v1/account`, { method: "GET", headers: { "x-api-key": "injected-by-proxy" } })).json() as { records?: { remaining?: number } };
+  const after = accountRecords(await (await lo.fetch(`${LO}/v1/account`, { method: "GET", headers: { "x-api-key": "injected-by-proxy" } })).json());
   const report = {
     test: "E", icp: icp.id, status: run.status, reason: run.reason, spend: run.spend, yield: run.yield, funnel: run.funnel, estimates: run.estimates,
-    reconciliation: { leadoceanBefore: acct.records.remaining, leadoceanAfter: after.records?.remaining ?? null, leadoceanCharged: run.spend.leadoceanRecords, apifyRuns: apify.runs,
+    reconciliation: { leadoceanBefore: acct.remaining, leadoceanAfter: after?.remaining ?? null, leadoceanCharged: run.spend.leadoceanRecords, apifyRuns: apify.runs,
       apifyUser: apUser, apifyUsageBeforeUsd: apUsageBefore.used, apifyUsageAfterUsd: apUsageAfter.used,
       apifyDeltaUsd: Math.round((apUsageAfter.used - apUsageBefore.used) * 1e6) / 1e6, apifyCapUsd: wc.apifyUsd },
     wire: lo.log, queue: run.queue, review: run.review, excluded: run.excluded.map((l) => ({ company: l.company.domain, reasons: l.qualification?.disproven })),
