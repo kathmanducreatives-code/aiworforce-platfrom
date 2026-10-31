@@ -31,7 +31,12 @@ const NOW = new Date("2026-10-30T12:00:00Z");
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const CSHA = "a".repeat(64);
 type J = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-const failedA = (c: J, now = NOW) => contractChecks(c, now).filter((x) => !x.ok).map((x) => x.id);
+/** The catalog the contract names (absent: Contract 2's), read as the stage reads it. */
+const catalogOf = (c: J) => {
+  try { return JSON.parse(Deno.readTextFileSync(new URL(`../../${c?.catalog ?? "docs/launch/proposals/smoke-catalog-canary-funding.json"}`, import.meta.url))); }
+  catch { return undefined; }
+};
+const failedA = (c: J, now = NOW) => contractChecks(c, now, catalogOf(c)).filter((x) => !x.ok).map((x) => x.id);
 const variant = (f: (c: J) => void) => { const c = structuredClone(CONTRACT); f(c); return c; };
 
 Deno.test("contract: Contract 2 (consumed) passes A01–A09 and fails exactly the pool-coverage checks it ran into", () => {
@@ -116,6 +121,18 @@ Deno.test("contract 3: passes A01–A11 within every reviewed cap, and covers it
   wide.actors["apify:harvestapi~linkedin-job-search"].max_units = 3;
   assertEquals(failedA(wide).filter((x) => x === "A10" || x === "A11"), ["A10", "A11"]);
   assert(CONTRACT3.status.includes("NOT wired"), "a proposal, never the contract the stage reads");
+  // A12: the named catalog must be a reviewed one and match the contract exactly.
+  const mismatched = structuredClone(CONTRACT3);
+  mismatched.actors["apify:atomus~linkedin-company-scraper"].max_microusd = 3000;
+  assert(failedA(mismatched).includes("A12"), "a contract that does not match its catalog");
+  const foreign = structuredClone(CONTRACT3); foreign.catalog = "docs/launch/proposals/smoke-catalog-demo-funding.json";
+  assert(failedA(foreign).includes("A12"), "only a canary-funding catalog");
+  const outside = structuredClone(CONTRACT3); outside.catalog = "../../etc/passwd";
+  assert(failedA(outside).includes("A12"), "no path outside the reviewed proposals");
+  assert(!failedA(CONTRACT).includes("A12"), "Contract 2 matches its own catalog");
+  // A malformed actor entry fails A05; it never throws past the gate.
+  const nullActor = structuredClone(CONTRACT3); nullActor.actors["apify:harvestapi~linkedin-company"] = null;
+  assert(failedA(nullActor).includes("A05"));
 });
 
 Deno.test("contract 3: the REAL Contract 2 GPT proposal, compiled today under the narrowed catalog, satisfies S01–S18", async () => {

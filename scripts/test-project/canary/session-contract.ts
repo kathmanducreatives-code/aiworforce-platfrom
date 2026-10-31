@@ -15,6 +15,8 @@
 // sha256, so `lead_mission_queue`'s primary key refuses a second kickoff under
 // the same contract — atomically, in the database, whatever the workflow does.
 
+import { CANARY_CATALOG_PATH, DEFAULT_CANARY_CATALOG } from "./validate-kickoff.ts";
+
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export const CONTRACT_PROJECT_REF = "tlvnfrxzjhsjgdofwehb";
@@ -40,7 +42,7 @@ const mk = (out: Check[]) => (id: string, what: string, ok: boolean, observed: u
   out.push({ id, what, ok, observed: typeof observed === "string" ? observed : JSON.stringify(observed) });
 
 /** The contract itself: well-formed, unexpired, this project, never wider than the reviewed caps. */
-export function contractChecks(c: Json, now: Date): Check[] {
+export function contractChecks(c: Json, now: Date, catalogDoc?: Json): Check[] {
   const out: Check[] = [];
   const add = mk(out);
   add("A01", "a version-1 agentory-canary-session contract", c?.contract === "agentory-canary-session" && c?.version === 1 && typeof c?.id === "string" && c.id.length > 0, [c?.contract, c?.version, c?.id]);
@@ -52,11 +54,11 @@ export function contractChecks(c: Json, now: Date): Check[] {
     m.max_qualified_companies === 1 && typeof m.instruction === "string" && m.instruction.length > 0, [m.scenario, m.requested_count, m.max_qualified_companies]);
   const actors = Object.entries((c?.actors ?? {}) as Record<string, Json>);
   add("A05", "only reviewed actors, each at most one start and within its reviewed units and maximum", actors.length > 0 &&
-    actors.every(([a, v]) => APPROVED_ACTORS[a] && v.max_starts === 1 && Number.isInteger(v.max_units) && v.max_units >= 1 &&
+    actors.every(([a, v]) => APPROVED_ACTORS[a] && !!v && typeof v === "object" && v.max_starts === 1 && Number.isInteger(v.max_units) && v.max_units >= 1 &&
       v.max_units <= APPROVED_ACTORS[a].max_units && Number.isInteger(v.max_microusd) && v.max_microusd > 0 && v.max_microusd <= APPROVED_ACTORS[a].max_microusd),
-    Object.fromEntries(actors.map(([a, v]) => [a, [v.max_starts, v.max_units, v.max_microusd]])));
+    Object.fromEntries(actors.map(([a, v]) => [a, [v?.max_starts, v?.max_units, v?.max_microusd]])));
   const s = c?.spending ?? {};
-  const provider = actors.reduce((a, [, v]) => a + Number(v.max_microusd), 0);
+  const provider = actors.reduce((a, [, v]) => a + Number(v?.max_microusd), 0);
   const model = Number(c?.model?.worker_attempts) * Number(c?.model?.max_microusd_per_call);
   const compile = Number(c?.model?.compile_calls) * Number(c?.model?.max_microusd_per_call);
   add("A06", "the model is Luna, at most 2 compile calls and 4 worker attempts, each within the reviewed bound",
@@ -85,6 +87,24 @@ export function contractChecks(c: Json, now: Date): Check[] {
     Number(c?.model?.worker_attempts) >= needed, { worker_attempts: c?.model?.worker_attempts ?? null, pool, needed });
   add("A11", "company details can read every discovered company (its headquarters is a hard claim only the record proves)",
     pool >= 1 && details >= pool, { pool, details });
+  // ── THE CATALOG THE CONTRACT NAMES (absent: Contract 2's) ───────────────────
+  //
+  // The kickoff is prepared from it and validated against it, so it must be a
+  // reviewed canary-funding catalog whose per-start maxima and pinned units are
+  // EXACTLY the contract's — a catalog wider than its contract, or a contract
+  // that names a catalog it does not match, is refused before anything runs.
+  const catalogPath = String(c?.catalog ?? DEFAULT_CANARY_CATALOG);
+  const q = (catalogDoc?.approved_quotes ?? null) as Record<string, Json> | null;
+  const pin = (t: string, field: string) => Number(get(q?.[t]?.request_limits ?? {}, field));
+  // Only the actors the contract names: a contract narrower than its catalog is
+  // valid here and refused at the plan (S06), as a narrower contract always was.
+  const named = Object.keys(c?.actors ?? {}).filter((actor) => actor in APPROVED_ACTORS);
+  const agrees = !!q && !("pvalyou" in q) && named.length > 0 && named.every((actor) => {
+    const a = APPROVED_ACTORS[actor], v = c.actors[actor];
+    return !!v && Number(q[a.template]?.maximum_microusd) === Number(v.max_microusd) && pin(a.template, a.units_field) === Number(v.max_units);
+  });
+  add("A12", "the named catalog is a reviewed canary-funding catalog and matches the contract's maxima and units exactly",
+    CANARY_CATALOG_PATH.test(catalogPath) && agrees, { catalog: catalogPath, read: !!q });
   return out;
 }
 
@@ -159,7 +179,10 @@ if (import.meta.main) {
   const flag = (n: string) => { const i = rest.indexOf(n); return i >= 0 ? rest[i + 1] : undefined; };
   const print = (checks: Check[]) => { for (const x of checks) console.log(`${x.ok ? "PASS" : "FAIL"}  ${x.id} ${x.what}: ${x.observed}`); };
   if (cmd === "contract") {
-    const checks = contractChecks(JSON.parse(Deno.readTextFileSync(rest[0])), new Date(flag("--now") ?? Date.now()));
+    const contract = JSON.parse(Deno.readTextFileSync(rest[0]));
+    const catalogPath = String(contract?.catalog ?? DEFAULT_CANARY_CATALOG);
+    const catalogDoc = CANARY_CATALOG_PATH.test(catalogPath) ? JSON.parse(Deno.readTextFileSync(catalogPath)) : undefined;
+    const checks = contractChecks(contract, new Date(flag("--now") ?? Date.now()), catalogDoc);
     print(checks);
     Deno.exit(checks.every((x) => x.ok) ? 0 : 1);
   } else if (cmd === "ids") {

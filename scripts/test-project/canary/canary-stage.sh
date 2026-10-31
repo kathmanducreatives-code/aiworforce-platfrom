@@ -574,9 +574,15 @@ case "$STAGE" in
     # both). Absent: Contract 2's catalog and figures, exactly as before. A12
     # checks the pair agree; K11 that no catalog exceeds the reviewed ceilings.
     CANARY_CATALOG="$(jq -r '.catalog // "docs/launch/proposals/smoke-catalog-canary-funding.json"' "$CONTRACT")"
-    CANARY_JOBS_MAX="$(jq -r '.actors["apify:harvestapi~linkedin-job-search"].max_microusd // 4000' "$CONTRACT")"
-    CANARY_DETAILS_MAX="$(jq -r '.actors["apify:harvestapi~linkedin-company"].max_microusd // 4050' "$CONTRACT")"
-    CANARY_ATOMUS_MAX="$(jq -r '.actors["apify:atomus~linkedin-company-scraper"].max_microusd // 10550' "$CONTRACT")"
+    [[ "$CANARY_CATALOG" =~ ^docs/launch/proposals/smoke-catalog-canary-funding(-[0-9]+)?\.json$ && -f "$CANARY_CATALOG" ]] \
+      || stop "the contract's catalog is not a reviewed canary-funding catalog: $CANARY_CATALOG"
+    # An actor the contract omits is prepared at its CATALOG's figure (the plan is
+    # then refused at S06), never at another contract's.
+    max_of() { jq -r --slurpfile cat "$CANARY_CATALOG" --arg a "$1" --arg t "$2" \
+      '.actors[$a].max_microusd // $cat[0].approved_quotes[$t].maximum_microusd' "$CONTRACT"; }
+    CANARY_JOBS_MAX="$(max_of apify:harvestapi~linkedin-job-search jobs)"
+    CANARY_DETAILS_MAX="$(max_of apify:harvestapi~linkedin-company details)"
+    CANARY_ATOMUS_MAX="$(max_of apify:atomus~linkedin-company-scraper atomus)"
     export CANARY_CATALOG CANARY_JOBS_MAX CANARY_DETAILS_MAX CANARY_ATOMUS_MAX
     # One approval: this exact contract, at this exact commit.
     require_approval "run canary session $csha at $EXPECTED_SHA"

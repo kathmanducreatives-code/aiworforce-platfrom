@@ -15,7 +15,7 @@
 import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { parse } from "https://deno.land/std@0.224.0/yaml/mod.ts";
 import { prepareKickoff } from "../../scripts/test-project/real-gpt/prepareKickoff.ts";
-import { validateKickoff } from "../../scripts/test-project/canary/validate-kickoff.ts";
+import { approvedCatalog, validateKickoff } from "../../scripts/test-project/canary/validate-kickoff.ts";
 import { canaryBudget, CANARY_BUDGET_MICROUSD } from "../../scripts/test-project/canary/canary-budget.ts";
 import { checkDbUrl } from "../../scripts/test-project/canary/db-url-check.ts";
 
@@ -168,6 +168,24 @@ const kickoff = (over: Record<string, unknown> = {}) => prepareKickoff({
   ...over,
 } as never);
 const failed = (k: Record<string, unknown>, sql: string, sha = SHA) => validateKickoff(k as never, sql, sha).filter((c) => !c.ok).map((c) => c.id);
+
+Deno.test("kickoff validator, Contract 3: its narrowed catalog passes K01–K20; Contract 2's figures or a raised catalog fail", async () => {
+  const CATALOG3 = JSON.parse(Deno.readTextFileSync(new URL("../../docs/launch/proposals/smoke-catalog-canary-funding-3.json", import.meta.url)));
+  const REAL2 = JSON.parse(Deno.readTextFileSync(new URL("../../docs/launch/proposals/canary-session-2-real-gpt-proposal.json", import.meta.url)));
+  const k = await kickoff({
+    catalog: CATALOG3.approved_quotes, compile: () => Promise.resolve(structuredClone(REAL2)),
+    prices: { jobs_maximum_microusd: 2000, details_maximum_microusd: 4050, atomus_maximum_microusd: 3550, observed_at: "2026-10-29T00:00:00Z", source: "test" },
+  }) as unknown as Record<string, unknown> & { sql: string };
+  const f3 = (doc: Record<string, unknown>) =>
+    validateKickoff(k as never, k.sql, SHA, approvedCatalog(doc)).filter((c) => !c.ok).map((c) => c.id);
+  assertEquals(f3(CATALOG3), [], "Contract 3's kickoff against Contract 3's catalog");
+  assertStringIncludes(k.sql, "worst-case provider 9600 µ$.");
+  // Against Contract 2's figures the same kickoff is refused: the validator reads the catalog, it does not trust it.
+  assert(failed(k, k.sql).includes("K11") && failed(k, k.sql).includes("K12"));
+  // A catalog above the reviewed ceiling is refused even when the kickoff matches it.
+  const raised = structuredClone(CATALOG3); raised.approved_quotes.atomus.maximum_microusd = 20_000;
+  assert(f3(raised).includes("K11"), "no catalog may exceed the reviewed ceilings");
+});
 
 Deno.test("kickoff validator: the approved paid canary passes K01–K19", async () => {
   const k = await kickoff() as unknown as Record<string, unknown> & { sql: string };

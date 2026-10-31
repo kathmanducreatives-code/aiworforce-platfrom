@@ -186,7 +186,11 @@ expect budget-many-prepares "FAIL  B4"
 run override-under-actions 1 verify GITHUB_ACTIONS=true CANARY_OFFLINE_PROPOSAL=docs/launch/proposals/canary-funding-reviewed-mission-proposal.json
 expect override-under-actions "is a local-rehearsal override and is refused in GitHub Actions"
 C="$tmp/contracts"; mkdir -p "$C"
-mkc() { jq "$2" docs/launch/proposals/canary-session-contract.json > "$C/$1.json"; sha256sum "$C/$1.json" | cut -d' ' -f1; }
+# The session variants are built on CONTRACT 3 (the next contract to run): the
+# consumed Contract 2 no longer passes A10/A11 — its limits could not finish the
+# pool it bought. Override with REHEARSAL_CONTRACT for another proposal.
+BASE_CONTRACT="${REHEARSAL_CONTRACT:-docs/launch/proposals/canary-session-contract-3.json}"
+mkc() { jq "$2" "$BASE_CONTRACT" > "$C/$1.json"; sha256sum "$C/$1.json" | cut -d' ' -f1; }
 sess() {   # sess <name> <expect> <contract> [env…]
   local name="$1" want="$2" file="$C/$3.json"; shift 3
   local h; h="$(sha256sum "$file" | cut -d' ' -f1)"
@@ -196,7 +200,7 @@ sess() {   # sess <name> <expect> <contract> [env…]
 mkc fresh '.id = "rehearsal-1"' > /dev/null
 mkc expired '.id = "rehearsal-expired" | .expires_at = "2026-01-01T00:00:00Z"' > /dev/null
 mkc manual '.id = "rehearsal-manual" | .auto_execute = false' > /dev/null
-mkc narrow '.id = "rehearsal-narrow" | del(.actors["apify:atomus~linkedin-company-scraper"]) | .spending.max_provider_microusd = 8050 | .spending.max_session_microusd = 82930' > /dev/null
+mkc narrow '.id = "rehearsal-narrow" | del(.actors["apify:atomus~linkedin-company-scraper"]) | .spending.max_provider_microusd = (.spending.max_provider_microusd - 3550) | .spending.max_session_microusd = (.spending.max_session_microusd - 3550)' > /dev/null
 mkc wide '.id = "rehearsal-wide" | .actors["apify:atomus~linkedin-company-scraper"].max_starts = 2' > /dev/null
 mkc pvalyou '.id = "rehearsal-pvalyou" | .actors["apify:pvalyou~company-record"] = {"max_starts":1,"max_units":1,"unit":"company","max_microusd":40050}' > /dev/null
 
@@ -234,13 +238,13 @@ expect session-while-interrupted "conflicting work"
 sauth="$(psql "$url" -XAt -c "select id from public.discovery_smoke_authorizations where queue_id = '$squeue'")"
 psql "$url" -XAtq -v ON_ERROR_STOP=1 -c "update public.lead_mission_queue set status = 'complete' where id = '$squeue'" \
   -c "insert into public.discovery_smoke_operations (authorization_id, operation_key, task_id, generation, kind, actor, template_id, payload_hash, committed_microusd, provider_run_id)
-      values ('$sauth', 'rehearsal-jobs', gen_random_uuid(), 1, 'provider', 'apify:harvestapi~linkedin-job-search', 'jobs', repeat('b', 64), 4000, 'run-jobs'),
+      values ('$sauth', 'rehearsal-jobs', gen_random_uuid(), 1, 'provider', 'apify:harvestapi~linkedin-job-search', 'jobs', repeat('b', 64), 2000, 'run-jobs-c3'),
              ('$sauth', 'rehearsal-uncertain', gen_random_uuid(), 1, 'provider', 'apify:harvestapi~linkedin-company', 'details', repeat('c', 64), 4050, null),
              ('$sauth', 'rehearsal-over', gen_random_uuid(), 1, 'provider', 'apify:atomus~linkedin-company-scraper', 'atomus', repeat('d', 64), 10550, 'run-over'),
              ('$sauth', 'rehearsal-wrong', gen_random_uuid(), 1, 'provider', 'apify:harvestapi~linkedin-company', 'details', repeat('e', 64), 4050, 'run-wrong')" > /dev/null
 run session-close-partial 1 session-close CANARY_QUEUE_ID="$squeue"
 expect session-close-partial "authorization stopped"
-expect session-close-partial "RECONCILED run run-jobs: SUCCEEDED"
+expect session-close-partial "RECONCILED run run-jobs-c3: SUCCEEDED"
 expect session-close-partial "run run-over (apify:atomus~linkedin-company-scraper): not reconciled automatically"
 expect session-close-partial "run run-wrong (apify:harvestapi~linkedin-company): not reconciled automatically"
 expect session-close-partial "3 provider purchase(s) UNCERTAIN or over their cap"
