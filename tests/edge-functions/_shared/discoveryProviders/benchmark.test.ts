@@ -56,9 +56,10 @@ Deno.test("benchmark: company matching is exact identity — right, wrong compan
       A04: co("leadocean", "4", "held.example"),
     },
   }));
-  assertEquals([s.companyMatching.numerator, s.companyMatching.denominator, s.companyMatching.wrong, s.companyMatching.missed], [1, 3, 1, 1]);
-  // HQ is scored only where a canonical record PROVED the truth, and only on correct matches.
-  assertEquals([s.headquartersVerification.numerator, s.headquartersVerification.denominator], [1, 1]);
+  // A01: same LinkedIn page, another domain — conflicting, neither right nor wrong. A02: wrong domain. A03: missed.
+  assertEquals([s.companyMatching.numerator, s.companyMatching.denominator, s.companyMatching.wrong, s.companyMatching.missed, s.companyMatching.conflicting], [0, 3, 1, 1, 1]);
+  // HQ is scored only where a canonical record PROVED the truth, and only on confirmed matches.
+  assertEquals([s.headquartersVerification.numerator, s.headquartersVerification.denominator], [0, 0]);
   assertEquals(s.skippedForSuppression, ["A04", "B03"]);
 });
 

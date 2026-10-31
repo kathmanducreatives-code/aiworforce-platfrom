@@ -147,5 +147,6 @@ Deno.test("S1 missing comparison evidence is UNCONFIRMED, not a wrong match (Tes
     provider: "leadocean", personMatches: {}, discoveryRows: [], discoveryLeads: [], timings: [], unitsConsumed: 3, unit: "records", costUsd: 0,
     companyMatches: { A01: row({ name: "Acme", domain: "acme.example" }), A02: row({ name: "Beta Labs, Inc", domain: "beta.example" }), A03: row({ name: "Gamma", domain: "elsewhere.example" }) },
   }, null, AT);
-  assertEquals(s.companyMatching, { numerator: 1, denominator: 3, value: 1 / 3, wrong: 1, missed: 0, unconfirmed: 1, unconfirmedNameAgrees: 1, accuracyWhereComparable: 0.5 });
+  assertEquals(s.companyMatching, { numerator: 1, denominator: 3, value: 1 / 3, wrong: 1, missed: 0, conflicting: 0, unconfirmed: 1, unconfirmedNameAgrees: 1, accuracyWhereComparable: 0.5 });
+  assertEquals(companyIdentityOutcome({ domain: "acme.example", linkedin_url: "https://www.linkedin.com/company/acme" }, row({ linkedinUrl: "https://www.linkedin.com/company/acme", domain: "acme-alias.example" })), "conflicting");
 });
