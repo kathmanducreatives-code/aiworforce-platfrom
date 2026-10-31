@@ -89,7 +89,11 @@ function view(p: ProviderId, row: ConnectionRow | undefined, flags: DiscoveryFla
 
 function errorText(e: unknown): { status: ConnectionStatus; message: string } {
   if (e instanceof ProviderError) {
-    if (e.kind === "auth_failed" || e.kind === "forbidden_scope") return { status: "invalid", message: e.kind === "auth_failed" ? "The provider rejected this key." : "This key is missing a required scope." };
+    // Only a rejected key is invalid. A missing scope or a plan that excludes an
+    // endpoint is a limit of a VALID key: refusing it would discard a working key.
+    if (e.kind === "auth_failed") return { status: "invalid", message: "The provider rejected this key." };
+    if (e.kind === "forbidden_scope") return { status: "error", message: "This key is missing a required scope." };
+    if (e.kind === "plan_restricted") return { status: "error", message: "The provider's plan does not include this endpoint." };
     return { status: "error", message: `Provider unavailable (${e.kind}).` };
   }
   return { status: "error", message: "Verification failed." };
@@ -132,7 +136,10 @@ export async function handleConnections(req: ConnectionRequest, ctx: { userId: s
     }
     const row: ConnectionRow = {
       workspaceId: req.workspaceId, provider: p, status: "connected", keyFingerprint: await fingerprint(req.apiKey),
-      usage, lastVerifiedAt: now().toISOString(), lastError: null, connectedBy: ctx.userId,
+      usage, lastVerifiedAt: now().toISOString(),
+      // A working key on a limited plan or scope: connected, with its limits shown.
+      lastError: usage.restrictions?.length ? `Connected with limits: ${usage.restrictions.join("; ")}` : null,
+      connectedBy: ctx.userId,
     };
     await ctx.store.store(row, req.apiKey);
     return { status: 200, body: { connection: view(p, row, ctx.flags) } };

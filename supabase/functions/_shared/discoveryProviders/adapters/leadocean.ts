@@ -1,7 +1,13 @@
 // LeadOcean adapter — people + company search, usage, and (separately
 // authorized) contact enrichment.
 //
-// Contract: https://api.leadocean.io/openapi.json (read 2026-10-27).
+// Contract: https://api.leadocean.io/openapi.json (read 2026-10-27; request side
+// re-checked 2026-10-30 against spec sha256 743a760a…, vocabulary/leadocean.json).
+//   filters  hqCountry / country are ISO alpha-2 ENUMS and industry a closed enum
+//            of labels: every value goes through vocabulary.translate, so a value
+//            LeadOcean cannot filter on refuses the provider instead of widening
+//            a per-record-billed search. Companies take `linkedin`, people
+//            `companyLinkedin`, for exact identity.
 //   auth     x-api-key; key scopes `search` and `enrich` (403 without one)
 //   search   POST /v1/search            people     1 record per row returned
 //            POST /v1/search/companies  companies  1 record per row returned
@@ -18,7 +24,8 @@
 // A field not found is simply absent; verification then treats the
 // requirement as unknown, never as met.
 
-import { pick, pickList, pickNum, pickStr, parseRange, geoLevel, type AdapterDeps, type DiscoveryAdapter, type SearchPage, type UsageInfo } from "../adapter.ts";
+import { translate } from "../vocabulary.ts";
+import { pick, pickList, pickNum, pickStr, parseRange, type AdapterDeps, type DiscoveryAdapter, type SearchPage, type UsageInfo } from "../adapter.ts";
 import { callProvider } from "../http.ts";
 import type { PlanStep } from "../routing.ts";
 import { ProviderError, type ContactPoint, type DiscoveryRequirements, type FilterKey, type ProviderCompany, type ProviderPerson, type Range } from "../types.ts";
@@ -54,35 +61,24 @@ const PARAM_OF: Record<string, FilterKey> = {
   title: "roles", country: "geography_person", industry: "industry", excludeIndustry: "excluded_company_types",
   excludeKeywords: "excluded_company_types", hqCountry: "geography_hq", hqState: "geography_hq", hqCity: "geography_hq",
   minEmployees: "employee_range", maxEmployees: "employee_range", domain: "known_companies",
+  linkedin: "known_companies", companyLinkedin: "known_companies",
 };
 
 export function buildLeadOceanSearch(step: PlanStep, req: DiscoveryRequirements, cursor: string | null, limit: number) {
+  // Each page asks only for what the step may still take: billing is per row returned.
   const body: Record<string, unknown> = { limit: Math.max(1, Math.min(100, limit)), order: "stable" };
   if (cursor) body.cursor = cursor;
+  // People rows: drop picture blocks and duplicate lists. Company rows keep
+  // financials (slim would drop them), which may carry funding evidence.
+  if (step.kind === "people_search") body.slim = true;
   const native = new Set(step.requirements.filter((r) => r.handling === "native").map((r) => r.key));
   for (const h of req.hard) {
     if (!native.has(h.key)) continue;
-    const list = Array.isArray(h.values) ? h.values : [];
-    switch (h.key) {
-      case "industry": body.industry = list; break;
-      case "known_companies": body.domain = list; break;
-      case "excluded_company_types": body.excludeIndustry = list; body.excludeKeywords = list; break;
-      case "geography_person": body.country = list; break;
-      case "roles": if (step.kind === "people_search") body.title = list; break;
-      case "employee_range": {
-        const r = h.values as Range;
-        if (r.min !== null) body.minEmployees = r.min;
-        if (r.max !== null) body.maxEmployees = r.max;
-        break;
-      }
-      case "geography_hq": {
-        for (const v of list) {
-          const level = geoLevel(v);
-          const k = level === "country" ? "hqCountry" : level === "us_state" ? "hqState" : "hqCity";
-          (body[k] as string[] | undefined)?.push(v) ?? (body[k] = [v]);
-        }
-        break;
-      }
+    const t = translate("leadocean", step.kind, h);
+    // The router marks a requirement native only when it translates; a miss is a bug, never a broadening.
+    if (!t.ok) throw new ProviderError("leadocean", "invalid_request", `planned filter no longer translates: ${t.reason}`);
+    for (const [k, v] of Object.entries(t.params)) {
+      body[k] = Array.isArray(v) && Array.isArray(body[k]) ? [...(body[k] as unknown[]), ...v] : v;
     }
   }
   // Roles of a company-target mission still narrow the people search.
@@ -203,14 +199,21 @@ export function leadOceanAdapter(deps: AdapterDeps): DiscoveryAdapter {
       return normalizeLeadOceanPage(r.json, step, now().toISOString());
     },
     async verifyKey(): Promise<UsageInfo> {
-      const r = await callProvider(deps.fetch, { provider: "leadocean", url: `${base}/v1/usage`, method: "GET", headers, paid: false }, deps.sleep);
+      // GET /v1/account: "Free" (spec). One read gives plan, key scopes and records left.
+      const r = await callProvider(deps.fetch, { provider: "leadocean", url: `${base}/v1/account`, method: "GET", headers, paid: false }, deps.sleep);
       const d = (r.json as { data?: Record<string, unknown> })?.data ?? {};
-      const used = typeof d.used === "number" ? d.used : null;
-      const limit = pickNum(d, ["plan.monthlyCredits"]);
+      const sc = pick(d, ["key.scopes"]);
+      const scopes = Array.isArray(sc) ? sc.map(String) : null;
+      const restrictions: string[] = [];
+      if (scopes && !scopes.includes("search")) restrictions.push("search: key lacks the search scope");
+      if (scopes && !scopes.includes("enrich")) restrictions.push("enrich: key lacks the enrich scope");
+      if (pick(d, ["account.suspended"]) === true) restrictions.push("account suspended");
       return {
-        plan: pickStr(d, ["plan.slug"]), used, limit,
-        remaining: used !== null && limit !== null ? Math.max(0, limit - used) : null,
-        resetsAt: pickStr(d, ["resetsAt"]), checkedAt: now().toISOString(),
+        plan: pickStr(d, ["subscription.planSlug", "account.plan"]),
+        used: pickNum(d, ["records.used"]), limit: pickNum(d, ["records.ceiling"]),
+        remaining: pickNum(d, ["records.remaining"]),
+        resetsAt: pickStr(d, ["records.resetsAt"]), checkedAt: now().toISOString(),
+        restrictions, scopes,
       };
     },
   };

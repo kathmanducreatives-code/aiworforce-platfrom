@@ -48,10 +48,17 @@ function retryAfterMs(h: Headers): number | null {
 }
 
 function messageOf(json: unknown, status: number): string {
-  const e = (json as { error?: { message?: unknown } | string; message?: unknown } | null);
-  const m = typeof e?.error === "string" ? e.error : (e?.error as { message?: unknown } | undefined)?.message ?? e?.message;
+  const e = (json as { error?: { message?: unknown } | string; message?: unknown; error_details?: { message?: unknown } } | null);
+  // Apollo's structured error_details replaces error / error_code (sunset 2027-02-16).
+  const m = typeof e?.error === "string" ? e.error : (e?.error as { message?: unknown } | undefined)?.message ?? e?.error_details?.message ?? e?.message;
   // Provider text is data: shortened, never echoed with headers or keys.
   return typeof m === "string" ? m.slice(0, 200) : `HTTP ${status}`;
+}
+
+/** A 403 that names the PLAN, not the key: the key stays valid. */
+export function planRestricted(json: unknown): boolean {
+  const j = json as { error_code?: unknown; error_details?: { code?: unknown } } | null;
+  return j?.error_code === "API_INACCESSIBLE" || j?.error_details?.code === "AUTH.AUTHORIZATION.ENDPOINT_ACCESS_DENIED";
 }
 
 export async function callProvider(fetchImpl: FetchLike, spec: CallSpec, sleep: Sleep = (ms) => new Promise((r) => setTimeout(r, ms))): Promise<CallResult> {
@@ -88,7 +95,7 @@ export async function callProvider(fetchImpl: FetchLike, spec: CallSpec, sleep: 
     const wait = retryAfterMs(res.headers);
     const msg = messageOf(json, s);
     if (s === 401) throw new ProviderError(spec.provider, "auth_failed", msg, s);
-    if (s === 403) throw new ProviderError(spec.provider, "forbidden_scope", msg, s);
+    if (s === 403) throw new ProviderError(spec.provider, planRestricted(json) ? "plan_restricted" : "forbidden_scope", msg, s);
     if (s === 402 || res.headers.get("x-quota-state") === "exhausted") throw new ProviderError(spec.provider, "allowance_exhausted", msg, s);
     if (s === 410) throw new ProviderError(spec.provider, "cursor_expired", msg, s);
     if (s === 400 || s === 404 || s === 409 || s === 422) throw new ProviderError(spec.provider, "invalid_request", msg, s);

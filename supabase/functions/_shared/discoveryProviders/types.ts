@@ -167,6 +167,13 @@ export interface ProviderPerson {
 export type ProviderErrorKind =
   | "auth_failed"
   | "forbidden_scope"
+  /**
+   * The key is valid but the account's PLAN does not include this endpoint
+   * (Apollo 403 API_INACCESSIBLE / AUTH.AUTHORIZATION.ENDPOINT_ACCESS_DENIED,
+   * observed 2026-10-30 on a Professional (Trial) plan). Never a reason to
+   * mark the key invalid.
+   */
+  | "plan_restricted"
   | "allowance_exhausted"
   | "rate_limited"
   | "outage"

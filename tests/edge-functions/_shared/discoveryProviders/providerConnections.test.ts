@@ -111,15 +111,17 @@ Deno.test("health: a re-verify that the provider now rejects marks the connectio
   assertEquals(store.secrets.size, 0);
 });
 
-Deno.test("verification calls are free: LeadOcean /v1/usage, Apollo People Search with one row", async () => {
+Deno.test("verification calls are free: LeadOcean /v1/account, Apollo usage_stats + People Search with one row", async () => {
   const f = mockFetch({
-    "GET /v1/usage": [{ body: { data: { used: 5, plan: { slug: "starter", monthlyCredits: 100 }, resetsAt: "2026-11-01T00:00:00Z" } } }],
+    "GET /v1/account": [{ body: { success: true, data: { account: { plan: "starter" }, key: { scopes: ["search"] }, records: { ceiling: 100, used: 5, remaining: 95, resetsAt: "2026-11-01T00:00:00Z" } } } }],
+    "POST /api/v1/usage_stats/api_usage_stats": [{ body: {} }],
     "POST /api/v1/mixed_people/api_search": [{ body: { total_entries: 0, people: [] } }],
   });
   const verify = verifierFrom((p, k) => (p === "leadocean" ? leadOceanAdapter : apolloAdapter)({ apiKey: k, fetch: f.fetch, sleep: noSleep, now: FIXED_NOW }));
   assertEquals((await verify("leadocean", KEY)).remaining, 95);
   await verify("apollo", "ap_key_123456789");
-  assertEquals(f.calls.map((x) => `${x.method} ${new URL(x.url).pathname}`), ["GET /v1/usage", "POST /api/v1/mixed_people/api_search"]);
-  assertEquals((f.calls[1].body as { per_page: number }).per_page, 1);
+  assertEquals(f.calls.map((x) => `${x.method} ${new URL(x.url).pathname}`), ["GET /v1/account", "POST /api/v1/usage_stats/api_usage_stats", "POST /api/v1/mixed_people/api_search"]);
+  // Apollo filters are query parameters, as documented.
+  assertEquals(new URL(f.calls[2].url).searchParams.get("per_page"), "1");
   assertFalse(f.calls.some((x) => x.url.includes(KEY)), "keys travel in headers, never URLs");
 });

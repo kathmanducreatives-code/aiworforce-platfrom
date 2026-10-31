@@ -16,6 +16,7 @@
 // Pure.
 
 import { PROVIDERS, type SearchKind } from "./providers.ts";
+import { translate } from "./vocabulary.ts";
 import { BROADENING_FILTER_KEYS, type BroadeningDimension } from "./requirements.ts";
 import type { DiscoveryRequirements, FilterKey, HardRequirement, ProviderId } from "./types.ts";
 
@@ -62,6 +63,8 @@ export interface RequirementRoute {
   label: string;
   handling: RequirementHandling;
   via?: ProviderId;
+  /** Why a requirement is unsupported, when a filter exists but the value does not translate. */
+  note?: string;
 }
 
 export interface PlanStep {
@@ -131,7 +134,13 @@ function routeRequirement(h: HardRequirement, p: ProviderId, kind: SearchKind, v
   const base = { criterionId: h.criterionId, key: h.key, label: h.label };
   if (h.key === "unmappable") return { ...base, handling: "unsupported" };
   const d = PROVIDERS[p];
-  if (d.native[kind]?.includes(h.key)) return { ...base, handling: "native" };
+  if (d.native[kind]?.includes(h.key)) {
+    // A native filter counts only when the values translate EXACTLY into the
+    // provider's vocabulary. Otherwise the provider would ignore or reject it
+    // and the search would run wider than asked — refused, never post-verified.
+    const t = translate(p, kind, h);
+    return t.ok ? { ...base, handling: "native" } : { ...base, handling: "unsupported", note: t.reason };
+  }
   if (d.returnsFields[kind]?.includes(h.key)) return { ...base, handling: "post_verify" };
   if (verifier && verifier !== p) {
     const v = PROVIDERS[verifier];
@@ -197,8 +206,8 @@ export function planDiscovery(input: {
       refused.push({
         provider: p,
         reason: forbidden.length
-          ? `cannot filter or verify ${unsupported.map((u) => u.label).join(", ")} and broadening is forbidden`
-          : `cannot filter or verify ${unsupported.map((u) => u.label).join(", ")}`,
+          ? `cannot filter or verify ${unsupported.map((u) => u.label + (u.note ? ` (${u.note})` : "")).join(", ")} and broadening is forbidden`
+          : `cannot filter or verify ${unsupported.map((u) => u.label + (u.note ? ` (${u.note})` : "")).join(", ")}`,
         unsupported: unsupported.map(({ criterionId, label, key }) => ({ criterionId, label, key })),
       });
       continue;

@@ -25,7 +25,7 @@ Deno.test("access check: every paid or unlisted operation is refused before anyt
   for (const [call, method, path] of [
     [apollo, "POST", "/api/v1/mixed_companies/search"], // 1 credit per page
     [apollo, "POST", "/api/v1/people/match"], // enrichment
-    [apollo, "GET", "/api/v1/auth/health"], // free, but verifies nothing
+    [apollo, "GET", "/api/v1/auth/health"], // free, but carries no account detail (and behind a key-injecting proxy proves nothing)
     [lo, "POST", "/v1/search"], [lo, "POST", "/v1/search/companies"], [lo, "POST", "/v1/enrich"],
     [lo, "GET", "/v1/companies/enrich"], [lo, "POST", "/v1/exports"], [lo, "GET", "/v1/companies/count/../enrich"],
   ] as const) {

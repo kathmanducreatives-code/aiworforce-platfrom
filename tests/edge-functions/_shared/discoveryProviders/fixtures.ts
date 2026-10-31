@@ -19,7 +19,10 @@ const BASE_PROPOSAL = {
   evaluation_instructions: "", founder_unlock_recommended: false, confidence: 0.8, unknowns: [],
 };
 
-export const MANUFACTURER_QUERY = "Find 5 US manufacturers under 100 employees and their founder or CEO. Do not broaden. Exclude staffing agencies.";
+// The exclusion names LeadOcean's own industry label, so every provider can
+// express it exactly (vocabulary.ts). A free-text exclusion ("staffing
+// agencies") refuses LeadOcean's people search instead — see the vocabulary tests.
+export const MANUFACTURER_QUERY = "Find 5 US manufacturers under 100 employees and their founder or CEO. Do not broaden. Exclude Staffing and Recruiting firms.";
 
 /** The model's reading of MANUFACTURER_QUERY (a fixture), compiled by the real compiler. */
 export function compileManufacturerMission(overrides: Record<string, unknown> = {}, query = MANUFACTURER_QUERY) {
@@ -33,6 +36,7 @@ export function compileManufacturerMission(overrides: Record<string, unknown> = 
     hard_constraints: [
       { field: "employee_max", operator: "lte", value: 100, reason: "under 100 employees" },
       { field: "geography", operator: "in", value: ["United States"], reason: "US" },
+      { field: "excluded_company_types", operator: "not_in", value: ["Staffing and Recruiting"], reason: "Exclude Staffing and Recruiting firms" },
     ],
     disallowed_broadening: ["geography", "employee_range"],
     required_capabilities: ["general_company_discovery", "company_details_enrichment", "company_semantic_evaluation", "portfolio_ranking"],
@@ -83,11 +87,16 @@ export function loPage(rows: unknown[], meta: Record<string, unknown> = {}) {
 
 // ── Apollo rows ─────────────────────────────────────────────────────────────
 
+/**
+ * A People API Search row exactly as documented (re-read 2026-10-30): the
+ * organization carries its NAME and has_* flags only — no id, no domain.
+ * (`org.primary_domain` is accepted for call sites but never emitted.)
+ */
 export function apPerson(id: string, first: string, title: string, org: { name: string; id?: string; primary_domain?: string }) {
   return {
     id, first_name: first, last_name_obfuscated: "S***h", title, last_refreshed_at: "2026-10-01T00:00:00Z",
     has_email: true, has_city: true, has_state: true, has_country: true, has_direct_phone: "Yes",
-    organization: { name: org.name, ...(org.id ? { id: org.id } : {}), ...(org.primary_domain ? { primary_domain: org.primary_domain } : {}) },
+    organization: { name: org.name, has_industry: true, has_phone: true, has_city: true, has_state: true, has_country: true, has_zip_code: true, has_revenue: false, has_employee_count: true },
   };
 }
 

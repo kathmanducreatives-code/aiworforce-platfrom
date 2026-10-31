@@ -139,7 +139,7 @@ Deno.test("routing: every native filter in the table is one the adapter actually
   for (const p of ["leadocean", "apollo"] as const) {
     const plan = planDiscovery({ requirements: r, connections: [conn(p), conn("apify")], selection: [p, "apify"] });
     const step = plan.steps.find((s) => s.provider === p)!;
-    const body = p === "leadocean" ? buildLeadOceanSearch(step, r, null, 10).body : buildApolloSearch(step, r, 1, 10).body;
+    const body = p === "leadocean" ? buildLeadOceanSearch(step, r, null, 10).body : buildApolloSearch(step, r, 1).params;
     const sent = JSON.stringify(body);
     for (const native of step.requirements.filter((x) => x.handling === "native")) {
       const marker = { roles: p === "leadocean" ? "title" : "person_titles", geography_hq: p === "leadocean" ? "hqCountry" : "organization_locations", employee_range: p === "leadocean" ? "maxEmployees" : "organization_num_employees_ranges", industry: "industry", excluded_company_types: "excludeIndustry" }[native.key as string];
@@ -269,14 +269,16 @@ Deno.test("failure: auth failure on the primary fails over to the fallback; noth
   assertEquals(run.steps.map((s) => [s.provider, s.status, s.errorKind]), [["leadocean", "failed", "auth_failed"], ["apollo", "completed", null]]);
   assertEquals(run.status, "partial");
   const lead = run.leads[0];
-  // Apollo filtered size + HQ itself; Apify's site read settled industry and the exclusion.
+  // A People API Search row names its employer and nothing else: no domain, so
+  // no website check can be aimed at it and nothing here establishes the company.
+  assertEquals(lead.company.domain, []);
+  assertEquals(lead.company.name[0].value, "Stonebridge Fabrication");
   assertEquals(Object.fromEntries(lead.checks.map((c) => [c.key, c.outcome])), {
-    industry: "matched", geography_hq: "provider_filter", employee_range: "provider_filter", excluded_company_types: "matched",
+    industry: "unknown", geography_hq: "provider_filter", employee_range: "provider_filter", excluded_company_types: "unknown",
   });
-  // Apollo's own size / HQ filters are not independently confirmed: not qualified.
   assertEquals(lead.status, "needs_verification");
   assertEquals(lead.verification, null);
-  assertEquals(run.verification?.checked, 1);
+  assertEquals(run.verification?.checked, 0, "no domain, no site read");
 });
 
 Deno.test("failure: an outage (503) is retried within bounds, then the step fails cleanly", async () => {
@@ -330,7 +332,7 @@ Deno.test("failure: a paid request that fails in transit is charge_uncertain —
 });
 
 Deno.test("failure: a free request that fails in transit is retried", async () => {
-  const f = mockFetch({ "GET /v1/usage": ["network_error", { body: { data: { used: 10, plan: { slug: "growth", monthlyCredits: 1000 } } } }] });
+  const f = mockFetch({ "GET /v1/account": ["network_error", { body: { success: true, data: { account: { plan: "solo" }, key: { scopes: ["search", "enrich"] }, records: { ceiling: 1000, used: 10, remaining: 990 } } } }] });
   const u = await loAdapter(f).verifyKey();
   assertEquals(f.calls.length, 2);
   assertEquals(u.remaining, 990);

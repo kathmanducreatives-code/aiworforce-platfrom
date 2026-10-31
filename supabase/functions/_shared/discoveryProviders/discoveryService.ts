@@ -110,8 +110,11 @@ export async function handleDiscovery(req: DiscoveryRequest, d: DiscoveryDeps): 
   });
   if (run.status === "blocked") return { status: 409, body: { error: run.reason, plan } };
   for (const s of run.steps) {
-    if (s.errorKind === "auth_failed" || s.errorKind === "forbidden_scope") {
+    if (s.errorKind === "auth_failed") {
       await d.store.mark(req.workspaceId, s.provider, { status: "invalid", lastError: "The provider rejected the stored key." });
+    } else if (s.errorKind === "forbidden_scope" || s.errorKind === "plan_restricted") {
+      // The key still works: record the limit, keep the connection.
+      await d.store.mark(req.workspaceId, s.provider, { lastError: s.errorKind === "plan_restricted" ? "The provider's plan does not include this search." : "The stored key lacks the scope this search needs." });
     }
   }
   const projected = run.leads.map((l) => projectLead(l, { workspaceId: req.workspaceId, missionId: req.messageId, run })).filter((x): x is ProjectedLead => !!x);

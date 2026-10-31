@@ -1,7 +1,8 @@
 // Free, read-only access check for Apollo and LeadOcean.
 //
 //   APOLLO_API_KEY=… LEADOCEAN_API_KEY=… deno run --allow-env --allow-net=api.apollo.io,api.leadocean.io \
-//     --allow-read scripts/provider-access-check.ts [--out report.json]
+//     --allow-read scripts/provider-access-check.ts [--out report.json] [--apollo-key-injected]
+//   --apollo-key-injected: the Apollo key is a cloud Network Secret the proxy adds
 //
 // Every request passes one gate (`FREE_OPERATIONS`): an exact method + path
 // that the provider's own documentation states consumes nothing. Anything else
@@ -12,8 +13,10 @@
 // is kept, and a person row from the one-row Apollo search is dropped unread.
 //
 // Why these and not others:
-//   Apollo  GET  /api/v1/auth/health  is NOT used: it answers is_logged_in:true
-//           for a missing or invalid key (observed 2026-10-30), so it verifies nothing.
+//   Apollo  GET  /api/v1/auth/health  is NOT used: it returns only {healthy,
+//           is_logged_in} with no account detail, and in a cloud session whose
+//           proxy injects the key (a Network Secret) it reports a login for ANY
+//           header — so it cannot tell a working key from a wrong one there.
 //           POST /api/v1/usage_stats/api_usage_stats — no credits (API pricing:
 //           only the listed endpoints consume credits); needs a master key.
 //           POST /api/v1/mixed_people/api_search, per_page 1 — 0 credits, returns
@@ -158,9 +161,14 @@ if (import.meta.main) {
   const realFetch: FetchLike = (url, init) => fetch(url, init);
   for (const [p, env] of [["apollo", "APOLLO_API_KEY"], ["leadocean", "LEADOCEAN_API_KEY"]] as const) {
     const key = Deno.env.get(env)?.trim();
-    if (!key) { report[p] = { configured: false, note: `${env} is not set; nothing was sent` }; continue; }
-    const results = p === "apollo" ? await checkApollo(realFetch, key) : await checkLeadOcean(realFetch, key, cohort, mission);
-    report[p] = { configured: true, key_fingerprint: await fingerprint(key), results };
+    // A cloud Network Secret is added by the session's proxy: the key never
+    // reaches this process. Only on an explicit flag do we send a placeholder
+    // header for the proxy to replace; nothing then fingerprints a real key.
+    const injected = !key && p === "apollo" && Deno.args.includes("--apollo-key-injected");
+    if (!key && !injected) { report[p] = { configured: false, note: `${env} is not set; nothing was sent` }; continue; }
+    const sent = key ?? "injected-by-proxy";
+    const results = p === "apollo" ? await checkApollo(realFetch, sent) : await checkLeadOcean(realFetch, sent, cohort, mission);
+    report[p] = { configured: true, key_fingerprint: injected ? "proxy-injected" : await fingerprint(sent), results };
   }
   const text = JSON.stringify(report, null, 2);
   if (outIdx >= 0 && Deno.args[outIdx + 1]) await Deno.writeTextFile(Deno.args[outIdx + 1], text);

@@ -25,6 +25,10 @@ export interface UsageInfo {
   remaining: number | null;
   resetsAt: string | null;
   checkedAt: string;
+  /** Capabilities the key or plan cannot use, found by free calls (e.g. "people_search: plan"). */
+  restrictions?: string[];
+  /** Key scopes the provider reports (LeadOcean: search, enrich). */
+  scopes?: string[] | null;
 }
 
 export interface DiscoveryAdapter {

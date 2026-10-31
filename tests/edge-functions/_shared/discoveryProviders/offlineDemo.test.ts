@@ -25,18 +25,21 @@ Deno.test("offline demo (auto): LeadOcean primary, five leads pass the provider 
   }
 });
 
-Deno.test("offline demo (Apollo + Apify): free search, site reads settle industry and exclusions, nothing over-claimed", async () => {
+Deno.test("offline demo (Apollo + Apify): Apollo's people rows name an employer only, so nothing can be verified or rejected", async () => {
   const { plan, run, rows } = await runOfflineDemo(["apollo", "apify"]);
   assertEquals(plan.steps.map((s) => [s.provider, s.estimatedCredits]), [["apollo", 0]]);
   const by = Object.fromEntries(run.leads.map((l) => [l.company.name[0].value, l]));
-  // Industry and exclusion matched on the site; size and HQ rest on Apollo's filter alone.
-  assertEquals(by["Stonebridge Fabrication"].status, "needs_verification");
+  // People API Search returns the organization's NAME only (documented): no domain,
+  // so no website check can be aimed at it and no company fact is established.
+  assertEquals(run.verification?.checked, 0);
+  for (const name of ["Stonebridge Fabrication", "Patel Software", "Rivers Staffing"]) {
+    assertEquals(by[name].status, "needs_verification", `${name}: nothing establishes or rules it out`);
+    assertEquals(by[name].company.domain, []);
+  }
+  // Apollo's own size / HQ filters stay untrusted.
   assertEquals(by["Stonebridge Fabrication"].checks.filter((c) => c.outcome === "provider_filter").map((c) => c.trusted), [false, false]);
-  // The software shop's own site does not say "manufacturing": unknown, not qualified, not rejected.
-  assertEquals(by["Patel Software"].status, "needs_verification");
-  assertEquals(by["Rivers Staffing"].status, "rejected");
-  assert(by["Rivers Staffing"].reasons[0].startsWith("Excluding: staffing agencies: contradicted"));
   // Apollo search carries no contact values at all.
   assertFalse(run.leads.some((l) => l.contacts.some((c) => c.person.contactPoints.length)));
-  assertEquals(rows.length, 2, "needs-verification leads are written, labelled; the rejected one is not");
+  assertEquals(rows.length, 3, "needs-verification leads are written, labelled");
 });
+
