@@ -38,7 +38,8 @@ import { readCompanyRecords, type CanonicalRun } from "./canonical.ts";
 import { collectSignals, type Signal, type SignalPlan, type SignalStatus } from "./signals.ts";
 import { DEFAULT_WEIGHTS, rankLeads, type RankResult, type RankWeights } from "./ranking.ts";
 import { employmentFrom, enrichPhones, redactPhoneRecord, type PhoneClass, type PhoneRecord, type PhoneTarget } from "./phones.ts";
-import { EMPTY_FUNNEL, estimateCandidates, type CandidateEstimate, type FunnelCounts } from "./metrics.ts";
+import { ledgeredInvoker } from "./apifyInvoker.ts";
+import { EMPTY_FUNNEL, estimateCandidates, yieldReport, type CandidateEstimate, type FunnelCounts, type YieldReport } from "./metrics.ts";
 
 export const PIPELINE_VERSION = "lead-pipeline-v1" as const;
 
@@ -105,6 +106,8 @@ export interface PipelineInput {
   actorTimeoutMs?: number;
   /** The plan is computed and returned, nothing is bought. */
   dryRun?: boolean;
+  /** USD per LeadOcean record for cost reporting (Free plan: 0 monetary); null = report records only. */
+  usdPerLeadOceanRecord?: number | null;
   /** For tests: the phone lookup call. */
   phoneCall?: Parameters<typeof enrichPhones>[0]["call"];
 }
@@ -123,6 +126,13 @@ export interface PipelineRun {
   excluded: PipelineLead[];
   funnel: FunnelCounts;
   estimates: CandidateEstimate[];
+  yield: YieldReport;
+  /**
+   * The numbers the lookups returned, keyed by person — SENSITIVE: for the
+   * caller to store in the contact record under the enrichment authorization.
+   * Never logged, never in a report; every other field of the run is report-safe.
+   */
+  contactValues: { personKey: string; leadId: string | null; e164: string; class: PhoneClass }[];
   checkpoint: WalkCheckpoint;
   spend: { leadoceanRecords: number; apifyUsd: number };
 }
@@ -155,7 +165,8 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
   const missionId = `lp:${input.walkId}:r${cp.recordsBought}`;
   const base = (status: PipelineRun["status"], reason: string | null): PipelineRun => ({
     version: PIPELINE_VERSION, status, reason, plan, discovery: null, canonical: null, signals: null, phones: null,
-    queue: [], review: [], excluded: [], funnel: { ...EMPTY_FUNNEL }, estimates: [], checkpoint: cp, spend: { leadoceanRecords: 0, apifyUsd: 0 },
+    queue: [], review: [], excluded: [], funnel: { ...EMPTY_FUNNEL }, estimates: [], contactValues: [],
+    yield: yieldReport({ funnel: EMPTY_FUNNEL, leadoceanRecords: 0, apifyUsd: 0, usdPerLeadOceanRecord: input.usdPerLeadOceanRecord ?? null, rejections: [], enrichmentSkips: [] }), checkpoint: cp, spend: { leadoceanRecords: 0, apifyUsd: 0 },
   });
   if (resume.blocked) return base("blocked", resume.blocked);
   if (cp.icpId !== input.icp.id) return base("blocked", `walk ${input.walkId} belongs to ICP ${cp.icpId}`);
@@ -186,7 +197,10 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
 
   // 4 canonical company records → shared engine re-decides
   const timeout = input.actorTimeoutMs ?? 120_000;
-  const apify = withTimeout(input.apify, timeout);
+  // Every Apify run is reserved in the durable ledger first (replay on re-run, never re-bought after an uncertain charge).
+  const apifyCeiling = (input.approvals.canonicalMaxUsd ?? 0) + (input.approvals.signals?.maxUsd ?? 0);
+  const timed = withTimeout(input.apify, timeout);
+  const apify = timed ? ledgeredInvoker(timed, input.ledger, { workspaceId: input.workspaceId, missionId: `${missionId}:apify`, maxUsd: apifyCeiling }) : null;
   let canonical: CanonicalRun | null = null;
   let leads = run.leads;
   if (input.approvals.canonicalMaxUsd != null) {
@@ -338,6 +352,13 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
     phones: phones ? { recordsCharged: phones.recordsCharged, stopped: phones.stopped, skipped: phones.skipped } : null,
     queue: out.filter((x) => x.rank.lane === "queue"), review: out.filter((x) => x.rank.lane === "review"), excluded: out.filter((x) => x.rank.lane === "excluded"),
     funnel, estimates, checkpoint: next,
+    yield: yieldReport({
+      funnel, leadoceanRecords: leadoceanRecords + (phones?.recordsCharged ?? 0), apifyUsd, usdPerLeadOceanRecord: input.usdPerLeadOceanRecord ?? null,
+      rejections: out.flatMap((x) => x.statuses.qualification === "ineligible" ? (x.qualification?.disproven.length ? x.qualification.disproven.map((d) => `disproven:${d}`) : [x.statuses.discovery === "duplicate_prior_walk" ? "duplicate_prior_walk" : "ineligible"])
+        : x.statuses.qualification === "pending" ? (x.qualification?.gaps ?? []).map((g) => `unknown:${g}`) : []),
+      enrichmentSkips: (phones?.skipped ?? []).map((k) => k.reason.replace(/\(.*\)/, "").trim()),
+    }),
+    contactValues: (phones?.records ?? []).filter((x) => x.e164).map((x) => ({ personKey: x.personKey, leadId: x.leadId, e164: x.e164!, class: x.class })),
     spend: { leadoceanRecords: leadoceanRecords + (phones?.recordsCharged ?? 0), apifyUsd },
   };
 }

@@ -69,3 +69,24 @@ export function advance(cp: WalkCheckpoint, run: { personIds: string[]; companyK
     exhausted: !run.morePages && run.pages > 0 && run.personIds.length === 0 ? "no new people returned" : cp.exhausted,
   };
 }
+
+/** The hosted store (held migration 20261031120000_lead_pipeline_checkpoints.sql). `admin` is a service-role client. */
+// deno-lint-ignore no-explicit-any
+export function supabaseCheckpointStore(admin: any): CheckpointStore {
+  return {
+    async load(workspaceId, walkId) {
+      const { data, error } = await admin.from("lead_pipeline_checkpoints").select("*").eq("workspace_id", workspaceId).eq("walk_id", walkId).maybeSingle();
+      if (error) throw new Error(`checkpoint read failed: ${error.message}`);
+      if (!data) return null;
+      return { version: CHECKPOINT_VERSION, walkId, workspaceId, icpId: data.icp_id, seenPersonIds: data.seen_person_ids ?? [], seenCompanyKeys: data.seen_company_keys ?? [],
+        pagesBought: data.pages_bought, recordsBought: data.records_bought, updatedAt: data.updated_at, exhausted: data.exhausted };
+    },
+    async save(cp) {
+      const { error } = await admin.from("lead_pipeline_checkpoints").upsert({
+        workspace_id: cp.workspaceId, walk_id: cp.walkId, icp_id: cp.icpId, version: cp.version, seen_person_ids: cp.seenPersonIds, seen_company_keys: cp.seenCompanyKeys,
+        pages_bought: cp.pagesBought, records_bought: cp.recordsBought, exhausted: cp.exhausted, updated_at: cp.updatedAt,
+      }, { onConflict: "workspace_id,walk_id" });
+      if (error) throw new Error(`checkpoint write failed: ${error.message}`);
+    },
+  };
+}

@@ -124,3 +124,54 @@ export function plannedFunnel(discovered: number, assumed: Record<string, number
   const pa = Math.round(lu * r("personAssociated"));
   return { ...EMPTY_FUNNEL, discovered, unique, newToAgentory: newTo, eligible, decisionMaker: dm, hasPhoneFlag: hp, lookedUp: lu, personAssociated: pa, verifiedDirect: 0, outreachReady: Math.round(pa * r("outreachReady")) };
 }
+
+export interface YieldReport {
+  candidatesDiscovered: number;
+  candidatesUnique: number;
+  candidatesEligible: number;
+  enrichmentAttempts: number;
+  /** Lookups that returned any number / lookups. */
+  phoneMatchRate: number | null;
+  /** Lookups that returned a person-associated (mobile/direct) number / lookups. */
+  personDirectCandidateRate: number | null;
+  /** Lookups that ended independently verified person-direct / lookups. */
+  verifiedDirectRate: number | null;
+  /** Rows bought that were already seen in this walk or already in Agentory. */
+  duplicateRate: number | null;
+  cost: {
+    leadoceanRecords: number; apifyUsd: number;
+    /** USD when a per-record price is known (LeadOcean Free plan: $0 monetary, records only). */
+    totalUsd: number | null;
+    perCandidateUsd: number | null; perCandidateRecords: number | null;
+    perPersonAssociatedNumberUsd: number | null;
+    perVerifiedDirectNumberUsd: number | null;
+  };
+  rejectionReasons: Record<string, number>;
+  enrichmentSkipReasons: Record<string, number>;
+}
+
+const ratio = (k: number, n: number) => (n > 0 ? Math.round((k / n) * 1000) / 1000 : null);
+
+export function yieldReport(input: {
+  funnel: FunnelCounts; leadoceanRecords: number; apifyUsd: number; usdPerLeadOceanRecord: number | null;
+  rejections: string[]; enrichmentSkips: string[];
+}): YieldReport {
+  const f = input.funnel;
+  const numbers = f.personAssociated + f.switchboard + f.invalidOrMismatched;
+  const totalUsd = input.usdPerLeadOceanRecord == null ? null : Math.round((input.leadoceanRecords * input.usdPerLeadOceanRecord + input.apifyUsd) * 1e6) / 1e6;
+  const per = (n: number) => (totalUsd == null || n === 0 ? null : Math.round((totalUsd / n) * 1e4) / 1e4);
+  const count = (xs: string[]) => xs.reduce<Record<string, number>>((a, x) => ({ ...a, [x]: (a[x] ?? 0) + 1 }), {});
+  return {
+    candidatesDiscovered: f.discovered, candidatesUnique: f.unique, candidatesEligible: f.eligible, enrichmentAttempts: f.lookedUp,
+    phoneMatchRate: ratio(numbers, f.lookedUp),
+    personDirectCandidateRate: ratio(f.personAssociated, f.lookedUp),
+    verifiedDirectRate: ratio(f.verifiedDirect, f.lookedUp),
+    duplicateRate: ratio(f.discovered - f.newToAgentory, f.discovered),
+    cost: {
+      leadoceanRecords: input.leadoceanRecords, apifyUsd: input.apifyUsd, totalUsd,
+      perCandidateUsd: per(f.unique), perCandidateRecords: f.unique ? Math.round((input.leadoceanRecords / f.unique) * 100) / 100 : null,
+      perPersonAssociatedNumberUsd: per(f.personAssociated), perVerifiedDirectNumberUsd: per(f.verifiedDirect),
+    },
+    rejectionReasons: count(input.rejections), enrichmentSkipReasons: count(input.enrichmentSkips),
+  };
+}
