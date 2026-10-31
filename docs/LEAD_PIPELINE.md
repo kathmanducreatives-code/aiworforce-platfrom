@@ -72,7 +72,7 @@ it canonical records and signals are unavailable and nothing qualifies on HQ.
 | Size proof | claim only (headcounts ran low vs LinkedIn in Test L) | declared band, $0.004/company | — |
 | Posts / hiring / expansion / leadership | — | profile & company posts $0.002/post; job search $0.001/job + $0.001/start | — |
 | Funding | `company_funding` (claim, in the row, no extra cost) | atomus funding $0.0035/company (not wired) | — |
-| Phone | `/v2/people/phone` 1 record, mobile/direct/office, no DNC field | — | not tested |
+| Phone | `/v1/people/phone` 1 record (found or not), mobile/direct/office; `dnc` published but unpopulated (null = unknown) | — | not tested |
 | Independent phone verification | — | — | — (**gap**: no carrier/HLR check in the stack) |
 
 ## Account state (free reads, 2026-10-31)
@@ -123,7 +123,7 @@ on ineligible leads), top-ranked first, Apify company reads only for non-rejecte
 
 ## Known gaps / blockers
 
-1. LeadOcean `/v2/people/phone` returns 401 with the REST Network Secret (search works) — phone yield unmeasured.
+1. Phone yield unmeasured: the Network Secret covers `/v1/*` only (v2 → 401); lookups now use `/v1/people/phone` behind a free auth probe. Test P1 proposed.
 2. No independent phone verification source → `verified_person_direct` stays 0.
 3. Held migrations (`20261027120000_provider_connections`, `20261031120000_lead_pipeline_checkpoints`) not applied.
 4. `/v2/people/phone` response shape is documented, not yet observed live (test E observes it).

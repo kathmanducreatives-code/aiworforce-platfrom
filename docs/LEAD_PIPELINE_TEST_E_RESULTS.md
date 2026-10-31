@@ -52,3 +52,26 @@ low-confidence expansion cue. 6 of 7 job searches returned nothing.
 
 Nothing in this file names a person. The full run report (with names and LinkedIn
 URLs, no phone values) is kept outside the repository.
+
+## Follow-up: the phone 401 (resolved in `00588094`)
+
+Root cause, confirmed with rejected requests (LeadOcean: "Requests we reject are
+not counted"; account counter 25 used / 975 remaining before and after):
+
+| request (empty body / invalid) | result |
+|---|---|
+| `POST /v1/people/phone {}` | 400 Validation failed → key accepted |
+| `POST /v1/search {"limit":0}` | 400 Validation failed → key accepted |
+| `POST /v2/people/phone {}` (placeholder key) | 401 Missing or malformed x-api-key |
+| `POST /v2/people/phone {}` (no key header) | 401 Missing or malformed x-api-key |
+
+The workspace Network Secret for `api.leadocean.io` is injected on `/v1/*`
+only; on `/v2/*` LeadOcean receives the placeholder. The code's header format
+(`x-api-key`) matches the OpenAPI scheme on every path. The MCP `find_phone`
+works because it authenticates with LeadOcean's OAuth connection, not the
+Network Secret. Fix: lookups use `POST /v1/people/phone` (same cached lookup and
+price per the OpenAPI), preceded by a free empty-body auth probe that stops
+all lookups on 401/403. Widening the secret to `/v2/*` would also work.
+
+Next: phone-only test P1 (`scripts/lead-pipeline-phone-test-p1.ts`), top five
+eligible Test E prospects, ≤5 LeadOcean records, $0 Apify — proposed, awaiting approval.

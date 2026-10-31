@@ -43,3 +43,4 @@ artifacts/lead-quality-benchmark/
 .mcp.json
 AgriDrone-Guardian/
 .test-e.lock
+.phone-test-p1.lock
