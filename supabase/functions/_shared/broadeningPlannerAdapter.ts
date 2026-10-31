@@ -168,8 +168,10 @@ export function createBroadeningPlanner(opts: PlannerAdapterOpts = {}): {
         onModelCall: opts.onModelCall,
         budget: opts.budget,
       });
-      const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("planner_timeout")), timeoutMs));
-      const r = await Promise.race([call, timeout]);
+      // Cleared once the race settles: a live timer would hold the process open.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new Error("planner_timeout")), timeoutMs); });
+      const r = await Promise.race([call, timeout]).finally(() => clearTimeout(timer));
 
       meta.latency_ms = Date.now() - started;
       meta.provider = r.provider;
