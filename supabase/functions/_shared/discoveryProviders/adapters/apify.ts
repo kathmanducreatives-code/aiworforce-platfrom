@@ -16,7 +16,12 @@ import { pickStr, type DiscoveryAdapter, type SearchPage, type UsageInfo } from 
 import type { PlanStep } from "../routing.ts";
 import { ProviderError, type DiscoveryRequirements, type FilterKey, type HardRequirement, type ProviderCompany } from "../types.ts";
 
-export interface ActorRun { items: unknown[]; runId?: string | null }
+export interface ActorRun {
+  items: unknown[];
+  runId?: string | null;
+  /** What Apify charged for the run, when the invoker knows it (run.usageTotalUsd). */
+  chargedUsd?: number | null;
+}
 export type ActorInvoker = (actorKey: string, input: Record<string, unknown>, opts: { maxItems: number; idempotencyKey: string }) => Promise<ActorRun>;
 
 export const APIFY_ACTORS = {
