@@ -10,9 +10,10 @@
 import type { LedgerEntry, ReserveResult, UsageLedger } from "./budget.ts";
 import type { ConnectionRow, ConnectionStore } from "./connections.ts";
 import type { ProviderId } from "./types.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// deno-lint-ignore no-explicit-any
-type Admin = any;
+/** The service-role client (as the other shared stores type it). */
+type Admin = SupabaseClient;
 
 function must<T>(r: { data: T; error: unknown }): T {
   if (r.error) throw new Error(`provider store: ${(r.error as { message?: string })?.message ?? "error"}`);

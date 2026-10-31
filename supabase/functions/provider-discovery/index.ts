@@ -11,7 +11,7 @@
 // closed. Wiring it to the existing guarded actor invoker is a separate,
 // reviewed change.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authenticateUser, defaultAuthDeps } from "../_shared/requestAuth.ts";
 import { handleDiscovery, parseDiscoveryRequest } from "../_shared/discoveryProviders/discoveryService.ts";
 import { readFlags } from "../_shared/discoveryProviders/flags.ts";
@@ -27,8 +27,7 @@ const cors = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
-// deno-lint-ignore no-explicit-any
-async function persist(admin: any, rows: ProjectedLead[]) {
+async function persist(admin: SupabaseClient, rows: ProjectedLead[]) {
   for (const r of rows) {
     let accountId: string | null = null;
     if (r.account.domain) {
