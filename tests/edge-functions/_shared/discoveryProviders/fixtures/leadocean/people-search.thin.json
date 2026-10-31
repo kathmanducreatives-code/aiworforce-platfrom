@@ -1,0 +1,155 @@
+{
+  "_provenance": {
+    "what": "A LeadOcean POST /v1/search page (thin people rows), in the key structure OBSERVED in validation test V (2026-10-31, slim off). All values synthetic (.example).",
+    "observed": [
+      "profile_data.{profile_full_name,profile_first_name,profile_last_name,profile_headline,profile_url,profile_address.{city,state,continent,country_code}}",
+      "contact_data.{has_email,has_phone,email_status,email_type,email_types}",
+      "contact_data.contact_current_experiences[].{company_name,company_domain,company_industry,job_title,current,start_date,job_seniority.job_level,company_employees.{number_of_employees,_code,_min,_max},company_social_links.linkedin.url}",
+      "meta.{key,schema,sources,source_ids.{person_id,person_group_id,company_id}}",
+      "page meta.{count,credits,limit,nextCursor,records,schema,source,total,unsupportedFilters}"
+    ],
+    "absent_by_design": [
+      "employer headquarters (never in a people row)",
+      "meta.fetched_at (not on people rows)",
+      "contact_emails / contact_phones (only with reveal_email)"
+    ],
+    "source": "validation test V; structure only \u2014 no real value is copied"
+  },
+  "success": true,
+  "data": [
+    {
+      "profile_data": {
+        "profile_full_name": "Robin Vale",
+        "profile_headline": "Helping teams sell better | VP of Sales at Northwind Analytics",
+        "profile_url": "https://www.linkedin.com/in/robin-vale-example",
+        "profile_first_name": "Robin",
+        "profile_last_name": "Vale",
+        "profile_address": {
+          "city": "Austin",
+          "state": "Texas",
+          "continent": "North America",
+          "country_code": "US"
+        }
+      },
+      "contact_data": {
+        "has_email": true,
+        "has_phone": true,
+        "email_status": "verified",
+        "email_type": "work",
+        "contact_current_experiences": [
+          {
+            "company_name": "Northwind Analytics",
+            "company_domain": "northwind.example",
+            "job_title": "VP of Sales",
+            "company_industry": "Software Development",
+            "current": true,
+            "start_date": null,
+            "job_seniority": {
+              "job_level": "VP",
+              "score": null
+            },
+            "company_employees": {
+              "number_of_employees": 140,
+              "number_of_employees_code": "51-200",
+              "number_of_employees_min": 51,
+              "number_of_employees_max": 200
+            },
+            "company_social_links": {
+              "linkedin": {
+                "url": "https://www.linkedin.com/company/northwind-example"
+              }
+            }
+          }
+        ],
+        "email_types": [
+          "work"
+        ]
+      },
+      "meta": {
+        "key": "person/lo-person-1001",
+        "schema": "leadocean.person.v1",
+        "sources": [
+          "leadocean"
+        ],
+        "source_ids": {
+          "person_id": "lo-person-1001",
+          "person_group_id": "g-lo-person-1001",
+          "company_id": "lo-company-77"
+        }
+      }
+    },
+    {
+      "profile_data": {
+        "profile_full_name": "Kai Moreno",
+        "profile_headline": "Founder & CEO at Harbor Freightworks",
+        "profile_url": "https://www.linkedin.com/in/kai-moreno-example",
+        "profile_first_name": "Kai",
+        "profile_last_name": "Moreno",
+        "profile_address": {
+          "city": "Austin",
+          "state": "Texas",
+          "continent": "North America",
+          "country_code": "US"
+        }
+      },
+      "contact_data": {
+        "has_email": true,
+        "has_phone": false,
+        "email_status": "catch_all",
+        "email_type": "work",
+        "contact_current_experiences": [
+          {
+            "company_name": "Harbor Freightworks",
+            "company_domain": "harborfreight.example",
+            "job_title": "Vice President, Sales Operations",
+            "company_industry": "Truck Transportation",
+            "current": true,
+            "start_date": null,
+            "job_seniority": {
+              "job_level": "Director",
+              "score": null
+            },
+            "company_employees": {
+              "number_of_employees": 1400,
+              "number_of_employees_code": "1001-5000",
+              "number_of_employees_min": 1001,
+              "number_of_employees_max": 5000
+            },
+            "company_social_links": {
+              "linkedin": {
+                "url": "https://www.linkedin.com/company/harborfreight-example"
+              }
+            }
+          }
+        ],
+        "email_types": [
+          "work"
+        ]
+      },
+      "meta": {
+        "key": "person/lo-person-1002",
+        "schema": "leadocean.person.v1",
+        "sources": [
+          "leadocean"
+        ],
+        "source_ids": {
+          "person_id": "lo-person-1002",
+          "person_group_id": "g-lo-person-1002",
+          "company_id": "lo-company-78"
+        }
+      }
+    }
+  ],
+  "meta": {
+    "count": 2,
+    "credits": 2,
+    "limit": 2,
+    "nextCursor": null,
+    "records": 2,
+    "schema": "leadocean.person.v1",
+    "source": "leadocean",
+    "total": null,
+    "unsupportedFilters": [],
+    "key_hash": "deadbeefdeadbeef"
+  }
+}
