@@ -51,6 +51,8 @@ export interface DiscoveryRun {
   verification: { provider: ProviderId; checked: number; credits: number; stopped: string | null } | null;
   credits: Partial<Record<ProviderId, number>>;
   merge: MergeResult["stats"] | null;
+  /** Every row the steps returned (contact values already redacted), so a caller can merge them with another provider's rows. */
+  rows?: { companies: ProviderCompany[]; people: ProviderPerson[] };
 }
 
 export interface RunInput {
@@ -218,6 +220,7 @@ export async function runDiscovery(input: RunInput): Promise<DiscoveryRun> {
       rejected: ranked.filter((l) => l.status === "rejected").length,
     },
     steps, verification, credits, merge: merged.stats,
+    rows: { companies: companyRows, people: personRows },
   };
 }
 

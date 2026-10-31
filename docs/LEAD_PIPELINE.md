@@ -6,9 +6,11 @@ live run since Test V. Live test E is proposed below and needs approval.
 
 **LeadOcean evaluation closed (2026-10-31): CONDITIONAL GO — see `LEADOCEAN_FINAL_VERDICT.md`. Live provider tests are off by default (`AGENTORY_PROVIDER_LIVE_TESTS=enabled` opens one approved run).**
 
-## Standard architecture: LeadOcean → Apify → Agentory → ATLAS
+**Multi-provider discovery (2026-10-31): LeadOcean → Apify is now one of several strategies. GPT interprets the request and a deterministic planner chooses LeadOcean, Apify or both (Apollo disabled) — see `DISCOVERY_ARCHITECTURE.md`.**
 
-This is Agentory's standard discovery workflow. Each provider has one job:
+## LeadOcean-led strategy: LeadOcean → Apify → Agentory → ATLAS
+
+This is the `leadocean_plus_apify` strategy (structured people queries). Each provider has one job:
 
 | Layer | Responsible for | May it decide eligibility? |
 |---|---|---|

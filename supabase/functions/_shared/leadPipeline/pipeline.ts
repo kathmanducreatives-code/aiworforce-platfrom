@@ -31,7 +31,8 @@ import type { SharedQualification } from "../discoveryProviders/sharedQualificat
 import type { EvidenceItem } from "../candidateObservation.ts";
 import type { Eligibility } from "../candidateEligibility.ts";
 import { classifyDecisionMakerRole } from "../decisionMaker/roleFamily.ts";
-import { compileIcp, icpContradictions, type IcpConfig } from "./icp.ts";
+import { compileIcp, icpContradictions, leadoceanHints, type IcpConfig } from "./icp.ts";
+import type { DiscoveryRequirements } from "../discoveryProviders/types.ts";
 import { advance, newCheckpoint, resumeHints, type CheckpointStore, type WalkCheckpoint } from "./checkpoint.ts";
 import { ExclusionIndex, type ExclusionVerdict } from "./exclusions.ts";
 import { readCompanyRecords, type CanonicalRun } from "./canonical.ts";
@@ -102,6 +103,13 @@ export interface PipelineInput {
   workspaceId: string;
   walkId: string;
   icp: IcpConfig;
+  /**
+   * Requirements compiled from an interpreted request (the strategy planner,
+   * `strategy.ts`), instead of compiling the ICP's own fixed query. Their
+   * `criteria` stay the shared engine's input untouched; `hard` is what the
+   * LeadOcean search is planned on. The ICP still supplies narrowing and ranking.
+   */
+  requirements?: DiscoveryRequirements;
   connections: ProviderConnectionState[];
   limits?: Partial<PlanLimits>;
   approvals: PipelineApprovals;
@@ -158,7 +166,8 @@ function withTimeout(invoke: ActorInvoker | null, ms: number): ActorInvoker | nu
 
 const first = <T>(xs: { value: T }[]): T | null => xs[0]?.value ?? null;
 
-function bestContact(l: VerifiedLead): CanonicalPerson | null {
+/** The lead's best decision-maker contact (founder first), or null. */
+export function bestContact(l: VerifiedLead): CanonicalPerson | null {
   const ok = l.contacts.filter((c) => c.status !== "rejected");
   const order = { founder: 0, executive_revenue: 1, sales_leadership: 2, growth_leadership: 3, revenue_operations: 4, sales_operations: 5, other: 6 } as const;
   const fam = (p: CanonicalPerson) => order[classifyDecisionMakerRole(first(p.title)).role_family];
@@ -170,7 +179,10 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
   const at = now().toISOString();
   const cp = (await input.checkpoints.load(input.workspaceId, input.walkId)) ?? newCheckpoint(input.workspaceId, input.walkId, input.icp.id, at);
   const resume = resumeHints(cp);
-  const compiled = compileIcp(input.icp, resume.excludeIds ? { excludeIds: resume.excludeIds } : {});
+  const extra = resume.excludeIds ? { excludeIds: resume.excludeIds } : {};
+  const compiled = input.requirements
+    ? { requirements: { ...input.requirements, providerHints: { leadocean: leadoceanHints(input.icp, { ...(input.requirements.providerHints?.leadocean ?? {}), ...extra }) } } }
+    : compileIcp(input.icp, extra);
   const plan = planDiscovery({ requirements: compiled.requirements, connections: input.connections, selection: ["leadocean"], limits: input.limits });
   // One mission id per purchase position: a crashed run re-run before its checkpoint saved replays from the ledger.
   const missionId = `lp:${input.walkId}:r${cp.recordsBought}`;

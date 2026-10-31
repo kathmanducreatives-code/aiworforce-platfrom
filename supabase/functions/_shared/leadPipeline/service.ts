@@ -28,6 +28,10 @@ import { ExclusionIndex, type ExistingRecord } from "./exclusions.ts";
 import { configureIcp, ICPS, type IcpConfig, type IcpId } from "./icp.ts";
 import { runLeadPipeline, worstCase, type PipelineApprovals, type PipelineRun } from "./pipeline.ts";
 import { projectPipelineLead, type PipelineRow } from "./projection.ts";
+import type { GenerateJsonFn } from "../intelligence/plannerWrapper.ts";
+import type { ProviderId } from "../discoveryProviders/types.ts";
+import { runDiscoveryStrategy, type StrategyRun } from "./multiProvider.ts";
+import { adviseStrategy, isStrategy, planStrategy, specFromMission, type DiscoveryStrategyId, type StrategyContext, type StrategyPlan } from "./strategy.ts";
 
 const on = (v: string | undefined) => !!v && ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
 
@@ -139,6 +143,128 @@ export async function handleLeadPipeline(req: PipelineRequest, d: PipelineDeps):
       status: run.status, reason: run.reason, spend: run.spend, funnel: run.funnel, yield: run.yield, estimates: run.estimates,
       discovery: run.discovery, canonical: run.canonical, signals: run.signals && { spentUsd: run.signals.spentUsd, stopped: run.signals.stopped }, phones: run.phones,
       queue: run.queue, review: run.review, excludedCount: run.excluded.length, written: rows.length,
+    },
+  };
+}
+
+// ── Multi-provider strategy (strategy.ts / multiProvider.ts) ────────────────
+//
+//   strategy_plan  {workspace_id, query, walk_id, requested_count?, strategy?, exclude_providers?,
+//                   allow_review_only?, max_leadocean_records?, max_apify_usd?}
+//                  Member. GPT interprets the request (the mission compiler), the
+//                  planner judges every strategy, GPT may pick among the feasible
+//                  ones. Returns the plan and its hash. No provider is called.
+//   strategy_run   the same, plus approval {plan_hash, leadocean_records, apify_usd}.
+//                  Owner/admin. Re-interprets and re-plans; the approval must name
+//                  that plan's hash (a re-interpretation that changes the plan is
+//                  refused, never run) and cover its worst case. Writes eligible and
+//                  pending leads; never looks up a phone; sends nothing.
+//
+// Same switches as the ICP walk (LEAD_PIPELINE_ENABLED + workspace allowlist),
+// plus each provider's own flag: LeadOcean via PROVIDER_LEADOCEAN_ENABLED and
+// its commercial terms, Apify discovery via PROVIDER_APIFY_DISCOVERY_ENABLED and
+// a deployment token. Apollo is never planned (APOLLO_ACCESS_VALIDATED).
+
+
+export interface StrategyRequest {
+  action: "strategy_plan" | "strategy_run";
+  workspaceId: string;
+  walkId: string;
+  query: string;
+  requestedCount: number | null;
+  user: StrategyContext["user"];
+  budget: StrategyContext["budget"];
+  approval: { planHash: string; leadoceanRecords: number; apifyUsd: number } | null;
+}
+
+const PROVIDER_NAMES: readonly ProviderId[] = ["leadocean", "apify", "apollo"];
+
+export function parseStrategyRequest(b: Record<string, unknown>): StrategyRequest | null {
+  if (b.action !== "strategy_plan" && b.action !== "strategy_run") return null;
+  if (typeof b.workspace_id !== "string" || typeof b.walk_id !== "string" || !/^[a-z0-9:_-]{1,120}$/i.test(b.walk_id)) return null;
+  if (typeof b.query !== "string" || !b.query.trim() || b.query.length > 2000) return null;
+  const count = b.requested_count === undefined ? null : num(b.requested_count, 100);
+  if (b.requested_count !== undefined && (count === null || count < 1 || !Number.isInteger(count))) return null;
+  if (b.strategy !== undefined && !isStrategy(b.strategy)) return null;
+  const exclude = b.exclude_providers === undefined ? [] : b.exclude_providers;
+  if (!Array.isArray(exclude) || !exclude.every((p) => PROVIDER_NAMES.includes(p as ProviderId))) return null;
+  const maxLo = b.max_leadocean_records === undefined ? 50 : num(b.max_leadocean_records, 500);
+  const maxUsd = b.max_apify_usd === undefined ? 0.25 : num(b.max_apify_usd, 5);
+  if (maxLo === null || maxUsd === null || !Number.isInteger(maxLo)) return null;
+  const a = b.approval as Record<string, unknown> | null | undefined;
+  let approval: StrategyRequest["approval"] = null;
+  if (a) {
+    const lo = num(a.leadocean_records ?? 0, 500), usd = num(a.apify_usd ?? 0, 5);
+    if (typeof a.plan_hash !== "string" || lo === null || usd === null || !Number.isInteger(lo)) return null;
+    approval = { planHash: a.plan_hash, leadoceanRecords: lo, apifyUsd: usd };
+  }
+  return {
+    action: b.action, workspaceId: b.workspace_id, walkId: b.walk_id, query: b.query.trim(), requestedCount: count,
+    user: { ...(b.strategy ? { strategy: b.strategy as DiscoveryStrategyId } : {}), excludeProviders: exclude as ProviderId[], allowReviewOnly: b.allow_review_only === true },
+    budget: { maxLeadoceanRecords: maxLo, maxApifyUsd: maxUsd }, approval,
+  };
+}
+
+export interface StrategyDeps extends PipelineDeps {
+  /** GPT interpretation: the mission compiler's final mission, or why there is none. Never a regex fallback. */
+  interpret(query: string, workspaceId: string, requestedCount: number | null): Promise<{ mission: unknown } | { error: string }>;
+  /** GPT strategy advice; null = the deterministic choice only. */
+  advisor: GenerateJsonFn | null;
+}
+
+export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDeps): Promise<{ status: number; body: Record<string, unknown> }> {
+  const now = d.now ?? (() => new Date());
+  if (!d.flags.enabled) return { status: 404, body: { error: "disabled" } };
+  if (!d.userId) return { status: 401, body: { error: "sign in required" } };
+  if (!d.flags.workspaces.has(req.workspaceId)) return { status: 403, body: { error: "the lead pipeline is not enabled for this workspace" } };
+  const role = await d.store.memberRole(d.userId, req.workspaceId);
+  if (!role) return { status: 403, body: { error: "not a member of this workspace" } };
+  if (req.action === "strategy_run" && !ADMIN.has(role)) return { status: 403, body: { error: "only a workspace owner or admin can approve a paid run" } };
+
+  const interpreted = await d.interpret(req.query, req.workspaceId, req.requestedCount);
+  if ("error" in interpreted) return { status: 422, body: { error: `the request could not be interpreted: ${interpreted.error}` } };
+  const spec = specFromMission(interpreted.mission as never, { defaultCount: req.requestedCount ?? 25 });
+
+  const rows = await d.store.list(req.workspaceId);
+  const lo = rows.find((x) => x.provider === "leadocean");
+  const ap = rows.find((x) => x.provider === "apollo");
+  const f = d.discoveryFlags;
+  const ctx: StrategyContext = {
+    providers: {
+      leadocean: { enabled: f.enabled && f.provider.leadocean && f.commercialTerms.leadocean, connected: lo?.status === "connected", authorized: true, remaining: lo?.usage?.remaining ?? null },
+      apify: { enabled: f.enabled && f.provider.apify, connected: !!d.apify, authorized: true },
+      apollo: { enabled: f.enabled && f.provider.apollo && f.commercialTerms.apollo, connected: ap?.status === "connected", authorized: true },
+    },
+    budget: req.budget, user: req.user,
+  };
+  const base = planStrategy(spec, ctx);
+  const plan: StrategyPlan = req.user?.strategy || !d.advisor ? base : planStrategy(spec, ctx, await adviseStrategy(spec, base.candidates, d.advisor, req.workspaceId));
+  if (req.action === "strategy_plan" || plan.status === "blocked") {
+    return { status: plan.status === "blocked" ? 409 : 200, body: { status: plan.status, plan, worstCase: plan.estimate } };
+  }
+  if (!req.approval) return { status: 400, body: { error: "a run needs an approval", plan } };
+  if (req.approval.planHash !== plan.planHash) return { status: 409, body: { error: "plan changed since it was approved (re-interpretation or new limits); review the new plan", plan } };
+
+  const key = plan.steps.some((s) => s.provider === "leadocean") ? await d.store.secret(req.workspaceId, "leadocean") : null;
+  const connections: ProviderConnectionState[] = [{
+    provider: "leadocean", connected: lo?.status === "connected", enabled: !!ctx.providers.leadocean?.enabled,
+    commercialTermsConfirmed: f.commercialTerms.leadocean, remainingCredits: lo?.usage?.remaining ?? null,
+    recentFailures: lo && lo.status !== "connected" ? 1 : 0, restrictions: lo?.usage?.restrictions ?? [],
+  }];
+  const run: StrategyRun = await runDiscoveryStrategy({
+    workspaceId: req.workspaceId, walkId: req.walkId, spec, plan,
+    approval: { ...req.approval, approvedBy: d.userId, approvedAt: now().toISOString() },
+    leadocean: key ? d.leadoceanFor(key).adapter : null, apify: d.apify, connections,
+    ledger: d.ledger, checkpoints: d.checkpoints, existing: new ExclusionIndex(await d.loadExisting(req.workspaceId), now), now,
+  });
+  if (run.status === "blocked") return { status: 409, body: { error: run.reason, plan } };
+  const projected = [...run.queue, ...run.review].map((l) => projectPipelineLead(l, { workspaceId: req.workspaceId, values: [] })).filter((x): x is PipelineRow => !!x);
+  await d.persist(projected, 0);
+  return {
+    status: 200,
+    body: {
+      status: run.status, reason: run.reason, strategy: run.strategy, steps: run.steps, spend: run.spend, limitations: run.limitations,
+      evidenceRefused: run.evidenceRefused, queue: run.queue, review: run.review, excludedCount: run.excluded.length, written: projected.length,
     },
   };
 }

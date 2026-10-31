@@ -1,4 +1,6 @@
-// lead-pipeline: plan (free dry run) and run (approved) an ICP walk —
+// lead-pipeline: plan (free dry run) and run (approved) an ICP walk, or
+// (strategy_plan / strategy_run) any request: GPT interprets it and the
+// strategy planner chooses LeadOcean, Apify or both (_shared/leadPipeline/strategy.ts) —
 // LeadOcean discovery → canonical company records → shared qualification →
 // optional Apify signals → ranking → optional phone lookups → Leads tables.
 //
@@ -14,7 +16,10 @@ import { authenticateUser, defaultAuthDeps } from "../_shared/requestAuth.ts";
 import { readFlags } from "../_shared/discoveryProviders/flags.ts";
 import { supabaseConnectionStore, supabaseLedger } from "../_shared/discoveryProviders/supabaseStore.ts";
 import { leadOceanAdapter } from "../_shared/discoveryProviders/adapters/leadocean.ts";
-import { handleLeadPipeline, parsePipelineRequest, readPipelineFlags } from "../_shared/leadPipeline/service.ts";
+import { handleLeadPipeline, handleStrategyRequest, parsePipelineRequest, parseStrategyRequest, readPipelineFlags } from "../_shared/leadPipeline/service.ts";
+import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
+import { compileLeadMission } from "../_shared/leadMissionCompiler.ts";
+import { createStrategyAdvisorGenerateJson } from "../_shared/leadPipeline/strategyAdvisorModel.ts";
 import { supabaseCheckpointStore } from "../_shared/leadPipeline/checkpoint.ts";
 import { loadExistingRecords } from "../_shared/leadPipeline/history.ts";
 import { pipelineApifyInvoker } from "../_shared/leadPipeline/apifyInvoker.ts";
@@ -63,20 +68,37 @@ Deno.serve(async (req) => {
   if (!auth.ok) return json({ error: auth.error }, auth.status);
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { return json({ error: "invalid body" }, 400); }
-  const parsed = parsePipelineRequest(body);
-  if (!parsed) return json({ error: "invalid request" }, 400);
+  const strategyReq = parseStrategyRequest(body);
+  const parsed = strategyReq ? null : parsePipelineRequest(body);
+  if (!parsed && !strategyReq) return json({ error: "invalid request" }, 400);
+  const workspaceId = (strategyReq ?? parsed)!.workspaceId;
   const admin = createClient(env("SUPABASE_URL")!, env("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   const f = (u: string, i: RequestInit) => fetch(u, i);
   const apifyToken = env("APIFY_API_TOKEN");
+  const deps = {
+    userId: auth.userId, flags, discoveryFlags: readFlags(env),
+    store: supabaseConnectionStore(admin), ledger: supabaseLedger(admin, workspaceId), checkpoints: supabaseCheckpointStore(admin),
+    loadExisting: (ws: string) => loadExistingRecords(admin, ws, new Date()),
+    leadoceanFor: (apiKey: string) => { const d = { apiKey, fetch: f }; return { adapter: leadOceanAdapter(d), deps: d }; },
+    apify: apifyToken ? pipelineApifyInvoker({ token: apifyToken, fetch: f }) : null,
+    persist: (rows: PipelineRow[]) => persist(admin, rows),
+  };
   try {
-    const r = await handleLeadPipeline(parsed, {
-      userId: auth.userId, flags, discoveryFlags: readFlags(env),
-      store: supabaseConnectionStore(admin), ledger: supabaseLedger(admin, parsed.workspaceId), checkpoints: supabaseCheckpointStore(admin),
-      loadExisting: (ws) => loadExistingRecords(admin, ws, new Date()),
-      leadoceanFor: (apiKey) => { const deps = { apiKey, fetch: f }; return { adapter: leadOceanAdapter(deps), deps }; },
-      apify: apifyToken ? pipelineApifyInvoker({ token: apifyToken, fetch: f }) : null,
-      persist: (rows) => persist(admin, rows),
-    });
+    if (strategyReq) {
+      const r = await handleStrategyRequest(strategyReq, {
+        ...deps,
+        // GPT reads the request (the mission compiler); no deterministic fallback stands in for it.
+        interpret: async (query, ws, requestedCount) => {
+          const binding = buildMissionCompilerBinding({ workspaceId: ws });
+          const proposal = await binding.proposeMission!({ originalUserQuery: query, requestedCount });
+          if (!proposal) return { error: binding.lastModelFailure()?.code ?? "the model returned no usable interpretation" };
+          return { mission: compileLeadMission({ originalUserQuery: query, proposal, requestedCount }).final_mission };
+        },
+        advisor: createStrategyAdvisorGenerateJson(),
+      });
+      return json(r.body, r.status);
+    }
+    const r = await handleLeadPipeline(parsed!, deps);
     return json(r.body, r.status);
   } catch (e) {
     console.error("[lead-pipeline] failed", { name: (e as Error)?.name });

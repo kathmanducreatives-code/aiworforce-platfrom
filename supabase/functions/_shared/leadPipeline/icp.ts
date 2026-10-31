@@ -25,9 +25,11 @@ import { requirementsFromMission } from "../discoveryProviders/requirements.ts";
 import type { DiscoveryRequirements } from "../discoveryProviders/types.ts";
 
 export type IcpId = "icp_a_b2b_saas" | "icp_b_agency";
+/** A configured ICP, or one derived from an interpreted request by the strategy planner (`strategy.ts`). */
+export type IcpConfigId = IcpId | `spec:${string}`;
 
 export interface IcpConfig {
-  id: IcpId;
+  id: IcpConfigId;
   label: string;
   /** How a person would ask for it; the compiler reads this with the proposal. */
   query: string;
@@ -153,13 +155,18 @@ export function compileIcp(icp: IcpConfig, extraHints: Record<string, unknown> =
   };
   const compiled = compileLeadMission({ originalUserQuery: icp.query, proposal: proposal as never, requestedCount: icp.requestedCount });
   const requirements = requirementsFromMission(compiled.final_mission as never);
-  const hints: Record<string, unknown> = {
-    industry: icp.leadocean.industry, seniority: icp.leadocean.seniority,
+  return { icp, requirements: { ...requirements, providerHints: { leadocean: leadoceanHints(icp, extraHints) } }, criteria: requirements.criteria };
+}
+
+/** The ICP's LeadOcean narrowing filters (never requirements), plus any extra (e.g. the checkpoint's excludeIds). */
+export function leadoceanHints(icp: IcpConfig, extraHints: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ...(icp.leadocean.industry.length ? { industry: icp.leadocean.industry } : {}),
+    ...(icp.leadocean.seniority.length ? { seniority: icp.leadocean.seniority } : {}),
     ...(icp.leadocean.companyKeywords?.length ? { companyKeywords: icp.leadocean.companyKeywords } : {}),
     ...(icp.leadocean.hasPhone !== undefined ? { hasPhone: icp.leadocean.hasPhone } : {}),
     ...(icp.leadocean.excludeTitle?.length ? { excludeTitle: icp.leadocean.excludeTitle } : {}),
     ...(icp.leadocean.personCountry?.length ? { country: icp.leadocean.personCountry } : {}),
     ...extraHints,
   };
-  return { icp, requirements: { ...requirements, providerHints: { leadocean: hints } }, criteria: requirements.criteria };
 }

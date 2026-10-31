@@ -225,6 +225,17 @@ export function qualifyCompany(
 const bareDomain = (v: unknown) => String(v ?? "").toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0] || null;
 const liSlug = (v: unknown) => /linkedin\.com\/company\/([^/?#\s]+)/i.exec(String(v ?? ""))?.[1].toLowerCase().replace(/\/+$/, "") ?? null;
 
+/**
+ * Does this batch of evidence (one source's items) name THIS company? The same
+ * rule `qualifyCompany` applies to canonical evidence, for a caller that holds
+ * several sources and must admit or refuse each one on its own: one source's
+ * matching identity must never lend another source's facts to the company.
+ */
+export function evidenceIdentity(items: readonly EvidenceItem[], ids: { domains: string[]; linkedinUrls: string[] }): "match" | "conflict" | "none" {
+  if (items.some((e) => e.dimension === "identity" && e.status === "proven" && identityMatches(e.value, ids))) return "match";
+  return identityConflict(items, ids) ? "conflict" : "none";
+}
+
 function identityMatches(v: unknown, ids: { domains: string[]; linkedinUrls: string[] }): boolean {
   if (!v || typeof v !== "object") return false;
   const r = v as { domain?: unknown; linkedin_company_url?: unknown };
