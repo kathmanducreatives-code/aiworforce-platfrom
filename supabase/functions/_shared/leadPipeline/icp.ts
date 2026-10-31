@@ -37,10 +37,17 @@ export interface IcpConfig {
   /** Role titles the decision-maker search uses (LeadOcean title keywords, OR). */
   roleTitles: string[];
   /** Narrowing only. */
-  leadocean: { industry: string[]; companyKeywords?: string[]; seniority: string[]; hasPhone?: boolean };
+  leadocean: { industry: string[]; companyKeywords?: string[]; seniority: string[]; hasPhone?: boolean; excludeTitle?: string[]; personCountry?: string[] };
   /** Ranking only. */
   relevance: { positive: string[]; negative: string[]; industryLabels: string[] };
 }
+
+/**
+ * LeadOcean's founder / C-suite bands also match people who only hold the word:
+ * the final benchmark returned an "Investor" (c_suite band) and an "iOS Developer
+ * Co-founder". Narrowing only — the shared engine still decides the role.
+ */
+export const NON_DECISION_TITLES = ["Investor", "Advisor", "Board Member", "Intern", "Developer", "Assistant"];
 
 export const ICP_A: IcpConfig = Object.freeze({
   id: "icp_a_b2b_saas",
@@ -56,6 +63,10 @@ export const ICP_A: IcpConfig = Object.freeze({
   leadocean: {
     industry: ["Software Development", "Technology; Information and Internet", "IT Services and IT Consulting"],
     seniority: ["owner", "founder", "c_suite", "vp", "head"],
+    excludeTitle: NON_DECISION_TITLES,
+    // Where the PERSON is (hqCountry is the employer): 8 of 9 benchmark people at
+    // "US-HQ" companies were abroad. US phone outreach needs US-located people.
+    personCountry: ["US"],
   },
   relevance: {
     positive: ["b2b", "saas", "software as a service", "platform", "api", "for teams", "for businesses", "enterprise", "smb", "workflow", "crm"],
@@ -77,6 +88,10 @@ export const ICP_B: IcpConfig = Object.freeze({
     // 50,000 or fewer; otherwise named in unsupportedFilters (and so not relied on).
     companyKeywords: ["lead generation", "outbound", "demand generation", "appointment setting", "sales development"],
     seniority: ["owner", "founder", "c_suite", "partner"],
+    excludeTitle: NON_DECISION_TITLES,
+    // Where the PERSON is (hqCountry is the employer): 8 of 9 benchmark people at
+    // "US-HQ" companies were abroad. US phone outreach needs US-located people.
+    personCountry: ["US"],
   },
   relevance: {
     positive: ["lead generation", "lead gen", "outbound", "cold email", "demand generation", "appointment setting", "sdr", "sales development", "pipeline", "abm", "growth agency"],
@@ -129,6 +144,8 @@ export function compileIcp(icp: IcpConfig, extraHints: Record<string, unknown> =
     industry: icp.leadocean.industry, seniority: icp.leadocean.seniority,
     ...(icp.leadocean.companyKeywords?.length ? { companyKeywords: icp.leadocean.companyKeywords } : {}),
     ...(icp.leadocean.hasPhone !== undefined ? { hasPhone: icp.leadocean.hasPhone } : {}),
+    ...(icp.leadocean.excludeTitle?.length ? { excludeTitle: icp.leadocean.excludeTitle } : {}),
+    ...(icp.leadocean.personCountry?.length ? { country: icp.leadocean.personCountry } : {}),
     ...extraHints,
   };
   return { icp, requirements: { ...requirements, providerHints: { leadocean: hints } }, criteria: requirements.criteria };

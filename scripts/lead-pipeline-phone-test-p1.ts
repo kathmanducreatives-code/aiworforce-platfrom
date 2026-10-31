@@ -18,6 +18,7 @@
 //     kept unless --keep-values <file> is passed (written 0600, outside the repo)
 // Test E's own report, lock and results are only read, never modified.
 
+import { assertLiveTestsEnabled } from "./_liveTestGate.ts";
 import { memoryLedger } from "../supabase/functions/_shared/discoveryProviders/budget.ts";
 import type { FetchLike } from "../supabase/functions/_shared/discoveryProviders/http.ts";
 import { enrichPhones, leadOceanPhoneAuthProbe, LEADOCEAN_PHONE_PATH, redactPhoneRecord, type PhoneTarget } from "../supabase/functions/_shared/leadPipeline/phones.ts";
@@ -96,6 +97,7 @@ async function main() {
   console.log(`  worst case: ${TEST_P1.lookups} LeadOcean records (1 per lookup, found or not), $0 Apify`);
   console.log(`  APPROVAL STRING: ${P1_APPROVAL}`);
   if (!args.includes("--execute")) { console.log("DRY RUN — nothing bought."); return; }
+  assertLiveTestsEnabled();
 
   if (arg("--approve") !== P1_APPROVAL) throw new P1Refusal(`refused: --approve must equal "${P1_APPROVAL}"`);
   if (!args.includes("--key-injected")) throw new P1Refusal("refused: the key must be the proxy-injected Network Secret (--key-injected)");

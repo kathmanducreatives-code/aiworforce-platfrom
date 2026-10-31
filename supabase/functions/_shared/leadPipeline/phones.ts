@@ -77,6 +77,8 @@ export interface PhoneRecord {
   doNotCall: boolean;
   /** The provider's do-not-call field: `flagged` only when it says true; `unknown` otherwise (it is unpopulated at source). */
   dnc: "flagged" | "unknown";
+  /** True when the number is outside the NANP (+1). Phone test P1: 3 of 5 founder numbers at US-HQ companies were. */
+  international: boolean | null;
   /** How sure the number belongs to this person (not whether it connects). */
   matchConfidence: "high" | "medium" | "low" | "none";
   employment: EmploymentEvidence;
@@ -200,7 +202,7 @@ export interface PhoneEnrichment {
 
 const NOT_LOOKED_UP = (t: PhoneTarget, cls: PhoneClass, reasons: string[], cost: PhoneRecord["cost"]["basis"] = "none", records = 0): PhoneRecord => ({
   leadId: t.leadId, personKey: t.personKey, providerPersonId: t.providerPersonId, provider: "leadocean", endpoint: LEADOCEAN_PHONE_PATH,
-  value: null, e164: null, masked: null, valueHash: null, type: null, priority: null, class: cls, verification: null, doNotCall: false, dnc: "unknown",
+  value: null, e164: null, masked: null, valueHash: null, type: null, priority: null, class: cls, verification: null, doNotCall: false, dnc: "unknown", international: null,
   matchConfidence: "none", employment: t.employment, cost: { records, basis: cost }, retrievedAt: null, reasons,
 });
 
@@ -261,6 +263,7 @@ export async function enrichPhones(input: {
         verification: best?.verification ?? null, doNotCall: res.points.some((p) => p.verification === "provider_flagged" && p.value === best?.value),
         dnc: res.points.some((p) => p.verification === "provider_flagged" && p.value === best?.value) ? "flagged" : "unknown",
         matchConfidence: c.matchConfidence, retrievedAt: best?.retrievedAt ?? null,
+        international: c.e164 ? !c.e164.startsWith("+1") : null,
       };
       charged += res.credits;
       // The ledger keeps the classification, never the number.

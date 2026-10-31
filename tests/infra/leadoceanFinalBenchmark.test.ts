@@ -66,3 +66,12 @@ Deno.test("benchmark independence: Apify HQ / size and the homepage decide; Lead
   assertEquals([bad.hq, bad.size, bad.tech], ["fail", "fail", "fail"]);
   assertEquals(isUseful(e, bad), false, "an independent contradiction makes a row not useful");
 });
+
+Deno.test("benchmark regression: company technologies arrive as [{technology_product:{name}}] (observed 2026-10-31)", () => {
+  const row = { ...loCompanyRow({ id: "c9", name: "Obs", domain: "obs.example", industry: "Software Development", employees: 40, hqCountryCode: "US" }),
+    company_detected_technologies: [{ technology_product: { id: null, name: "Salesforce CRM", url: null } }, { technology_product: { id: null, name: "Hubspot", url: null } }] };
+  const e = evaluateRow(sc("C-S9"), row as never);
+  assertEquals(e.company.technologies, ["salesforce crm", "hubspot"]);
+  assertEquals(e.checks.technologies, "pass");
+  assert(!e.missing.includes("technologies"));
+});

@@ -29,6 +29,7 @@
 // LeadOcean's own fields are never treated as independent evidence of themselves:
 // independence comes only from the Apify company record and the company's own homepage.
 
+import { assertLiveTestsEnabled } from "./_liveTestGate.ts";
 import { redactLeadOceanRow } from "../supabase/functions/_shared/discoveryProviders/adapters/leadocean.ts";
 import { classifyDecisionMakerRole } from "../supabase/functions/_shared/decisionMaker/roleFamily.ts";
 import { sha256Hex } from "../supabase/functions/_shared/providerInputFingerprint.ts";
@@ -143,7 +144,8 @@ export function evaluateRow(s: Scenario, row: Row): RowEval {
   const founded = typeof foundedRaw === "number" ? foundedRaw : typeof foundedRaw === "string" && /^\d{4}/.test(foundedRaw) ? Number(foundedRaw.slice(0, 4)) : null;
   const techRaw = people ? null : get(row, "company_detected_technologies");
   const technologies = (Array.isArray(get(techRaw, "technologies")) ? get(techRaw, "technologies") as unknown[] : Array.isArray(techRaw) ? techRaw as unknown[] : [])
-    .map((t) => (str(get(t, "name")) ?? str(t) ?? "").toLowerCase()).filter(Boolean);
+    // Observed shape (final benchmark, 2026-10-31): [{technology_product: {id, name, url}}].
+    .map((t) => (str(get(t, "technology_product.name")) ?? str(get(t, "name")) ?? str(t) ?? "").toLowerCase()).filter(Boolean);
   const title = people ? str(get(c, "job_title")) : null;
   const role = title ? classifyDecisionMakerRole(title) : null;
   const ev: RowEval = {
@@ -224,6 +226,7 @@ async function main() {
   for (const r of reqs) console.log(`  ${r.id.padEnd(6)} POST ${r.path.padEnd(22)} ≤${r.limit}  ${r.body.length > 220 ? r.body.slice(0, 220) + "…" : r.body}`);
   console.log(`  APPROVAL STRING: ${approval}`);
   if (!args.includes("--execute")) { console.log("DRY RUN — nothing bought."); return; }
+  assertLiveTestsEnabled();
 
   if (arg("--approve") !== approval) throw new Error(`refused: --approve must equal "${approval}"`);
   if (!args.includes("--key-injected")) throw new Error("refused: --key-injected is required");
@@ -287,4 +290,32 @@ async function main() {
   console.log(JSON.stringify({ before: before.remaining, after: after?.remaining ?? null, charged, apify, useful: scored.filter((x) => x.useful).length, statuses: results.map((r) => [r.id, r.status, r.credits]) }));
 }
 
-if (import.meta.main) await main();
+/** Re-score stored rows offline (no LeadOcean or Apify call); refreshes only the free homepage checks. */
+export async function reevaluate(dir: string, fetchHome: (domain: string) => Promise<string | null>) {
+  const stored = JSON.parse(await Deno.readTextFile(`${dir}/evaluation.json`)) as { evals: (RowEval & { independent: Record<string, Check | "unavailable"> | null })[] } & Record<string, unknown>;
+  const rows = JSON.parse(await Deno.readTextFile(`${dir}/rows.json`)) as { results: { id: string; rows: Row[] }[] };
+  const fresh = rows.results.flatMap((r) => r.rows.map((row) => evaluateRow(SCENARIOS.find((s) => s.id === r.id)!, row)));
+  const out = [];
+  for (let i = 0; i < fresh.length; i++) {
+    const e = fresh[i];
+    const prior = stored.evals[i]?.independent ?? null;
+    let tech: Check | "unavailable" = "unavailable";
+    let homepage: string[] | null = null;
+    if (e.scenario === "C-S9" && e.company.domain) {
+      const html = await fetchHome(e.company.domain);
+      homepage = html == null ? null : homepageTech(html);
+      tech = homepage == null || !e.company.technologies.length ? "unavailable"
+        : e.company.technologies.some((t) => homepage!.some((h) => t.includes(h))) ? "pass" : "fail";
+    }
+    const ind = prior ? { ...prior, tech } : null;
+    out.push({ ...e, independent: ind, homepageTech: homepage, useful: isUseful(e, ind) });
+  }
+  await Deno.writeTextFile(`${dir}/evaluation.json`, JSON.stringify({ ...stored, evals: out, reevaluatedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
+  return out;
+}
+
+if (import.meta.main && Deno.args.includes("--reevaluate")) {
+  const dir = Deno.args[Deno.args.indexOf("--reevaluate") + 1];
+  const r = await reevaluate(dir, async (d) => { try { const res = await fetch(`https://${d}/`, { signal: AbortSignal.timeout(15_000) }); return res.ok ? await res.text() : null; } catch { return null; } });
+  console.log(JSON.stringify(r.map((e) => [e.scenario, e.company.domain, e.checks, e.independent, e.homepageTech, e.useful])));
+} else if (import.meta.main) await main();

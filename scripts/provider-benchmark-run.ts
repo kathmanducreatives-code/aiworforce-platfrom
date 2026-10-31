@@ -13,6 +13,7 @@
 // The key is a cloud Network Secret the proxy adds; this process sends a
 // placeholder and never sees it.
 
+import { assertLiveTestsEnabled } from "./_liveTestGate.ts";
 import { compileLeadMission } from "../supabase/functions/_shared/leadMissionCompiler.ts";
 import { leadOceanAdapter } from "../supabase/functions/_shared/discoveryProviders/adapters/leadocean.ts";
 import { scoreProvider, type Cohort } from "../supabase/functions/_shared/discoveryProviders/benchmark.ts";
@@ -67,6 +68,7 @@ if (import.meta.main) {
   const arg = (n: string) => { const i = Deno.args.indexOf(n); return i >= 0 ? Deno.args[i + 1] : undefined; };
   const dry = Deno.args.includes("--dry-run");
   if (arg("--test") !== APPROVED.test) throw new Error(`only Test ${APPROVED.test} is approved`);
+  if (!dry) assertLiveTestsEnabled();
   const approve = arg("--approve");
   if (approve !== `${APPROVED.provider}=${APPROVED.maxRecords}`) throw new Error(`--approve must be exactly ${APPROVED.provider}=${APPROVED.maxRecords}`);
   if (!dry && !Deno.args.includes("--key-injected")) throw new Error("the LeadOcean key must be a proxy-injected Network Secret (--key-injected)");

@@ -123,7 +123,7 @@ const PARAM_OF: Record<string, FilterKey> = {
 };
 
 /** Filters an ICP may add to NARROW a search. None of them can widen it. */
-const PEOPLE_HINTS: ReadonlySet<string> = new Set(["industry", "companyKeywords", "seniority", "jobLevel", "jobFunction", "excludeIds", "hasPhone", "employeeRange"]);
+const PEOPLE_HINTS: ReadonlySet<string> = new Set(["industry", "companyKeywords", "seniority", "jobLevel", "jobFunction", "excludeIds", "excludeTitle", "country", "hasPhone", "employeeRange"]);
 const COMPANY_HINTS: ReadonlySet<string> = new Set(["industry", "keywords", "employeeRange", "companyType"]);
 
 export function buildLeadOceanSearch(step: PlanStep, req: DiscoveryRequirements, cursor: string | null, limit: number) {

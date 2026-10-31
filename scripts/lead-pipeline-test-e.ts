@@ -25,6 +25,7 @@
 //   * nothing is written to any database; nothing is sent; no one is called
 // Keys are cloud Network Secrets the proxy injects; this process sends placeholders.
 
+import { assertLiveTestsEnabled } from "./_liveTestGate.ts";
 import { leadOceanAdapter } from "../supabase/functions/_shared/discoveryProviders/adapters/leadocean.ts";
 import { memoryLedger } from "../supabase/functions/_shared/discoveryProviders/budget.ts";
 import type { FetchLike } from "../supabase/functions/_shared/discoveryProviders/http.ts";
@@ -127,6 +128,7 @@ async function main() {
   for (const l of wc.lines) console.log(`  ${l}`);
   console.log(`  APPROVAL STRING: ${approvalString(wc)}`);
   if (!args.includes("--execute")) { console.log("DRY RUN — nothing bought."); return; }
+  assertLiveTestsEnabled();
 
   if (arg("--approve") !== approvalString(wc)) throw new ERefusal(`refused: --approve must equal "${approvalString(wc)}"`);
   if (!args.includes("--key-injected")) throw new ERefusal("refused: keys must be proxy-injected Network Secrets (--key-injected)");

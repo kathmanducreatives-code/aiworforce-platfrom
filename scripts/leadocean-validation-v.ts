@@ -15,6 +15,7 @@
 // pictures or key hash) and the key paths each record carries, compared with
 // FIELDS / FIELD_BASIS.
 
+import { assertLiveTestsEnabled } from "./_liveTestGate.ts";
 import { FIELDS, FIELD_BASIS, redactLeadOceanRow } from "../supabase/functions/_shared/discoveryProviders/adapters/leadocean.ts";
 
 export const APPROVED_V = Object.freeze({ test: "V", provider: "leadocean", maxRecords: 2, usd: 0 });
@@ -84,6 +85,7 @@ if (import.meta.main) {
   const worst = V_REQUESTS.reduce((n, r) => n + r.maxRecords, 0);
   if (worst > APPROVED_V.maxRecords) throw new Error(`worst case ${worst} > approved ${APPROVED_V.maxRecords}`);
   if (dry) { console.log(JSON.stringify({ dryRun: true, worstCaseRecords: worst, approved: APPROVED_V.maxRecords, requests: V_REQUESTS }, null, 1)); Deno.exit(0); }
+  assertLiveTestsEnabled();
 
   const g = vGuard((url, init) => fetch(url, init));
   const headers = { "x-api-key": "injected-by-proxy", accept: "application/json", "content-type": "application/json" };
