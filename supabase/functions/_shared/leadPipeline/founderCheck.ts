@@ -22,7 +22,8 @@ import { classifyDecisionMakerRole } from "../decisionMaker/roleFamily.ts";
 import { companyLinkedInSlug } from "../decisionMaker/companyIdentity.ts";
 import { normalizePersonName } from "../decisionMaker/personProfile.ts";
 
-export const COMPANY_EMPLOYEES_ACTOR = Object.freeze({ key: "apify_linkedin_company_employees", actorId: "harvestapi/linkedin-company-employees", perItemUsd: 0.003, perStartUsd: 0.02, emptyUsd: 0 });
+// emptyUsd 0.03 encodes the catalogued $0.05 minimum per run (start $0.02 + at least $0.03).
+export const COMPANY_EMPLOYEES_ACTOR = Object.freeze({ key: "apify_linkedin_company_employees", actorId: "harvestapi/linkedin-company-employees", perItemUsd: 0.003, perStartUsd: 0.02, emptyUsd: 0.03 });
 
 export type FounderCheckState = "confirmed" | "other_decision_maker" | "not_found" | "unavailable";
 export interface FounderCheck { companyKey: string; state: FounderCheckState; title: string | null; source: string | null; reason: string | null }
@@ -40,7 +41,7 @@ export async function checkFounders(
   if (!targets.length) return { checks, spentUsd: 0, stopped: null };
   if (!invoke) { targets.forEach((t) => una(t, "Apify is not connected for this run")); return { checks, spentUsd: 0, stopped: null }; }
   const maxItems = targets.length * opts.perCompany;
-  const worst = COMPANY_EMPLOYEES_ACTOR.perStartUsd + COMPANY_EMPLOYEES_ACTOR.perItemUsd * maxItems;
+  const worst = COMPANY_EMPLOYEES_ACTOR.perStartUsd + Math.max(COMPANY_EMPLOYEES_ACTOR.perItemUsd * maxItems, COMPANY_EMPLOYEES_ACTOR.emptyUsd);
   if (worst > opts.maxUsd + 1e-9) { targets.forEach((t) => una(t, `worst case $${worst.toFixed(4)} exceeds the $${opts.maxUsd} ceiling`)); return { checks, spentUsd: 0, stopped: "budget" }; }
   try {
     const run = await invoke(COMPANY_EMPLOYEES_ACTOR.key, {

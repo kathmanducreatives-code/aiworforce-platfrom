@@ -23,6 +23,10 @@ export const PIPELINE_ACTORS: Readonly<Record<string, { actorId: string; perItem
   [SIGNAL_ACTORS.companyPosts.key]: SIGNAL_ACTORS.companyPosts,
   [SIGNAL_ACTORS.jobs.key]: SIGNAL_ACTORS.jobs,
   [COMPANY_EMPLOYEES_ACTOR.key]: COMPANY_EMPLOYEES_ACTOR,
+  // Discovery actors (discoveryEngine/sources/apify.ts); prices from hiringActorCatalog.ts, BRONZE.
+  apify_linkedin_post_search: { actorId: "harvestapi/linkedin-post-search", perStartUsd: 0.00005, perItemUsd: 0.002, emptyUsd: 0.001 },
+  // $0.10 per search page (≤25 short profiles) is the floor: perStart carries it.
+  apify_people_search: { actorId: "harvestapi/linkedin-profile-search", perStartUsd: 0.1, perItemUsd: 0.004, emptyUsd: 0 },
 });
 
 export class ApifyRefusal extends Error { override name = "ApifyRefusal"; }

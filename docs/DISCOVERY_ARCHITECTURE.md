@@ -1,6 +1,11 @@
-# Agentory standard discovery architecture
+# ICP walk (one strategy) — superseded as the standard by `DISCOVERY_ENGINE.md`
 
-**LeadOcean discovers. Apify verifies and researches. Agentory decides.**
+> **Superseded (2026-11-01):** discovery is now provider-neutral — GPT interprets the
+> request and the planner chooses LeadOcean, Apify or both (Apollo planned); see
+> `DISCOVERY_ENGINE.md`. This document describes the LeadOcean-led ICP walk, which
+> remains available as one strategy through `lead-pipeline`.
+
+**ICP walk: LeadOcean discovers. Apify verifies and researches. Agentory decides.**
 Implemented in `supabase/functions/_shared/leadPipeline/` (`runLeadPipeline`), behind
 `LEAD_PIPELINE_ENABLED` (off). Evidence for the split: `LEADOCEAN_FINAL_VERDICT.md`.
 

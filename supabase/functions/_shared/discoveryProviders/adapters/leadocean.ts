@@ -123,8 +123,11 @@ const PARAM_OF: Record<string, FilterKey> = {
 };
 
 /** Filters an ICP may add to NARROW a search. None of them can widen it. */
-const PEOPLE_HINTS: ReadonlySet<string> = new Set(["industry", "companyKeywords", "seniority", "jobLevel", "jobFunction", "excludeIds", "excludeTitle", "country", "hasPhone", "employeeRange"]);
-const COMPANY_HINTS: ReadonlySet<string> = new Set(["industry", "keywords", "employeeRange", "companyType"]);
+// companyLinkedin / domain scope a people search to companies another step found
+// (multi-provider discovery); funding and technology keys are narrowing claims.
+const PEOPLE_HINTS: ReadonlySet<string> = new Set(["industry", "companyKeywords", "seniority", "jobLevel", "jobFunction", "excludeIds", "excludeTitle", "country", "hasPhone", "employeeRange",
+  "companyLinkedin", "domain", "fundingType", "minLastFundingYear", "technologies"]);
+const COMPANY_HINTS: ReadonlySet<string> = new Set(["industry", "keywords", "employeeRange", "companyType", "fundingType", "minLastFundingYear", "technologies"]);
 
 export function buildLeadOceanSearch(step: PlanStep, req: DiscoveryRequirements, cursor: string | null, limit: number) {
   // Each page asks only for what the step may still take: billing is per row returned.

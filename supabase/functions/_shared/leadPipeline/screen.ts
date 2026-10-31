@@ -41,7 +41,8 @@ export interface ScreenResult {
 const first = <T>(xs: { value: T }[]): T | null => xs[0]?.value ?? null;
 
 export function screenCandidates(
-  leads: readonly VerifiedLead[], icp: IcpConfig, contactOf: (l: VerifiedLead) => CanonicalPerson | null, alreadyWalked: ReadonlySet<string>, now: Date,
+  leads: readonly VerifiedLead[], icp: Pick<IcpConfig, "employees">, contactOf: (l: VerifiedLead) => CanonicalPerson | null, alreadyWalked: ReadonlySet<string>, now: Date,
+  opts: { requireDecisionMaker?: boolean } = {},
 ): ScreenResult[] {
   const seenSlugs = new Map<string, string>();
   const out: ScreenResult[] = [];
@@ -58,7 +59,7 @@ export function screenCandidates(
     if (l.status === "rejected" && l.rejectionBasis === "proven") { out.push(res("already_rejected", l.reasons.slice(0, 3))); continue; }
     const p = contactOf(l);
     const role = p ? classifyDecisionMakerRole(first(p.title)) : null;
-    if (!role || role.role_family === "other" || role.disqualified_by) {
+    if ((opts.requireDecisionMaker ?? true) && (!role || role.role_family === "other" || role.disqualified_by)) {
       out.push(res("no_decision_maker", [p ? `provider title "${first(p.title) ?? ""}" is not a decision-maker role` : "no contact in the row"]));
       continue;
     }

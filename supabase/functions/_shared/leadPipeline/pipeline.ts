@@ -1,4 +1,8 @@
-// The standard Agentory discovery architecture, for one ICP walk.
+// The ICP WALK strategy: a LeadOcean-led, checkpointed walk over a fixed ICP.
+// It is ONE strategy, not the discovery architecture: arbitrary requests go
+// through the provider-neutral engine (`discoveryEngine/`: GPT interpreter →
+// planner → any provider first → shared eligibility), which can start from
+// Apify, LeadOcean or both. This walk keeps its own entry (`lead-pipeline`).
 //
 //   LeadOcean  DISCOVERS — people search narrowed by the ICP; every field it
 //              returns is a provider claim (docs/LEADOCEAN_FINAL_VERDICT.md)
