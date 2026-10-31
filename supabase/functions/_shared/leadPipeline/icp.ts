@@ -16,9 +16,8 @@
 // business-model vocabulary and LeadOcean's 534 industry labels share no exact
 // term, so as a hard rule no company could ever qualify (docs/PROVIDER_CAPABILITIES.md §4).
 //
-// The size bound is stated once (employee_range), never restated as
-// employee_min/max hard constraints (the shared-engine bug pinned in
-// benchmarkRunner.test.ts "KNOWN ISSUE").
+// The size bound is stated once (employee_range). A restated equal bound in
+// hard_constraints is also safe now (missionCriteria.restatesEmployeeBound).
 
 import { compileLeadMission } from "../leadMissionCompiler.ts";
 import type { MissionCriterion } from "../missionCriteria.ts";
@@ -110,6 +109,20 @@ export function configureIcp(base: IcpConfig, over: Partial<Omit<IcpConfig, "id"
     leadocean: { ...base.leadocean, ...(over.leadocean ?? {}) },
     relevance: { ...base.relevance, ...(over.relevance ?? {}) },
   };
+}
+
+/**
+ * Requirements no company can meet together. Refused as `contradictory_requirements`
+ * before anything is planned or bought (the same refusal requestFeasibility gives a
+ * mission), so a mistyped size is never sent to a provider as an empty search.
+ */
+export function icpContradictions(icp: IcpConfig): string[] {
+  const out: string[] = [];
+  const { min, max } = icp.employees;
+  if (min > max) out.push(`at least ${min} and at most ${max} employees (which did you mean?)`);
+  if (min < 0 || max < 0) out.push("a negative employee count");
+  if (!icp.roleTitles.length) out.push("no decision-maker role to find");
+  return out;
 }
 
 const BASE_PROPOSAL = {

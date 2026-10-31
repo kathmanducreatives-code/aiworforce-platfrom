@@ -27,7 +27,9 @@ export interface PipelineRow {
 }
 
 export function projectPipelineLead(l: PipelineLead, ctx: { workspaceId: string; values: PipelineRun["contactValues"] }): PipelineRow | null {
-  if (l.statuses.qualification === "ineligible") return null;
+  // Rejected leads never reach the Leads tables; neither does a lead screened
+  // out before verification (nothing was verified, nothing is for review).
+  if (l.statuses.qualification === "ineligible" || l.statuses.screening === "screened_out") return null;
   const v = l.person ? ctx.values.find((x) => x.personKey === l.person!.key) : undefined;
   const writable = v && (v.class === "unverified_person_associated" || v.class === "verified_person_direct") && !l.phone?.doNotCall;
   const attribution = {

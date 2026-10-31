@@ -109,14 +109,14 @@ deno test --allow-read --allow-env --no-check tests/edge-functions/_shared/disco
 - **Authority source keys** are `apollo_discovery`, `leadocean_discovery` and
   `apify_discovery_site_check`. `AUTHORITY_RULES` names none of them, by design.
 
-**Bug found in shared code, not fixed here (owned by the Apify session).**
-- **What happens:** a proposal that restates its size bound as `employee_min` / `employee_max`
-  hard constraints compiles to hard `constraint` criteria that no evidence dimension answers. Every
-  company then stays `pending`, even when the size and HQ are proven.
-- **Where it reproduces:** `8b0e2b6b`, `demo/lead-discovery-e2e` and
-  `claude/optimistic-hypatia-3bylnd` @ `89868f3b`.
-- **Relation to earlier fixes:** it's the same class as `7ee00ca` (restated hiring), which fixed
-  hiring only.
-- **Reproduction and expected fix:** the `KNOWN ISSUE` test in `benchmarkRunner.test.ts` and the
-  `note` in `benchmarks/provider-discovery/mission-c-proposal.json`. The benchmark states the size
-  once as a workaround. When the shared fix lands, that test fails by design and should be removed.
+**Restated size bound: fixed in the shared compiler.**
+- **Was:** a proposal restating its size bound as `employee_min` / `employee_max` hard constraints
+  compiled to hard `constraint` criteria that no evidence answers, so every company stayed `pending`.
+- **Fix:** `missionCriteria.restatesEmployeeBound` (Apify branch `8b69ffe2`) skips a restatement
+  only when its value EQUALS the stated range bound; a different bound is still kept.
+- **Pinned by:** `benchmarkRunner.test.ts` "restated size constraint" (it replaces the former
+  `KNOWN ISSUE` tripwire, which is removed in the same commit).
+- **Identity (added with the LeadOcean → Apify architecture):** an Apify company record is admitted
+  for a company only when it names one of the company's domains, or its LinkedIn profile while
+  naming no different website. A LinkedIn match whose record names another domain is refused
+  (`canonical_refused`: identity conflict); the company stays `pending`.

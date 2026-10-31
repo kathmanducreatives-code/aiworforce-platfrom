@@ -44,19 +44,23 @@ export async function readCompanyRecords(targets: readonly CanonicalTarget[], in
   const facts = new Map<string, CanonicalFacts>();
   const statuses: CanonicalRun["statuses"] = [];
   const batch = targets.filter((t) => !!t.linkedinUrl);
+  // One company profile is bought once: two records naming the same LinkedIn
+  // company (e.g. an identity conflict on the domain) share one URL in the run.
+  const slugOf = (u: string) => /linkedin\.com\/company\/([^/?#\s]+)/i.exec(u)?.[1]?.toLowerCase() ?? u.toLowerCase();
+  const urls = [...new Map(batch.map((t) => [slugOf(t.linkedinUrl), t.linkedinUrl])).values()];
   for (const t of targets) if (!t.linkedinUrl) statuses.push({ companyKey: t.companyKey, state: "no_linkedin", reason: "no LinkedIn company URL to read the record by" });
   if (!batch.length) return { evidence, facts, statuses, spentUsd: 0, stopped: null };
   if (!invoke) {
     for (const t of batch) statuses.push({ companyKey: t.companyKey, state: "unavailable", reason: "Apify is not connected for this run" });
     return { evidence, facts, statuses, spentUsd: 0, stopped: null };
   }
-  const worst = COMPANY_RECORD_ACTOR.perStartUsd + COMPANY_RECORD_ACTOR.perItemUsd * batch.length;
+  const worst = COMPANY_RECORD_ACTOR.perStartUsd + COMPANY_RECORD_ACTOR.perItemUsd * urls.length;
   if (worst > opts.maxUsd + 1e-9) {
     for (const t of batch) statuses.push({ companyKey: t.companyKey, state: "skipped_budget", reason: `worst case $${worst.toFixed(5)} exceeds the $${opts.maxUsd} ceiling` });
     return { evidence, facts, statuses, spentUsd: 0, stopped: "budget" };
   }
   try {
-    const run = await invoke(COMPANY_RECORD_ACTOR.key, { companies: batch.map((t) => t.linkedinUrl) }, { maxItems: batch.length, idempotencyKey: `${opts.idPrefix}:${COMPANY_RECORD_ACTOR.key}:${batch.map((t) => t.companyKey).sort().join(",")}` });
+    const run = await invoke(COMPANY_RECORD_ACTOR.key, { companies: urls }, { maxItems: urls.length, idempotencyKey: `${opts.idPrefix}:${COMPANY_RECORD_ACTOR.key}:${batch.map((t) => t.companyKey).sort().join(",")}` });
     const at = opts.now.toISOString();
     const bySlug = new Map<string, Record<string, unknown>>();
     for (const it of run.items) {

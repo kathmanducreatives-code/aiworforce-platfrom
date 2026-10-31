@@ -6,6 +6,36 @@ live run since Test V. Live test E is proposed below and needs approval.
 
 **LeadOcean evaluation closed (2026-10-31): CONDITIONAL GO — see `LEADOCEAN_FINAL_VERDICT.md`. Live provider tests are off by default (`AGENTORY_PROVIDER_LIVE_TESTS=enabled` opens one approved run).**
 
+## Standard architecture: LeadOcean → Apify → Agentory → ATLAS
+
+This is Agentory's standard discovery workflow. Each provider has one job:
+
+| Layer | Responsible for | May it decide eligibility? |
+|---|---|---|
+| **LeadOcean** | Company and decision-maker discovery; initial ICP narrowing (industry, HQ country, size, seniority, `hasPhone`); funding and contact-availability flags | **No.** Its rows enter as `leadocean_discovery` evidence, at most `plausible`. |
+| **Apify** | Company identity, HQ and size (`harvestapi/linkedin-company`, one batched read); optional posts and hiring for ranking | Only through `AUTHORITY_RULES`: one HQ-flagged location and a declared size band, on a record whose identity matches. |
+| **Agentory** | Dedupe, screening, the shared engine (`evaluateEligibility`), ranking, cost ledger, holds, the Leads/ATLAS rows | **Yes.** It is the only qualifier. |
+| **ATLAS** | Review queue: `lead_candidates` `qualified` (eligible) and `new` (needs verification) | It reviews; nothing is sent. |
+
+Execution order, with spend gated at each step:
+1. LeadOcean discovery, one approved page at a time.
+2. Dedupe by domain, LinkedIn URL and person group, plus the walk checkpoint. Then screen: a row whose OWN data contradicts a hard requirement (e.g. 900 employees for 11–200) is `screening: screened_out`. That is a cost decision, not a disproof: it is excluded, not verified, and not written to the Leads tables.
+3. Apify verifies identity, HQ and size for each screened-in company. There is one batched run, and one URL per LinkedIn company.
+4. The shared engine decides: `eligible`, `pending` (needs verification) or `ineligible` (a proven fact contradicts a requirement).
+5. Optional signals run only for eligible companies that are not held from outreach. A missing signal never blocks.
+6. Phone lookups (off unless approved) run only for eligible, unblocked decision-makers that have a phone flag.
+7. Projection writes ATLAS rows. Eligible companies become `qualified`, pending ones become `new`. Rejected and screened companies get no row. An existing Lead is updated, never re-created.
+
+Refusals before any spend:
+- `contradictory_requirements` (e.g. at least 500 and at most 50 employees, or no role).
+- A LeadOcean failure blocks the walk.
+- An Apify batch whose worst case exceeds its ceiling buys nothing (`skipped_budget`).
+- A failed Apify run counts its worst case and is never retried (`charge_uncertain`).
+
+Offline proof: `tests/edge-functions/_shared/leadPipeline/tenCompanyArchitecture.test.ts` (ten companies; wrong HQ, wrong size, no record, no LinkedIn, duplicate people, a duplicate LinkedIn with a conflicting domain, a held Lead, a screened row, a signal-free eligible company, Apify failure, budget exhaustion, contradiction, LeadOcean failure).
+
+**Funding.** LeadOcean's `company_funding` is a ranking claim. It is not a qualifier, and a year alone is not a date. Atomus funding corroboration is **not wired into this pipeline**: neither ICP requires funding. A mission that makes funding a hard requirement belongs on the Apify engine's verified funding route (Contract 3), until Atomus is added here as an approved step.
+
 ## Flow
 
 ```
@@ -32,11 +62,12 @@ Code: `supabase/functions/_shared/leadPipeline/` — `icp.ts`, `checkpoint.ts`,
 `phones.ts`, `metrics.ts`, `pipeline.ts`, `apifyInvoker.ts`, `projection.ts`,
 `service.ts`; edge function `supabase/functions/lead-pipeline/`.
 
-## Four statuses, never merged
+## Five statuses, never merged
 
 | status | values | decided by |
 |---|---|---|
 | discovery | new · existing · duplicate_prior_walk | identifiers vs Agentory records and the walk checkpoint |
+| screening | passed · screened_out · prior_walk | the discovery row's own data (cost gate before Apify; never a disproof) |
 | qualification | eligible · pending · ineligible | the shared engine only |
 | enrichment | not_requested · not_eligible_for_lookup · skipped · verified_person_direct · unverified_person_associated · company_switchboard · invalid_or_mismatched · no_number | phones.ts |
 | outreachReadiness | ready_for_review · blocked · not_ready | eligible + decision-maker + person-associated number + no hold. **Never "ready to call"**: a human reviews; nothing is sent or dialled by this code. |

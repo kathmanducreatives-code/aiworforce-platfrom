@@ -168,7 +168,7 @@ Deno.test("runner: the REAL cohort's live worst case, planned with no fetch", as
   assertEquals(ap.steps.filter((s) => s.skipped?.startsWith("Apollo filters companies by domain only")).length, 0);
 });
 
-Deno.test("KNOWN ISSUE (shared engine, Apify-owned): a restated size constraint keeps every company pending — remove when fixed", async () => {
+Deno.test("restated size constraint: decided like the size stated once (missionCriteria.restatesEmployeeBound)", async () => {
   const f = await readJson("benchmarks/provider-discovery/mission-c-proposal.json");
   const restated = { ...f.proposal, hard_constraints: [...f.proposal.hard_constraints,
     { field: "employee_min", operator: "gte", value: 51, reason: "51-200" }, { field: "employee_max", operator: "lte", value: 200, reason: "51-200" }] };
@@ -176,6 +176,10 @@ Deno.test("KNOWN ISSUE (shared engine, Apify-owned): a restated size constraint 
     { capability: "c", actor_key: "apify_linkedin_company_details", provider: "apify", route_id: null, plan_version: null, provider_call_id: "c", mission_id: null, observed_at: FIXED_NOW().toISOString() }).evidence;
   const judge = (proposal: unknown) => evaluateEligibility(compileLeadMission({ originalUserQuery: f.query, proposal: proposal as never, requestedCount: 10 }).final_mission.criteria as never, buildCompanyEvidenceGraph("k", record), undefined, []).eligibility;
   assertEquals(judge(f.proposal), "eligible", "the benchmark proposal states the size once: decidable");
-  // When this assertion fails, the shared fix has landed: delete this test and the note in mission-c-proposal.json.
-  assertEquals(judge(restated), "pending");
+  assertEquals(judge(restated), "eligible", "an equal restatement adds no second requirement");
+  const different = { ...f.proposal, hard_constraints: [...f.proposal.hard_constraints, { field: "employee_max", operator: "lte", value: 100, reason: "different" }] };
+  // A different bound is not a restatement; the request never says 100, so it is a ranking target, never a gate.
+  const diffCriteria = compileLeadMission({ originalUserQuery: f.query, proposal: different as never, requestedCount: 10 }).final_mission.criteria as { kind: string; dimension: string }[];
+  assertEquals(diffCriteria.filter((c) => c.dimension === "constraint").map((c) => c.kind), ["target"]);
+  assertEquals(judge(different), "eligible");
 });

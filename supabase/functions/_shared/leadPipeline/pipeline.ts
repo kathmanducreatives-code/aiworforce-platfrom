@@ -31,7 +31,7 @@ import type { SharedQualification } from "../discoveryProviders/sharedQualificat
 import type { EvidenceItem } from "../candidateObservation.ts";
 import type { Eligibility } from "../candidateEligibility.ts";
 import { classifyDecisionMakerRole } from "../decisionMaker/roleFamily.ts";
-import { compileIcp, type IcpConfig } from "./icp.ts";
+import { compileIcp, icpContradictions, type IcpConfig } from "./icp.ts";
 import { advance, newCheckpoint, resumeHints, type CheckpointStore, type WalkCheckpoint } from "./checkpoint.ts";
 import { ExclusionIndex, type ExclusionVerdict } from "./exclusions.ts";
 import { readCompanyRecords, type CanonicalRun } from "./canonical.ts";
@@ -45,6 +45,14 @@ export const PIPELINE_VERSION = "lead-pipeline-v1" as const;
 
 export type DiscoveryStatus = "new" | "existing" | "duplicate_prior_walk";
 export type EnrichmentStatus = "not_requested" | "not_eligible_for_lookup" | "skipped" | PhoneClass;
+/**
+ * What happened before any Apify spend. `screened_out`: the discovery row's OWN
+ * data contradicts a hard requirement (e.g. LeadOcean reports 900 employees for
+ * an 11–200 ICP), so no verification is bought for it. That is a cost decision,
+ * not a disproof: qualification stays the shared engine's (`pending`), and the
+ * lead is neither queued, reviewed nor written to the Leads tables.
+ */
+export type ScreeningStatus = "passed" | "screened_out" | "prior_walk";
 export type OutreachReadiness =
   /** Eligible, decision-maker, person-associated number, no hold — a human reviews before any contact. */
   | "ready_for_review"
@@ -67,7 +75,9 @@ export interface PipelineLead {
     key: string; name: string | null; title: string | null; linkedinUrl: string | null;
     providerPersonId: string | null; roleFamily: string; hasPhoneFlag: boolean | null;
   } | null;
-  statuses: { discovery: DiscoveryStatus; qualification: Eligibility; enrichment: EnrichmentStatus; outreachReadiness: OutreachReadiness };
+  statuses: { discovery: DiscoveryStatus; screening: ScreeningStatus; qualification: Eligibility; enrichment: EnrichmentStatus; outreachReadiness: OutreachReadiness };
+  /** Why the lead was screened out before verification (provider-reported, unverified); empty when it passed. */
+  screeningReasons: string[];
   qualification: Pick<SharedQualification, "checks" | "gaps" | "disproven" | "evidence_sources"> | null;
   canonicalRecord: CanonicalRun["statuses"][number]["state"] | "not_requested";
   signals: Signal[];
@@ -120,7 +130,7 @@ export interface PipelineRun {
   plan: DiscoveryPlan;
   discovery: Pick<DiscoveryRun, "status" | "reason" | "steps" | "counts" | "credits"> | null;
   canonical: { spentUsd: number; stopped: string | null; read: number } | null;
-  signals: { spentUsd: number; stopped: string | null; statuses: SignalStatus[] } | null;
+  signals: { spentUsd: number; stopped: string | null; statuses: SignalStatus[]; skipped: { companyKey: string; reason: string }[] } | null;
   phones: { recordsCharged: number; stopped: string | null; skipped: { personKey: string; reason: string }[] } | null;
   queue: PipelineLead[];
   review: PipelineLead[];
@@ -171,6 +181,9 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
   });
   if (resume.blocked) return base("blocked", resume.blocked);
   if (cp.icpId !== input.icp.id) return base("blocked", `walk ${input.walkId} belongs to ICP ${cp.icpId}`);
+  // A request no company can satisfy is refused as such, before any plan is bought.
+  const contradictions = icpContradictions(input.icp);
+  if (contradictions.length) return base("blocked", `contradictory_requirements: ${contradictions.join("; ")}`);
   if (plan.status !== "ready") return base("blocked", plan.blockedReason);
   if (input.dryRun) return base("dry_run", null);
 
@@ -196,6 +209,14 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
     });
   }
 
+  // 3b screening: a lead its own discovery row contradicts gets no paid verification.
+  const screened = new Map<string, string[]>();
+  for (const l of run.leads) {
+    if (l.status === "rejected" && l.rejectionBasis === "provider_reported" && !priorCompanies.has(l.company.key)) {
+      screened.set(l.company.key, l.checks.filter((c) => c.outcome === "contradicted").map((c) => `${c.label}: ${c.note} (provider-reported, unverified)`));
+    }
+  }
+
   // 4 canonical company records → shared engine re-decides
   const timeout = input.actorTimeoutMs ?? 120_000;
   // Every Apify run is reserved in the durable ledger first (replay on re-run, never re-bought after an uncertain charge).
@@ -205,7 +226,7 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
   let canonical: CanonicalRun | null = null;
   let leads = run.leads;
   if (input.approvals.canonicalMaxUsd != null) {
-    const targets = run.leads.filter((l) => l.status !== "rejected" && !priorCompanies.has(l.company.key))
+    const targets = run.leads.filter((l) => !screened.has(l.company.key) && l.status !== "rejected" && !priorCompanies.has(l.company.key))
       .map((l) => ({ companyKey: l.company.key, linkedinUrl: first(l.company.linkedinUrl) ?? "" }));
     canonical = await readCompanyRecords(targets, apify, { maxUsd: input.approvals.canonicalMaxUsd, now: now(), idPrefix: missionId });
     if (canonical.evidence.size) {
@@ -220,8 +241,13 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
   }
   const eligibilityOf = (l: VerifiedLead): Eligibility => l.shared?.eligibility ?? "pending";
 
-  // 5 signals, eligible only
-  const eligibleLeads = leads.filter((l) => eligibilityOf(l) === "eligible" && !priorCompanies.has(l.company.key));
+  // 5 signals: eligible, not previously walked, and not held from outreach
+  // (signals only rank a lead for outreach; a held lead cannot be contacted, so
+  // buying its posts and jobs is spend with no use).
+  const blocked = (l: VerifiedLead) => { const h = history.get(l.company.key); return !!(h?.company.blocksOutreach || h?.person?.blocksOutreach); };
+  const signalSkipped = leads.filter((l) => eligibilityOf(l) === "eligible" && !priorCompanies.has(l.company.key) && blocked(l))
+    .map((l) => ({ companyKey: l.company.key, reason: "outreach_blocked: an existing hold or CRM relationship blocks outreach; signals not bought" }));
+  const eligibleLeads = leads.filter((l) => eligibilityOf(l) === "eligible" && !priorCompanies.has(l.company.key) && !blocked(l));
   let signalRun: Awaited<ReturnType<typeof collectSignals>> | null = null;
   if (input.approvals.signals) {
     const s = input.approvals.signals;
@@ -246,7 +272,9 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
       industryLabels: [...new Set(l.company.industry.flatMap((c) => c.value))], employeeCount: first(l.company.employeeCount),
       hasPhone: p ? first(p.hasPhone) : null, signals: signalsFor(l, p),
     };
-  }), input.icp, input.weights ?? DEFAULT_WEIGHTS);
+  }), input.icp, input.weights ?? DEFAULT_WEIGHTS).map((r) => screened.has(r.leadKey)
+    ? { ...r, lane: "excluded" as const, explanation: `Screened out before verification (no Apify spend): ${screened.get(r.leadKey)!.join("; ")}.` }
+    : r);
   const rankOf = new Map(ranked.map((r) => [r.leadKey, r]));
 
   // 7 phones: eligible decision-makers, top-ranked first, at most maxLookups
@@ -297,6 +325,7 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
     const dm = !!role && role.role_family !== "other";
     const readiness: OutreachReadiness = blockers.length && (h.company.blocksOutreach || h.person?.blocksOutreach || ph?.doNotCall) ? "blocked"
       : r.lane === "queue" && dm && (ph?.class === "unverified_person_associated" || ph?.class === "verified_person_direct") ? "ready_for_review" : "not_ready";
+    const screening: ScreeningStatus = priorCompanies.has(l.company.key) ? "prior_walk" : screened.has(l.company.key) ? "screened_out" : "passed";
     return {
       version: PIPELINE_VERSION, leadKey: l.company.key,
       existingLeadIds: [...new Set([...h.company.existingLeadIds, ...(h.person?.existingLeadIds ?? [])])], icpId: input.icp.id,
@@ -312,7 +341,8 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
       },
       person: p ? { key: p.key, name: first(p.fullName), title: first(p.title), linkedinUrl: first(p.linkedinUrl),
         providerPersonId: p.sources.find((s) => s.provider === "leadocean")?.recordId ?? null, roleFamily: role!.role_family, hasPhoneFlag: first(p.hasPhone) } : null,
-      statuses: { discovery: discoveryStatus, qualification, enrichment, outreachReadiness: readiness },
+      statuses: { discovery: discoveryStatus, screening, qualification, enrichment, outreachReadiness: readiness },
+      screeningReasons: screened.get(l.company.key) ?? [],
       qualification: l.shared ? { checks: l.shared.checks, gaps: l.shared.gaps, disproven: l.shared.disproven, evidence_sources: l.shared.evidence_sources } : null,
       canonicalRecord: canonical?.statuses.find((s) => s.companyKey === l.company.key)?.state ?? "not_requested",
       signals: signalsFor(l, p), rank: rankOf.get(l.company.key)!, phone: ph ? redactPhoneRecord(ph) : null, outreachBlockers: blockers,
@@ -327,7 +357,8 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
     unique: out.length,
     newToAgentory: out.filter((x) => x.statuses.discovery === "new").length,
     eligible: out.filter((x) => x.statuses.discovery === "new" && x.statuses.qualification === "eligible").length,
-    pending: out.filter((x) => x.statuses.qualification === "pending").length,
+    pending: out.filter((x) => x.statuses.qualification === "pending" && x.statuses.screening !== "screened_out").length,
+    screenedOut: out.filter((x) => x.statuses.screening === "screened_out").length,
     ineligible: out.filter((x) => x.statuses.qualification === "ineligible").length,
     decisionMaker: out.filter((x) => x.statuses.discovery === "new" && x.statuses.qualification === "eligible" && x.person && x.person.roleFamily !== "other").length,
     hasPhoneFlag: out.filter((x) => x.statuses.discovery === "new" && x.statuses.qualification === "eligible" && x.person && x.person.roleFamily !== "other" && x.person.hasPhoneFlag === true).length,
@@ -354,13 +385,14 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
     reason: [run.reason, canonical?.stopped && `canonical: ${canonical.stopped}`, signalRun?.stopped && `signals: ${signalRun.stopped}`, phones?.stopped && `phones: ${phones.stopped}`].filter(Boolean).join("; ") || null,
     plan, discovery,
     canonical: canonical ? { spentUsd: canonical.spentUsd, stopped: canonical.stopped, read: canonical.statuses.filter((s) => s.state === "read").length } : null,
-    signals: signalRun ? { spentUsd: signalRun.spentUsd, stopped: signalRun.stopped, statuses: signalRun.statuses } : null,
+    signals: signalRun ? { spentUsd: signalRun.spentUsd, stopped: signalRun.stopped, statuses: signalRun.statuses, skipped: signalSkipped } : null,
     phones: phones ? { recordsCharged: phones.recordsCharged, stopped: phones.stopped, skipped: phones.skipped } : null,
     queue: out.filter((x) => x.rank.lane === "queue"), review: out.filter((x) => x.rank.lane === "review"), excluded: out.filter((x) => x.rank.lane === "excluded"),
     funnel, estimates, checkpoint: next,
     yield: yieldReport({
       funnel, leadoceanRecords: leadoceanRecords + (phones?.recordsCharged ?? 0), apifyUsd, usdPerLeadOceanRecord: input.usdPerLeadOceanRecord ?? null,
       rejections: out.flatMap((x) => x.statuses.qualification === "ineligible" ? (x.qualification?.disproven.length ? x.qualification.disproven.map((d) => `disproven:${d}`) : [x.statuses.discovery === "duplicate_prior_walk" ? "duplicate_prior_walk" : "ineligible"])
+        : x.statuses.screening === "screened_out" ? ["screened_out"]
         : x.statuses.qualification === "pending" ? (x.qualification?.gaps ?? []).map((g) => `unknown:${g}`) : []),
       enrichmentSkips: (phones?.skipped ?? []).map((k) => k.reason.replace(/\(.*\)/, "").trim()),
     }),

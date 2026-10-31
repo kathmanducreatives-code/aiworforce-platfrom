@@ -17,6 +17,8 @@ export interface FunnelCounts {
   newToAgentory: number;
   eligible: number;
   pending: number;
+  /** Discovery rows whose own data contradicted a hard requirement: no verification bought. */
+  screenedOut: number;
   ineligible: number;
   decisionMaker: number;
   hasPhoneFlag: number;
@@ -30,7 +32,7 @@ export interface FunnelCounts {
 }
 
 export const EMPTY_FUNNEL: FunnelCounts = Object.freeze({
-  discovered: 0, unique: 0, newToAgentory: 0, eligible: 0, pending: 0, ineligible: 0, decisionMaker: 0, hasPhoneFlag: 0, lookedUp: 0,
+  discovered: 0, unique: 0, newToAgentory: 0, eligible: 0, pending: 0, screenedOut: 0, ineligible: 0, decisionMaker: 0, hasPhoneFlag: 0, lookedUp: 0,
   personAssociated: 0, verifiedDirect: 0, switchboard: 0, invalidOrMismatched: 0, noNumber: 0, outreachReady: 0,
 });
 

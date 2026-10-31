@@ -198,7 +198,9 @@ export function qualifyCompany(
   const matches = offered.some((e) => e.dimension === "identity" && e.status === "proven" && identityMatches(e.value, ids));
   const canonical = matches ? offered.map((e) => ({ ...e, company_key: c.key })) : [];
   const canonical_refused = offered.length && !matches
-    ? { count: offered.length, reason: "no proven identity item names this company's domain or LinkedIn URL" } : null;
+    ? { count: offered.length, reason: identityConflict(offered, ids)
+      ? "identity conflict: the company record's LinkedIn profile matches, but its website names a different domain"
+      : "no proven identity item names this company's domain or LinkedIn URL" } : null;
   const graph: CompanyEvidenceGraph = buildCompanyEvidenceGraph(c.key, [...own, ...canonical], { now: input.now });
   const r = evaluateEligibility(input.criteria, graph, undefined, input.holds?.(ids) ?? []);
   const actorOf = (id: string | undefined) => [...own, ...canonical].find((e) => e.evidence_id === id)?.source.actor ?? null;
@@ -228,7 +230,33 @@ function identityMatches(v: unknown, ids: { domains: string[]; linkedinUrls: str
   const r = v as { domain?: unknown; linkedin_company_url?: unknown };
   const d = bareDomain(r.domain);
   const li = liSlug(r.linkedin_company_url);
-  return (!!d && ids.domains.some((x) => bareDomain(x) === d)) || (!!li && ids.linkedinUrls.some((x) => liSlug(x) === li));
+  return identityVerdict(d, li, ids) === "match";
+}
+
+/**
+ * Identity verification: does the record describe THIS company?
+ *   match     the record names one of the company's domains, or its LinkedIn
+ *             profile while naming no different website
+ *   conflict  the LinkedIn profile matches but the record's own website is a
+ *             DIFFERENT domain than every one the discovery rows gave — two
+ *             companies, or a stale profile; either way the record decides
+ *             nothing about this one (it stays pending, never rejected)
+ *   none      nothing in the record names this company
+ */
+function identityVerdict(d: string | null, li: string | null, ids: { domains: string[]; linkedinUrls: string[] }): "match" | "conflict" | "none" {
+  const domainMatch = !!d && ids.domains.some((x) => bareDomain(x) === d);
+  if (domainMatch) return "match";
+  const liMatch = !!li && ids.linkedinUrls.some((x) => liSlug(x) === li);
+  if (!liMatch) return "none";
+  return d && ids.domains.length ? "conflict" : "match";
+}
+
+function identityConflict(offered: readonly EvidenceItem[], ids: { domains: string[]; linkedinUrls: string[] }): boolean {
+  return offered.some((e) => {
+    if (e.dimension !== "identity" || e.status !== "proven" || !e.value || typeof e.value !== "object") return false;
+    const r = e.value as { domain?: unknown; linkedin_company_url?: unknown };
+    return identityVerdict(bareDomain(r.domain), liSlug(r.linkedin_company_url), ids) === "conflict";
+  });
 }
 
 /** The compiler's criteria from a compiled mission, untouched. */

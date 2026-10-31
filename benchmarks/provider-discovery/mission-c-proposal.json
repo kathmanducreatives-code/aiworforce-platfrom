@@ -54,5 +54,5 @@
     "confidence": 0.8,
     "unknowns": []
   },
-  "note": "The size bound is stated once (employee_range), not restated as employee_min/employee_max hard_constraints: on every branch today (8b0e2b6b, demo/lead-discovery-e2e, claude/optimistic-hypatia-3bylnd @ 89868f3b) a restated size constraint compiles to a hard `constraint` criterion no evidence dimension answers, so every company stays pending even with the size proven. Shared-engine fix owned by the Apify repair session; pinned by benchmarkRunner.test.ts (KNOWN ISSUE tripwire)."
+  "note": "The size bound is stated once (employee_range). An equal restatement as employee_min/employee_max hard_constraints is also decided correctly since missionCriteria.restatesEmployeeBound (Apify branch 8b69ffe2); pinned by benchmarkRunner.test.ts \"restated size constraint\"."
 }
