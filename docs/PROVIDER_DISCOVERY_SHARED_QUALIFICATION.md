@@ -79,3 +79,44 @@ Tests: 81/81 on this branch and on a throwaway merge with `demo/lead-discovery-e
 ```sh
 deno test --allow-read --allow-env --no-check tests/edge-functions/_shared/discoveryProviders/ tests/frontend/providerDiscovery.test.ts
 ```
+
+## Coordination with the Apify repair session (as of 2026-10-31)
+
+**Files.**
+- This branch changes none of the Apify session's files.
+- Against `claude/optimistic-hypatia-3bylnd`, the only file both branches touch is
+  `src/lib/leadLibrary/canonicalLeadRow.ts`. That change is PR #195's own two-line addition, and it
+  merged cleanly in a trial merge.
+- `deno.lock` entries added by the local Deno installer were removed, so they won't conflict.
+
+**Read-only dependencies.** This layer imports, and never edits, these shared modules:
+- `candidateEligibility.ts`
+- `evidenceGraph.ts`
+- `candidateObservation.ts`
+- `evidenceAuthority.ts`
+- `missionCriteria.ts` (types)
+- `fundingCorroboration.ts` (behaviour relied on, below)
+
+**Interfaces the Apify side should know about.**
+- **`canonicalEvidence(company) → EvidenceItem[]`** (in `VerifyOptions`) is the only way canonical
+  evidence enters a provider lead. It still isn't wired in production. Evidence is admitted only
+  with a proven identity item naming the company.
+- **Provider funding** uses the value shape `{ provider_funding: … }`, deliberately **not**
+  `{ claim: "funding_record", record }`. So `fundingRecordsInGraph` ignores it, and a provider's
+  round can't reach `decideRecentlyFunded`. If that reader ever widens its filter, this guard has to
+  be re-checked. `evidenceContract.test.ts` "funding: a provider's dated round last month…" will
+  fail if it breaks.
+- **Authority source keys** are `apollo_discovery`, `leadocean_discovery` and
+  `apify_discovery_site_check`. `AUTHORITY_RULES` names none of them, by design.
+
+**Bug found in shared code, not fixed here (owned by the Apify session).**
+- **What happens:** a proposal that restates its size bound as `employee_min` / `employee_max`
+  hard constraints compiles to hard `constraint` criteria that no evidence dimension answers. Every
+  company then stays `pending`, even when the size and HQ are proven.
+- **Where it reproduces:** `8b0e2b6b`, `demo/lead-discovery-e2e` and
+  `claude/optimistic-hypatia-3bylnd` @ `89868f3b`.
+- **Relation to earlier fixes:** it's the same class as `7ee00ca` (restated hiring), which fixed
+  hiring only.
+- **Reproduction and expected fix:** the `KNOWN ISSUE` test in `benchmarkRunner.test.ts` and the
+  `note` in `benchmarks/provider-discovery/mission-c-proposal.json`. The benchmark states the size
+  once as a workaround. When the shared fix lands, that test fails by design and should be removed.

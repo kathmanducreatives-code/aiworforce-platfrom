@@ -1,147 +1,144 @@
-# Apollo and LeadOcean live tests: proposals and exact budget
+# Apollo and LeadOcean live tests: proposals and exact budgets (v2)
 
-Status: **proposed. Nothing in this plan has been run.** No paid request has been sent, and no
-key exists in the environment yet.
+Status: **proposed; nothing metered has been run.** Both connections are verified with free calls
+(`docs/PROVIDER_CAPABILITIES.md`).
 
-Each test needs your approval of its stated budget. Approving one test approves only that test.
+Each test below needs a **separate approval by name**. Approving one test approves nothing else.
 
-Pricing sources, read 2026-10-30:
-- Apollo: [API pricing](https://docs.apollo.io/docs/api-pricing).
-- LeadOcean: the [OpenAPI spec](https://api.leadocean.io/openapi.json) and the
-  [pricing page](https://leadocean.io/pricing).
+Every figure here is the **server's own worst case**. `benchmarkRunner.ts` computes it from the
+committed cohort. The test "the REAL cohort's live worst case, planned with no fetch" pins it, and
+the runner refuses a whole run before any call if its worst case exceeds the approved units.
 
-## What every live test shares
+## Shared rules (both tests)
 
-**Cohort:** `benchmarks/provider-discovery/cohort.json`, selected read-only from TEST.
-- A01 LangChain, A02 Baseten, A03 Oscilar.
-- A04–A10 and B01–B10 are unfilled. The TEST project holds no further real companies and no
-  decision-makers.
-- Group C is one fixed mission, run unchanged on both providers: "10 US-headquartered B2B SaaS
-  companies, 51–200 employees, and their VP of Sales".
+**Input.**
+- `benchmarks/provider-discovery/cohort.json`:
+  - A01 LangChain (`langchain.com`);
+  - A02 Baseten and A03 Oscilar (LinkedIn only).
+  - The cohort was selected read-only from the TEST project, which holds no other real companies
+    and no decision-makers.
+- Group C is `mission-c-proposal.json`, compiled by the real compiler and identical for both
+  providers: 10 US-headquartered companies, 51–200 employees, with their VP of Sales where
+  available.
 
-**Never in any test:**
-- enrichment of a person, or a reveal of email or phone;
-- exports;
-- writing to a CRM, HubSpot or Leads;
-- messages or calls;
-- LeadOcean's `people/viewed`;
-- a retry of a paid request.
+**Never.**
+- Enrichment, contact reveal, exports, `people/viewed`, `add_to_my_prospects`.
+- Writing to a CRM, HubSpot or Leads.
+- Messages or calls.
+- The Apollo adapter physically can't reach anything outside search and usage (`ALLOWED_PATHS`).
 
-**What happens to the data:**
-- Search rows have contact values redacted on arrival (`orchestrator.redactContactValues`).
-- Results go to a session scratch file, not to the repository.
+**Retries.** Never for a paid request that may have billed:
+- A timeout, transit failure or 5xx on a paid call becomes `charge_uncertain`, the ledger holds it,
+  and nothing re-buys it.
+- 429 and 503 are retried at most twice, and only within a Retry-After of 30 s or less, because
+  neither bills.
 
-**Software protections:**
-- The usage ledger (`budget.ts`) reserves every paid page under an idempotent key before sending
-  it.
-- A page whose charge is uncertain is marked `uncertain` and never sent again.
-- The per-provider cap is `min(approval, server estimate)`, so an approval can't raise spend.
-- The approval is bound to the plan hash.
-- Paging stops as soon as the provider checks are satisfied.
-- One attempt per operation, a 15-second timeout, and no automatic retry of anything paid.
+**Stop conditions.** The provider stops at its first:
+- `auth_failed`
+- `plan_restricted` / `forbidden_scope`
+- `allowance_exhausted` (402)
+- `charge_uncertain`
 
-**External effects:** read-only searches against each provider's dataset. Nothing is created or
-changed on either account, except that:
-- the account's usage counters increase;
-- Apollo may log the API calls in its usage stats.
+The steps after it aren't sent.
 
-## Step 0: free access check (no cost; needs only the keys)
+**Result limits.**
+- Each known-company lookup is limited to 1 row.
+- Group C reads 1 page of 10.
+- No verification step, no fallback provider.
 
-`deno run --allow-env --allow-read --allow-net=api.apollo.io,api.leadocean.io scripts/provider-access-check.ts --out <scratch>/access.json`
+**Data.**
+- Search rows have their contact values redacted on arrival.
+- The report holds availability flags and statuses only.
+- Results go to a session file, not the repository.
 
-| Provider | Operations | Units consumed | Money |
-|---|---|---|---|
-| Apollo | `usage_stats/api_usage_stats`, `mixed_people/api_search` (`per_page`=1) | 0 credits | $0 |
-| LeadOcean | `GET /v1/account`, `/v1/usage`, `/v1/filters/companies`, `/v1/companies/count` ×4 (A01–A03 and the mission) | 0 records | $0 |
+**Reconciliation.**
+- The ledger records settled units per step under idempotent keys.
+- LeadOcean: `records.used` before and after (from the free account read) must equal the ledger's
+  units, otherwise the run reports `reconciled: false`.
+- Apollo has no balance API: compare its in-app Credit usage page with the ledger's units.
 
-This step establishes:
-- the account identity (LeadOcean: account id and masked email);
-- the plan, records or credits left, key scopes and rate limits;
-- whether the Apollo key is a master key (People API Search and usage stats need one);
-- the response field names, which settle #195's open item on LeadOcean `FIELDS`;
-- LeadOcean's free exact-identity coverage of A01–A03.
-
-The results decide whether steps 1 and 2 are needed as written. If LeadOcean holds none of
-A01–A03, for example, its step 1 is dropped.
-
-## Test L: LeadOcean (unit: records, 1 per row returned)
+## Test L: LeadOcean (Free plan; unit = records)
 
 | Step | Input | Operation | Records, worst case |
 |---|---|---|---|
-| L1 known-company match | A01 by `domain`, A02 and A03 by `linkedin` | `POST /v1/search/companies`, `limit`=1, one call per slot | **3** |
-| L2a discovery: companies | mission C filters (hqCountry, employees 51–200, SaaS keyword) | `POST /v1/search/companies`, `limit`=10, one page | **10** |
-| L2b discovery: decision-makers | title "VP Sales", the L2a domains | `POST /v1/search`, `limit`=10, one page, `slim` | **10** |
-| **Total** | | 3 searches (L2b only if L2a returns rows) | **≤ 23 records** |
+| L1 known companies | A01 by `domain`; A02, A03 by `linkedin` | `search/companies`, `limit` 1, one call per slot | **3** |
+| L2 group C | `hqCountry` US, min/maxEmployees 51/200, `title` "VP of Sales" | `search` (people), `limit` 10, one page, `slim` | **10** |
+| **Total** | | | **≤ 13 records** |
 
-**Money:**
-- **$0 marginal on any plan.** LeadOcean is flat-priced and has no per-record charge.
-- On the Free plan, the 23 records come out of a one-time allowance of 1,000 (2.3%); when it runs
-  out, LeadOcean answers 402 and charges nothing.
-- On paid plans, an exhausted window slows requests down; it doesn't bill.
+**Money: $0.**
+- The Free plan never bills. The 13 records come out of the account's 1,000 lifetime records, which
+  is 1.3%.
+- When the allowance runs out, LeadOcean answers 402 and charges nothing.
 
-**Worst-case monetary cost:** $0 beyond the subscription you already hold.
+**Worst-case monetary cost:** $0.
 
-**Protection:** a ledger cap of 23 records, and `PlanLimits.maxCreditsPerMission` set to 23.
+**Already done, free:** all three cohort companies exist in LeadOcean by exact identifier
+(`count_companies`, 0 records), and group C's pool is 6,395 companies for 0 records.
 
-**Caveat:** the spec says an enrichment costs 1 record "whether or not it finds anything", while
-the pricing page says misses are free. That's irrelevant here because no test enriches.
+**How it runs.** The runner uses LeadOcean's REST API, so it needs a LeadOcean key available to the
+session:
+- either a `LEADOCEAN_API_KEY` environment variable;
+- or a Network Secret for `api.leadocean.io`, used the same way as Apollo's.
 
-## Test P: Apollo (unit: credits)
+The connected MCP server spends the same account allowance, but the runner can't drive it. Running
+L by hand through MCP tools would bypass the ledger and the budget gate, so I don't propose that.
+
+## Test P: Apollo (Professional Trial; unit = credits)
 
 | Step | Input | Operation | Credits, worst case |
 |---|---|---|---|
-| P1 known-company match | A01 by domain (`q_organization_domains_list`); A02 and A03 by name, then verified by LinkedIn URL | Organization Search, `per_page` ≤ 5, one page per slot | **3** (1 per page) |
-| P2a discovery: companies | mission C (`organization_locations` US, `organization_num_employees_ranges` "51,200", SaaS keyword tag) | Organization Search, `per_page`=10, one page | **1** |
-| P2b discovery: decision-makers | title "VP Sales", the P2a organization ids | People API Search, `per_page`=10 | **0** |
-| **Total** | | 4 paid pages | **≤ 4 credits** |
+| P1 known company | A01 `langchain.com` | Organization Search (`q_organization_domains_list`), `per_page` 10, one page | **1** |
+| P2 group C | `organization_locations` United States, `organization_num_employees_ranges` 51,200 | Organization Search, `per_page` 10, one page | **1** |
+| A02, A03 | No domain held; Apollo filters companies by domain only, and a name search would be a guess | Not sent | 0 |
+| **Total** | | | **≤ 2 credits** |
 
-**Money:** 4 credits from your plan's existing allowance. The monetary value depends on your plan.
-Step 0 reads the plan, and I'll restate the figure before you approve.
+**Ending early.** If this trial plan also excludes Organization Search, P1's 403 bills nothing and
+stops the test at **0 credits**. Answering that question is P1's main purpose.
 
-**Worst-case monetary cost:**
-- I haven't confirmed Apollo's per-credit price for your plan. **I'm asking for a hard ceiling of
-  $1.00**, which allows up to $0.25 per credit. Step 0 reports the real figure, and if it's higher,
-  I'll come back to you before running anything.
-- If Apollo bills more credits than its documentation states, the ledger records the overbilling
-  and the run stops at the next page.
+**People.** People API Search is unavailable on this plan, so group C runs as Organization Search
+and returns no contacts. Measures 2, 7 and 8 are then not applicable to Apollo.
 
-**Protection:** a ledger cap of 4 credits, the approval bound to the plan hash, and People API
-Search `include_similar_titles: false`.
+**Money.** The 2 credits come from the trial's allowance. Apollo's API can't read that balance or
+its price, so **I'm asking for a hard ceiling of $1.00** (up to $0.50 per credit). Check that the
+trial still has credits in the app before approving.
 
-## Optional test V: canonical evidence for qualification (owned by the Apify session)
+## Optional test V: canonical evidence (owned by the Apify session)
 
-Without canonical evidence, every provider lead stays `needs_verification`, which is by design.
-That leaves benchmark measures 4 and 10 ("unique qualified" and "cost per qualified") at
-0 and null.
+Without canonical evidence, every Apollo and LeadOcean lead stays `needs_verification`. That's the
+shared engine working correctly, but it leaves "qualified yield" at 0 and "cost per qualified"
+undefined.
 
-Measuring them needs the existing Apify engine to:
-- read the company record of each company discovered in L2a and P2a (at most 20 after the union);
-- run its grounded website check for the business-model criterion.
+Measuring those needs the Apify engine to read the company record of each company discovered in L2
+and P2: at most 20 records, or 23 including the cohort.
 
-That spend belongs to the Apify engine's guarded worker and its $3 canary budget, and the other
-session owns it. I'll ask that session for its own per-company price before proposing this.
-**It isn't part of this approval.**
+The other session owns that spend and its $3 canary budget. **It isn't part of this approval.** I'll
+ask the Apify session for its per-company figure first. Its last published worst case for
+`harvestapi~linkedin-company` was $0.00405 per start plus 1 company.
 
-## Total for this approval
+## How the providers will be compared (`benchmark.ts`, identical rules)
 
-| | Units | Worst-case money |
+1. Company matching accuracy, by exact identity.
+2. Decision-maker accuracy: same person, same employer, in the role. Not applicable while group B is
+   unfilled.
+3. HQ verification, against proven truth only. The cohort holds no proven HQ yet, so this needs V.
+4. Unique companies **qualified by the shared engine**, plus how many passed only the provider
+   checks.
+5. Duplicate rate.
+6. Overlap between providers.
+7. Phone candidate coverage, from flags.
+8. Independently verified direct-number coverage. This is 0 until independent evidence exists, by
+   design.
+9. Latency: p50, p95, max.
+10. Cost per qualified result. Null, never 0, when nothing qualifies.
+
+Plus:
+- **Evidence quality:** checks answered by a returned value, versus a filter the provider claims,
+  versus nothing.
+- **Freshness:** the age of the provider's own update stamp.
+
+## Totals for approval
+
+| Test | Units, worst case | Money, worst case |
 |---|---|---|
-| Step 0 (free) | 0 | $0 |
-| Test L | ≤ 23 LeadOcean records | $0 marginal |
-| Test P | ≤ 4 Apollo credits | ≤ $1.00 |
-| **All** | | **≤ $1.00** |
-
-## Before any paid step
-
-1. Add `APOLLO_API_KEY` and `LEADOCEAN_API_KEY` as environment secrets for this cloud
-   environment. Never paste them into chat.
-2. Run step 0 and review its report.
-3. Confirm commercial terms, though for this internal test it's informational only. LeadOcean
-   grants resale and embedding only on its Platform plan, and Apollo's API Terms for
-   customer-facing use are still to confirm (`docs/PROVIDER_DISCOVERY.md` §5.1).
-4. Check the production holds (outreach history, CRM relationship, existing Lead IDs) for
-   A01–A03. TEST holds none.
-5. Approve L and/or P by name with the budget above.
-
-The live runner reuses the orchestrator and ledger, and comes with its own offline rehearsal
-before the first paid call.
+| L (LeadOcean) | ≤ 13 records | $0 |
+| P (Apollo) | ≤ 2 credits | ≤ $1.00 (hard ceiling) |
