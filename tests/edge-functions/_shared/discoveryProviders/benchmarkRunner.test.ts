@@ -141,8 +141,9 @@ Deno.test("runner: the REAL cohort's live worst case, planned with no fetch", as
   const lo = await plan("leadocean");
   assertEquals([lo.worstCaseUnits, lo.refused !== null], [13, true], "3 exact lookups + 10 discovery records");
   const ap = await plan("apollo", ["people_search: not in this plan"]);
-  assertEquals([ap.worstCaseUnits, ap.refused !== null], [2, true], "LangChain by domain + 1 Organization Search page");
-  assertEquals(ap.steps.filter((s) => s.skipped?.startsWith("Apollo filters companies by domain only")).map((s) => s.slot), ["A02", "A03"]);
+  // Baseten and Oscilar now carry domains from Agentory's own evidence: Apollo can look all three up.
+  assertEquals([ap.worstCaseUnits, ap.refused !== null], [4, true], "three domain lookups + 1 Organization Search page");
+  assertEquals(ap.steps.filter((s) => s.skipped?.startsWith("Apollo filters companies by domain only")).length, 0);
 });
 
 Deno.test("KNOWN ISSUE (shared engine, Apify-owned): a restated size constraint keeps every company pending — remove when fixed", async () => {

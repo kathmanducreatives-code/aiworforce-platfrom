@@ -61,7 +61,7 @@ The steps after it aren't sent.
 
 | Step | Input | Operation | Records, worst case |
 |---|---|---|---|
-| L1 known companies | A01 by `domain`; A02, A03 by `linkedin` | `search/companies`, `limit` 1, one call per slot | **3** |
+| L1 known companies | A01, A02, A03 by `domain` (A02/A03 domains from Agentory's own evidence, added after Test L) | `search/companies`, `limit` 1, one call per slot | **3** |
 | L2 group C | `hqCountry` US, min/maxEmployees 51/200, `title` "VP of Sales" | `search` (people), `limit` 10, one page, `slim` | **10** |
 | **Total** | | | **≤ 13 records** |
 
@@ -87,10 +87,9 @@ L by hand through MCP tools would bypass the ledger and the budget gate, so I do
 
 | Step | Input | Operation | Credits, worst case |
 |---|---|---|---|
-| P1 known company | A01 `langchain.com` | Organization Search (`q_organization_domains_list`), `per_page` 10, one page | **1** |
+| P1 known companies | A01 `langchain.com`, A02 `baseten.co`, A03 `oscilar.com` | Organization Search (`q_organization_domains_list`), `per_page` 10, one page each | **3** |
 | P2 group C | `organization_locations` United States, `organization_num_employees_ranges` 51,200 | Organization Search, `per_page` 10, one page | **1** |
-| A02, A03 | No domain held; Apollo filters companies by domain only, and a name search would be a guess | Not sent | 0 |
-| **Total** | | | **≤ 2 credits** |
+| **Total** | | | **≤ 4 credits** |
 
 **Ending early.** If this trial plan also excludes Organization Search, P1's 403 bills nothing and
 stops the test at **0 credits**. Answering that question is P1's main purpose.
@@ -98,8 +97,8 @@ stops the test at **0 credits**. Answering that question is P1's main purpose.
 **People.** People API Search is unavailable on this plan, so group C runs as Organization Search
 and returns no contacts. Measures 2, 7 and 8 are then not applicable to Apollo.
 
-**Money.** The 2 credits come from the trial's allowance. Apollo's API can't read that balance or
-its price, so **I'm asking for a hard ceiling of $1.00** (up to $0.50 per credit). Check that the
+**Money.** The 4 credits come from the trial's allowance. Apollo's API can't read that balance or
+its price, so **I'm asking for a hard ceiling of $1.00** (up to $0.25 per credit). Check that the
 trial still has credits in the app before approving.
 
 ## Optional test V: canonical evidence (owned by the Apify session)
@@ -141,4 +140,4 @@ Plus:
 | Test | Units, worst case | Money, worst case |
 |---|---|---|
 | L (LeadOcean) | ≤ 13 records | $0 |
-| P (Apollo) | ≤ 2 credits | ≤ $1.00 (hard ceiling) |
+| P (Apollo) | ≤ 4 credits | ≤ $1.00 (hard ceiling) |
