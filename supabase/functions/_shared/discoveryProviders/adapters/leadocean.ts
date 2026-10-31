@@ -12,7 +12,7 @@
 //   search   POST /v1/search            people     1 record per row returned
 //            POST /v1/search/companies  companies  1 record per row returned
 //            count=true&limit=1 is free (meta.countOnly)
-//   enrich   POST /v1/enrich, /v2/people/email/work, /v2/people/phone
+//   enrich   POST /v1/enrich, /v2/people/email/work; phones: POST /v1/people/phone (leadPipeline/phones.ts)
 //            1 record per call, found or not
 //   usage    GET /v1/usage              free; used to verify a key
 //   paging   meta.nextCursor (signed); 410 = snapshot retired

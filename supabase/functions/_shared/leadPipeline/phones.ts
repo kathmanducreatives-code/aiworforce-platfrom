@@ -24,9 +24,17 @@
 // do-not-call is a FLAG on any class: it blocks outreach, it does not reclassify.
 // Phone values never enter reports: `masked` and `valueHash` do.
 //
-// POST /v2/people/phone request keys (person_id | linkedin_url | email | phone)
-// are from LeadOcean's tool schema; the response parsing below is documented
-// shape ({has_phone, phones:[{phone,type,priority}]}) not yet observed live.
+// Endpoint: POST /v1/people/phone (OpenAPI, read 2026-10-31): exactly one of
+// linkedin_url | email | phone | person_id; 1 record per call, found or not; the
+// same cached lookup as /v2/people/phone and /v1/people/enrich ("doors onto the
+// same lookup"). Response: {success, data:{key, has_phone, contact_phones:[{phone,
+// type, ddi, dnc, carrier, priority, score}]}, meta}. `dnc` is published but not
+// populated at source: null is UNKNOWN, never clearance (`dnc` below).
+//
+// Why v1: in test E the v2 path answered 401 "Missing or malformed x-api-key"
+// while /v1/search succeeded — the workspace's Network Secret for api.leadocean.io
+// is injected on /v1/* paths only (confirmed with rejected, uncounted requests).
+// `leadOceanPhoneAuthProbe` runs before any paid lookup and stops on 401.
 
 import type { AdapterDeps } from "../discoveryProviders/adapter.ts";
 import { pickStr } from "../discoveryProviders/adapter.ts";
@@ -67,6 +75,8 @@ export interface PhoneRecord {
   class: PhoneClass;
   verification: ContactPointVerification | null;
   doNotCall: boolean;
+  /** The provider's do-not-call field: `flagged` only when it says true; `unknown` otherwise (it is unpopulated at source). */
+  dnc: "flagged" | "unknown";
   /** How sure the number belongs to this person (not whether it connects). */
   matchConfidence: "high" | "medium" | "low" | "none";
   employment: EmploymentEvidence;
@@ -116,6 +126,29 @@ export function classifyPhone(cp: ContactPoint | null, ctx: ClassifyContext): { 
   return { class: "unverified_person_associated", e164, matchConfidence: type === "mobile" || type === "direct" ? "medium" : "low", reasons };
 }
 
+export const LEADOCEAN_PHONE_PATH = "/v1/people/phone";
+
+/**
+ * FREE authentication check for the phone path: an empty body is rejected by
+ * validation (400) after the key is accepted, and LeadOcean does not count
+ * rejected requests ("Requests we reject are not counted"). 400 → the key reaches
+ * this path; 401/403 → it does not, so no lookup may be attempted.
+ */
+export async function leadOceanPhoneAuthProbe(deps: AdapterDeps): Promise<{ ok: boolean; status: number | null; reason: string }> {
+  const base = deps.baseUrl ?? "https://api.leadocean.io";
+  try {
+    const res = await deps.fetch(`${base}${LEADOCEAN_PHONE_PATH}`, { method: "POST", headers: { "content-type": "application/json", "x-api-key": deps.apiKey }, body: "{}" });
+    let message = "";
+    try { message = String(((await res.json()) as { error?: { message?: unknown } })?.error?.message ?? "").slice(0, 120); } catch { /* non-JSON */ }
+    if (res.status === 400) return { ok: true, status: 400, reason: "key accepted on the phone path (validation rejected the empty probe, not counted)" };
+    if (res.status === 401) return { ok: false, status: 401, reason: `key not accepted on ${LEADOCEAN_PHONE_PATH}: ${message || "unauthorized"}` };
+    if (res.status === 403) return { ok: false, status: 403, reason: `key lacks the scope for ${LEADOCEAN_PHONE_PATH}: ${message || "forbidden"}` };
+    return { ok: false, status: res.status, reason: `unexpected ${res.status} from the probe; no lookup attempted` };
+  } catch (e) {
+    return { ok: false, status: null, reason: `probe failed (${(e as Error)?.name ?? "error"})` };
+  }
+}
+
 /** One LeadOcean phone lookup (1 record). Only enrichPhones calls this. */
 export async function leadOceanFindPhone(deps: AdapterDeps, input: { personId?: string | null; linkedinUrl?: string | null }): Promise<{ found: boolean; points: ContactPoint[]; credits: number; recordId: string }> {
   const base = deps.baseUrl ?? "https://api.leadocean.io";
@@ -124,7 +157,7 @@ export async function leadOceanFindPhone(deps: AdapterDeps, input: { personId?: 
   else if (input.personId) body.person_id = input.personId;
   else throw new ProviderError("leadocean", "invalid_request", "a phone lookup needs a person id or LinkedIn URL");
   // maxRetries 0: a metered call is never repeated automatically.
-  const r = await callProvider(deps.fetch, { provider: "leadocean", url: `${base}/v2/people/phone`, method: "POST", headers: { "x-api-key": deps.apiKey }, body, paid: true, maxRetries: 0 }, deps.sleep);
+  const r = await callProvider(deps.fetch, { provider: "leadocean", url: `${base}${LEADOCEAN_PHONE_PATH}`, method: "POST", headers: { "x-api-key": deps.apiKey }, body, paid: true, maxRetries: 0 }, deps.sleep);
   const at = (deps.now ?? (() => new Date()))().toISOString();
   const j = (r.json ?? {}) as Record<string, unknown>;
   const d = (j.data && typeof j.data === "object" ? j.data : j) as Record<string, unknown>;
@@ -140,7 +173,7 @@ export async function leadOceanFindPhone(deps: AdapterDeps, input: { personId?: 
   const priority = (p: unknown) => Number((p as { priority?: unknown }).priority ?? 99);
   points.sort((a, b) => priority(list.find((x) => pickStr(x, ["phone", "number"]) === a.value)) - priority(list.find((x) => pickStr(x, ["phone", "number"]) === b.value)));
   const meta = (j.meta ?? {}) as { credits?: unknown };
-  return { found: d.has_phone !== false && points.length > 0, points, credits: typeof meta.credits === "number" ? meta.credits : 1, recordId };
+  return { found: d.has_phone !== false && d.found !== false && points.length > 0, points, credits: typeof meta.credits === "number" ? meta.credits : 1, recordId };
 }
 
 export interface PhoneTarget {
@@ -166,8 +199,8 @@ export interface PhoneEnrichment {
 }
 
 const NOT_LOOKED_UP = (t: PhoneTarget, cls: PhoneClass, reasons: string[], cost: PhoneRecord["cost"]["basis"] = "none", records = 0): PhoneRecord => ({
-  leadId: t.leadId, personKey: t.personKey, providerPersonId: t.providerPersonId, provider: "leadocean", endpoint: "/v2/people/phone",
-  value: null, e164: null, masked: null, valueHash: null, type: null, priority: null, class: cls, verification: null, doNotCall: false,
+  leadId: t.leadId, personKey: t.personKey, providerPersonId: t.providerPersonId, provider: "leadocean", endpoint: LEADOCEAN_PHONE_PATH,
+  value: null, e164: null, masked: null, valueHash: null, type: null, priority: null, class: cls, verification: null, doNotCall: false, dnc: "unknown",
   matchConfidence: "none", employment: t.employment, cost: { records, basis: cost }, retrievedAt: null, reasons,
 });
 
@@ -190,6 +223,8 @@ export async function enrichPhones(input: {
   workspaceId: string; missionId: string; authorization: EnrichmentAuthorization | null;
   targets: readonly PhoneTarget[]; deps: AdapterDeps; ledger: UsageLedger;
   call?: typeof leadOceanFindPhone;
+  /** The free auth check run before the first lookup; defaults to the real probe unless `call` is injected (tests). */
+  probe?: ((deps: AdapterDeps) => Promise<{ ok: boolean; reason: string }>) | null;
 }): Promise<PhoneEnrichment> {
   const a = input.authorization;
   const call = input.call ?? leadOceanFindPhone;
@@ -200,10 +235,17 @@ export async function enrichPhones(input: {
   if (a && (a.workspaceId !== input.workspaceId || a.missionId !== input.missionId)) {
     return { records, skipped: input.targets.map((t) => ({ personKey: t.personKey, reason: "authorization belongs to another workspace or mission" })), recordsCharged: 0, stopped: "authorization_scope" };
   }
+  const probe = input.probe !== undefined ? input.probe : input.call ? null : leadOceanPhoneAuthProbe;
+  let probed = false;
   for (const t of input.targets) {
     const refuse = phoneLookupGate(t, a);
     if (refuse) { skipped.push({ personKey: t.personKey, reason: refuse }); continue; }
     if (stopped) { skipped.push({ personKey: t.personKey, reason: `stopped: ${stopped}` }); continue; }
+    if (probe && !probed) {
+      probed = true;
+      const pr = await probe(input.deps);
+      if (!pr.ok) { stopped = `auth_probe: ${pr.reason}`; skipped.push({ personKey: t.personKey, reason: `stopped: ${stopped}` }); continue; }
+    }
     const key = `${input.missionId}:phone:${t.personKey}`;
     const r = await input.ledger.reserve({ workspaceId: input.workspaceId, missionId: input.missionId, provider: "leadocean", key, credits: 1, providerCap: a!.maxCredits, missionCap: a!.maxCredits });
     if (!r.ok) { skipped.push({ personKey: t.personKey, reason: `ledger: ${r.reason}` }); if (r.reason !== "in_flight") stopped = `ledger ${r.reason}`; continue; }
@@ -217,6 +259,7 @@ export async function enrichPhones(input: {
         value: best?.value ?? null, e164: c.e164, masked: maskPhone(c.e164), valueHash: c.e164 ? sha256Hex(c.e164).slice(0, 16) : null,
         type: best?.type ?? null, priority: best ? res.points.indexOf(best) + 1 : null,
         verification: best?.verification ?? null, doNotCall: res.points.some((p) => p.verification === "provider_flagged" && p.value === best?.value),
+        dnc: res.points.some((p) => p.verification === "provider_flagged" && p.value === best?.value) ? "flagged" : "unknown",
         matchConfidence: c.matchConfidence, retrievedAt: best?.retrievedAt ?? null,
       };
       charged += res.credits;

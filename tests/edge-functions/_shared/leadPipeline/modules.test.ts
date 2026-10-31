@@ -199,12 +199,12 @@ Deno.test("phones: idempotent replay, cap, charge_uncertain stops without retry,
   const e = await enrichPhones({ workspaceId: "ws", missionId: "m3", authorization: auth({ missionId: "m3", maxCredits: 1 }), targets: [tgt({}), tgt({ personKey: "p2" })], deps, ledger, call });
   assertEquals(e.records.length, 1, "the cap stops the second lookup");
 });
-Deno.test("phones: leadOceanFindPhone posts linkedin_url or person_id to /v2/people/phone with no retries", async () => {
+Deno.test("phones: leadOceanFindPhone posts linkedin_url or person_id to /v1/people/phone with no retries", async () => {
   const { leadOceanFindPhone } = await import("../../../../supabase/functions/_shared/leadPipeline/phones.ts");
   const seen: { url: string; body: unknown }[] = [];
   const fetch = (url: string, init: { body?: string }) => { seen.push({ url, body: JSON.parse(init.body!) }); return Promise.resolve(new Response(JSON.stringify({ data: { has_phone: true, phones: [{ phone: "+1 303 555 0199", type: "office", priority: 2 }, { phone: "+1 512 555 0101", type: "mobile", priority: 1 }] }, meta: { credits: 1 } }), { status: 200 })); };
   const r = await leadOceanFindPhone({ apiKey: "k", fetch: fetch as never }, { personId: "42" });
-  assertEquals(seen[0].url, "https://api.leadocean.io/v2/people/phone");
+  assertEquals(seen[0].url, "https://api.leadocean.io/v1/people/phone", "v1: the path the workspace Network Secret covers (test E: v2 → 401)");
   assertEquals(seen[0].body, { person_id: "42" });
   assertEquals(r.points.map((p) => p.type), ["mobile", "office"], "priority order");
   assert(r.points.every((p) => p.verification === "provider_supplied_unverified"));
@@ -226,4 +226,45 @@ Deno.test("metrics: Wilson lower bound; estimates conservative; unknown stages r
   assert(e.expected! < e.conservative!);
   assert(e.lookupsConservative! > 0);
   assertEquals(estimateCandidates(f, 50, "verified_direct").unknownStages, ["verifiedDirect"]);
+});
+
+// ── Regression: test E phone 401 (2026-10-31) ───────────────────────────────
+const resp = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status }));
+Deno.test("phones auth probe: 400 on an empty body = key accepted; 401/403/other = no lookup; never a paid body", async () => {
+  const { leadOceanPhoneAuthProbe } = await import("../../../../supabase/functions/_shared/leadPipeline/phones.ts");
+  const sent: { url: string; body?: string }[] = [];
+  const mk = (status: number, body: unknown) => ({ apiKey: "k", fetch: ((url: string, i: { body?: string }) => { sent.push({ url, body: i.body }); return resp(status, body); }) as never });
+  assertEquals((await leadOceanPhoneAuthProbe(mk(400, { error: { message: "Validation failed" } }))).ok, true);
+  const r401 = await leadOceanPhoneAuthProbe(mk(401, { error: { message: "Missing or malformed x-api-key" } }));
+  assertEquals([r401.ok, r401.status], [false, 401]);
+  assert(r401.reason.includes("Missing or malformed x-api-key"));
+  assertEquals((await leadOceanPhoneAuthProbe(mk(403, {}))).ok, false);
+  assertEquals((await leadOceanPhoneAuthProbe(mk(200, { data: {} }))).ok, false, "a 200 to an empty body is unexpected: refuse");
+  assert(sent.every((x) => x.url === "https://api.leadocean.io/v1/people/phone" && x.body === "{}"), "the probe carries no identifier, so it can never be a lookup");
+});
+Deno.test("phones: a failed auth probe stops every lookup before the first paid call", async () => {
+  let calls = 0;
+  const r = await enrichPhones({ workspaceId: "ws", missionId: "mp", authorization: auth({ missionId: "mp" }), targets: [tgt({}), tgt({ personKey: "p2" })],
+    deps: { apiKey: "k", fetch: (() => resp(401, {})) as never }, ledger: memoryLedger(),
+    call: () => { calls++; return Promise.resolve({ found: true, points: [], credits: 1, recordId: "1" }); },
+    probe: () => Promise.resolve({ ok: false, reason: "key not accepted" }) });
+  assertEquals([calls, r.recordsCharged, r.records.length], [0, 0, 0]);
+  assert(r.stopped?.startsWith("auth_probe"));
+  assertEquals(r.skipped.length, 2);
+});
+Deno.test("phones: the real v1 response shape; dnc null is unknown (never clearance), dnc true is flagged", async () => {
+  const { leadOceanFindPhone } = await import("../../../../supabase/functions/_shared/leadPipeline/phones.ts");
+  const body = { success: true, data: { key: "person/1", has_phone: true, contact_phones: [
+    { phone: "+1 303 555 0199", type: "office", ddi: null, dnc: null, carrier: null, priority: 2, score: 0.4 },
+    { phone: "+1 512 555 0101", type: "mobile", ddi: null, dnc: null, carrier: null, priority: 1, score: 0.8 }] }, meta: { credits: 1 } };
+  const r = await leadOceanFindPhone({ apiKey: "k", fetch: (() => resp(200, body)) as never }, { personId: "1" });
+  assertEquals(r.points.map((p) => [p.type, p.verification]), [["mobile", "provider_supplied_unverified"], ["office", "provider_supplied_unverified"]]);
+  const ledger = memoryLedger();
+  const e = await enrichPhones({ workspaceId: "ws", missionId: "md", authorization: auth({ missionId: "md" }), targets: [tgt({})], deps: { apiKey: "k", fetch: (() => resp(200, body)) as never }, ledger, probe: null });
+  assertEquals([e.records[0].class, e.records[0].dnc, e.records[0].doNotCall, e.records[0].endpoint], ["unverified_person_associated", "unknown", false, "/v1/people/phone"]);
+  const flagged = { ...body, data: { ...body.data, contact_phones: [{ ...body.data.contact_phones[1], dnc: true }] } };
+  const f = await enrichPhones({ workspaceId: "ws", missionId: "mf", authorization: auth({ missionId: "mf" }), targets: [tgt({})], deps: { apiKey: "k", fetch: (() => resp(200, flagged)) as never }, ledger, probe: null });
+  assertEquals([f.records[0].dnc, f.records[0].doNotCall], ["flagged", true]);
+  const none = await leadOceanFindPhone({ apiKey: "k", fetch: (() => resp(200, { success: true, data: { key: "p", has_phone: false, contact_phones: [] } })) as never }, { personId: "2" });
+  assertEquals([none.found, none.points.length, none.credits], [false, 0, 1], "found:false still costs one record");
 });
