@@ -2,7 +2,9 @@
 //
 //   deno run --allow-read --allow-write --allow-env --allow-net=api.leadocean.io,api.apify.com \
 //     scripts/lead-pipeline-test-e.ts [--icp a|b] --out <file>                       # dry run: prints the exact plan, buys nothing
-//   ... --execute --approve "leadocean=15,apify_usd=0.18" --key-injected            # only after the owner approves exactly this
+//   ... --execute --approve "leadocean=15,apify_usd=0.18" --key-injected --apify-user <username>   # only after approval
+// One shot: a lock file (--lock, default .test-e.lock) is created before the first paid request;
+// a second execution is refused while it exists.
 //
 // One ICP walk, end to end:
 //   LeadOcean people search  1 page × ≤10 rows, hasPhone narrowing     ≤10 records
@@ -85,6 +87,13 @@ export function loGuard(inner: FetchLike, plan: { maxPages: number; pageSize: nu
   return { fetch, log };
 }
 
+async function apifyUsage(): Promise<{ used: number; limit: number }> {
+  const r = await fetch("https://api.apify.com/v2/users/me/limits", { headers: { Authorization: "Bearer injected-by-proxy" } });
+  const d = (await r.json() as { data?: { current?: { monthlyUsageUsd?: number }; limits?: { maxMonthlyUsageUsd?: number } } }).data;
+  if (r.status !== 200 || typeof d?.current?.monthlyUsageUsd !== "number") throw new ERefusal(`refused: cannot read Apify usage (${r.status})`);
+  return { used: d.current.monthlyUsageUsd, limit: d.limits?.maxMonthlyUsageUsd ?? 0 };
+}
+
 async function main() {
   const args = Deno.args;
   const arg = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
@@ -118,13 +127,27 @@ async function main() {
   if (!acct.records || (acct.records.remaining ?? 0) < wc.leadoceanRecords || acct.records.overLimit) throw new ERefusal("refused: LeadOcean account cannot cover the worst case");
   const ap = await fetch("https://api.apify.com/v2/users/me", { headers: { Authorization: "Bearer injected-by-proxy" } });
   if (ap.status !== 200) throw new ERefusal(`refused: Apify account not authenticated (${ap.status})`);
+  const apUser = (await ap.json() as { data?: { username?: string } }).data?.username ?? null;
+  if (arg("--apify-user") && apUser !== arg("--apify-user")) throw new ERefusal("refused: Apify account is not the intended one");
+  const apUsageBefore = await apifyUsage();
+  if (apUsageBefore.limit - apUsageBefore.used < wc.apifyUsd) throw new ERefusal("refused: Apify monthly headroom below the worst case");
+  // One shot: the in-memory ledger does not survive a process, so a second execution is refused
+  // by a lock written BEFORE the first paid request (delete it only after reconciling).
+  const lock = arg("--lock") ?? ".test-e.lock";
+  try { await Deno.writeTextFile(lock, JSON.stringify({ test: "E", planHash: dry.plan.planHash, startedAt: new Date().toISOString() }), { createNew: true }); }
+  catch { throw new ERefusal(`refused: ${lock} exists — test E already started once; reconcile before anything else`); }
   const apify = pipelineApifyInvoker({ token: "injected-by-proxy", fetch: realFetch, timeoutMs: 120_000 });
   const discovery = { kind: "discovery" as const, workspaceId: WS, missionId: `lp:${TEST_E.walkId}:r0`, planHash: dry.plan.planHash, maxCredits: { leadocean: dry.plan.estimatedCredits.leadocean ?? 0 }, approvedBy: "owner (test E)", approvedAt: new Date().toISOString() };
   const run = await runLeadPipeline({ ...base, apify, approvals: { ...approvals, discovery } });
+  // Apify's usage counter can lag: re-read until it moves past the start value or ~60 s pass.
+  let apUsageAfter = await apifyUsage();
+  for (let i = 0; i < 6 && apUsageAfter.used <= apUsageBefore.used && apify.runs.length; i++) { await new Promise((r) => setTimeout(r, 10_000)); apUsageAfter = await apifyUsage(); }
   const after = await (await lo.fetch(`${LO}/v1/account`, { method: "GET", headers: { "x-api-key": "injected-by-proxy" } })).json() as { records?: { remaining?: number } };
   const report = {
     test: "E", icp: icp.id, status: run.status, reason: run.reason, spend: run.spend, yield: run.yield, funnel: run.funnel, estimates: run.estimates,
-    reconciliation: { leadoceanBefore: acct.records.remaining, leadoceanAfter: after.records?.remaining ?? null, leadoceanCharged: run.spend.leadoceanRecords, apifyRuns: apify.runs },
+    reconciliation: { leadoceanBefore: acct.records.remaining, leadoceanAfter: after.records?.remaining ?? null, leadoceanCharged: run.spend.leadoceanRecords, apifyRuns: apify.runs,
+      apifyUser: apUser, apifyUsageBeforeUsd: apUsageBefore.used, apifyUsageAfterUsd: apUsageAfter.used,
+      apifyDeltaUsd: Math.round((apUsageAfter.used - apUsageBefore.used) * 1e6) / 1e6, apifyCapUsd: wc.apifyUsd },
     wire: lo.log, queue: run.queue, review: run.review, excluded: run.excluded.map((l) => ({ company: l.company.domain, reasons: l.qualification?.disproven })),
   };
   // contactValues are deliberately NOT written to the report.
