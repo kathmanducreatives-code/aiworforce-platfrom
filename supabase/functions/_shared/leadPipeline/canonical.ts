@@ -23,6 +23,7 @@ export interface CanonicalFacts {
   hq: { text: string; country: string | null } | null;
   sizeBand: { min: number; max: number | null } | null;
   industry: string | null;
+  founded: number | null;
 }
 
 export interface CanonicalRun {
@@ -72,6 +73,7 @@ export async function readCompanyRecords(targets: readonly CanonicalTarget[], in
       facts.set(t.companyKey, {
         description: norm.description, hq: hq ? { text: hq.text, country: hq.country } : null,
         sizeBand: norm.company_size_band ? { min: norm.company_size_band.min, max: norm.company_size_band.max } : null, industry: norm.provider_industry,
+        founded: typeof norm.startup_evidence?.year_founded === "number" ? norm.startup_evidence.year_founded : null,
       });
       const obs = observationFromCompany(norm, {
         capability: "company_details_enrichment", actor_key: COMPANY_RECORD_ACTOR.key, provider: "apify",
