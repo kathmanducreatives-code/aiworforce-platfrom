@@ -91,7 +91,9 @@ if (import.meta.main) {
   const output = {
     test: APPROVED, started, finished: new Date().toISOString(), dryRun: dry,
     wire: { requests: guard.log, committedLimit: guard.committed() },
-    runner: { ...rep, result: undefined },
+    runner: { ...rep, result: undefined, rawPages: undefined },
+    // Redacted raw pages for offline replay. This file stays in the session, never the repository.
+    rawPages: rep.rawPages,
     score,
     leads: rep.result.discoveryLeads.map((l) => ({
       status: l.status, providerStatus: l.providerStatus, rejectionBasis: l.rejectionBasis, reasons: l.reasons,

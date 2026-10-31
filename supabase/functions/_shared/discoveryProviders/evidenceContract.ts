@@ -66,7 +66,10 @@ export interface LeadEvidence {
     headquarters: Fact<{ country: string | null; region: string | null; city: string | null }>;
     employeeCount: Fact<number>;
     employeeRange: Fact<{ min: number | null; max: number | null }>;
+    /** Human-readable industry labels only. */
     industry: Fact<string[]>;
+    /** NAICS classification, kept apart from industry: a code is never a label. */
+    naics: Fact<{ sector: string | null; primary: string | null }>;
     /** Hiring evidence and posting dates: no provider in this layer returns dated postings. */
     hiring: Fact<{ postedAt: string | null }>;
     funding: Fact<FundingClaim>;
@@ -170,6 +173,10 @@ export function leadEvidence(lead: VerifiedLead, roles: string[]): LeadEvidence 
       employeeCount: fact(one(c.employeeCount, "headcount"), null),
       employeeRange: fact(one(c.employeeRange, "company_size_band"), sharedFor(s, ["company_size"])),
       industry: fact(one(c.industry, "industry"), sharedFor(s, ["industry", "business_model"])),
+      naics: fact(grouped([c.naicsSector, c.naicsPrimary], (cs) => ({
+        sector: (cs.find((x) => x.sourceField === "naics_sector")?.value as string) ?? null,
+        primary: (cs.find((x) => x.sourceField === "naics_primary")?.value as string) ?? null,
+      }), "industry", upd), null),
       hiring: fact<{ postedAt: string | null }>([], sharedFor(s, ["hiring"])),
       funding: fact(one(c.funding, "funding"), sharedFor(s, ["funding", "company_stage"])),
     },

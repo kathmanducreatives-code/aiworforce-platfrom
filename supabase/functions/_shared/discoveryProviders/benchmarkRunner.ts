@@ -71,6 +71,8 @@ export interface RunnerReport {
   stoppedBy: string | null;
   steps: RunnerStep[];
   result: ProviderBenchmarkResult;
+  /** Redacted raw pages (no contact values): re-parse with the adapter's normalizer, nothing re-bought. */
+  rawPages: { step: string; raw: unknown }[];
 }
 
 function lookupRequirements(slot: string, identifier: string): DiscoveryRequirements {
@@ -104,10 +106,14 @@ export async function runProviderBenchmark(i: RunnerInput): Promise<RunnerReport
   // Raw rows of the discovery step only (the duplicate-rate measure counts them).
   const rows: ProviderCompany[] = [];
   let capturing = false;
+  // Every paid page's redacted raw copy, by step: replayable offline after a mapping fix.
+  const rawPages: { step: string; raw: unknown }[] = [];
+  let stepId = "";
   const adapter: DiscoveryAdapter = {
     ...base,
     async search(step, req, cursor, limit) {
       const page: SearchPage = await base.search(step, req, cursor, limit);
+      if (page.raw !== undefined) rawPages.push({ step: stepId, raw: page.raw });
       if (capturing) rows.push(...page.companies, ...page.people.map((p) => p.company).filter((c): c is ProviderCompany => !!c));
       return page;
     },
@@ -140,7 +146,7 @@ export async function runProviderBenchmark(i: RunnerInput): Promise<RunnerReport
   const report = (o: Partial<RunnerReport>): RunnerReport => ({
     version: BENCHMARK_RUNNER_VERSION, provider: i.provider, refused: null, worstCaseUnits: worst, approvedUnits: i.approvedUnits,
     ledgerUnits: 0, providerReportedUnits: null, reconciled: null, stoppedBy: null,
-    steps: steps.map(({ req: _r, ...s }) => s), result: empty, ...o,
+    steps: steps.map(({ req: _r, ...s }) => s), result: empty, rawPages, ...o,
   });
 
   // ── 2. The budget gate: all or nothing ──────────────────────────────────
@@ -155,6 +161,7 @@ export async function runProviderBenchmark(i: RunnerInput): Promise<RunnerReport
     if (s.skipped || !s.plan || !s.req) continue;
     if (stoppedBy) { s.skipped = `not run: provider stopped (${stoppedBy})`; continue; }
     capturing = s.kind === "discovery";
+    stepId = s.id;
     const run = await runDiscovery({
       workspaceId: i.workspaceId, missionId: `benchmark:${i.cohort.version}:${i.provider}:${s.id}`, requirements: s.req, plan: s.plan,
       approval: { kind: "discovery", workspaceId: i.workspaceId, missionId: `benchmark:${i.cohort.version}:${i.provider}:${s.id}`, planHash: s.plan.planHash,

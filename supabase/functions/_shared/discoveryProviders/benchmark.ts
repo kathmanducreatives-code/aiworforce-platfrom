@@ -116,12 +116,27 @@ function companies(records: string[][]): string[][] {
 }
 const intersects = (a: readonly string[], b: ReadonlySet<string>) => a.some((k) => b.has(k));
 
-function sameCompany(a: { domain?: string | null; linkedin_url?: string | null }, b: ProviderCompany): boolean {
+export type IdentityOutcome = "match" | "mismatch" | "unconfirmed";
+
+/**
+ * Is the returned record the cohort's company? Decided ONLY on an identifier
+ * both sides carry. A shared identifier that agrees is a match; one that
+ * disagrees is a mismatch. When the two sides carry no identifier of the same
+ * kind (the cohort holds only a LinkedIn URL, the row only a domain) nothing
+ * can be compared: that is UNCONFIRMED, never a wrong match.
+ */
+export function companyIdentityOutcome(a: { domain?: string | null; linkedin_url?: string | null }, b: ProviderCompany): IdentityOutcome {
   const la = liCompany(a.linkedin_url), lb = liCompany(b.linkedinUrl);
-  if (la && lb) return la === lb;
   const da = normDomain(a.domain ?? null), db = normDomain(b.domain ?? null);
-  return !!da && !!db && da === db;
+  const li = la && lb ? la === lb : null;
+  const dom = da && db ? da === db : null;
+  // Any shared identifier that disagrees is a mismatch, even if another agrees (two companies, one profile).
+  if (li === false || dom === false) return "mismatch";
+  if (li === true || dom === true) return "match";
+  return "unconfirmed";
 }
+
+const normName = (v: unknown) => String(v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\b(inc|llc|ltd|corp|co|the)\b/g, "").trim();
 
 const COUNTRY: Record<string, string> = { us: "united states", usa: "united states", "united states of america": "united states", uk: "united kingdom" };
 const country = (v: unknown) => { const t = String(v ?? "").trim().toLowerCase(); return t ? COUNTRY[t] ?? t : null; };
@@ -134,7 +149,12 @@ const ratio = (n: number, d: number): Ratio => ({ numerator: n, denominator: d, 
 export interface BenchmarkScore {
   version: typeof BENCHMARK_VERSION;
   provider: ProviderId;
-  /** 1 */ companyMatching: Ratio & { wrong: number; missed: number };
+  /**
+   * 1 — numerator/denominator: confirmed matches over slots sent. `unconfirmed`
+   * are returned records no shared identifier can confirm or refute (with how
+   * many of them at least agree on name); `wrong` only a contradicting identifier.
+   */
+  companyMatching: Ratio & { wrong: number; missed: number; unconfirmed: number; unconfirmedNameAgrees: number; accuracyWhereComparable: number | null };
   /** 2 */ decisionMakerAccuracy: Ratio & { wrongPerson: number; wrongEmployer: number; wrongRole: number; missed: number };
   /** 3 */ headquartersVerification: Ratio & { disagree: number; absent: number; noTruth: number };
   /** 4 */ uniqueQualified: { qualified: number; uniqueToProvider: number; alreadyKnown: number; providerChecksOnly: number };
@@ -184,6 +204,7 @@ export function scoreProvider(cohort: Cohort, r: ProviderBenchmarkResult, other:
   for (const s of cohort.known_companies) if (s.status === "selected") for (const k of identityKeys(s)) known.add(k);
 
   // 1 + 3 — known companies
+  let unconfirmed = 0, unconfirmedNameAgrees = 0;
   let correct = 0, wrong = 0, missed = 0, hqOk = 0, hqBad = 0, hqAbsent = 0, hqNoTruth = 0, cDen = 0;
   for (const s of cohort.known_companies) {
     if (s.status !== "selected") continue;
@@ -191,7 +212,9 @@ export function scoreProvider(cohort: Cohort, r: ProviderBenchmarkResult, other:
     cDen++;
     const m = r.companyMatches[s.slot] ?? null;
     if (!m) { missed++; continue; }
-    if (!sameCompany(s, m)) { wrong++; continue; }
+    const outcome = companyIdentityOutcome(s, m);
+    if (outcome === "mismatch") { wrong++; continue; }
+    if (outcome === "unconfirmed") { unconfirmed++; if (normName(s.name) && normName(s.name) === normName(m.name)) unconfirmedNameAgrees++; continue; }
     correct++;
     const truth = country(s.truth_hq_country);
     if (!truth) { hqNoTruth++; continue; }
@@ -263,7 +286,8 @@ export function scoreProvider(cohort: Cohort, r: ProviderBenchmarkResult, other:
   return {
     version: BENCHMARK_VERSION,
     provider: r.provider,
-    companyMatching: { ...ratio(correct, cDen), wrong, missed },
+    companyMatching: { ...ratio(correct, cDen), wrong, missed, unconfirmed, unconfirmedNameAgrees,
+      accuracyWhereComparable: correct + wrong > 0 ? correct / (correct + wrong) : null },
     decisionMakerAccuracy: { ...ratio(pOk, pDen), wrongPerson: wPerson, wrongEmployer: wEmp, wrongRole: wRole, missed: pMiss },
     headquartersVerification: { ...ratio(hqOk, hqOk + hqBad + hqAbsent), disagree: hqBad, absent: hqAbsent, noTruth: hqNoTruth },
     uniqueQualified: {

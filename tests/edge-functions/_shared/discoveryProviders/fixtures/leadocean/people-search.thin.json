@@ -1,0 +1,30 @@
+{
+  "_provenance": {
+    "what": "A LeadOcean POST /v1/search page in the THIN people-row shape. All values are synthetic (.example).",
+    "documented": ["profile_data.profile_full_name", "profile_data.profile_headline", "profile_data.profile_url", "contact_data.has_email", "contact_data.has_phone", "contact_data.email_status", "contact_data.email_type", "contact_data.contact_current_experiences[].company_name", "contact_data.contact_current_experiences[].company_domain", "contact_data.contact_current_experiences[].job_title", "meta.source_ids.person_id", "meta.fetched_at", "meta.credits", "meta.unsupportedFilters", "meta.nextCursor"],
+    "catalogue": ["contact_data.contact_current_experiences[].company_industry (export column current_company_industry, search: true)"],
+    "absent_by_design": ["employer headquarters and headcount (export catalogue: search false)", "contact_emails / contact_phones (documented: present only when reveal_email=true)"],
+    "sources": ["https://leadocean.io/ (enrich example)", "https://leadocean.io/blog/enrich-linkedin-urls-curl", "https://api.leadocean.io/openapi.json", "GET /v1/exports/columns (2026-10-31)"],
+    "confirm_with": "validation test V2 (one person record)"
+  },
+  "success": true,
+  "data": [
+    {
+      "profile_data": { "profile_full_name": "Robin Vale", "profile_headline": "Helping teams sell better | VP of Sales at Northwind Analytics", "profile_url": "https://www.linkedin.com/in/robin-vale-example" },
+      "contact_data": {
+        "has_email": true, "has_phone": true, "email_status": "verified", "email_type": "work",
+        "contact_current_experiences": [{ "company_name": "Northwind Analytics", "company_domain": "northwind.example", "job_title": "VP of Sales", "company_industry": "Software Development" }]
+      },
+      "meta": { "source_ids": { "person_id": "lo-person-1001" }, "fetched_at": "2026-10-20" }
+    },
+    {
+      "profile_data": { "profile_full_name": "Kai Moreno", "profile_headline": "Founder & CEO at Harbor Freightworks", "profile_url": "https://www.linkedin.com/in/kai-moreno-example" },
+      "contact_data": {
+        "has_email": true, "has_phone": false, "email_status": "catch_all", "email_type": "work",
+        "contact_current_experiences": [{ "company_name": "Harbor Freightworks", "company_domain": "harborfreight.example", "job_title": "Vice President, Sales Operations", "company_industry": "Truck Transportation" }]
+      },
+      "meta": { "source_ids": { "person_id": "lo-person-1002" }, "fetched_at": "2026-08-01" }
+    }
+  ],
+  "meta": { "count": 2, "credits": 2, "nextCursor": null, "unsupportedFilters": [], "key_hash": "deadbeef" }
+}

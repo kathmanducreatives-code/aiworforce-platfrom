@@ -1,0 +1,21 @@
+{
+  "_provenance": {
+    "what": "A LeadOcean POST /v1/search/companies page (company records). All values are synthetic (.example).",
+    "documented": ["company_data.company_name", "company_data.company_domain", "company_data.naics_sector", "company_data.naics_primary", "meta.fetched_at", "meta.credits"],
+    "inferred": ["company_data.company_industry (MCP get_company: 'industry')", "company_data.company_employees.number_of_employees (MCP get_company: 'headcount and size code in company_employees'; key as in the documented experience block)", "company_data.company_linkedin_url", "meta.source_ids.company_id"],
+    "unknown": ["the headquarters key (MCP get_company says 'headquarters address' without naming it) — deliberately ABSENT here so tests never pass on a guessed HQ key"],
+    "confirm_with": "validation test V1 (one company record)"
+  },
+  "success": true,
+  "data": [
+    {
+      "company_data": {
+        "company_name": "Northwind Analytics", "company_domain": "northwind.example", "company_linkedin_url": "https://www.linkedin.com/company/northwind-example",
+        "company_industry": "Software Development", "naics_sector": "54", "naics_primary": "541511",
+        "company_employees": { "number_of_employees": 140 }
+      },
+      "meta": { "source_ids": { "company_id": "lo-company-77" }, "fetched_at": "2026-10-18" }
+    }
+  ],
+  "meta": { "count": 1, "credits": 1, "nextCursor": null, "unsupportedFilters": [] }
+}
