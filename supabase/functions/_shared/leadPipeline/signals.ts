@@ -164,7 +164,9 @@ export function signalFromFunding(f: FundingClaim | null | undefined, subject: S
     signalId: signalId(["leadocean", recordId, "funding", f.roundDate, f.lastRoundType]), subject, type: "funding", sourceUrl: null, eventDate,
     collectedAt: now.toISOString(), recency: recencyOf(eventDate, windowDays, now),
     evidence: { excerpt: [f.lastRoundType, f.roundDate ?? f.lastRoundYear, f.totalUsd ? `$${f.totalUsd.toLocaleString("en-US")} total` : null].filter(Boolean).join(" · "), fields: { ...f, recordId } },
-    confidence: eventDate ? "medium" : "low", provider: "leadocean", actor: null, corroboration: "single_source", cost: { usd: 0, basis: "included" },
+    // A provider claim: used to prioritise verification, never more than low
+    // confidence until a second, independent source (a dated Apify post) corroborates it.
+    confidence: "low", provider: "leadocean", actor: null, corroboration: "single_source", cost: { usd: 0, basis: "included" },
   };
 }
 

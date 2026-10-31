@@ -103,14 +103,16 @@ Deno.test("service: off → 404; not allowlisted → 403; non-member → 403; me
 
 Deno.test("service: plan is a free dry run with the exact worst case; run needs the same hash and enough records", async () => {
   const { d, lo } = deps();
-  const plan = await handleLeadPipeline(req({ action: "plan", approval: { plan_hash: "-", leadocean_records: 0, canonical_max_usd: 0.03, signals_max_usd: 0.05, phone_lookups: 2 } }), d);
+  // A discovery approval cannot ask for phone lookups: refused at parse, not ignored.
+  assertEquals(parsePipelineRequest({ action: "plan", workspace_id: WS, icp: "icp_a_b2b_saas", walk_id: "walk-1", approval: { plan_hash: "-", leadocean_records: 0, phone_lookups: 2 } }), null);
+  const plan = await handleLeadPipeline(req({ action: "plan", approval: { plan_hash: "-", leadocean_records: 0, canonical_max_usd: 0.03, signals_max_usd: 0.05 } }), d);
   assertEquals(plan.status, 200);
   assertEquals(lo.calls.length, 0);
   const hash = (plan.body.plan as { planHash: string }).planHash;
   const est = (plan.body.plan as { estimatedCredits: { leadocean: number } }).estimatedCredits.leadocean;
   assertEquals(est, 15, "5 requested × overfetch 3");
   const wc = plan.body.worstCase as { leadoceanRecords: number; apifyUsd: number };
-  assertEquals(wc, { ...wc, leadoceanRecords: est + 2, apifyUsd: 0.08 });
+  assertEquals(wc, { ...wc, leadoceanRecords: est, apifyUsd: 0.08 }, "no phone records in a discovery worst case");
   assertEquals((await handleLeadPipeline(req({ action: "run", approval: { plan_hash: "wrong", leadocean_records: 5 } }), d)).status, 409);
   assertEquals((await handleLeadPipeline(req({ action: "run", approval: { plan_hash: hash, leadocean_records: est - 1 } }), d)).status, 409);
   assertEquals(lo.calls.length, 0, "refused runs buy nothing");

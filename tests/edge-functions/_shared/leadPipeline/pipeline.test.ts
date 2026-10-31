@@ -6,7 +6,7 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import { memoryLedger, type DiscoveryApproval } from "../../../../supabase/functions/_shared/discoveryProviders/budget.ts";
 import { memoryCheckpointStore } from "../../../../supabase/functions/_shared/leadPipeline/checkpoint.ts";
 import { ExclusionIndex } from "../../../../supabase/functions/_shared/leadPipeline/exclusions.ts";
-import { runLeadPipeline, worstCase, type PipelineApprovals, type PipelineInput } from "../../../../supabase/functions/_shared/leadPipeline/pipeline.ts";
+import { enrichQueuedPhones, runLeadPipeline, worstCase, type PipelineApprovals, type PipelineInput } from "../../../../supabase/functions/_shared/leadPipeline/pipeline.ts";
 import { apifyMock, CONNECTIONS, ICP, leadOceanMock, LIMITS, NOW, phoneMock, WS } from "./fixtures.ts";
 
 const SIGNALS = { collect: { companyPosts: true, jobs: true }, maxPostsPerSubject: 3, maxJobsPerCompany: 5, windowDays: 30, maxUsd: 0.05 };
@@ -72,24 +72,29 @@ Deno.test("end to end: shared engine decides on canonical evidence; four separat
     assertEquals(by["deltaflow.example"].statuses.outreachReadiness, "blocked");
     assertFalse(ph.calls.includes("1004"), "a held person is never looked up");
 
-    // Phones: only eligible, has_phone, unblocked people; provider numbers never verified.
-    assertEquals(ph.calls.sort(), ["1001", "1005"]);
-    assertEquals(by["acmesaas.example"].statuses.enrichment, "unverified_person_associated");
-    assertEquals([by["acmesaas.example"].phone?.value, by["acmesaas.example"].phone?.e164, by["acmesaas.example"].phone?.valueHash], [null, null, null], "report-safe: no number in any form");
-    assertEquals(by["acmesaas.example"].phone?.masked, "+1•••••0001");
-    assert(!JSON.stringify([r.queue, r.review, r.excluded, r.phones, r.yield]).includes("5125550001"), "no number anywhere in the report-safe run");
-    assertEquals(r.contactValues.map((c) => c.e164).sort(), ["+15125550001", "+15125550005"]);
+    // Discovery never looks a phone up (approval or not): phones are the separate enrichQueuedPhones step.
+    assertEquals(ph.calls.length, 0);
+    assert(all.every((l) => l.statuses.enrichment === "not_requested" && l.phone === null));
+    assertEquals(r.contactValues, []);
     // HQ and description come from the canonical record the shared engine read.
     assertEquals(by["acmesaas.example"].company.hq, { country: "United States", region: null, city: "Austin", source: "apify_linkedin_company_details" });
     assert(by["acmesaas.example"].rank.factors.find((f) => f.factor === "icp_relevance")!.points > 0, "the record's own description feeds relevance");
-    assertEquals(by["acmesaas.example"].phone?.employment.status, "provider_consistent");
-    assertEquals(by["epsilonlabs.example"].statuses.enrichment, "company_switchboard");
-    assertEquals(by["gammaops.example"].statuses.enrichment, "not_eligible_for_lookup");
-    assert(all.every((l) => l.phone?.class !== "verified_person_direct"));
+    // Classification: eligible / needs_verification / rejected (verified).
+    assertEquals([by["acmesaas.example"].classification, by["gammaops.example"].classification, by["betacloud.example"].classification, by["betacloud.example"].rejectionBasis],
+      ["eligible", "needs_verification", "rejected", "verified"]);
 
-    // Readiness: only a person-associated number on an eligible decision-maker, for human review.
+    // ATLAS review queue: eligible decision-makers without a hold.
     assertEquals(by["acmesaas.example"].statuses.outreachReadiness, "ready_for_review");
-    assertEquals(by["epsilonlabs.example"].statuses.outreachReadiness, "not_ready");
+    assertEquals(by["epsilonlabs.example"].statuses.outreachReadiness, "ready_for_review");
+
+    // The separate phone step: only queued, unblocked people with the flag; provider numbers never verified.
+    const phones = await enrichQueuedPhones(r, { workspaceId: WS, approval: { maxLookups: 3, approvedBy: "t", approvedAt: NOW().toISOString() }, deps: lo.deps, ledger: input.ledger, call: ph.call as never });
+    assertEquals(ph.calls.sort(), ["1001", "1005"]);
+    assertFalse(ph.calls.includes("1004"), "a held person is never looked up");
+    assertEquals(phones.records.map((x) => x.class).sort(), ["company_switchboard", "unverified_person_associated"]);
+    assert(phones.records.every((x) => x.e164 === null && x.value === null), "report-safe");
+    assertEquals(phones.contactValues.map((c) => c.e164).sort(), ["+15125550001", "+15125550005"]);
+    assert(phones.records.every((x) => x.class !== "verified_person_direct"));
 
     // Signals: dated relevant hiring scores; an undated post never counts as recent.
     const acme = by["acmesaas.example"];
@@ -106,11 +111,10 @@ Deno.test("end to end: shared engine decides on canonical evidence; four separat
     assert(acme.rank.explanation.startsWith("Eligible;"));
 
     // Spend and metrics.
-    assertEquals(r.spend.leadoceanRecords, 5 + 2);
+    assertEquals(r.spend.leadoceanRecords, 5);
     assert(r.spend.apifyUsd <= 0.1);
     assertEquals(r.funnel.discovered, 5);
     assertEquals(r.funnel.eligible, 2, "Delta is eligible but not new");
-    assertEquals(r.funnel.personAssociated, 1);
     assertEquals(r.estimates.length, 4);
     assert(r.estimates.find((e) => e.usable === "verified_direct")!.unknownStages.includes("verifiedDirect"));
 

@@ -6,6 +6,8 @@ live run since Test V. Live test E is proposed below and needs approval.
 
 **LeadOcean evaluation closed (2026-10-31): CONDITIONAL GO — see `LEADOCEAN_FINAL_VERDICT.md`. Live provider tests are off by default (`AGENTORY_PROVIDER_LIVE_TESTS=enabled` opens one approved run).**
 
+**Standard architecture: `DISCOVERY_ARCHITECTURE.md` (LeadOcean discovers, Apify verifies, Agentory decides; phones are a separate step).**
+
 ## Flow
 
 ```

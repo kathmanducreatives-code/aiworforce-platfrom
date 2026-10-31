@@ -35,6 +35,8 @@ export interface RankWeights {
   lowConfidenceFraction: number;
   /** The provider says it holds a number for the person (a flag, not a verified phone). */
   phoneAvailable: number;
+  /** An independent source (Apify company employees) shows the person currently there in a decision-maker role. */
+  founderConfirmed: number;
   /** Size inside the ICP's preferred sub-band. */
   sizeSweetSpot: { min: number; max: number; points: number } | null;
 }
@@ -45,6 +47,7 @@ export const DEFAULT_WEIGHTS: RankWeights = Object.freeze({
   signal: { funding: 10, hiring: 4, relevantHiring: 10, expansion: 6, leadership_change: 6, linkedin_post: 3 },
   corroboratedMultiplier: 1.5, lowConfidenceFraction: 0.5,
   phoneAvailable: 8,
+  founderConfirmed: 8,
   sizeSweetSpot: null,
 }) as RankWeights;
 
@@ -60,6 +63,8 @@ export interface RankInput {
   employeeCount: number | null;
   hasPhone: boolean | null;
   signals: readonly Signal[];
+  /** Founder check result: true confirmed, false checked and not confirmed, null not checked. */
+  founderConfirmed?: boolean | null;
 }
 
 export interface RankResult {
@@ -130,6 +135,12 @@ export function scoreLead(input: RankInput, icp: IcpConfig, w: RankWeights = DEF
   }
   for (const [k, v] of byType) factors.push({ factor: `signal:${k}`, points: round(v.pts), why: v.why });
   if (!input.signals.length) factors.push({ factor: "signals", points: 0, why: "unknown: no signals collected (not a negative)" });
+
+  if (input.founderConfirmed != null) {
+    factors.push(input.founderConfirmed
+      ? { factor: "founder_confirmed", points: w.founderConfirmed, why: "an independent source shows the person currently there in a decision-maker role" }
+      : { factor: "founder_confirmed", points: 0, why: "independent check did not confirm the person (not a negative)" });
+  }
 
   // Phone availability is the provider's flag only.
   factors.push(input.hasPhone === true

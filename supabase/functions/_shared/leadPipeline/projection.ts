@@ -27,11 +27,14 @@ export interface PipelineRow {
 }
 
 export function projectPipelineLead(l: PipelineLead, ctx: { workspaceId: string; values: PipelineRun["contactValues"] }): PipelineRow | null {
-  if (l.statuses.qualification === "ineligible") return null;
+  // Rejected candidates (verified, screened or duplicate) are not written.
+  if (l.classification === "rejected") return null;
   const v = l.person ? ctx.values.find((x) => x.personKey === l.person!.key) : undefined;
   const writable = v && (v.class === "unverified_person_associated" || v.class === "verified_person_direct") && !l.phone?.doNotCall;
   const attribution = {
-    version: PIPELINE_ATTRIBUTION_VERSION, icp: l.icpId, statuses: l.statuses, qualification: l.qualification, canonical_record: l.canonicalRecord,
+    version: PIPELINE_ATTRIBUTION_VERSION, icp: l.icpId, statuses: l.statuses,
+    // LeadOcean discovers, Apify verifies, the shared engine decides: provenance of each part.
+    classification: l.classification, screen: l.screen, verified_by_apify: l.verified, founder_check: l.founderCheck, qualification: l.qualification, canonical_record: l.canonicalRecord,
     rank: { score: l.rank.score, lane: l.rank.lane, explanation: l.rank.explanation, factors: l.rank.factors },
     signals: l.signals.map((s) => ({ id: s.signalId, type: s.type, source_url: s.sourceUrl, event_date: s.eventDate, collected_at: s.collectedAt, recency: s.recency, confidence: s.confidence, provider: s.provider, actor: s.actor, cost: s.cost, corroboration: s.corroboration, excerpt: s.evidence.excerpt })),
     outreach_blockers: l.outreachBlockers, provenance: l.provenance, company_ids: l.company.providerCompanyIds,
@@ -52,7 +55,8 @@ export function projectPipelineLead(l: PipelineLead, ctx: { workspaceId: string;
     } : null,
     lead_candidate: {
       workspace_id: ctx.workspaceId, lead_type: "lead_pipeline",
-      status: l.statuses.qualification === "eligible" ? "qualified" : "new",
+      // eligible → qualified; needs_verification enters as discovered ("new"), never qualified.
+      status: l.classification === "eligible" ? "qualified" : "new",
       fit_score: l.rank.score, priority: null,
       reason: l.rank.explanation,
       next_action: l.statuses.outreachReadiness === "ready_for_review" ? "review_before_outreach" : null,

@@ -31,14 +31,17 @@ import { projectPipelineLead, type PipelineRow } from "./projection.ts";
 
 const on = (v: string | undefined) => !!v && ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
 
-export interface PipelineFlags { enabled: boolean; workspaces: Set<string>; signals: boolean; phones: boolean }
+export interface PipelineFlags { enabled: boolean; workspaces: Set<string>; signals: boolean; phones: boolean; founderCheck: boolean }
 export function readPipelineFlags(env: Env): PipelineFlags {
   return {
     enabled: on(env("LEAD_PIPELINE_ENABLED")),
     workspaces: new Set((env("LEAD_PIPELINE_WORKSPACES") ?? "").split(",").map((s) => s.trim()).filter(Boolean)),
     // Unfinished-in-production steps have their own switches, off by default.
     signals: on(env("LEAD_PIPELINE_SIGNALS_ENABLED")),
+    // Phones are never part of a discovery run (enrichQueuedPhones is a separate step);
+    // the flag is kept for that step's future endpoint.
     phones: on(env("LEAD_PIPELINE_PHONES_ENABLED")),
+    founderCheck: on(env("LEAD_PIPELINE_FOUNDER_CHECK_ENABLED")),
   };
 }
 
@@ -48,7 +51,7 @@ export interface PipelineRequest {
   icpId: IcpId;
   walkId: string;
   overrides: Partial<Pick<IcpConfig, "requestedCount">> & { hasPhone?: boolean };
-  approval: { planHash: string; leadoceanRecords: number; canonicalMaxUsd: number; signalsMaxUsd: number; phoneLookups: number } | null;
+  approval: { planHash: string; leadoceanRecords: number; canonicalMaxUsd: number; signalsMaxUsd: number; founderCheckMaxUsd: number } | null;
 }
 
 const num = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : null);
@@ -63,9 +66,11 @@ export function parsePipelineRequest(b: Record<string, unknown>): PipelineReques
   const a = b.approval as Record<string, unknown> | null | undefined;
   let approval: PipelineRequest["approval"] = null;
   if (a) {
-    const lo = num(a.leadocean_records, 500), c = num(a.canonical_max_usd ?? 0, 5), s = num(a.signals_max_usd ?? 0, 5), p = num(a.phone_lookups ?? 0, 200);
-    if (typeof a.plan_hash !== "string" || lo === null || c === null || s === null || p === null || !Number.isInteger(lo) || !Number.isInteger(p)) return null;
-    approval = { planHash: a.plan_hash, leadoceanRecords: lo, canonicalMaxUsd: c, signalsMaxUsd: s, phoneLookups: p };
+    const lo = num(a.leadocean_records, 500), c = num(a.canonical_max_usd ?? 0, 5), s = num(a.signals_max_usd ?? 0, 5), f = num(a.founder_check_max_usd ?? 0, 5);
+    // A discovery run never looks phones up: an approval that asks for lookups is refused, not silently ignored.
+    if (a.phone_lookups !== undefined && a.phone_lookups !== 0) return null;
+    if (typeof a.plan_hash !== "string" || lo === null || c === null || s === null || f === null || !Number.isInteger(lo)) return null;
+    approval = { planHash: a.plan_hash, leadoceanRecords: lo, canonicalMaxUsd: c, signalsMaxUsd: s, founderCheckMaxUsd: f };
   }
   return { action: b.action, workspaceId: b.workspace_id, icpId: b.icp, walkId: b.walk_id, overrides: { ...(count ? { requestedCount: count } : {}), ...(o.has_phone === true ? { hasPhone: true } : {}) }, approval };
 }
@@ -111,7 +116,8 @@ export async function handleLeadPipeline(req: PipelineRequest, d: PipelineDeps):
     discovery: null,
     canonicalMaxUsd: a && a.canonicalMaxUsd > 0 ? a.canonicalMaxUsd : null,
     signals: a && a.signalsMaxUsd > 0 && d.flags.signals ? { ...SIGNAL_PLAN, maxUsd: a.signalsMaxUsd } : null,
-    phoneLookups: a && a.phoneLookups > 0 && d.flags.phones ? { maxLookups: a.phoneLookups, approvedBy: d.userId, approvedAt: now().toISOString() } : null,
+    phoneLookups: null,
+    founderCheck: a && a.founderCheckMaxUsd > 0 && d.flags.founderCheck ? { maxUsd: a.founderCheckMaxUsd, perCompany: 3 } : null,
   };
   const base = {
     workspaceId: req.workspaceId, walkId: req.walkId, icp, connections, approvals,
@@ -136,7 +142,7 @@ export async function handleLeadPipeline(req: PipelineRequest, d: PipelineDeps):
   return {
     status: 200,
     body: {
-      status: run.status, reason: run.reason, spend: run.spend, funnel: run.funnel, yield: run.yield, estimates: run.estimates,
+      status: run.status, reason: run.reason, spend: run.spend, funnel: run.funnel, yield: run.yield, estimates: run.estimates, screening: run.screening, founderCheck: run.founderCheck,
       discovery: run.discovery, canonical: run.canonical, signals: run.signals && { spentUsd: run.signals.spentUsd, stopped: run.signals.stopped }, phones: run.phones,
       queue: run.queue, review: run.review, excludedCount: run.excluded.length, written: rows.length,
     },

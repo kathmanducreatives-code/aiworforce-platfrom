@@ -1,24 +1,30 @@
-// The lead pipeline, end to end, for one ICP walk:
+// The standard Agentory discovery architecture, for one ICP walk.
 //
-//   1 discovery     LeadOcean people search (runDiscovery: approval, ledger,
-//                   idempotent pages), narrowed by the ICP and the checkpoint's
-//                   excludeIds so nothing already bought is bought again
-//   2 dedupe        merged by identifiers (normalize.ts, person_group_id);
-//                   companies already walked → duplicate_prior_walk
-//   3 history       existing Leads keep their Lead ID; CRM relationships and
-//                   holds block outreach (exclusions.ts)
-//   4 canonical     Apify company record by LinkedIn URL → the Apify engine's
-//                   own evidence items → the shared engine re-decides (HQ, size)
-//   5 signals       Apify posts / jobs + LeadOcean funding, for ELIGIBLE leads
-//                   only; unavailable → unknown, never a block
-//   6 ranking       ordering only; eligibility stays the shared engine's
-//   7 phones        LeadOcean phone lookup for eligible decision-makers with a
-//                   has_phone flag, top-ranked first, under a lookup cap
-//   8 queue         normalized leads with four separate statuses + metrics
+//   LeadOcean  DISCOVERS — people search narrowed by the ICP; every field it
+//              returns is a provider claim (docs/LEADOCEAN_FINAL_VERDICT.md)
+//   Apify      VERIFIES — the company record (identity, domain, HQ, declared size,
+//              industry, description), optionally the founder relationship, then
+//              optional signals; every item passes the evidence-authority rules
+//   Agentory   DECIDES — evaluateEligibility (via verifyLeads) is the only authority
 //
-// Every metered step has its own ceiling, set by the caller's approval; a null
-// approval for a step means that step does not run (and costs nothing). The
-// shared engine (evaluateEligibility via verifyLeads) is the only qualifier.
+//   1 discovery     LeadOcean (runDiscovery: approval, ledger, idempotent pages,
+//                   excludeIds from the checkpoint)
+//   2 dedupe        merged by identifiers; prior-walk companies and same-LinkedIn
+//                   duplicates are never sent to a paid verifier
+//   3 history       existing Leads keep their ids; CRM / holds block outreach only
+//   4 screen        obvious mismatches on provider claims (no decision-maker, headcount
+//                   far outside) are not verified — a spending decision (screen.ts)
+//   5 verify        Apify company records for screened-in candidates, highest provider
+//                   funding priority first, inside the ceiling (overflow stays
+//                   needs_verification)
+//   6 eligibility   the shared engine decides: eligible / needs_verification / rejected
+//   7 founder check optional, eligible only (founderCheck.ts)
+//   8 signals       optional, eligible only; missing signals never block
+//   9 rank → ATLAS review queue
+//
+// Phone lookups are NOT part of discovery: `enrichQueuedPhones` is a separate,
+// separately authorized step over the queue. No paid call is retried; every one
+// is reserved in the durable ledger first.
 
 import type { ActorInvoker } from "../discoveryProviders/adapters/apify.ts";
 import type { DiscoveryAdapter, AdapterDeps } from "../discoveryProviders/adapter.ts";
@@ -39,6 +45,10 @@ import { collectSignals, type Signal, type SignalPlan, type SignalStatus } from 
 import { DEFAULT_WEIGHTS, rankLeads, type RankResult, type RankWeights } from "./ranking.ts";
 import { employmentFrom, enrichPhones, redactPhoneRecord, type PhoneClass, type PhoneRecord, type PhoneTarget } from "./phones.ts";
 import { ledgeredInvoker } from "./apifyInvoker.ts";
+import { screenCandidates, verificationBatch, type ScreenOutcome } from "./screen.ts";
+import { checkFounders, type FounderCheck } from "./founderCheck.ts";
+import { COMPANY_RECORD_ACTOR, type CanonicalFacts } from "./canonical.ts";
+import { companyLinkedInSlug } from "../decisionMaker/companyIdentity.ts";
 import { EMPTY_FUNNEL, estimateCandidates, yieldReport, type CandidateEstimate, type FunnelCounts, type YieldReport } from "./metrics.ts";
 
 export const PIPELINE_VERSION = "lead-pipeline-v1" as const;
@@ -67,6 +77,14 @@ export interface PipelineLead {
     key: string; name: string | null; title: string | null; linkedinUrl: string | null;
     providerPersonId: string | null; roleFamily: string; hasPhoneFlag: boolean | null;
   } | null;
+  /** Agentory's classification: the shared engine's verdict, plus `rejected` for screened-out and duplicate candidates. */
+  classification: "eligible" | "needs_verification" | "rejected";
+  /** Why rejected: `verified` = the engine disproved a hard requirement on evidence; `screened` = an obvious mismatch in the provider's claims (no paid verification bought); `duplicate`. */
+  rejectionBasis: "verified" | "screened" | "duplicate" | null;
+  screen: { outcome: ScreenOutcome; reasons: string[] };
+  /** What the Apify company record says (null when it was not read). Display only; qualification reads the evidence. */
+  verified: CanonicalFacts | null;
+  founderCheck: FounderCheck | null;
   statuses: { discovery: DiscoveryStatus; qualification: Eligibility; enrichment: EnrichmentStatus; outreachReadiness: OutreachReadiness };
   qualification: Pick<SharedQualification, "checks" | "gaps" | "disproven" | "evidence_sources"> | null;
   canonicalRecord: CanonicalRun["statuses"][number]["state"] | "not_requested";
@@ -84,8 +102,13 @@ export interface PipelineApprovals {
   canonicalMaxUsd: number | null;
   /** USD ceiling and plan for Apify signals (step 5); null = do not collect. */
   signals: (Omit<SignalPlan, "relevantRoles"> & { relevantRoles?: RegExp }) | null;
-  /** At most this many phone lookups (LeadOcean records), by the approver; null = none. */
+  /**
+   * At most this many phone lookups for the SEPARATE `enrichQueuedPhones` step.
+   * runLeadPipeline never looks a phone up; this only feeds the worst-case display.
+   */
   phoneLookups: { maxLookups: number; approvedBy: string; approvedAt: string } | null;
+  /** Optional founder-relationship check (eligible companies only); null = not run. */
+  founderCheck?: { maxUsd: number; perCompany: number } | null;
 }
 
 export interface PipelineInput {
@@ -119,7 +142,9 @@ export interface PipelineRun {
   reason: string | null;
   plan: DiscoveryPlan;
   discovery: Pick<DiscoveryRun, "status" | "reason" | "steps" | "counts" | "credits"> | null;
-  canonical: { spentUsd: number; stopped: string | null; read: number } | null;
+  canonical: { spentUsd: number; stopped: string | null; read: number; overBudget: number } | null;
+  screening: Record<ScreenOutcome, number>;
+  founderCheck: { spentUsd: number; stopped: string | null; confirmed: number } | null;
   signals: { spentUsd: number; stopped: string | null; statuses: SignalStatus[] } | null;
   phones: { recordsCharged: number; stopped: string | null; skipped: { personKey: string; reason: string }[] } | null;
   queue: PipelineLead[];
@@ -166,6 +191,7 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
   const missionId = `lp:${input.walkId}:r${cp.recordsBought}`;
   const base = (status: PipelineRun["status"], reason: string | null): PipelineRun => ({
     version: PIPELINE_VERSION, status, reason, plan, discovery: null, canonical: null, signals: null, phones: null,
+    screening: { verify: 0, duplicate: 0, no_decision_maker: 0, headcount_far_out: 0, unverifiable: 0, already_rejected: 0 }, founderCheck: null,
     queue: [], review: [], excluded: [], funnel: { ...EMPTY_FUNNEL }, estimates: [], contactValues: [],
     yield: yieldReport({ funnel: EMPTY_FUNNEL, leadoceanRecords: 0, apifyUsd: 0, usdPerLeadOceanRecord: input.usdPerLeadOceanRecord ?? null, rejections: [], enrichmentSkips: [] }), checkpoint: cp, spend: { leadoceanRecords: 0, apifyUsd: 0 },
   });
@@ -196,18 +222,29 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
     });
   }
 
-  // 4 canonical company records → shared engine re-decides
+  // 4 screen: provider claims decide only what is worth verifying
+  const screened = screenCandidates(run.leads, input.icp, bestContact, priorCompanies, now());
+  const screenOf = new Map(screened.map((x) => [x.companyKey, x]));
+  const screening = { verify: 0, duplicate: 0, no_decision_maker: 0, headcount_far_out: 0, unverifiable: 0, already_rejected: 0 } as Record<ScreenOutcome, number>;
+  for (const x of screened) screening[x.outcome]++;
+
+  // 5 verify: Apify company records, deduplicated by LinkedIn company, priority-ordered, inside the ceiling
   const timeout = input.actorTimeoutMs ?? 120_000;
   // Every Apify run is reserved in the durable ledger first (replay on re-run, never re-bought after an uncertain charge).
-  const apifyCeiling = (input.approvals.canonicalMaxUsd ?? 0) + (input.approvals.signals?.maxUsd ?? 0);
+  const apifyCeiling = (input.approvals.canonicalMaxUsd ?? 0) + (input.approvals.signals?.maxUsd ?? 0) + (input.approvals.founderCheck?.maxUsd ?? 0);
   const timed = withTimeout(input.apify, timeout);
   const apify = timed ? ledgeredInvoker(timed, input.ledger, { workspaceId: input.workspaceId, missionId: `${missionId}:apify`, maxUsd: apifyCeiling }) : null;
   let canonical: CanonicalRun | null = null;
+  let overBudget = 0;
   let leads = run.leads;
   if (input.approvals.canonicalMaxUsd != null) {
-    const targets = run.leads.filter((l) => l.status !== "rejected" && !priorCompanies.has(l.company.key))
-      .map((l) => ({ companyKey: l.company.key, linkedinUrl: first(l.company.linkedinUrl) ?? "" }));
-    canonical = await readCompanyRecords(targets, apify, { maxUsd: input.approvals.canonicalMaxUsd, now: now(), idPrefix: missionId });
+    const { buy, overBudget: over } = verificationBatch(screened, input.approvals.canonicalMaxUsd, COMPANY_RECORD_ACTOR.perStartUsd, COMPANY_RECORD_ACTOR.perItemUsd);
+    overBudget = over.length;
+    const urlOf = new Map(run.leads.map((l) => [l.company.key, first(l.company.linkedinUrl) ?? ""]));
+    // Keyed by LinkedIn slug: one paid item per company, however many rows named it.
+    canonical = await readCompanyRecords(buy.map((x) => ({ companyKey: x.slug!, linkedinUrl: urlOf.get(x.companyKey)! })), apify,
+      { maxUsd: input.approvals.canonicalMaxUsd, now: now(), idPrefix: missionId });
+    for (const x of over) canonical.statuses.push({ companyKey: x.slug!, state: "skipped_budget", reason: "beyond the company-record ceiling; stays needs_verification" });
     if (canonical.evidence.size) {
       const merged: MergeResult = {
         companies: run.leads.map((l) => l.company),
@@ -215,13 +252,38 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
         stats: { companyRows: 0, personRows: 0, companiesMerged: 0, peopleMerged: 0, identityConflicts: 0 },
       };
       const ev = canonical.evidence;
-      leads = verifyLeads(compiled.requirements, merged, [], { now, canonicalEvidence: (ids): readonly EvidenceItem[] => ev.get(ids.key) ?? [] });
+      // The shared engine admits these items only after its own identity and authority checks.
+      leads = verifyLeads(compiled.requirements, merged, [], { now, canonicalEvidence: (ids): readonly EvidenceItem[] => {
+        for (const u of ids.linkedinUrls) { const e = ev.get(companyLinkedInSlug(u) ?? ""); if (e) return e; }
+        return [];
+      } });
     }
   }
-  const eligibilityOf = (l: VerifiedLead): Eligibility => l.shared?.eligibility ?? "pending";
+  const slugOf = (l: VerifiedLead) => companyLinkedInSlug(first(l.company.linkedinUrl));
+  const factsOf = (l: VerifiedLead) => canonical?.facts.get(slugOf(l) ?? "") ?? null;
+  const screenedOut = (key: string) => { const o = screenOf.get(key)?.outcome; return o === "duplicate" || o === "no_decision_maker" || o === "headcount_far_out"; };
+  const eligibilityOf = (l: VerifiedLead): Eligibility => (screenedOut(l.company.key) ? "pending" : l.shared?.eligibility ?? "pending");
+  const classify = (l: VerifiedLead): { c: PipelineLead["classification"]; basis: PipelineLead["rejectionBasis"] } => {
+    const o = screenOf.get(l.company.key)?.outcome;
+    if (o === "duplicate") return { c: "rejected", basis: "duplicate" };
+    if (o === "no_decision_maker" || o === "headcount_far_out") return { c: "rejected", basis: "screened" };
+    const e = l.shared?.eligibility ?? "pending";
+    return e === "eligible" ? { c: "eligible", basis: null } : e === "ineligible" ? { c: "rejected", basis: "verified" } : { c: "needs_verification", basis: null };
+  };
+  const eligibleLeads = leads.filter((l) => classify(l).c === "eligible");
 
-  // 5 signals, eligible only
-  const eligibleLeads = leads.filter((l) => eligibilityOf(l) === "eligible" && !priorCompanies.has(l.company.key));
+  // 7 founder check (optional, eligible only)
+  let founders: Awaited<ReturnType<typeof checkFounders>> | null = null;
+  if (input.approvals.founderCheck) {
+    const fc = input.approvals.founderCheck;
+    founders = await checkFounders(eligibleLeads.flatMap((l) => {
+      const url = first(l.company.linkedinUrl);
+      const p = bestContact(l);
+      return url ? [{ companyKey: l.company.key, companyLinkedinUrl: url, personName: p ? first(p.fullName) : null }] : [];
+    }), apify, { maxUsd: fc.maxUsd, perCompany: fc.perCompany, jobTitles: input.icp.roleTitles, idPrefix: missionId });
+  }
+
+  // 8 signals (optional, eligible only)
   let signalRun: Awaited<ReturnType<typeof collectSignals>> | null = null;
   if (input.approvals.signals) {
     const s = input.approvals.signals;
@@ -236,67 +298,41 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
   const signalsFor = (l: VerifiedLead, p: CanonicalPerson | null) =>
     (signalRun?.signals ?? []).filter((s) => s.subject.key === l.company.key || (p && s.subject.key === p.key));
 
-  // 6 ranking
+  // 9 ranking (lanes from the classification; the score only orders)
   const ranked = rankLeads(leads.map((l) => {
     const p = bestContact(l);
+    const k = classify(l).c;
     return {
-      leadKey: l.company.key, eligibility: priorCompanies.has(l.company.key) ? "ineligible" : eligibilityOf(l), title: p ? first(p.title) : null,
+      leadKey: l.company.key, eligibility: k === "eligible" ? "eligible" : k === "rejected" ? "ineligible" : "pending", title: p ? first(p.title) : null,
       companyText: [...l.company.industry.flatMap((c) => c.value), ...l.company.keywords.flatMap((c) => c.value), ...(p ? p.headline.map((h) => h.value) : []),
-        ...(canonical?.facts.get(l.company.key)?.description ? [canonical!.facts.get(l.company.key)!.description!] : [])],
+        ...(factsOf(l)?.description ? [factsOf(l)!.description!] : [])],
       industryLabels: [...new Set(l.company.industry.flatMap((c) => c.value))], employeeCount: first(l.company.employeeCount),
       hasPhone: p ? first(p.hasPhone) : null, signals: signalsFor(l, p),
+      founderConfirmed: founders ? founders.checks.get(l.company.key)?.state === "confirmed" : null,
     };
   }), input.icp, input.weights ?? DEFAULT_WEIGHTS);
   const rankOf = new Map(ranked.map((r) => [r.leadKey, r]));
-
-  // 7 phones: eligible decision-makers, top-ranked first, at most maxLookups
   const byKey = new Map(leads.map((l) => [l.company.key, l]));
-  const targets: PhoneTarget[] = [];
-  for (const r of ranked) {
-    const l = byKey.get(r.leadKey)!;
-    const p = bestContact(l);
-    if (!p) continue;
-    const h = history.get(l.company.key);
-    targets.push({
-      personKey: p.key, leadId: h?.person?.existingLeadIds[0] ?? h?.company.existingLeadIds[0] ?? null,
-      providerPersonId: p.sources.find((s) => s.provider === "leadocean")?.recordId ?? null, linkedinUrl: first(p.linkedinUrl),
-      eligibility: r.lane === "queue" ? "eligible" : r.eligibility === "eligible" ? "pending" : r.eligibility,
-      hasPhone: first(p.hasPhone), outreachBlocked: !!(h?.company.blocksOutreach || h?.person?.blocksOutreach),
-      employment: employmentFrom({ providerSaysCurrent: first(p.employerIsCurrent), providerEmployerDomain: first(l.company.domain), companyDomains: l.company.domain.map((d) => d.value) }),
-    });
-  }
-  let phones: Awaited<ReturnType<typeof enrichPhones>> | null = null;
-  if (input.approvals.phoneLookups && input.leadoceanDeps) {
-    const a = input.approvals.phoneLookups;
-    const allowed = targets.filter((t) => t.eligibility === "eligible" && t.hasPhone === true && !t.outreachBlocked && t.employment.status !== "mismatch")
-      .slice(0, a.maxLookups).map((t) => t.personKey);
-    // Its own ledger scope: the ledger's provider cap sums a mission's LeadOcean usage,
-    // so sharing the discovery mission id would count discovery records against the lookup cap.
-    const phoneMission = `${missionId}:phones`;
-    const authorization: EnrichmentAuthorization = { kind: "enrichment", workspaceId: input.workspaceId, missionId: phoneMission, personKeys: allowed,
-      revealEmail: false, phones: true, maxCredits: a.maxLookups, approvedBy: a.approvedBy, approvedAt: a.approvedAt };
-    phones = await enrichPhones({ workspaceId: input.workspaceId, missionId: phoneMission, authorization, targets, deps: input.leadoceanDeps, ledger: input.ledger, call: input.phoneCall });
-  }
-  const phoneOf = new Map((phones?.records ?? []).map((r) => [r.personKey, r]));
-  const skippedOf = new Map((phones?.skipped ?? []).map((s) => [s.personKey, s.reason]));
 
   // 8 queue
   const out: PipelineLead[] = ranked.map((r) => {
     const l = byKey.get(r.leadKey)!;
     const p = bestContact(l);
     const h = history.get(l.company.key)!;
-    const ph = p ? phoneOf.get(p.key) ?? null : null;
+    const ph: PhoneRecord | null = null;
     const discoveryStatus: DiscoveryStatus = priorCompanies.has(l.company.key) ? "duplicate_prior_walk"
       : h.company.existingLeadIds.length || h.person?.existingLeadIds.length ? "existing" : "new";
     const qualification = eligibilityOf(l);
-    const enrichment: EnrichmentStatus = ph ? ph.class : !input.approvals.phoneLookups ? "not_requested"
-      : p && skippedOf.has(p.key) ? (r.lane === "queue" ? "skipped" : "not_eligible_for_lookup") : "not_eligible_for_lookup";
+    // Phones are a separate step (enrichQueuedPhones): discovery never looks one up.
+    const enrichment: EnrichmentStatus = "not_requested";
     const blockers = [...h.company.reasons.filter((x) => !x.includes("already in Agentory")), ...(h.person?.reasons.filter((x) => !x.includes("already in Agentory")) ?? [])];
-    if (ph?.doNotCall) blockers.push("number is flagged do-not-call");
+
     const role = p ? classifyDecisionMakerRole(first(p.title)) : null;
     const dm = !!role && role.role_family !== "other";
-    const readiness: OutreachReadiness = blockers.length && (h.company.blocksOutreach || h.person?.blocksOutreach || ph?.doNotCall) ? "blocked"
-      : r.lane === "queue" && dm && (ph?.class === "unverified_person_associated" || ph?.class === "verified_person_direct") ? "ready_for_review" : "not_ready";
+    // ATLAS review queue: eligible, a decision-maker, no hold. A human reviews before any contact.
+    const readiness: OutreachReadiness = h.company.blocksOutreach || h.person?.blocksOutreach ? "blocked"
+      : r.lane === "queue" && dm ? "ready_for_review" : "not_ready";
+    const cls = classify(l);
     return {
       version: PIPELINE_VERSION, leadKey: l.company.key,
       existingLeadIds: [...new Set([...h.company.existingLeadIds, ...(h.person?.existingLeadIds ?? [])])], icpId: input.icp.id,
@@ -305,17 +341,21 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
         providerCompanyIds: [...new Set(l.company.sources.map((s) => `${s.provider}:${s.recordId}`))], employeeCount: first(l.company.employeeCount),
         industry: [...new Set(l.company.industry.flatMap((c) => c.value))],
         // The provider's HQ claim, else the canonical record's HQ-flagged location (the one qualification read).
-        hq: first(l.company.hqCountry) || !canonical?.facts.get(l.company.key)?.hq
-          ? { country: first(l.company.hqCountry), region: first(l.company.hqRegion), city: first(l.company.hqCity), source: first(l.company.hqCountry) ? "provider" : null }
-          : { country: canonical.facts.get(l.company.key)!.hq!.country, region: null, city: canonical.facts.get(l.company.key)!.hq!.text.split(",")[0].trim(), source: "apify_linkedin_company_details" },
-        description: canonical?.facts.get(l.company.key)?.description ?? null,
+        // The Apify record's HQ-flagged location when read (what qualification used), else the provider's claim, labelled.
+        hq: factsOf(l)?.hq
+          ? { country: factsOf(l)!.hq!.country, region: null, city: factsOf(l)!.hq!.text.split(",")[0].trim(), source: "apify_linkedin_company_details" }
+          : { country: first(l.company.hqCountry), region: first(l.company.hqRegion), city: first(l.company.hqCity), source: first(l.company.hqCountry) ? "provider_claim" : null },
+        description: factsOf(l)?.description ?? null,
       },
       person: p ? { key: p.key, name: first(p.fullName), title: first(p.title), linkedinUrl: first(p.linkedinUrl),
         providerPersonId: p.sources.find((s) => s.provider === "leadocean")?.recordId ?? null, roleFamily: role!.role_family, hasPhoneFlag: first(p.hasPhone) } : null,
+      classification: cls.c, rejectionBasis: cls.basis,
+      screen: { outcome: screenOf.get(l.company.key)?.outcome ?? "verify", reasons: screenOf.get(l.company.key)?.reasons ?? [] },
+      verified: factsOf(l), founderCheck: founders?.checks.get(l.company.key) ?? null,
       statuses: { discovery: discoveryStatus, qualification, enrichment, outreachReadiness: readiness },
       qualification: l.shared ? { checks: l.shared.checks, gaps: l.shared.gaps, disproven: l.shared.disproven, evidence_sources: l.shared.evidence_sources } : null,
-      canonicalRecord: canonical?.statuses.find((s) => s.companyKey === l.company.key)?.state ?? "not_requested",
-      signals: signalsFor(l, p), rank: rankOf.get(l.company.key)!, phone: ph ? redactPhoneRecord(ph) : null, outreachBlockers: blockers,
+      canonicalRecord: canonical?.statuses.find((s) => s.companyKey === slugOf(l))?.state ?? "not_requested",
+      signals: signalsFor(l, p), rank: rankOf.get(l.company.key)!, phone: ph, outreachBlockers: blockers,
       provenance: { walkId: input.walkId, planHash: plan.planHash, runAt: at, providers: [...new Set(l.company.sources.map((s) => s.provider))] },
     };
   });
@@ -331,7 +371,7 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
     ineligible: out.filter((x) => x.statuses.qualification === "ineligible").length,
     decisionMaker: out.filter((x) => x.statuses.discovery === "new" && x.statuses.qualification === "eligible" && x.person && x.person.roleFamily !== "other").length,
     hasPhoneFlag: out.filter((x) => x.statuses.discovery === "new" && x.statuses.qualification === "eligible" && x.person && x.person.roleFamily !== "other" && x.person.hasPhoneFlag === true).length,
-    lookedUp: (phones?.records ?? []).length,
+    lookedUp: 0,
     personAssociated: people.filter((x) => x.phone?.class === "unverified_person_associated" || x.phone?.class === "verified_person_direct").length,
     verifiedDirect: people.filter((x) => x.phone?.class === "verified_person_direct").length,
     switchboard: people.filter((x) => x.phone?.class === "company_switchboard").length,
@@ -347,25 +387,58 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
   const next = advance(cp, { personIds, companyKeys: out.map((x) => x.company.key), pages: moreStep?.pages ?? 0, records: leadoceanRecords, morePages: (moreStep?.rows ?? 0) > 0, now: at });
   await input.checkpoints.save(next);
 
-  const apifyUsd = Math.round(((canonical?.spentUsd ?? 0) + (signalRun?.spentUsd ?? 0)) * 1e6) / 1e6;
-  const partial = run.status === "partial" || !!canonical?.stopped || !!signalRun?.stopped || !!phones?.stopped;
+  const apifyUsd = Math.round(((canonical?.spentUsd ?? 0) + (signalRun?.spentUsd ?? 0) + (founders?.spentUsd ?? 0)) * 1e6) / 1e6;
+  const partial = run.status === "partial" || !!canonical?.stopped || !!signalRun?.stopped || !!founders?.stopped;
   return {
     version: PIPELINE_VERSION, status: partial ? "partial" : "completed",
-    reason: [run.reason, canonical?.stopped && `canonical: ${canonical.stopped}`, signalRun?.stopped && `signals: ${signalRun.stopped}`, phones?.stopped && `phones: ${phones.stopped}`].filter(Boolean).join("; ") || null,
+    reason: [run.reason, canonical?.stopped && `canonical: ${canonical.stopped}`, founders?.stopped && `founder check: ${founders.stopped}`, signalRun?.stopped && `signals: ${signalRun.stopped}`].filter(Boolean).join("; ") || null,
     plan, discovery,
-    canonical: canonical ? { spentUsd: canonical.spentUsd, stopped: canonical.stopped, read: canonical.statuses.filter((s) => s.state === "read").length } : null,
+    canonical: canonical ? { spentUsd: canonical.spentUsd, stopped: canonical.stopped, read: canonical.statuses.filter((s) => s.state === "read").length, overBudget } : null,
+    screening, founderCheck: founders ? { spentUsd: founders.spentUsd, stopped: founders.stopped, confirmed: [...founders.checks.values()].filter((c) => c.state === "confirmed").length } : null,
     signals: signalRun ? { spentUsd: signalRun.spentUsd, stopped: signalRun.stopped, statuses: signalRun.statuses } : null,
-    phones: phones ? { recordsCharged: phones.recordsCharged, stopped: phones.stopped, skipped: phones.skipped } : null,
+    phones: null,
     queue: out.filter((x) => x.rank.lane === "queue"), review: out.filter((x) => x.rank.lane === "review"), excluded: out.filter((x) => x.rank.lane === "excluded"),
     funnel, estimates, checkpoint: next,
     yield: yieldReport({
-      funnel, leadoceanRecords: leadoceanRecords + (phones?.recordsCharged ?? 0), apifyUsd, usdPerLeadOceanRecord: input.usdPerLeadOceanRecord ?? null,
-      rejections: out.flatMap((x) => x.statuses.qualification === "ineligible" ? (x.qualification?.disproven.length ? x.qualification.disproven.map((d) => `disproven:${d}`) : [x.statuses.discovery === "duplicate_prior_walk" ? "duplicate_prior_walk" : "ineligible"])
-        : x.statuses.qualification === "pending" ? (x.qualification?.gaps ?? []).map((g) => `unknown:${g}`) : []),
-      enrichmentSkips: (phones?.skipped ?? []).map((k) => k.reason.replace(/\(.*\)/, "").trim()),
+      funnel, leadoceanRecords, apifyUsd, usdPerLeadOceanRecord: input.usdPerLeadOceanRecord ?? null,
+      rejections: out.flatMap((x) => x.rejectionBasis === "verified" ? (x.qualification?.disproven ?? []).map((d) => `disproven:${d}`)
+        : x.rejectionBasis ? [`${x.rejectionBasis}:${x.screen.outcome}`]
+        : x.classification === "needs_verification" ? (x.qualification?.gaps ?? []).map((g) => `unknown:${g}`) : []),
+      enrichmentSkips: [],
     }),
-    contactValues: (phones?.records ?? []).filter((x) => x.e164).map((x) => ({ personKey: x.personKey, leadId: x.leadId, e164: x.e164!, class: x.class })),
-    spend: { leadoceanRecords: leadoceanRecords + (phones?.recordsCharged ?? 0), apifyUsd },
+    contactValues: [],
+    spend: { leadoceanRecords, apifyUsd },
+  };
+}
+
+/**
+ * Optional, separately authorized phone enrichment over a finished run's queue.
+ * Never called by runLeadPipeline. Only queued (eligible), unblocked decision-makers
+ * with the provider's phone flag are candidates; a founder confirmed by an
+ * independent source carries `independent_current` employment, everyone else
+ * `provider_consistent` — so no provider number can become verified_person_direct
+ * without independent number evidence as well (phones.ts).
+ */
+export async function enrichQueuedPhones(run: PipelineRun, input: {
+  workspaceId: string; approval: { maxLookups: number; approvedBy: string; approvedAt: string };
+  deps: AdapterDeps; ledger: UsageLedger; call?: Parameters<typeof enrichPhones>[0]["call"]; probe?: Parameters<typeof enrichPhones>[0]["probe"];
+}): Promise<{ records: PhoneRecord[]; skipped: { personKey: string; reason: string }[]; recordsCharged: number; stopped: string | null; contactValues: PipelineRun["contactValues"] }> {
+  const targets: PhoneTarget[] = run.queue.filter((l) => l.person).map((l) => ({
+    personKey: l.person!.key, leadId: l.existingLeadIds[0] ?? null, providerPersonId: l.person!.providerPersonId, linkedinUrl: l.person!.linkedinUrl,
+    eligibility: l.classification === "eligible" ? "eligible" : "pending", hasPhone: l.person!.hasPhoneFlag,
+    outreachBlocked: l.statuses.outreachReadiness === "blocked",
+    employment: l.founderCheck?.state === "confirmed"
+      ? { status: "independent_current", sources: [l.founderCheck.source ?? "apify"], checkedAt: run.queue[0]?.provenance.runAt ?? null }
+      : { status: l.founderCheck?.state === "other_decision_maker" ? "unknown" : "provider_consistent", sources: ["leadocean"], checkedAt: null },
+  }));
+  const allowed = targets.filter((t) => t.hasPhone === true && !t.outreachBlocked).slice(0, input.approval.maxLookups).map((t) => t.personKey);
+  const missionId = `lp:${run.checkpoint.walkId}:phones:${run.plan.planHash}`;
+  const authorization: EnrichmentAuthorization = { kind: "enrichment", workspaceId: input.workspaceId, missionId, personKeys: allowed,
+    revealEmail: false, phones: true, maxCredits: input.approval.maxLookups, approvedBy: input.approval.approvedBy, approvedAt: input.approval.approvedAt };
+  const r = await enrichPhones({ workspaceId: input.workspaceId, missionId, authorization, targets, deps: input.deps, ledger: input.ledger, call: input.call, probe: input.probe });
+  return {
+    records: r.records.map(redactPhoneRecord), skipped: r.skipped, recordsCharged: r.recordsCharged, stopped: r.stopped,
+    contactValues: r.records.filter((x) => x.e164).map((x) => ({ personKey: x.personKey, leadId: x.leadId, e164: x.e164!, class: x.class })),
   };
 }
 
@@ -375,14 +448,16 @@ export function worstCase(plan: DiscoveryPlan, a: PipelineApprovals): { leadocea
   const phones = a.phoneLookups?.maxLookups ?? 0;
   const canon = a.canonicalMaxUsd ?? 0;
   const sig = a.signals?.maxUsd ?? 0;
+  const fc = a.founderCheck?.maxUsd ?? 0;
   return {
     leadoceanRecords: disc + phones,
-    apifyUsd: Math.round((canon + sig) * 1e6) / 1e6,
+    apifyUsd: Math.round((canon + sig + fc) * 1e6) / 1e6,
     lines: [
       `LeadOcean discovery: ≤${disc} records (${plan.steps.map((s) => `${s.maxPages} page(s) × ≤${s.pageSize}`).join(", ")})`,
-      `LeadOcean phone lookups: ≤${phones} records`,
+      `LeadOcean phone lookups (separate step, enrichQueuedPhones): ≤${phones} records`,
       `Apify company records: ≤$${canon}`,
       `Apify signals: ≤$${sig}`,
+      ...(fc ? [`Apify founder check: ≤$${fc}`] : []),
     ],
   };
 }

@@ -15,12 +15,14 @@ import type { ActorInvoker, ActorRun } from "../discoveryProviders/adapters/apif
 import type { FetchLike } from "../discoveryProviders/http.ts";
 import { COMPANY_RECORD_ACTOR } from "./canonical.ts";
 import { SIGNAL_ACTORS, worstCaseUsd } from "./signals.ts";
+import { COMPANY_EMPLOYEES_ACTOR } from "./founderCheck.ts";
 
 export const PIPELINE_ACTORS: Readonly<Record<string, { actorId: string; perItemUsd: number; perStartUsd: number; emptyUsd: number }>> = Object.freeze({
   [COMPANY_RECORD_ACTOR.key]: { actorId: COMPANY_RECORD_ACTOR.actorId, perItemUsd: COMPANY_RECORD_ACTOR.perItemUsd, perStartUsd: COMPANY_RECORD_ACTOR.perStartUsd, emptyUsd: 0 },
   [SIGNAL_ACTORS.profilePosts.key]: SIGNAL_ACTORS.profilePosts,
   [SIGNAL_ACTORS.companyPosts.key]: SIGNAL_ACTORS.companyPosts,
   [SIGNAL_ACTORS.jobs.key]: SIGNAL_ACTORS.jobs,
+  [COMPANY_EMPLOYEES_ACTOR.key]: COMPANY_EMPLOYEES_ACTOR,
 });
 
 export class ApifyRefusal extends Error { override name = "ApifyRefusal"; }
@@ -33,7 +35,7 @@ export function pipelineApifyInvoker(deps: { token: string; fetch: FetchLike; ti
     const a = PIPELINE_ACTORS[actorKey];
     if (!a) throw new ApifyRefusal(`actor ${actorKey} is not on the pipeline allowlist`);
     if (done.has(opts.idempotencyKey)) throw new ApifyRefusal(`run ${opts.idempotencyKey} was already started (no repeats)`);
-    if (!Number.isInteger(opts.maxItems) || opts.maxItems < 1 || opts.maxItems > 100) throw new ApifyRefusal("maxItems must be 1–100");
+    if (!Number.isInteger(opts.maxItems) || opts.maxItems < 1 || opts.maxItems > 200) throw new ApifyRefusal("maxItems must be 1–100");
     done.add(opts.idempotencyKey);
     const capUsd = worstCaseUsd({ key: actorKey, ...a }, opts.maxItems);
     const q = new URLSearchParams({ maxItems: String(opts.maxItems), maxTotalChargeUsd: capUsd.toFixed(5), timeout: String(Math.ceil((deps.timeoutMs ?? 120_000) / 1000)) });
