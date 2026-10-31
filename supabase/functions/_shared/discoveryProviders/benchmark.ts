@@ -144,6 +144,14 @@ export interface BenchmarkScore {
   /** 8 */ verifiedDirectNumberCoverage: Ratio;
   /** 9 */ latencyMs: { count: number; p50: number | null; p95: number | null; max: number | null };
   /** 10 */ costPerQualified: { usd: number | null; units: number | null; unit: string; qualified: number };
+  /**
+   * Evidence quality: of the hard checks on discovered companies, how many a
+   * RETURNED value answered (matched or contradicted) versus a filter the
+   * provider only says it applied, versus nothing at all.
+   */
+  evidenceQuality: { returnedValue: number; filterOnly: number; nothing: number; share: number | null };
+  /** Freshness: age in days of the provider's own update stamp, where it gives one. */
+  freshnessDays: { stamped: number; unstamped: number; median: number | null };
   skippedForSuppression: string[];
 }
 
@@ -168,7 +176,8 @@ function qualifiedNew(r: ProviderBenchmarkResult, known: Set<string>): string[][
   return companies(r.discoveryLeads.filter((l) => l.status === "qualified").map(leadKeys).filter((k) => !intersects(k, known)));
 }
 
-export function scoreProvider(cohort: Cohort, r: ProviderBenchmarkResult, other: ProviderBenchmarkResult | null = null): BenchmarkScore {
+/** `asOf`: the instant freshness is measured from (the run's own clock; never "now" implicitly in tests). */
+export function scoreProvider(cohort: Cohort, r: ProviderBenchmarkResult, other: ProviderBenchmarkResult | null = null, asOf: string = new Date().toISOString()): BenchmarkScore {
   const skipped: string[] = [];
   // Every identity Agentory already holds: a discovery hit on one is not new.
   const known = new Set<string>();
@@ -242,6 +251,15 @@ export function scoreProvider(cohort: Cohort, r: ProviderBenchmarkResult, other:
 
   // 10 — cost per qualified result (the shared engine's qualified only)
   const q = qualifiedAll.length;
+
+  // Evidence quality and freshness, over the discovered companies.
+  const checks = r.discoveryLeads.flatMap((l) => l.checks.filter((c) => c.criterionId !== "identity"));
+  const returned = checks.filter((c) => c.outcome === "matched" || c.outcome === "contradicted" || c.outcome === "conflicting").length;
+  const filterOnly = checks.filter((c) => c.outcome === "provider_filter").length;
+  const at = Date.parse(asOf);
+  const ages = r.discoveryLeads.flatMap((l) => l.company.sources.map((s) => s.providerUpdatedAt))
+    .map((d) => (d ? (at - Date.parse(d)) / 86_400_000 : NaN));
+  const stamped = ages.filter((x) => Number.isFinite(x) && x >= 0).sort((a, b) => a - b);
   return {
     version: BENCHMARK_VERSION,
     provider: r.provider,
@@ -261,6 +279,8 @@ export function scoreProvider(cohort: Cohort, r: ProviderBenchmarkResult, other:
       usd: r.costUsd !== null && q > 0 ? r.costUsd / q : null,
       units: q > 0 ? r.unitsConsumed / q : null, unit: r.unit, qualified: q,
     },
+    evidenceQuality: { returnedValue: returned, filterOnly, nothing: checks.length - returned - filterOnly, share: checks.length ? returned / checks.length : null },
+    freshnessDays: { stamped: stamped.length, unstamped: ages.length - stamped.length, median: stamped.length ? Math.round(stamped[Math.floor((stamped.length - 1) / 2)]) : null },
     skippedForSuppression: [...new Set(skipped)],
   };
 }

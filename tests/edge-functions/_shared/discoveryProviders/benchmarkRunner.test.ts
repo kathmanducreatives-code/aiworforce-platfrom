@@ -81,6 +81,10 @@ Deno.test("runner (LeadOcean): exact lookups + one discovery page inside the app
   assertEquals(s.uniqueQualified.qualified, 0, "no canonical evidence offline: nothing qualifies on a provider's word");
   assertEquals(s.costPerQualified.usd, null);
   assertEquals(s.latencyMs.count, 5, "two account reads, two lookups, one discovery page");
+  // HQ and size came back as values; nothing was filter-only. LeadOcean rows here carry no update stamp.
+  assertEquals([s.evidenceQuality.returnedValue, s.evidenceQuality.filterOnly], [s.evidenceQuality.returnedValue, 0]);
+  assert(s.evidenceQuality.share! > 0);
+  assertEquals([s.freshnessDays.stamped, s.freshnessDays.median], [0, null]);
   assertFalse(JSON.stringify(rep).includes("+1 555"), "no contact value anywhere in the report");
 });
 

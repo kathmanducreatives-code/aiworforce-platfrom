@@ -31,9 +31,10 @@ const co = (provider: "apollo" | "leadocean", id: string, domain: string, over: 
   ({ provider, recordId: id, retrievedAt: "t", name: id, domain, ...over });
 const person = (li: string, domain: string, title: string, over: Partial<ProviderPerson> = {}): ProviderPerson =>
   ({ provider: "leadocean", recordId: li, retrievedAt: "t", linkedinUrl: `https://www.linkedin.com/in/${li}`, title, company: co("leadocean", `c-${domain}`, domain), ...over });
-const lead = (domain: string, status: VerifiedLead["status"], providerStatus: VerifiedLead["status"] = status, phone = false) => ({
+const lead = (domain: string, status: VerifiedLead["status"], providerStatus: VerifiedLead["status"] = status, phone = false, updatedAt: string | null = null) => ({
   status, providerStatus,
-  company: { domain: [{ value: domain }], linkedinUrl: [] },
+  checks: [{ criterionId: "geo", key: "geography_hq", label: "HQ", outcome: providerStatus === "qualified" ? "matched" : "provider_filter", evidence: [], note: "" }],
+  company: { domain: [{ value: domain }], linkedinUrl: [], sources: [{ provider: "leadocean", recordId: domain, retrievedAt: "t", providerUpdatedAt: updatedAt, assertedFilters: [], ignoredFilters: [] }] },
   contacts: phone ? [{ person: { hasPhone: [{ value: true }], contactPoints: [] } }] : [],
 } as unknown as VerifiedLead);
 
@@ -104,6 +105,14 @@ Deno.test("benchmark: one company known by LinkedIn and returned by domain (or t
   });
   // Three rows: one by domain, one by LinkedIn, one bridging both → one company, two duplicates.
   assertEquals([scoreProvider(COHORT, lo).duplicateRate.numerator, scoreProvider(COHORT, lo).duplicateRate.denominator], [2, 3]);
+});
+
+Deno.test("benchmark: evidence quality counts returned values apart from filter-only answers; freshness reads the provider's stamp", () => {
+  const s = scoreProvider(COHORT, result("leadocean", {
+    discoveryLeads: [lead("a.example", "qualified", "qualified", false, "2026-10-20T00:00:00Z"), lead("b.example", "needs_verification", "needs_verification", false, "2026-07-02T00:00:00Z"), lead("c.example", "needs_verification")],
+  }), null, "2026-10-30T00:00:00Z");
+  assertEquals(s.evidenceQuality, { returnedValue: 1, filterOnly: 2, nothing: 0, share: 1 / 3 });
+  assertEquals(s.freshnessDays, { stamped: 2, unstamped: 1, median: 10 });
 });
 
 Deno.test("benchmark: nothing qualified → cost per qualified result is null, never zero", () => {
