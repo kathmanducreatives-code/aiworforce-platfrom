@@ -16,7 +16,7 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import { type AcceptanceCase, type AcceptanceFlags, KEY, runAcceptanceCase } from "./q4/acceptanceHarness.ts";
 import { evaluateEligibility } from "../../../supabase/functions/_shared/candidateEligibility.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
-import { parseMissionEvaluationStrict } from "../../../supabase/functions/_shared/missionEvaluation.ts";
+import { evaluatorAnswered, parseMissionEvaluationStrict } from "../../../supabase/functions/_shared/missionEvaluation.ts";
 import { buildEvidenceRegistry } from "../../../supabase/functions/_shared/leadEvidenceRegistry.ts";
 import type { MissionCriterion } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import { buildCompanyEvidence } from "../../../supabase/functions/_shared/leadCompanyEvidence.ts";
@@ -302,6 +302,23 @@ Deno.test("Q4.9 evaluator: a FAIL verdict holds a company every fact passes; no 
   assertEquals(fail.eligibility[0].eligibility, "eligible", "every fact passes");
   assertEquals(fail.evaluator[0].decision, "not_qualified");
   await accept({ id: "9-eval-timeout", request: AE, signal: ["hiring Account Executives"], evaluator: "timeout" }, 0);
+});
+
+Deno.test("Q4.9b canary session 2: a FAILED evaluator call is never `model_evaluated` and fabricates no verdict", async () => {
+  // run-agent parses a failed call's `null`; the strict parser answers with an
+  // `unknown` row for every criterion (origin "unparsed"). Those rows used to be
+  // recorded as the model's evaluation and lowered every evidence-proven check.
+  const f = await accept({ id: "9-eval-http-error", request: AE, signal: ["hiring Account Executives"], evaluator: "http_error" }, 0);
+  for (const [k, path] of Object.entries(f.evaluation_paths)) {
+    assert(path !== "model_evaluated", `${k}: a failed call is not an evaluation (${path})`);
+  }
+  const stored = Object.entries(f.mission_evaluations);
+  assert(stored.length > 0);
+  for (const [k, e] of stored) {
+    assertFalse(evaluatorAnswered(e as never), `${k}: what a resume restores is not an answer`);
+    assertEquals(((e?.criterion_verdicts ?? []) as Array<{ origin?: string }>).filter((v) => v.origin === "unparsed").length, 0,
+      `${k}: no fabricated "not_an_object" verdict is stored to lower a check`);
+  }
 });
 
 // ══════════════════════════════════════ 10. Interrupted and resumed ══

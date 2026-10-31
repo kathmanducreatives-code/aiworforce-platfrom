@@ -5,8 +5,8 @@
 #
 # Applies, in order: the Supabase platform shim (sql/00_supabase_shim.sql),
 # the held schema baseline, every migration in supabase/migrations/, the held
-# Lead V2 queue migrations, the held billing fix, then the held smoke
-# admission. The held files are applied HERE ONLY — to a throwaway database
+# Lead V2 queue migrations, the held billing fix, the held smoke admission,
+# then the held Phase 3c client schema. The held files are applied HERE ONLY — to a throwaway database
 # this lane creates and destroys. They are not approved for production
 # (supabase/migrations-held/README.md) and nothing in this lane can reach
 # production: the URL must point at localhost, which is checked below.
@@ -35,9 +35,19 @@ held_billing=(
 held_admission=(
   20261015140000_discovery_smoke_admission.sql
 )
-# DB_CONTRACT_OMIT_HELD names ONE held file to leave out. It is for
-# tests/db-contract/mutation.sh, which proves the credit and admission tests
-# fail without their migrations; nothing else sets it.
+# The held Company Brain Phase 3c client schema: canonical clients, grant
+# generations, one Brain per client (#174, proposal; not approved).
+held_client=(
+  20261024160000_client_company_brain.sql
+  # Backend's canonical membership writers (#174 O3 A, §9.4); need the triggers above.
+  20261025140000_workspace_member_writers.sql
+  # The direct-write boundary: application roles change memberships only through those writers.
+  20261025160000_workspace_members_app_surface.sql
+)
+# DB_CONTRACT_OMIT_HELD names ONE file to leave out: a held file, or a file in
+# supabase/migrations/ by its basename. It is for tests/db-contract/mutation.sh,
+# which proves the credit, admission and membership tests fail without their
+# migrations; nothing else sets it.
 omit="${DB_CONTRACT_OMIT_HELD:-}"
 apply() {
   psql "$url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$1" >/dev/null \
@@ -46,10 +56,34 @@ apply() {
 }
 apply "$root/tests/db-contract/sql/00_supabase_shim.sql"
 apply "$held/20260816120000_baseline_schema.sql"
-for f in $(ls "$root/supabase/migrations/"*.sql | sort); do apply "$f"; done
-for f in "${held_v2[@]}" "${held_billing[@]}" "${held_admission[@]}"; do
+for f in $(ls "$root/supabase/migrations/"*.sql | sort); do
+  if [ "$(basename "$f")" = "$omit" ]; then echo "omitted ${f#$root/} (mutation proof)"; continue; fi
+  apply "$f"
+done
+for f in "${held_v2[@]}" "${held_billing[@]}" "${held_admission[@]}" "${held_client[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done
+# The held lead-graph ownership fix (OWN-01): every parent reference in the
+# lead graph is composite on (workspace_id, id). Independent of the chains above.
+held_ownership=(
+  20261025120000_lead_graph_same_workspace_parents.sql
+)
+for f in "${held_ownership[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done
 # PostgREST reads its schema cache once at start; nothing else to reload here.
 echo "database ready"
+# The held task commit boundary (#179: EXEC-PLAN / EXEC-REVOKE): a task's plan
+# is in its workspace and its principal is a current member, checked in the
+# writing transaction. Independent of the chains above. (Placed after the
+# message above so it merges cleanly with the other held loops.)
+held_execution=(
+  20261025130000_tasks_commit_boundary.sql
+  20261025150000_task_plans_parent_identity.sql
+)
+for f in "${held_execution[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done

@@ -131,8 +131,12 @@ Deno.test("criteria: the evaluator answers exactly the criteria the decision rea
 
 Deno.test("callers: every eligibility decision passes the verdicts and the holds", () => {
   const files = {
-    "supabase/functions/run-agent/index.ts": 2, "supabase/functions/_shared/opportunityReasoningRun.ts": 1,
-    "supabase/functions/_shared/workbenchMissionView.ts": 2, "supabase/functions/_shared/leadCapabilityEngine.ts": 1,
+    "supabase/functions/run-agent/index.ts": 1, "supabase/functions/_shared/opportunityReasoningRun.ts": 1,
+    "supabase/functions/_shared/workbenchMissionView.ts": 2,
+    // canonicallyWorkableKeys + canonicalHardEvidence (the Leads page evidence)
+    // + verifiableCandidatesFrom (the verification phase's candidates, moved
+    // out of run-agent so the Replay Lab calls the same function)
+    "supabase/functions/_shared/leadCapabilityEngine.ts": 3,
   } as const;
   for (const [f, n] of Object.entries(files)) {
     const src = Deno.readTextFileSync(new URL(`../../../${f}`, import.meta.url));

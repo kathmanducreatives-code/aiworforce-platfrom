@@ -342,6 +342,8 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
       "offline-" + user + "@example.invalid"
     })`;
     await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${m.ws}, 'scout', 'Offline Scout', 'Find and verify the requested company using source evidence.', 'research')`;
+    // The requester is a member: run-agent re-checks the forwarded principal (legacyExecutionGuard).
+    await sql`insert into public.workspace_members (workspace_id, user_id, role) values (${m.ws}, ${user}, 'owner')`;
     await sql`insert into public.task_plans (id, workspace_id, user_id, user_instruction, status) values (${plan}, ${m.ws}, ${user}, ${missionGoal}, 'running')`;
     const conversation = uuid();
     await sql`insert into public.conversations (id,user_id,workspace_id,title) values (${conversation},${user},${m.ws},'Offline A7 audit')`;

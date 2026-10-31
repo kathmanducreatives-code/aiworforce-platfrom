@@ -16,6 +16,7 @@ import AppErrorBoundary from "./components/AppErrorBoundary";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
 
 import ProtectedRoute from "./components/ProtectedRoute";
+import { BrainCapabilityNotice } from '@/components/company-brain/BrainCapabilityNotice';
 import MainLayout from "./components/MainLayout";
 import AuthenticatedBackground from "./components/AuthenticatedBackground";
 
@@ -141,6 +142,7 @@ const App = () => (
                     <Route path="/signals" element={
                       <ProtectedRoute>
                         <MainLayout>
+                          <BrainCapabilityNotice capability="signals" />
                           <Signals />
                         </MainLayout>
                       </ProtectedRoute>
@@ -148,14 +150,14 @@ const App = () => (
 
                     {/* Agentory restructure — new top-level pages */}
                     <Route path="/leads" element={
-                      <ProtectedRoute><MainLayout><Leads /></MainLayout></ProtectedRoute>
+                      <ProtectedRoute><MainLayout><BrainCapabilityNotice capability="lead_search" /><Leads /></MainLayout></ProtectedRoute>
                     } />
                     <Route path="/leads/find" element={<Navigate to="/leads" replace />} />
                     <Route path="/leads/icp" element={<Navigate to="/leads" replace />} />
                     <Route path="/leads/research" element={<Navigate to="/leads" replace />} />
                     <Route path="/competitors" element={<Navigate to="/signals" replace />} />
                     <Route path="/content" element={
-                      <ProtectedRoute><MainLayout><Content /></MainLayout></ProtectedRoute>
+                      <ProtectedRoute><MainLayout><BrainCapabilityNotice capability="content" /><Content /></MainLayout></ProtectedRoute>
                     } />
                     <Route path="/agents" element={
                       <ProtectedRoute><MainLayout><Agents /></MainLayout></ProtectedRoute>

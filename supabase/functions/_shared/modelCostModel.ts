@@ -45,6 +45,14 @@ export interface ModelPrice {
   cached_input_per_1m: number;
   output_per_1m: number;
   /**
+   * Charged for input the provider WROTE to its cache (30-minute retention),
+   * when it bills writes separately. GPT-5.6 and later do: 1.25x the input rate
+   * (OpenAI prompt-caching guide, read 2026-10-28; 12-hour writes are 2.5x).
+   * Absent means writes are priced as ordinary input — today's behaviour for
+   * every model priced before this field existed.
+   */
+  cache_write_per_1m?: number;
+  /**
    * WHERE THE MONEY IS ACTUALLY BILLED.
    *
    * Not decoration. `google/gemini-3-flash-preview` reaches us through the
@@ -116,6 +124,21 @@ export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = Object.freeze(
   },
   "gpt-5.6-terra": { input_per_1m: 2.00, cached_input_per_1m: 0.20, output_per_1m: 12.00 },
   "gpt-5.6-sol": { input_per_1m: 5.00, cached_input_per_1m: 0.50, output_per_1m: 30.00 },
+  // ── THE GPT-6 FAMILY (`AGENTORY_GPT_MODEL_FAMILY=gpt-6`) ────────────────
+  //
+  // Priced BEFORE it can be routed to: an unpriced model counts $0 against the
+  // spend ceiling (`unpriced_calls`), so routing to it first would take every
+  // call out of budget enforcement. OpenAI model pages, read 2026-10-28.
+  // gpt-6.1-sol bills 2x input / 1.5x output for a whole request above 272K
+  // input tokens; no Agentory prompt is within 5x of that, so it is not modelled.
+  "gpt-6-luna": {
+    input_per_1m: 0.10, cached_input_per_1m: 0.01, output_per_1m: 0.50, cache_write_per_1m: 0.125,
+    billed_by: "openai", price_source: "published list price", effective: "2026-10-28",
+  },
+  "gpt-6.1-sol": {
+    input_per_1m: 2.00, cached_input_per_1m: 0.10, output_per_1m: 10.00, cache_write_per_1m: 2.50,
+    billed_by: "openai", price_source: "published list price", effective: "2026-10-28",
+  },
   "gpt-4.1": { input_per_1m: 2.00, cached_input_per_1m: 0.50, output_per_1m: 8.00 },
   "gpt-4.1-mini": { input_per_1m: 0.40, cached_input_per_1m: 0.10, output_per_1m: 1.60 },
 
@@ -293,6 +316,13 @@ export interface ModelUsage {
   /** The cached SUBSET of `input_tokens`, never additional to it. */
   cached_input_tokens: number | null;
   output_tokens: number | null;
+  /**
+   * The SUBSET of `input_tokens` written to the provider's cache, when the
+   * provider reports it (`cache_write_tokens`). Absent when not reported.
+   */
+  cache_write_input_tokens?: number;
+  /** Of those, written with 12-hour retention (2x the 30-minute write rate). */
+  cache_write_12h_tokens?: number;
 }
 
 const nonNeg = (v: unknown): number | null => {
@@ -316,10 +346,17 @@ export function readModelUsage(raw: unknown): ModelUsage {
     : null) ?? {};
   const details = (u.prompt_tokens_details ?? u.input_tokens_details) as
     Record<string, unknown> | undefined;
+  // Cache WRITES, reported by GPT-5.6 and later. Only carried when present,
+  // so a response that does not report them reads exactly as before.
+  const writes = nonNeg(details?.cache_write_tokens);
+  const writeDetails = details?.cache_write_tokens_details as Record<string, unknown> | undefined;
+  const writes12h = nonNeg(writeDetails?.ttl_12h_tokens);
   return {
     input_tokens: nonNeg(u.prompt_tokens) ?? nonNeg(u.input_tokens),
     cached_input_tokens: nonNeg(details?.cached_tokens) ?? 0,
     output_tokens: nonNeg(u.completion_tokens) ?? nonNeg(u.output_tokens),
+    ...(writes ? { cache_write_input_tokens: writes } : {}),
+    ...(writes && writes12h ? { cache_write_12h_tokens: Math.min(writes12h, writes) } : {}),
   };
 }
 
@@ -359,12 +396,19 @@ export function priceModelCall(i: {
   }
   const input = i.usage.input_tokens ?? 0;
   const cached = Math.min(i.usage.cached_input_tokens ?? 0, input);
-  const uncached = Math.max(0, input - cached);
+  // Writes are a SUBSET of the uncached input. A model with no write rate
+  // prices them as ordinary input, which is the sum this always computed.
+  const writes = price.cache_write_per_1m == null ? 0 : Math.min(i.usage.cache_write_input_tokens ?? 0, Math.max(0, input - cached));
+  const writes12h = Math.min(i.usage.cache_write_12h_tokens ?? 0, writes);
+  const uncached = Math.max(0, input - cached - writes);
   const output = i.usage.output_tokens ?? 0;
 
   const usd =
     (uncached / 1_000_000) * price.input_per_1m +
     (cached / 1_000_000) * price.cached_input_per_1m +
+    (writes / 1_000_000) * (price.cache_write_per_1m ?? price.input_per_1m) +
+    // A 12-hour write is billed at twice the 30-minute write rate.
+    (writes12h / 1_000_000) * (price.cache_write_per_1m ?? 0) +
     (output / 1_000_000) * price.output_per_1m;
 
   // NEVER `provider_reported`: OpenAI returns counts, not a charge. The counts

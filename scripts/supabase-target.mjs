@@ -108,6 +108,27 @@ export function resolveTarget({ requested, env = process.env }) {
   return { ok: true, target: "test", ref: CANONICAL.test };
 }
 
+/**
+ * "TEST" IS PRODUCTION TODAY (docs/SUPABASE_TARGETING.md): both canonical refs
+ * name `ohsdatpvfdjdemstoiuj`. Until an isolated TEST project exists and
+ * CANONICAL.test names it, the test target may only READ; anything that could
+ * change the project (deploy, secrets, migrations, storage…) is refused, so
+ * "deploy to TEST" can never quietly deploy to production. Production changes
+ * go through `supabase:prod` with SUPABASE_TARGET=production, deliberately.
+ */
+const READ_ONLY = ["functions list", "secrets list", "migration list", "projects list", "inspect db"];
+export function testIsProduction(canonical = CANONICAL) {
+  return canonical.test === canonical.production;
+}
+export function testTargetRefusal(args, canonical = CANONICAL) {
+  if (!testIsProduction(canonical)) return null;
+  const joined = args.filter((a) => !a.startsWith("-")).slice(0, 2).join(" ");
+  if (READ_ONLY.some((r) => joined === r || joined.startsWith(`${r} `))) return null;
+  return `the test target resolves to the PRODUCTION project (${canonical.test}); ` +
+    `only read-only commands (${READ_ONLY.join(", ")}) are allowed through it. ` +
+    "Create the isolated TEST project and point CANONICAL.test at it, or use supabase:prod deliberately.";
+}
+
 export function refusalFor(args) {
   const joined = args.filter((a) => !a.startsWith("-")).slice(0, 2).join(" ");
   for (const [cmd, why] of REFUSED) if (joined.startsWith(cmd)) return { cmd, why };
@@ -133,6 +154,10 @@ function main() {
 
   const refused = refusalFor(args);
   if (refused) fail(`\`supabase ${refused.cmd}\` is not available through this repo.\n  ${refused.why}`);
+  if (resolved.target === "test") {
+    const notTest = testTargetRefusal(args);
+    if (notTest) fail(notTest);
+  }
 
   // The canonical check, delegated — one definition of which ref is which env.
   execFileSync("node", ["scripts/verify-deploy-target.mjs", "--expect", resolved.target], {

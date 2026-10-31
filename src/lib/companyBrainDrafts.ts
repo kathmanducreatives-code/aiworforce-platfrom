@@ -33,6 +33,8 @@ export interface CompanyBrainDraft {
   userId: string;
   workspaceId: string;
   sectionId: string;
+  /** Which Brain: absent/null = the agency's; a client id = that client's (Phase 3c). */
+  clientId?: string | null;
   /** Server version the edit started from, for background-update detection. */
   brainVersion: string | null;
   values: SectionDraftValues;
@@ -49,6 +51,8 @@ export interface DraftScope {
   userId: string | null | undefined;
   workspaceId: string | null | undefined;
   sectionId: string | null | undefined;
+  /** Which Brain (Phase 3c): absent/null = the agency's, else that client's. Never shared between Brains. */
+  clientId?: string | null;
 }
 
 /**
@@ -57,9 +61,12 @@ export interface DraftScope {
  * draft would appear for another.
  */
 export function draftKey(scope: DraftScope): string | null {
-  const { userId, workspaceId, sectionId } = scope;
+  const { userId, workspaceId, sectionId, clientId } = scope;
   if (!userId || !workspaceId || !sectionId) return null;
-  return `${KEY_PREFIX}:${userId}:${workspaceId}:${sectionId}`;
+  // The agency key is unchanged, so drafts saved before client Brains still restore.
+  return clientId
+    ? `${KEY_PREFIX}:${userId}:${workspaceId}:client:${clientId}:${sectionId}`
+    : `${KEY_PREFIX}:${userId}:${workspaceId}:${sectionId}`;
 }
 
 /** sessionStorage is absent in SSR and can throw in private modes. */
@@ -96,6 +103,9 @@ function validate(raw: unknown, scope: DraftScope): CompanyBrainDraft | null {
   if (d.userId !== scope.userId || d.workspaceId !== scope.workspaceId || d.sectionId !== scope.sectionId) {
     return null;
   }
+  // …and the same Brain: a client draft never restores into the agency Brain or another client's.
+  const draftClient = typeof d.clientId === 'string' ? d.clientId : null;
+  if (draftClient !== (scope.clientId ?? null)) return null;
   if (!d.values || typeof d.values !== 'object' || Array.isArray(d.values)) return null;
 
   return {
@@ -103,6 +113,7 @@ function validate(raw: unknown, scope: DraftScope): CompanyBrainDraft | null {
     userId: d.userId,
     workspaceId: d.workspaceId,
     sectionId: d.sectionId,
+    clientId: draftClient,
     brainVersion: typeof d.brainVersion === 'string' ? d.brainVersion : null,
     values: d.values as SectionDraftValues,
     dirty: d.dirty === true,

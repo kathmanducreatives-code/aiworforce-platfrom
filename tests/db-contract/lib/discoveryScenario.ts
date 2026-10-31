@@ -18,6 +18,7 @@ import { mintJwt, REST_URL, sql, uuid } from "./harness.ts";
 import { seedSmokeMission } from "./smokeMission.ts";
 import { mockCriterionVerdicts } from "./criterionFixture.ts";
 import { createAdmissionFetch, missionAdmission } from "../../../supabase/functions/_shared/smokeAdmission.ts";
+import { installEffectFence } from "../../../supabase/functions/_shared/effectFence.ts";
 import { createLeadMissionRunner } from "../../../worker/leadMissionRunner.ts";
 import { createExecutionDeadline } from "../../../supabase/functions/_shared/leadExecutionFinalizer.ts";
 import { buildMissionCompilerBinding } from "../../../supabase/functions/_shared/leadMissionCompilerBinding.ts";
@@ -193,17 +194,143 @@ export interface Scenario {
   proposal?: Json;
   jobsStartStatus?: number;
   detailsStartStatus?: number;
-  /** Job-search status reads: `ok`, `unreadable` (HTTP 500), `running` (never finishes). */
-  jobsStatus?: "ok" | "unreadable" | "running";
+  /** Job-search status reads: `ok`, `unreadable` (HTTP 500), `running` (never finishes), `failed` (the run FAILED). */
+  jobsStatus?: "ok" | "unreadable" | "running" | "failed";
   /** Raw job-search dataset body (S18: malformed). */
   jobsDatasetRaw?: string;
   /** Every runtime model request after compilation times out (S21). */
   modelTimeout?: boolean;
+  /**
+   * KILL THE FIRST WORKER HARD at this vendor request, then let a second worker
+   * re-claim the queue row and run it (a SIGKILL, offline). From that request
+   * on, every request the first worker makes — database and vendor alike —
+   * never settles, so it can neither write nor buy again:
+   *   `jobs_post`    the job-search start (its answer never arrives);
+   *   `jobs_status`  the first status read of the job search — the run id is
+   *                  already recorded, and no checkpoint has been written yet;
+   *   `details_post` the company-details start, after discovery checkpointed;
+   *   `jobs_run_id_write` the execution ledger's write of the job search's run
+   *                  id (`onRunStarted`): the vendor started the run and the
+   *                  admission ledger recorded its receipt, but
+   *                  `lead_execution_calls.provider_run_id` is never saved.
+   */
+  interrupt?: "jobs_post" | "jobs_status" | "details_post" | "jobs_run_id_write";
+  /**
+   * With `interrupt`: runs after the first worker is dead and before the second
+   * worker claims the row (an operator, a reaper or a tamper between the two).
+   */
+  beforeResume?: (c: { m: Json; taskId: string }) => Promise<void>;
+  /**
+   * The first, real-GPT-only hosted step: the catalog's templates as usual (so
+   * the planner is shown exactly the approved actors and its request fits the
+   * model template), but every actor's start limit is 0, so the gate refuses
+   * each Apify start (`actor_limit`) before it is sent. Compilation and
+   * planning only; no paid provider.
+   */
+  modelOnly?: boolean;
+  /** Run with no Apify token at all (a second barrier beside zero starts). */
+  withoutApifyToken?: boolean;
+  /** Install the live-principal effect fence over the admission gate, as the worker's import does (EXEC-EFFECT). */
+  effectFence?: boolean;
+  /** Remove the requester's membership (committed) when this vendor request arrives. */
+  removeMemberAt?: "jobs_post";
+  // ── THE FUNDING CANARY (scripts/test-project/real-gpt, `canary_funding`) ──
+  /** The authorization's templates, when not the two-actor A7 catalog. */
+  quotes?: Json;
+  /** Each actor's start limit, when not A7's one job search and one details. */
+  actorLimits?: Record<string, number>;
+  /** The request's count (default 1, as A7). */
+  requestedCount?: number;
+  /** The kickoff's run budget (default A7's). */
+  runBudget?: Json;
+  /** Atomus's record for each requested LinkedIn URL (null: not found, which is free). */
+  atomus?: (url: string) => Json | null;
 }
 export interface Run {
   trace: Json; operations: Json[]; leads: Json[]; credits: Json[]; tasks: Json[]; refused: string[];
   of: (k: string) => Json[]; m: Awaited<ReturnType<typeof seedSmokeMission>>; plan: string; outcome: Json;
+  /** The execution ledger's provider_call rows, as the production writer left them. */
+  providerLedger: Json[];
   vendorRequests: Array<{ method: string; path: string; body: unknown }>; modelStages: string[];
+}
+
+/**
+ * THE SCRIPTED VENDORS — OpenAI and Apify answered from the scenario, nothing
+ * else reachable. Shared by the in-process scenarios below and the
+ * real-process rehearsal (tests/realprocess/), which installs it in a real
+ * worker process. `interruptAt` sees each Apify request's kill point; true
+ * leaves that request hanging forever.
+ */
+export function vendorResponder(s: Scenario, o: {
+  trace: Json; vendorRequests: Run["vendorRequests"]; isCompiled: () => boolean;
+  interruptAt?: (at: string | null, worker: string | null) => boolean;
+}): (url: URL, init: RequestInit | undefined, worker: string | null) => Promise<Response> {
+  const model = s.model ?? "honest";
+  const base = company("qualified");
+  const jobs = s.jobs ?? [job("ae", base)];
+  const detailsFor = s.details ?? ((url: string) => jobs.map((j) => j.company).find((c) => c.linkedinUrl === url) ?? null);
+  let detailsUrl: string | null = null;
+  let atomusUrls: string[] = [];
+  let models = 0;
+  return (url, init, worker) => {
+    const body = typeof init?.body === "string" ? (() => { try { return JSON.parse(init.body as string); } catch { return init.body; } })() : null;
+    o.trace.requests.push({ method: init?.method ?? "GET", host: url.hostname, path: url.pathname, query: [...url.searchParams].filter(([k]) => k !== "token"),
+      bytes: new TextEncoder().encode(String(init?.body ?? "")).length });
+    if (url.hostname === "api.openai.com") {
+      models++;
+      const name = body?.response_format?.json_schema?.name ?? null;
+      const system = String(body?.messages?.[0]?.content ?? "");
+      o.trace.model_stages.push(name ?? system.slice(0, 40));
+      if (o.isCompiled() && s.modelTimeout) {
+        return Promise.reject(new DOMException("offline model timeout", "TimeoutError"));
+      }
+      const userMsg = (() => { try { return JSON.parse(String(body?.messages?.at(-1)?.content ?? "")); } catch { return null; } })();
+      const answer = name === "lead_mission_proposal" ? (s.proposal ?? PROPOSAL)
+        : name === "lead_execution_plan" ? EXECUTION_PLAN
+        : system.startsWith("You assess several companies") ? { results: (userMsg?.companies ?? []).map((co: Json) => groundedResult(co.company_key, evidenceIn(co.evidence), model)) }
+        : system.startsWith("Decide whether this company satisfies") ? evaluatorAnswer(userMsg, model, s.aggregate)
+        : system.startsWith("You interpret supplied company evidence") ? groundedResult(String(userMsg?.company_key ?? ""), evidenceIn(userMsg), model)
+        : {};
+      return Promise.resolve(new Response(JSON.stringify({
+        id: `fake-${models}`, model: body?.model, choices: [{ message: { content: JSON.stringify(answer) }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 1000, completion_tokens: 400, total_tokens: 1400 },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    assertEquals(url.hostname, "api.apify.com", `unexpected vendor ${url.hostname}`);
+    o.vendorRequests.push({ method: init?.method ?? "GET", path: url.pathname.replace(/^\/v2\//, ""), body });
+    const kind = url.pathname.includes("atomus") ? "atomus"
+      : url.pathname.includes("linkedin-company") || url.pathname.includes("details") ? "details" : "jobs";
+    const method = init?.method ?? "GET";
+    const at = method === "POST" ? `${kind}_post` : url.pathname.includes("/actor-runs/run-jobs") ? "jobs_status" : null;
+    if (o.interruptAt?.(at, worker)) return new Promise<Response>(() => {});
+    const json = (b: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } }));
+    if ((init?.method ?? "GET") === "POST") {
+      const refused = kind === "jobs" ? s.jobsStartStatus : s.detailsStartStatus;
+      if (refused) return json({ error: { type: "offline", message: "offline: Apify refused the run" } }, refused);
+      if (kind === "details") detailsUrl = (body as Json)?.companies?.[0] ?? null;
+      if (kind === "atomus") atomusUrls = ((body as Json)?.companies ?? []).map(String);
+      return json({ data: { id: `run-${kind}`, defaultDatasetId: `dataset-${kind}`, status: "RUNNING" } }, 201);
+    }
+    if (url.pathname.includes("/actor-runs/")) {
+      const run = url.pathname.split("/").at(-1)!;
+      if (run === "run-jobs" && s.jobsStatus === "unreadable") return json({ error: "offline status unavailable" }, 500);
+      if (run === "run-jobs" && s.jobsStatus === "running") return json({ data: { id: run, defaultDatasetId: "dataset-jobs", status: "RUNNING" } });
+      if (run === "run-jobs" && s.jobsStatus === "failed") return json({ data: { id: run, defaultDatasetId: "dataset-jobs", status: "FAILED" } });
+      return json({ data: { id: run, defaultDatasetId: run.replace("run-", "dataset-"), status: "SUCCEEDED",
+        finishedAt: new Date(Date.now() - 1000).toISOString(),
+        usageTotalUsd: run === "run-jobs" ? 0.004 : run === "run-atomus" ? 0.00005 + 0.0035 * atomusUrls.filter((u) => s.atomus?.(u)).length : 0.00405 } });
+    }
+    assert(url.pathname.includes("/datasets/"), url.pathname);
+    if (url.pathname.includes("dataset-atomus")) {
+      return json(atomusUrls.map((u) => s.atomus?.(u)).filter((r): r is Json => !!r).map((r) => structuredClone(r)));
+    }
+    if (url.pathname.includes("dataset-details")) {
+      const rec = detailsUrl ? detailsFor(detailsUrl) : null;
+      return json(rec ? [structuredClone(rec)] : []);
+    }
+    if (s.jobsDatasetRaw !== undefined) return Promise.resolve(new Response(s.jobsDatasetRaw, { status: 200, headers: { "content-type": "application/json" } }));
+    return json(structuredClone(jobs));
+  };
 }
 
 export async function runScenario(s: Scenario): Promise<Run> {
@@ -228,15 +355,23 @@ export async function runScenario(s: Scenario): Promise<Run> {
   };
   const saved = new Map(Object.keys(env).map((k) => [k, Deno.env.get(k)]));
   for (const [k, v] of Object.entries(env)) Deno.env.set(k, v);
-  for (const k of ["ANTHROPIC_API_KEY", "FIRECRAWL_API_KEY", "FIRECRAWL_USD_PER_CREDIT"]) { saved.set(k, Deno.env.get(k)); Deno.env.delete(k); }
+  for (const k of ["ANTHROPIC_API_KEY", "FIRECRAWL_API_KEY", "FIRECRAWL_USD_PER_CREDIT", ...(s.withoutApifyToken ? ["APIFY_API_TOKEN"] : [])]) {
+    saved.set(k, Deno.env.get(k)); Deno.env.delete(k);
+  }
 
   const evidence = { observed_at: new Date(Date.now() - 60_000).toISOString(), source: "synthetic offline fixture; not an approved vendor quote", liability_bound_ref: "offline rehearsal" };
   const p = CATALOG.approved_quotes as Json;
   const fill = (t: Json) => ({ ...t, ...evidence });
-  const quotes = { jobs: fill(p.jobs), model: fill(p.luna), reads: fill(p.reads), details: { ...fill(p.details), maximum_microusd: SYNTHETIC_DETAILS_MAXIMUM } };
-  const m = await seedSmokeMission({ quotes, actorLimits: { [JOBS]: 1, [DETAILS]: 1 } });
+  const quotes = s.quotes
+    ? Object.fromEntries(Object.entries(s.quotes).map(([k, t]) => [k, fill(t as Json)]))
+    : { jobs: fill(p.jobs), model: fill(p.luna), reads: fill(p.reads), details: { ...fill(p.details), maximum_microusd: SYNTHETIC_DETAILS_MAXIMUM } };
+  const m = await seedSmokeMission({ quotes,
+    actorLimits: s.actorLimits ?? (s.modelOnly ? { [JOBS]: 0, [DETAILS]: 0 } : { [JOBS]: 1, [DETAILS]: 1 }) });
+  const requestedCount = s.requestedCount ?? 1;
   const user = uuid(), plan = uuid();
   await sql`insert into auth.users (id, email) values (${user}, ${"scenario-" + user + "@example.invalid"})`;
+  // The requester is a member: run-agent re-checks the forwarded principal (legacyExecutionGuard).
+  await sql`insert into public.workspace_members (workspace_id, user_id, role) values (${m.ws}, ${user}, 'owner')`;
   await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${m.ws}, 'scout', 'Offline Scout', 'Find and verify the requested company using source evidence.', 'research')`;
   await sql`insert into public.task_plans (id, workspace_id, user_id, user_instruction, status) values (${plan}, ${m.ws}, ${user}, ${missionGoal}, 'running')`;
   await sql`insert into public.workspace_credit_balances (workspace_id, balance_credits) values (${m.ws}, 10)`;
@@ -246,59 +381,46 @@ export async function runScenario(s: Scenario): Promise<Run> {
   const detailsFor = s.details ?? ((url: string) => jobs.map((j) => j.company).find((c) => c.linkedinUrl === url) ?? null);
   const trace: Json = { label: s.label, model, requests: [], admissions: [], model_stages: [], errors: [] };
   const vendorRequests: Run["vendorRequests"] = [];
-  let detailsUrl: string | null = null;
   let compiled = false;
-  let models = 0;
+  // The worker id whose process is "dead" (`s.interrupt`); its requests never settle.
+  let deadWorker: string | null = null;
+  let onKilled: () => void = () => {};
+  const killed = new Promise<void>((r) => onKilled = r);
+  const vendor = vendorResponder(s, { trace, vendorRequests, isCompiled: () => compiled,
+    interruptAt: (at, worker) => {
+      if (!(s.interrupt && trace.killed_at === undefined && at === s.interrupt && worker !== null)) return false;
+      deadWorker = worker;
+      trace.killed_at = at;
+      onKilled();
+      return true;
+    } });
   const fakeTransport: typeof fetch = (u, init) => {
     const url = new URL(u instanceof Request ? u.url : String(u));
-    if (url.origin === new URL(REST_URL).origin) return localFetch(u, init);
-    const body = typeof init?.body === "string" ? (() => { try { return JSON.parse(init.body as string); } catch { return init.body; } })() : null;
-    trace.requests.push({ method: init?.method ?? "GET", host: url.hostname, path: url.pathname, query: [...url.searchParams].filter(([k]) => k !== "token"),
-      bytes: new TextEncoder().encode(String(init?.body ?? "")).length });
-    if (url.hostname === "api.openai.com") {
-      models++;
-      const name = body?.response_format?.json_schema?.name ?? null;
-      const system = String(body?.messages?.[0]?.content ?? "");
-      trace.model_stages.push(name ?? system.slice(0, 40));
-      if (compiled && s.modelTimeout) {
-        return Promise.reject(new DOMException("offline model timeout", "TimeoutError"));
+    const worker = missionAdmission.getStore()?.workerId ?? null;
+    if (deadWorker !== null && worker === deadWorker) return new Promise<Response>(() => {});
+    if (url.origin === new URL(REST_URL).origin) {
+      // The kill between the purchase and its ledger record: the PATCH that
+      // would save the job search's run id on its execution-ledger row.
+      if (s.interrupt === "jobs_run_id_write" && trace.killed_at === undefined && worker !== null
+          && (init?.method ?? "GET") === "PATCH" && url.pathname.endsWith("/lead_execution_calls")
+          && typeof init?.body === "string" && init.body.includes('"provider_run_id":"run-jobs"')) {
+        deadWorker = worker;
+        trace.killed_at = "jobs_run_id_write";
+        onKilled();
+        return new Promise<Response>(() => {});
       }
-      const userMsg = (() => { try { return JSON.parse(String(body?.messages?.at(-1)?.content ?? "")); } catch { return null; } })();
-      const answer = name === "lead_mission_proposal" ? (s.proposal ?? PROPOSAL)
-        : name === "lead_execution_plan" ? EXECUTION_PLAN
-        : system.startsWith("You assess several companies") ? { results: (userMsg?.companies ?? []).map((co: Json) => groundedResult(co.company_key, evidenceIn(co.evidence), model)) }
-        : system.startsWith("Decide whether this company satisfies") ? evaluatorAnswer(userMsg, model, s.aggregate)
-        : system.startsWith("You interpret supplied company evidence") ? groundedResult(String(userMsg?.company_key ?? ""), evidenceIn(userMsg), model)
-        : {};
-      return Promise.resolve(new Response(JSON.stringify({
-        id: `fake-${models}`, model: body?.model, choices: [{ message: { content: JSON.stringify(answer) }, finish_reason: "stop" }],
-        usage: { prompt_tokens: 1000, completion_tokens: 400, total_tokens: 1400 },
-      }), { status: 200, headers: { "content-type": "application/json" } }));
+      return localFetch(u, init);
     }
-    assertEquals(url.hostname, "api.apify.com", `unexpected vendor ${url.hostname}`);
-    vendorRequests.push({ method: init?.method ?? "GET", path: url.pathname.replace(/^\/v2\//, ""), body });
-    const kind = url.pathname.includes("linkedin-company") || url.pathname.includes("details") ? "details" : "jobs";
-    const json = (b: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } }));
-    if ((init?.method ?? "GET") === "POST") {
-      const refused = kind === "jobs" ? s.jobsStartStatus : s.detailsStartStatus;
-      if (refused) return json({ error: { type: "offline", message: "offline: Apify refused the run" } }, refused);
-      if (kind === "details") detailsUrl = (body as Json)?.companies?.[0] ?? null;
-      return json({ data: { id: `run-${kind}`, defaultDatasetId: `dataset-${kind}`, status: "RUNNING" } }, 201);
+    // EXEC-EFFECT: the requester's membership is removed (committed) the moment the job search is bought.
+    if (s.removeMemberAt === "jobs_post" && trace.member_removed_after === undefined && (init?.method ?? "GET") === "POST"
+        && url.hostname === "api.apify.com" && url.pathname.includes("linkedin-job-search")) {
+      return vendor(url, init, worker).then(async (res) => {
+        await sql`delete from public.workspace_members where workspace_id = ${m.ws} and user_id = ${user}`;
+        trace.member_removed_after = trace.requests.length;
+        return res;
+      });
     }
-    if (url.pathname.includes("/actor-runs/")) {
-      const run = url.pathname.split("/").at(-1)!;
-      if (run === "run-jobs" && s.jobsStatus === "unreadable") return json({ error: "offline status unavailable" }, 500);
-      if (run === "run-jobs" && s.jobsStatus === "running") return json({ data: { id: run, defaultDatasetId: "dataset-jobs", status: "RUNNING" } });
-      return json({ data: { id: run, defaultDatasetId: run.replace("run-", "dataset-"), status: "SUCCEEDED",
-        finishedAt: new Date(Date.now() - 1000).toISOString(), usageTotalUsd: run === "run-jobs" ? 0.004 : 0.00405 } });
-    }
-    assert(url.pathname.includes("/datasets/"), url.pathname);
-    if (url.pathname.includes("dataset-details")) {
-      const rec = detailsUrl ? detailsFor(detailsUrl) : null;
-      return json(rec ? [structuredClone(rec)] : []);
-    }
-    if (s.jobsDatasetRaw !== undefined) return Promise.resolve(new Response(s.jobsDatasetRaw, { status: 200, headers: { "content-type": "application/json" } }));
-    return json(structuredClone(jobs));
+    return vendor(url, init, worker);
   };
   const gate = createAdmissionFetch({ db: client as never, ownApi: REST_URL, baseFetch: fakeTransport,
     log: (message, data) => trace.admissions.push({ message, data }) });
@@ -308,33 +430,34 @@ export async function runScenario(s: Scenario): Promise<Run> {
     const compilerCalls = new ModelCallCollector();
     const binding = buildMissionCompilerBinding({ workspaceId: m.ws, onModelCall: compilerCalls.sink });
     const raw = await missionAdmission.run({ queueId: m.queueId, workerId: m.workerId, taskId: m.taskId, generation: m.generation },
-      () => binding.proposeMission!({ originalUserQuery: missionGoal, requestedCount: 1 }));
+      () => binding.proposeMission!({ originalUserQuery: missionGoal, requestedCount }));
     assert(raw, JSON.stringify({ compiler_failure: binding.lastModelFailure() }));
     await compilerCalls.drain(createLedgerWriter(client as never), { workspace_id: m.ws, task_id: m.taskId, plan_id: plan, logical_call_key: "offline:mission_compilation" });
-    const c = compileLeadMission({ originalUserQuery: missionGoal, proposal: raw, requestedCount: 1 });
+    const c = compileLeadMission({ originalUserQuery: missionGoal, proposal: raw, requestedCount });
     const mission = { ...c.final_mission, mission_parser_source: c.parser_source,
       lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION, planner_runtime: runtimeIdentity("planner", "offline-rehearsal") };
     trace.compiled_mission = mission;
     compiled = true;
     globalThis.fetch = gate;
+    if (s.effectFence) installEffectFence(REST_URL);
     const request = { plan_id: plan, step_index: 0, agent_slug: "scout", workspace_id: m.ws, user_id: user, instruction: missionGoal,
-      requested_lead_count: 1, workflow_kind: "qualified_lead_sourcing", execution_mode: "company_first", tool_needed: "source_with_apify",
-      lead_mission: mission, tool_input: { lead_mission: mission, source_type: "jobs" }, run_budget: { provider_usd: 0.20, max_candidates: 3 } };
+      requested_lead_count: requestedCount, workflow_kind: "qualified_lead_sourcing", execution_mode: "company_first", tool_needed: "source_with_apify",
+      lead_mission: mission, tool_input: { lead_mission: mission, source_type: "jobs" }, run_budget: s.runBudget ?? { provider_usd: 0.20, max_candidates: 3 } };
     await sql`update public.tasks set status = 'complete' where id = ${m.taskId}`;
     await sql`update public.lead_mission_queue set task_id = null, lineage_id = null, request = ${sql.json(request as never)} where id = ${m.queueId}`;
     await sql`update public.discovery_smoke_authorizations a set criteria_hash = encode(sha256(convert_to(q.request::text, 'UTF8')), 'hex')
                 from public.lead_mission_queue q where q.id = a.queue_id and a.id = ${m.authorizationId}`;
     const { handleRunAgent } = await import("../../../supabase/functions/run-agent/index.ts");
-    const runner = createLeadMissionRunner({
+    const makeRunner = (workerId: string) => createLeadMissionRunner({
       handler: async (req, opts) => {
         const r = await handleRunAgent(req, opts);
         trace.handler ??= { status: r.status, body: await r.clone().json() };
         return r;
       },
       enforceMissionWallClock: true, serviceRoleKey: key, functionsBaseUrl: `${REST_URL}/functions/v1/`,
-      admission: { workerId: m.workerId }, createDeadline: (budgetMs) => createExecutionDeadline({ budgetMs }),
+      admission: { workerId }, createDeadline: (budgetMs) => createExecutionDeadline({ budgetMs }),
       bind: async (queueId, taskId, lineageId) => {
-        const { data, error } = await client.rpc("bind_lead_mission_execution", { p_queue_id: queueId, p_worker_id: m.workerId, p_task_id: taskId, p_lineage_id: lineageId });
+        const { data, error } = await client.rpc("bind_lead_mission_execution", { p_queue_id: queueId, p_worker_id: workerId, p_task_id: taskId, p_lineage_id: lineageId });
         assertEquals(error, null);
         trace.task_id = taskId;
         return (Array.isArray(data) ? data[0] : data)?.bound === true;
@@ -349,14 +472,37 @@ export async function runScenario(s: Scenario): Promise<Run> {
       },
     });
     const [q] = await sql`select created_at from public.lead_mission_queue where id = ${m.queueId}`;
-    trace.runner = await runner.run({ queueId: m.queueId, workspaceId: m.ws, request, taskId: null, lineageId: null, attempts: 1, isResume: false,
+    const first = makeRunner(m.workerId).run({ queueId: m.queueId, workspaceId: m.ws, request, taskId: null, lineageId: null, attempts: 1, isResume: false,
       heldUntil: null, enqueuedAt: new Date(q.created_at).toISOString() }, { executionBudgetMs: 150000, signal: new AbortController().signal });
+    if (!s.interrupt) {
+      trace.runner = await first;
+    } else {
+      const ended = await Promise.race([first.then(() => true), killed.then(() => false)]);
+      assert(!ended, `the first worker finished before reaching ${s.interrupt}`);
+      if (s.beforeResume) {
+        const [bound] = await sql`select task_id from public.lead_mission_queue where id = ${m.queueId}`;
+        await s.beforeResume({ m, taskId: bound.task_id });
+      }
+      // The dead worker's queue lease lapses and a second worker claims the row,
+      // as claim_next_lead_mission does: same row, its bound task and lineage.
+      const second = uuid();
+      const [b] = await sql`update public.lead_mission_queue set claimed_by = ${second}, lease_expires_at = now() + interval '3 minutes',
+                              attempts = attempts + 1, status = 'running'
+                            where id = ${m.queueId} returning task_id, lineage_id, attempts`;
+      trace.resumed_from = { task_id: b.task_id, lineage_id: b.lineage_id,
+        checkpointed: (await sql`select result ? 'company_first_state' as c from public.tasks where id = ${b.task_id}`)[0]?.c ?? null };
+      trace.runner = await makeRunner(second).run({ queueId: m.queueId, workspaceId: m.ws, request, taskId: b.task_id, lineageId: b.lineage_id,
+        attempts: b.attempts, isResume: true, heldUntil: null, enqueuedAt: new Date(q.created_at).toISOString() },
+        { executionBudgetMs: 150000, signal: new AbortController().signal });
+    }
 
     const operations = await sql`select kind, actor, committed_microusd, reported_microusd, report_source, provider_run_id, operation_key
       from public.discovery_smoke_operations where authorization_id = ${m.authorizationId} order by admitted_at`;
     const leads = (await client.from("lead_candidates").select("*").eq("workspace_id", m.ws)).data ?? [];
     const credits = await sql`select status, idempotency_key from public.credit_transactions where workspace_id = ${m.ws}`;
     const tasks = await sql`select id, status, result from public.tasks where workspace_id = ${m.ws}`;
+    const providerLedger = await sql`select status, provider_run_id, metadata from public.lead_execution_calls
+      where workspace_id = ${m.ws} and record_kind = 'provider_call' order by started_at`;
     const refused = trace.admissions.filter((a: Json) => a.message === "[smoke-admission] refused").map((a: Json) => a.data?.decision);
     const of = (k: string) => (operations as Json[]).filter((o) => o.kind === k);
     const live = (tasks as Json[]).map((t) => t.result).find((r) => r?.capability_execution_state) ?? {};
@@ -375,7 +521,7 @@ export async function runScenario(s: Scenario): Promise<Run> {
     };
     trace.outcome = outcome;
     return { trace, operations: operations as Json[], leads: leads as Json[], credits: credits as Json[], tasks: tasks as Json[], refused, of, m, plan,
-      outcome, vendorRequests, modelStages: trace.model_stages };
+      outcome, providerLedger: [...providerLedger] as Json[], vendorRequests, modelStages: trace.model_stages };
   } catch (e) {
     trace.errors.push(String(e));
     throw e;

@@ -29,6 +29,7 @@
 import { MISSION_STRATEGIES, REQUESTED_OUTPUTS } from "./leadMission.ts";
 import { PUBLIC_CAPABILITY_IDS } from "./leadCapabilityCatalogue.ts";
 import { SOURCE_STRATEGIES } from "./leadMissionCompiler.ts";
+import { type MissionContractVersion, SIGNAL_WINDOWS_PROPERTY } from "./missionInterpretationContract.ts";
 
 export const GPT_MISSION_SCHEMA_VERSION = "gpt-mission-schema-v1" as const;
 
@@ -139,7 +140,10 @@ export const MISSION_PROPOSAL_PROPERTIES = {
       employee_range: employeeRange(""),
     },
   },
-  disallowed_broadening: strings("Dimensions that must never be widened."),
+  disallowed_broadening: strings(
+    "Dimensions that must never be widened, by these names: geography, industry, business_model, " +
+      "stage, size, role, recency.",
+  ),
   required_evidence: strings("Evidence a candidate must carry to qualify."),
   required_capabilities: {
     ...strings("Pipeline stages this request needs, from the catalogue only."),
@@ -204,3 +208,23 @@ export const GPT_MISSION_SCHEMA = {
     properties: MISSION_PROPOSAL_PROPERTIES,
   },
 } as unknown as { name: string; schema: Record<string, unknown> };
+
+/**
+ * CONTRACT v2 (`missionInterpretationContract`): v1 plus `signal_windows`, each
+ * signal's own timeframe in the user's words. Used only when
+ * AGENTORY_MISSION_CONTRACT=v2; v1 above is unchanged.
+ */
+export const GPT_MISSION_SCHEMA_V2 = {
+  name: "lead_mission_proposal_v2",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: [...MISSION_PROPOSAL_FIELDS, "signal_windows"],
+    properties: { ...MISSION_PROPOSAL_PROPERTIES, signal_windows: SIGNAL_WINDOWS_PROPERTY },
+  },
+} as unknown as { name: string; schema: Record<string, unknown> };
+
+/** The structured-output schema for a contract version. */
+export function gptMissionSchemaFor(contract: MissionContractVersion) {
+  return contract === "v2" ? GPT_MISSION_SCHEMA_V2 : GPT_MISSION_SCHEMA;
+}

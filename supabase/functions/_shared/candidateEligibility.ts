@@ -662,7 +662,10 @@ function anyOfResolved(criteria: readonly MissionCriterion[], checks: CriterionC
  * Hard criteria decide it; everything else is checked for the record and
  * cannot change the outcome.
  *
- *   - The evaluator's per-criterion verdicts can only lower a check (#113).
+ *   - The evaluator's per-criterion verdicts can only lower a check (#113) —
+ *     except that the model's own evidence-free abstention does not lower a
+ *     funding window a clean, dated round record has decided
+ *     (`fundingResolvesAbstention`).
  *   - A `hold` (`qualificationHold.ts`) can only stop an otherwise ELIGIBLE
  *     candidate: it becomes pending with a blocked `qualification_hold` check.
  */
@@ -716,6 +719,13 @@ export function evaluateEligibility(
         evidence_ids: verdict.evidence.map((e) => e.evidence_id), provenance: null };
     }
     if (verdict?.result === "pass") return check; // never upgrades missing facts
+    // A DATED ROUND RESOLVES A GENUINE ABSTENTION — AND NOTHING ELSE.
+    // On the job-first route the funding verifier runs AFTER the evaluator, so
+    // the evaluator answered "unknown" before any round existed, and that
+    // stale abstention held a company Atomus had just proven funded inside the
+    // window as pending (the first-canary rehearsal). See `fundingResolvesAbstention`.
+    if (fundingResolvesAbstention(c, check, verdict, graph)) return check;
+    if (authorityResolvesAbstention(c, check, verdict, graph)) return check;
     return { ...check, result: verdict?.result === "fail" ? "fail" as const : "unknown" as const,
       reason: verdict?.reason ?? "the evaluator did not establish this criterion",
       evidence_ids: verdict?.evidence.map((e) => e.evidence_id) ?? [] };
@@ -758,4 +768,71 @@ export function evaluateEligibility(
     .map((h) => CRITERION_EVIDENCE_DIMENSION[h.dimension])
     .filter((d): d is EvidenceDimension => !!d))];
   return { version: ELIGIBILITY_VERSION, eligibility, checks, hard_checks, disproven, gaps, held };
+}
+
+/**
+ * May a dated funding record resolve the evaluator's earlier `unknown`?
+ *
+ * Only when ALL hold — otherwise the verdict lowers the check as #113 says:
+ *   - the verdict is a GENUINE abstention: the model itself answered
+ *     "unknown" and offered no receipt (`origin: "abstained"`). An `unknown`
+ *     the parser made — a pass/fail whose receipts were missing, stale,
+ *     conflicting, invalid or foreign (`downgraded`), an unknown citing
+ *     rejected receipts, a missing row, an unparsed answer, or a verdict with
+ *     no recorded origin — is unresolved, never an abstention;
+ *   - the criterion is a WINDOWED funding requirement and the check passed
+ *     through `decideRecentlyFunded` over dated round records (a window and at
+ *     least one record leave no other path to `pass` above);
+ *   - the funding evidence is clean: its current item is proven (null when all are stale), and
+ *     the graph holds no conflicting, stale or disproven funding item.
+ */
+/**
+ * May a PROVEN AUTHORITY RULE resolve the evaluator's evidence-free `unknown`?
+ *
+ * Canary session 2, LangChain: the company record flagged exactly one
+ * headquarters, San Francisco, United States — `li_record_flagged_headquarters`,
+ * level proven — so the headquarters check passed on structured evidence. The
+ * evaluator, shown the office list as well, answered "unknown" with no receipt,
+ * and that abstention lowered the proven check: the company could never
+ * qualify on geography. The same rule `fundingResolvesAbstention` states for a
+ * dated round applies to every authority-proven fact:
+ *   - the verdict is a GENUINE abstention: the model itself answered
+ *     "unknown" (`origin: "abstained"`). It may cite what made it hesitate —
+ *     LangChain's answer cited the office list — but an `unknown` asserts no
+ *     fact; a contradiction comes back as `fail` with receipts, and a fail, a
+ *     downgraded or rejected answer, a missing row or an unparsed answer still
+ *     lowers the check as before;
+ *   - the check PASSED on the graph, from an item a registered authority rule
+ *     PROVES (`evidenceAuthority.ts`) — a plausible provider field, a job-row
+ *     location or a model reading never qualifies here;
+ *   - no proven item for the dimension disagrees with it.
+ * Funding has its own, stricter rule above; interpretive dimensions (industry,
+ * business model) are the evaluator's to answer and are never resolved here.
+ */
+function authorityResolvesAbstention(
+  c: MissionCriterion, check: CriterionCheck, verdict: CriterionVerdict | null, graph: CompanyEvidenceGraph,
+): boolean {
+  if (check.result !== "pass" || c.dimension === "funding" || interpretive(c)) return false;
+  if (!verdict || verdict.result !== "unknown" || verdict.origin !== "abstained") return false;
+  const dim = CRITERION_EVIDENCE_DIMENSION[c.dimension];
+  const claim = dim ? graph.claims.find((x) => x.dimension === dim) : undefined;
+  if (!claim) return false;
+  const proven = (e: EvidenceItem | null | undefined) =>
+    !!e && e.status === "proven" && e.authority?.level === "proven";
+  const authoritative = [claim.current, ...claim.supporting].filter(proven);
+  if (!authoritative.some((e) => check.evidence_ids.includes(e!.evidence_id) ||
+    (c.dimension === "geography" && e!.authority?.claim === "headquarters"))) return false;
+  return !claim.conflicting.some(proven);
+}
+
+function fundingResolvesAbstention(
+  c: MissionCriterion, check: CriterionCheck, verdict: CriterionVerdict | null, graph: CompanyEvidenceGraph,
+): boolean {
+  if (c.dimension !== "funding" || !c.time_window?.days || check.result !== "pass") return false;
+  if (!verdict || verdict.result !== "unknown" || verdict.origin !== "abstained" || verdict.evidence.length > 0) return false;
+  if (fundingRecordsInGraph(graph).length === 0 || graph.conflicts.includes("funding")) return false;
+  const claim = graph.claims.find((x) => x.dimension === "funding");
+  if (!claim || claim.current?.status !== "proven") return false;
+  if (claim.conflicting.length > 0 || claim.stale.length > 0) return false;
+  return ![claim.current, ...claim.supporting].some((i) => i?.status === "disproven");
 }

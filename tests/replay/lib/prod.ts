@@ -69,22 +69,9 @@ export function candidateRule(l: SpendLedger, q: Pick<ReserveRequest, "purpose" 
 
 // ── VERBATIM FROM PR #24 run-agent (inline there) ──────────────────────────
 
-export function verifiableCandidatesFrom(
-  engineRun: { companies: readonly EngineCompany[] }, vCriteria: readonly MissionCriterion[], missionId: string,
-): VerifiableCandidate[] {
-  return missionCandidatesFrom(engineRun, { missionId: String(missionId) }).map((cand) => {
-    const e = evaluateEligibility(vCriteria as MissionCriterion[], cand.graph);
-    return {
-      company_key: cand.company_key, name: cand.name, domain: cand.domain, linkedin_url: cand.linkedin_url,
-      graph: cand.graph, eligibility: e.eligibility,
-      hard_checks: e.checks.filter((x) => x.kind === "hard"),
-      attempted_routes: cand.attempted_routes ?? [],
-      unaffordable_routes: cand.unaffordable_routes ?? [],
-      // Triage withheld paid verification: `verificationTargets` skips it.
-      paid_verification_blocked: cand.paid_verification_blocked ?? null,
-    };
-  });
-}
+// The verification phase's candidates: the SHARED production function since
+// canary session 2 (the copy here had lost the verdicts and holds).
+export { verifiableCandidatesFrom } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 
 export function missionHiringVerifier(vMission: LeadMissionV1, vCriteria: readonly MissionCriterion[]) {
   const hiringCriterion = vCriteria.find((c) => c.dimension === "hiring" && c.kind === "hard" && c.status === "ok");
@@ -119,8 +106,7 @@ export function unfinishedFrontierCount(companies: readonly EngineCompany[]): nu
 
 /** What run-agent must carry for the copies above to be the code it runs (source pins). */
 export const RUN_AGENT_PINS = [
-  "const vCandidates = () => missionCandidatesFrom(engineRun, { missionId: String(task.id) }).map((cand) => {",
-  "unaffordable_routes: cand.unaffordable_routes ?? [],",
+  "const vCandidates = () => verifiableCandidatesFrom(engineRun, vCriteria, String(task.id));",
   "const hiringCriterion = vCriteria.find((c) => c.dimension === \"hiring\" && c.kind === \"hard\" && c.status === \"ok\");",
   "const titles = hiringSearchTitles(vocab);",
   "? capabilityRun.companies.filter((c) =>\n            isUnfinishedFrontier(\n              c.investigation_state,",

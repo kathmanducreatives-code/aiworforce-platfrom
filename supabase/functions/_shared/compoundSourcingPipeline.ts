@@ -110,7 +110,41 @@ export interface PendingDecisionMaker {
     bucket: string;
     label: string | null;
     hard_checks: Record<string, string>;
+    /**
+     * What each hard requirement's answer rests on (`canonicalHardEvidence`):
+     * the provider or rule, how it was read, and where. Carried so the Leads
+     * page can show the proof and its uncertainty instead of a bare "pass".
+     */
+    hard_evidence?: RequirementEvidence[];
   } | null;
+}
+
+/** One hard requirement's answer and the evidence it rests on, as persisted on a lead row. */
+export interface RequirementEvidence {
+  dimension: string;
+  result: string;
+  reason: string;
+  /**
+   * The EXTERNAL provider the answer rests on (an actor key such as
+   * `apify_linkedin_job_search`); never an engine rule. Null when nothing
+   * external answered.
+   */
+  source: string | null;
+  /** Every external provider that contributed to this requirement's evidence. */
+  providers?: string[];
+  /**
+   * Two independent sources agree (different data origins, e.g. Atomus and
+   * Pvalyou), or a corroboration step confirmed it. One provider's record,
+   * however it was checked, is NOT corroborated.
+   */
+  corroborated?: boolean;
+  /** Agentory applied its own rule to the provider's data (role/date match). */
+  checked_by_rule?: boolean;
+  method: string | null;
+  status: string | null;
+  confidence: string | null;
+  url: string | null;
+  excerpt: string | null;
 }
 
 

@@ -97,7 +97,20 @@ Deno.test("test worker: the smoke's minimal orchestration, and keys for only the
 Deno.test("test worker: each secret reaches only the step that reads it; actions are pinned (H1-H3)", () => {
   assertEquals(secretKeys(job.env), [], "no secret at job level: it would reach every step, third-party actions included");
   assertEquals(steps[0].env, { SUPABASE_URL: "${{ secrets.TEST_SUPABASE_URL }}" }, "the guard reads the URL only");
+  // The canary launch's own steps (tests/infra/canaryWorkflow.test.ts): the
+  // administrator connection and the Apify token, only on a launch dispatch.
+  const launch = (s: Step) => (s.name ?? "").startsWith("Canary launch:") && (s as { if?: string }).if?.includes("inputs.canary_stage == 'launch'");
+  // The canary session's own steps (tests/infra/canarySession.test.ts): only on a session dispatch.
+  const session = (s: Step) => (s.name ?? "").startsWith("Canary session:") && (s as { if?: string }).if?.includes("inputs.canary_stage == 'session'");
   for (const s of steps.filter((s) => s !== steps[0] && s !== workerStep)) {
+    if (launch(s) && s.run) {
+      assertEquals(secretKeys(s.env), ["APIFY_API_TOKEN", "TEST_DB_URL"], `${s.name}`);
+      continue;
+    }
+    if (session(s) && s.run) {
+      assert(["APIFY_API_TOKEN,OPENAI_API_KEY,TEST_DB_URL", "APIFY_API_TOKEN,TEST_DB_URL"].includes(secretKeys(s.env).join(",")), `${s.name}`);
+      continue;
+    }
     assertEquals(secretKeys(s.env), [], `${s.name ?? s.uses} receives no secret`);
   }
   for (const s of steps.filter((s) => s.uses)) {

@@ -1,0 +1,52 @@
+{
+  "requested_opportunity_count": 1,
+  "requested_contact_ready_count": null,
+  "company_types": [
+    "B2B software"
+  ],
+  "geographies": [
+    "United States"
+  ],
+  "geography_is_hard": true,
+  "employee_range": {
+    "min": 11,
+    "max": 50
+  },
+  "decision_maker_roles": [],
+  "hard_constraints": [],
+  "soft_preferences": [],
+  "preferred_signals": [
+    "hiring Account Executive"
+  ],
+  "required_signal_terms": [
+    "Account Executive"
+  ],
+  "signal_recency_days": 30,
+  "adjacent_signals": [],
+  "excluded_signals": [],
+  "allowed_broadening": {
+    "role_families": [],
+    "company_types": [],
+    "geographies": [],
+    "employee_range": {
+      "min": null,
+      "max": null
+    }
+  },
+  "disallowed_broadening": [
+    "geography",
+    "role",
+    "size"
+  ],
+  "required_evidence": [],
+  "required_capabilities": [
+    "general_company_discovery",
+    "embedded_hiring_evidence",
+    "company_semantic_evaluation"
+  ],
+  "preferred_source_strategy": [],
+  "evaluation_instructions": "All requirements must be verified; unknown is never match.",
+  "founder_unlock_recommended": false,
+  "confidence": 0.99,
+  "unknowns": []
+}

@@ -11,7 +11,7 @@
 
 import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  resolveTarget, configuredRef, environmentOf, refusalFor,
+  resolveTarget, configuredRef, environmentOf, refusalFor, testIsProduction, testTargetRefusal,
 } from "../../scripts/supabase-target.mjs";
 
 const TEST_REF = "ohsdatpvfdjdemstoiuj";
@@ -191,4 +191,30 @@ Deno.test("the baseline snapshot still declares itself informational", async () 
     "../../supabase/migrations-archive/20260526000000_baseline_from_prod.sql", import.meta.url));
   assertStringIncludes(sql, "INFORMATIONAL ONLY");
   assertStringIncludes(sql, "NOT meant to be applied");
+});
+
+// "TEST" resolves to production today, so the test target only reads.
+Deno.test("test target: while it names production, every mutating command is refused", () => {
+  assert(testIsProduction(), "both canonical refs name the same project today");
+  for (const args of [["functions", "deploy", "run-agent"], ["secrets", "set", "X=1"], ["migration", "repair"], ["storage", "rm", "x"], ["link"]]) {
+    const r = testTargetRefusal(args);
+    assert(r, args.join(" "));
+    assertStringIncludes(r!, "PRODUCTION project");
+  }
+  for (const args of [["functions", "list"], ["secrets", "list"], ["migration", "list", "--linked"], ["projects", "list"]]) {
+    assertEquals(testTargetRefusal(args), null, args.join(" "));
+  }
+});
+
+Deno.test("test target: once an isolated TEST ref exists, the read-only restriction lifts", () => {
+  const isolated = { production: "ohsdatpvfdjdemstoiuj", test: "abcdefghijklmnopqrst" };
+  assertEquals(testIsProduction(isolated), false);
+  assertEquals(testTargetRefusal(["functions", "deploy", "run-agent"], isolated), null);
+});
+
+Deno.test("test target: main() applies the guard before the CLI runs", () => {
+  const src = Deno.readTextFileSync(new URL("../../scripts/supabase-target.mjs", import.meta.url));
+  const guard = src.indexOf("testTargetRefusal(args)");
+  const cli = src.indexOf('execFileSync("supabase"');
+  assert(guard > 0 && cli > guard, "the refusal precedes the supabase call");
 });

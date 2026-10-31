@@ -59,9 +59,10 @@ Deno.test("2. the invalidation is scoped to this workspace", () => {
   // cache can never serve another. Invalidating a bare key would blow away
   // every workspace's row, which is both wasteful and a way to leak one
   // workspace's loading state into another's screen.
+  // CACHE-SESSION (Codex #185): the key is also this signed-in session's.
   assert(
-    /companyBrainKey\(workspaceId\)/.test(ONBOARDING),
-    "invalidate the key for THIS workspace, not a bare prefix",
+    /companyBrainKey\(workspaceId, AGENCY_SCOPE, principal\)/.test(ONBOARDING),
+    "invalidate the key for THIS workspace and THIS session, not a bare prefix",
   );
 });
 
@@ -98,9 +99,12 @@ Deno.test("5. every writer of the brain refreshes what reads it", () => {
   const dashboard = Deno.readTextFileSync(
     new URL("src/pages/CompanyBrainDashboard.tsx", ROOT),
   );
+  // The settings editor writes through the one authorized save path
+  // (generate-company-brain-draft `update`), never the row directly — see
+  // tests/edge-functions/companyBrainWritePaths.test.ts.
   assert(
-    /\.from\('company_brain'\)[\s\S]{0,200}\.update\(/.test(dashboard),
-    "the settings editor is expected to write the row",
+    /saveCompanyBrainPatch\(/.test(dashboard),
+    "the settings editor is expected to write the row through the shared save",
   );
   assert(
     /refresh\(\)/.test(dashboard),

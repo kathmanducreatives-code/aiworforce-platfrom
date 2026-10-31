@@ -185,3 +185,24 @@ Deno.test("12. no lead-path module reaches the shared multi-provider layer", asy
       `${f} must name no other provider outside comments`);
   }
 });
+
+Deno.test("canary 2: a spend-gate refusal is `admission_refused`, never `http_error`, and is not retried", async () => {
+  // The fifth worker call of canary session 2 was refused by the mission's own
+  // gate (4 worker attempts) and recorded as an OpenAI HTTP error.
+  const { refusal } = await import("../../../supabase/functions/_shared/smokeAdmission.ts");
+  for (const earlier of [false, true]) {
+    let calls = 0;
+    const r = await gptStructured(REQ, {
+      readEnv: KEY, fetch: () => { calls++; return Promise.resolve(refusal("attempt_limit", null, earlier)); },
+    } as never);
+    assert(!r.ok);
+    assertEquals(r.code, "admission_refused", `purchase_may_exist=${earlier}`);
+    assertEquals(r.retryable, false);
+    assertEquals(calls, 1, "the gate is asked once: a refusal (even a 503) is not a transient provider fault");
+    assert(!r.detail.includes("OpenAI returned"), r.detail);
+  }
+  const { isProviderSideFailure } = await import("../../../supabase/functions/_shared/modelEscalation.ts");
+  const { isUnrecoverableModelFailure } = await import("../../../supabase/functions/_shared/modelFailureContract.ts");
+  assert(isProviderSideFailure("admission_refused"), "never escalated to a dearer model");
+  assert(isUnrecoverableModelFailure("admission_refused"), "never repaired");
+});

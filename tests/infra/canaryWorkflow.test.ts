@@ -1,0 +1,356 @@
+// THE FIRST REAL-APIFY CANARY'S AUTOMATION, PINNED.
+//
+// The canary runs through the existing guarded test-worker workflow (input
+// `canary_stage`), never a parallel path. Pinned here, offline:
+//   - `none` is the worker exactly as before; the canary stages run in the
+//     same Environment, behind a refusal step that names the isolated project,
+//     the canary workspace and the approved commit;
+//   - each secret reaches only the step that reads it; the model key only the
+//     paid compile; actions are pinned to full SHAs;
+//   - the stage script's own constants (target, reviewed checksums, approval
+//     phrases) match the reviewed files;
+//   - the kickoff validator refuses every drift the approval rests on.
+// The stages themselves run end to end against a local database and a
+// stand-in Apify API in scripts/test-project/canary/local-rehearsal.sh.
+import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { parse } from "https://deno.land/std@0.224.0/yaml/mod.ts";
+import { prepareKickoff } from "../../scripts/test-project/real-gpt/prepareKickoff.ts";
+import { approvedCatalog, validateKickoff } from "../../scripts/test-project/canary/validate-kickoff.ts";
+import { canaryBudget, CANARY_BUDGET_MICROUSD } from "../../scripts/test-project/canary/canary-budget.ts";
+import { checkDbUrl } from "../../scripts/test-project/canary/db-url-check.ts";
+
+const ROOT = new URL("../../", import.meta.url);
+const RAW = Deno.readTextFileSync(new URL(".github/workflows/discovery-test-worker.yml", ROOT));
+const STAGE = Deno.readTextFileSync(new URL("scripts/test-project/canary/canary-stage.sh", ROOT));
+const CATALOG = JSON.parse(Deno.readTextFileSync(new URL("docs/launch/proposals/smoke-catalog-canary-funding.json", ROOT)));
+const PROPOSAL = JSON.parse(Deno.readTextFileSync(new URL("docs/launch/proposals/canary-funding-reviewed-mission-proposal.json", ROOT)));
+const MIGRATION = Deno.readFileSync(new URL("supabase/migrations-held/20261029120000_smoke_read_cap_seven.sql", ROOT)) as Uint8Array<ArrayBuffer>;
+const ROLLBACK = Deno.readFileSync(new URL("supabase/migrations-held/rollback/20261029120000_smoke_read_cap_seven.down.sql", ROOT)) as Uint8Array<ArrayBuffer>;
+
+interface Step { name?: string; run?: string; uses?: string; if?: string; with?: Record<string, string>; env?: Record<string, string> }
+interface Job { if?: string; environment?: string; permissions?: Record<string, string>; "timeout-minutes"?: number; env: Record<string, string>; steps: Step[] }
+const wf = parse(RAW) as { on: { workflow_dispatch: { inputs: Record<string, Record<string, unknown>> } }; jobs: Record<string, Job> };
+const worker = wf.jobs.worker, canary = wf.jobs.canary;
+const secretKeys = (env: Record<string, string> = {}) =>
+  Object.entries(env).filter(([, v]) => String(v).includes("secrets.")).map(([k]) => k).sort();
+const SHA = "0123456789abcdef0123456789abcdef01234567";
+
+Deno.test("canary: one workflow — `none` (the default) is the worker; the other stages are one Environment-guarded job", () => {
+  const i = wf.on.workflow_dispatch.inputs;
+  assertEquals(i.canary_stage.default, "none");
+  assertEquals(i.canary_stage.options, ["none", "verify", "migrate", "prepare", "launch", "reconcile", "session", "evidence"]);
+  assertEquals(Object.keys(wf.jobs).sort(), ["canary", "worker"]);
+  // `session` runs in the worker job (its kickoff must precede the worker step), never the canary job.
+  assertStringIncludes(worker.if!, `!contains(fromJSON('["verify","migrate","prepare","reconcile","evidence"]'), inputs.canary_stage)`);
+  assertStringIncludes(canary.if!, `contains(fromJSON('["verify","migrate","prepare","reconcile","evidence"]'), inputs.canary_stage)`);
+  assertEquals(canary.environment, "discovery-test", "the same Environment and required reviewer");
+  assertEquals(worker.permissions, { contents: "read", actions: "read" }, "actions: read only, to download the prepare artifact");
+  assertEquals(canary.permissions, { contents: "read", actions: "read" }, "actions: read only, to count earlier prepare runs");
+  assertStringIncludes(RAW, `run-name: "Discovery test worker — \${{ inputs.canary_stage || 'none' }} @ \${{ inputs.expected_sha }}"`);
+});
+
+async function guard(job: Job, env: Record<string, string>) {
+  const out = await new Deno.Command("bash", {
+    args: ["-c", job.steps[0].run!], clearEnv: true, stdout: "piped", stderr: "piped",
+    env: { PATH: Deno.env.get("PATH") ?? "", GITHUB_SHA: SHA, EXPECTED_SHA: SHA, ...env },
+  }).output();
+  return { code: out.code, err: new TextDecoder().decode(out.stderr) };
+}
+const CANARY_ENV = { CONFIRM_REF: "tlvnfrxzjhsjgdofwehb", TEST_PROJECT_REF: "tlvnfrxzjhsjgdofwehb",
+  SUPABASE_URL: "https://tlvnfrxzjhsjgdofwehb.supabase.co", TEST_WORKSPACE_ID: "40e2512f-09b6-433e-97fe-f9999a1f1897", CANARY_STAGE: "verify" };
+
+Deno.test("canary job guard, executed: the canary project, workspace and commit only; production refused before checkout", async () => {
+  assert(canary.steps[0].name!.startsWith("Refuse"), "the guard is the first step");
+  assertEquals((await guard(canary, CANARY_ENV)).code, 0);
+  for (const stage of ["verify", "migrate", "prepare", "reconcile", "evidence"]) assertEquals((await guard(canary, { ...CANARY_ENV, CANARY_STAGE: stage })).code, 0);
+  const refused: Array<[Record<string, string>, string]> = [
+    [{ CONFIRM_REF: "ohsdatpvfdjdemstoiuj", TEST_PROJECT_REF: "ohsdatpvfdjdemstoiuj", SUPABASE_URL: "https://ohsdatpvfdjdemstoiuj.supabase.co" }, "not a non-production project"],
+    [{ CONFIRM_REF: "abcdefghijklmnopqrst", TEST_PROJECT_REF: "abcdefghijklmnopqrst", SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co" }, "tlvnfrxzjhsjgdofwehb only"],
+    [{ TEST_PROJECT_REF: "abcdefghijklmnopqrst" }, "does not match the Environment"],
+    [{ SUPABASE_URL: "https://ohsdatpvfdjdemstoiuj.supabase.co" }, "does not name the confirmed project"],
+    [{ TEST_WORKSPACE_ID: "9d09038b-2d39-49ca-b687-e3946ea7266d" }, "not the canary workspace"],
+    [{ EXPECTED_SHA: "f".repeat(40) }, "not the approved expected_sha"],
+    [{ CANARY_STAGE: "launch" }, "unknown canary stage"],
+  ];
+  for (const [over, why] of refused) {
+    const r = await guard(canary, { ...CANARY_ENV, ...over });
+    assertEquals(r.code, 1, JSON.stringify(over));
+    assertStringIncludes(r.err, why);
+  }
+});
+
+const WORKER_ENV = { CONFIRM_REF: "tlvnfrxzjhsjgdofwehb", TEST_PROJECT_REF: "tlvnfrxzjhsjgdofwehb",
+  SUPABASE_URL: "https://tlvnfrxzjhsjgdofwehb.supabase.co", LEAD_V2_WORKER_WORKSPACES: "40e2512f-09b6-433e-97fe-f9999a1f1897",
+  SESSION_MINUTES: "5", PROVIDERS: "openai-and-apify", CANARY_STAGE: "launch", KICKOFF_RUN_ID: "40833206361", KICKOFF_SHA256: "a".repeat(64) };
+
+Deno.test("worker guard, executed: launch needs the canary project and workspace, a paid dispatch and a named kickoff", async () => {
+  assertEquals((await guard(worker, WORKER_ENV)).code, 0);
+  assertEquals((await guard(worker, { ...WORKER_ENV, CANARY_STAGE: "none", PROVIDERS: "openai-only" })).code, 0, "the plain worker is unchanged");
+  const refused: Array<[Record<string, string>, string]> = [
+    [{ PROVIDERS: "openai-only" }, "providers must be openai-and-apify"],
+    [{ KICKOFF_SHA256: "" }, "approved kickoff sha256"],
+    [{ KICKOFF_RUN_ID: "latest" }, "approved kickoff sha256"],
+    [{ LEAD_V2_WORKER_WORKSPACES: "9d09038b-2d39-49ca-b687-e3946ea7266d" }, "discovery-test workspace only"],
+    [{ CONFIRM_REF: "abcdefghijklmnopqrst", TEST_PROJECT_REF: "abcdefghijklmnopqrst", SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co" }, "tlvnfrxzjhsjgdofwehb only"],
+    [{ CANARY_STAGE: "migrate" }, "does not run the worker"],
+  ];
+  for (const [over, why] of refused) {
+    const r = await guard(worker, { ...WORKER_ENV, ...over });
+    assertEquals(r.code, 1, JSON.stringify(over));
+    assertStringIncludes(r.err, why);
+  }
+});
+
+Deno.test("canary: each secret reaches only its step; the model key only the paid compile; actions pinned; no interpolation", () => {
+  assertEquals(secretKeys(canary.env), [], "no secret at job level");
+  assertEquals(canary.steps[0].env, { SUPABASE_URL: "${{ secrets.TEST_SUPABASE_URL }}" });
+  const stage = canary.steps.find((s) => (s.run ?? "").includes("canary-stage.sh"))!;
+  assertEquals(secretKeys(stage.env), ["APIFY_API_TOKEN", "OPENAI_API_KEY", "TEST_DB_URL"]);
+  assertEquals(stage.env!.OPENAI_API_KEY, "${{ inputs.canary_stage == 'prepare' && secrets.TEST_OPENAI_API_KEY || '' }}");
+  for (const s of canary.steps.filter((s) => s !== canary.steps[0] && s !== stage)) assertEquals(secretKeys(s.env), [], s.name ?? s.uses);
+  for (const job of [worker, canary]) {
+    for (const s of job.steps) {
+      assert(!(s.run ?? "").includes("${{"), `no expression interpolation in '${s.name ?? s.uses}'`);
+      if (s.uses) assert(/^[^@]+@[0-9a-f]{40}$/.test(s.uses), `${s.uses} must be pinned to a full commit SHA`);
+    }
+  }
+  // The launch: its kickoff executes immediately before the worker step, inside the 300 s window.
+  const names = worker.steps.map((s) => s.name ?? s.uses ?? "");
+  const exec = names.findIndex((n) => n.startsWith("Canary launch: re-verify"));
+  const workerAt = names.indexOf("One bounded worker session (drains on SIGTERM, then exits)");
+  // Between the launch's kickoff and the worker only the session's own (skipped on launch) step may sit.
+  assert(workerAt > exec && workerAt - exec <= 2 && names.slice(exec + 1, workerAt).every((n) => n.startsWith("Canary session:")), names.join(" | "));
+  for (const s of worker.steps.filter((s) => (s.name ?? "").startsWith("Canary launch:"))) assertStringIncludes(s.if!, "inputs.canary_stage == 'launch'");
+});
+
+async function sha256(b: Uint8Array<ArrayBuffer>) {
+  return [...new Uint8Array(await crypto.subtle.digest("SHA-256", b))].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+Deno.test("stage script: the one target, the reviewed checksums and the exact approval phrases", async () => {
+  assertStringIncludes(STAGE, "REF=tlvnfrxzjhsjgdofwehb");
+  assertStringIncludes(STAGE, "WS=40e2512f-09b6-433e-97fe-f9999a1f1897");
+  assertStringIncludes(STAGE, "PRODUCTION_REFS=(ohsdatpvfdjdemstoiuj wqnigjhcwjxtmordrwno)");
+  assertStringIncludes(STAGE, `MIGRATION_SHA256=${await sha256(MIGRATION)}`);
+  assertStringIncludes(STAGE, `ROLLBACK_SHA256=${await sha256(ROLLBACK)}`);
+  assertStringIncludes(STAGE, 'require_approval "apply 20261029120000_smoke_read_cap_seven to $REF"');
+  assertStringIncludes(STAGE, 'require_approval "compile canary kickoff at $EXPECTED_SHA"');
+  assertStringIncludes(STAGE, 'require_approval "launch canary $sha on $REF with a software-enforced \\$3 budget"');
+  // Every paid stage runs the $3 budget gate; read-only stages open read-only sessions.
+  for (const stage of ["verify)", "prepare)", "launch)"]) {
+    const body = STAGE.slice(STAGE.indexOf(`  ${stage}\n`), STAGE.indexOf(";;", STAGE.indexOf(`  ${stage}\n`)));
+    assertStringIncludes(body, "check_budget", stage);
+  }
+  assertStringIncludes(STAGE, 'case "$STAGE" in migrate|launch|session-close) DB_WRITES=1 ;; *) DB_WRITES=0 ;; esac');
+  assertStringIncludes(STAGE, '-c "set default_transaction_read_only = on"');
+  // The database URL is only ever handed to psql; nothing echoes it.
+  assert(!/echo[^\n]*\$TEST_DB_URL/.test(STAGE) && !/echo[^\n]*\$\{?APIFY_API_TOKEN/.test(STAGE) && !/echo[^\n]*\$\{?OPENAI_API_KEY/.test(STAGE));
+  // Read-only stages write nothing: no psql -f of anything but the reviewed migration, the kickoff and read-only SQL.
+  const runs = [...STAGE.matchAll(/\b(q|q_ro) (?:-F '\|' )?(?:-v [^ ]+ )*-f "?([^"\s]+)"?/g)].map((m) => [m[1], m[2]]);
+  assertEquals([...new Set(runs.map(([, f]) => f))].sort(), ['$AUDIT/kickoff/kickoff.sql', '$AUDIT/verify-checks.sql', '$MIGRATION', '$dir/kickoff.sql',
+    "scripts/test-project/canary/session-summary.sql", "scripts/test-project/real-gpt/preflight.sql",
+    "scripts/test-project/smoke-reconciliation.sql"].sort());
+  // The only files a session-capable (q) call may run that write: the reviewed migration and the validated kickoffs.
+  for (const [fn, f] of runs) {
+    if (fn === "q" && !["$MIGRATION", "$dir/kickoff.sql", "$AUDIT/kickoff/kickoff.sql"].includes(f)) {
+      assert(["scripts/test-project/real-gpt/preflight.sql", "$AUDIT/verify-checks.sql", "scripts/test-project/smoke-reconciliation.sql"].includes(f), f);
+    }
+  }
+});
+
+const kickoff = (over: Record<string, unknown> = {}) => prepareKickoff({
+  scenario: "canary_funding", project_ref: "tlvnfrxzjhsjgdofwehb", workspace_id: "40e2512f-09b6-433e-97fe-f9999a1f1897",
+  user_id: "22222222-2222-4222-8222-222222222222", queue_id: "33333333-3333-4333-8333-333333333333", plan_id: "44444444-4444-4444-8444-444444444444",
+  pricing_version: "test", catalog: CATALOG.approved_quotes, planner_commit: SHA,
+  prices: { jobs_maximum_microusd: 4000, details_maximum_microusd: 4050, atomus_maximum_microusd: 10550, observed_at: "2026-10-29T00:00:00Z", source: "test" },
+  compile: () => Promise.resolve(structuredClone(PROPOSAL)),
+  paid: { approved_by: "test approver", actor_limits: Object.fromEntries(Object.entries(CATALOG.actor_limits_proposed_for_paid_canary).filter(([k]) => k !== "note")) as Record<string, number> },
+  ...over,
+} as never);
+const failed = (k: Record<string, unknown>, sql: string, sha = SHA) => validateKickoff(k as never, sql, sha).filter((c) => !c.ok).map((c) => c.id);
+
+Deno.test("kickoff validator, Contract 3: its narrowed catalog passes K01–K20; Contract 2's figures or a raised catalog fail", async () => {
+  const CATALOG3 = JSON.parse(Deno.readTextFileSync(new URL("../../docs/launch/proposals/smoke-catalog-canary-funding-3.json", import.meta.url)));
+  const REAL2 = JSON.parse(Deno.readTextFileSync(new URL("../../docs/launch/proposals/canary-session-2-real-gpt-proposal.json", import.meta.url)));
+  const k = await kickoff({
+    catalog: CATALOG3.approved_quotes, compile: () => Promise.resolve(structuredClone(REAL2)),
+    prices: { jobs_maximum_microusd: 2000, details_maximum_microusd: 4050, atomus_maximum_microusd: 3550, observed_at: "2026-10-29T00:00:00Z", source: "test" },
+  }) as unknown as Record<string, unknown> & { sql: string };
+  const f3 = (doc: Record<string, unknown>) =>
+    validateKickoff(k as never, k.sql, SHA, approvedCatalog(doc)).filter((c) => !c.ok).map((c) => c.id);
+  assertEquals(f3(CATALOG3), [], "Contract 3's kickoff against Contract 3's catalog");
+  assertStringIncludes(k.sql, "worst-case provider 9600 µ$.");
+  // Against Contract 2's figures the same kickoff is refused: the validator reads the catalog, it does not trust it.
+  assert(failed(k, k.sql).includes("K11") && failed(k, k.sql).includes("K12"));
+  // A catalog above the reviewed ceiling is refused even when the kickoff matches it.
+  const raised = structuredClone(CATALOG3); raised.approved_quotes.atomus.maximum_microusd = 20_000;
+  assert(f3(raised).includes("K11"), "no catalog may exceed the reviewed ceilings");
+  // …even when the kickoff was prepared at exactly that raised figure: the CEILING refuses it, not a mismatch.
+  const atRaised = await kickoff({
+    catalog: raised.approved_quotes, compile: () => Promise.resolve(structuredClone(REAL2)),
+    prices: { jobs_maximum_microusd: 2000, details_maximum_microusd: 4050, atomus_maximum_microusd: 20_000, observed_at: "2026-10-29T00:00:00Z", source: "test" },
+  }) as unknown as Record<string, unknown> & { sql: string };
+  const viaRaised = validateKickoff(atRaised as never, atRaised.sql, SHA, approvedCatalog(raised)).filter((c) => !c.ok).map((c) => c.id);
+  assert(viaRaised.includes("K11"), `a raised catalog fails K11 even when matched: ${viaRaised}`);
+});
+
+Deno.test("kickoff validator: the approved paid canary passes K01–K19", async () => {
+  const k = await kickoff() as unknown as Record<string, unknown> & { sql: string };
+  assertEquals(failed(k, k.sql), []);
+});
+
+Deno.test("kickoff validator: every drift the approval rests on is refused", async () => {
+  const k = await kickoff() as unknown as Record<string, any> & { sql: string }; // eslint-disable-line @typescript-eslint/no-explicit-any
+  assertEquals(failed(k, k.sql, "f".repeat(40)), ["K08"], "another commit");
+  const zero = await kickoff({ paid: undefined }) as unknown as Record<string, unknown> & { sql: string };
+  assert(failed(zero, zero.sql).includes("K09") && failed(zero, zero.sql).includes("K17"), "a zero-start kickoff is not the paid canary");
+  const twoStarts = structuredClone(k); twoStarts.authorization.actor_limits["apify:atomus~linkedin-company-scraper"] = 2;
+  assert(failed(twoStarts, k.sql).includes("K09"), "a second Atomus start");
+  const pv = structuredClone(k); pv.authorization.quotes.pvalyou = { maximum_microusd: 40050, allowed_actors: ["apify:pvalyou~company-record"] };
+  assert(failed(pv, k.sql).includes("K10"), "a Pvalyou fallback");
+  const dear = structuredClone(k); dear.authorization.quotes.atomus.maximum_microusd = 20000;
+  assert(failed(dear, k.sql).includes("K11") && failed(dear, k.sql).includes("K12"), "a raised maximum");
+  const five = structuredClone(k); five.request.requested_lead_count = 5;
+  assert(failed(five, k.sql).includes("K03"), "five companies");
+  const unassumed = structuredClone(k); unassumed.disclosures = [];
+  assert(failed(unassumed, k.sql).includes("K07"), "the assumed hiring window dropped");
+  assert(failed(k, k.sql.replace("tlvnfrxzjhsjgdofwehb.", "abcdefghijklmnopqrst.")).includes("K16"), "another project");
+  assert(failed(k, k.sql.replace("commit;\n", "update public.workspace_credit_balances set balance_credits = 99;\ncommit;\n")).includes("K18"),
+    "an extra statement");
+  const other = structuredClone(k); other.request.workspace_id = "9d09038b-2d39-49ca-b687-e3946ea7266d";
+  assert(failed(other, k.sql).includes("K04"), "another workspace");
+});
+
+// ── the $3 canary budget (canary-budget.ts) ──────────────────────────────────
+const APIFY = { account: { room_usd: 18.99987, max_monthly_usage_usd: 19 }, actors: [
+  { template: "jobs", available: true, pricing_model: "PAY_PER_EVENT", worst_case_usd: 0.004 },
+  { template: "details", available: true, pricing_model: "PAY_PER_EVENT", worst_case_usd: 0.00405 },
+  { template: "atomus", available: true, pricing_model: "PAY_PER_EVENT", worst_case_usd: 0.01055 },
+] };
+const budget = (over: { stage?: string; apify?: unknown; spent?: number; prepares?: number } = {}) => canaryBudget({
+  stage: over.stage ?? "prepare", apify: (over.apify ?? APIFY) as never, spentMicrousd: over.spent ?? 0,
+  priorPrepares: over.prepares ?? 0, catalog: CATALOG.approved_quotes });
+const failing = (r: ReturnType<typeof canaryBudget>) => r.checks.filter((c) => c.result === "FAIL").map((c) => c.id);
+
+Deno.test("budget: the observed account (a $19 limit) passes the $3 canary gate, and the limitation is stated, never a PASS", () => {
+  const r = budget();
+  assertEquals([r.ok, failing(r)], [true, []]);
+  assertEquals(r.next_worst_microusd, 93_480, "compile 2 × $0.01248 + provider $0.0186 + worker model 4 × $0.01248");
+  const b6 = r.checks.find((c) => c.id === "B6")!;
+  assertEquals(b6.result, "INFO");
+  assertStringIncludes(b6.observed, "account hard limit $19");
+  assertStringIncludes(b6.observed, "unproven until the first run's receipts");
+  assertEquals(budget({ stage: "launch" }).next_worst_microusd, 68_520, "launch: the compile is already spent");
+});
+
+Deno.test("budget: too little left of the $3, a price above its reservation, a non-PPE actor or too little account room each refuse", () => {
+  assertEquals(failing(budget({ spent: CANARY_BUDGET_MICROUSD - 93_479 })), ["B4"], "one micro-dollar short");
+  assertEquals(budget({ spent: CANARY_BUDGET_MICROUSD - 93_480 }).ok, true, "exactly fits");
+  assertEquals(failing(budget({ stage: "launch", spent: 2_950_000 })), ["B4"]);
+  const dear = structuredClone(APIFY); dear.actors[2].worst_case_usd = 0.0106;
+  assertEquals(failing(budget({ apify: dear })), ["B2"]);
+  const flat = structuredClone(APIFY); (flat.actors[0] as Record<string, unknown>).pricing_model = "FLAT_PRICE_PER_MONTH";
+  assertEquals(failing(budget({ apify: flat })), ["B1"], "no per-run charge cap on a non-PPE actor");
+  const gone = structuredClone(APIFY); gone.actors[1].available = false;
+  assertEquals(failing(budget({ apify: gone })), ["B1"]);
+  const poor = structuredClone(APIFY); poor.account.room_usd = 0.01;
+  assertEquals(failing(budget({ apify: poor })), ["B5"]);
+  assertEquals(budget({ apify: { account: {}, actors: [] } }).ok, false, "no Apify record: refused");
+});
+
+Deno.test("budget: a session reserves the compile AND the paid run; an unknown stage fails closed (review blocker)", () => {
+  assertEquals(budget({ stage: "session" }).next_worst_microusd, 93_480);
+  assertEquals(failing(budget({ stage: "session", spent: 2_990_000 })), ["B4"], "$2.99 spent leaves no room for a session");
+  assertEquals(budget({ stage: "session", spent: CANARY_BUDGET_MICROUSD - 93_480 }).ok, true);
+  for (const stage of ["", "launch-and-more", "close"]) {
+    assert(failing(budget({ stage })).includes("B0") && failing(budget({ stage })).includes("B4"), stage);
+  }
+});
+
+Deno.test("budget: every earlier prepare's compile counts against the $3, launched or not (the unlaunched-compile gap)", () => {
+  // Each prepare may spend up to 2 × $0.01248 before any database row exists.
+  assertEquals(budget({ prepares: 3 }).spent_microusd, 3 * 24_960);
+  assertEquals(budget({ stage: "launch", prepares: 1, spent: 68_520 }).spent_microusd, 68_520 + 24_960);
+  // 116 abandoned prepares leave room for one more prepare; 117 do not.
+  assertEquals(budget({ prepares: 116 }).ok, true);
+  assertEquals(failing(budget({ prepares: 117 })), ["B4"]);
+  assertEquals(budget({ prepares: -1 }).ok, false, "an unreadable count refuses");
+  assertEquals(budget({ prepares: 1.5 }).ok, false);
+  const stage = STAGE.slice(STAGE.indexOf("prior_prepares() {"), STAGE.indexOf("check_budget() {"));
+  assertStringIncludes(stage, '[ -n "${GITHUB_TOKEN:-}" ] || return 1', "fails closed without a token");
+  assertStringIncludes(stage, 'contains(" — prepare @ ")', "counted by the run title the workflow sets");
+  assertStringIncludes(stage, "!= $self", "the current run is the next stage's worst case, not counted twice");
+  assert(!/estimated_cost_usd/.test(STAGE), "compiles are counted from the runs, never also from the ledger");
+});
+
+// ── TEST_DB_URL, checked before psql (db-url-check.ts) ───────────────────────
+// Regression: the first verify with TEST_DB_URL set failed with psql's
+// local-socket fallback ("/var/run/postgresql/.s.PGSQL.5432"): any value not
+// starting exactly with postgresql:// is read as a database name.
+const PW = "s3cr3t-Pa55";
+const POOLER = `postgresql://postgres.tlvnfrxzjhsjgdofwehb:${PW}@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres`;
+const DIRECT = `postgresql://postgres:${PW}@db.tlvnfrxzjhsjgdofwehb.supabase.co:5432/postgres`;
+const verdict = (raw: string | undefined, local = false) => {
+  const c = checkDbUrl(raw, "tlvnfrxzjhsjgdofwehb", local);
+  return { ok: c.length >= 8 && c.every((x) => x.ok), failed: c.filter((x) => !x.ok).map((x) => `${x.id}: ${x.detail}`), all: c };
+};
+
+Deno.test("TEST_DB_URL: the session pooler and the direct URI of the isolated project pass", () => {
+  assertEquals(verdict(POOLER).failed, []);
+  assertEquals(verdict(DIRECT).failed, []);
+  assertEquals(verdict(POOLER.replace("postgresql://", "postgres://")).ok, true);
+  assertEquals(verdict(POOLER + "?sslmode=require").ok, true);
+});
+
+Deno.test("TEST_DB_URL: every shape psql would read as a database name is named precisely (the socket-fallback regression)", () => {
+  const cases: Array<[string, string]> = [
+    [" " + POOLER, "remove 1 leading and 0 trailing whitespace"],
+    ["\n" + POOLER, "remove 1 leading and 0 trailing whitespace"],
+    [POOLER + "\n", "remove 0 leading and 1 trailing whitespace"],
+    [`"${POOLER}"`, "remove the quotes"],
+    [`'${POOLER}'`, "remove the quotes"],
+    [`psql "${POOLER}"`, "a pasted psql command"],
+    [`jdbc:${POOLER}`, "a jdbc: prefix"],
+    [`TEST_DB_URL=${POOLER}`, "a NAME= prefix"],
+    [POOLER.replace("postgresql://", ""), "no postgresql:// scheme"],
+    ["host=aws-1-ap-northeast-2.pooler.supabase.com user=postgres.tlvnfrxzjhsjgdofwehb dbname=postgres", "key=value conninfo"],
+    [undefined as unknown as string, "empty or not passed"],
+  ];
+  for (const [raw, why] of cases) {
+    const v = verdict(raw);
+    assertEquals(v.ok, false, JSON.stringify(raw));
+    assert(v.failed.some((f) => f.includes(why)), `${JSON.stringify(raw)} → ${JSON.stringify(v.failed)}`);
+  }
+});
+
+Deno.test("TEST_DB_URL: only the isolated project, the session pooler (5432), database postgres, a real password", () => {
+  const fails = (raw: string, why: string) => assert(verdict(raw).failed.some((f) => f.includes(why)), `${raw} → ${verdict(raw).failed}`);
+  fails(POOLER.replaceAll("tlvnfrxzjhsjgdofwehb", "ohsdatpvfdjdemstoiuj"), "PRODUCTION");
+  fails(DIRECT.replaceAll("tlvnfrxzjhsjgdofwehb", "ohsdatpvfdjdemstoiuj"), "PRODUCTION");
+  fails(POOLER.replaceAll("tlvnfrxzjhsjgdofwehb", "abcdefghijklmnopqrst"), "the user must be exactly postgres.tlvnfrxzjhsjgdofwehb");
+  fails(POOLER.replace("postgres.tlvnfrxzjhsjgdofwehb:", "postgres:"), "the user must be exactly postgres.tlvnfrxzjhsjgdofwehb");
+  fails(POOLER.replace(":5432/", ":6543/"), "TRANSACTION pooler");
+  fails(POOLER.replace(":5432/postgres", ":5432/other"), "use postgres");
+  fails(POOLER.replace(PW, "[YOUR-PASSWORD]"), "placeholder");
+  fails(POOLER.replace(PW, "pa@ss"), "unencoded special character");
+  fails(POOLER.replace(PW, "pa#ss"), "unencoded special character");
+  fails(POOLER.replace(PW, "pa/ss"), "unencoded special character");
+  assertEquals(verdict(POOLER.replace(PW, "pa%40ss%23")).ok, true, "an encoded password passes");
+  fails(POOLER.replace(`:${PW}`, ""), "no password");
+  fails(DIRECT.replace("db.tlvnfrxzjhsjgdofwehb.supabase.co", "127.0.0.1"), "is not the isolated project");
+  // Nothing printed carries the password.
+  for (const raw of [POOLER, " " + POOLER, `psql "${POOLER}"`, POOLER.replace(":5432/", ":6543/")]) {
+    assert(!JSON.stringify(verdict(raw).all).includes(PW), "the password never appears in a check");
+  }
+});
+
+Deno.test("TEST_DB_URL: the loopback exception is the local rehearsal's alone — the workflow never enables it", () => {
+  const local = `postgresql://postgres.tlvnfrxzjhsjgdofwehb:${PW}@127.0.0.1:5432/canary_rehearsal_x`;
+  assertEquals(verdict(local, true).ok, true);
+  assertEquals(verdict(local, false).ok, false, "without the flag a loopback host is refused");
+  assertEquals(verdict(local.replace("127.0.0.1", "db.example.com"), true).ok, false, "the flag accepts loopback only");
+  assert(!RAW.includes("CANARY_LOCAL_REHEARSAL"), "the workflow never sets the rehearsal flag");
+  // Every psql call is behind the check.
+  assertStringIncludes(STAGE, 'scripts/test-project/canary/db-url-check.ts');
+  assertStringIncludes(STAGE, '[ "$DB_URL_OK" = "1" ] || stop "internal: database call before TEST_DB_URL was checked"');
+});

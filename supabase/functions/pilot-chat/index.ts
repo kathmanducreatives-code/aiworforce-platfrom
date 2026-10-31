@@ -47,7 +47,9 @@ import {
 import {
   COMPETITORS_NEED_CONTEXT, PROFILE_POSTS_NEED_URLS,
 } from "../_shared/signalSourcingSurface.ts";
-import { shouldGateObjective } from "../_shared/companyBrainGate.ts";
+import { brainReadinessV2Enabled, readinessGate, shouldGateObjective } from "../_shared/companyBrainGate.ts";
+import { companyBrainReadiness, type BrainReadiness } from "../_shared/companyBrainReadiness.ts";
+import { normalizeCompanyBrain } from "../_shared/normalizeCompanyBrain.ts";
 import {
   failureMetadata, OUTCOME_CONTRACT_VERSION, satisfied, partiallySatisfied,
 } from "../_shared/outcomeContract.ts";
@@ -112,6 +114,7 @@ import { getSourceCapability } from "../_shared/sourceCapabilities.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, resolveCompanyContactTarget, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
+import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { leadIntentFromMission, planJobsActorInput, type LeadIntent, type BrainLite } from "../_shared/leadIntent.ts";
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
 import { routeQualifiedLead, qualifiedLeadRouteFromMission, normalizeCompanyVertical, inferCompanyStage, contractJobTitles } from "../_shared/qualifiedLeadRouting.ts";
@@ -1894,6 +1897,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // would let the two layers disagree about what the workspace says.
   let brainProfileForMission: Record<string, unknown> | null = null;
   let brainOnboardedForGate = false;
+  // Roadmap Phase 2, behind BRAIN_READINESS_V2: what this Brain can power yet.
+  const readinessV2 = brainReadinessV2Enabled((k) => { try { return Deno.env.get(k); } catch { return undefined; } });
+  // Computed only with the switch on, so the switch off changes nothing at all.
+  let brainReadiness: BrainReadiness | null = null;
   /**
    * What the request asked to WRITE, if anything — read once, above, and reused
    * by the memory follow-up section so it does not have to ask again.
@@ -1909,10 +1916,14 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       const profile = (data?.profile ?? null) as Record<string, unknown> | null;
       brainProfileForMission = profile;
       brainOnboardedForGate = data?.onboarding_completed === true;
-      if (!profile || !hasUsableBrain(profile, data?.onboarding_completed === true)) {
+      if (readinessV2) brainReadiness = companyBrainReadiness(normalizeCompanyBrain(profile ?? {}), brainOnboardedForGate);
+      // V2: a usable (not yet activated) Brain is context too — a request its
+      // readiness allows must not run without it.
+      const contextAllowed = brainReadiness ? brainReadiness.state !== "draft" : brainOnboardedForGate;
+      if (!profile || !hasUsableBrain(profile, contextAllowed)) {
         return null;
       }
-      return buildCompanyBrainContext(profile) || null;
+      return buildCompanyBrainContext(profile, { integrationStatus: buildIntegrationStatus() }) || null;
     } catch { return null; }
   })();
   const readEnvSafe = (k: string): string | undefined => {
@@ -2632,7 +2643,18 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // it is answered from held records above, before the router's refusal
       // and before this. So nothing here needs an exemption for it, and adding
       // one would be dead code pretending to be a safeguard.
-      if (shouldGateObjective(understood.request.objective,
+      if (readinessV2) {
+        // Assigned inside the context loader above (a closure), hence the explicit type.
+        const readinessNow = (brainReadiness as BrainReadiness | null) ?? companyBrainReadiness(normalizeCompanyBrain({}), false);
+        const gate = readinessGate(understood.request.objective, planCompose(understood.request)?.kind ?? null, readinessNow);
+        if (gate.gated) {
+          return await replyAndReturn(gate.reply, {
+            gated: "brain_not_ready",
+            clarification: true,
+            chat_brain: { route: brainRoute.kind, objective: understood.request.objective, capability: gate.capability, readiness: readinessNow.state },
+          });
+        }
+      } else if (shouldGateObjective(understood.request.objective,
             { onboarding_completed: brainOnboardedForGate })) {
         return await replyAndReturn(ONBOARDING_GATE_REPLY, {
           gated: "missing_brain",
@@ -3504,8 +3526,12 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   const brainProfile = (cbRow?.profile ?? null) as Record<string, unknown> | null;
-  const brainReady = hasUsableBrain(brainProfile, cbRow?.onboarding_completed === true);
-  const brainCtx = brainReady ? buildCompanyBrainContext(brainProfile) : "";
+  // Same rule as the context block above: under BRAIN_READINESS_V2 a usable Brain counts.
+  const brainContextAllowed = readinessV2
+    ? companyBrainReadiness(normalizeCompanyBrain(brainProfile ?? {}), cbRow?.onboarding_completed === true).state !== "draft"
+    : cbRow?.onboarding_completed === true;
+  const brainReady = hasUsableBrain(brainProfile, brainContextAllowed);
+  const brainCtx = brainReady ? buildCompanyBrainContext(brainProfile, { integrationStatus: buildIntegrationStatus() }) : "";
 
   // Personalized reply: a single Gemini call seeded with the compact brain
   // context + a category-specific instruction. Falls back to a static string

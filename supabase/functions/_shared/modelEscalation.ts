@@ -50,7 +50,10 @@
 //
 // PURE. No network, model or database access — the model call is injected.
 
-import { escalationRoute, type GptStage, type ModelRoute, routeModel, type RoutingSignals } from "./gptModelRouter.ts";
+import {
+  activeModelFamily, DEFAULT_MODEL_FAMILY, escalationRoute, type GptStage, type ModelFamilyId, type ModelRoute, routeModel,
+  type RoutingSignals,
+} from "./gptModelRouter.ts";
 import { isUnrecoverableModelFailure } from "./modelFailureContract.ts";
 
 export const MODEL_ESCALATION_VERSION = "model-escalation-v1" as const;
@@ -64,6 +67,8 @@ export const MODEL_ESCALATION_VERSION = "model-escalation-v1" as const;
  */
 const PROVIDER_FAILURE_CODES = new Set([
   "quota_exhausted", "no_api_key", "http_error", "transport_error", "timeout",
+  // The spend gate said no: a dearer model is the one thing that must not follow.
+  "admission_refused",
 ]);
 
 export function isProviderSideFailure(code: string | null | undefined): boolean {
@@ -141,6 +146,12 @@ export async function runWithEscalation<T>(
     validate: (value: T) => ValidationVerdict;
     signals?: RoutingSignals;
     onEvent?: (r: EscalationRecord) => void;
+    /**
+     * A run's allowance of escalations, shared across its stages. Absent means
+     * no run-level cap (the per-call ladder is still one rung). Present and
+     * spent, a rejected result fails safely instead of escalating.
+     */
+    escalationBudget?: EscalationBudget;
   },
 ): Promise<EscalationResult<T>> {
   const signals = deps.signals ?? {};
@@ -242,6 +253,26 @@ async function escalate<T>(
     };
   }
 
+  // A RUN-LEVEL CAP, on top of the one-rung ladder. Every escalating stage is
+  // bounded per call; without this a run whose amendments are each rejected
+  // escalates once per amendment. Spent, it fails safely like a stage with no
+  // escalation path, and says why.
+  if (deps.escalationBudget && !deps.escalationBudget.tryConsume(stage)) {
+    return {
+      ok: false,
+      record: emit({
+        ...base, event: "final_failure",
+        actual_model: primary.model,
+        escalation_reason: `escalation_budget_exhausted (${deps.escalationBudget.max} per run): ${reason}`.slice(0, 500),
+        provider_failure_code: primaryFailureCode,
+        attempts: 1,
+      }),
+      route: primary,
+      failureCode: "escalation_budget_exhausted",
+      failureDetail: reason,
+    };
+  }
+
   emit({
     ...base, event: "terra_escalation",
     actual_model: route.model,
@@ -306,4 +337,56 @@ async function escalate<T>(
     }),
     route,
   };
+}
+
+/**
+ * How many escalations one run may make, across all of its stages.
+ *
+ * Deterministic and counted, never a model's judgement. `max` 0 disables
+ * escalation for the run. One instance per run, passed to every
+ * `runWithEscalation` call that run makes.
+ */
+export class EscalationBudget {
+  readonly max: number;
+  private readonly spent: GptStage[] = [];
+  constructor(max: number) {
+    this.max = Number.isFinite(max) && max >= 0 ? Math.floor(max) : 0;
+  }
+  /** Spend one escalation for `stage`; false when none is left. */
+  tryConsume(stage: GptStage): boolean {
+    if (this.spent.length >= this.max) return false;
+    this.spent.push(stage);
+    return true;
+  }
+  get used(): readonly GptStage[] { return this.spent; }
+}
+
+/**
+ * THE MISSION-LEVEL ESCALATION CAP (Luna → Sol under the gpt-6 family).
+ *
+ * The production escalations of a lead mission are the engine's repair rounds
+ * — a refused discovery selection or execution plan asked once more, on the
+ * escalation model. Each DECISION already gets at most one. Across a mission,
+ * though, discovery is re-planned per wave and slice, so the number of repairs
+ * was unbounded. Under gpt-6 each one is a Sol call, so the mission carries a
+ * count (`escalations_used`, checkpointed with the engine state) and stops at
+ * this cap: a refused plan past it is blocked, exactly as a failed repair is.
+ *
+ * Null — no cap, today's behaviour — on the default family, which the review
+ * required to stay byte-identical. AGENTORY_MAX_ESCALATIONS_PER_MISSION
+ * overrides the default of 3; 0 disables escalation for the mission.
+ */
+export const MISSION_ESCALATION_CAP_ENV = "AGENTORY_MAX_ESCALATIONS_PER_MISSION";
+export const DEFAULT_MISSION_ESCALATION_CAP = 3;
+export function missionEscalationCap(
+  family: ModelFamilyId = activeModelFamily(),
+  read: (k: string) => string | undefined = (k) => {
+    try { return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get(k); }
+    catch { return undefined; }
+  },
+): number | null {
+  if (family === DEFAULT_MODEL_FAMILY) return null;
+  const raw = String(read(MISSION_ESCALATION_CAP_ENV) ?? "").trim();
+  const n = raw === "" ? NaN : Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : DEFAULT_MISSION_ESCALATION_CAP;
 }

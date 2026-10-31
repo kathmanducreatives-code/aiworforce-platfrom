@@ -93,7 +93,8 @@ import {
   type QualificationContext,
 } from "./missionQualificationContext.ts";
 import {
-  buildMissionEvaluationInput, notEvaluated, reevaluationContextFrom,
+  buildMissionEvaluationInput, evaluatorAnswered, failedEvaluationMarks, FAILED_EVALUATION_MARK, notEvaluated,
+  reevaluationContextFrom, RETRIED_EVALUATION_MARK, retryFailedEvaluation,
   type MissionReevaluationContextV1,
   type MissionEvaluation, type MissionEvaluationInput,
   type ParsedMissionEvaluation, type DecisionSource,
@@ -253,14 +254,15 @@ import { PRODUCTION_READINESS, routeActorReady, type ReadinessPolicy } from "./r
 import { markProviderUnavailable, unavailableProvider, type UnavailableProvider } from "./providerAvailability.ts";
 import {
   attemptedRoutes, unaffordableOpKey, unaffordableRoutes, verifyOpKey, type ClaimVerifier, type PendingVerifierRun, type VerificationTarget,
-  type VerifierFinding,
+  type VerifiableCandidate, type VerificationDecision, type VerifierFinding,
 } from "./claimVerifier.ts";
 import type { MapSelection } from "./webEvidenceRunner.ts";
 import { atomusInput, FUNDING_STAGE_VERIFIER_KEY } from "./fundingStageVerifier.ts";
 import { bucketOf, candidateDecision, decisionCounts, decisionSummary, type CandidateDecision, type MissionCandidate } from "./workbenchMissionView.ts";
 import { evaluateEligibility } from "./candidateEligibility.ts";
+import type { RequirementEvidence } from "./compoundSourcingPipeline.ts";
 import { canStillQualify, evidenceGapsFor } from "./evidenceGapRouter.ts";
-import { deriveMissionCriteria } from "./missionCriteria.ts";
+import { deriveMissionCriteria, type MissionCriterion } from "./missionCriteria.ts";
 import { fundingRecordEvidenceItem, fundingRecordFromDiscoveredRound } from "./fundingCorroboration.ts";
 import {
   decideFundingStage, fundingStageEvidenceItem, normalizeRoundType, requiredStagesOf, stageRank,
@@ -285,6 +287,8 @@ import { canonicalJson } from "./planHash.ts";
 import { sha256Hex } from "./providerInputFingerprint.ts";
 import { PENDING_RUN_MAX_POLLS, PENDING_RUN_MAX_WAIT_MS } from "./leadAutoContinuation.ts";
 import { tightenCeilings, type RunBudget } from "./runBudget.ts";
+import { missionEscalationCap } from "./modelEscalation.ts";
+import { activeModelFamily } from "./gptModelRouter.ts";
 import {
   nextUnreadPage, screenAdmissionOrder, type FundingScreenPlan, type ScreenVerdict,
 } from "./fundingPoolScreen.ts";
@@ -635,6 +639,11 @@ export interface CapabilityExecutionState {
    */
   unavailable_providers?: UnavailableProvider[];
   /**
+   * Repair rounds (escalations) this MISSION has made, across slices. Counted
+   * only when a mission escalation cap applies (`missionEscalationCap`).
+   */
+  escalations_used?: number;
+  /**
    * Claim-verifier provider runs still executing when a slice ended — adopted
    * by run id on the next slice, never bought twice (`claimVerifier`).
    */
@@ -645,6 +654,13 @@ export interface CapabilityExecutionState {
    * next slice. Never provider runs, so never read as work in flight.
    */
   verifier_deferred_steps?: PendingVerifierRun[];
+  /**
+   * Each candidate's verification decision for each verifier at the start of
+   * the last verification phase, with its reason (`verificationDecisions`):
+   * why a purchase was or was not made, kept on the checkpoint rather than in
+   * a worker log nobody keeps.
+   */
+  verification_decisions?: VerificationDecision[];
   /**
    * The pages each bought site map selected, by domain and intent set
    * (`webEvidenceRunner.recordMapMemory`), so a later collection for the same
@@ -2631,6 +2647,23 @@ export async function runCapabilityPlan(
       ? { ...opts.state!, provider_attempts: [...opts.state!.provider_attempts] }
       : newExecutionState(opts.plan, hash, bindingPrint);
 
+  // ── A REPAIR ROUND IS AN ESCALATION, AND A MISSION HAS A FEW ──────────────
+  //
+  // Null on the default model family (no cap; unchanged). Under gpt-6 a repair
+  // runs on Sol, and the count rides on the checkpointed state so a later
+  // slice cannot spend the allowance again. See `missionEscalationCap`.
+  const escalationCap = missionEscalationCap(activeModelFamily(opts.readEnv), opts.readEnv);
+  const spendEscalation = (stage: string): boolean => {
+    if (escalationCap === null) return true;
+    const used = state.escalations_used ?? 0;
+    if (used >= escalationCap) {
+      log("mission_escalation_budget_exhausted", { stage, used, cap: escalationCap });
+      return false;
+    }
+    state.escalations_used = used + 1;
+    return true;
+  };
+
   // ── REPAIR A CHECKPOINT AN OLDER BUILD POISONED ──────────────────────────
   //
   // The rule in `finish` stops this state being created. This undoes the ones
@@ -3251,6 +3284,8 @@ export async function runCapabilityPlan(
       }
 
       const blocking = first.violations.filter((v) => v.severity === "block");
+      // Past the mission's escalation cap the refusal stands, as a failed repair does.
+      if (!spendEscalation("discovery_actor_selection_repair")) return first;
       log("discovery_strategy_repair_attempt", {
         violations: blocking.map((v) => v.code),
         actors: blocking.map((v) => v.actor_key ?? null),
@@ -4784,6 +4819,15 @@ export async function runCapabilityPlan(
         executionPlan = first;
       } else {
         const blocking = first.violations.filter((v) => v.severity === "block");
+        if (!spendEscalation("execution_plan_repair")) {
+          state.terminal_reason = "execution_plan_blocked";
+          state.fallback_reason = "escalation_budget_exhausted";
+          log("execution_plan_blocked", {
+            first: blocking.map((v) => ({ code: v.code, actor_key: v.actor_key, message: v.message })),
+            reason: "mission escalation budget exhausted",
+          });
+          throw new ExecutionPlanBlockedError(first.violations);
+        }
         // THE MESSAGE, NOT ONLY THE CODE. `no_valid_step` on its own says a
         // plan was refused and nothing about why; the message now carries the
         // proposed steps and the reasons each was dropped, and a log that
@@ -8996,7 +9040,8 @@ export async function runCapabilityPlan(
         eligibleOrdered
           .filter((c) =>
             c.brain !== null &&
-            (c.brain.outcome === "QUALIFIED" || c.mission_evaluation !== null))
+            (c.brain.outcome === "QUALIFIED" || c.mission_evaluation !== null) &&
+            !retryFailedEvaluation(c.mission_evaluation, opts.readEnv))
           .map((c) => c.key));
       for (let qIndex = 0; qIndex < eligibleOrdered.length; qIndex++) {
         const c = eligibleOrdered[qIndex];
@@ -9421,7 +9466,9 @@ export async function runCapabilityPlan(
           break;
         }
 
-        if (evaluation) {
+        // A CALL THAT RETURNED NOTHING IS NOT AN EVALUATION (canary session 2,
+        // Oscilar): it falls through to the held, never-evaluated path below.
+        if (evaluation && evaluatorAnswered(evaluation.evaluation)) {
           c.evaluation_path = "model_evaluated";
           c.decision_source = "gpt_evaluation";
           c.mission_evaluation = evaluation.evaluation;
@@ -9527,8 +9574,18 @@ export async function runCapabilityPlan(
         // site, and a run with no evaluator makes no model call here at all —
         // it qualifies nobody and says so through `evaluation_paths` and
         // `mission_evaluation_observability`. Silence reported as silence.
+        // A CALL THAT WAS MADE AND FAILED is marked apart from "no evaluator" and
+        // "budget spent" (both `null`): only the former may be retried, once, and
+        // only under `LEAD_REEVALUATE_FAILED_EVALUATION` (`retryFailedEvaluation`).
+        const priorFailed = failedEvaluationMarks(c.mission_evaluation);
         c.decision_source = "insufficient_evidence";
-        c.mission_evaluation = notEvaluated("no evaluator was available for this run");
+        c.mission_evaluation = notEvaluated(evaluation
+          ? "the mission evaluator was called and returned no usable answer"
+          : "no evaluator was available for this run");
+        if (evaluation) {
+          c.mission_evaluation.unknown_fields = [...c.mission_evaluation.unknown_fields, FAILED_EVALUATION_MARK,
+            ...(priorFailed.failed ? [RETRIED_EVALUATION_MARK] : [])];
+        }
         // An enabled evaluator that failed to answer cannot be bypassed by
         // the broader facts the earlier batch happened to establish.
         if (deps.evaluateMission) c.mission_evaluation.criterion_verdicts = [];
@@ -11888,6 +11945,31 @@ export function missionCandidatesFrom(
 }
 
 /**
+ * The verification phase's candidates, decided exactly as the canonical view
+ * decides them: the same graph, the evaluator's verdicts and the engine's
+ * holds (Q1). It lived inline in run-agent, and the Replay Lab carried a
+ * "verbatim" copy that had lost the verdicts and holds — so no replay could
+ * reproduce an evaluator abstention lowering a proven check (canary session 2).
+ * One function now, called by both.
+ */
+export function verifiableCandidatesFrom(
+  run: { companies: readonly EngineCompany[] }, criteria: readonly MissionCriterion[], missionId: string,
+): VerifiableCandidate[] {
+  return missionCandidatesFrom(run, { missionId: String(missionId) }).map((cand) => {
+    const e = evaluateEligibility(criteria as MissionCriterion[], cand.graph, cand.criterion_verdicts, cand.holds);
+    return {
+      company_key: cand.company_key, name: cand.name, domain: cand.domain, linkedin_url: cand.linkedin_url,
+      graph: cand.graph, eligibility: e.eligibility,
+      hard_checks: e.checks.filter((x) => x.kind === "hard"),
+      attempted_routes: cand.attempted_routes ?? [],
+      unaffordable_routes: cand.unaffordable_routes ?? [],
+      // Triage withheld paid verification: `verificationTargets` skips it.
+      paid_verification_blocked: cand.paid_verification_blocked ?? null,
+    };
+  });
+}
+
+/**
  * ENRICHMENT THAT ANSWERED IS A TRIED ROUTE.
  *
  * `attemptedRoutes` reads only the claim verifiers' `verify:` marks, so the
@@ -11931,6 +12013,57 @@ export function canonicalDecisions(
     out.set(candidate.company_key, candidateDecision({ criteria, candidate, anchor }));
   }
   return out;
+}
+
+/**
+ * WHAT EACH HARD ANSWER RESTS ON, per company, from the same eligibility read
+ * `canonicalDecisions` makes. A separate map (not a field on the decision) so
+ * nothing that compares decisions changes; the persistence projection carries
+ * it onto the lead row for the Leads page.
+ */
+export function canonicalHardEvidence(
+  companies: readonly EngineCompany[], opts: Parameters<typeof canonicalDecisions>[1],
+): Map<string, RequirementEvidence[]> {
+  const criteria = deriveMissionCriteria(opts.mission, opts.readiness ?? PRODUCTION_READINESS);
+  const out = new Map<string, RequirementEvidence[]>();
+  for (const c of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
+    const e = evaluateEligibility(criteria, c.graph, c.criterion_verdicts, c.holds);
+    out.set(c.company_key, e.checks.filter((x) => x.kind === "hard").map((x) => {
+      const claim = x.provenance ? c.graph.claims.find((cl) => cl.dimension === x.provenance!.dimension) ?? null : null;
+      const providers = (claim?.sources ?? []).filter((a) => originOfActor(a) !== null);
+      // Who said it, by data ORIGIN: two LinkedIn scrapes are one source.
+      const agreeing = claim ? [claim.current, ...claim.supporting].filter((i) => i && i.status === "proven") : [];
+      const origins = new Set(agreeing.map((i) => originOfActor(i!.source.actor)).filter((o): o is string => o !== null));
+      const actor = x.provenance?.actor ?? null;
+      return {
+        dimension: x.dimension, result: x.result, reason: x.reason,
+        source: actor && originOfActor(actor) !== null ? actor : providers[0] ?? null,
+        providers,
+        corroborated: origins.has(CORROBORATED_ORIGIN) || origins.size >= 2,
+        checked_by_rule: x.provenance?.method === "deterministic_derivation",
+        method: x.provenance?.method ?? null,
+        status: x.provenance?.status ?? null, confidence: x.provenance?.confidence ?? null,
+        url: x.provenance?.url ?? null, excerpt: x.provenance?.excerpt ?? null,
+      };
+    }));
+  }
+  return out;
+}
+
+/** Engine rules, not sources: they read other items and never add an origin. */
+const ENGINE_RULE_ACTORS: ReadonlySet<string> = new Set(["deterministic_verdict", "engine"]);
+const CORROBORATED_ORIGIN = "corroborated";
+
+/**
+ * The data origin behind an actor, so agreement is counted by independent
+ * source rather than by scraper: every LinkedIn actor (and the LinkedIn
+ * registry) is one origin. Null for an engine rule.
+ */
+function originOfActor(actor: string): string | null {
+  if (ENGINE_RULE_ACTORS.has(actor)) return null;
+  if (actor === "linkedin" || actor.startsWith("apify_linkedin_")) return "linkedin";
+  if (actor === "funding_corroboration") return CORROBORATED_ORIGIN;
+  return actor;
 }
 
 /**

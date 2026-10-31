@@ -83,7 +83,14 @@ export interface AcceptanceCase {
   /** Actors that are not available to this run. */
   unavailable?: string[];
   /** The model's aggregate verdict (the parser and canonical rules still decide). */
-  evaluator?: "pass" | "fail" | "timeout";
+  /**
+   * `http_error`: the call failed (an HTTP error or the spend gate's refusal)
+   * and run-agent's wrapper hands the engine the strict parser's reading of a
+   * `null` response — canary session 2's fifth call, exactly.
+   */
+  evaluator?: "pass" | "fail" | "timeout" | "http_error" | "http_error_once";
+  /** Extra environment the engine reads (`opts.readEnv`). */
+  env?: Record<string, string>;
   /**
    * The first slice's execution deadline closes right after discovery, as a
    * slice running out of wall clock does; the next slice resumes from the
@@ -219,6 +226,10 @@ export interface AcceptanceFlags {
   notice: { qualified: number; text: string };
   terminal: Json;
   resume: { keys: string[]; providerCallsAdded: number; evaluatorCallsAdded: number } | null;
+  /** Each company's `evaluation_path` after the final slice. */
+  evaluation_paths: Record<string, string>;
+  /** Each company's stored mission evaluation after the final slice (what a resume restores). */
+  mission_evaluations: Record<string, Json | null>;
   /** The engine's own account of the first slice and the resumed one. */
   execution: { terminal_reason: unknown; completed: unknown; slices: number; resumed_terminal_reason: unknown };
 }
@@ -233,7 +244,7 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
   const feasibility = assessRequestFeasibility(mission as never, graph as never, { executability: "enforce", readiness: policy }) as Json;
   const flags: AcceptanceFlags = {
     id: c.id, criteria, feasibility, refused: null, entry: graph.entry_capability ?? null, providerCalls: [], evaluator: [],
-    eligibility: [], canonical: [], qualifiedKeys: [], workbench: { qualified: 0, counts: {} }, persisted: [],
+    eligibility: [], canonical: [], qualifiedKeys: [], workbench: { qualified: 0, counts: {} }, persisted: [], evaluation_paths: {}, mission_evaluations: {},
     notice: { qualified: 0, text: "" }, terminal: {}, resume: null,
     execution: { terminal_reason: null, completed: null, slices: 0, resumed_terminal_reason: null },
   };
@@ -283,6 +294,9 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
     evaluateMission: async (i: Json) => {
       evaluatorCalls++;
       if (c.evaluator === "timeout") return null;
+      if (c.evaluator === "http_error" || (c.evaluator === "http_error_once" && evaluatorCalls === 1)) {
+        return parseMissionEvaluationStrict(null, i.registry, criteria as never) as Json;
+      }
       const parsed = parseMissionEvaluationStrict(evaluatorRaw(i.input, i.registry, c), i.registry, criteria as never) as Json;
       flags.evaluator.push({ company_key: i.company_key, decision: parsed.evaluation?.decision ?? null,
         verdicts: parsed.evaluation?.criterion_verdicts ?? [] });
@@ -291,7 +305,7 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
     log: () => {},
   };
   const opts: Json = {
-    mission, plan: graph, maxCandidates: 1, readEnv: (k: string) => k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined,
+    mission, plan: graph, maxCandidates: 1, readEnv: (k: string) => k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : c.env?.[k],
     readiness: policy, specMode: "enforce", specScope: { workspace_id: "q4-acceptance", lineage_id: c.id },
     identity: { task_id: c.id, workspace_id: "q4-acceptance" }, log: deps.log,
   };
@@ -431,6 +445,8 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
     canonical: r.decisions, qualifiedKeys: r.keys, workbench: { qualified: r.summary.qualified, counts: r.view.counts },
     persisted: r.persisted, notice: { qualified: r.outcome.qualification.qualified, text: renderRunOutcome(r.outcome) },
     terminal: r.terminal,
+    evaluation_paths: Object.fromEntries(run.companies.map((co: Json) => [co.key, co.evaluation_path])),
+    mission_evaluations: Object.fromEntries(run.companies.map((co: Json) => [co.key, co.mission_evaluation ?? null])),
     eligibility: r.cands.map((x: Json) => {
       const e = evaluateEligibility(criteria as never, x.graph) as Json;
       return { company_key: x.company_key, eligibility: e.eligibility, checks: e.checks, gaps: e.gaps };

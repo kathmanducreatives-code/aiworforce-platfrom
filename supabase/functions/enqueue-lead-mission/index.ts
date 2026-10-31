@@ -15,6 +15,7 @@ import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
 import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
+import { type GuardDb, legacyExecutionGuard, referencedPlanId, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
 import {
   prepareV2LeadCount, validateV2KickoffBody, type KickoffBody,
 } from "../_shared/leadMissionV2Request.ts";
@@ -55,6 +56,18 @@ async function handleEnqueueLeadMission(req: Request): Promise<Response> {
   }
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+  // THE LEGACY PRE-EFFECT GUARD (legacyExecutionGuard.ts), before the queue row
+  // exists: no pilot or client-scoped mission is queued, and the person the
+  // service caller acts for must still be a member.
+  const guard = await legacyExecutionGuard({
+    db: admin as unknown as GuardDb, workspaceId,
+    principalUserId: typeof request.user_id === "string" && request.user_id ? request.user_id : null,
+    body: request, taskIds: referencedTaskIds(request), planId: referencedPlanId(request),
+  });
+  if (!guard.ok) {
+    console.error("[enqueue-lead-mission][pre-effect-guard] refused", { workspace_id: workspaceId, code: guard.code, detail: guard.detail });
+    return json({ error: guard.code, detail: guard.detail }, guard.status);
+  }
   const forced = prepareV2LeadCount(request);
   const { data, error } = await admin.from("lead_mission_queue")
     .insert({ workspace_id: workspaceId, request: forced, status: "queued" })

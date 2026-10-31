@@ -267,27 +267,54 @@ export function verifierRouteActors(v: Pick<ClaimVerifier, "route_actor" | "rout
   return v.route_actors?.length ? v.route_actors : [v.route_actor];
 }
 
-export function verificationTargets(
+/** Why the verification phase did, or did not, take one candidate for one verifier. */
+export type VerificationDecisionReason =
+  | "targeted"
+  | "over_target_cap"
+  | "not_pending"
+  | "paid_verification_blocked"
+  | "no_gap_for_this_verifier"
+  | "cannot_still_qualify"
+  | "cheap_stage_first";
+
+export interface VerificationDecision {
+  company_key: string;
+  route_actor: string;
+  reason: VerificationDecisionReason;
+  /** The candidate's open hard gaps as the router sees them: what blocked or waited. */
+  gaps: Array<{ dimension: string; next: string; route: string | null }>;
+}
+
+/**
+ * EVERY candidate's decision for this verifier, with its reason — the
+ * persisted answer to "why was Atomus never started for X?" (canary session 2:
+ * the only record of it was a worker console line that was never kept).
+ * `verificationTargets` is exactly the `targeted` subset, in its order.
+ */
+export function verificationDecisions(
   verifier: Pick<ClaimVerifier, "route_actor" | "route_actors" | "max_targets">,
   candidates: readonly VerifiableCandidate[],
   criteriaValue: (criterionId: string) => unknown,
   registry: readonly ClaimDefinition[] = CLAIM_REGISTRY,
-  /** The same readiness decision the router and the planner read. */
   policy: ReadinessPolicy = PRODUCTION_READINESS,
-  /** The criterion's time window (days), so a verifier can tell a decisive answer from an open one. */
   criteriaWindow?: (criterionId: string) => number | null,
-): VerificationTarget[] {
+): { decisions: VerificationDecision[]; targets: VerificationTarget[] } {
+  const routes = verifierRouteActors(verifier);
+  const decisions: VerificationDecision[] = [];
   const out: Array<VerificationTarget & { open: number }> = [];
   for (const c of candidates) {
-    if (c.eligibility !== "pending") continue;
+    const decide = (reason: VerificationDecisionReason, gaps: ReturnType<typeof evidenceGapsFor> = []) => decisions.push({
+      company_key: c.company_key, route_actor: verifier.route_actor, reason,
+      gaps: gaps.map((g) => ({ dimension: g.dimension, next: g.next, route: g.route?.actor ?? null })),
+    });
+    if (c.eligibility !== "pending") { decide("not_pending"); continue; }
     // TRIAGE CALLED IT IRRELEVANT, CONFIDENTLY: no further purchase. Its verdict
     // is untouched — it stays PENDING on the evidence it has (`missionTriage`).
-    if (c.paid_verification_blocked) continue;
+    if (c.paid_verification_blocked) { decide("paid_verification_blocked"); continue; }
     const gaps = evidenceGapsFor(c.hard_checks, c.graph, registry, new Set(c.attempted_routes), policy,
       new Set(c.unaffordable_routes ?? []));
-    const routes = verifierRouteActors(verifier);
     const mine = gaps.find((g) => g.next === "verify" && !!g.route && routes.includes(g.route.actor));
-    if (!mine) continue;
+    if (!mine) { decide("no_gap_for_this_verifier", gaps); continue; }
     // ── ONLY A VIABLE CANDIDATE IS WORTH ANOTHER PURCHASE ─────────────────
     //
     // A failed hard claim already made the candidate ineligible (skipped
@@ -307,10 +334,11 @@ export function verificationTargets(
     // THE ONE VIABILITY RULE (`canStillQualify`), shared with continuation: a
     // hard claim no executable route can close means nothing bought here can
     // make the candidate eligible.
-    if (!canStillQualify(gaps)) continue;
+    if (!canStillQualify(gaps)) { decide("cannot_still_qualify", gaps); continue; }
     const cheapFirst = gaps.find((g) => g !== mine && !(g.route && routes.includes(g.route.actor)) &&
       g.considered.some((r) => CHEAP_STAGE_CAPABILITIES.has(r.capability) && !r.tried));
-    if (cheapFirst) continue;
+    if (cheapFirst) { decide("cheap_stage_first", gaps); continue; }
+    decide("targeted", gaps);
     out.push({
       company_key: c.company_key, name: c.name, domain: c.domain, linkedin_url: c.linkedin_url,
       criterion: {
@@ -321,9 +349,24 @@ export function verificationTargets(
       open: gaps.length,
     });
   }
-  return out.sort((a, b) => a.open - b.open || a.company_key.localeCompare(b.company_key))
-    .slice(0, Math.max(0, verifier.max_targets))
-    .map(({ open: _open, ...t }) => t);
+  const ordered = out.sort((a, b) => a.open - b.open || a.company_key.localeCompare(b.company_key));
+  const kept = ordered.slice(0, Math.max(0, verifier.max_targets));
+  const dropped = new Set(ordered.slice(kept.length).map((t) => t.company_key));
+  for (const d of decisions) if (d.reason === "targeted" && dropped.has(d.company_key)) d.reason = "over_target_cap";
+  return { decisions, targets: kept.map(({ open: _open, ...t }) => t) };
+}
+
+export function verificationTargets(
+  verifier: Pick<ClaimVerifier, "route_actor" | "route_actors" | "max_targets">,
+  candidates: readonly VerifiableCandidate[],
+  criteriaValue: (criterionId: string) => unknown,
+  registry: readonly ClaimDefinition[] = CLAIM_REGISTRY,
+  /** The same readiness decision the router and the planner read. */
+  policy: ReadinessPolicy = PRODUCTION_READINESS,
+  /** The criterion's time window (days), so a verifier can tell a decisive answer from an open one. */
+  criteriaWindow?: (criterionId: string) => number | null,
+): VerificationTarget[] {
+  return verificationDecisions(verifier, candidates, criteriaValue, registry, policy, criteriaWindow).targets;
 }
 
 /** Split a list into batches of at most `size`. */

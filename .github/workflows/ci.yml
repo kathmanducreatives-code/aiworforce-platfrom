@@ -71,6 +71,7 @@ jobs:
       contract: ${{ steps.plan.outputs.contract }}
       contract_all: ${{ steps.plan.outputs.contract_all }}
       mutation: ${{ steps.plan.outputs.mutation }}
+      realprocess: ${{ steps.plan.outputs.realprocess }}
       contract_count: ${{ steps.plan.outputs.contract_count }}
       contract_shard_1: ${{ steps.plan.outputs.contract_shard_1 }}
       contract_shard_2: ${{ steps.plan.outputs.contract_shard_2 }}
@@ -357,9 +358,67 @@ jobs:
         if: failure()
         run: docker logs contract-pg 2>&1 | tail -50
 
+  realprocess:
+    # REAL WORKER PROCESSES (tests/realprocess): the worker binary itself,
+    # killed with SIGKILL mid-purchase and recovered by a second process, and
+    # the zero-Apify real-GPT kickoff run end to end by a real worker (model
+    # scripted, every external host fenced). Planned whenever the database
+    # contract is: a change that can move the worker's path must prove it with
+    # real processes, not only in-process tests. A fixture or guard change that
+    # stops a real worker (e.g. a requester who is not a workspace member)
+    # fails here instead of at TEST.
+    name: Real worker processes
+    needs: plan
+    if: needs.plan.outputs.realprocess == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+          cache: true
+
+      - name: Start a disposable Postgres (generated password)
+        run: |
+          pw="$(openssl rand -hex 16)"
+          echo "::add-mask::$pw"
+          docker run -d --name realprocess-pg -e POSTGRES_PASSWORD="$pw" \
+            -p 127.0.0.1:5432:5432 "$POSTGRES_IMAGE" >/dev/null
+          for _ in $(seq 1 90); do
+            docker exec realprocess-pg pg_isready -h 127.0.0.1 -U postgres -q && break
+            sleep 1
+          done
+          docker exec realprocess-pg pg_isready -h 127.0.0.1 -U postgres
+          echo "PG_ADMIN_URL=postgres://postgres:$pw@127.0.0.1:5432/postgres" >> "$GITHUB_ENV"
+
+      - name: Fetch the pinned PostgREST (checksum verified)
+        run: |
+          dir="$RUNNER_TEMP/postgrest"; mkdir -p "$dir"
+          curl -fsSL -o "$dir/postgrest.tar.xz" \
+            "https://github.com/PostgREST/postgrest/releases/download/$POSTGREST_VERSION/postgrest-$POSTGREST_VERSION-linux-static-x64.tar.xz"
+          echo "$POSTGREST_SHA256  $dir/postgrest.tar.xz" | sha256sum -c -
+          tar -xJf "$dir/postgrest.tar.xz" -C "$dir"
+          "$dir/postgrest" --version
+          echo "POSTGREST_BIN=$dir/postgrest" >> "$GITHUB_ENV"
+
+      - name: Real-process rehearsals
+        run: |
+          set -o pipefail
+          tests/realprocess/run.sh 2>&1 | tee "$RUNNER_TEMP/realprocess.log"
+          # Succeeding without running is not a pass: every rehearsal must have executed.
+          passed=$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/realprocess.log" | sed -nE 's/^ok \| ([0-9]+) passed \| 0 failed.*/\1/p' | tail -1)
+          echo "rehearsals passed: ${passed:-0}"
+          [ "${passed:-0}" -ge 4 ] || { echo "expected at least 4 real-process rehearsals to run and pass" >&2; exit 1; }
+
+      - name: Postgres log on failure
+        if: failure()
+        run: docker logs realprocess-pg 2>&1 | tail -50
+
   gate:
     name: CI gate
-    needs: [plan, backend, replay, frontend, contract, mutation]
+    needs: [plan, backend, replay, frontend, contract, mutation, realprocess]
     # ALWAYS runs, so a failed, skipped or cancelled job is judged, not ignored.
     if: always()
     runs-on: ubuntu-latest

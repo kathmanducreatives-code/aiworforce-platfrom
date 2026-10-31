@@ -1,0 +1,733 @@
+// END-TO-END Company Brain autosave, agency and client (Phase 2 + Phase 3c, held).
+//
+// The ACTUAL generate-company-brain-draft handler (its Deno.serve entry point
+// captured in process) runs against real Postgres + PostgREST with the held
+// client schema; the page side is the ACTUAL request builder and save-result
+// logic the autosave hook uses (src/lib/brainProgressRequest.ts,
+// onboardingAutosave.applyProgressSaveResult, brainScope). Every request the
+// handler makes is recorded; anything that is not the local database is
+// refused and counted.
+//
+// Two modes:
+//   REAL SESSIONS (tests/db-contract/run-with-gotrue.sh sets BRAIN_E2E_AUTH_URL):
+//     users sign up through a real GoTrue, every request carries a real access
+//     token, the handler's getUser goes to that GoTrue, and logout is a real
+//     GoTrue logout.
+//   STAND-IN (the ordinary lane, CI): `/auth/v1/user` is answered locally — it
+//     verifies the token's HS256 signature with the lane's secret and, as
+//     GoTrue does, refuses a token whose session row is gone (session_not_found).
+// Either way, everything after authentication — membership, roles, grants,
+// locks and writes — is the real database.
+import { assert, assertEquals, assertNotEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { captured, restoreServe } from "./lib/captureServe.ts";
+import "../../supabase/functions/generate-company-brain-draft/index.ts";
+import { REST_URL, mintJwt, seedWorkspace, serviceClient, sql, uuid } from "./lib/harness.ts";
+import { buildProgressSaveBody, readProgressSaveResponse } from "../../src/lib/brainProgressRequest.ts";
+import { applyProgressSaveResult, readServerProgress, type Answers, type ProgressCopy } from "../../src/lib/onboardingAutosave.ts";
+import { AGENCY_SCOPE, brainScopeKey, clientScope, effectiveBrainScope, nextBrainScope, sameBrainScope, type BrainScope } from "../../src/lib/brainScope.ts";
+import { buildBrainUpdateBody, listBrainClients, loadClientBrain, readBrainUpdateResponse, type BrainInvoke } from "../../src/lib/clientBrainApi.ts";
+import { clientBrainContextForScope } from "../../supabase/functions/_shared/clientBrain.ts";
+
+const handler = captured[0];
+restoreServe();
+assert(handler, "the actual handler module was imported and captured");
+const opts = { sanitizeResources: false, sanitizeOps: false };
+
+const AUTH_URL = Deno.env.get("BRAIN_E2E_AUTH_URL") ?? null;
+if (AUTH_URL && new URL(AUTH_URL).hostname !== "127.0.0.1") throw new Error("real-session mode needs its own loopback GoTrue");
+if (!AUTH_URL) await sql`create table if not exists auth.sessions (
+  id uuid primary key default extensions.gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz default now(),
+  not_after timestamptz
+)`;
+
+// ── The gateway the handler talks to ────────────────────────────────────────
+const GATEWAY = "http://supabase-gateway.test";
+const SECRET = Deno.env.get("DB_CONTRACT_JWT_SECRET")!;
+type Seen = { method: string; path: string };
+let seen: Seen[] = [];
+let external: string[] = [];
+let onRest: ((s: Seen) => Promise<void>) | null = null;
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  const req = new Request(input, init);
+  if (req.url.startsWith(GATEWAY + "/rest/v1/")) {
+    const s = { method: req.method, path: req.url.slice((GATEWAY + "/rest/v1").length) };
+    seen.push(s);
+    if (onRest) await onRest(s);
+    return realFetch(new Request(REST_URL + s.path, req));
+  }
+  if (req.url.startsWith(GATEWAY + "/auth/v1/")) {
+    if (AUTH_URL) return realFetch(new Request(AUTH_URL + req.url.slice((GATEWAY + "/auth/v1").length), req));
+    if (req.url.startsWith(GATEWAY + "/auth/v1/user")) return goTrueUser(req);
+  }
+  if (AUTH_URL && req.url.startsWith(AUTH_URL)) return realFetch(req);
+  if (req.url.startsWith(REST_URL)) return realFetch(req);
+  external.push(req.url);
+  throw new Error(`external request refused: ${req.url}`);
+};
+for (const k of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "APIFY_API_TOKEN", "FIRECRAWL_API_KEY", "LOVABLE_API_KEY"]) Deno.env.delete(k);
+Deno.env.set("SUPABASE_URL", GATEWAY);
+Deno.env.set("SUPABASE_ANON_KEY", await mintJwt("anon"));
+Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", await mintJwt("service_role"));
+const clientsOn = (on: boolean) => on ? Deno.env.set("COMPANY_BRAIN_CLIENTS_ENABLED", "true") : Deno.env.delete("COMPANY_BRAIN_CLIENTS_ENABLED");
+
+const b64url = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const hmacKey = await crypto.subtle.importKey("raw", new TextEncoder().encode(SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+async function userToken(u: User): Promise<string> {
+  if (u.token) return u.token;
+  const now = Math.floor(Date.now() / 1000);
+  const enc = (o: unknown) => b64url(new TextEncoder().encode(JSON.stringify(o)));
+  const head = enc({ alg: "HS256", typ: "JWT" });
+  const body = enc({ sub: u.id, role: "authenticated", aud: "authenticated", session_id: u.session, iat: now, exp: now + 3600 });
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", hmacKey, new TextEncoder().encode(`${head}.${body}`)));
+  return `${head}.${body}.${b64url(sig)}`;
+}
+async function goTrueUser(req: Request): Promise<Response> {
+  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  const [h, b, s] = token.split(".");
+  const fromB64 = (x: string) => Uint8Array.from(atob(x.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(x.length / 4) * 4, "=")), (c) => c.charCodeAt(0));
+  const ok = h && b && s && await crypto.subtle.verify("HMAC", hmacKey, fromB64(s), new TextEncoder().encode(`${h}.${b}`));
+  if (!ok) return Response.json({ code: 401, msg: "invalid JWT" }, { status: 401 });
+  const claims = JSON.parse(new TextDecoder().decode(fromB64(b))) as { sub: string; session_id: string; exp: number };
+  if (claims.exp < Date.now() / 1000) return Response.json({ code: 401, msg: "expired" }, { status: 401 });
+  const live = await sql`select 1 from auth.sessions where id = ${claims.session_id} and user_id = ${claims.sub}
+    and (not_after is null or not_after > now())`;
+  if (live.length === 0) return Response.json({ code: 403, error_code: "session_not_found" }, { status: 403 });
+  return Response.json({ id: claims.sub, aud: "authenticated", role: "authenticated", email: `${claims.sub.slice(0, 8)}@contract.test` });
+}
+
+// ── Calling the actual handler, as the page does ─────────────────────────────
+type User = { id: string; session: string; token?: string };
+type Reply = { status: number; body: Record<string, unknown> };
+async function call(u: User, body: Record<string, unknown>): Promise<Reply> {
+  const res = await handler(new Request("http://edge.test/generate-company-brain-draft", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${await userToken(u)}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }));
+  return { status: res.status, body: await res.json() as Record<string, unknown> };
+}
+const posts = (path: string) => seen.filter((s) => s.method !== "GET" && s.method !== "HEAD" && s.path.startsWith(path)).length;
+const writes = () => seen.filter((s) => s.method !== "GET" && s.method !== "HEAD").length;
+function freshLog() { seen = []; external = []; onRest = null; }
+
+// The page's autosave state for one Brain: the version it builds on, the copy
+// it last loaded or saved (base), and the user's current answers (mine).
+interface Page { ws: string; scope: BrainScope; version: string | null; base: ProgressCopy }
+const copy = (answers: Answers, step = 1): ProgressCopy => ({ step, answers, updated_at: new Date().toISOString() });
+async function autosave(u: User, page: Page, mine: ProgressCopy) {
+  const reply = await call(u, buildProgressSaveBody({ workspaceId: page.ws, step: mine.step, answers: mine.answers, expectedUpdatedAt: page.version, scope: page.scope }));
+  const outcome = readProgressSaveResponse(reply.body);
+  const next = applyProgressSaveResult({ version: page.version, base: page.base }, mine, outcome);
+  return { reply, outcome, next, page: { ...page, version: next.version, base: next.base } };
+}
+
+// ── Fixture ──────────────────────────────────────────────────────────────────
+async function user(): Promise<User> {
+  if (AUTH_URL) {
+    const r = await realFetch(AUTH_URL + "/signup", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: `brain-e2e-${uuid()}@synthetic.example`, password: "Synthetic-offline-only-58213!" }) });
+    const body = await r.json() as { access_token?: string };
+    assertEquals(r.status, 200, "local auto-confirmed signup");
+    const claims = JSON.parse(atob(body.access_token!.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as { sub: string; session_id: string };
+    return { id: claims.sub, session: claims.session_id, token: body.access_token };
+  }
+  const id = uuid(); const session = uuid();
+  await sql`insert into auth.users (id, email) values (${id}, ${`${id.slice(0, 8)}@contract.test`})`;
+  await sql`insert into auth.sessions (id, user_id) values (${session}, ${id})`;
+  return { id, session };
+}
+async function member(ws: string, role: string): Promise<User> {
+  const u = await user();
+  await sql`insert into public.workspace_members (workspace_id, user_id, role) values (${ws}, ${u.id}, ${role})`;
+  return u;
+}
+async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+  const { data, error } = await (await serviceClient()).rpc(fn, args);
+  if (error) throw new Error(`${fn}: ${error.message}`);
+  return (Array.isArray(data) ? data[0] : data) as T;
+}
+async function agency() {
+  const ws = await seedWorkspace();
+  const owner = await member(ws, "owner");
+  const editor = await member(ws, "editor");
+  const editor2 = await member(ws, "editor");
+  const viewer = await member(ws, "viewer");
+  await sql`insert into public.company_brain (workspace_id, profile) values (${ws}, ${sql.json({ company: { name: "Agency Co" }, positioning: "AGENCY-ONLY positioning" } as never)})`;
+  const mk = async (name: string) => (await rpc<{ client_id: string }>("client_account_create", { p_workspace_id: ws, p_actor_id: owner.id, p_session_id: owner.session, p_name: name })).client_id;
+  const A = await mk("Client A"); const B = await mk("Client B");
+  return { ws, owner, editor, editor2, viewer, A, B };
+}
+type Agency = Awaited<ReturnType<typeof agency>>;
+const grant = (ag: Agency, client: string, u: User) =>
+  rpc("client_access_grant", { p_workspace_id: ag.ws, p_client_id: client, p_target_user_id: u.id, p_actor_id: ag.owner.id, p_session_id: ag.owner.session });
+// What the page loads when it opens a Brain.
+async function openAgency(ws: string): Promise<Page> {
+  const { data } = await (await serviceClient()).from("company_brain").select("profile, updated_at").eq("workspace_id", ws).single();
+  const row = data as { profile: unknown; updated_at: string };
+  return { ws, scope: AGENCY_SCOPE, version: row.updated_at, base: readServerProgress(row.profile) ?? copy({}, 0) };
+}
+async function openClient(u: User, ws: string, clientId: string): Promise<Page> {
+  const r = await call(u, { action: "status", workspace_id: ws, scope: "client", client_id: clientId });
+  assertEquals(r.status, 200, JSON.stringify(r.body));
+  return { ws, scope: clientScope(clientId)!, version: r.body.version == null ? null : String(r.body.version), base: readServerProgress(r.body.profile) ?? copy({}, 0) };
+}
+async function state(ws: string): Promise<string> {
+  const [r] = await sql`select md5(concat_ws('|',
+    (select coalesce(string_agg(row(b.*)::text, ',' order by b.client_id), '') from public.client_company_brain b where b.workspace_id = ${ws}),
+    (select coalesce(string_agg(row(g.*)::text, ',' order by g.id), '') from public.client_access_grants g where g.workspace_id = ${ws}),
+    (select coalesce(string_agg(row(a.*)::text, ','), '') from public.company_brain a where a.workspace_id = ${ws}))) as h`;
+  return r.h as string;
+}
+// Only the Brains (every client Brain and the agency Brain): a revocation
+// itself changes grants or memberships, never a Brain.
+async function brains(ws: string): Promise<string> {
+  const [r] = await sql`select md5(concat_ws('|',
+    (select coalesce(string_agg(row(b.*)::text, ',' order by b.client_id), '') from public.client_company_brain b where b.workspace_id = ${ws}),
+    (select coalesce(string_agg(row(a.*)::text, ','), '') from public.company_brain a where a.workspace_id = ${ws}))) as h`;
+  return r.h as string;
+}
+const clientProfile = async (ws: string, c: string) =>
+  (await sql`select profile from public.client_company_brain where workspace_id = ${ws} and client_id = ${c}`)[0]?.profile as Record<string, unknown> | undefined;
+const agencyProfile = async (ws: string) =>
+  (await sql`select profile from public.company_brain where workspace_id = ${ws}`)[0]?.profile as Record<string, unknown>;
+const answersIn = (p: Record<string, unknown> | undefined) => readServerProgress(p)?.answers ?? {};
+
+// ── 1. Agency Brain ──────────────────────────────────────────────────────────
+Deno.test("1. a user edits and autosaves the AGENCY Brain: versioned, through the authorized writer, and a manual edit after it", opts, async () => {
+  clientsOn(true);
+  const ag = await agency();
+  let page = await openAgency(ag.ws);
+  freshLog();
+  const s1 = await autosave(ag.editor, page, copy({ company: { name: "Agency Co", description: "We run outbound for SaaS" } }));
+  assertEquals(s1.reply.status, 200, JSON.stringify(s1.reply.body));
+  assertEquals(s1.next.status, "saved");
+  assertNotEquals(s1.page.version, page.version, "a new version");
+  assertEquals(posts("/rpc/company_brain_authorized_write"), 1, "the AUTH-06 writer, once");
+  assertEquals(posts("/company_brain"), 0, "never a direct table write");
+  assertEquals(answersIn(await agencyProfile(ag.ws)).company?.description, "We run outbound for SaaS");
+  page = s1.page;
+  const s2 = await autosave(ag.editor, page, copy({ company: { name: "Agency Co", description: "We run outbound for SaaS and fintech" } }, 2));
+  assertEquals(s2.reply.status, 200); page = s2.page;
+  const m = await call(ag.editor, { action: "update", workspace_id: ag.ws, expected_updated_at: page.version, patch: { positioning: "AGENCY-ONLY edited" } });
+  assertEquals(m.status, 200, JSON.stringify(m.body));
+  assertEquals((await agencyProfile(ag.ws)).positioning, "AGENCY-ONLY edited");
+  assertEquals(await sql`select 1 from public.client_company_brain where workspace_id = ${ag.ws}`.then((r) => r.length), 0, "no client Brain touched");
+  assertEquals(external, []);
+});
+
+// ── 2. Authorized client Brain ───────────────────────────────────────────────
+Deno.test("2. a user edits and autosaves an AUTHORIZED CLIENT Brain: first insert, then CAS on its version; the agency Brain is untouched", opts, async () => {
+  clientsOn(true);
+  const ag = await agency();
+  await grant(ag, ag.A, ag.editor);
+  const agencyBefore = JSON.stringify(await agencyProfile(ag.ws));
+  let page = await openClient(ag.editor, ag.ws, ag.A);
+  assertEquals(page.version, null, "no Brain yet");
+  freshLog();
+  const s1 = await autosave(ag.editor, page, copy({ company: { name: "Client A Inc", description: "A-SECRET: sells to hospitals" } }));
+  assertEquals(s1.reply.status, 200, JSON.stringify(s1.reply.body));
+  assertEquals(s1.page.version, "1");
+  assertEquals(s1.reply.body.client_id, ag.A);
+  assertEquals(posts("/rpc/client_brain_authorized_write"), 1);
+  assertEquals(posts("/rpc/company_brain_authorized_write") + posts("/company_brain"), 0, "the agency writer is never called");
+  page = s1.page;
+  const s2 = await autosave(ag.editor, page, copy({ company: { name: "Client A Inc", description: "A-SECRET: sells to hospitals and clinics" } }, 2));
+  assertEquals(s2.page.version, "2"); page = s2.page;
+  const m = await call(ag.editor, { action: "update", workspace_id: ag.ws, scope: "client", client_id: ag.A, expected_version: 2, patch: { positioning: "A-SECRET positioning" } });
+  assertEquals(m.status, 200, JSON.stringify(m.body)); assertEquals(m.body.version, 3);
+  assertEquals((await clientProfile(ag.ws, ag.A))?.positioning, "A-SECRET positioning");
+  assertEquals(JSON.stringify(await agencyProfile(ag.ws)), agencyBefore, "agency Brain byte-for-byte unchanged");
+  assertEquals(await clientProfile(ag.ws, ag.B), undefined, "client B untouched");
+  assertEquals(external, []);
+});
+
+// ── 3. A viewer attempts to edit ─────────────────────────────────────────────
+Deno.test("3. a viewer's autosave is refused for the agency Brain and for a client it is granted; nothing is written", opts, async () => {
+  clientsOn(true);
+  const ag = await agency();
+  await grant(ag, ag.A, ag.viewer);
+  const before = await state(ag.ws);
+  freshLog();
+  const a = await autosave(ag.viewer, await openAgency(ag.ws), copy({ company: { name: "viewer edit" } }));
+  assertEquals(a.reply.status, 403); assertEquals(a.reply.body.error, "brain_role_forbidden");
+  assertEquals(a.next.status, "offline", "the page keeps the text and reports it unsaved");
+  const c = await autosave(ag.viewer, await openClient(ag.viewer, ag.ws, ag.A), copy({ company: { name: "viewer edit" } }));
+  assertEquals(c.reply.status, 403);
+  assertEquals(writes(), 0, "no write request at all");
+  assertEquals(await state(ag.ws), before);
+  // The viewer can still read the client it is granted.
+  assertEquals((await call(ag.viewer, { action: "status", workspace_id: ag.ws, scope: "client", client_id: ag.A })).status, 200);
+});
+
+// ── 4. Two users edit concurrently ───────────────────────────────────────────
+for (const target of ["agency", "client"] as const) {
+  Deno.test(`4. two users autosave the same ${target} Brain from one version: no edit is lost, both orderings`, opts, async () => {
+    clientsOn(true);
+    const ag = await agency();
+    await grant(ag, ag.A, ag.editor); await grant(ag, ag.A, ag.editor2);
+    const open = (u: User) => target === "agency" ? openAgency(ag.ws) : openClient(u, ag.ws, ag.A);
+    const seedU = ag.owner;
+    if (target === "client") await grant(ag, ag.A, ag.owner);
+    const s0 = await autosave(seedU, await open(seedU), copy({ company: { name: "Shared", description: "base" } }));
+    assertEquals(s0.reply.status, 200);
+    // (a) one after the other: the second is stale (pre-check), merges, retries.
+    let p1 = await open(ag.editor); let p2 = await open(ag.editor2);
+    assertEquals(p1.version, p2.version);
+    const one = await autosave(ag.editor, p1, copy({ company: { name: "Shared by ONE", description: "base" } }));
+    assertEquals(one.reply.status, 200); p1 = one.page;
+    const two = await autosave(ag.editor2, p2, copy({ company: { name: "Shared", description: "base, plus TWO's notes" } }));
+    assertEquals(two.reply.status, 409); assertEquals(two.outcome.kind, "stale");
+    assertEquals(two.next.restore?.answers.company, { name: "Shared by ONE", description: "base, plus TWO's notes" }, "merged: ONE's name and TWO's unsaved notes");
+    assertEquals(two.next.conflicts, []);
+    p2 = two.page;
+    const retry = await autosave(ag.editor2, p2, two.next.restore!);
+    assertEquals(retry.reply.status, 200, JSON.stringify(retry.reply.body)); p2 = retry.page;
+    // (b) a true race lost at the locked write: ONE's write is held while TWO saves.
+    p1 = await open(ag.editor);
+    p2 = await open(ag.editor2);
+    const writer = target === "agency" ? "/rpc/company_brain_authorized_write" : "/rpc/client_brain_authorized_write";
+    let raced = false;
+    onRest = async (s) => {
+      if (raced || s.method !== "POST" || !s.path.startsWith(writer)) return;
+      raced = true; onRest = null;
+      const t = await autosave(ag.editor2, p2, copy({ company: { name: "Shared by ONE", description: "TWO raced in" } }));
+      assertEquals(t.reply.status, 200);
+    };
+    const lost = await autosave(ag.editor, p1, copy({ company: { name: "ONE renamed it", description: "base, plus TWO's notes" } }));
+    assert(raced, "the race happened");
+    assertEquals(lost.reply.status, 409); assertEquals(lost.outcome.kind, "stale");
+    // Nothing the user typed is lost in either shape of the answer.
+    let p = lost.page; let mine = copy({ company: { name: "ONE renamed it", description: "base, plus TWO's notes" } });
+    if (lost.next.restore) mine = lost.next.restore;
+    for (let i = 0; i < 3; i++) {
+      const r = await autosave(ag.editor, p, mine);
+      p = r.page;
+      if (r.reply.status === 200) break;
+      assertEquals(r.reply.status, 409);
+      mine = r.next.restore ?? mine;
+    }
+    const stored = target === "agency" ? answersIn(await agencyProfile(ag.ws)) : answersIn(await clientProfile(ag.ws, ag.A));
+    assertEquals(stored.company, { name: "ONE renamed it", description: "TWO raced in" }, "ONE's rename and TWO's text both survive");
+    assertEquals(external, []);
+  });
+}
+
+// ── 5. Permission revoked during autosave ────────────────────────────────────
+async function revokedMidSave(when: (s: Seen) => boolean, revoke: (ag: Agency) => Promise<unknown>, scope: "agency" | "client") {
+  clientsOn(true);
+  const ag = await agency();
+  await grant(ag, ag.A, ag.editor);
+  const page = scope === "agency" ? await openAgency(ag.ws) : await openClient(ag.editor, ag.ws, ag.A);
+  const before = await brains(ag.ws);
+  freshLog();
+  let fired = false;
+  onRest = async (s) => { if (!fired && when(s)) { fired = true; await revoke(ag); } };
+  const mine = copy({ company: { name: "typed before the revocation" } });
+  const r = await autosave(ag.editor, page, mine);
+  assert(fired, "the revocation committed while the request was in flight");
+  return { ag, r, before, after: await brains(ag.ws), page, mine };
+}
+// Logout: a real GoTrue logout in real-session mode; the session row removed otherwise.
+async function logout(u: User) {
+  if (AUTH_URL) {
+    const r = await realFetch(AUTH_URL + "/logout?scope=global", { method: "POST", headers: { Authorization: `Bearer ${u.token}` } });
+    assertEquals(r.status, 204); await r.body?.cancel();
+  } else {
+    await sql`delete from auth.sessions where id = ${u.session}`;
+  }
+  assertEquals((await sql`select 1 from auth.sessions where id = ${u.session}`).length, 0, "the session is gone");
+}
+const grantRevoke = (ag: Agency) => rpc("client_access_revoke", { p_workspace_id: ag.ws, p_client_id: ag.A, p_target_user_id: ag.editor.id, p_actor_id: ag.owner.id, p_session_id: ag.owner.session });
+for (const c of [
+  { name: "client grant revoked between the handler's check and its read → refused, zero write requests", scope: "client" as const,
+    when: (s: Seen) => s.method === "GET" && s.path.startsWith("/rpc/client_brain_read"), revoke: grantRevoke, status: 403, reason: "no_grant", attempts: 0 },
+  { name: "client grant revoked at the write → refused by the locked writer: one attempt, zero rows", scope: "client" as const,
+    when: (s: Seen) => s.method === "POST" && s.path.startsWith("/rpc/client_brain_authorized_write"), revoke: grantRevoke, status: 403, reason: "no_grant", attempts: 1 },
+  { name: "demoted to viewer at the client write → forbidden_role", scope: "client" as const,
+    when: (s: Seen) => s.method === "POST" && s.path.startsWith("/rpc/client_brain_authorized_write"),
+    revoke: (ag: Agency) => sql`update public.workspace_members set role = 'viewer' where workspace_id = ${ag.ws} and user_id = ${ag.editor.id}`, status: 403, reason: "role", attempts: 1 },
+  { name: "client archived at the write → client_archived", scope: "client" as const,
+    when: (s: Seen) => s.method === "POST" && s.path.startsWith("/rpc/client_brain_authorized_write"),
+    revoke: (ag: Agency) => rpc("client_account_archive", { p_workspace_id: ag.ws, p_client_id: ag.A, p_actor_id: ag.owner.id, p_session_id: ag.owner.session }), status: 403, reason: "client_archived", attempts: 1 },
+  { name: "membership removed during an AGENCY autosave (after the Brain read) → not_member, zero write requests", scope: "agency" as const,
+    when: (s: Seen) => s.method === "GET" && s.path.startsWith("/company_brain?"),
+    revoke: (ag: Agency) => sql`delete from public.workspace_members where workspace_id = ${ag.ws} and user_id = ${ag.editor.id}`, status: 403, reason: "not_member", attempts: 0 },
+  { name: "logged out at the client write → session_invalid", scope: "client" as const,
+    when: (s: Seen) => s.method === "POST" && s.path.startsWith("/rpc/client_brain_authorized_write"),
+    revoke: (ag: Agency) => logout(ag.editor), status: 401, reason: "session_invalid", attempts: 1 },
+]) {
+  Deno.test(`5. ${c.name}; the page keeps the unsaved text`, opts, async () => {
+    const { r, before, after, page, mine } = await revokedMidSave(c.when, c.revoke, c.scope);
+    assertEquals(r.reply.status, c.status, JSON.stringify(r.reply.body));
+    assertEquals(r.reply.body.reason, c.reason);
+    assertEquals(after, before, "no Brain changed");
+    assertEquals(writes(), c.attempts, "write requests");
+    assertEquals(external, []);
+    // The page: still the same version and base, nothing restored over the
+    // user's answers — the next pass would retry exactly what was typed.
+    assertEquals(r.next.status, "offline");
+    assertEquals(r.next.version, page.version);
+    assertEquals(r.next.base, page.base);
+    assertEquals(r.next.restore, null);
+    assertEquals(mine.answers.company.name, "typed before the revocation");
+  });
+}
+
+// ── 6. Stale version: rejected, nothing typed is lost ────────────────────────
+Deno.test("6. a stale autosave is rejected without a write and without losing the user's unsaved text", opts, async () => {
+  clientsOn(true);
+  const ag = await agency();
+  await grant(ag, ag.A, ag.editor); await grant(ag, ag.A, ag.editor2);
+  const first = await autosave(ag.editor, await openClient(ag.editor, ag.ws, ag.A), copy({ company: { name: "A", description: "draft" }, founder: { name: "Dana" } }));
+  assertEquals(first.reply.status, 200);
+  const mineBase = await openClient(ag.editor, ag.ws, ag.A);
+  // Someone else saves first: changes the description and the founder's role.
+  const other = await autosave(ag.editor2, await openClient(ag.editor2, ag.ws, ag.A), copy({ company: { name: "A", description: "THEIR description" }, founder: { name: "Dana", role: "CEO" } }));
+  assertEquals(other.reply.status, 200);
+  const stored = await state(ag.ws);
+  freshLog();
+  const mine = copy({ company: { name: "A, renamed by me", description: "MY UNSAVED description" }, founder: { name: "Dana" } });
+  const r = await autosave(ag.editor, mineBase, mine);
+  assertEquals(r.reply.status, 409); assertEquals(r.reply.body.rejected_reason, "stale");
+  assertEquals(writes(), 0, "a stale save writes nothing"); assertEquals(await state(ag.ws), stored);
+  const merged = r.next.restore!;
+  assertEquals(merged.answers.company.name, "A, renamed by me", "my change the other side did not touch is kept");
+  assertEquals(merged.answers.founder.role, "CEO", "their change I did not touch is taken");
+  assertEquals(r.next.conflicts, [{ form: "company", field: "description", mine: "MY UNSAVED description", theirs: "THEIR description" }],
+    "a field both changed is offered back with my text, never dropped silently");
+});
+
+// ── 7. Switching between clients ─────────────────────────────────────────────
+Deno.test("7. switching clients: each Brain has its own version and buffer; an answer or version never crosses to another client", opts, async () => {
+  clientsOn(true);
+  const ag = await agency();
+  await grant(ag, ag.A, ag.editor); await grant(ag, ag.B, ag.editor);
+  const listed = ((await (await serviceClient()).rpc("client_accounts_for_actor", { p_workspace_id: ag.ws, p_actor_id: ag.editor.id, p_session_id: ag.editor.session })).data as { client_id: string }[]).map((r) => r.client_id);
+  assertEquals(listed.sort(), [ag.A, ag.B].sort());
+  let sel = { workspaceId: ag.ws, scope: AGENCY_SCOPE as BrainScope };
+  sel = nextBrainScope(sel, { pickClient: ag.A, listed });
+  assertEquals(sel.scope, { kind: "client", clientId: ag.A });
+  const pA = await openClient(ag.editor, ag.ws, ag.A);
+  const a1 = await autosave(ag.editor, pA, copy({ company: { name: "A-ONLY name" } }));
+  assertEquals(a1.reply.status, 200);
+  sel = nextBrainScope(sel, { pickClient: ag.B, listed });
+  assertEquals(sel.scope, { kind: "client", clientId: ag.B });
+  assertNotEquals(brainScopeKey(ag.ws, clientScope(ag.A)!), brainScopeKey(ag.ws, sel.scope), "separate unsaved-text buffers");
+  assertNotEquals(brainScopeKey(ag.ws, AGENCY_SCOPE), brainScopeKey(ag.ws, sel.scope));
+  const pB = await openClient(ag.editor, ag.ws, ag.B);
+  assertEquals(pB.version, null, "B starts from B's own state, not A's");
+  // A stale buffer carrying A's version must not land on B.
+  const before = await state(ag.ws);
+  freshLog();
+  const crossed = await autosave(ag.editor, { ...pB, version: a1.page.version }, copy({ company: { name: "A-ONLY name" } }));
+  assertEquals(crossed.reply.status, 409, "A's version against B is stale, not a write");
+  assertEquals(writes(), 0); assertEquals(await state(ag.ws), before);
+  assertEquals(crossed.reply.body.client_id, ag.B);
+  const b1 = await autosave(ag.editor, pB, copy({ company: { name: "B-ONLY name" } }));
+  assertEquals(b1.reply.status, 200);
+  assertEquals(answersIn(await clientProfile(ag.ws, ag.A)).company?.name, "A-ONLY name");
+  assertEquals(answersIn(await clientProfile(ag.ws, ag.B)).company?.name, "B-ONLY name");
+  // A response that arrives after the user switched away is not applied to the new Brain.
+  assert(!sameBrainScope(clientScope(ag.A)!, sel.scope));
+  // Picking an unlisted client changes nothing; switching workspace returns to that workspace's agency Brain.
+  assertEquals(nextBrainScope(sel, { pickClient: uuid(), listed }), sel);
+  assertEquals(nextBrainScope(sel, { workspaceId: uuid() }).scope, AGENCY_SCOPE);
+  // A client id from another workspace is refused, never resolved to anything.
+  const other = await agency();
+  assertEquals((await call(ag.editor, { action: "status", workspace_id: ag.ws, scope: "client", client_id: other.A })).body.reason, "no_grant");
+});
+
+// ── 8. No client data in another context ─────────────────────────────────────
+Deno.test("8. no client's data reaches another client's, the agency's, or an ungranted user's context", opts, async () => {
+  clientsOn(true);
+  const ag = await agency();
+  await grant(ag, ag.A, ag.editor); await grant(ag, ag.B, ag.editor2);
+  for (const [u, c, tag] of [[ag.editor, ag.A, "ALPHA-7731"], [ag.editor2, ag.B, "BRAVO-4410"]] as const) {
+    const p = await openClient(u, ag.ws, c);
+    assertEquals((await autosave(u, p, copy({ company: { name: `${tag} Corp`, description: `${tag} confidential ICP` } }))).reply.status, 200);
+  }
+  const text = (x: unknown) => JSON.stringify(x);
+  const readA = await call(ag.editor, { action: "status", workspace_id: ag.ws, scope: "client", client_id: ag.A });
+  const readB = await call(ag.editor2, { action: "status", workspace_id: ag.ws, scope: "client", client_id: ag.B });
+  assert(text(readA.body).includes("ALPHA-7731") && !text(readA.body).includes("BRAVO-4410"));
+  assert(text(readB.body).includes("BRAVO-4410") && !text(readB.body).includes("ALPHA-7731"));
+  assert(!text(readA.body).includes("AGENCY-ONLY") && !text(readB.body).includes("AGENCY-ONLY"), "no agency data in a client read");
+  const agencyRow = text(await agencyProfile(ag.ws));
+  assert(!agencyRow.includes("ALPHA-7731") && !agencyRow.includes("BRAVO-4410"), "no client data in the agency Brain");
+  // Ungranted: refused with a body that carries none of the client's data.
+  const cross = await call(ag.editor, { action: "status", workspace_id: ag.ws, scope: "client", client_id: ag.B });
+  assertEquals(cross.status, 403); assert(!text(cross.body).includes("BRAVO"));
+  const crossSave = await autosave(ag.editor, { ws: ag.ws, scope: clientScope(ag.B)!, version: "1", base: copy({}, 0) }, copy({ company: { name: "x" } }));
+  assertEquals(crossSave.reply.status, 403); assert(!text(crossSave.reply.body).includes("BRAVO"), "even a stale-shaped request gets no copy");
+  // Agent context for a client scope: that client only.
+  const svc = await serviceClient();
+  const ctx = await clientBrainContextForScope(svc, { kind: "client", clientId: ag.A }, { workspaceId: ag.ws, actorId: ag.editor.id, sessionId: ag.editor.session });
+  assert(ctx.outcome === "ok" && text(ctx.profile).includes("ALPHA-7731") && !text(ctx.profile).includes("BRAVO") && !text(ctx.profile).includes("AGENCY-ONLY"));
+  const ctxB = await clientBrainContextForScope(svc, { kind: "client", clientId: ag.B }, { workspaceId: ag.ws, actorId: ag.editor.id, sessionId: ag.editor.session });
+  assertEquals(ctxB.outcome, "no_grant");
+});
+
+// ── Guards: switched off, missing client, unsupported action ─────────────────
+Deno.test("switched off: a client request is refused before any Brain access — never served from the agency Brain", opts, async () => {
+  clientsOn(false);
+  const ag = await agency();
+  await grant(ag, ag.A, ag.editor);
+  const before = await state(ag.ws);
+  freshLog();
+  const r = await call(ag.editor, buildProgressSaveBody({ workspaceId: ag.ws, step: 1, answers: { company: { name: "x" } }, expectedUpdatedAt: null, scope: clientScope(ag.A)! }));
+  assertEquals(r.status, 409); assertEquals(r.body.error, "client_brains_disabled");
+  assertEquals(seen.filter((s) => !s.path.startsWith("/workspace_members?")), [], "only the membership gate ran");
+  assertEquals(await state(ag.ws), before);
+  // The agency autosave is unaffected by the switch.
+  assertEquals((await autosave(ag.editor, await openAgency(ag.ws), copy({ company: { name: "agency still saves" } }))).reply.status, 200);
+});
+
+Deno.test("a client request without a client, or for an action clients do not support, is refused before any model, provider or Brain access", opts, async () => {
+  clientsOn(true);
+  const ag = await agency();
+  await grant(ag, ag.A, ag.editor);
+  const before = await state(ag.ws);
+  freshLog();
+  const missing = await call(ag.editor, { action: "save_draft", workspace_id: ag.ws, scope: "client", patch: {}, setup: { step: 1, answers: {} } });
+  assertEquals(missing.status, 400); assertEquals(missing.body.error, "client_context_required");
+  const drafting = await call(ag.editor, { action: "draft", workspace_id: ag.ws, scope: "client", client_id: ag.A, website_url: "https://example.com" });
+  assertEquals(drafting.status, 400); assertEquals(drafting.body.error, "client_scope_not_supported");
+  const research = await call(ag.editor, { action: "research_company", workspace_id: ag.ws, scope: "client", client_id: ag.A, website_url: "https://example.com" });
+  assertEquals(research.status, 400);
+  assertEquals(external, [], "no provider or model request");
+  assertEquals(writes(), 0); assertEquals(await state(ag.ws), before);
+});
+
+// ── The switcher and the page's client path, through the page's own API ─────
+const invokeAs = (u: User): BrainInvoke => async (body) => (await call(u, body)).body;
+
+Deno.test("9. the switcher lists exactly the user's active granted clients — and drops one the moment access ends", opts, async () => {
+  clientsOn(true);
+  const ag = await agency();
+  await grant(ag, ag.A, ag.editor); await grant(ag, ag.B, ag.editor); await grant(ag, ag.A, ag.viewer);
+  const names = async (u: User) => {
+    const r = await listBrainClients(invokeAs(u), ag.ws);
+    return r.kind === "ok" ? r.clients.map((c) => c.name).sort() : r.kind;
+  };
+  assertEquals(await names(ag.editor), ["Client A", "Client B"]);
+  assertEquals(await names(ag.viewer), ["Client A"], "a viewer with a grant sees it (read)");
+  assertEquals(await names(ag.owner), [], "an owner without grants sees no client (P3-D3)");
+  freshLog();
+  const raw = await call(ag.editor, { action: "list_clients", workspace_id: ag.ws });
+  assertEquals(Object.keys((raw.body.clients as Record<string, unknown>[])[0]).sort(), ["client_id", "name"], "ids and names only — no grant ids");
+  assertEquals(writes(), 0); assertEquals(external, []);
+  // The selected client is shown only while it is listed.
+  const listed = async (u: User) => { const r = await listBrainClients(invokeAs(u), ag.ws); return r.kind === "ok" ? r.clients : null; };
+  assertEquals(effectiveBrainScope(ag.B, await listed(ag.editor)), { kind: "client", clientId: ag.B });
+  await rpc("client_access_revoke", { p_workspace_id: ag.ws, p_client_id: ag.B, p_target_user_id: ag.editor.id, p_actor_id: ag.owner.id, p_session_id: ag.owner.session });
+  assertEquals(await names(ag.editor), ["Client A"]);
+  assertEquals(effectiveBrainScope(ag.B, await listed(ag.editor)), AGENCY_SCOPE, "revoked → back to the agency Brain");
+  await rpc("client_account_archive", { p_workspace_id: ag.ws, p_client_id: ag.A, p_actor_id: ag.owner.id, p_session_id: ag.owner.session });
+  assertEquals(await names(ag.editor), [], "archived → gone");
+  // Another workspace's member, a removed member, a signed-out user, switched off.
+  const other = await agency();
+  assertEquals((await call(other.editor, { action: "list_clients", workspace_id: ag.ws })).status, 403);
+  await logout(ag.viewer);
+  assertEquals((await call(ag.viewer, { action: "list_clients", workspace_id: ag.ws })).status, 401, "a logged-out session lists nothing");
+  clientsOn(false);
+  assertEquals((await listBrainClients(invokeAs(ag.editor), ag.ws)).kind, "off");
+  assertEquals((await call(ag.editor, { action: "list_clients", workspace_id: ag.ws, scope: "client", client_id: ag.B })).status, 409);
+  clientsOn(true);
+  assertEquals((await call(ag.editor, { action: "list_clients", workspace_id: ag.ws, scope: "client", client_id: ag.B })).body.error, "client_scope_not_supported");
+});
+
+Deno.test("10. the page edits a client Brain: first edit creates it, later edits are versioned, a stale or revoked edit is refused with nothing written", opts, async () => {
+  clientsOn(true);
+  const ag = await agency();
+  await grant(ag, ag.A, ag.editor); await grant(ag, ag.A, ag.editor2);
+  const scope = clientScope(ag.A)!;
+  const edit = async (u: User, patch: Record<string, unknown>, expectedVersion: string | null) =>
+    readBrainUpdateResponse(scope, (await call(u, buildBrainUpdateBody({ workspaceId: ag.ws, scope, patch, expectedVersion }))).body);
+  const loaded = await loadClientBrain(invokeAs(ag.editor), ag.ws, ag.A);
+  assert(loaded.kind === "ok"); assertEquals(loaded.row.version, null, "no Brain yet");
+  const first = await edit(ag.editor, { positioning: { promise: "A-ONLY promise" } }, null);
+  assert(first.ok, JSON.stringify(first)); assertEquals(first.version, "1");
+  const second = await edit(ag.editor, { positioning: { promise: "A-ONLY promise v2" } }, "1");
+  assert(second.ok); assertEquals(second.version, "2");
+  // A first-edit body against a Brain that now exists is refused, not an overwrite.
+  const before = await brains(ag.ws);
+  const late = await edit(ag.editor2, { positioning: { promise: "late first edit" } }, null);
+  assertEquals(late.conflict, true); assertEquals(await brains(ag.ws), before);
+  const stale = await edit(ag.editor2, { positioning: { promise: "stale" } }, "1");
+  assertEquals(stale.conflict, true); assertEquals(await brains(ag.ws), before);
+  // Access ends: the page is told to leave this client.
+  await rpc("client_access_revoke", { p_workspace_id: ag.ws, p_client_id: ag.A, p_target_user_id: ag.editor2.id, p_actor_id: ag.owner.id, p_session_id: ag.owner.session });
+  const gone = await edit(ag.editor2, { positioning: { promise: "after revoke" } }, "2");
+  assertEquals(gone.denied, "no_grant"); assertEquals(await brains(ag.ws), before);
+  assertEquals((await loadClientBrain(invokeAs(ag.editor2), ag.ws, ag.A)), { kind: "denied", reason: "no_grant" });
+  await logout(ag.editor);
+  assertEquals((await edit(ag.editor, { positioning: { promise: "after logout" } }, "2")).ok, false);
+  assertEquals(await brains(ag.ws), before);
+  const agencyAfter = JSON.stringify(await agencyProfile(ag.ws));
+  assert(!agencyAfter.includes("A-ONLY"), "the agency Brain never received a client edit");
+});
+
+Deno.test("11. switching agency → A → B → agency: each read shows only that Brain; nothing from one is shown or saved as another", opts, async () => {
+  clientsOn(true);
+  const ag = await agency();
+  await grant(ag, ag.A, ag.editor); await grant(ag, ag.B, ag.editor);
+  for (const [c, tag] of [[ag.A, "ALPHA"], [ag.B, "BRAVO"]] as const) {
+    const r = readBrainUpdateResponse(clientScope(c)!, (await call(ag.editor, buildBrainUpdateBody({ workspaceId: ag.ws, scope: clientScope(c)!, patch: { positioning: { promise: `${tag}-promise` } }, expectedVersion: null }))).body);
+    assert(r.ok, JSON.stringify(r));
+  }
+  const text = (x: unknown) => JSON.stringify(x);
+  const seq: [BrainScope, string, string[]][] = [
+    [AGENCY_SCOPE, "AGENCY-ONLY", ["ALPHA", "BRAVO"]],
+    [clientScope(ag.A)!, "ALPHA", ["BRAVO", "AGENCY-ONLY"]],
+    [clientScope(ag.B)!, "BRAVO", ["ALPHA", "AGENCY-ONLY"]],
+    [AGENCY_SCOPE, "AGENCY-ONLY", ["ALPHA", "BRAVO"]],
+  ];
+  for (const [scope, must, never] of seq) {
+    const shown = scope.kind === "agency" ? await agencyProfile(ag.ws) : await (async () => {
+      const r = await loadClientBrain(invokeAs(ag.editor), ag.ws, scope.clientId); assert(r.kind === "ok"); return r.row.profile; })();
+    assert(text(shown).includes(must), `${must} shown`);
+    for (const n of never) assert(!text(shown).includes(n), `${n} never shown in ${must}`);
+  }
+  // A response for A that arrives after switching to B is recognised as not B's.
+  const forA = await loadClientBrain(invokeAs(ag.editor), ag.ws, ag.A);
+  assert(forA.kind === "ok");
+  assert(!sameBrainScope(clientScope(ag.A)!, clientScope(ag.B)!));
+  // The page asks the server which Brain answered; a mismatched answer is refused.
+  assertEquals(await loadClientBrain(async () => ({ ok: true, client_id: ag.A, profile: { x: 1 }, version: 1 }), ag.ws, ag.B), { kind: "denied", reason: "unknown" });
+});
+
+// ── AUTH-06 × versioned autosave on the ACTIVATE paths (#168 ↔ #169/#176) ────
+// The merge of #168 into #169/#176 must keep BOTH protections in
+// generate-company-brain-draft's save_draft/activate: every write goes through
+// the AUTH-06 authorized writer (session, membership and role re-checked in the
+// write's transaction), and a versioned save lands only on the version it was
+// built from — checked by that same writer, never by a comparison after it.
+const COMPLETE = {
+  company: { name: "Ready Co", description: "Scheduling software for clinics", business_model: "B2B SaaS" },
+  target_customer: { industries: ["Healthcare"], disqualifiers: { industries: ["Agencies"] } },
+  buyer_personas: ["COO"], triggers: ["New clinic opened"], pain_points: ["No-shows"],
+};
+async function agencyWith(profile: Record<string, unknown> | null) {
+  const ws = await seedWorkspace();
+  const owner = await member(ws, "owner");
+  const admin = await member(ws, "admin");
+  const editor = await member(ws, "editor");
+  if (profile) await sql`insert into public.company_brain (workspace_id, profile) values (${ws}, ${sql.json(profile as never)})`;
+  return { ws, owner, admin, editor };
+}
+const brainRow = async (ws: string) =>
+  (await sql`select profile, onboarding_completed, updated_at::text as v from public.company_brain where workspace_id = ${ws}`)[0] as
+    { profile: Record<string, unknown>; onboarding_completed: boolean; v: string } | undefined;
+const activateBody = (ws: string, extra: Record<string, unknown> = {}) =>
+  ({ action: "activate", workspace_id: ws, patch: {}, change_origin: "onboarding_seller_confirmation", ...extra });
+async function atWriter(writer: string, act: () => Promise<unknown>) {
+  let fired = false;
+  onRest = async (s) => {
+    if (fired || s.method !== "POST" || !s.path.startsWith(writer)) return;
+    fired = true; onRest = null; await act();
+  };
+  return () => fired;
+}
+
+Deno.test("12. activation goes through the AUTH-06 writer: an admin demoted in flight is refused and nothing activates; an owner's activation lands and ends onboarding progress", opts, async () => {
+  clientsOn(false);
+  const a = await agencyWith(COMPLETE);
+  const before = await brainRow(a.ws);
+  freshLog();
+  const fired = await atWriter("/rpc/company_brain_authorized_write",
+    () => sql`update public.workspace_members set role = 'editor' where workspace_id = ${a.ws} and user_id = ${a.admin.id}`);
+  const r = await call(a.admin, activateBody(a.ws));
+  assert(fired(), "the demotion committed between the handler's check and the write");
+  assertEquals(r.status, 403, JSON.stringify(r.body)); assertEquals(r.body.reason, "role_changed");
+  const after = await brainRow(a.ws);
+  assertEquals(after?.onboarding_completed, false, "not activated");
+  assertEquals(after?.v, before?.v, "the row did not change");
+  assertEquals(posts("/company_brain"), 0, "never a direct table write");
+  // Positive control: progress saved, then an owner activates — one authorized write.
+  const p = await openAgency(a.ws);
+  const prog = await autosave(a.owner, p, copy({ company: { name: "Ready Co" } }));
+  assertEquals(prog.reply.status, 200);
+  assert(readServerProgress((await brainRow(a.ws))?.profile) !== null, "progress recorded");
+  freshLog();
+  const ok = await call(a.owner, activateBody(a.ws));
+  assertEquals(ok.status, 200, JSON.stringify(ok.body)); assertEquals(ok.body.activated, true);
+  const done = await brainRow(a.ws);
+  assertEquals(done?.onboarding_completed, true);
+  assertEquals(readServerProgress(done?.profile), null, "activation ends onboarding progress (withoutSetupProgress)");
+  assertEquals(posts("/rpc/company_brain_authorized_write"), 1); assertEquals(posts("/company_brain"), 0);
+  assertEquals(external, []);
+});
+
+Deno.test("13. blocked activation (incomplete Brain) saves its draft only through the AUTH-06 writer: a member removed in flight is refused and nothing changes", opts, async () => {
+  clientsOn(false);
+  const a = await agencyWith({ company: { name: "Half Co" } });
+  const before = await brainRow(a.ws);
+  freshLog();
+  const fired = await atWriter("/rpc/company_brain_authorized_write",
+    () => sql`delete from public.workspace_members where workspace_id = ${a.ws} and user_id = ${a.admin.id}`);
+  const r = await call(a.admin, activateBody(a.ws));
+  assert(fired());
+  assertEquals(r.status, 403, JSON.stringify(r.body)); assertEquals(r.body.reason, "not_member");
+  assertEquals((await brainRow(a.ws))?.v, before?.v);
+  // Positive control: the owner's blocked activation keeps the draft, does not activate.
+  const ok = await call(a.owner, activateBody(a.ws, { patch: { company: { name: "Half Co", description: "now described" } } }));
+  assertEquals(ok.status, 200, JSON.stringify(ok.body)); assertEquals(ok.body.activated, false); assertEquals(ok.body.ok, false);
+  const row = await brainRow(a.ws);
+  assertEquals(row?.onboarding_completed, false);
+  assertNotEquals(row?.v, before?.v, "the draft was saved");
+  assertEquals(posts("/company_brain"), 0);
+});
+
+Deno.test("14. a versioned activation that loses the race at the write is stale: nothing written, nothing activated", opts, async () => {
+  clientsOn(false);
+  const a = await agencyWith(COMPLETE);
+  let p = await openAgency(a.ws);
+  const s1 = await autosave(a.owner, p, copy({ company: { name: "Ready Co" } }));
+  assertEquals(s1.reply.status, 200); p = s1.page;
+  freshLog();
+  const fired = await atWriter("/rpc/company_brain_authorized_write", async () => {
+    const other = await autosave(a.admin, await openAgency(a.ws), copy({ company: { name: "Ready Co", description: "another device" } }));
+    assertEquals(other.reply.status, 200);
+  });
+  const before = await brainRow(a.ws);
+  const r = await call(a.owner, activateBody(a.ws, { setup: { step: 3, answers: { company: { name: "Ready Co" } } }, expected_updated_at: p.version }));
+  assert(fired());
+  assertEquals(r.status, 409, JSON.stringify(r.body)); assertEquals(r.body.rejected_reason, "stale");
+  const after = await brainRow(a.ws);
+  assertEquals(after?.onboarding_completed, false, "an activation never lands on a version it did not build on");
+  assertNotEquals(after?.v, before?.v, "only the other device's save landed");
+  assertEquals(answersIn(after?.profile).company?.description, "another device");
+});
+
+Deno.test("15. a versioned first save never overwrites a Brain another device created in flight", opts, async () => {
+  clientsOn(false);
+  const a = await agencyWith(null);
+  freshLog();
+  const fired = await atWriter("/rpc/company_brain_authorized_write", async () => {
+    const other = await call(a.admin, buildProgressSaveBody({ workspaceId: a.ws, step: 1, answers: { company: { name: "FIRST DEVICE" } }, expectedUpdatedAt: null }));
+    assertEquals(other.status, 200, JSON.stringify(other.body));
+  });
+  const r = await call(a.owner, buildProgressSaveBody({ workspaceId: a.ws, step: 1, answers: { company: { name: "second device" } }, expectedUpdatedAt: null }));
+  assert(fired());
+  assertEquals(r.status, 409, JSON.stringify(r.body));
+  assertEquals(answersIn((await brainRow(a.ws))?.profile).company?.name, "FIRST DEVICE", "the first device's Brain is intact");
+  // The page merges and retries against the copy it is now given.
+  const outcome = readProgressSaveResponse(r.body);
+  assertEquals(outcome.kind, "stale");
+});
+
+Deno.test("16. logged out during activation → session_invalid; nothing activates", opts, async () => {
+  clientsOn(false);
+  const a = await agencyWith(COMPLETE);
+  const before = await brainRow(a.ws);
+  freshLog();
+  const fired = await atWriter("/rpc/company_brain_authorized_write", () => logout(a.owner));
+  const r = await call(a.owner, activateBody(a.ws));
+  assert(fired());
+  assertEquals(r.status, 401, JSON.stringify(r.body)); assertEquals(r.body.reason, "session_invalid");
+  const after = await brainRow(a.ws);
+  assertEquals([after?.onboarding_completed, after?.v], [false, before?.v]);
+});

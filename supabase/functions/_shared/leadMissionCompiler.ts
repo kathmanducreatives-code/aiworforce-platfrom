@@ -50,7 +50,13 @@
 // model call and passes its raw output in.
 
 import { compileMissionSemantics } from "./missionCriteria.ts";
-import { readSignalPhrase } from "./missionSignalDescriptor.ts";
+import { readRoleQualifier, readSignalPhrase } from "./missionSignalDescriptor.ts";
+import { explicitWindowDays, kindForEvent } from "./signalKinds.ts";
+import {
+  activeMissionContract, MAX_CONTRACT_WINDOW_DAYS, type MissionContractVersion, parseSignalWindows,
+  type ProposedSignalWindow, SIGNAL_WINDOWS_INSTRUCTION, type SignalWindowDecision, timeframeAudit,
+  validateSignalWindows,
+} from "./missionInterpretationContract.ts";
 import {
   runtimeIdentity, LEAD_INTELLIGENCE_CONTRACT_VERSION,
 } from "./leadRuntimeIdentity.ts";
@@ -63,6 +69,7 @@ import {
   type MissionDirectives, type RequestedOutput, type TargetEntity, type MissionType,
 } from "./leadMission.ts";
 import { buildMissionBriefing } from "./agentoryBriefing.ts";
+import { CAPABILITY_AVAILABILITY_INSTRUCTION, capabilityContextForPrompt } from "./capabilityContext.ts";
 import { isCapabilityId, type CapabilityId } from "./leadCapabilityGraph.ts";
 import {
   catalogueForPrompt, isPublicCapability, offersFrom, toInternalCapabilities,
@@ -138,6 +145,11 @@ export interface GptMissionProposal {
   known_companies: string[];
   /** Recency window the request implies, in days. Null when it implies none. */
   signal_recency_days: number | null;
+  /**
+   * CONTRACT v2 only: each signal's own timeframe, with the user's words for it
+   * (`missionInterpretationContract`). Absent on a v1 proposal.
+   */
+  signal_windows?: ProposedSignalWindow[];
   /**
    * The literal role/signal words the user typed ("RevOps", "SDR"), preserved
    * verbatim rather than mapped to a taxonomy key. A plan that drifts entirely
@@ -428,6 +440,8 @@ export interface CompilerPromptContext {
   } | null;
   /** Count an upstream intake already resolved, if any. */
   requestedCount?: number | null;
+  /** Interpretation contract; defaults to AGENTORY_MISSION_CONTRACT (v1 when unset). */
+  contract?: MissionContractVersion;
 }
 
 /**
@@ -439,6 +453,36 @@ export interface CompilerPromptContext {
  * and no Actor appears anywhere in this object.
  */
 export function buildMissionCompilerPayload(
+  ctx: CompilerPromptContext,
+): Record<string, unknown> {
+  const v1 = buildMissionCompilerPayloadV1(ctx);
+  if ((ctx.contract ?? activeMissionContract()) !== "v2") return v1;
+  // ── CONTRACT v2 ─────────────────────────────────────────────────────────
+  //
+  // Same payload, three changes, each with its own evidence:
+  //   * every signal's timeframe is its own (`signal_windows`) — review R1;
+  //   * the catalogue says which capabilities this deployment can execute —
+  //     `capabilityExecutability`, read rather than restated;
+  //   * the request goes LAST. Everything before it is identical on every
+  //     call, so the provider's prompt cache can serve it. In v1 the request
+  //     sat fourth and roughly 9k characters of fixed text followed it.
+  const { user_query, company_brain_context, response_shape, ...fixed } = v1;
+  return {
+    ...fixed,
+    contract_version: "v2",
+    instruction: [MISSION_COMPILER_SYSTEM_PROMPT, SIGNAL_WINDOWS_INSTRUCTION, CAPABILITY_AVAILABILITY_INSTRUCTION].join(" "),
+    capability_catalogue: capabilityContextForPrompt(),
+    response_shape: {
+      ...(response_shape as Record<string, unknown>),
+      signal_recency_days: "null — use signal_windows",
+      signal_windows: "[{ event, days: number|null, phrase: the user's exact words, signal: the signal phrase it qualifies or null }] — one per signal with a stated timeframe",
+    },
+    company_brain_context,
+    user_query,
+  };
+}
+
+function buildMissionCompilerPayloadV1(
   ctx: CompilerPromptContext,
 ): Record<string, unknown> {
   return {
@@ -517,7 +561,7 @@ export function buildMissionCompilerPayload(
         role_families: "string[]", company_types: "string[]", geographies: "string[]",
         employee_range: { min: "number|null", max: "number|null" },
       },
-      disallowed_broadening: "string[]",
+      disallowed_broadening: "names from: geography, industry, business_model, stage, size, role, recency",
       required_evidence: "string[]",
       required_capabilities: "capability names from capability_catalogue",
       preferred_source_strategy: "values from source_strategy_vocabulary",
@@ -718,6 +762,8 @@ export function parseMissionProposal(raw: unknown, userText = ""): ParsedProposa
       // gets the empty/false reading, never a fabricated constraint.
       known_companies: strArray(c.known_companies),
       signal_recency_days: recencyDays(c.signal_recency_days, repairs),
+      // Only a v2 proposal carries the key, so a v1 proposal parses unchanged.
+      ...(Array.isArray(c.signal_windows) ? { signal_windows: parseSignalWindows(c.signal_windows) ?? [] } : {}),
       required_signal_terms: strArray(c.required_signal_terms),
       no_broadening_requested: c.no_broadening_requested === true,
       geography_is_hard: c.geography_is_hard === true,
@@ -803,6 +849,8 @@ export interface CompiledMissionResult {
   unknowns: string[];
   /** Present only when a proposal was refused outright. */
   safety_violations: ProposalViolation[];
+  /** Contract v2 only: how each stated timeframe reached (or did not reach) a signal. */
+  interpretation_trace?: InterpretationTrace;
 }
 
 export interface CompileMissionInput {
@@ -819,6 +867,24 @@ export interface CompileMissionInput {
    * signal, as before.
    */
   signalRecencyByEvent?: Record<string, number> | null;
+  /**
+   * The interpretation contract the proposal was produced under. Defaults to
+   * AGENTORY_MISSION_CONTRACT (v1 when unset). `signal_windows` is read ONLY
+   * under v2: a v1 compile ignores the field and records that it did.
+   */
+  contract?: MissionContractVersion;
+}
+
+/** Contract v2: from each FINAL runtime signal back to the words that set its window. */
+export interface InterpretationTrace {
+  contract: "v2";
+  signals: Array<{
+    event: string;
+    signal_phrase: string | null;
+    runtime_days: number | null;
+    source: "contract" | "contract_per_signal" | "reader_contract_omitted" | "default" | "none" | "other";
+  }>;
+  proposed_windows: SignalWindowDecision[];
 }
 
 /**
@@ -897,6 +963,9 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   let source: ParserSource = "deterministic_fallback";
   let mission: LeadMissionV1;
   let requestedCaps: string[] = [];
+  /** Contract v2's validated windows; null on a v1 proposal. */
+  let contractWindows: ReturnType<typeof validateSignalWindows> | null = null;
+  const contract: MissionContractVersion = i.contract ?? activeMissionContract();
   let approvedCaps: PublicCapabilityId[] = [];
   const rejectedCaps: CapabilityDecisionRecord["rejected"] = [];
 
@@ -941,8 +1010,20 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
       approvedCaps = [...parsed.proposal.required_capabilities];
       const internal = toInternalCapabilities(approvedCaps);
 
+      // CONTRACT v2: the model said which signal each timeframe belongs to;
+      // code checks the words are the user's and computes the days. A caller's
+      // own per-event windows (the Chat Brain path) still win.
+      if (parsed.proposal.signal_windows && contract === "v2") {
+        contractWindows = validateSignalWindows(query, parsed.proposal.signal_windows);
+        for (const c of contractWindows.changes) changes.push(c);
+      } else if (parsed.proposal.signal_windows) {
+        // A v2-only field under v1 is never acted on, whoever produced it.
+        changes.push("signal_windows_ignored:contract_v1");
+      }
+
       const validated = validateLeadMission(
-        proposalToMissionCandidate(parsed.proposal, internal, deterministic(), i.signalRecencyByEvent ?? null),
+        proposalToMissionCandidate(parsed.proposal, internal, deterministic(),
+          i.signalRecencyByEvent ?? contractWindows?.byEvent ?? null),
         { originalUserQuery: query, isCapabilityId, requestedCount: i.requestedCount },
       );
       for (const r of validated.repairs) changes.push(r);
@@ -1071,7 +1152,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
       role_families: [], company_types: [], geographies: [],
       employee_range: { min: null, max: null },
     },
-    disallowed_broadening: p?.disallowed_broadening ?? [],
+    disallowed_broadening: canonicalDisallowedBroadening(p?.disallowed_broadening ?? [], changes),
     evaluation_instructions: (p?.evaluation_instructions ?? "").trim() || requestedExplanationOf(i.originalUserQuery),
     source_strategy: p?.preferred_source_strategy ?? [],
     requested_contact_ready_count: p?.requested_contact_ready_count ?? null,
@@ -1127,6 +1208,42 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   }
 
   mission = { ...mission, hard_constraints: hard, soft_preferences: soft, directives };
+  // Model-proposed roles the user never named are removed, then restated
+  // constraints that are exactly equivalent are deduplicated (both recorded).
+  if (p) {
+    mission = authorizeHiringRoles(mission, query, changes);
+    // v1 recovers the hiring window by reading the sentence (review W1). Under
+    // contract v2 the model has already attributed every window and code has
+    // validated it, so that reader is consulted only to RECORD a disagreement:
+    // it reads "funding closed within 6 months" as a hiring window (review R1).
+    if (!contractWindows) {
+      mission = preserveStatedHiringWindow(mission, query, changes);
+    } else {
+      // Review R1: this regex reads "funding closed within 6 months" and "who
+      // joined within 90 days" as hiring windows. Recorded, never applied.
+      const reader = statedHiringWindowDays(query);
+      const hiring = contractWindows.byEvent.hiring ?? null;
+      if (reader !== hiring) changes.push(`hiring_regex_disagrees_with_contract:regex=${reader ?? "none"}:contract=${hiring ?? "none"}`);
+      // Two windows for one event, each naming its signal ("AEs in the last 2
+      // weeks or SDRs in the last 90 days"), are two requirements. The runtime
+      // cannot hold them apart: `requestedHiringFromSignals` enforces the
+      // SHORTEST hiring window on every posting, so the 90-day SDR requirement
+      // would silently become 14 days. Refused until the runtime carries
+      // per-signal windows; never collapsed.
+      for (const [event, assigned] of Object.entries(contractWindows.perSignal)) {
+        contractWindows.conflicts.push(
+          `per_signal_windows_not_enforced_at_runtime:${event}:${assigned.map((a) => `${a.signal}=${a.days}`).join("|")}`);
+      }
+      // A global window beside per-signal ones must agree with one of them.
+      const global = p.signal_recency_days;
+      if (global != null) {
+        const days = contractWindows.decisions.map((d) => d.days).filter((d): d is number => d != null);
+        if (days.some((d) => d === Math.min(global, MAX_CONTRACT_WINDOW_DAYS))) changes.push(`signal_recency_days_redundant:${global}`);
+        else contractWindows.conflicts.push(`global_window_conflict:signal_recency_days=${global}:signal_windows=${days.join("|") || "none"}`);
+      }
+    }
+    mission = dedupeEquivalentConstraints(mission, changes);
+  }
   if ((hedged.length > 0 || negated.length > 0) && statedLocations.length === 0) delete mission.geography_is_hard;
 
   // ── P1: THE MEANING, MADE EXPLICIT — AND THE CARRIERS KEPT HONEST ─────────
@@ -1140,9 +1257,66 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   const semantics = compileMissionSemantics({
     query, mission,
     proposal: p ? { signal_recency_days: p.signal_recency_days, confidence: p.confidence } : null,
+    ...(contractWindows
+      ? {
+        signalWindows: Object.fromEntries(Object.entries(contractWindows.byEvent)
+          .map(([event, d]) => [kindForEvent(event) ?? event, d])),
+        contractPerSignalKinds: Object.keys(contractWindows.perSignal).map((e) => kindForEvent(e) ?? e),
+      }
+      : {}),
   });
   mission = semantics.mission;
   for (const c of semantics.changes) changes.push(c);
+
+  // ── CONTRACT v2: FAIL CLOSED ON ANY TIMEFRAME NOBODY CAN VOUCH FOR ────────
+  //
+  // Conflicts between the model and the reader, timeframes the request states
+  // that no window accounts for, negated timeframes no signal can carry, a
+  // window whose signal is missing from the runtime: each would compile into
+  // a mission that is wider, narrower or inverted relative to the words. The
+  // mission is refused instead; the compiler binding's bounded second attempt
+  // is what repairs it.
+  let trace: InterpretationTrace | null = null;
+  if (contractWindows) {
+    const stated = mission.mission_semantics?.stated_windows ?? {};
+    const audit = timeframeAudit(query, p?.signal_windows ?? [], Object.values(stated));
+    for (const u of audit.undirected) changes.push(`timeframe_without_direction_not_checked:${u}`);
+    const signals = mission.required_signals ?? [];
+    const runtimeEvents = new Set(signals.map((x) => String(x.event ?? x.type)));
+    const missing = contractWindows.decisions
+      .filter((d) => d.days != null && !runtimeEvents.has(d.event))
+      .map((d) => `signal_missing_for_window:${d.event}`);
+    const conflicts = [...new Set([
+      ...contractWindows.conflicts,
+      ...semantics.changes.filter((c) => c.startsWith("window_conflict:")),
+      ...audit.unaccounted.map((u) => `timeframe_unaccounted:${u}`),
+      ...audit.negated.map((u) => `timeframe_negated:${u}`),
+      ...missing,
+    ])];
+    if (conflicts.length) {
+      throw new MissionCompilationBlockedError(query, conflicts.map((c) => `interpretation_conflict:${c}`));
+    }
+    const sourceOf = (x: { event?: unknown; type?: unknown; timeframe_days?: number | null }): InterpretationTrace["signals"][number]["source"] => {
+      const e = String(x.event ?? x.type);
+      const k = kindForEvent(e) ?? e;
+      if (x.timeframe_days == null) return "none";
+      if (contractWindows!.perSignal[e]?.some((a) => a.days === x.timeframe_days)) return "contract_per_signal";
+      if (contractWindows!.byEvent[e] != null && Math.min(contractWindows!.byEvent[e], MAX_CONTRACT_WINDOW_DAYS) === x.timeframe_days) return "contract";
+      if (semantics.changes.includes(`window_from_reader_contract_omitted:${k}:${x.timeframe_days}d`)) return "reader_contract_omitted";
+      if (semantics.changes.some((c) => c.startsWith(`window_defaulted:${k}:`))) return "default";
+      return "other";
+    };
+    trace = {
+      contract: "v2",
+      signals: signals.map((x) => ({
+        event: String(x.event ?? x.type),
+        signal_phrase: typeof (x as { phrase?: unknown }).phrase === "string" ? (x as { phrase: string }).phrase : null,
+        runtime_days: x.timeframe_days ?? null,
+        source: sourceOf(x),
+      })),
+      proposed_windows: contractWindows.decisions,
+    };
+  }
 
   // ── STAMPED WHERE MISSIONS ARE MADE, NOT WHERE THEY ARE USED ─────────────
   //
@@ -1179,6 +1353,8 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
     gpt_proposal: parsed.proposal,
     validator_changes: changes,
     final_mission: mission,
+    // From the request to the runtime signal: which timeframe went where, and why.
+    ...(trace ? { interpretation_trace: trace } : {}),
     schema_version: MISSION_COMPILER_SCHEMA_VERSION,
     workspace_context: workspace,
     capability_decision: {
@@ -1228,6 +1404,318 @@ const MISSION_TYPE_FOR_OUTPUT: Record<RequestedOutput, MissionType> = {
   job_listings: "job_research",
   social_posts: "qualified_lead_sourcing",
 };
+
+/**
+ * The dimension names `directives.disallowed_broadening` is read by.
+ *
+ * Consumers test exact words — `leadCapabilityEngine` asks
+ * `disallowed_broadening.includes("role")` before it lets a run widen the
+ * requested role — but the schema never said which words, so the first
+ * real-GPT A7 run (2026-10-27, check I7) wrote prose: "geography",
+ * "company type", "employee range", "Account Executive role", "30-day posting
+ * recency". "role" was never there, so role broadening stayed allowed although
+ * the model meant to forbid it.
+ */
+export const BROADENING_DIMENSIONS = Object.freeze([
+  "geography", "industry", "business_model", "stage", "size", "role", "recency",
+] as const);
+// ── ONLY AN ENTRY THAT NAMES A DIMENSION, AND NOTHING THAT MERELY MENTIONS ONE ─
+//
+// The first cut matched any word anywhere ("Windows developers" read as a
+// recency ban, "seniority" as a whole-role ban: independent review of PR
+// #194). An entry is read only when it IS a dimension's name, or a short
+// phrase whose head noun is one ("Account Executive role", "30-day posting
+// recency"). Anything else is kept verbatim and unread.
+const BROADENING_NAMES: Readonly<Record<string, string>> = Object.freeze(Object.fromEntries([
+  ["geography", ["geography", "geographies", "geo", "location", "locations", "country", "countries", "region", "regions",
+    "hq", "headquarters", "hq location", "hq country", "headquarters location", "company location", "territory",
+    "company profile.locations"]],
+  ["industry", ["industry", "industries", "vertical", "verticals", "sector", "sectors", "company type", "company types",
+    "business type", "business types"]],
+  ["business_model", ["business model", "business models"]],
+  ["stage", ["stage", "stages", "company stage", "funding stage"]],
+  ["size", ["size", "company size", "employee range", "employee count", "employee band", "employees", "headcount",
+    "size band", "employee size"]],
+  ["role", ["role", "roles", "role family", "role families", "job title", "job titles", "title", "titles", "job function",
+    "hiring role", "hiring roles"]],
+  ["recency", ["recency", "posting recency", "posting age", "posting date", "hiring window", "time window",
+    "signal recency", "signal window", "freshness", "hiring signal recency"]],
+].flatMap(([dim, names]) => (names as string[]).map((n) => [n, dim as string]))));
+const BROADENING_HEADS: ReadonlyArray<readonly [string, RegExp]> = [
+  ["role", /\s(?:roles?|titles?)$/],
+  ["recency", /\s(?:recency|posting age|posting date)$/],
+  ["geography", /\s(?:locations?|geography)$/],
+  ["size", /\s(?:employee range|headcount|employee band)$/],
+  ["industry", /\s(?:industry|company type)$/],
+];
+/**
+ * Each entry the model wrote, read onto the canonical dimension it names.
+ *
+ * ADDITIVE: every entry is kept exactly as written (the round planner compares
+ * company types and signal names literally) and the canonical name is added
+ * beside it, so normalisation can only add a ban the model stated, never lose
+ * one. Each reading is recorded in `changes`.
+ */
+export function canonicalDisallowedBroadening(entries: readonly string[], changes?: string[]): string[] {
+  const out: string[] = [];
+  const add = (v: string) => { if (!out.includes(v)) out.push(v); };
+  const canon: string[] = [];
+  for (const raw of entries) {
+    const entry = String(raw ?? "").trim();
+    if (!entry) continue;
+    add(entry);
+    const t = entry.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ")
+      // "do not broaden the location or headcount" names two dimensions.
+      .replace(/^(?:do not|don't|never|no)\s+(?:broaden|widen|expand|relax|loosen|change)\s+(?:the\s+)?/, "");
+    const items = t.split(/\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or|&)\s+/).map((x) => x.replace(/^the\s+/, "").trim());
+    const dims = items.map((x) => BROADENING_NAMES[x] ??
+      (x.split(" ").length <= 5 ? BROADENING_HEADS.find(([, re]) => re.test(x))?.[0] : undefined));
+    // Read only when EVERY item names a dimension; a partly-readable entry stays verbatim only.
+    if (dims.length && dims.every(Boolean)) {
+      for (const dim of dims as string[]) {
+        if (dim === entry) continue;
+        changes?.push(`disallowed_broadening_canonical:${entry}->${dim}`);
+        canon.push(dim);
+      }
+    }
+  }
+  for (const d of canon) add(d);
+  return out;
+}
+
+/** A role word and its regular singular/plural, for reading it in the user's own sentence. */
+function roleWordForms(term: string): string[] {
+  const t = term.trim().toLowerCase();
+  return [...new Set([t, t.replace(/(?<=[a-z]{2})(?:es|s)$/, ""), t.replace(/s$/, ""), `${t}s`])];
+}
+
+const inSentence = (sentence: string, phrase: string) =>
+  new RegExp(`(?:^|[^a-z0-9])${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}(?:$|[^a-z0-9])`)
+    .test(sentence);
+
+/**
+ * The hiring window the user's own sentence states, or null.
+ *
+ * Read narrowly, because a window handed to the wrong signal is worse than
+ * none: only a window that FOLLOWS a hiring or posting word in the SAME clause
+ * ("an open Account Executive posting dated within 30 days", "hiring AEs
+ * posted in the last 2 weeks"), and only before another signal's or the
+ * company's own clause begins ("… and raised funding in the last 2 years",
+ * "… founded in the last 3 years"). The general window reader does not see
+ * "within 30 days" at all and files "posted in the last 2 weeks" under social
+ * activity, so it cannot answer this question.
+ */
+const HIRING_ANCHOR_RE =
+  /\b(?:hiring|hires|recruiting|job\s+postings?|(?:open|posted|new)\s+(?:[a-z][\w-]*\s+){0,4}?(?:postings?|roles?|positions?|openings?|jobs?|reqs?|vacanc(?:y|ies)))\b/i;
+const CLAUSE_END_RE =
+  /[.;]|\b(?:and|that|who|which|with|while)\s+(?:has\s+|have\s+|had\s+|recently\s+)?(?:raised|funded|founded|launched|announced|expanded|acquired|posted\s+about)\b|\b(?:founded|established|incorporated|funded|raised)\b/i;
+export function statedHiringWindowDays(query: string): number | null {
+  const q = String(query ?? "");
+  const anchor = q.match(HIRING_ANCHOR_RE);
+  if (!anchor || anchor.index == null) return null;
+  const after = q.slice(anchor.index + anchor[0].length);
+  const end = after.search(CLAUSE_END_RE);
+  const clause = (end >= 0 ? after.slice(0, end) : after)
+    // "within 30 days" and "in 30 days" name the same window as "within the last 30 days".
+    .replace(/\b(within|in|over|during)\s+(?!the\b)(?=(?:\d|a\b|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|ninety))/gi,
+      "$1 the last ");
+  return explicitWindowDays(clause.toLowerCase());
+}
+
+/**
+ * THE USER'S STATED HIRING WINDOW REACHES THE RUNTIME (review W1, PR #194).
+ *
+ * The job filter reads `required_signals[].timeframe_days`, which came only
+ * from the proposal's `signal_recency_days`. A proposal that omitted it left
+ * the runtime with no window — a 200-day-old posting proved "dated within 30
+ * days" — while the criterion still displayed the 30-day default, so I5
+ * passed. Now:
+ *   * a window the user stated and the proposal omitted is set from the
+ *     request (recorded `hiring_window_from_request`);
+ *   * a proposal window that DIFFERS from the user's is a contradiction: the
+ *     user's window is what the runtime uses (never the model's wider or
+ *     narrower one), the conflict is recorded, and it is marked on the signal
+ *     (`window_conflict`) so the interpretation gate refuses the mission.
+ * Nothing changes when the user stated no window.
+ */
+export function preserveStatedHiringWindow(
+  mission: LeadMissionV1, query: string, changes: string[],
+): LeadMissionV1 {
+  const stated = statedHiringWindowDays(query);
+  if (stated == null) return mission;
+  const required_signals = (mission.required_signals ?? []).map((sig) => {
+    if ((sig.event ?? sig.type) !== "hiring") return sig;
+    const proposed = sig.timeframe_days;
+    if (proposed == null) {
+      changes.push(`hiring_window_from_request:${stated}`);
+      return { ...sig, timeframe_days: stated };
+    }
+    if (proposed !== stated) {
+      changes.push(`hiring_window_contradiction:proposal=${proposed}:request=${stated}`);
+      return { ...sig, timeframe_days: stated, window_conflict: { proposed, requested: stated } } as typeof sig;
+    }
+    return sig;
+  });
+  return { ...mission, required_signals };
+}
+
+/**
+ * Whether excluding `excluded` rules out every posting for `required`: the
+ * excluded words (a regular plural allowed) appear whole inside the required
+ * role. "account executive" excludes "enterprise account executive"; the
+ * reverse does not hold.
+ */
+export function roleExcludes(excluded: string, required: string): boolean {
+  const words = (s: string) => ` ${s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+  const req = roleWordForms(required).map(words);
+  return roleWordForms(excluded).some((f) => f.trim().length > 1 && req.some((r) => r.includes(words(f))));
+}
+
+/**
+ * ONLY THE ROLES THE USER NAMED (independent review of PR #194, blocking 1).
+ *
+ * The model restates the request, and a restatement can add a role: "Account
+ * Executive" came back as "Account Executive or SDR", the reader kept both
+ * terms, and SDR postings would then have qualified. A hiring signal's role
+ * terms and exclusions are therefore kept only when the user's own sentence
+ * names them (allowing a regular plural), and its role families only when the
+ * sentence or a kept term names them. What is removed is recorded; a signal
+ * left with fewer than two terms carries no AND/OR reading.
+ */
+export function authorizeHiringRoles(
+  mission: LeadMissionV1, query: string, changes: string[],
+): LeadMissionV1 {
+  const q = query.toLowerCase();
+  const named = (term: string) => roleWordForms(term).some((f) => f.length > 1 && inSentence(q, f));
+  const familiesOfQuery = readRoleQualifier(query).role_families ?? [];
+  const required_signals = (mission.required_signals ?? []).map((sig) => {
+    if ((sig.event ?? sig.type) !== "hiring") return sig;
+    const qual = { ...((sig.qualifier ?? {}) as Record<string, unknown>) } as {
+      role_terms?: string[]; role_families?: string[]; role_match?: string; excluded_role_terms?: string[];
+    };
+    // A kept term takes the user's own spelling ("account executives" →
+    // "account executive" when the request wrote the singular).
+    const asWritten = (t: string) => roleWordForms(t).find((f) => f.length > 1 && inSentence(q, f));
+    const terms = [...new Set((qual.role_terms ?? []).flatMap((t) => {
+      const f = asWritten(t);
+      if (!f) { changes.push(`hiring_role_not_in_request:${t}`); return []; }
+      if (f !== t.trim().toLowerCase()) changes.push(`hiring_role_spelled_as_request:${t}->${f}`);
+      return [f];
+    }))];
+    const excluded = (qual.excluded_role_terms ?? []).filter((t) => {
+      if (named(t)) return true;
+      changes.push(`excluded_role_not_in_request:${t}`);
+      return false;
+    });
+    // ── A REQUIRED ROLE THAT IS ALSO EXCLUDED IS A CONTRADICTION, KEPT AS ONE ──
+    //
+    // "open Account Executive posting, not Account Executives" (second review
+    // of PR #194, N1) requires a role and excludes every posting that could
+    // prove it. Nothing is deleted to make that pass: both stay on the
+    // mission, the contradiction is recorded here, and the interpretation gate
+    // (I9) refuses it. An exclusion that is narrower than the role ("Account
+    // Executives, not Enterprise Account Executives") is a consistent
+    // alternative and is not a contradiction.
+    for (const e of excluded) {
+      const r = terms.find((t) => roleExcludes(e, t));
+      if (r) changes.push(`hiring_role_excluded_and_required:${e}~${r}`);
+    }
+    const allowed = new Set([...familiesOfQuery, ...terms.flatMap((t) => readRoleQualifier(t).role_families ?? [])]);
+    const families = [...new Set([...(qual.role_families ?? []), ...(sig.role_families ?? [])])].filter((f) => {
+      if (allowed.has(f)) return true;
+      changes.push(`hiring_role_family_not_in_request:${f}`);
+      return false;
+    });
+    const next = { ...qual };
+    delete next.role_terms; delete next.role_families; delete next.role_match; delete next.excluded_role_terms;
+    if (terms.length) next.role_terms = terms;
+    if (families.length) next.role_families = families;
+    if (terms.length > 1 && qual.role_match) next.role_match = qual.role_match;
+    if (excluded.length) next.excluded_role_terms = excluded;
+    const out = { ...sig, qualifier: next } as typeof sig;
+    if (families.length) out.role_families = families; else delete out.role_families;
+    return out;
+  });
+  return { ...mission, required_signals };
+}
+
+/**
+ * ONLY A CONSTRAINT THAT SAYS EXACTLY WHAT ITS CRITERION SAYS IS A DUPLICATE
+ * (independent review of PR #194, blocking 2).
+ *
+ * The model restates size, hiring role and hiring window in `hard_constraints`
+ * beside the fields that already carry them, and each restatement became a
+ * second hard criterion (real run 1, check I6). The first cut matched field
+ * WORDS and value NUMBERS and so also discarded "employee_count greater_than
+ * 50", "outside [11,50]", "older_than_days 30", "except Account Executive",
+ * "sales_headcount >= 11". Now a constraint is removed only when its field is
+ * one of a closed list for that dimension, its operator is an equality-like
+ * one from a closed list, and its value equals the mission's own value for the
+ * dimension. Everything else — another operator, another field, another
+ * value, no operator — is kept, and so still reaches the interpretation gate.
+ * Every removal is recorded.
+ */
+const SAME_SIZE = {
+  fields: new Set(["employee_range", "employee_count_range", "employees_range", "company_size", "company_size_range",
+    "employee_band", "size_band", "headcount_range", "declared_employee_band", "employee_size_band"]),
+  ops: new Set(["equals", "equal", "eq", "=", "==", "is", "in", "between", "range", "declared_band_equals", "band_equals",
+    "within_range"]),
+};
+const SAME_ROLE = {
+  fields: new Set(["hiring_signal", "hiring_role", "hiring_roles", "open_role", "open_roles", "open_role_type",
+    "hiring_activity", "job_title", "job_titles", "hiring_role_title"]),
+  ops: new Set(["has_open_role", "has_open_roles", "equals", "equal", "eq", "=", "==", "is", "in", "includes", "matches",
+    "contains", "has"]),
+};
+const SAME_WINDOW = {
+  fields: new Set(["hiring_signal_recency", "hiring_recency", "posting_recency", "job_posting_recency",
+    "hiring_window_days", "posting_window_days", "signal_recency_days", "posting_age_days"]),
+  ops: new Set(["within_days", "within", "within_last_days", "posted_within", "posted_within_days", "max_age_days",
+    "at_most_days", "<=", "lte"]),
+};
+function rangeOf(v: unknown): { min: number; max: number } | null {
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    const o = v as { min?: unknown; max?: unknown };
+    return typeof o.min === "number" && typeof o.max === "number" ? { min: o.min, max: o.max } : null;
+  }
+  if (Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === "number")) return { min: v[0], max: v[1] };
+  const s = Array.isArray(v) && v.length === 1 ? String(v[0]) : typeof v === "string" ? v : null;
+  const m = s?.trim().match(/^(\d{1,6})\s*(?:-|–|—|to)\s*(\d{1,6})(?:\s*employees?)?$/i);
+  return m ? { min: Number(m[1]), max: Number(m[2]) } : null;
+}
+export function dedupeEquivalentConstraints(mission: LeadMissionV1, changes: string[]): LeadMissionV1 {
+  const hard = { ...(mission.hard_constraints ?? {}) } as Record<string, { operator?: unknown; value?: unknown }>;
+  const er = mission.company_profile?.employee_range ?? {};
+  const hiring = (mission.required_signals ?? []).filter((s) => (s.event ?? s.type) === "hiring");
+  const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+  const sameRoles = (a: string[], b: string[]) => {
+    const fa = new Set(a.map((x) => roleWordForms(x)[1] ?? norm(x))), fb = new Set(b.map((x) => roleWordForms(x)[1] ?? norm(x)));
+    return fa.size > 0 && fa.size === fb.size && [...fa].every((x) => fb.has(x));
+  };
+  for (const [field, raw] of Object.entries(hard)) {
+    if (!raw || typeof raw !== "object") continue;
+    const op = norm(raw.operator);
+    const f = field.toLowerCase();
+    let dim: string | null = null;
+    if (SAME_SIZE.fields.has(f) && SAME_SIZE.ops.has(op)) {
+      const r = rangeOf(raw.value);
+      if (r && typeof er.min === "number" && typeof er.max === "number" && r.min === er.min && r.max === er.max) dim = "company_size";
+    } else if (SAME_ROLE.fields.has(f) && SAME_ROLE.ops.has(op)) {
+      const vals = (Array.isArray(raw.value) ? raw.value : [raw.value]).map(norm).filter(Boolean);
+      if (hiring.length === 1 && sameRoles(vals, ((hiring[0].qualifier ?? {}) as { role_terms?: string[] }).role_terms ?? [])) {
+        dim = "hiring";
+      }
+    } else if (SAME_WINDOW.fields.has(f) && SAME_WINDOW.ops.has(op)) {
+      const n = typeof raw.value === "number" ? raw.value : /^\d{1,4}$/.test(norm(raw.value)) ? Number(norm(raw.value)) : NaN;
+      if (hiring.length === 1 && Number.isFinite(n) && n === hiring[0].timeframe_days) dim = "hiring";
+    }
+    if (dim) {
+      changes.push(`hard_constraint_deduplicated:${field}:${op}:${JSON.stringify(raw.value)}->${dim}`);
+      delete hard[field];
+    }
+  }
+  return { ...mission, hard_constraints: hard };
+}
 
 /**
  * Read the model's signal prose into requirements, REJOINING fragments.

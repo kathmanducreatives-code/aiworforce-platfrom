@@ -38,6 +38,9 @@ export const DB_ALL_TRIGGERS = [
   /^tests\/db-contract\/[^/]+\.sh$/,
 ];
 
+/** The real-process rehearsals spawn these by path: a change to them runs the rehearsals even when no contract file is selected. */
+export const REALPROCESS_TRIGGERS = [/^worker\//, /^tests\/realprocess\//];
+
 /**
  * Top-level areas the plan understands. A changed path outside all of them is
  * UNCLASSIFIED and runs the complete database contract (and the mutation
@@ -216,9 +219,17 @@ export function plan(i) {
   }
   if (level === 1 && !mutation) reasons.push("mutation proofs: deferred to ready-for-review / release");
 
+  // ── real worker processes (tests/realprocess) ──────────────────────────
+  // With the contract, and whenever the worker or the rehearsals themselves
+  // change: they spawn worker/main.ts by path, which no import scan follows.
+  const rpHit = unknownDiff ? null : changed.find((f) => REALPROCESS_TRIGGERS.some((r) => r.test(f)));
+  if (rpHit && contract.length === 0) reasons.push(`real worker processes: ${rpHit} changed`);
+  const realprocess = contract.length > 0 || unknownDiff || Boolean(rpHit);
+
   return {
     level,
     fast: true,
+    realprocess,
     contract: contract.length > 0,
     contract_all: contractAll,
     contract_files: contractAll ? [] : contract,
@@ -299,6 +310,13 @@ export function gateVerdict(i) {
     const r = res(j);
     if (required && r !== "success") problems.push(`${j}: required by the plan, ${r}`);
     if (!required && r !== "skipped" && r !== "success") problems.push(`${j}: not required, but ${r}`);
+  }
+  // Real worker processes: required when the plan says so. A plan from before
+  // the job existed names no `realprocess`, and then the job is not judged.
+  if (out.realprocess !== undefined) {
+    const rp = res("realprocess");
+    if (out.realprocess === "true" && rp !== "success") problems.push(`realprocess: required by the plan, ${rp}`);
+    if (out.realprocess !== "true" && rp !== "skipped" && rp !== "success") problems.push(`realprocess: not required, but ${rp}`);
   }
   if (level === 3 && !conditional.mutation) problems.push("level 3 without the mutation proofs");
   if (level >= 2 && out.contract_all !== "true") problems.push(`level ${level} without the complete database contract`);
