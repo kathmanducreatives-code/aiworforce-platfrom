@@ -19,12 +19,12 @@ import { supabaseCheckpointStore } from "../_shared/leadPipeline/checkpoint.ts";
 import { loadExistingRecords } from "../_shared/leadPipeline/history.ts";
 import { pipelineApifyInvoker } from "../_shared/leadPipeline/apifyInvoker.ts";
 import type { PipelineRow } from "../_shared/leadPipeline/projection.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
-// deno-lint-ignore no-explicit-any
-async function persist(admin: any, rows: PipelineRow[]) {
+async function persist(admin: SupabaseClient, rows: PipelineRow[]) {
   const now = new Date().toISOString();
   for (const r of rows) {
     if (r.existingLeadId) {

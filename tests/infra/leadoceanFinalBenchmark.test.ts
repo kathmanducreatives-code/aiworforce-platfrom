@@ -18,15 +18,26 @@ Deno.test("benchmark plan: 8 pinned requests, 15 records, 12 scenarios covered b
 });
 
 Deno.test("benchmark ledger: durable, append-only; a key in any state is visible to the next process", async () => {
-  const p = await Deno.makeTempFile({ dir: "/tmp" });
-  await Deno.remove(p);
-  assertEquals(await ledgerRead(p), []);
-  await ledgerAppend(p, { key: "h:P-S2", state: "reserved", records: 2, status: null, at: "t" });
-  await ledgerAppend(p, { key: "h:P-S2", state: "failed", records: null, status: 429, at: "t" });
-  const l = await ledgerRead(p);
-  assertEquals(l.map((x) => x.state), ["reserved", "failed"]);
-  assertEquals((await Deno.stat(p)).mode! & 0o777, 0o600);
-  await Deno.remove(p);
+  // The deploy-safety lane runs without --allow-write, so the file ledger is
+  // exercised in a child process that alone may write (its own temp file).
+  const mod = new URL("../../scripts/leadocean-final-benchmark.ts", import.meta.url).href;
+  const child = `
+    const { ledgerAppend, ledgerRead } = await import(${JSON.stringify(mod)});
+    const p = await Deno.makeTempFile();
+    await Deno.remove(p);
+    const empty = await ledgerRead(p);
+    await ledgerAppend(p, { key: "h:P-S2", state: "reserved", records: 2, status: null, at: "t" });
+    await ledgerAppend(p, { key: "h:P-S2", state: "failed", records: null, status: 429, at: "t" });
+    const states = (await ledgerRead(p)).map((x) => x.state);
+    const mode = (await Deno.stat(p)).mode & 0o777;
+    await Deno.remove(p);
+    console.log(JSON.stringify({ empty, states, mode }));`;
+  const out = await new Deno.Command(Deno.execPath(), { args: ["eval", "--no-check", child], stdout: "piped", stderr: "piped" }).output();
+  assert(out.success, new TextDecoder().decode(out.stderr));
+  const r = JSON.parse(new TextDecoder().decode(out.stdout).trim().split("\n").pop()!);
+  assertEquals(r.empty, []);
+  assertEquals(r.states, ["reserved", "failed"]);
+  assertEquals(r.mode, 0o600);
 });
 
 Deno.test("benchmark evaluation: people row in the observed shape — size band, industry, decision-maker; HQ is not in a people row", () => {

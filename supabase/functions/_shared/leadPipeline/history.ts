@@ -16,6 +16,7 @@
 // record. A hold blocks outreach; it never changes qualification.
 
 import type { ExistingRecord, HoldReason } from "./exclusions.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export const RECENT_CONTACT_DAYS = 90;
 const DAY = 86_400_000;
@@ -80,12 +81,11 @@ export function holdsFromOutreach(leads: OutreachLeadRow[], touches: TouchRow[],
 }
 
 /** Load every record for one workspace. `admin` is a service-role client; reads only. */
-// deno-lint-ignore no-explicit-any
-export async function loadExistingRecords(admin: any, workspaceId: string, now: Date): Promise<ExistingRecord[]> {
-  const page = async <T>(q: () => Promise<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> => {
+export async function loadExistingRecords(admin: SupabaseClient, workspaceId: string, now: Date): Promise<ExistingRecord[]> {
+  const page = async <T>(q: () => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<T[]> => {
     const { data, error } = await q();
     if (error) throw new Error(`history read failed: ${error.message}`);
-    return data ?? [];
+    return (data ?? []) as T[];
   };
   const [accounts, contacts, candidates, oLeads, acts, calls] = await Promise.all([
     page<AccountRow>(() => admin.from("accounts").select("id, domain, linkedin_url, stage, raw").eq("workspace_id", workspaceId).limit(20000)),

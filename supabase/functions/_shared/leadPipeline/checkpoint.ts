@@ -12,6 +12,7 @@
 // with excludeIds = the ids already seen (at most 1,000 per call, LeadOcean's
 // limit), so nothing already paid for is bought again. Within one run, paging
 // uses the cursor in stable order (adapters/leadocean.ts).
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export const CHECKPOINT_VERSION = "lead-pipeline-checkpoint-v1" as const;
 export const EXCLUDE_IDS_MAX = 1000;
@@ -71,8 +72,7 @@ export function advance(cp: WalkCheckpoint, run: { personIds: string[]; companyK
 }
 
 /** The hosted store (held migration 20261031120000_lead_pipeline_checkpoints.sql). `admin` is a service-role client. */
-// deno-lint-ignore no-explicit-any
-export function supabaseCheckpointStore(admin: any): CheckpointStore {
+export function supabaseCheckpointStore(admin: SupabaseClient): CheckpointStore {
   return {
     async load(workspaceId, walkId) {
       const { data, error } = await admin.from("lead_pipeline_checkpoints").select("*").eq("workspace_id", workspaceId).eq("walk_id", walkId).maybeSingle();
