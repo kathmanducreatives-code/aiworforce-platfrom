@@ -158,7 +158,16 @@ export interface BenchmarkScore {
    * many of them at least agree on name); `wrong` only a contradicting identifier.
    */
   companyMatching: Ratio & { wrong: number; missed: number; conflicting: number; unconfirmed: number; unconfirmedNameAgrees: number; accuracyWhereComparable: number | null };
-  /** 2 */ decisionMakerAccuracy: Ratio & { wrongPerson: number; wrongEmployer: number; wrongRole: number; missed: number };
+  /**
+   * 2 — `wrong*` only where BOTH sides carry the field and it disagrees.
+   * `unconfirmed` counts returned people a missing field kept from being
+   * judged (no LinkedIn URL on one side, an employer named but not by domain —
+   * Apollo's people rows — or no title, Test L's empty titles): never wrong.
+   */
+  decisionMakerAccuracy: Ratio & {
+    wrongPerson: number; wrongEmployer: number; wrongRole: number; missed: number;
+    unconfirmed: { person: number; employer: number; role: number };
+  };
   /** 3 */ headquartersVerification: Ratio & { disagree: number; absent: number; noTruth: number };
   /** 4 */ uniqueQualified: { qualified: number; uniqueToProvider: number; alreadyKnown: number; providerChecksOnly: number };
   /** 5 */ duplicateRate: Ratio;
@@ -173,8 +182,13 @@ export interface BenchmarkScore {
    * provider only says it applied, versus nothing at all.
    */
   evidenceQuality: { returnedValue: number; filterOnly: number; nothing: number; share: number | null };
-  /** Freshness: age in days of the provider's own update stamp, where it gives one. */
-  freshnessDays: { stamped: number; unstamped: number; median: number | null };
+  /**
+   * Freshness: age in days of the provider's own update stamp, where it gives
+   * one. A stamp AFTER the measuring instant is no age at all (clock skew, or a
+   * serve time mistaken for an update): counted as `future`, never as
+   * unstamped and never as fresh.
+   */
+  freshnessDays: { stamped: number; unstamped: number; future: number; median: number | null };
   skippedForSuppression: string[];
 }
 
@@ -230,15 +244,22 @@ export function scoreProvider(cohort: Cohort, r: ProviderBenchmarkResult, other:
 
   // 2 — known decision-makers: same person, current employer, role
   let pOk = 0, wPerson = 0, wEmp = 0, wRole = 0, pMiss = 0, pDen = 0;
+  const pUnconfirmed = { person: 0, employer: 0, role: 0 };
   for (const s of cohort.known_decision_makers) {
     if (s.status !== "selected") continue;
     if (!sendable(s)) { skipped.push(s.slot); continue; }
     pDen++;
     const m = r.personMatches[s.slot] ?? null;
     if (!m) { pMiss++; continue; }
+    // MISSING IS NOT WRONG (the companies' rule, applied to people): each
+    // field is judged only when both sides carry it.
     const lp = liPerson(s.linkedin_url), lm = liPerson(m.linkedinUrl);
-    if (!lp || !lm || lp !== lm) { wPerson++; continue; }
-    if (normDomain(s.employer_domain ?? null) !== normDomain(m.company?.domain ?? null)) { wEmp++; continue; }
+    if (!lp || !lm) { pUnconfirmed.person++; continue; }
+    if (lp !== lm) { wPerson++; continue; }
+    const de = normDomain(s.employer_domain ?? null), dm = normDomain(m.company?.domain ?? null);
+    if (!de || !dm) { pUnconfirmed.employer++; continue; }
+    if (de !== dm) { wEmp++; continue; }
+    if (!m.title || !s.role) { pUnconfirmed.role++; continue; }
     if (!roleMatches(m.title, s.role)) { wRole++; continue; }
     pOk++;
   }
@@ -287,12 +308,15 @@ export function scoreProvider(cohort: Cohort, r: ProviderBenchmarkResult, other:
   const ages = r.discoveryLeads.flatMap((l) => l.company.sources.map((s) => s.providerUpdatedAt))
     .map((d) => (d ? (at - Date.parse(d)) / 86_400_000 : NaN));
   const stamped = ages.filter((x) => Number.isFinite(x) && x >= 0).sort((a, b) => a - b);
+  const future = ages.filter((x) => Number.isFinite(x) && x < 0).length;
+  const mid = stamped.length >> 1;
+  const median = !stamped.length ? null : Math.round(stamped.length % 2 ? stamped[mid] : (stamped[mid - 1] + stamped[mid]) / 2);
   return {
     version: BENCHMARK_VERSION,
     provider: r.provider,
     companyMatching: { ...ratio(correct, cDen), wrong, missed, conflicting, unconfirmed, unconfirmedNameAgrees,
       accuracyWhereComparable: correct + wrong > 0 ? correct / (correct + wrong) : null },
-    decisionMakerAccuracy: { ...ratio(pOk, pDen), wrongPerson: wPerson, wrongEmployer: wEmp, wrongRole: wRole, missed: pMiss },
+    decisionMakerAccuracy: { ...ratio(pOk, pDen), wrongPerson: wPerson, wrongEmployer: wEmp, wrongRole: wRole, missed: pMiss, unconfirmed: pUnconfirmed },
     headquartersVerification: { ...ratio(hqOk, hqOk + hqBad + hqAbsent), disagree: hqBad, absent: hqAbsent, noTruth: hqNoTruth },
     uniqueQualified: {
       qualified: q, uniqueToProvider: mine.filter((g) => !intersects(g, theirs)).length, alreadyKnown,
@@ -308,7 +332,7 @@ export function scoreProvider(cohort: Cohort, r: ProviderBenchmarkResult, other:
       units: q > 0 ? r.unitsConsumed / q : null, unit: r.unit, qualified: q,
     },
     evidenceQuality: { returnedValue: returned, filterOnly, nothing: checks.length - returned - filterOnly, share: checks.length ? returned / checks.length : null },
-    freshnessDays: { stamped: stamped.length, unstamped: ages.length - stamped.length, median: stamped.length ? Math.round(stamped[Math.floor((stamped.length - 1) / 2)]) : null },
+    freshnessDays: { stamped: stamped.length, unstamped: ages.length - stamped.length - future, future, median },
     skippedForSuppression: [...new Set(skipped)],
   };
 }

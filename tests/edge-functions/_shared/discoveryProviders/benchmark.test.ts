@@ -80,6 +80,34 @@ Deno.test("benchmark: a decision-maker counts only as the same person, at the sa
   assertEquals([s.decisionMakerAccuracy.numerator, s.decisionMakerAccuracy.denominator, s.decisionMakerAccuracy.wrongEmployer], [1, 2, 1]);
 });
 
+Deno.test("benchmark: a decision-maker's MISSING field is unconfirmed, never wrong (Apollo employer names, Test L's empty titles)", () => {
+  const s = scoreProvider(COHORT, result("apollo", {
+    personMatches: {
+      // No LinkedIn URL on the returned row: who it is cannot be compared.
+      B01: person("patdoe", "alpha.example", "VP Sales", { linkedinUrl: null }),
+      // Apollo names the employer without a domain: the employer cannot be compared.
+      B02: person("samroe", "", "CEO", { company: { ...co("apollo", "c-sam", ""), domain: null } }),
+    },
+  }));
+  const d = s.decisionMakerAccuracy;
+  assertEquals([d.wrongPerson, d.wrongEmployer, d.wrongRole], [0, 0, 0], "nothing contradicted, so nothing is wrong");
+  assertEquals(d.unconfirmed, { person: 1, employer: 1, role: 0 });
+  assertEquals([d.numerator, d.denominator], [0, 2], "and nothing is confirmed either");
+  // An empty title (Test L read every title empty) is an unconfirmed role, not a wrong one.
+  const t = scoreProvider(COHORT, result("leadocean", { personMatches: { B01: person("patdoe", "alpha.example", "") } }));
+  assertEquals([t.decisionMakerAccuracy.wrongRole, t.decisionMakerAccuracy.unconfirmed.role], [0, 1]);
+  // A real contradiction is still wrong.
+  const w = scoreProvider(COHORT, result("leadocean", { personMatches: { B01: person("someoneelse", "alpha.example", "VP Sales") } }));
+  assertEquals(w.decisionMakerAccuracy.wrongPerson, 1);
+});
+
+Deno.test("benchmark: a stamp after the measuring instant is `future` — never fresh, never hidden as unstamped", () => {
+  const s = scoreProvider(COHORT, result("leadocean", {
+    discoveryLeads: [lead("a.example", "qualified", "qualified", false, "2026-10-20T00:00:00Z"), lead("f.example", "qualified", "qualified", false, "2026-11-05T00:00:00Z")],
+  }), null, "2026-10-30T00:00:00Z");
+  assertEquals(s.freshnessDays, { stamped: 1, unstamped: 0, future: 1, median: 10 });
+});
+
 Deno.test("benchmark: only the shared engine's qualified count; known and other-provider companies are not unique", () => {
   const lo = result("leadocean", {
     discoveryRows: [co("leadocean", "x", "new1.example"), co("leadocean", "y", "new1.example"), co("leadocean", "z", "new2.example")],
@@ -113,7 +141,9 @@ Deno.test("benchmark: evidence quality counts returned values apart from filter-
     discoveryLeads: [lead("a.example", "qualified", "qualified", false, "2026-10-20T00:00:00Z"), lead("b.example", "needs_verification", "needs_verification", false, "2026-07-02T00:00:00Z"), lead("c.example", "needs_verification")],
   }), null, "2026-10-30T00:00:00Z");
   assertEquals(s.evidenceQuality, { returnedValue: 1, filterOnly: 2, nothing: 0, share: 1 / 3 });
-  assertEquals(s.freshnessDays, { stamped: 2, unstamped: 1, median: 10 });
+  // Ages 10 and 120 days: the median of an even count is the mean of the two
+  // middle ages (65), not the lower one (the scorer reported 10).
+  assertEquals(s.freshnessDays, { stamped: 2, unstamped: 1, future: 0, median: 65 });
 });
 
 Deno.test("benchmark: nothing qualified → cost per qualified result is null, never zero", () => {
