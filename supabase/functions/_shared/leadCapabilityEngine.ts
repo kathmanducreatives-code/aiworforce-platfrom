@@ -93,7 +93,8 @@ import {
   type QualificationContext,
 } from "./missionQualificationContext.ts";
 import {
-  buildMissionEvaluationInput, evaluatorAnswered, notEvaluated, reevaluationContextFrom,
+  buildMissionEvaluationInput, evaluatorAnswered, failedEvaluationMarks, FAILED_EVALUATION_MARK, notEvaluated,
+  reevaluationContextFrom, RETRIED_EVALUATION_MARK, retryFailedEvaluation,
   type MissionReevaluationContextV1,
   type MissionEvaluation, type MissionEvaluationInput,
   type ParsedMissionEvaluation, type DecisionSource,
@@ -9039,7 +9040,8 @@ export async function runCapabilityPlan(
         eligibleOrdered
           .filter((c) =>
             c.brain !== null &&
-            (c.brain.outcome === "QUALIFIED" || c.mission_evaluation !== null))
+            (c.brain.outcome === "QUALIFIED" || c.mission_evaluation !== null) &&
+            !retryFailedEvaluation(c.mission_evaluation, opts.readEnv))
           .map((c) => c.key));
       for (let qIndex = 0; qIndex < eligibleOrdered.length; qIndex++) {
         const c = eligibleOrdered[qIndex];
@@ -9573,7 +9575,17 @@ export async function runCapabilityPlan(
         // it qualifies nobody and says so through `evaluation_paths` and
         // `mission_evaluation_observability`. Silence reported as silence.
         c.decision_source = "insufficient_evidence";
-        c.mission_evaluation = notEvaluated("no evaluator was available for this run");
+        // A CALL THAT WAS MADE AND FAILED is marked apart from "no evaluator" and
+        // "budget spent" (both `null`): only the former may be retried, once, and
+        // only under `LEAD_REEVALUATE_FAILED_EVALUATION` (`retryFailedEvaluation`).
+        const priorFailed = failedEvaluationMarks(c.mission_evaluation);
+        c.mission_evaluation = notEvaluated(evaluation
+          ? "the mission evaluator was called and returned no usable answer"
+          : "no evaluator was available for this run");
+        if (evaluation) {
+          c.mission_evaluation.unknown_fields = [...c.mission_evaluation.unknown_fields, FAILED_EVALUATION_MARK,
+            ...(priorFailed.failed ? [RETRIED_EVALUATION_MARK] : [])];
+        }
         // An enabled evaluator that failed to answer cannot be bypassed by
         // the broader facts the earlier batch happened to establish.
         if (deps.evaluateMission) c.mission_evaluation.criterion_verdicts = [];

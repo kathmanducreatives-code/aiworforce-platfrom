@@ -21,8 +21,27 @@ const PRODUCTION_REFS = ["ohsdatpvfdjdemstoiuj", "wqnigjhcwjxtmordrwno"];
 const JOBS = "apify:harvestapi~linkedin-job-search";
 const DETAILS = "apify:harvestapi~linkedin-company";
 const ATOMUS = "apify:atomus~linkedin-company-scraper";
-/** The approved per-start maxima (µ$): the reviewed canary catalog. */
+/**
+ * The REVIEWED CEILINGS per start (µ$): Contract 2's catalog. A later contract's
+ * catalog may narrow them and never raise them (`approvedCatalog`).
+ */
 export const APPROVED_MAXIMA: Readonly<Record<string, number>> = { jobs: 4000, details: 4050, atomus: 10550, model: 12480, reads: 0 };
+/** The only catalogs a canary kickoff may be prepared from: the reviewed canary-funding files. */
+export const CANARY_CATALOG_PATH = /^docs\/launch\/proposals\/smoke-catalog-canary-funding(-[0-9]+)?\.json$/;
+export const DEFAULT_CANARY_CATALOG = "docs/launch/proposals/smoke-catalog-canary-funding.json";
+
+/** What a kickoff must equal: one reviewed catalog's maxima, each within the reviewed ceiling. */
+export interface ApprovedCatalog { maxima: Record<string, number>; within_ceilings: boolean }
+export function approvedCatalog(doc: Json): ApprovedCatalog {
+  const q = (doc?.approved_quotes ?? {}) as Record<string, Json>;
+  const name = (n: string) => n === "luna" ? "model" : n;
+  const maxima = Object.fromEntries(Object.entries(q).map(([n, t]) => [name(n), Number(t?.maximum_microusd)]));
+  const within_ceilings = Object.keys(APPROVED_MAXIMA).every((n) => Number.isFinite(maxima[n]) && maxima[n] <= APPROVED_MAXIMA[n]) &&
+    Object.keys(maxima).every((n) => n in APPROVED_MAXIMA);
+  return { maxima, within_ceilings };
+}
+/** Contract 2's catalog, as the reviewed default. */
+const CONTRACT2_CATALOG: ApprovedCatalog = { maxima: { ...APPROVED_MAXIMA }, within_ceilings: true };
 export const PROVIDER_CAP_MICROUSD = 200_000;
 export const MODEL_CAP_MICROUSD = 50_000;
 const MODEL_ATTEMPTS = 4;
@@ -32,7 +51,7 @@ export interface Check { id: string; what: string; ok: boolean; observed: string
 /** Every SQL line that starts a statement must be one of the reviewed four (plus the transaction). */
 const ALLOWED_STATEMENT = /^(begin;|commit;|insert into public\.task_plans \(|insert into public\.lead_execution_calls \(|insert into public\.lead_mission_queue \(|select public\.authorize_discovery_smoke\()/;
 
-export function validateKickoff(k: Json, sql: string, expectedSha: string): Check[] {
+export function validateKickoff(k: Json, sql: string, expectedSha: string, approved: ApprovedCatalog = CONTRACT2_CATALOG): Check[] {
   const out: Check[] = [];
   const c = (id: string, what: string, ok: boolean, observed: unknown) =>
     out.push({ id, what, ok, observed: typeof observed === "string" ? observed : JSON.stringify(observed) });
@@ -65,11 +84,15 @@ export function validateKickoff(k: Json, sql: string, expectedSha: string): Chec
       !/pvalyou/i.test(sql.split("\n").filter((l) => !l.startsWith("--")).join("\n")) &&
       !/pvalyou/i.test(JSON.stringify(auth)), Object.keys(quotes).sort());
   const maxima = Object.fromEntries(Object.entries(quotes).map(([n, q]) => [n, q.maximum_microusd]));
-  c("K11", "every maximum is the approved one", Object.entries(APPROVED_MAXIMA).every(([n, m]) => maxima[n] === m), maxima);
+  c("K11", "every maximum is the approved catalog's, and no catalog exceeds the reviewed ceiling",
+    approved.within_ceilings && Object.keys(APPROVED_MAXIMA).every((n) => maxima[n] === approved.maxima[n]), maxima);
   const templateOf = (actor: string) => Object.values(quotes).find((q) => (q.allowed_actors ?? []).includes(actor) &&
     (q.allowed_kinds ?? []).includes("provider"));
   const provider = Object.entries(limits).reduce((a, [actor, n]) => a + n * Number(templateOf(actor)?.maximum_microusd ?? Infinity), 0);
-  c("K12", `worst-case provider spend ≤ ${PROVIDER_CAP_MICROUSD} µ$ ($0.20)`, provider <= PROVIDER_CAP_MICROUSD && provider === 18_600, provider);
+  // One start of each approved actor at the catalog's own maxima — Contract 2's 18,600 µ$, or less.
+  const expected = approved.maxima.jobs + approved.maxima.details + approved.maxima.atomus;
+  c("K12", `worst-case provider spend ≤ ${PROVIDER_CAP_MICROUSD} µ$ ($0.20) and exactly the catalog's`,
+    provider <= PROVIDER_CAP_MICROUSD && provider === expected, provider);
   const model = MODEL_ATTEMPTS * Number(quotes.model?.maximum_microusd ?? Infinity);
   c("K13", `worst-case worker model spend ≤ ${MODEL_CAP_MICROUSD} µ$ ($0.05)`, model <= MODEL_CAP_MICROUSD, model);
   c("K20", "provider + worker model worst case ≤ the $0.25 combined authorization", provider + model <= 250_000, provider + model);
@@ -81,7 +104,8 @@ export function validateKickoff(k: Json, sql: string, expectedSha: string): Chec
   c("K16", "the SQL names the canary project and never production",
     sql.includes(`for TEST project ${CANARY_PROJECT_REF}.`) && !PRODUCTION_REFS.some((r) => sql.replace(/NEVER run on [a-z0-9 ]+\./, "").includes(r)), "header");
   c("K17", "the SQL is a PAID canary approval naming its approver",
-    /^-- PAID: APPROVED BY .+\. Starts: .*worst-case provider 18600 µ\$\.$/m.test(sql), sql.match(/^-- PAID: APPROVED BY ([^.]*)\./m)?.[1] ?? null);
+    new RegExp(`^-- PAID: APPROVED BY .+\\. Starts: .*worst-case provider ${expected} µ\\$\\.$`, "m").test(sql),
+    sql.match(/^-- PAID: APPROVED BY ([^.]*)\./m)?.[1] ?? null);
   const statements = sql.split("\n").filter((l) => l.trim() && !l.startsWith("--") && !/^\s/.test(l));
   const bad = statements.filter((l) => !ALLOWED_STATEMENT.test(l));
   c("K18", "only the four reviewed statements, in one transaction", bad.length === 0 &&
@@ -98,11 +122,13 @@ export function queueIdOf(sql: string): string | null {
 }
 
 if (import.meta.main) {
-  const a = parseArgs(Deno.args, { string: ["dir", "expected-sha", "json"] });
+  const a = parseArgs(Deno.args, { string: ["dir", "expected-sha", "json", "catalog"] });
   if (!a.dir || !/^[0-9a-f]{40}$/.test(a["expected-sha"] ?? "")) { console.error("--dir and a 40-hex --expected-sha are required"); Deno.exit(2); }
+  const catalogFile = a.catalog ?? DEFAULT_CANARY_CATALOG;
+  if (!CANARY_CATALOG_PATH.test(catalogFile)) { console.error(`--catalog must be a reviewed canary-funding catalog: ${catalogFile}`); Deno.exit(2); }
   const k = JSON.parse(Deno.readTextFileSync(`${a.dir}/kickoff.json`));
   const sql = Deno.readTextFileSync(`${a.dir}/kickoff.sql`);
-  const checks = validateKickoff(k, sql, a["expected-sha"]!);
+  const checks = validateKickoff(k, sql, a["expected-sha"]!, approvedCatalog(JSON.parse(Deno.readTextFileSync(catalogFile))));
   for (const x of checks) console.log(`${x.ok ? "PASS" : "FAIL"} ${x.id} ${x.what}: ${x.observed}`);
   const ok = checks.every((x) => x.ok);
   if (a.json) Deno.writeTextFileSync(a.json, JSON.stringify({ ok, queue_id: queueIdOf(sql), checks }, null, 2) + "\n");

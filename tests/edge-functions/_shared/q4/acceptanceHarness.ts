@@ -88,7 +88,9 @@ export interface AcceptanceCase {
    * and run-agent's wrapper hands the engine the strict parser's reading of a
    * `null` response — canary session 2's fifth call, exactly.
    */
-  evaluator?: "pass" | "fail" | "timeout" | "http_error";
+  evaluator?: "pass" | "fail" | "timeout" | "http_error" | "http_error_once";
+  /** Extra environment the engine reads (`opts.readEnv`). */
+  env?: Record<string, string>;
   /**
    * The first slice's execution deadline closes right after discovery, as a
    * slice running out of wall clock does; the next slice resumes from the
@@ -292,7 +294,9 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
     evaluateMission: async (i: Json) => {
       evaluatorCalls++;
       if (c.evaluator === "timeout") return null;
-      if (c.evaluator === "http_error") return parseMissionEvaluationStrict(null, i.registry, criteria as never) as Json;
+      if (c.evaluator === "http_error" || (c.evaluator === "http_error_once" && evaluatorCalls === 1)) {
+        return parseMissionEvaluationStrict(null, i.registry, criteria as never) as Json;
+      }
       const parsed = parseMissionEvaluationStrict(evaluatorRaw(i.input, i.registry, c), i.registry, criteria as never) as Json;
       flags.evaluator.push({ company_key: i.company_key, decision: parsed.evaluation?.decision ?? null,
         verdicts: parsed.evaluation?.criterion_verdicts ?? [] });
@@ -301,7 +305,7 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
     log: () => {},
   };
   const opts: Json = {
-    mission, plan: graph, maxCandidates: 1, readEnv: (k: string) => k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined,
+    mission, plan: graph, maxCandidates: 1, readEnv: (k: string) => k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : c.env?.[k],
     readiness: policy, specMode: "enforce", specScope: { workspace_id: "q4-acceptance", lineage_id: c.id },
     identity: { task_id: c.id, workspace_id: "q4-acceptance" }, log: deps.log,
   };

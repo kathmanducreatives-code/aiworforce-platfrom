@@ -1293,6 +1293,43 @@ export function evaluatorAnswered(e: MissionEvaluation | null | undefined): bool
   return !(verdicts.length === 0 && e.reasoning === FALLBACK_INSUFFICIENT.reasoning);
 }
 
+/** Opt-in: re-evaluate, once, a company whose only evaluator call failed. Default off. */
+export const REEVALUATE_FAILED_EVALUATION_ENV = "LEAD_REEVALUATE_FAILED_EVALUATION";
+/** `unknown_fields` mark: the evaluator was CALLED and returned nothing usable. */
+export const FAILED_EVALUATION_MARK = "evaluation_failed";
+/** `unknown_fields` mark: that failure was already retried once. */
+export const RETRIED_EVALUATION_MARK = "evaluation_retried";
+
+export function failedEvaluationMarks(e: { unknown_fields?: readonly string[] } | null | undefined) {
+  const f = e?.unknown_fields ?? [];
+  return { failed: f.includes(FAILED_EVALUATION_MARK), retried: f.includes(RETRIED_EVALUATION_MARK) };
+}
+
+/**
+ * Is a restored decision that rests on a FAILED evaluator call re-evaluated?
+ *
+ * Canary session 2: Oscilar's only evaluation was refused by the spend gate,
+ * so its proven hiring stayed unknown and it could never be verified further.
+ * The acceptance matrix deliberately asserts that a resume evaluates nothing
+ * (Q4.9, an evaluator timeout), so this is OFF unless
+ * `LEAD_REEVALUATE_FAILED_EVALUATION=on`, and even then it applies only to a
+ * call that was made and failed (never "no evaluator", "budget spent" or a
+ * timeout, which reach the engine as `null`) and only ONCE per company: a
+ * second failure is marked retried and restored like any other decision. The
+ * call is still bounded by the slice's evaluation budget and the spend gate.
+ */
+export function retryFailedEvaluation(
+  e: { unknown_fields?: readonly string[] } | null | undefined,
+  readEnv?: (key: string) => string | undefined,
+): boolean {
+  // The engine passes `opts.readEnv`, which run-agent leaves unset: read the
+  // process environment then, exactly as the investigation-budget resolvers do.
+  const read = readEnv ?? ((k: string) => { try { return Deno.env.get(k); } catch { return undefined; } });
+  if (String(read(REEVALUATE_FAILED_EVALUATION_ENV) ?? "").trim().toLowerCase() !== "on") return false;
+  const m = failedEvaluationMarks(e);
+  return m.failed && !m.retried;
+}
+
 export function notEvaluated(reason: string): MissionEvaluation {
   return {
     ...FALLBACK_INSUFFICIENT,

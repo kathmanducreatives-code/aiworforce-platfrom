@@ -328,7 +328,8 @@ generate_kickoff() {
   "${env[@]}" "$DENO" run --no-prompt --allow-env --allow-read --allow-write="$out" "${net[@]}" \
     scripts/test-project/real-gpt/prepare-real-gpt-kickoff.ts --scenario canary_funding \
     --project-ref "$REF" --workspace "$WS" --user "$user" \
-    --pricing-version "canary-$(date -u +%Y%m%d)" --jobs-max 4000 --details-max 4050 --atomus-max 10550 \
+    --pricing-version "canary-$(date -u +%Y%m%d)" --jobs-max "${CANARY_JOBS_MAX:-4000}" --details-max "${CANARY_DETAILS_MAX:-4050}" \
+    --atomus-max "${CANARY_ATOMUS_MAX:-10550}" ${CANARY_CATALOG:+--catalog "$CANARY_CATALOG"} \
     --observed-at "$observed" --price-source "apify-account-check.ts on the discovery-test account at $observed" \
     --approved-by "$approver" --authorize-paid "$approver" --acknowledge-defaults \
     --expected-sha "$EXPECTED_SHA" --out "$out" "${src[@]}" ${SESSION_QUEUE_ID:+--queue "$SESSION_QUEUE_ID" --plan "$SESSION_PLAN_ID"} \
@@ -339,8 +340,9 @@ generate_kickoff() {
 
 validate_kickoff() {
   local dir="$1"
-  if "$DENO" run --no-prompt --allow-read="$dir" --allow-write="$dir" scripts/test-project/canary/validate-kickoff.ts \
-      --dir "$dir" --expected-sha "$EXPECTED_SHA" --json "$dir/validation.json" > "$dir/validation.txt" 2>&1; then
+  local catalog="${CANARY_CATALOG:-docs/launch/proposals/smoke-catalog-canary-funding.json}"
+  if "$DENO" run --no-prompt --allow-read="$dir,$catalog" --allow-write="$dir" scripts/test-project/canary/validate-kickoff.ts \
+      --dir "$dir" --expected-sha "$EXPECTED_SHA" --catalog "$catalog" --json "$dir/validation.json" > "$dir/validation.txt" 2>&1; then
     pass "kickoff valid: K01–K19 (request, interpretation, assumed window, commit, one start each, no Pvalyou, budget, SQL shape)"
   else
     cat "$dir/validation.txt"; fail "kickoff invalid: $(grep '^FAIL' "$dir/validation.txt" | tr '\n' ';')"
@@ -568,6 +570,14 @@ case "$STAGE" in
     # own hash is still what the approval phrase must name, and A01–A09 still apply.
     [ "${CANARY_LOCAL_REHEARSAL:-}" = "1" ] && [ -n "${CANARY_SESSION_CONTRACT:-}" ] && CONTRACT="$CANARY_SESSION_CONTRACT"
     csha="$(sha256sum "$CONTRACT" | cut -d' ' -f1)"
+    # THE CONTRACT NAMES ITS CATALOG AND ITS PER-START MAXIMA (Contract 3 narrowed
+    # both). Absent: Contract 2's catalog and figures, exactly as before. A12
+    # checks the pair agree; K11 that no catalog exceeds the reviewed ceilings.
+    CANARY_CATALOG="$(jq -r '.catalog // "docs/launch/proposals/smoke-catalog-canary-funding.json"' "$CONTRACT")"
+    CANARY_JOBS_MAX="$(jq -r '.actors["apify:harvestapi~linkedin-job-search"].max_microusd // 4000' "$CONTRACT")"
+    CANARY_DETAILS_MAX="$(jq -r '.actors["apify:harvestapi~linkedin-company"].max_microusd // 4050' "$CONTRACT")"
+    CANARY_ATOMUS_MAX="$(jq -r '.actors["apify:atomus~linkedin-company-scraper"].max_microusd // 10550' "$CONTRACT")"
+    export CANARY_CATALOG CANARY_JOBS_MAX CANARY_DETAILS_MAX CANARY_ATOMUS_MAX
     # One approval: this exact contract, at this exact commit.
     require_approval "run canary session $csha at $EXPECTED_SHA"
     [ -n "${CANARY_APPROVER:-}" ] || stop "CANARY_APPROVER (who approved the session) is required"

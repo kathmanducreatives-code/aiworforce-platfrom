@@ -40,10 +40,11 @@
 import { parseArgs } from "https://deno.land/std@0.224.0/cli/parse_args.ts";
 import { buildMissionCompilerBinding } from "../../../supabase/functions/_shared/leadMissionCompilerBinding.ts";
 import { lunaOnlyFetch, prepareKickoff } from "./prepareKickoff.ts";
+import { CANARY_CATALOG_PATH } from "../canary/validate-kickoff.ts";
 
 const a = parseArgs(Deno.args, {
   string: ["approved-by", "out", "workspace", "user", "pricing-version", "jobs-max", "details-max", "observed-at", "price-source", "queue", "plan", "proposal",
-    "scenario", "project-ref", "atomus-max", "pvalyou-max", "authorize-paid", "expected-sha"],
+    "scenario", "project-ref", "atomus-max", "pvalyou-max", "authorize-paid", "expected-sha", "catalog"],
   boolean: ["acknowledge-defaults"],
 });
 const need = (k: string) => { const v = a[k]; if (!v) { console.error(`--${k} is required`); Deno.exit(2); } return String(v); };
@@ -55,7 +56,13 @@ const workspaceId = need("workspace");
 const scenario = (a.scenario ?? "a7") as "a7" | "demo_funding" | "canary_funding";
 if (!["a7", "demo_funding", "canary_funding"].includes(scenario)) { console.error("--scenario must be a7, demo_funding or canary_funding"); Deno.exit(2); }
 const funding = scenario !== "a7";
-const catalogFile = scenario === "demo_funding" ? "smoke-catalog-demo-funding.json"
+// THE CONTRACT NAMES ITS CATALOG (canary_funding only), and only a reviewed
+// canary-funding catalog may be named; whether its maxima stay within the
+// reviewed ceilings is `validate-kickoff.ts` K11's question.
+if (a.catalog && scenario !== "canary_funding") { console.error("--catalog is for --scenario canary_funding only"); Deno.exit(2); }
+if (a.catalog && !CANARY_CATALOG_PATH.test(String(a.catalog))) { console.error(`--catalog must be a reviewed canary-funding catalog: ${a.catalog}`); Deno.exit(2); }
+const catalogFile = a.catalog ? String(a.catalog).replace("docs/launch/proposals/", "")
+  : scenario === "demo_funding" ? "smoke-catalog-demo-funding.json"
   : scenario === "canary_funding" ? "smoke-catalog-canary-funding.json" : "smoke-catalog-two-actor.json";
 const catalogDoc = JSON.parse(Deno.readTextFileSync(new URL(`../../../docs/launch/proposals/${catalogFile}`, import.meta.url)));
 const catalog = catalogDoc.approved_quotes;
