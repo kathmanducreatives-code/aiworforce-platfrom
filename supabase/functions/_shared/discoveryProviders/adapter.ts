@@ -113,10 +113,18 @@ const US_STATES = new Set([
   "utah", "vermont", "virginia", "washington", "west virginia", "wisconsin", "wyoming",
 ]);
 
+let REGION_NAMES: Intl.DisplayNames | null = null;
 export function normCountry(v: string | null | undefined): string | null {
   if (!v) return null;
   const t = v.trim().toLowerCase();
-  return COUNTRY_ALIASES[t] ?? t;
+  if (COUNTRY_ALIASES[t]) return COUNTRY_ALIASES[t];
+  // An ISO alpha-2 code ("GB", "US" — LeadOcean's country_code) reads as its English name.
+  if (/^[a-z]{2}$/.test(t)) {
+    REGION_NAMES ??= new Intl.DisplayNames(["en"], { type: "region" });
+    const name = REGION_NAMES.of(t.toUpperCase())?.toLowerCase();
+    if (name && name !== t) return COUNTRY_ALIASES[name] ?? name;
+  }
+  return t;
 }
 
 export type GeoLevel = "country" | "us_state" | "place";

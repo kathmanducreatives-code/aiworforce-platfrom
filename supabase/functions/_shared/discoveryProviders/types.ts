@@ -83,6 +83,13 @@ export interface DiscoveryRequirements {
   /** Entries that name no dimension: kept for audit, never read as a ban or a permission. */
   forbidBroadeningUnread: string[];
   /**
+   * Provider-specific NARROWING filters (an ICP's industry labels, employer
+   * keywords, seniority bands, ids already seen). They only shrink what a
+   * search returns: they never satisfy a requirement and never qualify a lead.
+   * Bound into the plan hash, so an approval cannot be replayed with others.
+   */
+  providerHints?: { leadocean?: Record<string, unknown> };
+  /**
    * The compiler's own criteria, untouched. The shared qualification engine
    * (`sharedQualification.ts` → `evaluateEligibility`) decides on these, not
    * on the provider-facing `hard` list above.
@@ -182,6 +189,8 @@ export interface ProviderPerson {
    * it does not say. A provider's word only: never verified employment.
    */
   employerIsCurrent?: boolean | null;
+  /** LeadOcean person_group_id: equal across duplicate records of one human. */
+  personGroupId?: string | null;
   /** Flags only (Apollo search returns has_email / has_direct_phone, never values). */
   hasEmail?: boolean | null;
   hasPhone?: boolean | null;

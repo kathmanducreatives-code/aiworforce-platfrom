@@ -169,3 +169,37 @@ Deno.test("S1 missing comparison evidence is UNCONFIRMED, not a wrong match (Tes
   assertEquals(s.companyMatching, { numerator: 1, denominator: 3, value: 1 / 3, wrong: 1, missed: 0, conflicting: 0, unconfirmed: 1, unconfirmedNameAgrees: 1, accuracyWhereComparable: 0.5 });
   assertEquals(companyIdentityOutcome({ domain: "acme.example", linkedin_url: "https://www.linkedin.com/company/acme" }, row({ linkedinUrl: "https://www.linkedin.com/company/acme", domain: "acme-alias.example" })), "conflicting");
 });
+
+Deno.test("P1 ISO country codes compare as countries: GB is the United Kingdom, US the United States", async () => {
+  const { normCountry } = await import("../../../../supabase/functions/_shared/discoveryProviders/adapter.ts");
+  assertEquals([normCountry("GB"), normCountry("US"), normCountry("de")], ["united kingdom", "united states", "germany"]);
+  assertEquals(normCountry("United Kingdom"), normCountry("GB"));
+});
+
+Deno.test("P1 two LeadOcean records of one human (same person_group_id) merge into one person", async () => {
+  const fixture = await read(PEOPLE);
+  const a = structuredClone(fixture.data[0]);
+  const b = structuredClone(fixture.data[0]);
+  b.meta.source_ids.person_id = "lo-person-9999";
+  b.profile_data.profile_url = null;
+  const people = normalizeLeadOceanPage({ ...fixture, data: [a, b] }, await peopleStep(), AT).people;
+  assertEquals(people.map((p) => p.personGroupId), ["g-lo-person-1001", "g-lo-person-1001"]);
+  assertEquals(mergeRecords([], people).people.length, 1);
+});
+
+Deno.test("P1 narrowing hints: allow-listed only, never override a requirement, and bound into the plan hash", async () => {
+  const r = await missionC();
+  const withHints = { ...r, providerHints: { leadocean: { industry: ["Software Development"], seniority: ["founder", "c_suite"], hasPhone: true } } };
+  const step = planDiscovery({ requirements: withHints, connections: [conn("leadocean")], selection: ["leadocean"], limits: { maxRecordsPerStep: 10, overfetch: 1 } }).steps[0];
+  const body = buildLeadOceanSearch(step, withHints, null, 10).body;
+  assertEquals([body.industry, body.seniority, body.hasPhone, body.hqCountry], [["Software Development"], ["founder", "c_suite"], true, ["US"]]);
+  // A hint cannot replace what a requirement set.
+  const clash = { ...r, providerHints: { leadocean: { hqCountry: ["CA"] } } };
+  let threw = false;
+  try { buildLeadOceanSearch(step, clash, null, 10); } catch { threw = true; }
+  assert(threw, "hqCountry is not a narrowing hint");
+  // An approval for one set of hints does not cover another.
+  const p1 = planDiscovery({ requirements: withHints, connections: [conn("leadocean")], selection: ["leadocean"] });
+  const p2 = planDiscovery({ requirements: { ...withHints, providerHints: { leadocean: { industry: ["Marketing Services"] } } }, connections: [conn("leadocean")], selection: ["leadocean"] });
+  assert(p1.planHash !== p2.planHash);
+});

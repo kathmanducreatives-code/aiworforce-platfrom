@@ -122,6 +122,10 @@ const PARAM_OF: Record<string, FilterKey> = {
   linkedin: "known_companies", companyLinkedin: "known_companies", fundingType: "company_stage",
 };
 
+/** Filters an ICP may add to NARROW a search. None of them can widen it. */
+const PEOPLE_HINTS: ReadonlySet<string> = new Set(["industry", "companyKeywords", "seniority", "jobLevel", "jobFunction", "excludeIds", "hasPhone", "employeeRange"]);
+const COMPANY_HINTS: ReadonlySet<string> = new Set(["industry", "keywords", "employeeRange", "companyType"]);
+
 export function buildLeadOceanSearch(step: PlanStep, req: DiscoveryRequirements, cursor: string | null, limit: number) {
   // Each page asks only for what the step may still take: billing is per row returned.
   // ORDER. `ranked` (LeadOcean's default) returns the best matches first: what a
@@ -143,6 +147,13 @@ export function buildLeadOceanSearch(step: PlanStep, req: DiscoveryRequirements,
     for (const [k, v] of Object.entries(t.params)) {
       body[k] = Array.isArray(v) && Array.isArray(body[k]) ? [...(body[k] as unknown[]), ...v] : v;
     }
+  }
+  // Narrowing hints: only allow-listed keys, never one a requirement already set.
+  for (const [k, v] of Object.entries(req.providerHints?.leadocean ?? {})) {
+    const allowed = step.kind === "people_search" ? PEOPLE_HINTS : COMPANY_HINTS;
+    if (!allowed.has(k)) throw new ProviderError("leadocean", "invalid_request", `hint ${k} is not an allowed narrowing filter`);
+    if (k in body && k !== "excludeIds") continue;
+    body[k] = v;
   }
   // Roles of a company-target mission still narrow the people search.
   if (step.kind === "people_search" && !body.title && req.roles.length) body.title = req.roles;
@@ -315,6 +326,7 @@ export function normalizeLeadOceanPage(json: unknown, step: PlanStep, at: string
       company: employerFrom(row, at, ignored, asserted),
       // LeadOcean states it explicitly: contact_current_experiences[0].current.
       employerIsCurrent: typeof pick(row, FIELDS.expCurrent) === "boolean" ? pick(row, FIELDS.expCurrent) as boolean : null,
+      personGroupId: pickStr(row, FIELDS.personGroupId),
       hasEmail: (row as { contact_data?: { has_email?: boolean } })?.contact_data?.has_email ?? null,
       hasPhone: (row as { contact_data?: { has_phone?: boolean } })?.contact_data?.has_phone ?? null,
       contactPoints: contactPointsFrom(row, recordId, at),

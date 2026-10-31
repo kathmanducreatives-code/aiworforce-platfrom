@@ -222,6 +222,8 @@ export function mergeRecords(companyRows: ProviderCompany[], personRows: Provide
     if (li) keys.push(`li:${li}`);
     for (const cp of p.contactPoints ?? []) if (cp.kind === "email") keys.push(`email:${cp.value.toLowerCase()}`);
     keys.push(`${p.provider}:${p.recordId}`);
+    // One human, several provider records: LeadOcean's person_group_id joins them.
+    if (p.personGroupId) keys.push(`group:${p.provider}:${p.personGroupId}`);
     if (p.fullName && domain) keys.push(`nm:${normText(p.fullName)}|${domain}`);
     const fresh: CanonicalPerson = {
       key: keys[0],

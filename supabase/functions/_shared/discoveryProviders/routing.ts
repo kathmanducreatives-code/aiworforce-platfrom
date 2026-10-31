@@ -279,7 +279,7 @@ export function planDiscovery(input: {
   if (unmappable.length) blockedReason = `requirement not expressible to any provider: ${unmappable.map((u) => u.label).join(", ")}`;
   else if (!steps.length) blockedReason = refused.length ? "no selected provider can satisfy every hard requirement" : "no provider selected";
 
-  const planBody = { selection: input.selection, steps, verification, limits };
+  const planBody = { selection: input.selection, steps, verification, limits, hints: req.providerHints ?? null };
   return {
     status: blockedReason ? "blocked" : "ready",
     blockedReason,
