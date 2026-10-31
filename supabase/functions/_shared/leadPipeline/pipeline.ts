@@ -60,7 +60,8 @@ export interface PipelineLead {
   company: {
     key: string; name: string | null; domain: string | null; linkedinUrl: string | null;
     providerCompanyIds: string[]; employeeCount: number | null; industry: string[];
-    hq: { country: string | null; region: string | null; city: string | null };
+    hq: { country: string | null; region: string | null; city: string | null; source: string | null };
+    description: string | null;
   };
   person: {
     key: string; name: string | null; title: string | null; linkedinUrl: string | null;
@@ -71,8 +72,8 @@ export interface PipelineLead {
   canonicalRecord: CanonicalRun["statuses"][number]["state"] | "not_requested";
   signals: Signal[];
   rank: RankResult;
-  /** Report-safe: no phone value. */
-  phone: Omit<PhoneRecord, "value"> | null;
+  /** Report-safe: no number in any form (contactValues carries it, separately). */
+  phone: PhoneRecord | null;
   outreachBlockers: string[];
   provenance: { walkId: string; planHash: string; runAt: string; providers: string[] };
 }
@@ -240,7 +241,8 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
     const p = bestContact(l);
     return {
       leadKey: l.company.key, eligibility: priorCompanies.has(l.company.key) ? "ineligible" : eligibilityOf(l), title: p ? first(p.title) : null,
-      companyText: [...l.company.industry.flatMap((c) => c.value), ...l.company.keywords.flatMap((c) => c.value), ...(p ? p.headline.map((h) => h.value) : [])],
+      companyText: [...l.company.industry.flatMap((c) => c.value), ...l.company.keywords.flatMap((c) => c.value), ...(p ? p.headline.map((h) => h.value) : []),
+        ...(canonical?.facts.get(l.company.key)?.description ? [canonical!.facts.get(l.company.key)!.description!] : [])],
       industryLabels: [...new Set(l.company.industry.flatMap((c) => c.value))], employeeCount: first(l.company.employeeCount),
       hasPhone: p ? first(p.hasPhone) : null, signals: signalsFor(l, p),
     };
@@ -302,7 +304,11 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
         key: l.company.key, name: first(l.company.name), domain: first(l.company.domain), linkedinUrl: first(l.company.linkedinUrl),
         providerCompanyIds: [...new Set(l.company.sources.map((s) => `${s.provider}:${s.recordId}`))], employeeCount: first(l.company.employeeCount),
         industry: [...new Set(l.company.industry.flatMap((c) => c.value))],
-        hq: { country: first(l.company.hqCountry), region: first(l.company.hqRegion), city: first(l.company.hqCity) },
+        // The provider's HQ claim, else the canonical record's HQ-flagged location (the one qualification read).
+        hq: first(l.company.hqCountry) || !canonical?.facts.get(l.company.key)?.hq
+          ? { country: first(l.company.hqCountry), region: first(l.company.hqRegion), city: first(l.company.hqCity), source: first(l.company.hqCountry) ? "provider" : null }
+          : { country: canonical.facts.get(l.company.key)!.hq!.country, region: null, city: canonical.facts.get(l.company.key)!.hq!.text.split(",")[0].trim(), source: "apify_linkedin_company_details" },
+        description: canonical?.facts.get(l.company.key)?.description ?? null,
       },
       person: p ? { key: p.key, name: first(p.fullName), title: first(p.title), linkedinUrl: first(p.linkedinUrl),
         providerPersonId: p.sources.find((s) => s.provider === "leadocean")?.recordId ?? null, roleFamily: role!.role_family, hasPhoneFlag: first(p.hasPhone) } : null,

@@ -75,7 +75,13 @@ Deno.test("end to end: shared engine decides on canonical evidence; four separat
     // Phones: only eligible, has_phone, unblocked people; provider numbers never verified.
     assertEquals(ph.calls.sort(), ["1001", "1005"]);
     assertEquals(by["acmesaas.example"].statuses.enrichment, "unverified_person_associated");
-    assertEquals(by["acmesaas.example"].phone?.value, null, "report-safe: no phone value");
+    assertEquals([by["acmesaas.example"].phone?.value, by["acmesaas.example"].phone?.e164, by["acmesaas.example"].phone?.valueHash], [null, null, null], "report-safe: no number in any form");
+    assertEquals(by["acmesaas.example"].phone?.masked, "+1•••••0001");
+    assert(!JSON.stringify([r.queue, r.review, r.excluded, r.phones, r.yield]).includes("5125550001"), "no number anywhere in the report-safe run");
+    assertEquals(r.contactValues.map((c) => c.e164).sort(), ["+15125550001", "+15125550005"]);
+    // HQ and description come from the canonical record the shared engine read.
+    assertEquals(by["acmesaas.example"].company.hq, { country: "United States", region: null, city: "Austin", source: "apify_linkedin_company_details" });
+    assert(by["acmesaas.example"].rank.factors.find((f) => f.factor === "icp_relevance")!.points > 0, "the record's own description feeds relevance");
     assertEquals(by["acmesaas.example"].phone?.employment.status, "provider_consistent");
     assertEquals(by["epsilonlabs.example"].statuses.enrichment, "company_switchboard");
     assertEquals(by["gammaops.example"].statuses.enrichment, "not_eligible_for_lookup");

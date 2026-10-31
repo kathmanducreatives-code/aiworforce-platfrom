@@ -221,7 +221,7 @@ export async function enrichPhones(input: {
       };
       charged += res.credits;
       // The ledger keeps the classification, never the number.
-      await input.ledger.settle(key, res.credits, { ...rec, value: null, e164: null });
+      await input.ledger.settle(key, res.credits, redactPhoneRecord(rec));
       records.push(rec);
     } catch (e) {
       const pe = e instanceof ProviderError ? e : null;
@@ -240,9 +240,9 @@ export async function enrichPhones(input: {
   return { records, skipped, recordsCharged: charged, stopped };
 }
 
-/** A report-safe copy: no phone values. */
-export function redactPhoneRecord(r: PhoneRecord): Omit<PhoneRecord, "value"> & { value: null } {
-  return { ...r, value: null };
+/** A report-safe copy: no number in any form (a 10-digit number's hash is reversible by enumeration). `masked` stays. */
+export function redactPhoneRecord(r: PhoneRecord): PhoneRecord & { value: null; e164: null; valueHash: null } {
+  return { ...r, value: null, e164: null, valueHash: null };
 }
 
 /** Employment evidence from what the pipeline holds. LeadOcean's own current-employer flag is provider_consistent at best. */
