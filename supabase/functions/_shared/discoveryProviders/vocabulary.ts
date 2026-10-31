@@ -63,6 +63,17 @@ export function leadOceanIndustry(v: string): string | null {
   return INDUSTRY.get(norm(v)) ?? null;
 }
 
+/**
+ * The compiler's round stages → LeadOcean `fundingType` (the company's MOST
+ * RECENT round). series_e has no exact value — LeadOcean groups "Series E-J",
+ * which is wider — so it does not translate. A non-round stage ("startup",
+ * "growth") has no round at all.
+ */
+const LEADOCEAN_ROUND: Readonly<Record<string, string>> = Object.freeze({
+  "pre-seed": "Pre seed", "pre_seed": "Pre seed", "seed": "Seed",
+  "series_a": "Series A", "series_b": "Series B", "series_c": "Series C", "series_d": "Series D",
+});
+
 const DOMAIN = /^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 const isDomain = (v: string) => DOMAIN.test(v.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0]) && !/linkedin\.com/i.test(v);
 const isCompanyLinkedin = (v: string) => /linkedin\.com\/company\//i.test(v);
@@ -120,6 +131,10 @@ function leadOcean(kind: SearchKind, h: HardRequirement): Translation {
     }
     case "roles":
       return kind === "people_search" ? { ok: true, params: { title: list } } : { ok: false, reason: "roles apply to people search" };
+    case "company_stage": {
+      const r = all(list, (v) => LEADOCEAN_ROUND[v.trim().toLowerCase()] ?? null, "round stage LeadOcean's fundingType names exactly");
+      return r.ok ? { ok: true, params: { fundingType: [...new Set(r.out)] } } : { ok: false, reason: r.reason };
+    }
     default:
       return { ok: false, reason: `LeadOcean has no filter for ${h.key}` };
   }

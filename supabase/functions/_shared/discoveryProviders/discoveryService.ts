@@ -90,6 +90,7 @@ export async function handleDiscovery(req: DiscoveryRequest, d: DiscoveryDeps): 
       enabled: d.flags.provider[p], commercialTermsConfirmed: d.flags.commercialTerms[p],
       remainingCredits: r?.usage?.remaining ?? null,
       recentFailures: r && r.status !== "connected" ? 1 : 0,
+      restrictions: r?.usage?.restrictions ?? [],
     };
   });
   const plan = planDiscovery({ requirements, connections, selection: req.selection });

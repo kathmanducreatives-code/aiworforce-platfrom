@@ -68,7 +68,7 @@ const PARAM_OF: Record<string, FilterKey> = {
   title: "roles", country: "geography_person", industry: "industry", excludeIndustry: "excluded_company_types",
   excludeKeywords: "excluded_company_types", hqCountry: "geography_hq", hqState: "geography_hq", hqCity: "geography_hq",
   minEmployees: "employee_range", maxEmployees: "employee_range", domain: "known_companies",
-  linkedin: "known_companies", companyLinkedin: "known_companies",
+  linkedin: "known_companies", companyLinkedin: "known_companies", fundingType: "company_stage",
 };
 
 export function buildLeadOceanSearch(step: PlanStep, req: DiscoveryRequirements, cursor: string | null, limit: number) {

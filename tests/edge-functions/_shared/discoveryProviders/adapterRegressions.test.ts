@@ -191,3 +191,25 @@ Deno.test("LO6 LeadOcean: people search asks for slim rows; company search keeps
   const companies = { ...people, kind: "company_search" as const, requirements: people.requirements.filter((x) => x.key !== "roles") };
   assertEquals(buildLeadOceanSearch(companies, r, null, 5).body.slim, undefined);
 });
+
+// ── Capabilities ────────────────────────────────────────────────────────────
+
+Deno.test("C1 LeadOcean funding stage: exact rounds only — Series E-J is wider than Series E, and 'startup' is no round", () => {
+  assertEquals(translate("leadocean", "company_search", hard("company_stage", ["seed", "series_a"])),
+    { ok: true, params: { fundingType: ["Seed", "Series A"] } });
+  assertEquals(translate("leadocean", "company_search", hard("company_stage", ["pre-seed"])), { ok: true, params: { fundingType: ["Pre seed"] } });
+  assertEquals(translate("leadocean", "company_search", hard("company_stage", ["series_e"])).ok, false);
+  assertEquals(translate("leadocean", "company_search", hard("company_stage", ["startup"])).ok, false);
+  assertEquals(translate("apollo", "company_search", hard("company_stage", ["seed"])).ok, false, "Apollo has no exact stage filter");
+});
+
+Deno.test("C2 a plan restriction found by the free key check refuses that search kind at PLAN time", () => {
+  const r = req();
+  const restricted = { ...conn("apollo"), restrictions: ["people_search: not in this plan"] };
+  const plan = planDiscovery({ requirements: r, connections: [restricted, conn("apify")], selection: ["apollo", "apify"] });
+  assertFalse(plan.steps.some((s) => s.provider === "apollo"));
+  assertEquals(plan.refused.find((x) => x.provider === "apollo")!.reason, "people search unavailable — not in this plan");
+  // Auto still finds the provider that can run the mission.
+  const auto = planDiscovery({ requirements: r, connections: [restricted, conn("leadocean"), conn("apify")], selection: "auto" });
+  assertEquals(auto.steps[0].provider, "leadocean");
+});

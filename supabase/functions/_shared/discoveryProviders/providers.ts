@@ -79,7 +79,8 @@ export const PROVIDERS: Record<ProviderId, ProviderDescriptor> = {
     capabilities: ["people_search", "company_search", "contact_enrichment"],
     native: {
       people_search: ["roles", "industry", "geography_hq", "geography_person", "employee_range", "known_companies", "excluded_company_types"],
-      company_search: ["industry", "geography_hq", "employee_range", "known_companies", "excluded_company_types"],
+      // company_stage: fundingType (the most recent round), exact stages only (vocabulary.ts).
+      company_search: ["industry", "geography_hq", "employee_range", "known_companies", "excluded_company_types", "company_stage"],
     },
     returnsFields: {
       people_search: ["roles", "geography_person", ...ALL_COMPANY_FIELDS],

@@ -34,6 +34,12 @@ export interface ProviderConnectionState {
   remainingCredits: number | null;
   /** Consecutive recent failures (auth, outage). */
   recentFailures: number;
+  /**
+   * Capabilities this key or plan cannot use, as the free key check found them
+   * ("people_search: not in this plan"). A step of that kind is refused at
+   * plan time instead of failing — and being re-tried — at run time.
+   */
+  restrictions?: string[];
 }
 
 export interface PlanLimits {
@@ -193,6 +199,8 @@ export function planDiscovery(input: {
     const why = eligibility(conns.get(p));
     if (why) { refused.push({ provider: p, reason: why, unsupported: [] }); continue; }
     const kind = searchKindFor(req, p);
+    const restricted = kind ? conns.get(p)?.restrictions?.find((r) => r.startsWith(`${kind}:`)) : undefined;
+    if (kind && restricted) { refused.push({ provider: p, reason: `${kind.replace("_", " ")} unavailable — ${restricted.slice(kind.length + 1).trim()}`, unsupported: [] }); continue; }
     // Apify without a search of the right kind is still the verifier, not a refusal.
     if (!kind && p === verifier) continue;
     if (!kind) { refused.push({ provider: p, reason: `no ${req.targetEntity === "person" ? "people" : "company"} search`, unsupported: [] }); continue; }
