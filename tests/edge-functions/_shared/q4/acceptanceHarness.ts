@@ -78,6 +78,13 @@ export interface AcceptanceCase {
   jobs?: JobSpec[];
   /** What the company-details Actor returns. */
   details?: "same" | "empty" | "foreign" | "hq_conflict";
+  /**
+   * Fields the company-details record states DIFFERENTLY from the discovery
+   * row (a true two-source disagreement, e.g. another size band).
+   */
+  detailsCompany?: Json;
+  /** The business model the website grounder answers for this company (default b2b_software). */
+  businessModel?: "b2b_saas" | "ai_saas" | "b2b_software" | "b2b_service" | "consumer" | "unknown";
   /** Funding rounds the funding pair reports; undefined = no record at all. */
   rounds?: RoundSpec[];
   /** Actors that are not available to this run. */
@@ -166,7 +173,7 @@ function details(c: AcceptanceCase, company: Json): Json[] {
     case "empty": return [];
     case "foreign": return [foreign];
     case "hq_conflict": return [{ ...company, locations: [{ country: "Canada", city: "Toronto", isHeadquarter: true }] }];
-    default: return [company];
+    default: return [{ ...company, ...(c.detailsCompany ?? {}) }];
   }
 }
 
@@ -283,7 +290,7 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
       outcomes: batch.map((m: Json) => {
         const desc = m.registry.items.find((e: Json) => e.evidence_type === "company_description");
         const raw = {
-          business_model: { value: "b2b_software", confidence: 0.95 }, decision: "pass", confidence: 0.95,
+          business_model: { value: c.businessModel ?? "b2b_software", confidence: 0.95 }, decision: "pass", confidence: 0.95,
           supporting_claims: desc ? [{ claim: "sells software to business teams", claim_type: "business_model",
             evidence_ids: [desc.evidence_id], evidence_excerpts: [{ evidence_id: desc.evidence_id, excerpt: desc.source_text }] }] : [],
         };
@@ -347,7 +354,7 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
               const page = registry.items.find((e: Json) => e.evidence_type === "web_page");
               if (!page) return null;
               return verifyGroundedResult({ registry, result: parseGroundedResult({
-                business_model: { value: "b2b_software", confidence: 0.95 }, company_fit: "pass", decision: "pass", confidence: 0.95,
+                business_model: { value: c.businessModel ?? "b2b_software", confidence: 0.95 }, company_fit: "pass", decision: "pass", confidence: 0.95,
                 supporting_claims: [{ claim: "sells software to business customers", claim_type: "business_model",
                   evidence_ids: [page.evidence_id], evidence_excerpts: [{ evidence_id: page.evidence_id, excerpt: page.source_text }] }],
               }) } as never);
