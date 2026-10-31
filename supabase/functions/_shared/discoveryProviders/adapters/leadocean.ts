@@ -54,6 +54,13 @@ export const FIELDS = {
   employees: ["company_metrics.employee_count", "company_data.company_employee_count", "company_data.employee_count"],
   employeeRange: ["company_data.company_employee_range", "company_data.employee_range"],
   founded: ["company_data.company_founded", "company_data.founded"],
+  // Funding: filterable (fundingType, min/maxLastFundingYear, min/maxFunding) but the
+  // row paths are UNCONFIRMED — not in the spec. Absent paths leave funding unknown.
+  fundingType: ["company_data.company_last_funding_type", "company_data.last_funding_type", "company_financials.last_funding_type"],
+  fundingYear: ["company_data.company_last_funding_year", "company_data.last_funding_year", "company_financials.last_funding_year"],
+  fundingDate: ["company_data.company_last_funding_date", "company_data.last_funding_date", "company_financials.last_funding_date"],
+  fundingTotal: ["company_data.company_total_funding", "company_data.total_funding", "company_financials.total_funding"],
+  fundingLast: ["company_data.company_last_funding_amount", "company_data.last_funding_amount", "company_financials.last_funding_amount"],
 } as const;
 
 /** Our filter → LeadOcean's search parameter names (for meta.unsupportedFilters). */
@@ -86,6 +93,19 @@ export function buildLeadOceanSearch(step: PlanStep, req: DiscoveryRequirements,
   return { path: step.kind === "people_search" ? "/v1/search" : "/v1/search/companies", body };
 }
 
+/** A full date only when the provider gives one; a year alone stays a year. */
+function fundingFrom(row: unknown): ProviderCompany["funding"] {
+  const d = pickStr(row, FIELDS.fundingDate);
+  const f = {
+    lastRoundType: pickStr(row, FIELDS.fundingType),
+    lastRoundYear: pickNum(row, FIELDS.fundingYear),
+    roundDate: d && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : null,
+    totalUsd: pickNum(row, FIELDS.fundingTotal),
+    lastRoundUsd: pickNum(row, FIELDS.fundingLast),
+  };
+  return f.lastRoundType || f.lastRoundYear || f.roundDate || f.totalUsd || f.lastRoundUsd ? f : null;
+}
+
 function companyFrom(row: unknown, at: string, ignored: FilterKey[], asserted: FilterKey[]): ProviderCompany | null {
   const name = pickStr(row, FIELDS.companyName);
   const domain = pickStr(row, FIELDS.companyDomain);
@@ -104,6 +124,7 @@ function companyFrom(row: unknown, at: string, ignored: FilterKey[], asserted: F
     employeeCount: pickNum(row, FIELDS.employees),
     employeeRange: parseRange(pick(row, FIELDS.employeeRange)),
     foundedYear: pickNum(row, FIELDS.founded),
+    funding: fundingFrom(row),
     ignoredFilters: ignored,
     assertedFilters: asserted,
   };
@@ -170,6 +191,8 @@ export function normalizeLeadOceanPage(json: unknown, step: PlanStep, at: string
       title: pickStr(row, FIELDS.title), seniority: pickStr(row, FIELDS.seniority),
       linkedinUrl: pickStr(row, FIELDS.linkedin), country: pickStr(row, FIELDS.personCountry),
       company: companyFrom(row, at, ignored, asserted),
+      // A people row's employer comes from contact_current_experiences: LeadOcean says current.
+      employerIsCurrent: pickStr(row, ["contact_data.contact_current_experiences.0.company_name", "contact_data.contact_current_experiences.0.company_domain"]) ? true : null,
       hasEmail: (row as { contact_data?: { has_email?: boolean } })?.contact_data?.has_email ?? null,
       hasPhone: (row as { contact_data?: { has_phone?: boolean } })?.contact_data?.has_phone ?? null,
       contactPoints: contactPointsFrom(row, recordId, at),

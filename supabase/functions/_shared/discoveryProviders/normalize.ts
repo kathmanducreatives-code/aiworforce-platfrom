@@ -13,7 +13,7 @@
 //
 // Pure.
 
-import type { Claim, ContactPoint, ProviderCompany, ProviderId, ProviderPerson, Range } from "./types.ts";
+import type { Claim, ContactPoint, FundingClaim, ProviderCompany, ProviderId, ProviderPerson, Range } from "./types.ts";
 
 export interface SourceRef {
   provider: ProviderId;
@@ -39,6 +39,7 @@ export interface CanonicalCompany {
   employeeCount: Claim<number>[];
   employeeRange: Claim<Range>[];
   foundedYear: Claim<number>[];
+  funding: Claim<FundingClaim>[];
   sources: SourceRef[];
   conflicts: FieldConflict[];
   identityConflicts: string[];
@@ -53,6 +54,8 @@ export interface CanonicalPerson {
   linkedinUrl: Claim<string>[];
   country: Claim<string>[];
   companyKey: string | null;
+  /** The provider's statement that `companyKey` is the CURRENT employer (never verified employment). */
+  employerIsCurrent: Claim<boolean>[];
   hasEmail: Claim<boolean>[];
   hasPhone: Claim<boolean>[];
   contactPoints: ContactPoint[];
@@ -106,6 +109,12 @@ function disagree(field: string, a: Claim[], b: Claim[]): boolean {
     const r = x as Range, s = y as Range;
     return (r.max !== null && s.min !== null && r.max < s.min) || (s.max !== null && r.min !== null && s.max < r.min);
   }
+  if (field === "funding") {
+    const r = x as FundingClaim, s = y as FundingClaim;
+    // The same round is the same type in the same year; a missing part is not a disagreement.
+    return (!!r.lastRoundType && !!s.lastRoundType && normText(r.lastRoundType) !== normText(s.lastRoundType)) ||
+      (r.lastRoundYear !== null && s.lastRoundYear !== null && r.lastRoundYear !== s.lastRoundYear);
+  }
   if (Array.isArray(x) && Array.isArray(y)) {
     const xs = new Set(x.map((v) => normText(String(v))));
     return !y.some((v) => xs.has(normText(String(v))));
@@ -113,9 +122,9 @@ function disagree(field: string, a: Claim[], b: Claim[]): boolean {
   return normText(String(x)) !== normText(String(y));
 }
 
-const COMPANY_FIELDS = ["name", "domain", "linkedinUrl", "industry", "keywords", "hqCountry", "hqRegion", "hqCity", "employeeCount", "employeeRange", "foundedYear"] as const;
+const COMPANY_FIELDS = ["name", "domain", "linkedinUrl", "industry", "keywords", "hqCountry", "hqRegion", "hqCity", "employeeCount", "employeeRange", "foundedYear", "funding"] as const;
 type CompanyField = typeof COMPANY_FIELDS[number];
-const CONFLICT_FIELDS: CompanyField[] = ["industry", "hqCountry", "hqRegion", "employeeCount", "employeeRange", "foundedYear"];
+const CONFLICT_FIELDS: CompanyField[] = ["industry", "hqCountry", "hqRegion", "employeeCount", "employeeRange", "foundedYear", "funding"];
 
 function freshCompany(c: ProviderCompany): CanonicalCompany {
   const d = normDomain(c.domain);
@@ -126,6 +135,7 @@ function freshCompany(c: ProviderCompany): CanonicalCompany {
     hqCountry: claim(c.hqCountry, c, "hq_country"), hqRegion: claim(c.hqRegion, c, "hq_region"), hqCity: claim(c.hqCity, c, "hq_city"),
     employeeCount: claim(c.employeeCount, c, "employee_count"), employeeRange: claim(c.employeeRange, c, "employee_range"),
     foundedYear: claim(c.foundedYear, c, "founded_year"),
+    funding: claim(c.funding && (c.funding.lastRoundType || c.funding.lastRoundYear || c.funding.roundDate || c.funding.totalUsd) ? c.funding : null, c, "funding"),
     sources: [sourceOf(c)], conflicts: [], identityConflicts: [],
   };
 }
@@ -203,6 +213,7 @@ export function mergeRecords(companyRows: ProviderCompany[], personRows: Provide
       title: claim(p.title, p, "title"), seniority: claim(p.seniority, p, "seniority"),
       linkedinUrl: claim(p.linkedinUrl, p, "linkedin_url"), country: claim(p.country, p, "country"),
       companyKey: company?.key ?? null,
+      employerIsCurrent: claim(company ? (p.employerIsCurrent ?? null) : null, p, "employer_is_current"),
       hasEmail: claim(p.hasEmail ?? null, p, "has_email"), hasPhone: claim(p.hasPhone ?? null, p, "has_phone"),
       contactPoints: [...(p.contactPoints ?? [])],
       sources: [sourceOf(p)], conflicts: [], identityConflicts: [],
@@ -218,7 +229,7 @@ export function mergeRecords(companyRows: ProviderCompany[], personRows: Provide
         people.push(fresh); pindex.set(fresh.key, fresh);
         continue;
       }
-      for (const f of ["fullName", "firstName", "title", "seniority", "linkedinUrl", "country", "hasEmail", "hasPhone"] as const) {
+      for (const f of ["fullName", "firstName", "title", "seniority", "linkedinUrl", "country", "hasEmail", "hasPhone", "employerIsCurrent"] as const) {
         const before = hit[f] as Claim[];
         const incoming = fresh[f] as Claim[];
         if ((f === "title" || f === "country") && disagree(f, before, incoming)) {

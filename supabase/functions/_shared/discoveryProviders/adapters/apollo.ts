@@ -118,6 +118,8 @@ export function normalizeApolloPage(json: unknown, step: PlanStep, page: number,
           provider: "apollo", recordId: `org-name:${orgName.toLowerCase()}`, retrievedAt: at, name: orgName, domain: null,
           assertedFilters: asserted, ignoredFilters: [],
         } : null,
+        // People API Search returns the person's current organization.
+        employerIsCurrent: orgName ? true : null,
         hasEmail: (p as { has_email?: boolean }).has_email ?? null,
         hasPhone: (p as { has_direct_phone?: unknown }).has_direct_phone === true || (p as { has_direct_phone?: unknown }).has_direct_phone === "Yes",
         contactPoints: [],

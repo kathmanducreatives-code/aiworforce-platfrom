@@ -39,6 +39,19 @@ export type FilterKey =
 
 export interface Range { min: number | null; max: number | null }
 
+/**
+ * A funding EVENT as a provider states it. `roundDate` is set only when the
+ * provider gives a full date; a year alone stays a year, so it can never
+ * satisfy a dated window ("raised in the last six months").
+ */
+export interface FundingClaim {
+  lastRoundType: string | null;
+  lastRoundYear: number | null;
+  roundDate: string | null;
+  totalUsd: number | null;
+  lastRoundUsd: number | null;
+}
+
 export interface HardRequirement {
   /** The compiler's criterion id, so every verdict points back at the user's words. */
   criterionId: string;
@@ -110,6 +123,7 @@ export interface ProviderCompany {
   employeeCount?: number | null;
   employeeRange?: Range | null;
   foundedYear?: number | null;
+  funding?: FundingClaim | null;
   /** Filters this provider reported it did NOT apply to the query that produced this row. */
   ignoredFilters?: FilterKey[];
   /** Filters the provider applied natively to the query that produced this row. */
@@ -154,6 +168,12 @@ export interface ProviderPerson {
   linkedinUrl?: string | null;
   country?: string | null;
   company?: ProviderCompany | null;
+  /**
+   * Whether the provider states `company` is the person's CURRENT employer
+   * (LeadOcean contact_current_experiences, Apollo's organization). Null when
+   * it does not say. A provider's word only: never verified employment.
+   */
+  employerIsCurrent?: boolean | null;
   /** Flags only (Apollo search returns has_email / has_direct_phone, never values). */
   hasEmail?: boolean | null;
   hasPhone?: boolean | null;

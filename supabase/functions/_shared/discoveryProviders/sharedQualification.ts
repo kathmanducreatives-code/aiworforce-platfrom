@@ -155,6 +155,16 @@ export function evidenceFromCompany(
         { claim: "industry", field: "industry_taxonomy" }, now, src(cl)));
     }
   }
+  // Funding: the provider's statement of an EVENT. Deliberately NOT the
+  // canonical funding_record shape (fundingCorroboration.fundingRecordsInGraph
+  // reads only that, from the funding pair), so a provider round can never
+  // enter decideRecentlyFunded; weighed as a funding claim it is at most
+  // plausible. occurred_at is set only from a full date — a year is not a date.
+  for (const cl of c.funding) {
+    const it = itemFrom(cl, c.key, missionId, "funding", { provider_funding: cl.value },
+      { claim: "recently_funded", field: "funding_record" }, now, src(cl));
+    out.push(cl.value.roundDate ? { ...it, occurred_at: cl.value.roundDate } : it);
+  }
   // The provider layer's own site checks: an undated open-roles count and
   // site text. Neither is a dated posting nor a grounded statement, so the
   // authority layer keeps both below proof.

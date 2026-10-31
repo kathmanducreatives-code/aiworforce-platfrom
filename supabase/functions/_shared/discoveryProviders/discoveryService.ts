@@ -117,7 +117,7 @@ export async function handleDiscovery(req: DiscoveryRequest, d: DiscoveryDeps): 
       await d.store.mark(req.workspaceId, s.provider, { lastError: s.errorKind === "plan_restricted" ? "The provider's plan does not include this search." : "The stored key lacks the scope this search needs." });
     }
   }
-  const projected = run.leads.map((l) => projectLead(l, { workspaceId: req.workspaceId, missionId: req.messageId, run })).filter((x): x is ProjectedLead => !!x);
+  const projected = run.leads.map((l) => projectLead(l, { workspaceId: req.workspaceId, missionId: req.messageId, run, roles: requirements.roles })).filter((x): x is ProjectedLead => !!x);
   await d.persist(projected);
   return {
     status: 200,

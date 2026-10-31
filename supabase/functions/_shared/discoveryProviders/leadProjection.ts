@@ -10,6 +10,7 @@
 //
 // Pure: it returns rows; the caller decides whether to write them.
 
+import { leadEvidence } from "./evidenceContract.ts";
 import type { DiscoveryRun } from "./orchestrator.ts";
 import type { CanonicalCompany, CanonicalPerson } from "./normalize.ts";
 import type { RequirementCheck, VerifiedLead } from "./verify.ts";
@@ -59,7 +60,7 @@ function size(c: CanonicalCompany): string | null {
   return r ? `${r.min ?? 0}-${r.max ?? ""}`.replace(/-$/, "+") : null;
 }
 
-export function projectLead(lead: VerifiedLead, ctx: { workspaceId: string; missionId: string; run: Pick<DiscoveryRun, "planHash" | "finishedAt"> }): ProjectedLead | null {
+export function projectLead(lead: VerifiedLead, ctx: { workspaceId: string; missionId: string; run: Pick<DiscoveryRun, "planHash" | "finishedAt">; roles?: string[] }): ProjectedLead | null {
   if (lead.status === "rejected") return null;
   const c = lead.company;
   const domain = first(c.domain);
@@ -73,6 +74,8 @@ export function projectLead(lead: VerifiedLead, ctx: { workspaceId: string; miss
     verification: lead.verification,
     // The shared engine's verdict: what qualification rests on, and what is still open.
     shared_qualification: lead.shared,
+    // What the lead rests on, by kind, with provenance and status (no contact values).
+    evidence: leadEvidence(lead, ctx.roles ?? []),
     discovered_at: ctx.run.finishedAt,
     providers: providersOf(c),
     checks: checksOut(lead.checks),
