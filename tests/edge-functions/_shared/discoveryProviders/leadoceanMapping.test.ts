@@ -34,7 +34,7 @@ Deno.test("M1 title is the CURRENT role's job_title (was read from .title — ev
   const page = normalizeLeadOceanPage(await read(PEOPLE), await peopleStep(), AT);
   assertEquals(page.people.map((p) => p.title), ["VP of Sales", "Vice President, Sales Operations"]);
   assertEquals(FIELDS.title[0], "contact_data.contact_current_experiences.0.job_title");
-  assertEquals(FIELD_BASIS[FIELDS.title[0]], "documented");
+  assertEquals(FIELD_BASIS[FIELDS.title[0]], "observed", "seen in a real row in validation test V");
 });
 
 Deno.test("M2 the headline is kept apart and NEVER read as a title", async () => {
@@ -46,18 +46,25 @@ Deno.test("M2 the headline is kept apart and NEVER read as a title", async () =>
   assertEquals(p.headline, "Helping teams sell better | VP of Sales at Northwind Analytics");
 });
 
-Deno.test("M3 person LinkedIn is profile_data.profile_url and freshness is meta.fetched_at (both were wrong keys)", async () => {
+Deno.test("M3 person LinkedIn is profile_data.profile_url; meta.fetched_at is the SERVE time, never read as freshness (V)", async () => {
   const [p] = normalizeLeadOceanPage(await read(PEOPLE), await peopleStep(), AT).people;
   assertEquals(p.linkedinUrl, "https://www.linkedin.com/in/robin-vale-example");
-  assertEquals(p.providerUpdatedAt, "2026-10-20");
-  assertEquals(p.company!.providerUpdatedAt, "2026-10-20");
+  // V: LangChain's fetched_at was the second of the request. LeadOcean publishes no data-update stamp.
+  assertEquals(p.providerUpdatedAt, null);
+  assertEquals(p.company!.providerUpdatedAt, null);
+  const c = normalizeLeadOceanPage(await read(COMPANIES), await companyStep(), AT).companies[0];
+  assertEquals(c.providerUpdatedAt, null, "a company record's fetched_at is not freshness either");
 });
 
-Deno.test("M4 a people row's employer comes from contact_current_experiences[0]; a thin row has NO employer HQ or headcount", async () => {
+Deno.test("M4 a people row's employer comes from contact_current_experiences[0]: headcount and LinkedIn yes, headquarters never (V)", async () => {
   const [p] = normalizeLeadOceanPage(await read(PEOPLE), await peopleStep(), AT).people;
   assertEquals([p.company!.name, p.company!.domain, p.company!.industry], ["Northwind Analytics", "northwind.example", ["Software Development"]]);
-  assertEquals([p.company!.hqCountry ?? null, p.company!.employeeCount ?? null], [null, null]);
-  assertEquals(p.employerIsCurrent, true);
+  assertEquals([p.company!.employeeCount, p.company!.employeeRange], [140, { min: 51, max: 200 }]);
+  assertEquals(p.company!.linkedinUrl, "https://www.linkedin.com/company/northwind-example");
+  assertEquals(p.company!.recordId, "lo-company-77", "the people row names the employer's LeadOcean company_id");
+  assertEquals(p.company!.hqCountry ?? null, null);
+  // `current` is LeadOcean's explicit flag, and the job level is kept as seniority.
+  assertEquals([p.employerIsCurrent, p.seniority, p.country], [true, "VP", "US"]);
 });
 
 Deno.test("M5 NAICS is never an industry: '54' stays a sector code (Test L reported industry ['54'])", async () => {
@@ -67,7 +74,7 @@ Deno.test("M5 NAICS is never an industry: '54' stays a sector code (Test L repor
   // A record carrying ONLY the NAICS code has no industry at all.
   const fixture = await read(COMPANIES);
   const row = structuredClone(fixture.data[0]);
-  delete row.company_data.company_industry;
+  row.company_data.company_industries = [];
   const only = normalizeLeadOceanPage({ ...fixture, data: [row] }, await companyStep(), AT).companies[0];
   assertEquals(only.industry, null);
   const merged = mergeRecords([only], []).companies[0];
@@ -77,9 +84,21 @@ Deno.test("M5 NAICS is never an industry: '54' stays a sector code (Test L repor
   assertEquals(leadEvidence(lead, []).company.industry.status, "unknown");
 });
 
-Deno.test("M6 the headquarters key is unknown: it stays ABSENT, never guessed from a neighbouring field", async () => {
+Deno.test("M6 headquarters is company_primary_address (V); when LeadOcean holds none (LangChain) it stays ABSENT", async () => {
+  const fixture = await read(COMPANIES);
+  const c = normalizeLeadOceanPage(fixture, await companyStep(), AT).companies[0];
+  assertEquals([c.hqCountry, c.hqRegion, c.hqCity], ["US", "Texas", "Austin"]);
+  const row = structuredClone(fixture.data[0]);
+  row.company_data.company_primary_address = { city: null, state: null, country: null, country_code: null, continent: null, postal_code: null };
+  const none = normalizeLeadOceanPage({ ...fixture, data: [row] }, await companyStep(), AT).companies[0];
+  assertEquals([none.hqCountry ?? null, none.hqRegion ?? null, none.hqCity ?? null], [null, null, null]);
+});
+
+Deno.test("M8 funding is a dated event (company_funding, V): type, full date, year, total — never the canonical funding-pair shape", async () => {
   const c = normalizeLeadOceanPage(await read(COMPANIES), await companyStep(), AT).companies[0];
-  assertEquals([c.hqCountry ?? null, c.hqRegion ?? null, c.hqCity ?? null], [null, null, null]);
+  assertEquals(c.funding, { lastRoundType: "Series A", lastRoundYear: 2026, roundDate: "2026-09-15", totalUsd: 12000000, lastRoundUsd: null });
+  const item = evidenceFromCompany(mergeRecords([c], []).companies[0], [], null, new Date(AT)).find((e) => e.dimension === "funding")!;
+  assertEquals([item.status, item.occurred_at], ["plausible", "2026-09-15"]);
 });
 
 Deno.test("M7 role check on the real title: 'VP of Sales' matches; 'Vice President, Sales Operations' does not", async () => {
@@ -124,8 +143,8 @@ Deno.test("F2 a filter LeadOcean names in unsupportedFilters is never treated as
   const hq = lead.checks.find((c) => c.key === "geography_hq")!;
   assertEquals(hq.outcome, "unknown");
   assert(hq.note.includes("ignoring"));
-  // The size filter LeadOcean did apply is reported as applied — but still not trusted to qualify.
-  assertEquals(lead.checks.find((c) => c.key === "employee_range")!.outcome, "provider_filter");
+  // Size comes back as a VALUE in the people row (V): checked against it, not against the filter claim.
+  assertEquals(lead.checks.find((c) => c.key === "employee_range")!.outcome, "matched");
 });
 
 Deno.test("S1 missing comparison evidence is UNCONFIRMED, not a wrong match (Test L scored Baseten and Oscilar 'wrong')", () => {

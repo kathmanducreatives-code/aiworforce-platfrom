@@ -159,28 +159,28 @@ async function runLeadOcean(rows: unknown[], meta: Record<string, unknown> = {})
   return { run, f, ledger, plan };
 }
 
-Deno.test("search: thin LeadOcean people rows settle industry, exclusion and role from returned values; HQ and size rest on the filter alone; nothing qualifies", async () => {
+Deno.test("search: LeadOcean people rows settle industry, size, exclusion and role from returned values; HQ rests on the filter alone; nothing qualifies", async () => {
   const { run, f } = await runLeadOcean(MARKET.map(loPerson));
   assertEquals(f.calls.length, 1);
   assertEquals(f.calls[0].headers["x-api-key"], "lo_test_key_123456");
   assertEquals(run.status, "completed");
-  // A thin people row returns no employer HQ and no headcount (export catalogue:
-  // search false), so no lead passes even the provider checks on its own word.
+  // A people row returns the employer's headcount but never its HQ (validation
+  // test V), so HQ rests on LeadOcean's filter and no lead passes the provider checks.
   assertEquals(run.leads.filter((l) => l.providerStatus === "qualified").length, 0);
   const rejected = Object.fromEntries(run.leads.filter((l) => l.status === "rejected").map((l) => [l.company.name[0].value, l.checks.filter((c) => c.outcome === "contradicted").map((c) => c.key).join(",") || "contacts"]));
   assertEquals(rejected, {
-    "Patel Software": "industry",
+    "Ward Industrial": "employee_range", "Patel Software": "industry",
     // A staffing firm is both outside the industry and of an excluded type.
     "Rivers Staffing": "industry,excluded_company_types", "Young Fasteners": "contacts",
   });
-  // A German HQ or 1,400 staff is NOT visible in a people row: LeadOcean's filter
-  // is the only thing standing between them and the list. They wait for verification.
+  // A German HQ is NOT visible in a people row: LeadOcean's filter is the only
+  // thing standing between it and the list. It waits for verification.
   const byName = Object.fromEntries(run.leads.map((l) => [l.company.name[0].value, l]));
-  for (const n of ["Hale Tooling GmbH", "Ward Industrial"]) assertEquals(byName[n].status, "needs_verification", n);
+  assertEquals(byName["Hale Tooling GmbH"].status, "needs_verification");
   const five = ["Brooks Textile Mill", "Chen Precision Parts", "Lakeside Plastics", "Ortiz Metalworks", "Stonebridge Fabrication"];
   for (const n of five) {
     const c = Object.fromEntries(byName[n].checks.map((x) => [x.key, x.outcome]));
-    assertEquals([c.industry, c.geography_hq, c.employee_range, c.excluded_company_types], ["matched", "provider_filter", "provider_filter", "matched"], n);
+    assertEquals([c.industry, c.geography_hq, c.employee_range, c.excluded_company_types], ["matched", "provider_filter", "matched", "matched"], n);
   }
   // Provider-reported contradictions discard a lead; they do not disprove it.
   assert(run.leads.filter((l) => l.status === "rejected").every((l) => l.rejectionBasis === "provider_reported"));
@@ -196,9 +196,9 @@ Deno.test("search: thin LeadOcean people rows settle industry, exclusion and rol
   assert(lead.reasons.some((r) => r.startsWith("geography: not established")));
   // Every value-backed check names its LeadOcean record and retrieval time.
   assert(lead.checks.filter((c) => c.outcome === "matched").every((c) => c.evidence.length > 0 && c.evidence.every((e) => e.provider === "leadocean" && e.retrievedAt === FIXED_NOW().toISOString())));
-  // The title came from the CURRENT role's job_title, and LeadOcean's fetch date is kept.
+  // The title came from the CURRENT role's job_title; LeadOcean gives no data-update stamp.
   assertEquals(lead.contacts[0].person.title[0].value, "Founder & CEO");
-  assertEquals(lead.company.sources[0].providerUpdatedAt, "2026-10-20");
+  assertEquals(lead.company.sources[0].providerUpdatedAt, null);
 });
 
 Deno.test("search: empty results complete with zero leads and charge nothing", async () => {
@@ -445,8 +445,8 @@ Deno.test("contacts: a provider phone is never verified; a provider-verified ema
 Deno.test("projection: discovery writes no contact values to the Leads tables, and rejected leads are not written", async () => {
   const { run } = await runLeadOcean(MARKET.map(loPerson));
   const rows = run.leads.map((l) => projectLead(l, { workspaceId: WS, missionId: MISSION, run })).filter((x) => x !== null);
-  // Seven wait for verification (incl. the two whose wrong HQ / size no thin row shows); three are rejected.
-  assertEquals(rows.length, 7);
+  // Six wait for verification (incl. the one whose wrong HQ no people row shows); four are rejected.
+  assertEquals(rows.length, 6);
   for (const r of rows) {
     assertEquals(r!.account.workspace_id, WS);
     assert(r!.account.source.startsWith("provider_discovery:"));

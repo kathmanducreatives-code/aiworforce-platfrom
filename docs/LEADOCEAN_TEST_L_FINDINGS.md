@@ -151,3 +151,72 @@ anything runs.
 **Stop conditions.** Any status other than 200 (including 401, 402 or 429) or an uncertain charge
 stops V, and nothing is retried. Reconciliation: `records.used` must rise by exactly the
 reported credits, and by no more than 2.
+
+---
+
+## Validation test V: results (run 2026-10-31, commit `0cb848ba`)
+
+**What ran.**
+- **Approved:** 2 records, $0.
+- **Requests:** exactly V1 (`GET /v1/companies/enrich?domain=langchain.com`) and V2 (`POST /v1/search`
+  at `baseten.co`, `limit` 1, ranked, `slim` off). Both returned 200 with one row each. Nothing was
+  retried or refused.
+- **Reconciliation:** passed. The account went from 13 used to **15** (985 remaining), matching the
+  2 credits LeadOcean reported.
+- **Counter lag (new finding):** the first read after the run still showed 14; the counter catches
+  up seconds later. The runner and V script now re-read the free usage counter before reporting a
+  mismatch, and never re-send a paid request.
+- **Scrubbing:** the stored report's per-row `meta.key_hash` (a 16-hex key identifier) was removed,
+  and the redactor now strips it at every depth.
+
+**Field paths, now `observed` in `FIELD_BASIS`.**
+
+| Field | Path | Was |
+|---|---|---|
+| HQ (company) | `company_data.company_primary_address.{country_code, state, city}` | unknown |
+| Industry (company) | `company_data.company_industries[].name3` (array; `name2` is a slug) | `company_industry`: wrong |
+| Size (company) | `company_data.company_employees.{number_of_employees, _min, _max, _code}` | inferred: right object, band added |
+| Company LinkedIn | `company_data.company_social_links.linkedin.url` | `company_linkedin_url`: wrong |
+| Funding | `company_data.company_funding.{last_round_type, last_round_date, last_round_year, total_raised_usd, lead_investors}` | guessed keys: wrong |
+| Founded | `company_data.company_profile.date_founded` | wrong |
+| Company id | `company_data.company_id` (and `meta.source_ids.company_id`) | inferred |
+| Person location | `profile_data.profile_address.country_code` | wrong |
+| Employer (people row) | `contact_current_experiences[0].{company_name, company_domain, company_industry, company_employees.*, company_social_links.linkedin.url, current, job_title, job_seniority.job_level}`, with `meta.source_ids.company_id` | headcount wrongly assumed absent |
+
+**Corrections to my earlier conclusions.**
+1. **`meta.fetched_at` is the serve time, not freshness.** LangChain's value was the second of the
+   request. LeadOcean publishes **no data-update stamp**, so freshness can't be measured and is no
+   longer read from it.
+2. **People rows do carry the employer's headcount** when `slim` is off. Test L sent `slim: true`
+   and may have lost it, so `slim` is now off on every search. People rows still **never** carry the
+   employer's HQ.
+3. **Ids are stable.** The employer's `company_id` in V2 (13404724) equals Test L's Baseten company
+   record id, so people rows and company records join exactly.
+
+**Offline replay.** Re-parsing V's redacted raw rows with the corrected mapping gives:
+
+- **LangChain:**
+  - industry "Technology; Information and Internet";
+  - NAICS 54 / 541511;
+  - 145 employees (band 51–200);
+  - HQ not held;
+  - Series A, 2024-02-15, $35M total, lead investor Sequoia Capital;
+  - LinkedIn page found.
+- **Baseten (the employer in V2):**
+  - Software Development;
+  - 137 employees (51–200);
+  - LinkedIn page found;
+  - no HQ in a people row.
+
+The person's title, current flag, level ("Staff") and country (GB) parse; no name is reported.
+
+**Against Agentory's evidence.**
+- LangChain's 145 is about a third of the company record's 469.
+- Baseten's 137 sits below the LinkedIn-declared band of 201–500.
+
+That's two of two companies where LeadOcean is **materially lower** than Agentory's sources. Its
+headcounts should be treated as possibly stale until compared at scale. The funding event is dated,
+so it reaches the shared engine as a plausible, dated claim and never as proof.
+
+Tests: 144/144, including the observed-shape fixtures, M6 (HQ path), M8 (dated funding), LO6
+(`slim` off) and the lag-tolerant reconciliation test.

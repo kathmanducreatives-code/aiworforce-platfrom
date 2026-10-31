@@ -47,6 +47,6 @@ Deno.test("key inventory lists paths and types, never values; coverage names the
   assertEquals(p["contact_data.contact_current_experiences.0.job_title"], "string");
   assertEquals(p["contact_data.contact_current_experiences"], "array(1)");
   const c = fieldCoverage(row, p);
-  assertEquals(c.title, { path: "contact_data.contact_current_experiences.0.job_title", basis: "documented", type: "string" });
+  assertEquals(c.title, { path: "contact_data.contact_current_experiences.0.job_title", basis: "observed", type: "string" });
   assertEquals(c.hqCountry, null);
 });

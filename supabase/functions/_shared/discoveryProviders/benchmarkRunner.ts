@@ -46,6 +46,12 @@ export interface RunnerInput {
   usdPerUnit: number | null;
   now?: () => Date;
   clock?: () => number;
+  /**
+   * Wait between reconciliation re-reads. LeadOcean's account counter lags its
+   * own per-response credits by seconds (validation test V: 13 → 14, then 15).
+   * Only the FREE usage read is repeated; no paid request is ever re-sent.
+   */
+  settle?: (ms: number) => Promise<void>;
 }
 
 export interface RunnerStep {
@@ -181,7 +187,12 @@ export async function runProviderBenchmark(i: RunnerInput): Promise<RunnerReport
   result.costUsd = i.usdPerUnit === null ? null : spent * i.usdPerUnit;
 
   // ── 4. Reconcile ────────────────────────────────────────────────────────
-  const after: UsageInfo | null = await adapter.verifyKey().catch(() => null);
+  let after: UsageInfo | null = await adapter.verifyKey().catch(() => null);
+  const settle = i.settle ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  for (let k = 0; k < 3 && before?.used != null && after?.used != null && after.used - before.used < spent; k++) {
+    await settle(2000);
+    after = await adapter.verifyKey().catch(() => after);
+  }
   const reported = before?.used != null && after?.used != null ? after.used - before.used : null;
   return report({
     result, stoppedBy, ledgerUnits: spent, providerReportedUnits: reported,

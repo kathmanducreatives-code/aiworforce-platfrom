@@ -105,8 +105,13 @@ if (import.meta.main) {
     results.push({ id: r.id, status: res.status, rows: rows.length, meta, raw: redacted,
       paths: redacted.map((x) => keyPaths(x)), coverage: redacted.map((x) => fieldCoverage(x, keyPaths(x))) });
   }
-  const after = await used();
   const credits = g.log.filter((l) => l.id !== "account").reduce((n, l) => n + (l.credits ?? 0), 0);
+  // The account counter lags the per-response credits by seconds: re-read (free) before calling it a mismatch.
+  let after = await used();
+  for (let k = 0; k < 3 && before != null && after != null && after - before < credits; k++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    after = await used();
+  }
   const out = { test: APPROVED_V, at: new Date().toISOString(), wire: g.log, committedMaxRecords: g.committed(), stopped,
     reconciliation: { before, after, accountDelta: before != null && after != null ? after - before : null, reportedCredits: credits,
       reconciled: before != null && after != null ? after - before === credits && after - before <= APPROVED_V.maxRecords : null }, results };

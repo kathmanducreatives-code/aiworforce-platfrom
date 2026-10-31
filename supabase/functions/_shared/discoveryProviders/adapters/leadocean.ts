@@ -50,58 +50,68 @@ export const LEADOCEAN_BASE = "https://api.leadocean.io";
  * is not a job title. Validation test V2 confirms the inferred paths.
  */
 const EXP = "contact_data.contact_current_experiences.0";
-export const FIELD_BASIS: Readonly<Record<string, "documented" | "catalogue" | "inferred">> = Object.freeze({
-  "meta.source_ids.person_id": "documented", "profile_data.profile_full_name": "documented",
-  "profile_data.profile_headline": "documented", "profile_data.profile_url": "documented", "meta.fetched_at": "documented",
-  [`${EXP}.job_title`]: "documented", [`${EXP}.company_name`]: "documented", [`${EXP}.company_domain`]: "documented",
-  [`${EXP}.company_employees.number_of_employees`]: "documented",
-  "company_data.company_name": "documented", "company_data.company_domain": "documented",
-  "company_data.naics_sector": "documented", "company_data.naics_primary": "documented",
-  [`${EXP}.company_industry`]: "catalogue",
-  "company_data.company_industry": "inferred", "company_data.company_employees.number_of_employees": "inferred",
-  "company_data.company_linkedin_url": "inferred", "meta.source_ids.company_id": "inferred",
+/**
+ * `observed`: present in a real LeadOcean row (validation test V, 2026-10-31:
+ * one company record via /v1/companies/enrich, one thin people row via
+ * /v1/search, slim off). Outranks every other basis.
+ */
+export const FIELD_BASIS: Readonly<Record<string, "observed" | "documented" | "catalogue" | "inferred">> = Object.freeze({
+  "meta.source_ids.person_id": "observed", "meta.source_ids.company_id": "observed", "meta.source_ids.person_group_id": "observed",
+  "profile_data.profile_full_name": "observed", "profile_data.profile_first_name": "observed", "profile_data.profile_headline": "observed",
+  "profile_data.profile_url": "observed", "profile_data.profile_address.country_code": "observed",
+  [`${EXP}.job_title`]: "observed", [`${EXP}.current`]: "observed", [`${EXP}.job_seniority.job_level`]: "observed",
+  [`${EXP}.company_name`]: "observed", [`${EXP}.company_domain`]: "observed", [`${EXP}.company_industry`]: "observed",
+  [`${EXP}.company_employees.number_of_employees`]: "observed", [`${EXP}.company_social_links.linkedin.url`]: "observed",
+  "company_data.company_id": "observed", "company_data.company_name": "observed", "company_data.company_domain": "observed",
+  "company_data.company_industries": "observed", "company_data.naics_sector": "observed", "company_data.naics_primary": "observed",
+  "company_data.company_employees.number_of_employees": "observed", "company_data.company_social_links.linkedin.url": "observed",
+  "company_data.company_primary_address.country_code": "observed", "company_data.company_primary_address.state": "observed",
+  "company_data.company_primary_address.city": "observed", "company_data.company_profile.date_founded": "observed",
+  "company_data.company_funding": "observed", "meta.fetched_at": "observed",
 });
 
 export const FIELDS = {
   personId: ["meta.source_ids.person_id"],
+  personGroupId: ["meta.source_ids.person_group_id"],
   fullName: ["profile_data.profile_full_name"],
   firstName: ["profile_data.profile_first_name"],
-  // The CURRENT role's title. The headline ("Founder & CEO at CloudSync") is kept apart.
-  title: [`${EXP}.job_title`, "profile_data.profile_job_title"],
+  // The CURRENT role's title. The headline is kept apart and never read as a title.
+  title: [`${EXP}.job_title`],
   headline: ["profile_data.profile_headline"],
-  seniority: ["profile_data.profile_seniority", `${EXP}.job_level`],
-  linkedin: ["profile_data.profile_url", "profile_data.profile_linkedin_url"],
-  personCountry: ["profile_data.profile_location_country_code", "profile_data.country_code", "profile_data.profile_location_country"],
-  // When LeadOcean fetched the record — the only freshness stamp it publishes.
-  fetchedAt: ["meta.fetched_at"],
-  companyId: ["meta.source_ids.company_id", "company_data.company_id"],
+  seniority: [`${EXP}.job_seniority.job_level`],
+  linkedin: ["profile_data.profile_url"],
+  personCountry: ["profile_data.profile_address.country_code"],
+  // meta.fetched_at is when LeadOcean SERVED the record (V: the second of the
+  // request) — not when its data was updated. LeadOcean publishes no
+  // data-update stamp, so it is never read as freshness.
+  servedAt: ["meta.fetched_at"],
+  companyId: ["company_data.company_id", "meta.source_ids.company_id"],
   companyName: ["company_data.company_name"],
   companyDomain: ["company_data.company_domain"],
-  companyLinkedin: ["company_data.company_linkedin_url"],
-  industry: ["company_data.company_industry"],
+  companyLinkedin: ["company_data.company_social_links.linkedin.url"],
+  // An ARRAY of { name3: label, name2: slug }: name3 is the enum label.
+  industries: ["company_data.company_industries"],
   naicsSector: ["company_data.naics_sector"],
   naicsPrimary: ["company_data.naics_primary"],
-  keywords: ["company_data.company_keywords"],
-  hqCountry: ["company_data.company_hq_country_code", "company_data.company_hq_country", "company_data.company_headquarters.country_code"],
-  hqRegion: ["company_data.company_hq_state", "company_data.company_headquarters.state"],
-  hqCity: ["company_data.company_hq_city", "company_data.company_headquarters.city"],
+  keywords: ["company_data.company_tags"],
+  hqCountry: ["company_data.company_primary_address.country_code"],
+  hqRegion: ["company_data.company_primary_address.state"],
+  hqCity: ["company_data.company_primary_address.city"],
   employees: ["company_data.company_employees.number_of_employees"],
-  employeeRange: ["company_data.company_employees.employee_range", "company_data.company_employee_range"],
-  founded: ["company_data.company_founded"],
-  // The employer as a PEOPLE row states it (contact_current_experiences[0]).
+  employeesMin: ["company_data.company_employees.number_of_employees_min"],
+  employeesMax: ["company_data.company_employees.number_of_employees_max"],
+  founded: ["company_data.company_profile.date_founded"],
+  funding: ["company_data.company_funding"],
+  // The employer as a PEOPLE row states it (contact_current_experiences[0]); no HQ is carried there.
+  expCompanyId: ["meta.source_ids.company_id"],
   expCompanyName: [`${EXP}.company_name`],
   expCompanyDomain: [`${EXP}.company_domain`],
-  expCompanyLinkedin: [`${EXP}.company_linkedin_url`],
+  expCompanyLinkedin: [`${EXP}.company_social_links.linkedin.url`],
   expIndustry: [`${EXP}.company_industry`],
   expEmployees: [`${EXP}.company_employees.number_of_employees`],
-  expEmployeeRange: [`${EXP}.company_employees.employee_range`],
-  // Funding: filterable (fundingType, min/maxLastFundingYear, min/maxFunding) but the
-  // row paths are not shown anywhere LeadOcean publishes. Absent paths leave funding unknown.
-  fundingType: ["company_data.company_last_funding_type", "company_data.last_funding_type"],
-  fundingYear: ["company_data.company_last_funding_year", "company_data.last_funding_year"],
-  fundingDate: ["company_data.company_last_funding_date", "company_data.last_funding_date"],
-  fundingTotal: ["company_data.company_total_funding", "company_data.total_funding"],
-  fundingLast: ["company_data.company_last_funding_amount", "company_data.last_funding_amount"],
+  expEmployeesMin: [`${EXP}.company_employees.number_of_employees_min`],
+  expEmployeesMax: [`${EXP}.company_employees.number_of_employees_max`],
+  expCurrent: [`${EXP}.current`],
 } as const;
 
 /** Our filter → LeadOcean's search parameter names (for meta.unsupportedFilters). */
@@ -120,9 +130,10 @@ export function buildLeadOceanSearch(step: PlanStep, req: DiscoveryRequirements,
   // keeps the cursor consistent. A single-page step asks for relevance.
   const body: Record<string, unknown> = { limit: Math.max(1, Math.min(100, limit)), order: step.maxPages > 1 ? "stable" : "ranked" };
   if (cursor) body.cursor = cursor;
-  // People rows: drop picture blocks and duplicate lists. Company rows keep
-  // financials (slim would drop them), which may carry funding evidence.
-  if (step.kind === "people_search") body.slim = true;
+  // slim stays OFF: validation test V read the full thin row (slim false) and
+  // it carries the employer's headcount; slim's dropped parts are not
+  // documented field by field. Pictures are removed by redactLeadOceanRow.
+  body.slim = false;
   const native = new Set(step.requirements.filter((r) => r.handling === "native").map((r) => r.key));
   for (const h of req.hard) {
     if (!native.has(h.key)) continue;
@@ -140,16 +151,36 @@ export function buildLeadOceanSearch(step: PlanStep, req: DiscoveryRequirements,
 
 /** A full date only when the provider gives one; a year alone stays a year. */
 function fundingFrom(row: unknown): ProviderCompany["funding"] {
-  const d = pickStr(row, FIELDS.fundingDate);
-  const f = {
-    lastRoundType: pickStr(row, FIELDS.fundingType),
-    lastRoundYear: pickNum(row, FIELDS.fundingYear),
+  // company_data.company_funding: { last_round_type, last_round_date, last_round_year, total_raised_usd, lead_investors }.
+  const f = pick(row, FIELDS.funding) as Record<string, unknown> | null;
+  if (!f || typeof f !== "object") return null;
+  const d = typeof f.last_round_date === "string" ? f.last_round_date : null;
+  const out = {
+    lastRoundType: typeof f.last_round_type === "string" && f.last_round_type.trim() ? f.last_round_type.trim() : null,
+    lastRoundYear: typeof f.last_round_year === "number" ? f.last_round_year : null,
+    // A full date only when the provider gives one; a year alone stays a year.
     roundDate: d && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : null,
-    totalUsd: pickNum(row, FIELDS.fundingTotal),
-    lastRoundUsd: pickNum(row, FIELDS.fundingLast),
+    totalUsd: typeof f.total_raised_usd === "number" ? f.total_raised_usd : null,
+    lastRoundUsd: null,
   };
-  return f.lastRoundType || f.lastRoundYear || f.roundDate || f.totalUsd || f.lastRoundUsd ? f : null;
+  return out.lastRoundType || out.lastRoundYear || out.roundDate || out.totalUsd ? out : null;
 }
+
+/** company_industries[].name3 — the enum labels. name2 is a slug and is not an industry label. */
+function industriesFrom(row: unknown): string[] | null {
+  const list = pick(row, FIELDS.industries);
+  if (!Array.isArray(list)) return null;
+  const labels = list.map((x) => (x && typeof x === "object" ? (x as Record<string, unknown>).name3 : null))
+    .filter((x): x is string => typeof x === "string" && !!x.trim());
+  return labels.length ? labels : null;
+}
+
+function bandFrom(row: unknown, min: readonly string[], max: readonly string[]): ProviderCompany["employeeRange"] {
+  const lo = pickNum(row, min), hi = pickNum(row, max);
+  return lo === null && hi === null ? null : { min: lo, max: hi };
+}
+
+const yearOf = (v: string | null) => (v && /^\d{4}/.test(v) ? Number(v.slice(0, 4)) : null);
 
 /** A company RECORD row (company search / lookup): company_data. */
 function companyFrom(row: unknown, at: string, ignored: FilterKey[], asserted: FilterKey[]): ProviderCompany | null {
@@ -159,18 +190,19 @@ function companyFrom(row: unknown, at: string, ignored: FilterKey[], asserted: F
   return {
     provider: "leadocean",
     recordId: pickStr(row, FIELDS.companyId) ?? `domain:${domain ?? name}`,
-    retrievedAt: at, providerUpdatedAt: pickStr(row, FIELDS.fetchedAt),
+    // No data-update stamp exists; meta.fetched_at is the serve time, not freshness.
+    retrievedAt: at, providerUpdatedAt: null,
     name, domain,
     linkedinUrl: pickStr(row, FIELDS.companyLinkedin),
-    industry: pickList(row, FIELDS.industry),
+    industry: industriesFrom(row),
     naicsSector: pickStr(row, FIELDS.naicsSector), naicsPrimary: pickStr(row, FIELDS.naicsPrimary),
     keywords: pickList(row, FIELDS.keywords),
     hqCountry: pickStr(row, FIELDS.hqCountry),
     hqRegion: pickStr(row, FIELDS.hqRegion),
     hqCity: pickStr(row, FIELDS.hqCity),
     employeeCount: pickNum(row, FIELDS.employees),
-    employeeRange: parseRange(pick(row, FIELDS.employeeRange)),
-    foundedYear: pickNum(row, FIELDS.founded),
+    employeeRange: bandFrom(row, FIELDS.employeesMin, FIELDS.employeesMax),
+    foundedYear: yearOf(pickStr(row, FIELDS.founded)),
     funding: fundingFrom(row),
     ignoredFilters: ignored,
     assertedFilters: asserted,
@@ -182,12 +214,14 @@ function employerFrom(row: unknown, at: string, ignored: FilterKey[], asserted: 
   const name = pickStr(row, FIELDS.expCompanyName);
   const domain = pickStr(row, FIELDS.expCompanyDomain);
   if (!name && !domain) return null;
+  const id = pickStr(row, FIELDS.expCompanyId);
   return {
-    provider: "leadocean", recordId: `domain:${domain ?? name}`, retrievedAt: at, providerUpdatedAt: pickStr(row, FIELDS.fetchedAt),
+    // The people row names the employer's LeadOcean company_id: the same record id a company lookup returns.
+    provider: "leadocean", recordId: id ?? `domain:${domain ?? name}`, retrievedAt: at, providerUpdatedAt: null,
     name, domain, linkedinUrl: pickStr(row, FIELDS.expCompanyLinkedin),
     industry: pickList(row, FIELDS.expIndustry),
     employeeCount: pickNum(row, FIELDS.expEmployees),
-    employeeRange: parseRange(pick(row, FIELDS.expEmployeeRange)),
+    employeeRange: bandFrom(row, FIELDS.expEmployeesMin, FIELDS.expEmployeesMax),
     ignoredFilters: ignored, assertedFilters: asserted,
   };
 }
@@ -204,7 +238,7 @@ export function redactLeadOceanRow(row: unknown): unknown {
     if (!v || typeof v !== "object") return v;
     const out: Record<string, unknown> = {};
     for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
-      if (/picture|photo|avatar/i.test(k)) continue;
+      if (/picture|photo|avatar/i.test(k) || k === "key_hash") continue;
       if (k === "contact_emails" || k === "contact_phones") {
         out[k] = Array.isArray(x) ? x.map((e) => ({ type: (e as Record<string, unknown>)?.type ?? null, status: (e as Record<string, unknown>)?.status ?? null, redacted: true })) : x;
         continue;
@@ -273,13 +307,14 @@ export function normalizeLeadOceanPage(json: unknown, step: PlanStep, at: string
     if (!recordId) continue;
     people.push({
       provider: "leadocean", recordId, retrievedAt: at,
-      providerUpdatedAt: pickStr(row, FIELDS.fetchedAt),
+      providerUpdatedAt: null,
       fullName: pickStr(row, FIELDS.fullName), firstName: pickStr(row, FIELDS.firstName),
       title: pickStr(row, FIELDS.title), headline: pickStr(row, FIELDS.headline), seniority: pickStr(row, FIELDS.seniority),
       linkedinUrl: pickStr(row, FIELDS.linkedin), country: pickStr(row, FIELDS.personCountry),
       // A people row names its employer in contact_current_experiences — "current" by LeadOcean's word.
       company: employerFrom(row, at, ignored, asserted),
-      employerIsCurrent: pickStr(row, [...FIELDS.expCompanyName, ...FIELDS.expCompanyDomain]) ? true : null,
+      // LeadOcean states it explicitly: contact_current_experiences[0].current.
+      employerIsCurrent: typeof pick(row, FIELDS.expCurrent) === "boolean" ? pick(row, FIELDS.expCurrent) as boolean : null,
       hasEmail: (row as { contact_data?: { has_email?: boolean } })?.contact_data?.has_email ?? null,
       hasPhone: (row as { contact_data?: { has_phone?: boolean } })?.contact_data?.has_phone ?? null,
       contactPoints: contactPointsFrom(row, recordId, at),

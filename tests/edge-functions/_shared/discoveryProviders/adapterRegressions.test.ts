@@ -184,12 +184,12 @@ Deno.test("LO5 LeadOcean: the key check reads /v1/account (free) — plan, scope
   assertEquals(u.restrictions, ["enrich: key lacks the enrich scope"]);
 });
 
-Deno.test("LO6 LeadOcean: people search asks for slim rows; company search keeps financials", () => {
+Deno.test("LO6 LeadOcean: slim is OFF on every search (V read the full row; slim's dropped parts are undocumented)", () => {
   const r = req();
   const people = planDiscovery({ requirements: r, connections: [conn("leadocean")], selection: ["leadocean"] }).steps[0];
-  assertEquals(buildLeadOceanSearch(people, r, null, 5).body.slim, true);
+  assertEquals(buildLeadOceanSearch(people, r, null, 5).body.slim, false);
   const companies = { ...people, kind: "company_search" as const, requirements: people.requirements.filter((x) => x.key !== "roles") };
-  assertEquals(buildLeadOceanSearch(companies, r, null, 5).body.slim, undefined);
+  assertEquals(buildLeadOceanSearch(companies, r, null, 5).body.slim, false);
 });
 
 // ── Capabilities ────────────────────────────────────────────────────────────

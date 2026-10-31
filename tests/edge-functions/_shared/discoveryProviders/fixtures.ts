@@ -59,42 +59,57 @@ export interface Synthetic {
   industry?: string; employees?: number; email?: string; emailStatus?: string; phone?: string; linkedin?: string;
 }
 
+const band = (n: number) => (n <= 10 ? [1, 10] : n <= 50 ? [11, 50] : n <= 200 ? [51, 200] : n <= 500 ? [201, 500] : n <= 1000 ? [501, 1000] : n <= 5000 ? [1001, 5000] : [5001, 10000]);
+const employeesBlock = (n: number) => { const [lo, hi] = band(n); return { number_of_employees: n, number_of_employees_code: `${lo}-${hi}`, number_of_employees_min: lo, number_of_employees_max: hi }; };
+
 /**
- * A people-search row in LeadOcean's DOCUMENTED thin shape (published enrich
- * example; export column catalogue, search: true): the person, and the employer
- * as contact_current_experiences[0] — name, domain, job title, industry. A thin
- * row carries NO employer headquarters and NO headcount (catalogue: search
- * false), so `employees` / `country` never appear here; use loCompanyRow.
- * contact_emails / contact_phones appear only when a test simulates them
- * arriving anyway (they are documented "Present only when reveal_email=true").
+ * A people-search row in the shape OBSERVED in validation test V (2026-10-31,
+ * POST /v1/search, slim off): the person, and the employer as
+ * contact_current_experiences[0] — name, domain, company_id (in meta), job
+ * title, current flag, job level, industry label, headcount block, LinkedIn.
+ * A people row carries NO employer headquarters. contact_emails / phones
+ * appear only when a test simulates them arriving anyway (documented
+ * "Present only when reveal_email=true"). Values are synthetic.
  */
 export function loPerson(s: Synthetic) {
   return {
     profile_data: {
-      profile_full_name: s.name, profile_headline: `${s.title} at ${s.company}`,
+      profile_full_name: s.name, profile_first_name: s.name.split(" ")[0], profile_last_name: s.name.split(" ").slice(1).join(" "),
+      profile_headline: null,
       profile_url: s.linkedin ?? `https://www.linkedin.com/in/${s.name.toLowerCase().replace(/\s+/g, "-")}`,
+      profile_address: { city: null, state: null, continent: "North America", country_code: "US" },
     },
     contact_data: {
-      has_email: !!s.email, has_phone: !!s.phone, email_status: s.email ? (s.emailStatus ?? "verified") : "none", email_type: "work",
-      contact_current_experiences: [{ company_name: s.company, company_domain: s.domain, job_title: s.title, ...(s.industry ? { company_industry: s.industry } : {}) }],
+      has_email: !!s.email, has_phone: !!s.phone, email_status: s.email ? (s.emailStatus ?? "verified") : "none", email_type: "work", email_types: ["work"],
+      contact_current_experiences: [{
+        company_name: s.company, company_domain: s.domain, job_title: s.title, current: true, start_date: null,
+        job_seniority: { job_level: "C-Team", score: null },
+        ...(s.industry ? { company_industry: s.industry } : {}),
+        ...(s.employees !== undefined ? { company_employees: employeesBlock(s.employees) } : {}),
+        company_social_links: { linkedin: { url: `https://www.linkedin.com/company/${s.domain.split(".")[0]}` } },
+      }],
       ...(s.email ? { contact_emails: [{ email: s.email, type: "work", status: s.emailStatus ?? "verified", verified_batch_date: "2026-09-01", priority: 1, score: 0.9 }] } : {}),
       ...(s.phone ? { contact_phones: [{ phone: s.phone, type: "mobile", ddi: null, dnc: false, carrier: null, priority: 1, score: 0.7 }] } : {}),
     },
-    meta: { source_ids: { person_id: s.id }, fetched_at: "2026-10-20" },
+    meta: { key: `person/${s.id}`, schema: "leadocean.person.v1", sources: ["leadocean"], source_ids: { person_id: s.id, person_group_id: `g-${s.id}`, company_id: `lo-c-${s.domain}` } },
   };
 }
 
-/** A company-record row (company search / lookup): company_data, documented keys plus the inferred ones. */
-export function loCompanyRow(c: { id: string; name: string; domain: string; industry?: string; naicsSector?: string; employees?: number; linkedin?: string }) {
+/** A company record in the shape OBSERVED in validation test V (GET /v1/companies/enrich). Values are synthetic. */
+export function loCompanyRow(c: { id: string; name: string; domain: string; industry?: string; naicsSector?: string; employees?: number; linkedin?: string; hqCountryCode?: string | null; hqState?: string | null; hqCity?: string | null; funding?: Record<string, unknown> }) {
   return {
     company_data: {
-      company_name: c.name, company_domain: c.domain,
-      ...(c.industry ? { company_industry: c.industry } : {}),
+      company_id: c.id, company_name: c.name, company_domain: c.domain, company_type: "Privately Held",
+      company_industries: c.industry ? [{ name3: c.industry, name2: c.industry.toLowerCase().replace(/[^a-z]+/g, "-") }] : [],
       ...(c.naicsSector ? { naics_sector: c.naicsSector } : {}),
-      ...(c.employees !== undefined ? { company_employees: { number_of_employees: c.employees } } : {}),
-      ...(c.linkedin ? { company_linkedin_url: c.linkedin } : {}),
+      ...(c.employees !== undefined ? { company_employees: employeesBlock(c.employees) } : {}),
+      company_social_links: { linkedin: { url: c.linkedin ?? null } },
+      company_primary_address: { city: c.hqCity ?? null, state: c.hqState ?? null, country: null, country_code: c.hqCountryCode ?? null, continent: null, postal_code: null },
+      company_profile: { date_founded: null, entity_type: "company", publicly_traded: false },
+      ...(c.funding ? { company_funding: c.funding } : {}),
     },
-    meta: { source_ids: { company_id: c.id }, fetched_at: "2026-10-20" },
+    company_metrics: { completion_score: 0.8, marketability_score: null },
+    meta: { key: `company/${c.id}`, schema: "leadocean.company.v1", sources: ["leadocean"], source_ids: { company_id: c.id }, fetched_at: "2026-10-31T00:00:00.000Z" },
   };
 }
 

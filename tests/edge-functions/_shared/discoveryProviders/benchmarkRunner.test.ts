@@ -39,8 +39,16 @@ const SYNTH: Cohort = {
   discovery: { mission_query: "c", requested_count: 10 },
 };
 
-const loCompanyRow = (domain: string, li: string | null, country = "United States") =>
-  ({ company_data: { company_name: domain.split(".")[0], company_domain: domain, ...(li ? { company_linkedin_url: li } : {}), company_hq_country: country, company_employee_range: "51-200" }, meta: { source_ids: { company_id: `lo-c-${domain}` } } });
+/** A company record in the shape observed in validation test V (synthetic values). */
+const loCompanyRow = (domain: string, li: string | null, countryCode = "US") => ({
+  company_data: {
+    company_id: `lo-c-${domain}`, company_name: domain.split(".")[0], company_domain: domain,
+    company_social_links: { linkedin: { url: li } },
+    company_primary_address: { country_code: countryCode, state: null, city: null },
+    company_employees: { number_of_employees: 120, number_of_employees_code: "51-200", number_of_employees_min: 51, number_of_employees_max: 200 },
+  },
+  meta: { source_ids: { company_id: `lo-c-${domain}` }, fetched_at: "2026-10-27T12:00:00.000Z" },
+});
 const DISCOVERED: Synthetic[] = Array.from({ length: 10 }, (_, i) => ({
   id: `lo-p${i}`, name: `Person ${i}`, title: "VP of Sales", company: `Co ${i}`, domain: `co${i % 8}.example`, employees: 120, phone: i % 2 ? "+1 555 0100" : undefined,
 }));
@@ -58,7 +66,7 @@ Deno.test("runner (LeadOcean): exact lookups + one discovery page inside the app
   const f = mockFetch({
     "GET /v1/account": [accountRead(0), accountRead(12)],
     "POST /v1/search/companies": [{ body: loPage([loCompanyRow("alpha.example", "https://www.linkedin.com/company/alpha")], { credits: 1 }) },
-      { body: loPage([loCompanyRow("beta.example", "https://www.linkedin.com/company/beta", "Canada")], { credits: 1 }) }],
+      { body: loPage([loCompanyRow("beta.example", "https://www.linkedin.com/company/beta", "CA")], { credits: 1 }) }],
     "POST /v1/search": [{ body: loPage(DISCOVERED.map(loPerson), { credits: 10 }) }],
   });
   const rep = await runProviderBenchmark(await loInput(f));
@@ -81,11 +89,25 @@ Deno.test("runner (LeadOcean): exact lookups + one discovery page inside the app
   assertEquals(s.uniqueQualified.qualified, 0, "no canonical evidence offline: nothing qualifies on a provider's word");
   assertEquals(s.costPerQualified.usd, null);
   assertEquals(s.latencyMs.count, 5, "two account reads, two lookups, one discovery page");
-  // Thin people rows return neither HQ nor size: both checks on all eight employers rest on the filter alone.
-  assertEquals(s.evidenceQuality, { returnedValue: 0, filterOnly: 16, nothing: 0, share: 0 });
-  // meta.fetched_at is LeadOcean's freshness stamp: 2026-10-20, 7.5 days before the run (rounded), on all eight employers.
-  assertEquals([s.freshnessDays.stamped, s.freshnessDays.median], [8, 8]);
+  // People rows return the employer's size (checked against the value) but never its HQ (filter-only), for all eight employers.
+  assertEquals(s.evidenceQuality, { returnedValue: 8, filterOnly: 8, nothing: 0, share: 0.5 });
+  // LeadOcean publishes no data-update stamp (meta.fetched_at is the serve time): freshness is unmeasurable.
+  assertEquals([s.freshnessDays.stamped, s.freshnessDays.median], [0, null]);
   assertFalse(JSON.stringify(rep).includes("+1 555"), "no contact value anywhere in the report");
+});
+
+Deno.test("runner: a lagging usage counter is re-read (free) until it reconciles — never a paid retry", async () => {
+  const f = mockFetch({
+    // before: 0; first after-read lags at 3; then the counter catches up at 12.
+    "GET /v1/account": [accountRead(0), accountRead(3), accountRead(12)],
+    "POST /v1/search/companies": [{ body: loPage([loCompanyRow("alpha.example", null)], { credits: 1 }) }, { body: loPage([loCompanyRow("beta.example", null)], { credits: 1 }) }],
+    "POST /v1/search": [{ body: loPage(DISCOVERED.map(loPerson), { credits: 10 }) }],
+  });
+  const waits: number[] = [];
+  const rep = await runProviderBenchmark({ ...(await loInput(f)), settle: (ms) => { waits.push(ms); return Promise.resolve(); } });
+  assertEquals([rep.ledgerUnits, rep.providerReportedUnits, rep.reconciled], [12, 12, true]);
+  assertEquals(waits, [2000]);
+  assertEquals(f.calls.filter((c) => c.method === "POST").length, 3, "no paid request repeated");
 });
 
 Deno.test("runner: a worst case above the approved units refuses the WHOLE run before any call", async () => {
