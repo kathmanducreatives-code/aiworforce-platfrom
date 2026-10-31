@@ -185,6 +185,13 @@ Deno.test("kickoff validator, Contract 3: its narrowed catalog passes K01–K20;
   // A catalog above the reviewed ceiling is refused even when the kickoff matches it.
   const raised = structuredClone(CATALOG3); raised.approved_quotes.atomus.maximum_microusd = 20_000;
   assert(f3(raised).includes("K11"), "no catalog may exceed the reviewed ceilings");
+  // …even when the kickoff was prepared at exactly that raised figure: the CEILING refuses it, not a mismatch.
+  const atRaised = await kickoff({
+    catalog: raised.approved_quotes, compile: () => Promise.resolve(structuredClone(REAL2)),
+    prices: { jobs_maximum_microusd: 2000, details_maximum_microusd: 4050, atomus_maximum_microusd: 20_000, observed_at: "2026-10-29T00:00:00Z", source: "test" },
+  }) as unknown as Record<string, unknown> & { sql: string };
+  const viaRaised = validateKickoff(atRaised as never, atRaised.sql, SHA, approvedCatalog(raised)).filter((c) => !c.ok).map((c) => c.id);
+  assert(viaRaised.includes("K11"), `a raised catalog fails K11 even when matched: ${viaRaised}`);
 });
 
 Deno.test("kickoff validator: the approved paid canary passes K01–K19", async () => {

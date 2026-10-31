@@ -55,19 +55,38 @@ Nothing qualifies offline. No funding round was ever fetched, and none is
 assumed. Continuation now sees 2 executable verification routes, where the
 run reported `frontier_exhausted`.
 
-## Open decision: re-evaluating a failed evaluation
+## Second pass (verification and readiness)
 
-The engine restores any company that carries a mission evaluation, the
-never-evaluated placeholder included. The acceptance matrix asserts this
-behaviour on purpose (Q4.9: "a resume from the final checkpoint buys and
-evaluates nothing", even after an evaluator timeout). So a company whose only
-evaluation failed (Oscilar) is never evaluated again, and the evaluator must
-answer before it can qualify. Re-asking once on the next slice is a product
-decision that would change Q4.9. It is left as it was and recorded here.
+| # | Defect found | Fix | Proven by |
+|---|---|---|---|
+| 12 | A company whose only evaluator call FAILED was never evaluated again: the placeholder was restored as a decision. Q4.9 deliberately asserts that a resume evaluates nothing. | `LEAD_REEVALUATE_FAILED_EVALUATION=on` (default **off**) re-asks **once**, and only for a call that was made and failed (`evaluation_failed` mark). It never applies to "no evaluator", budget exhaustion or a timeout (`null`). A second failure is marked `evaluation_retried` and restored. | `failedEvaluationRetry.test.ts` (Q4.9 holds with the flag off and on) + 4 fault injections |
+| 13 | Old runs showed a hard `constraint` no evidence could answer as `PENDING`, as if evidence might still come. | `readMissionView` marks the exact pre-repair shape `legacy_unverifiable`; the Workbench line reads "NOT VERIFIABLE …". Stored history is unchanged. | `workbenchCanonicalView.test.ts` (Contract 2's stored LangChain checks) |
+| 14 | The kickoff preparer hard-coded Contract 2's catalog, the stage hard-coded its prices, and the validator hard-coded K11 (`=== 4000/4050/10550`), K12 (`=== 18600`) and K17. A narrower Contract 3 could never run, and its session would have stopped (fail-closed) at S08 and K11. | The contract names its catalog (`catalog`). The stage derives prices from the contract and the catalog. A12 requires a reviewed `smoke-catalog-canary-funding*.json` path whose maxima and pinned units equal the contract's. K11/K12/K17 read the catalog, with Contract 2's figures as hard ceilings. | `canarySession.test.ts`, `canaryWorkflow.test.ts`, `local-rehearsal.sh` |
+| 15 | When a contract omitted an actor, the stage defaulted that actor's price to Contract 2's figure, not the named catalog's. The session was refused at K11 instead of S06. | `max_of` falls back to the contract's own catalog. | `local-rehearsal.sh` (`session-plan-outside-contract` now fails at S06, as asserted) |
+| 16 | `contractChecks` threw on a `null` actor entry instead of failing A05. | A05 tolerates and refuses a malformed entry. | `canarySession.test.ts` |
 
-## Contract 3
+### Verified, no defect
 
-`docs/launch/proposals/canary-session-contract-3.json` and
-`smoke-catalog-canary-funding-3.json` are proposals that stay within every
-reviewed cap: pool 1, details 1, Atomus 1, 4 worker attempts, worst case
-$0.08448. They are not wired to the workflow.
+- **Continuation slices.** The execution plan is reused from the checkpoint (re-validated, never re-bought), and pool evaluation is restored. A slice adds GPT calls only for companies it actually evaluates, so A10's "2 + pool" holds across slices. A company left `enrichment: not_started` reopens company enrichment (`capabilityStillOwed`). C3-7 resumes after discovery and buys each actor once.
+- **Atomus without Pvalyou.** Checked on the real 2026-09-21 Atomus payload. Atomus alone PASSES a dated round inside a 180-day window and FAILS a complete history with nothing in it. No record at all stays PENDING. STAGE still needs the cited pair; recency does not (`contract3FundingLive.test.ts`).
+
+## Contract 3: offline rehearsal
+
+1. **Engine** (`contract3Rehearsal.test.ts`): the Contract 3 mission, the real Contract 2 GPT proposal, the real engine and verification phase, and Pvalyou unavailable. Every purchase passes through the gate's own `classifyRequest` and `boundRequest` with Contract 3's catalog (`maxItems: 1`, one company per start).
+   - Proven US HQ + AE posting + a round 40 days ago → 1 qualified. Exactly one start of each of jobs, details and Atomus; no Pvalyou; inside 9600 µ$.
+   - A US job at a Canadian-HQ company → ineligible, and no Atomus is bought.
+   - Empty company details → pending, and no Atomus is bought.
+   - A 300-day-old round → ineligible after one Atomus start.
+   - No funding record → pending.
+   - A failed evaluator → nothing qualifies.
+   - An interrupted slice → resumed, with each actor bought once.
+2. **Stages** (`scripts/test-project/canary/local-rehearsal.sh`, local Postgres 17 + the fake Apify): all 49 stage runs as expected, with no secret in any output.
+   - Every session variant is built on Contract 3, and the session reaches READY FOR THE WORKER.
+   - A narrower contract stops at S06.
+   - A wider one, Pvalyou and an expired contract stop at A03/A05.
+   - Run receipts within the cap reconcile; over-cap and wrong-actor runs stay open.
+   - NO_RUN is concluded only on its two records.
+
+## Open product decision
+
+Whether to turn on `LEAD_REEVALUATE_FAILED_EVALUATION` for the TEST worker. It is off; Contract 3 is sized so that its one evaluation has its own attempt (A10), and gptProvider already retries transient HTTP errors within a call.

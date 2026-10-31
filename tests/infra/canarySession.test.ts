@@ -130,6 +130,10 @@ Deno.test("contract 3: passes A01–A11 within every reviewed cap, and covers it
   const outside = structuredClone(CONTRACT3); outside.catalog = "../../etc/passwd";
   assert(failedA(outside).includes("A12"), "no path outside the reviewed proposals");
   assert(!failedA(CONTRACT).includes("A12"), "Contract 2 matches its own catalog");
+  // A catalog whose CONTENT agrees, named by an unreviewed path, is still refused.
+  const renamed = structuredClone(CONTRACT3); renamed.catalog = "docs/launch/proposals/smoke-catalog-two-actor.json";
+  assert(contractChecks(renamed, NOW, CATALOG3).find((x) => x.id === "A12")!.ok === false, "only a reviewed canary-funding path");
+  assert(contractChecks(CONTRACT3, NOW, CATALOG3).find((x) => x.id === "A12")!.ok, "the same content under its own path agrees");
   // A malformed actor entry fails A05; it never throws past the gate.
   const nullActor = structuredClone(CONTRACT3); nullActor.actors["apify:harvestapi~linkedin-company"] = null;
   assert(failedA(nullActor).includes("A05"));

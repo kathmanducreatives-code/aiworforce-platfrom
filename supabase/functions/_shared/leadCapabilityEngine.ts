@@ -9574,11 +9574,11 @@ export async function runCapabilityPlan(
         // site, and a run with no evaluator makes no model call here at all —
         // it qualifies nobody and says so through `evaluation_paths` and
         // `mission_evaluation_observability`. Silence reported as silence.
-        c.decision_source = "insufficient_evidence";
         // A CALL THAT WAS MADE AND FAILED is marked apart from "no evaluator" and
         // "budget spent" (both `null`): only the former may be retried, once, and
         // only under `LEAD_REEVALUATE_FAILED_EVALUATION` (`retryFailedEvaluation`).
         const priorFailed = failedEvaluationMarks(c.mission_evaluation);
+        c.decision_source = "insufficient_evidence";
         c.mission_evaluation = notEvaluated(evaluation
           ? "the mission evaluator was called and returned no usable answer"
           : "no evaluator was available for this run");
