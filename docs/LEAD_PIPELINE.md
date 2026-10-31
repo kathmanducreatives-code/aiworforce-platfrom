@@ -1,6 +1,6 @@
 # Lead pipeline — LeadOcean discovery + Apify signals + phone enrichment
 
-Status (2026-10-31): implemented and validated **offline** (179 tests). Behind
+Status (2026-10-31): implemented, validated offline (200 tests) and by live test E (see `LEAD_PIPELINE_TEST_E_RESULTS.md`). Behind
 `LEAD_PIPELINE_ENABLED` (off). Not deployed; held migrations not applied. No
 live run since Test V. Live test E is proposed below and needs approval.
 
@@ -83,7 +83,7 @@ Audience (free counts, mailable default): ICP A + `hasPhone` 84,001 people at
 34,572 companies; ICP B + `hasPhone` 20,865 people at 7,704 companies.
 Apify: **not authenticated from this session** (401 token-not-provided).
 
-## Live test E (PROPOSED — not approved, not run)
+## Live test E (approved and run 2026-10-31 — results in LEAD_PIPELINE_TEST_E_RESULTS.md)
 
 `scripts/lead-pipeline-test-e.ts --icp a` (dry run prints this exactly):
 
@@ -123,7 +123,7 @@ on ineligible leads), top-ranked first, Apify company reads only for non-rejecte
 
 ## Known gaps / blockers
 
-1. Apify token not available to this session (live E blocked until added).
+1. LeadOcean `/v2/people/phone` returns 401 with the REST Network Secret (search works) — phone yield unmeasured.
 2. No independent phone verification source → `verified_person_direct` stays 0.
 3. Held migrations (`20261027120000_provider_connections`, `20261031120000_lead_pipeline_checkpoints`) not applied.
 4. `/v2/people/phone` response shape is documented, not yet observed live (test E observes it).
