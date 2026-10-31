@@ -47,10 +47,37 @@ const SIGNAL_DIMENSIONS_NOT_SIGNALS = new Set([
   "company_profile",
 ]);
 
+/** What the mission's own criteria already carry, so a restatement of them can be recognised. */
+interface Covered { sizeRange: Range | null; geography: boolean }
+
+/**
+ * Is this `constraint` a RESTATEMENT of a criterion the mission already carries?
+ *
+ * The model repeats the size bound and the location in `hard_constraints`
+ * beside the fields that carry them ("under 100 employees" → `employee_max
+ * lte 100` next to `employee_range.max = 100`). Only an EQUAL restatement adds
+ * nothing: a different bound ("at most 50") is a requirement of its own and is
+ * never dropped. Decided BEFORE the criterion's status — the shared compiler
+ * marks a stated hard `constraint` `unprovable_today` (no evidence dimension
+ * answers it), and a restatement of a provable size or location must not
+ * block every plan as `unmappable` (CI on the merge with launch/hardening).
+ */
+function restatement(c: CriterionLike, covered: Covered): boolean {
+  if (c.dimension !== "constraint") return false;
+  const v = (c.value ?? {}) as { field?: unknown; value?: unknown };
+  const field = str(v.field);
+  const bound = typeof v.value === "number" ? v.value : num(Number(str(v.value) ?? NaN));
+  if (field === "employee_max") return bound !== null && covered.sizeRange?.max === bound;
+  if (field === "employee_min") return bound !== null && covered.sizeRange?.min === bound;
+  if (field === "geography" || field === "company_profile.locations") return covered.geography;
+  return false;
+}
+
 /** Map one hard criterion. Returns null for a criterion another one already covers. */
-function mapHard(c: CriterionLike): HardRequirement | null {
+function mapHard(c: CriterionLike, covered: Covered = { sizeRange: null, geography: false }): HardRequirement | null {
   const base = { criterionId: c.id ?? `${c.dimension}:?`, label: c.label ?? String(c.dimension), representable: (c.status ?? "ok") === "ok" };
   const unmappable = (why: string): HardRequirement => ({ ...base, key: "unmappable", values: [], detail: why });
+  if (restatement(c, covered)) return null;
   if (!base.representable) return unmappable(`criterion status ${c.status}`);
   switch (c.dimension) {
     case "industry": return { ...base, key: "industry", values: values(c) };
@@ -70,10 +97,9 @@ function mapHard(c: CriterionLike): HardRequirement | null {
       const list = Array.isArray(v.value) ? v.value.filter((x): x is string => !!str(x)) : (str(v.value) ? [v.value as string] : []);
       if (field === "excluded_company_types" || field === "excluded_industries") return { ...base, key: "excluded_company_types", values: list };
       if (field === "excluded_geographies" || field === "excluded_locations") return { ...base, key: "excluded_geography", values: list };
-      // The compiler emits the size bound both as company_size and as a
-      // constraint; the range carries it, so the constraint adds nothing.
-      if (field === "employee_max" || field === "employee_min") return null;
-      if (field === "geography" || field === "company_profile.locations") return null;
+      // An EQUAL restatement of the size range or the location returned null
+      // above (`restatement`). Anything else — a different bound, a location
+      // with no geography criterion — is a requirement no filter expresses.
       return unmappable(`constraint ${field ?? "?"} has no provider filter`);
     }
     case "unrecognised_signal":
@@ -135,9 +161,14 @@ export function requirementsFromMission(mission: MissionLike): DiscoveryRequirem
   const hard: HardRequirement[] = [];
   const preferences: DiscoveryRequirements["preferences"] = [];
   const seen = new Set<string>();
+  const hardCriteria = (mission.criteria ?? []).filter((c) => c.kind === "hard");
+  const covered: Covered = {
+    sizeRange: asRange(hardCriteria.find((c) => c.dimension === "company_size")?.value),
+    geography: hardCriteria.some((c) => c.dimension === "geography"),
+  };
   for (const c of mission.criteria ?? []) {
     if (c.kind === "hard") {
-      const r = mapHard(c);
+      const r = mapHard(c, covered);
       if (!r) continue;
       // any_of alternatives share one requirement (RC02): keep the first.
       const dedupe = `${r.key}:${JSON.stringify(r.values)}`;
