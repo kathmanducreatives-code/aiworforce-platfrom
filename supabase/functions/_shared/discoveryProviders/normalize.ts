@@ -129,12 +129,24 @@ const COMPANY_FIELDS = ["name", "domain", "linkedinUrl", "industry", "naicsSecto
 type CompanyField = typeof COMPANY_FIELDS[number];
 const CONFLICT_FIELDS: CompanyField[] = ["industry", "hqCountry", "hqRegion", "employeeCount", "employeeRange", "foundedYear", "funding"];
 
+/**
+ * INDUSTRY LABELS ONLY, WHATEVER THE ADAPTER HANDED OVER. A value that is only
+ * digits ("54", "541511") is a classification CODE (NAICS, SIC), never a label
+ * an industry requirement can be checked against — Test L read LeadOcean's
+ * `naics_sector` as the industry. Adapters keep codes in naicsSector /
+ * naicsPrimary; this holds the line for every provider, present and future.
+ */
+export function industryLabels(v: readonly string[] | null | undefined): string[] | null {
+  const out = (v ?? []).map((x) => String(x ?? "").trim()).filter((x) => x && !/^\d+(?:[.-]\d+)*$/.test(x));
+  return out.length ? out : null;
+}
+
 function freshCompany(c: ProviderCompany): CanonicalCompany {
   const d = normDomain(c.domain);
   return {
     key: d ? `domain:${d}` : linkedinSlug(c.linkedinUrl) ? `li:${linkedinSlug(c.linkedinUrl)}` : `${c.provider}:${c.recordId}`,
     name: claim(c.name, c, "name"), domain: claim(d, c, "domain"), linkedinUrl: claim(c.linkedinUrl, c, "linkedin_url"),
-    industry: claim(c.industry, c, "industry"), keywords: claim(c.keywords, c, "keywords"),
+    industry: claim(industryLabels(c.industry), c, "industry"), keywords: claim(c.keywords, c, "keywords"),
     naicsSector: claim(c.naicsSector ?? null, c, "naics_sector"), naicsPrimary: claim(c.naicsPrimary ?? null, c, "naics_primary"),
     hqCountry: claim(c.hqCountry, c, "hq_country"), hqRegion: claim(c.hqRegion, c, "hq_region"), hqCity: claim(c.hqCity, c, "hq_city"),
     employeeCount: claim(c.employeeCount, c, "employee_count"), employeeRange: claim(c.employeeRange, c, "employee_range"),
