@@ -1,0 +1,58 @@
+{
+  "query": "Find 10 US-headquartered companies with 51-200 employees, with their VP of Sales where available. Do not broaden.",
+  "proposal": {
+    "requested_opportunity_count": 10,
+    "requested_contact_ready_count": null,
+    "company_types": [],
+    "geographies": [
+      "United States"
+    ],
+    "employee_range": {
+      "min": 51,
+      "max": 200
+    },
+    "decision_maker_roles": [
+      "VP of Sales"
+    ],
+    "hard_constraints": [
+      {
+        "field": "geography",
+        "operator": "in",
+        "value": [
+          "United States"
+        ],
+        "reason": "US-headquartered"
+      }
+    ],
+    "soft_preferences": [],
+    "preferred_signals": [],
+    "adjacent_signals": [],
+    "excluded_signals": [],
+    "allowed_broadening": {
+      "role_families": [],
+      "company_types": [],
+      "geographies": [],
+      "employee_range": {
+        "min": null,
+        "max": null
+      }
+    },
+    "disallowed_broadening": [
+      "geography",
+      "employee_range",
+      "role"
+    ],
+    "required_evidence": [],
+    "required_capabilities": [
+      "general_company_discovery",
+      "company_details_enrichment",
+      "portfolio_ranking"
+    ],
+    "preferred_source_strategy": [],
+    "evaluation_instructions": "",
+    "founder_unlock_recommended": false,
+    "confidence": 0.8,
+    "unknowns": []
+  },
+  "note": "The size bound is stated once (employee_range), not restated as employee_min/employee_max hard_constraints: on every branch today (8b0e2b6b, demo/lead-discovery-e2e, claude/optimistic-hypatia-3bylnd @ 89868f3b) a restated size constraint compiles to a hard `constraint` criterion no evidence dimension answers, so every company stays pending even with the size proven. Shared-engine fix owned by the Apify repair session; pinned by benchmarkRunner.test.ts (KNOWN ISSUE tripwire)."
+}

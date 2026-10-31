@@ -206,9 +206,17 @@ Deno.test("C1 LeadOcean funding stage: exact rounds only — Series E-J is wider
 Deno.test("C2 a plan restriction found by the free key check refuses that search kind at PLAN time", () => {
   const r = req();
   const restricted = { ...conn("apollo"), restrictions: ["people_search: not in this plan"] };
-  const plan = planDiscovery({ requirements: r, connections: [restricted, conn("apify")], selection: ["apollo", "apify"] });
+  // A PERSON mission has no fallback: refused when planned.
+  assertEquals(r.targetEntity, "person", "the fixture asks for founders/CEOs: a person mission");
+  const people = r;
+  const plan = planDiscovery({ requirements: people, connections: [restricted, conn("apify")], selection: ["apollo", "apify"] });
   assertFalse(plan.steps.some((s) => s.provider === "apollo"));
   assertEquals(plan.refused.find((x) => x.provider === "apollo")!.reason, "people search unavailable — not in this plan");
+  // A COMPANY mission falls back to Organization Search: companies, no contacts, nothing dropped.
+  const companies = planDiscovery({ requirements: { ...r, targetEntity: "company" }, connections: [restricted, conn("apify")], selection: ["apollo", "apify"] });
+  const step = companies.steps.find((s) => s.provider === "apollo")!;
+  assertEquals(step.kind, "company_search");
+  assertFalse(step.requirements.some((x) => x.key === "roles"));
   // Auto still finds the provider that can run the mission.
   const auto = planDiscovery({ requirements: r, connections: [restricted, conn("leadocean"), conn("apify")], selection: "auto" });
   assertEquals(auto.steps[0].provider, "leadocean");

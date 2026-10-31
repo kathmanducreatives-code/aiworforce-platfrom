@@ -198,9 +198,20 @@ export function planDiscovery(input: {
   for (const p of candidates) {
     const why = eligibility(conns.get(p));
     if (why) { refused.push({ provider: p, reason: why, unsupported: [] }); continue; }
-    const kind = searchKindFor(req, p);
-    const restricted = kind ? conns.get(p)?.restrictions?.find((r) => r.startsWith(`${kind}:`)) : undefined;
-    if (kind && restricted) { refused.push({ provider: p, reason: `${kind.replace("_", " ")} unavailable — ${restricted.slice(kind.length + 1).trim()}`, unsupported: [] }); continue; }
+    const restrictedKind = (k: SearchKind | null) => (k ? conns.get(p)?.restrictions?.find((r) => r.startsWith(`${k}:`)) : undefined);
+    let kind = searchKindFor(req, p);
+    const restricted = restrictedKind(kind);
+    // A COMPANY mission whose people search the plan excludes can still be
+    // searched for companies: the roles were never owed by the company
+    // (routing.relevant), so nothing is dropped — the leads arrive without
+    // contacts. A PERSON mission has no such fallback.
+    if (kind === "people_search" && restricted && req.targetEntity === "company" &&
+        PROVIDERS[p].capabilities.includes("company_search") && !restrictedKind("company_search")) {
+      kind = "company_search";
+    } else if (kind && restricted) {
+      refused.push({ provider: p, reason: `${kind.replace("_", " ")} unavailable — ${restricted.slice(kind.length + 1).trim()}`, unsupported: [] });
+      continue;
+    }
     // Apify without a search of the right kind is still the verifier, not a refusal.
     if (!kind && p === verifier) continue;
     if (!kind) { refused.push({ provider: p, reason: `no ${req.targetEntity === "person" ? "people" : "company"} search`, unsupported: [] }); continue; }

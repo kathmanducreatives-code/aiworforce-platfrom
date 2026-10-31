@@ -10,54 +10,153 @@
       "contacts": 0,
       "outreach_leads": 0,
       "company_headcount_snapshots": 3,
-      "real_companies_seen_in_canary_runs": ["langchain", "baseten", "oscilar-inc"],
-      "synthetic_fixtures_excluded": ["qualified.example", "canada.example"]
+      "real_companies_seen_in_canary_runs": [
+        "langchain",
+        "baseten",
+        "oscilar-inc"
+      ],
+      "synthetic_fixtures_excluded": [
+        "qualified.example",
+        "canada.example"
+      ]
     },
     "suppression_check": "TEST holds no outreach_leads, contacts or CRM rows, so no hold applies there. Before any live run the production holds (outreach history, CRM relationship, existing Lead IDs) must be checked for every selected slot; each slot carries a suppression block and the benchmark never sends a suppressed slot to a provider."
   },
   "known_companies": [
     {
-      "slot": "A01", "status": "selected", "name": "LangChain", "domain": "langchain.com",
+      "slot": "A01",
+      "status": "selected",
+      "name": "LangChain",
+      "domain": "langchain.com",
       "linkedin_url": "https://www.linkedin.com/company/langchain",
       "truth_hq_country": null,
       "truth_source": "apify_linkedin_company_details read 2026-10-30 (company_headcount_snapshots); HQ not stored, so no HQ truth",
-      "suppression": { "existing_lead_id": null, "outreach_hold": false, "crm_relationship": null }
+      "suppression": {
+        "existing_lead_id": null,
+        "outreach_hold": false,
+        "crm_relationship": null
+      }
     },
     {
-      "slot": "A02", "status": "selected", "name": "Baseten", "domain": null,
+      "slot": "A02",
+      "status": "selected",
+      "name": "Baseten",
+      "domain": null,
       "linkedin_url": "https://www.linkedin.com/company/baseten",
-      "truth_hq_country": null, "truth_source": "apify_linkedin_job_search canary row (discovery only)",
-      "suppression": { "existing_lead_id": null, "outreach_hold": false, "crm_relationship": null }
+      "truth_hq_country": null,
+      "truth_source": "apify_linkedin_job_search canary row (discovery only)",
+      "suppression": {
+        "existing_lead_id": null,
+        "outreach_hold": false,
+        "crm_relationship": null
+      }
     },
     {
-      "slot": "A03", "status": "selected", "name": "Oscilar", "domain": null,
+      "slot": "A03",
+      "status": "selected",
+      "name": "Oscilar",
+      "domain": null,
       "linkedin_url": "https://www.linkedin.com/company/oscilar-inc",
-      "truth_hq_country": null, "truth_source": "apify_linkedin_job_search canary row (discovery only)",
-      "suppression": { "existing_lead_id": null, "outreach_hold": false, "crm_relationship": null }
+      "truth_hq_country": null,
+      "truth_source": "apify_linkedin_job_search canary row (discovery only)",
+      "suppression": {
+        "existing_lead_id": null,
+        "outreach_hold": false,
+        "crm_relationship": null
+      }
     },
-    { "slot": "A04", "status": "unfilled", "unfilled_reason": "the TEST project holds no further real companies" },
-    { "slot": "A05", "status": "unfilled", "unfilled_reason": "the TEST project holds no further real companies" },
-    { "slot": "A06", "status": "unfilled", "unfilled_reason": "the TEST project holds no further real companies" },
-    { "slot": "A07", "status": "unfilled", "unfilled_reason": "the TEST project holds no further real companies" },
-    { "slot": "A08", "status": "unfilled", "unfilled_reason": "the TEST project holds no further real companies" },
-    { "slot": "A09", "status": "unfilled", "unfilled_reason": "the TEST project holds no further real companies" },
-    { "slot": "A10", "status": "unfilled", "unfilled_reason": "the TEST project holds no further real companies" }
+    {
+      "slot": "A04",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A05",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A06",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A07",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A08",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A09",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A10",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    }
   ],
   "known_decision_makers": [
-    { "slot": "B01", "status": "unfilled", "unfilled_reason": "the TEST project holds no contact or decision-maker records" },
-    { "slot": "B02", "status": "unfilled", "unfilled_reason": "the TEST project holds no contact or decision-maker records" },
-    { "slot": "B03", "status": "unfilled", "unfilled_reason": "the TEST project holds no contact or decision-maker records" },
-    { "slot": "B04", "status": "unfilled", "unfilled_reason": "the TEST project holds no contact or decision-maker records" },
-    { "slot": "B05", "status": "unfilled", "unfilled_reason": "the TEST project holds no contact or decision-maker records" },
-    { "slot": "B06", "status": "unfilled", "unfilled_reason": "the TEST project holds no contact or decision-maker records" },
-    { "slot": "B07", "status": "unfilled", "unfilled_reason": "the TEST project holds no contact or decision-maker records" },
-    { "slot": "B08", "status": "unfilled", "unfilled_reason": "the TEST project holds no contact or decision-maker records" },
-    { "slot": "B09", "status": "unfilled", "unfilled_reason": "the TEST project holds no contact or decision-maker records" },
-    { "slot": "B10", "status": "unfilled", "unfilled_reason": "the TEST project holds no contact or decision-maker records" }
+    {
+      "slot": "B01",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B02",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B03",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B04",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B05",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B06",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B07",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B08",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B09",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B10",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    }
   ],
   "discovery": {
-    "mission_query": "Find 10 US-headquartered B2B SaaS companies with 51-200 employees and their VP of Sales. Do not broaden.",
+    "mission_query": "Find 10 US-headquartered companies with 51-200 employees, with their VP of Sales where available. Do not broaden.",
     "requested_count": 10,
-    "why_this_mission": "Every hard criterion is decidable by the shared engine from canonical evidence (HQ and size band from the company record, business model from a grounded website statement), and both providers filter all of them natively, so neither is refused and the comparison is like for like."
+    "proposal_file": "benchmarks/provider-discovery/mission-c-proposal.json",
+    "why_this_mission": "Every hard criterion is one both providers filter EXACTLY (LeadOcean hqCountry=US, min/maxEmployees; Apollo organization_locations, organization_num_employees_ranges) and the shared engine can decide from canonical evidence (HQ flag and declared size band on the company record). An industry was left out on purpose: Agentory's controlled business-model vocabulary ('B2B SaaS') has no exact LeadOcean label, and LeadOcean's labels ('Software Development') are outside that vocabulary, so no industry wording is decidable by both \u2014 it would refuse one provider or leave every company pending."
   }
 }
