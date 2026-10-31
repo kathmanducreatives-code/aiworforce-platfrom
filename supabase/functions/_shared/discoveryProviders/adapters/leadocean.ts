@@ -32,35 +32,76 @@ import { ProviderError, type ContactPoint, type DiscoveryRequirements, type Filt
 
 export const LEADOCEAN_BASE = "https://api.leadocean.io";
 
-/** Candidate paths per field, most specific first. `meta.source_ids.*` and `company_data.company_name/company_domain/naics_sector` are named in the spec; the rest are UNCONFIRMED. */
+/**
+ * Where each field lives, and HOW WE KNOW. `profile_data` / `company_data` are
+ * untyped in the OpenAPI spec, so every path carries its basis:
+ *
+ *   documented  shown in LeadOcean's own published example payloads
+ *               (leadocean.io enrich example; blog "enrich-linkedin-urls-curl";
+ *               the spec's `fields` examples), read 2026-10-31
+ *   catalogue   the column exists in GET /v1/exports/columns as a thin-search
+ *               column (search: true); the JSON key follows the documented
+ *               naming of its neighbours
+ *   inferred    named by the MCP tool description or the spec's prose, key not shown
+ *
+ * Paths are tried in order; a field none of them finds stays ABSENT (unknown),
+ * never guessed from a neighbouring field. Industry and NAICS are separate
+ * fields: a NAICS sector code is never an industry label. A person's headline
+ * is not a job title. Validation test V2 confirms the inferred paths.
+ */
+const EXP = "contact_data.contact_current_experiences.0";
+export const FIELD_BASIS: Readonly<Record<string, "documented" | "catalogue" | "inferred">> = Object.freeze({
+  "meta.source_ids.person_id": "documented", "profile_data.profile_full_name": "documented",
+  "profile_data.profile_headline": "documented", "profile_data.profile_url": "documented", "meta.fetched_at": "documented",
+  [`${EXP}.job_title`]: "documented", [`${EXP}.company_name`]: "documented", [`${EXP}.company_domain`]: "documented",
+  [`${EXP}.company_employees.number_of_employees`]: "documented",
+  "company_data.company_name": "documented", "company_data.company_domain": "documented",
+  "company_data.naics_sector": "documented", "company_data.naics_primary": "documented",
+  [`${EXP}.company_industry`]: "catalogue",
+  "company_data.company_industry": "inferred", "company_data.company_employees.number_of_employees": "inferred",
+  "company_data.company_linkedin_url": "inferred", "meta.source_ids.company_id": "inferred",
+});
+
 export const FIELDS = {
-  personId: ["meta.source_ids.person_id", "id"],
-  fullName: ["profile_data.profile_full_name", "profile_data.full_name", "profile_data.name"],
-  firstName: ["profile_data.profile_first_name", "profile_data.first_name"],
-  title: ["profile_data.profile_job_title", "profile_data.job_title", "contact_data.contact_current_experiences.0.title", "profile_data.profile_headline"],
-  seniority: ["profile_data.profile_seniority", "profile_data.seniority"],
-  linkedin: ["profile_data.profile_linkedin_url", "profile_data.linkedin_url"],
-  personCountry: ["profile_data.profile_location_country", "profile_data.country"],
-  personUpdated: ["meta.updated_at", "profile_data.updated_at"],
+  personId: ["meta.source_ids.person_id"],
+  fullName: ["profile_data.profile_full_name"],
+  firstName: ["profile_data.profile_first_name"],
+  // The CURRENT role's title. The headline ("Founder & CEO at CloudSync") is kept apart.
+  title: [`${EXP}.job_title`, "profile_data.profile_job_title"],
+  headline: ["profile_data.profile_headline"],
+  seniority: ["profile_data.profile_seniority", `${EXP}.job_level`],
+  linkedin: ["profile_data.profile_url", "profile_data.profile_linkedin_url"],
+  personCountry: ["profile_data.profile_location_country_code", "profile_data.country_code", "profile_data.profile_location_country"],
+  // When LeadOcean fetched the record — the only freshness stamp it publishes.
+  fetchedAt: ["meta.fetched_at"],
   companyId: ["meta.source_ids.company_id", "company_data.company_id"],
-  companyName: ["company_data.company_name", "contact_data.contact_current_experiences.0.company_name"],
-  companyDomain: ["company_data.company_domain", "company_data.domain", "contact_data.contact_current_experiences.0.company_domain"],
-  companyLinkedin: ["company_data.company_linkedin_url", "company_data.linkedin_url"],
-  industry: ["company_data.company_industry", "company_data.industry", "company_data.naics_sector"],
-  keywords: ["company_data.company_keywords", "company_data.keywords"],
-  hqCountry: ["company_data.company_hq_country", "company_data.hq_country", "company_data.company_country"],
-  hqRegion: ["company_data.company_hq_state", "company_data.hq_state"],
-  hqCity: ["company_data.company_hq_city", "company_data.hq_city"],
-  employees: ["company_metrics.employee_count", "company_data.company_employee_count", "company_data.employee_count"],
-  employeeRange: ["company_data.company_employee_range", "company_data.employee_range"],
-  founded: ["company_data.company_founded", "company_data.founded"],
+  companyName: ["company_data.company_name"],
+  companyDomain: ["company_data.company_domain"],
+  companyLinkedin: ["company_data.company_linkedin_url"],
+  industry: ["company_data.company_industry"],
+  naicsSector: ["company_data.naics_sector"],
+  naicsPrimary: ["company_data.naics_primary"],
+  keywords: ["company_data.company_keywords"],
+  hqCountry: ["company_data.company_hq_country_code", "company_data.company_hq_country", "company_data.company_headquarters.country_code"],
+  hqRegion: ["company_data.company_hq_state", "company_data.company_headquarters.state"],
+  hqCity: ["company_data.company_hq_city", "company_data.company_headquarters.city"],
+  employees: ["company_data.company_employees.number_of_employees"],
+  employeeRange: ["company_data.company_employees.employee_range", "company_data.company_employee_range"],
+  founded: ["company_data.company_founded"],
+  // The employer as a PEOPLE row states it (contact_current_experiences[0]).
+  expCompanyName: [`${EXP}.company_name`],
+  expCompanyDomain: [`${EXP}.company_domain`],
+  expCompanyLinkedin: [`${EXP}.company_linkedin_url`],
+  expIndustry: [`${EXP}.company_industry`],
+  expEmployees: [`${EXP}.company_employees.number_of_employees`],
+  expEmployeeRange: [`${EXP}.company_employees.employee_range`],
   // Funding: filterable (fundingType, min/maxLastFundingYear, min/maxFunding) but the
-  // row paths are UNCONFIRMED — not in the spec. Absent paths leave funding unknown.
-  fundingType: ["company_data.company_last_funding_type", "company_data.last_funding_type", "company_financials.last_funding_type"],
-  fundingYear: ["company_data.company_last_funding_year", "company_data.last_funding_year", "company_financials.last_funding_year"],
-  fundingDate: ["company_data.company_last_funding_date", "company_data.last_funding_date", "company_financials.last_funding_date"],
-  fundingTotal: ["company_data.company_total_funding", "company_data.total_funding", "company_financials.total_funding"],
-  fundingLast: ["company_data.company_last_funding_amount", "company_data.last_funding_amount", "company_financials.last_funding_amount"],
+  // row paths are not shown anywhere LeadOcean publishes. Absent paths leave funding unknown.
+  fundingType: ["company_data.company_last_funding_type", "company_data.last_funding_type"],
+  fundingYear: ["company_data.company_last_funding_year", "company_data.last_funding_year"],
+  fundingDate: ["company_data.company_last_funding_date", "company_data.last_funding_date"],
+  fundingTotal: ["company_data.company_total_funding", "company_data.total_funding"],
+  fundingLast: ["company_data.company_last_funding_amount", "company_data.last_funding_amount"],
 } as const;
 
 /** Our filter → LeadOcean's search parameter names (for meta.unsupportedFilters). */
@@ -73,7 +114,11 @@ const PARAM_OF: Record<string, FilterKey> = {
 
 export function buildLeadOceanSearch(step: PlanStep, req: DiscoveryRequirements, cursor: string | null, limit: number) {
   // Each page asks only for what the step may still take: billing is per row returned.
-  const body: Record<string, unknown> = { limit: Math.max(1, Math.min(100, limit)), order: "stable" };
+  // ORDER. `ranked` (LeadOcean's default) returns the best matches first: what a
+  // discovery page should contain. `stable` is id order on a pinned snapshot —
+  // the right choice only for walking a whole result set across pages, where it
+  // keeps the cursor consistent. A single-page step asks for relevance.
+  const body: Record<string, unknown> = { limit: Math.max(1, Math.min(100, limit)), order: step.maxPages > 1 ? "stable" : "ranked" };
   if (cursor) body.cursor = cursor;
   // People rows: drop picture blocks and duplicate lists. Company rows keep
   // financials (slim would drop them), which may carry funding evidence.
@@ -106,6 +151,7 @@ function fundingFrom(row: unknown): ProviderCompany["funding"] {
   return f.lastRoundType || f.lastRoundYear || f.roundDate || f.totalUsd || f.lastRoundUsd ? f : null;
 }
 
+/** A company RECORD row (company search / lookup): company_data. */
 function companyFrom(row: unknown, at: string, ignored: FilterKey[], asserted: FilterKey[]): ProviderCompany | null {
   const name = pickStr(row, FIELDS.companyName);
   const domain = pickStr(row, FIELDS.companyDomain);
@@ -113,10 +159,11 @@ function companyFrom(row: unknown, at: string, ignored: FilterKey[], asserted: F
   return {
     provider: "leadocean",
     recordId: pickStr(row, FIELDS.companyId) ?? `domain:${domain ?? name}`,
-    retrievedAt: at,
+    retrievedAt: at, providerUpdatedAt: pickStr(row, FIELDS.fetchedAt),
     name, domain,
     linkedinUrl: pickStr(row, FIELDS.companyLinkedin),
     industry: pickList(row, FIELDS.industry),
+    naicsSector: pickStr(row, FIELDS.naicsSector), naicsPrimary: pickStr(row, FIELDS.naicsPrimary),
     keywords: pickList(row, FIELDS.keywords),
     hqCountry: pickStr(row, FIELDS.hqCountry),
     hqRegion: pickStr(row, FIELDS.hqRegion),
@@ -128,6 +175,46 @@ function companyFrom(row: unknown, at: string, ignored: FilterKey[], asserted: F
     ignoredFilters: ignored,
     assertedFilters: asserted,
   };
+}
+
+/** The EMPLOYER as a people row states it (contact_current_experiences[0]); no HQ is carried there. */
+function employerFrom(row: unknown, at: string, ignored: FilterKey[], asserted: FilterKey[]): ProviderCompany | null {
+  const name = pickStr(row, FIELDS.expCompanyName);
+  const domain = pickStr(row, FIELDS.expCompanyDomain);
+  if (!name && !domain) return null;
+  return {
+    provider: "leadocean", recordId: `domain:${domain ?? name}`, retrievedAt: at, providerUpdatedAt: pickStr(row, FIELDS.fetchedAt),
+    name, domain, linkedinUrl: pickStr(row, FIELDS.expCompanyLinkedin),
+    industry: pickList(row, FIELDS.expIndustry),
+    employeeCount: pickNum(row, FIELDS.expEmployees),
+    employeeRange: parseRange(pick(row, FIELDS.expEmployeeRange)),
+    ignoredFilters: ignored, assertedFilters: asserted,
+  };
+}
+
+/**
+ * The row as received, minus what is not needed to replay it: contact VALUES
+ * (an address or number is replaced by its type and status only) and picture
+ * blocks. Names, titles, employers and LeadOcean's ids stay — they are what a
+ * re-parse needs. Used to keep paid pages replayable offline.
+ */
+export function redactLeadOceanRow(row: unknown): unknown {
+  const walk = (v: unknown, key = ""): unknown => {
+    if (Array.isArray(v)) return v.map((x) => walk(x, key));
+    if (!v || typeof v !== "object") return v;
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+      if (/picture|photo|avatar/i.test(k)) continue;
+      if (k === "contact_emails" || k === "contact_phones") {
+        out[k] = Array.isArray(x) ? x.map((e) => ({ type: (e as Record<string, unknown>)?.type ?? null, status: (e as Record<string, unknown>)?.status ?? null, redacted: true })) : x;
+        continue;
+      }
+      if (k === "email" || k === "phone" || k === "personal_emails" || k === "work_email") { out[k] = x == null ? x : "[redacted]"; continue; }
+      out[k] = walk(x, k);
+    }
+    return out;
+  };
+  return walk(row);
 }
 
 const EMAIL_FLAGGED = new Set(["invalid", "risky", "disposable"]);
@@ -186,13 +273,13 @@ export function normalizeLeadOceanPage(json: unknown, step: PlanStep, at: string
     if (!recordId) continue;
     people.push({
       provider: "leadocean", recordId, retrievedAt: at,
-      providerUpdatedAt: pickStr(row, FIELDS.personUpdated),
+      providerUpdatedAt: pickStr(row, FIELDS.fetchedAt),
       fullName: pickStr(row, FIELDS.fullName), firstName: pickStr(row, FIELDS.firstName),
-      title: pickStr(row, FIELDS.title), seniority: pickStr(row, FIELDS.seniority),
+      title: pickStr(row, FIELDS.title), headline: pickStr(row, FIELDS.headline), seniority: pickStr(row, FIELDS.seniority),
       linkedinUrl: pickStr(row, FIELDS.linkedin), country: pickStr(row, FIELDS.personCountry),
-      company: companyFrom(row, at, ignored, asserted),
-      // A people row's employer comes from contact_current_experiences: LeadOcean says current.
-      employerIsCurrent: pickStr(row, ["contact_data.contact_current_experiences.0.company_name", "contact_data.contact_current_experiences.0.company_domain"]) ? true : null,
+      // A people row names its employer in contact_current_experiences — "current" by LeadOcean's word.
+      company: employerFrom(row, at, ignored, asserted),
+      employerIsCurrent: pickStr(row, [...FIELDS.expCompanyName, ...FIELDS.expCompanyDomain]) ? true : null,
       hasEmail: (row as { contact_data?: { has_email?: boolean } })?.contact_data?.has_email ?? null,
       hasPhone: (row as { contact_data?: { has_phone?: boolean } })?.contact_data?.has_phone ?? null,
       contactPoints: contactPointsFrom(row, recordId, at),
@@ -200,7 +287,9 @@ export function normalizeLeadOceanPage(json: unknown, step: PlanStep, at: string
     });
   }
   const credits = typeof meta.credits === "number" ? meta.credits : rows.length;
+  const safeMeta = Object.fromEntries(Object.entries(meta).filter(([k]) => k !== "key_hash"));
   return {
+    raw: { data: rows.map(redactLeadOceanRow), meta: safeMeta },
     companies, people,
     nextCursor: typeof meta.nextCursor === "string" && meta.nextCursor && meta.depthCapped !== true ? meta.nextCursor : null,
     creditsCharged: credits,

@@ -42,7 +42,7 @@ Deno.test("approval: a ceiling BELOW the estimate is refused before any call", a
 Deno.test("contact values: never held by the run, the ledger, or the projected rows — yet duplicates by email still merge", async () => {
   const a = loPerson({ ...MARKET[0], id: "x1", linkedin: "https://linkedin.com/in/a-1" });
   const b = loPerson({ ...MARKET[0], id: "x2", linkedin: undefined });
-  (b.profile_data as Record<string, unknown>).profile_linkedin_url = null;
+  (b.profile_data as Record<string, unknown>).profile_url = null;
   const f = mockFetch({ "POST /v1/search": [{ body: loPage([a, b]) }] });
   const plan = planDiscovery({ requirements: req(), connections: [conn("leadocean")], selection: ["leadocean"] });
   const ledger = memoryLedger();

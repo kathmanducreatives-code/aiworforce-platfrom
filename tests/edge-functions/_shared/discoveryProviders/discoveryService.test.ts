@@ -55,8 +55,8 @@ Deno.test("service: run needs the approval for exactly the planned hash, then wr
   assertEquals(f.calls.length, 0);
   const ok = await handleDiscovery(parseDiscoveryRequest({ action: "run", workspace_id: WS, message_id: MSG, selection: ["leadocean"], approval: { plan_hash: plan.planHash, max_credits: plan.estimatedCredits } })!, deps);
   assertEquals(ok.status, 200);
-  assertEquals((ok.body.run as { counts: unknown }).counts, { qualified: 0, needsVerification: 5, rejected: 5 });
-  assertEquals(written.length, 5);
+  assertEquals((ok.body.run as { counts: unknown }).counts, { qualified: 0, needsVerification: 7, rejected: 3 });
+  assertEquals(written.length, 7);
   assert(written.every((w) => w.account.workspace_id === WS));
   assertFalse(JSON.stringify(ok.body).includes("lo_key_1234567890"));
 });

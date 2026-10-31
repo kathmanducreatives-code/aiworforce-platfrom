@@ -159,32 +159,46 @@ async function runLeadOcean(rows: unknown[], meta: Record<string, unknown> = {})
   return { run, f, ledger, plan };
 }
 
-Deno.test("search: a LeadOcean search finds the five that meet every requirement on the provider's word, rejects each wrong one, and qualifies none on that word alone", async () => {
+Deno.test("search: thin LeadOcean people rows settle industry, exclusion and role from returned values; HQ and size rest on the filter alone; nothing qualifies", async () => {
   const { run, f } = await runLeadOcean(MARKET.map(loPerson));
   assertEquals(f.calls.length, 1);
   assertEquals(f.calls[0].headers["x-api-key"], "lo_test_key_123456");
   assertEquals(run.status, "completed");
-  const q = run.leads.filter((l) => l.providerStatus === "qualified").map((l) => l.company.name[0].value).sort();
-  assertEquals(q, ["Brooks Textile Mill", "Chen Precision Parts", "Lakeside Plastics", "Ortiz Metalworks", "Stonebridge Fabrication"]);
+  // A thin people row returns no employer HQ and no headcount (export catalogue:
+  // search false), so no lead passes even the provider checks on its own word.
+  assertEquals(run.leads.filter((l) => l.providerStatus === "qualified").length, 0);
   const rejected = Object.fromEntries(run.leads.filter((l) => l.status === "rejected").map((l) => [l.company.name[0].value, l.checks.filter((c) => c.outcome === "contradicted").map((c) => c.key).join(",") || "contacts"]));
   assertEquals(rejected, {
-    "Hale Tooling GmbH": "geography_hq", "Ward Industrial": "employee_range", "Patel Software": "industry",
+    "Patel Software": "industry",
     // A staffing firm is both outside the industry and of an excluded type.
     "Rivers Staffing": "industry,excluded_company_types", "Young Fasteners": "contacts",
   });
+  // A German HQ or 1,400 staff is NOT visible in a people row: LeadOcean's filter
+  // is the only thing standing between them and the list. They wait for verification.
+  const byName = Object.fromEntries(run.leads.map((l) => [l.company.name[0].value, l]));
+  for (const n of ["Hale Tooling GmbH", "Ward Industrial"]) assertEquals(byName[n].status, "needs_verification", n);
+  const five = ["Brooks Textile Mill", "Chen Precision Parts", "Lakeside Plastics", "Ortiz Metalworks", "Stonebridge Fabrication"];
+  for (const n of five) {
+    const c = Object.fromEntries(byName[n].checks.map((x) => [x.key, x.outcome]));
+    assertEquals([c.industry, c.geography_hq, c.employee_range, c.excluded_company_types], ["matched", "provider_filter", "provider_filter", "matched"], n);
+  }
   // Provider-reported contradictions discard a lead; they do not disprove it.
   assert(run.leads.filter((l) => l.status === "rejected").every((l) => l.rejectionBasis === "provider_reported"));
   assertEquals(run.credits.leadocean, 10);
   // THE SHARED ENGINE DECIDES: a discovery row proves nothing, so none qualifies on it.
   assertEquals(run.counts.qualified, 0);
-  const lead = run.leads.find((l) => l.providerStatus === "qualified")!;
+  const lead = byName["Stonebridge Fabrication"];
   assertEquals(lead.status, "needs_verification");
   assertEquals(lead.verification, null);
   assertEquals(lead.shared!.eligibility, "pending");
   assertEquals(lead.shared!.evidence_sources, { leadocean_discovery: lead.shared!.evidence_sources.leadocean_discovery });
   assertEquals(lead.shared!.hard_checks.geography, "unknown");
   assert(lead.reasons.some((r) => r.startsWith("geography: not established")));
-  assert(lead.checks.every((c) => c.evidence.length > 0 && c.evidence.every((e) => e.provider === "leadocean" && e.retrievedAt === FIXED_NOW().toISOString())));
+  // Every value-backed check names its LeadOcean record and retrieval time.
+  assert(lead.checks.filter((c) => c.outcome === "matched").every((c) => c.evidence.length > 0 && c.evidence.every((e) => e.provider === "leadocean" && e.retrievedAt === FIXED_NOW().toISOString())));
+  // The title came from the CURRENT role's job_title, and LeadOcean's fetch date is kept.
+  assertEquals(lead.contacts[0].person.title[0].value, "Founder & CEO");
+  assertEquals(lead.company.sources[0].providerUpdatedAt, "2026-10-20");
 });
 
 Deno.test("search: empty results complete with zero leads and charge nothing", async () => {
@@ -221,7 +235,8 @@ Deno.test("search: only a reviewed trust entry lets a provider filter stand in f
   const merged = mergeRecords([], normalizeLeadOceanPage(loPage(rows), planDiscovery({ requirements: req(), connections: [conn("leadocean")], selection: ["leadocean"] }).steps[0], "t").people);
   assertEquals(verifyLeads(req(), merged, [], { trustedFilters: { apollo: ["employee_range"] } })[0].status, "needs_verification", "another provider's trust does not count");
   assertEquals(verifyLeads(req(), merged, [], { trustedFilters: { leadocean: ["industry"] } })[0].status, "needs_verification", "another key's trust does not count");
-  const [ok] = verifyLeads(req(), merged, [], { trustedFilters: { leadocean: ["employee_range"] } });
+  assertEquals(verifyLeads(req(), merged, [], { trustedFilters: { leadocean: ["employee_range"] } })[0].providerStatus, "needs_verification", "HQ is still filter-only and untrusted");
+  const [ok] = verifyLeads(req(), merged, [], { trustedFilters: { leadocean: ["employee_range", "geography_hq"] } });
   assertEquals(ok.providerStatus, "qualified");
   // Trust in a provider's filter is a provider-check matter; the shared engine still decides.
   assertEquals(ok.status, "needs_verification");
@@ -236,17 +251,20 @@ Deno.test("search: a trusted filter the provider reported ignoring is unknown, n
   assertEquals(lead.status, "needs_verification");
 });
 
-Deno.test("search: pagination is bounded by maxRecords and stops once enough leads pass the provider checks", async () => {
+Deno.test("search: pagination is bounded by maxRecords — and with thin rows nothing passes, so the walk reads to the cap", async () => {
   const page1 = loPage(MARKET.slice(0, 3).map(loPerson), { nextCursor: "c2" });
   const page2 = loPage(MARKET.slice(3, 10).map(loPerson), { nextCursor: "c3" });
   const f = mockFetch({ "POST /v1/search": [{ body: page1 }, { body: page2 }, { body: loPage([loPerson({ ...MARKET[0], id: "never" })]) }] });
   const r = req();
   const plan = planDiscovery({ requirements: r, connections: [conn("leadocean")], selection: ["leadocean"], limits: { maxRecordsPerStep: 12 } });
   const run = await runDiscovery({ workspaceId: WS, missionId: MISSION, requirements: r, plan, approval: approve(plan), adapters: { leadocean: loAdapter(f) }, ledger: memoryLedger(), now: FIXED_NOW });
+  // maxRecords 12 at 10 a page is two pages at most: the third cursor is never followed.
   assertEquals(f.calls.length, 2);
   assertEquals((f.calls[1].body as Record<string, unknown>).cursor, "c2");
   assert(run.steps[0].rows <= 12);
-  assertEquals(run.leads.filter((l) => l.providerStatus === "qualified").length, 5);
+  // A multi-page walk uses stable order so the cursor stays consistent.
+  assertEquals((f.calls[0].body as Record<string, unknown>).order, "stable");
+  assertEquals(run.leads.filter((l) => l.providerStatus === "qualified").length, 0);
   assertEquals(run.counts.qualified, 0, "more pages cannot prove what only canonical evidence can");
 });
 
@@ -427,7 +445,8 @@ Deno.test("contacts: a provider phone is never verified; a provider-verified ema
 Deno.test("projection: discovery writes no contact values to the Leads tables, and rejected leads are not written", async () => {
   const { run } = await runLeadOcean(MARKET.map(loPerson));
   const rows = run.leads.map((l) => projectLead(l, { workspaceId: WS, missionId: MISSION, run })).filter((x) => x !== null);
-  assertEquals(rows.length, 5);
+  // Seven wait for verification (incl. the two whose wrong HQ / size no thin row shows); three are rejected.
+  assertEquals(rows.length, 7);
   for (const r of rows) {
     assertEquals(r!.account.workspace_id, WS);
     assert(r!.account.source.startsWith("provider_discovery:"));
@@ -439,7 +458,7 @@ Deno.test("projection: discovery writes no contact values to the Leads tables, a
   const a = rows.find((r) => r!.account.name === "Stonebridge Fabrication")!;
   const att = a.account.raw.agentory_discovery as Record<string, unknown>;
   assertEquals(att.status, "needs_verification");
-  assertEquals(att.provider_status, "qualified");
+  assertEquals(att.provider_status, "needs_verification", "HQ and size are filter-only in a thin row");
   assertEquals((att.shared_qualification as { eligibility: string }).eligibility, "pending");
   assertEquals((att.providers as { provider: string }[])[0].provider, "leadocean");
   const avail = (a.contacts[0].raw.agentory_discovery as { availability: Record<string, unknown> }).availability;

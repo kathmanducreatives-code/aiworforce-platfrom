@@ -59,25 +59,42 @@ export interface Synthetic {
   industry?: string; employees?: number; email?: string; emailStatus?: string; phone?: string; linkedin?: string;
 }
 
+/**
+ * A people-search row in LeadOcean's DOCUMENTED thin shape (published enrich
+ * example; export column catalogue, search: true): the person, and the employer
+ * as contact_current_experiences[0] — name, domain, job title, industry. A thin
+ * row carries NO employer headquarters and NO headcount (catalogue: search
+ * false), so `employees` / `country` never appear here; use loCompanyRow.
+ * contact_emails / contact_phones appear only when a test simulates them
+ * arriving anyway (they are documented "Present only when reveal_email=true").
+ */
 export function loPerson(s: Synthetic) {
   return {
     profile_data: {
-      profile_full_name: s.name, profile_job_title: s.title,
-      profile_linkedin_url: s.linkedin ?? `https://www.linkedin.com/in/${s.name.toLowerCase().replace(/\s+/g, "-")}`,
-      profile_location_country: s.country ?? "United States",
+      profile_full_name: s.name, profile_headline: `${s.title} at ${s.company}`,
+      profile_url: s.linkedin ?? `https://www.linkedin.com/in/${s.name.toLowerCase().replace(/\s+/g, "-")}`,
     },
     contact_data: {
-      has_email: !!s.email, has_phone: !!s.phone,
-      contact_emails: s.email ? [{ email: s.email, type: "work", status: s.emailStatus ?? "verified", verified_batch_date: "2026-09-01", priority: 1, score: 0.9 }] : [],
-      contact_phones: s.phone ? [{ phone: s.phone, type: "mobile", ddi: null, dnc: false, carrier: null, priority: 1, score: 0.7 }] : [],
+      has_email: !!s.email, has_phone: !!s.phone, email_status: s.email ? (s.emailStatus ?? "verified") : "none", email_type: "work",
+      contact_current_experiences: [{ company_name: s.company, company_domain: s.domain, job_title: s.title, ...(s.industry ? { company_industry: s.industry } : {}) }],
+      ...(s.email ? { contact_emails: [{ email: s.email, type: "work", status: s.emailStatus ?? "verified", verified_batch_date: "2026-09-01", priority: 1, score: 0.9 }] } : {}),
+      ...(s.phone ? { contact_phones: [{ phone: s.phone, type: "mobile", ddi: null, dnc: false, carrier: null, priority: 1, score: 0.7 }] } : {}),
     },
+    meta: { source_ids: { person_id: s.id }, fetched_at: "2026-10-20" },
+  };
+}
+
+/** A company-record row (company search / lookup): company_data, documented keys plus the inferred ones. */
+export function loCompanyRow(c: { id: string; name: string; domain: string; industry?: string; naicsSector?: string; employees?: number; linkedin?: string }) {
+  return {
     company_data: {
-      company_name: s.company, company_domain: s.domain,
-      ...(s.industry ? { company_industry: s.industry } : {}),
-      ...(s.country !== undefined ? { company_hq_country: s.country } : { company_hq_country: "United States" }),
-      ...(s.employees !== undefined ? { company_employee_count: s.employees } : {}),
+      company_name: c.name, company_domain: c.domain,
+      ...(c.industry ? { company_industry: c.industry } : {}),
+      ...(c.naicsSector ? { naics_sector: c.naicsSector } : {}),
+      ...(c.employees !== undefined ? { company_employees: { number_of_employees: c.employees } } : {}),
+      ...(c.linkedin ? { company_linkedin_url: c.linkedin } : {}),
     },
-    meta: { source_ids: { person_id: s.id, company_id: `lo-c-${s.domain}` } },
+    meta: { source_ids: { company_id: c.id }, fetched_at: "2026-10-20" },
   };
 }
 

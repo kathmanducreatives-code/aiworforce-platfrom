@@ -32,6 +32,8 @@ export interface CanonicalCompany {
   domain: Claim<string>[];
   linkedinUrl: Claim<string>[];
   industry: Claim<string[]>[];
+  naicsSector: Claim<string>[];
+  naicsPrimary: Claim<string>[];
   keywords: Claim<string[]>[];
   hqCountry: Claim<string>[];
   hqRegion: Claim<string>[];
@@ -50,6 +52,7 @@ export interface CanonicalPerson {
   fullName: Claim<string>[];
   firstName: Claim<string>[];
   title: Claim<string>[];
+  headline: Claim<string>[];
   seniority: Claim<string>[];
   linkedinUrl: Claim<string>[];
   country: Claim<string>[];
@@ -122,7 +125,7 @@ function disagree(field: string, a: Claim[], b: Claim[]): boolean {
   return normText(String(x)) !== normText(String(y));
 }
 
-const COMPANY_FIELDS = ["name", "domain", "linkedinUrl", "industry", "keywords", "hqCountry", "hqRegion", "hqCity", "employeeCount", "employeeRange", "foundedYear", "funding"] as const;
+const COMPANY_FIELDS = ["name", "domain", "linkedinUrl", "industry", "naicsSector", "naicsPrimary", "keywords", "hqCountry", "hqRegion", "hqCity", "employeeCount", "employeeRange", "foundedYear", "funding"] as const;
 type CompanyField = typeof COMPANY_FIELDS[number];
 const CONFLICT_FIELDS: CompanyField[] = ["industry", "hqCountry", "hqRegion", "employeeCount", "employeeRange", "foundedYear", "funding"];
 
@@ -132,6 +135,7 @@ function freshCompany(c: ProviderCompany): CanonicalCompany {
     key: d ? `domain:${d}` : linkedinSlug(c.linkedinUrl) ? `li:${linkedinSlug(c.linkedinUrl)}` : `${c.provider}:${c.recordId}`,
     name: claim(c.name, c, "name"), domain: claim(d, c, "domain"), linkedinUrl: claim(c.linkedinUrl, c, "linkedin_url"),
     industry: claim(c.industry, c, "industry"), keywords: claim(c.keywords, c, "keywords"),
+    naicsSector: claim(c.naicsSector ?? null, c, "naics_sector"), naicsPrimary: claim(c.naicsPrimary ?? null, c, "naics_primary"),
     hqCountry: claim(c.hqCountry, c, "hq_country"), hqRegion: claim(c.hqRegion, c, "hq_region"), hqCity: claim(c.hqCity, c, "hq_city"),
     employeeCount: claim(c.employeeCount, c, "employee_count"), employeeRange: claim(c.employeeRange, c, "employee_range"),
     foundedYear: claim(c.foundedYear, c, "founded_year"),
@@ -210,7 +214,7 @@ export function mergeRecords(companyRows: ProviderCompany[], personRows: Provide
     const fresh: CanonicalPerson = {
       key: keys[0],
       fullName: claim(p.fullName, p, "full_name"), firstName: claim(p.firstName, p, "first_name"),
-      title: claim(p.title, p, "title"), seniority: claim(p.seniority, p, "seniority"),
+      title: claim(p.title, p, "title"), headline: claim(p.headline ?? null, p, "headline"), seniority: claim(p.seniority, p, "seniority"),
       linkedinUrl: claim(p.linkedinUrl, p, "linkedin_url"), country: claim(p.country, p, "country"),
       companyKey: company?.key ?? null,
       employerIsCurrent: claim(company ? (p.employerIsCurrent ?? null) : null, p, "employer_is_current"),
@@ -229,7 +233,7 @@ export function mergeRecords(companyRows: ProviderCompany[], personRows: Provide
         people.push(fresh); pindex.set(fresh.key, fresh);
         continue;
       }
-      for (const f of ["fullName", "firstName", "title", "seniority", "linkedinUrl", "country", "hasEmail", "hasPhone", "employerIsCurrent"] as const) {
+      for (const f of ["fullName", "firstName", "title", "headline", "seniority", "linkedinUrl", "country", "hasEmail", "hasPhone", "employerIsCurrent"] as const) {
         const before = hit[f] as Claim[];
         const incoming = fresh[f] as Claim[];
         if ((f === "title" || f === "country") && disagree(f, before, incoming)) {

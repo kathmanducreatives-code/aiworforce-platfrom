@@ -16,6 +16,11 @@ export interface SearchPage {
   /** Hard filters the provider reported it ignored for this query. */
   ignoredFilters: FilterKey[];
   total: number | null;
+  /**
+   * The page as received, redacted (no contact values, no pictures), so a paid
+   * page can be re-parsed offline after a mapping fix without buying it again.
+   */
+  raw?: unknown;
 }
 
 export interface UsageInfo {

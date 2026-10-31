@@ -115,7 +115,12 @@ export interface ProviderCompany {
   name?: string | null;
   domain?: string | null;
   linkedinUrl?: string | null;
+  /** Human-readable industry labels only. NAICS codes live in naicsSector / naicsPrimary. */
   industry?: string[] | null;
+  /** Two-digit NAICS sector code ("54"), as the provider states it. Never an industry label. */
+  naicsSector?: string | null;
+  /** The one NAICS code the company is filed under ("541511"). */
+  naicsPrimary?: string | null;
   keywords?: string[] | null;
   hqCountry?: string | null;
   hqRegion?: string | null;
@@ -163,7 +168,10 @@ export interface ProviderPerson {
   providerUpdatedAt?: string | null;
   fullName?: string | null;
   firstName?: string | null;
+  /** The CURRENT role's job title. */
   title?: string | null;
+  /** The profile headline — the person's own tagline, never read as a title. */
+  headline?: string | null;
   seniority?: string | null;
   linkedinUrl?: string | null;
   country?: string | null;

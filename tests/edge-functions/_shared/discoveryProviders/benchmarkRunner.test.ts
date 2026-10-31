@@ -73,7 +73,7 @@ Deno.test("runner (LeadOcean): exact lookups + one discovery page inside the app
   const d = f.calls.find((c) => c.url.endsWith("/v1/search"))!.body as Record<string, unknown>;
   assertEquals([d.hqCountry, d.minEmployees, d.maxEmployees, d.title, d.limit], [["US"], 51, 200, ["VP of Sales"], 10]);
   // Score it with the identical rules.
-  const s = scoreProvider(SYNTH, rep.result);
+  const s = scoreProvider(SYNTH, rep.result, null, FIXED_NOW().toISOString());
   assertEquals([s.companyMatching.numerator, s.companyMatching.denominator], [2, 2]);
   assertEquals([s.headquartersVerification.numerator, s.headquartersVerification.denominator], [1, 1]);
   assertEquals(s.duplicateRate.denominator, 10);
@@ -81,10 +81,10 @@ Deno.test("runner (LeadOcean): exact lookups + one discovery page inside the app
   assertEquals(s.uniqueQualified.qualified, 0, "no canonical evidence offline: nothing qualifies on a provider's word");
   assertEquals(s.costPerQualified.usd, null);
   assertEquals(s.latencyMs.count, 5, "two account reads, two lookups, one discovery page");
-  // HQ and size came back as values; nothing was filter-only. LeadOcean rows here carry no update stamp.
-  assertEquals([s.evidenceQuality.returnedValue, s.evidenceQuality.filterOnly], [s.evidenceQuality.returnedValue, 0]);
-  assert(s.evidenceQuality.share! > 0);
-  assertEquals([s.freshnessDays.stamped, s.freshnessDays.median], [0, null]);
+  // Thin people rows return neither HQ nor size: both checks on all eight employers rest on the filter alone.
+  assertEquals(s.evidenceQuality, { returnedValue: 0, filterOnly: 16, nothing: 0, share: 0 });
+  // meta.fetched_at is LeadOcean's freshness stamp: 2026-10-20, 7.5 days before the run (rounded), on all eight employers.
+  assertEquals([s.freshnessDays.stamped, s.freshnessDays.median], [8, 8]);
   assertFalse(JSON.stringify(rep).includes("+1 555"), "no contact value anywhere in the report");
 });
 
