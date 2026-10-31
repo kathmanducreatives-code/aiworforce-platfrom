@@ -89,7 +89,7 @@ export function freeGate(fetchImpl: FetchLike, provider: Provider, key: string, 
 const get = (o: unknown, path: string): unknown => path.split(".").reduce<unknown>((a, k) => (a && typeof a === "object" ? (a as Record<string, unknown>)[k] : undefined), o);
 const pick = (o: unknown, paths: string[]) => Object.fromEntries(paths.map((p) => [p, get(o, p) ?? null]));
 const errorCode = (j: unknown) => String(get(j, "error.code") ?? get(j, "error") ?? "").slice(0, 80) || null;
-/** "kathmandu@gmail.com" → "k***@gmail.com" */
+/** "pat@example.com" → "p***@example.com" */
 const maskEmail = (v: unknown) => typeof v === "string" && v.includes("@") ? `${v[0]}***@${v.split("@")[1]}` : null;
 
 export interface CohortIdentity { slot: string; domain?: string | null; linkedin_url?: string | null }
