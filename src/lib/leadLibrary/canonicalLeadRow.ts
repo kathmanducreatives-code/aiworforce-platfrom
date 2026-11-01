@@ -68,6 +68,7 @@ function toSelectedRecipient(r: CanonicalSelectedRecipient | null): SelectedReci
     email: r.email,
     phone: r.phone,
     verified: r.verified,
+    roleVerification: r.roleVerification ?? null,
   };
 }
 

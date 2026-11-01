@@ -195,7 +195,11 @@ export function LeadDetailDrawer({
                 k="Status"
                 v={lead.selectedRecipient.verified
                   ? <span className="text-emerald-300">Verified buyer</span>
-                  : <span className="text-amber-200/80">Needs review</span>}
+                  : lead.selectedRecipient.roleVerification === "employment_mismatch"
+                    ? <span className="text-rose-300">Not at this company per the provider's own record</span>
+                    : lead.selectedRecipient.roleVerification === "requires_role_verification"
+                      ? <span className="text-amber-200/80">Role and current employment unverified (provider title only)</span>
+                      : <span className="text-amber-200/80">Needs review</span>}
               />
               {lead.alternateRecipients.length > 0 && (
                 <div className="text-[11.5px] text-[#7D8590]">

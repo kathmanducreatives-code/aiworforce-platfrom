@@ -83,6 +83,8 @@ export interface SelectedRecipient {
   email: string | null;
   phone: string | null;
   verified: boolean;
+  /** Discovery pipeline verdict on the person's role / current employment, when it wrote the contact. */
+  roleVerification?: string | null;
 }
 
 export interface OpenerPreview {
