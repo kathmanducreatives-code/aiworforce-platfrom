@@ -1,0 +1,239 @@
+# DEPLOY THE DISCOVERY FUNCTIONS TO TEST — automatic after CI, TEST project only.
+#
+# WHEN. After the `CI` workflow finishes SUCCESSFULLY for a push to
+# launch/hardening (i.e. a merged pull request), or by hand (workflow_dispatch)
+# from launch/hardening to redeploy or roll back to an exact commit that is on
+# launch/hardening and passed CI. Nothing else starts it: no pull_request, no
+# schedule, no other branch.
+#
+# WHAT. Only `lead-pipeline` and `provider-connections`, only to project
+# tlvnfrxzjhsjgdofwehb (hard-coded; the production ref is refused by name), only
+# the functions whose dependency graph changed since the build TEST runs now
+# (scripts/deploy/test-functions-smoke.ts `changed`). No migration, no secret, no flag
+# is ever written here. Then the smoke suite (`verify`): active, project, commit,
+# JWT, allowlists, disabled capabilities, ledger/outreach/lead tables unchanged,
+# production unchanged, and — when the smoke account is configured — ONE GPT
+# `strategy_plan` (never a paid run; no provider call; no retry).
+#
+# PROVENANCE. Every response of both functions names its build
+# (x-agentory-build: <sha>@<time>). The run uploads `test-deploy-<sha>`: the state
+# before (versions, builds, table counts), the smoke report and the plan, and sets
+# the commit status `agentory/test-smoke` — the production workflow requires it.
+#
+# ROLLBACK. Dispatch this workflow with `sha` = the previous good commit and
+# `rollback: true` (docs/launch/test-deploy-loop.md). The previous build is named
+# in the failed run's `before.json`.
+#
+# SECRETS come from the `supabase-test` Environment only (deployment branch
+# policy: launch/hardening): SUPABASE_ACCESS_TOKEN, and optionally
+# SMOKE_USER_EMAIL / SMOKE_USER_PASSWORD (a plain member of the TEST workspace).
+# THIS REPOSITORY IS PUBLIC: nothing here prints a secret; the report holds no
+# token, password, email or secret value.
+name: Deploy discovery functions (TEST)
+run-name: "TEST deploy @ ${{ inputs.sha || github.event.workflow_run.head_sha }}"
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [launch/hardening]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full 40-character commit on launch/hardening (CI must have passed for it)"
+        required: true
+        type: string
+      rollback:
+        description: "Allow deploying a commit OLDER than the one TEST runs (rollback)"
+        required: false
+        default: false
+        type: boolean
+      force:
+        description: "Deploy both functions even if their code did not change"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+# One TEST deploy at a time; a queued one waits, and re-checks staleness when it starts.
+concurrency:
+  group: deploy-test-functions
+  cancel-in-progress: false
+
+env:
+  TEST_REF: tlvnfrxzjhsjgdofwehb
+  PROD_REF: ohsdatpvfdjdemstoiuj
+  DENO_VERSION: v2.8.2
+  SUPABASE_CLI_VERSION: 2.118.0
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    name: Deploy and smoke-test TEST
+    # A successful CI run on a push to launch/hardening, or a manual run from launch/hardening.
+    if: >-
+      (github.event_name == 'workflow_run'
+        && github.event.workflow_run.conclusion == 'success'
+        && github.event.workflow_run.event == 'push'
+        && github.event.workflow_run.head_branch == 'launch/hardening')
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/launch/hardening')
+    runs-on: ubuntu-latest
+    environment: supabase-test
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read      # look up CI runs for a dispatched sha
+      statuses: write    # agentory/test-smoke on the deployed commit
+    env:
+      TARGET_SHA: ${{ inputs.sha || github.event.workflow_run.head_sha }}
+      ROLLBACK: ${{ inputs.rollback || false }}
+      FORCE: ${{ inputs.force || false }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Refuse anything but the TEST project
+        run: |
+          [ "$TEST_REF" = "tlvnfrxzjhsjgdofwehb" ] || { echo "::error::TEST_REF changed"; exit 1; }
+          [ "$TEST_REF" != "$PROD_REF" ] || { echo "::error::TEST_REF is the production ref"; exit 1; }
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::sha must be a full 40-character commit"; exit 1; }
+          echo "target $TARGET_SHA → project $TEST_REF"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: The commit is on launch/hardening, current, and passed CI
+        id: commit
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain)"
+          git fetch --no-tags --quiet origin launch/hardening
+          tip="$(git rev-parse FETCH_HEAD)"
+          git merge-base --is-ancestor "$TARGET_SHA" "$tip" \
+            || { echo "::error::$TARGET_SHA is not on launch/hardening"; exit 1; }
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "$TARGET_SHA" != "$tip" ]; then
+            # A newer merge exists; its own CI run deploys it. Deploying this one would be stale.
+            echo "::notice::superseded: launch/hardening is at $tip; that commit's CI run deploys it"
+            echo "superseded=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            n="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$TARGET_SHA&status=success&per_page=1" --jq '.total_count')"
+            [ "${n:-0}" -gt 0 ] || { echo "::error::no successful CI run for $TARGET_SHA"; exit 1; }
+          fi
+          echo "superseded=false" >> "$GITHUB_OUTPUT"
+          echo "$TARGET_SHA is on launch/hardening (tip $tip) and passed CI"
+
+      - uses: denoland/setup-deno@v2
+        if: steps.commit.outputs.superseded == 'false'
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - uses: supabase/setup-cli@v1
+        if: steps.commit.outputs.superseded == 'false'
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Snapshot TEST before the deploy (versions, builds, table counts, production builds)
+        if: steps.commit.outputs.superseded == 'false'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::SUPABASE_ACCESS_TOKEN is not set in the supabase-test environment"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/report"
+          deno run --allow-net --allow-env --allow-read --allow-write --allow-run scripts/deploy/test-functions-smoke.ts snapshot "$RUNNER_TEMP/report/before.json"
+
+      - name: Decide which functions changed
+        id: changed
+        if: steps.commit.outputs.superseded == 'false'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          deno run --allow-net --allow-env --allow-read --allow-write --allow-run scripts/deploy/test-functions-smoke.ts changed "$TARGET_SHA"
+          live="$(grep '^live=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)"
+          # Refuse to move TEST backwards unless this is an explicit rollback.
+          for sha in $(echo "$live" | jq -r '.[].sha // empty' | sort -u); do
+            if [ "$sha" != "$TARGET_SHA" ] && git merge-base --is-ancestor "$TARGET_SHA" "$sha" 2>/dev/null && [ "$ROLLBACK" != "true" ]; then
+              echo "::error::TEST runs $sha, which is NEWER than $TARGET_SHA; dispatch with rollback=true to go back"; exit 1
+            fi
+          done
+          if [ "$FORCE" = "true" ]; then echo "functions=lead-pipeline provider-connections" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Stamp the build with the commit
+        if: steps.commit.outputs.superseded == 'false' && steps.changed.outputs.functions != ''
+        run: scripts/deploy/stamp-build.sh stamp
+
+      - name: Deploy changed functions to TEST
+        if: steps.commit.outputs.superseded == 'false' && steps.changed.outputs.functions != ''
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          FUNCTIONS: ${{ steps.changed.outputs.functions }}
+        run: |
+          for fn in $FUNCTIONS; do
+            case "$fn" in lead-pipeline|provider-connections) ;; *) echo "::error::refusing to deploy $fn"; exit 1 ;; esac
+            echo "deploying $fn → $TEST_REF"
+            supabase functions deploy "$fn" --project-ref "$TEST_REF" --use-docker
+          done
+
+      - name: Smoke-test TEST
+        id: smoke
+        if: steps.commit.outputs.superseded == 'false'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SMOKE_USER_EMAIL: ${{ secrets.SMOKE_USER_EMAIL }}
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD }}
+          EXPECTED_SHA: ${{ env.TARGET_SHA }}
+          DEPLOYED_FUNCTIONS: ${{ steps.changed.outputs.functions }}
+        run: |
+          # Give a fresh deploy a moment to serve the new build.
+          for fn in $DEPLOYED_FUNCTIONS; do
+            for i in $(seq 1 20); do
+              b="$(curl -sS -o /dev/null -D - -X OPTIONS "https://$TEST_REF.supabase.co/functions/v1/$fn" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-agentory-build"{print $2}')"
+              case "$b" in "$TARGET_SHA@"*) break ;; esac; sleep 6
+            done
+          done
+          deno run --allow-net --allow-env --allow-read --allow-write --allow-run scripts/deploy/test-functions-smoke.ts verify "$RUNNER_TEMP/report/before.json" "$RUNNER_TEMP/report"
+
+      - name: Record provenance (commit status agentory/test-smoke)
+        if: always() && steps.commit.outputs.superseded == 'false'
+        env:
+          VERDICT: ${{ steps.smoke.outputs.verdict }}
+          FAILED: ${{ steps.smoke.outputs.failed }}
+          SKIPPED: ${{ steps.smoke.outputs.skipped }}
+        run: |
+          if [ "$VERDICT" = "READY" ]; then state=success; desc="TEST READY: deployed and every smoke check passed";
+          elif [ -n "$FAILED" ]; then state=failure; desc="TEST NOT READY: failed checks $FAILED";
+          elif [ -n "$VERDICT" ]; then state=failure; desc="TEST NOT READY: $SKIPPED check(s) skipped (smoke account not configured?)";
+          else state=failure; desc="TEST deploy failed before the smoke suite"; fi
+          gh api "repos/$REPO/statuses/$TARGET_SHA" -f state="$state" -f context=agentory/test-smoke \
+            -f description="${desc:0:139}" -f target_url="$RUN_URL" > /dev/null
+          echo "agentory/test-smoke = $state ($desc)"
+
+      - name: Upload the report (before-state, smoke report, plan)
+        if: always() && steps.commit.outputs.superseded == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-deploy-${{ env.TARGET_SHA }}
+          path: ${{ runner.temp }}/report/
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: On failure — where TEST stands and how to recover
+        if: failure() && steps.commit.outputs.superseded == 'false'
+        run: |
+          {
+            echo "## ❌ TEST deploy/smoke failed"
+            echo "- Commit: \`$TARGET_SHA\` · Project: \`$TEST_REF\` · Run: $RUN_URL"
+            echo "- Before this run (from before.json):"
+            echo '```json'; jq -c '.functions' "$RUNNER_TEMP/report/before.json" 2>/dev/null || echo "(no snapshot)"; echo '```'
+            echo "- Investigate: \`gh run view ${{ github.run_id }} --log-failed\` and the \`test-deploy-$TARGET_SHA\` artifact."
+            echo "- Roll back: dispatch this workflow with the previous build's sha and rollback=true."
+            echo "- Production is not affected and cannot be promoted: agentory/test-smoke is not success."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -11,6 +11,7 @@
 // 20261031120000_lead_pipeline_checkpoints.sql. Logic: _shared/leadPipeline/service.ts.
 // Nothing here sends a message or places a call.
 
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authenticateUser, defaultAuthDeps } from "../_shared/requestAuth.ts";
 import { readFlags } from "../_shared/discoveryProviders/flags.ts";
@@ -59,7 +60,8 @@ async function persist(admin: SupabaseClient, rows: PipelineRow[]) {
   }
 }
 
-Deno.serve(async (req) => {
+// Every response (an unauthenticated OPTIONS too) names the build: x-agentory-build.
+Deno.serve(withBuildStamp(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const env = (k: string) => Deno.env.get(k);
   const flags = readPipelineFlags(env);
@@ -111,4 +113,4 @@ Deno.serve(async (req) => {
     console.error("[lead-pipeline] failed", { name: (e as Error)?.name });
     return json({ error: "lead pipeline failed" }, 500);
   }
-});
+}));
