@@ -213,6 +213,11 @@ export interface DiscoverySpec {
   roles: string[];
   geography: string[];
   employees: Range | null;
+  /**
+   * A size the user PREFERRED ("smaller companies preferred"), never a gate: it only
+   * orders which discovered companies get the limited verification and people lookups.
+   */
+  preferredEmployees: Range | null;
   industry: string[];
   /** Signals the request is DEFINED by (required_signals), hard or ranking-only. */
   signals: SpecSignal[];
@@ -280,12 +285,41 @@ export function specFromMission(mission: MissionLike, opts: { defaultCount?: num
     roles: req.roles,
     geography: [...values("geography_hq"), ...values("geography_person")],
     employees: range ?? null,
+    preferredEmployees: preferredSize(mission),
     industry: values("industry"),
     signals,
     otherHard: req.hard.filter((h) => !modelled.has(h.key)).map((h) => `${h.key}: ${h.label}`),
     forbidBroadening: req.forbidBroadening,
     requirements: req,
   };
+}
+
+/** The target (soft) size criterion, if the compiler recorded one. Never read from a hard criterion. */
+function preferredSize(mission: MissionLike): Range | null {
+  for (const c of mission.criteria ?? []) {
+    if (c.kind !== "target") continue;
+    const v = (c.value ?? {}) as { field?: unknown; value?: unknown; min?: unknown; max?: unknown };
+    const r = (c.dimension === "constraint" && v.field === "employee_range" ? v.value : c.dimension === "company_size" ? v : null) as { min?: unknown; max?: unknown } | null;
+    if (!r) continue;
+    const min = typeof r.min === "number" ? r.min : null, max = typeof r.max === "number" ? r.max : null;
+    if (min !== null || max !== null) return { min, max };
+  }
+  return null;
+}
+
+/**
+ * How far a declared size band is from the preferred size: 0 inside or overlapping,
+ * otherwise the gap in employees; an unknown band sorts after every known one. Ordering
+ * only — a band from a discovery row is a claim and decides nothing.
+ */
+export function sizePreferenceDistance(band: { min: number | null; max: number | null } | null, pref: Range | null): number {
+  if (!pref) return 0;
+  if (!band || (band.min == null && band.max == null)) return Number.MAX_SAFE_INTEGER;
+  const lo = band.min ?? 0, hi = band.max ?? Number.MAX_SAFE_INTEGER;
+  const plo = pref.min ?? 0, phi = pref.max ?? Number.MAX_SAFE_INTEGER;
+  if (hi < plo) return plo - hi;
+  if (lo > phi) return lo - phi;
+  return 0;
 }
 
 // ── Context: who may do what, with what money ───────────────────────────────
@@ -391,6 +425,19 @@ export function hiringTitles(spec: DiscoverySpec): string[] {
   const s = spec.signals.find((x) => x.kind === "hiring");
   return (s?.roleTerms.length ? s.roleTerms : s?.roleFamilies.length ? s.roleFamilies.map((f) => FAMILY_TITLES[f]).filter((t): t is string => !!t) : []).slice(0, 3);
 }
+/**
+ * The job-search INPUT titles: the requested roles, plus — only when the user stated a
+ * small-company preference — a "Founding <role>" variant, because founding roles are posted
+ * by early-stage employers. A search bias, never a criterion: postings are still post-filtered
+ * to the requested role family, and the founding variant is not added to what qualifies.
+ */
+export function discoveryJobTitles(spec: DiscoverySpec): string[] {
+  const base = hiringTitles(spec);
+  const small = spec.preferredEmployees?.max != null && spec.preferredEmployees.max <= 500;
+  if (!small || !base.length || base.some((t) => /\bfounding\b/i.test(t))) return base;
+  return [`Founding ${base[0].replace(/s$/i, "")}`, ...base].slice(0, 3);
+}
+
 /** The post-search topics for the request's post signal (≤3), the user's own words. */
 export function postTopics(spec: DiscoverySpec): string[] {
   return (spec.signals.find((x) => x.kind === "social_activity")?.topics ?? []).slice(0, 3);
@@ -494,7 +541,7 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
         companies = Math.ceil(max / JOB_ROWS_PER_COMPANY);
         const why = c.discoversBySignal === "social_activity"
           ? `companies posting about ${postTopics(spec).join(" / ") || "the topic"}${defining?.windowDays ? ` in the last ${defining.windowDays} days` : ""} (company-page authors only)`
-          : `employers with an open ${hiringTitles(spec).join(" / ") || "role"} posting${hiring?.windowDays ? ` in the last ${hiring.windowDays} days` : ""}`;
+          : `employers with an open ${hiringTitles(spec).join(" / ") || "role"} posting${hiring?.windowDays ? ` in the last ${hiring.windowDays} days` : ""}${discoveryJobTitles(spec).length > hiringTitles(spec).length ? ` (search also uses "${discoveryJobTitles(spec)[0]}" for the stated smaller-company preference; search bias only)` : ""}`;
         out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: price(max), why });
       } else if (c.role === "people_at_companies") {
         const max = Math.max(0, Math.min(companies * peoplePer, itemCap));

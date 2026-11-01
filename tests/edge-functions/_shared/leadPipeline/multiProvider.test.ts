@@ -29,7 +29,7 @@ import { ApifyRefusal, ledgeredInvoker, PIPELINE_ACTORS, pipelineApifyInvoker } 
 import { companiesFromPostRows, companyEmployeesInput, peopleFromEmployeeRows } from "../../../../supabase/functions/_shared/leadPipeline/apifyDiscovery.ts";
 import { checkFounders } from "../../../../supabase/functions/_shared/leadPipeline/founderCheck.ts";
 import { checkStrategyApproval } from "../../../../supabase/functions/_shared/leadPipeline/multiProvider.ts";
-import { chainFor } from "../../../../supabase/functions/_shared/leadPipeline/strategy.ts";
+import { chainFor, discoveryJobTitles, hiringTitles, sizePreferenceDistance } from "../../../../supabase/functions/_shared/leadPipeline/strategy.ts";
 import { readFlags } from "../../../../supabase/functions/_shared/discoveryProviders/flags.ts";
 import { handleStrategyRequest, parseStrategyRequest, readPipelineFlags, type StrategyDeps } from "../../../../supabase/functions/_shared/leadPipeline/service.ts";
 import type { PipelineRow } from "../../../../supabase/functions/_shared/leadPipeline/projection.ts";
@@ -93,12 +93,12 @@ const CONNECTIONS = [conn("leadocean"), conn("apify")];
 // ── Provider fixtures ───────────────────────────────────────────────────────
 
 /** harvestapi/linkedin-job-search row (fields as catalogued in hiringActorCatalog: verified live 2026-09-16). */
-function job(id: string, title: string, posted: string, co: { slug: string; name: string; website: string; industry?: string; hq?: string }, extra: Record<string, unknown> = {}) {
+function job(id: string, title: string, posted: string, co: { slug: string; name: string; website: string; industry?: string; hq?: string; band?: [number, number | null] }, extra: Record<string, unknown> = {}) {
   return {
     id, title, linkedinUrl: `https://www.linkedin.com/jobs/view/${id}`, jobState: "LISTED", postedDate: posted,
     company: {
       id: `c-${co.slug}`, universalName: co.slug, name: co.name, linkedinUrl: `https://www.linkedin.com/company/${co.slug}`, website: co.website,
-      employeeCount: 80, employeeCountRange: { start: 51, end: 200 }, industries: [{ name: co.industry ?? "Software Development" }],
+      employeeCount: 80, employeeCountRange: { start: co.band?.[0] ?? 51, ...(co.band ? (co.band[1] == null ? {} : { end: co.band[1] }) : { end: 200 }) }, industries: [{ name: co.industry ?? "Software Development" }],
       locations: [{ headquarter: true, parsed: { text: co.hq ?? "Austin, Texas, United States" } }],
     },
     location: { linkedinText: "Austin, TX" }, descriptionText: `${co.name} is hiring.`, ...extra,
@@ -715,4 +715,83 @@ Deno.test("consolidation: the LeadOcean-led strategy shares the same evidence ca
   const again = await execute(spec, plan, { cache, ap: { invoke: invoke(c2), calls: [] } as never });
   assertFalse(c2.flatMap((c) => c.slugs ?? []).includes("acmesaas"), "a record already bought is not bought twice");
   assertEquals(byDomain(again.r)["acmesaas.example"].statuses.qualification, "eligible");
+});
+
+// ── Revised S2: decision-makers at hiring companies, a size PREFERENCE, measurable matching ──
+
+const S2_ROLES = ["CEO", "Founder", "Co-Founder", "Head of Sales", "Chief Revenue Officer", "VP of Sales"];
+const revisedS2 = (sentence = "Find the CEO, founder, head of sales, CRO or VP of Sales at 1 US company currently hiring Account Executives. Smaller companies preferred.", term = "Account Executive") =>
+  interpret(sentence, { ...US, requested_opportunity_count: 1, decision_maker_roles: S2_ROLES, preferred_signals: ["hiring"], required_signal_terms: [term],
+    signal_recency_days: 30, soft_preferences: [{ field: "employee_range", value: { min: 11, max: 200 }, reason: "smaller companies preferred" }], strategies: ["hiring"], output_intent: "contacts" }, 1);
+
+Deno.test("revised S2: 'smaller companies preferred' is a preference, never a hard size; a number in the sentence would be hard", () => {
+  const spec = revisedS2();
+  assertEquals([spec.employees, spec.preferredEmployees], [null, { min: 11, max: 200 }]);
+  assertEquals(spec.roles, S2_ROLES);
+  assertEquals(spec.signals[0].roleTerms, ["account executives"]);
+  // The preference biases the search input only; what qualifies is unchanged.
+  assertEquals(discoveryJobTitles(spec), ["Founding account executive", "account executives"]);
+  assertEquals(hiringTitles(spec), ["account executives"]);
+  assertEquals(planStrategy(spec, CTX).strategy, "apify_plus_leadocean");
+  // The pitfall the canary avoids: the compiler reads a stated range as a hard criterion.
+  const hard = revisedS2("Find the CEO at 1 US company currently hiring Account Executives, ideally a smaller company of about 11-200 employees.");
+  assertEquals(hard.employees, { min: 11, max: 200 });
+  assertEquals(discoveryJobTitles(Q.hiringAE()), hiringTitles(Q.hiringAE()), "no preference: no bias");
+});
+
+Deno.test("revised S2: size preference distance orders, it never filters", () => {
+  const pref = { min: 11, max: 200 };
+  assertEquals(sizePreferenceDistance({ min: 51, max: 200 }, pref), 0);
+  assertEquals(sizePreferenceDistance({ min: 1001, max: 5000 }, pref), 801);
+  assertEquals(sizePreferenceDistance({ min: 2, max: 10 }, pref), 1);
+  assert(sizePreferenceDistance(null, pref) > sizePreferenceDistance({ min: 10001, max: null }, pref), "an unknown band sorts last");
+  assertEquals(sizePreferenceDistance({ min: 10001, max: null }, null), 0, "no preference: no ordering");
+});
+
+Deno.test("revised S2: the limited reads and people lookups go to the preferred-size companies; the rest stay pending, never dropped", async () => {
+  const spec = revisedS2();
+  const plan = planStrategy(spec, CTX);
+  assertEquals(plan.steps.map((x) => [x.capability, x.maxItems]), [["apify.linkedin_job_search", 4], ["apify.linkedin_company_record", 2], ["leadocean.people_by_domain", 2]]);
+  const BIG = { slug: "bigcorp", name: "BigCorp", website: "https://bigcorp.example", band: [10001, null] as [number, null] };
+  const MID = { ...MAPLE, hq: "Austin, Texas, United States", band: [1001, 5000] as [number, number] };
+  const jobs = [
+    job("s1", "Founding Account Executive", "2026-10-28", BIG),
+    job("s2", "Founding Account Executive", "2026-10-27", MID),
+    job("s3", "Founding Account Executive", "2026-10-26", { ...NORTHWIND, band: [51, 200] }),
+    job("s4", "Account Executive", "2026-10-25", { ...HARBOR, band: [11, 50] }),
+  ];
+  const harbor = companyRecord("harbor", { name: "Harbor Metrics", website: "https://harbor.example", hqCountry: "US", city: "Boston", band: [11, 50] });
+  const calls: Call[] = [];
+  const invoke: ActorInvoker = (actor, input, opts) => {
+    calls.push({ actor, input, key: opts.idempotencyKey });
+    if (actor === "apify_linkedin_job_search") return Promise.resolve({ items: jobs, runId: "rj", chargedUsd: 0.005 });
+    return Promise.resolve({ items: (input.companies as string[]).map((u) => ({ ...RECORDS, harbor } as Record<string, unknown>)[/company\/([^/]+)/.exec(u)![1]]).filter(Boolean), runId: "rc", chargedUsd: 0.00805 });
+  };
+  const { r, lo } = await execute(spec, plan, { ap: { invoke, calls } });
+  const read = (calls.find((c) => c.actor === "apify_linkedin_company_details")!.input.companies as string[]).map((u) => /company\/([^/]+)/.exec(u)![1]).sort();
+  assertEquals(read, ["harbor", "northwind"], "the two reads go to the preferred-size employers, not BigCorp or the 1001–5000 company");
+  const by = byDomain(r);
+  assertEquals([by["bigcorp.example"].statuses.qualification, by["bigcorp.example"].canonicalRecord], ["pending", "skipped_budget"], "kept for review, not dropped");
+  assertEquals((lo.calls[0].body as { domain: string[] }).domain.sort(), ["harbor.example", "northwind.example"], "people only at the two verified companies");
+  // Matching: a person counts only through a company Apify discovered.
+  const matched = all(r).filter((l) => l.person && l.provenance.providers.includes("apify") && l.provenance.providers.includes("leadocean"));
+  assertEquals(matched.map((l) => [l.company.domain, l.person!.name]).sort(), [["harbor.example", "Hugo Hart"], ["northwind.example", "Nia North"]]);
+  assert(matched.every((l) => l.statuses.qualification === "eligible" && l.person!.roleFamily !== "other"));
+  // A row at a company Apify did not discover is never attached to one that it did.
+  const stray = all(r).filter((l) => l.person && !l.provenance.providers.includes("apify"));
+  assert(stray.every((l) => !["harbor.example", "northwind.example"].includes(l.company.domain ?? "")));
+  // A large company is never disqualified by the preference: it would be eligible on its own record.
+  assertEquals(by["bigcorp.example"].qualification?.disproven ?? [], []);
+});
+
+Deno.test("revised S2: when LeadOcean returns no one, the verified companies stand and nothing is invented", async () => {
+  const spec = revisedS2();
+  const plan = planStrategy(spec, CTX);
+  const empty = mockFetch({ "POST /v1/search": [{ body: loPage([]) }] });
+  const lo = { adapter: leadOceanAdapter({ apiKey: "offline-test-key", fetch: empty.fetch, sleep: noSleep, now: NOW }), calls: empty.calls };
+  const { r } = await execute(spec, plan, { lo, ap: apifyMock({ jobs: [job("e1", "Founding Account Executive", "2026-10-28", { ...NORTHWIND, band: [51, 200] })] }) });
+  const north = byDomain(r)["northwind.example"];
+  assertEquals([north.statuses.qualification, north.person, north.statuses.outreachReadiness], ["eligible", null, "not_ready"]);
+  assertEquals(r.spend.leadoceanRecords, 0, "LeadOcean bills per row returned: no rows, no records");
+  assertEquals(r.status, "completed");
 });

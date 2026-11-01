@@ -45,7 +45,7 @@ import { NON_DECISION_TITLES } from "./icp.ts";
 import { bestContact, runLeadPipeline, PIPELINE_VERSION, type PipelineLead, type PipelineRun } from "./pipeline.ts";
 import { DEFAULT_WEIGHTS, rankLeads } from "./ranking.ts";
 import {
-  APOLLO_ACCESS_VALIDATED, DISCOVERY_CAPABILITIES, hiringTitles, icpFromSpec, postTopics, leadoceanDiscoveryRequirements,
+  APOLLO_ACCESS_VALIDATED, DISCOVERY_CAPABILITIES, discoveryJobTitles, icpFromSpec, postTopics, sizePreferenceDistance, leadoceanDiscoveryRequirements,
   type DiscoverySpec, type DiscoveryStrategyId, type Limitation, type StrategyPlan,
 } from "./strategy.ts";
 
@@ -215,7 +215,7 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   const postActor = PIPELINE_ACTORS["apify_linkedin_post_search"];
   const found: Awaited<ReturnType<typeof discoverHiringCompanies>> & { signals?: Signal[] } =
     jobStep.capability === "apify.linkedin_job_search"
-      ? await discoverHiringCompanies(spec, hiringTitles(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission })
+      ? await discoverHiringCompanies(spec, discoveryJobTitles(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission })
       : jobStep.capability === "apify.linkedin_post_search" && postActor
       ? await discoverPostingCompanies(spec, postTopics(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission, perItemUsd: postActor.perItemUsd, perStartUsd: postActor.perStartUsd })
       : { companies: [], evidence: new Map(), jobs: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: `no executor for ${jobStep.capability}`, runId: null };
@@ -232,6 +232,10 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
 
   // 3 company records: identity, HQ, size — as many as the ceiling allows; the rest stay pending
   const recStep = plan.steps.find((s) => s.capability === "apify.linkedin_company_record")!;
+  // A stated size PREFERENCE orders which companies get the limited reads (and, below, the
+  // people lookups) — the job row's band is a claim, used for ordering only, never as a gate.
+  const prefOrder = (c: ProviderCompany) => sizePreferenceDistance(found.sizeClaims?.get(slugOf(c.linkedinUrl) ?? "") ?? null, spec.preferredEmployees);
+  found.companies.sort((a, b) => prefOrder(a) - prefOrder(b));
   const targets = found.companies.map((c) => ({ companyKey: `li:${slugOf(c.linkedinUrl)}`, linkedinUrl: c.linkedinUrl ?? "" }));
   const recBudget = Math.max(0, Math.min(recStep.estimate.apifyUsd, cap.apifyUsd - apifySpent));
   // Fresh records this workspace already bought are reused, not bought again; misses are
@@ -291,7 +295,16 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
       steps.push({ capability: peopleStep.capability, provider: "apify", status: "failed", reason: `${(e as Error)?.message ?? "failed"}; not retried`, spend: { leadoceanRecords: 0, apifyUsd: peopleStep.estimate.apifyUsd } });
     }
   } else if (peopleStep) {
-    const domains = [...new Set(found.companies.map((c) => c.domain).filter((d): d is string => !!d && !disproven.has(d)))];
+    // Verified-and-eligible companies first, then the rest, in preference order; at most one
+    // domain per record the step may buy, so every person returned belongs to a company
+    // this run discovered and (where the budget allowed) verified.
+    const state = (c: ProviderCompany) => {
+      const st = canonical.statuses.find((x) => x.companyKey === `li:${slugOf(c.linkedinUrl)}`)?.state;
+      const elig = firstPass.find((l) => l.company.domain.some((d) => d.value === c.domain))?.shared?.eligibility;
+      return elig === "eligible" ? 0 : st === "read" ? 1 : 2;
+    };
+    const ranked = found.companies.filter((c) => !!c.domain && !disproven.has(c.domain)).sort((a, b) => state(a) - state(b) || prefOrder(a) - prefOrder(b));
+    const domains = [...new Set(ranked.map((c) => c.domain!))].slice(0, Math.max(1, peopleStep.maxItems));
     if (!domains.length) {
       steps.push({ capability: peopleStep.capability, provider: "leadocean", status: "skipped", reason: "no verified-or-pending company with a domain", spend: { leadoceanRecords: 0, apifyUsd: 0 } });
     } else {

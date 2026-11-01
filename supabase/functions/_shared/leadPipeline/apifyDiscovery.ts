@@ -37,6 +37,8 @@ export interface HiringDiscovery {
   /** Apify engine evidence per employer, keyed by LinkedIn company slug. */
   evidence: Map<string, EvidenceItem[]>;
   jobs: Map<string, NormalizedHiringJob[]>;
+  /** The employer's declared size band as the discovery row states it (a claim: ordering only), by slug. */
+  sizeClaims?: Map<string, { min: number | null; max: number | null } | null>;
   rows: number;
   dropped: Record<string, number>;
   spentUsd: number;
@@ -68,7 +70,7 @@ export async function discoverHiringCompanies(
   spec: DiscoverySpec, titles: string[], invoke: ActorInvoker | null,
   opts: { maxItems: number; maxUsd: number; now: Date; idPrefix: string; missionId?: string | null },
 ): Promise<HiringDiscovery> {
-  const out: HiringDiscovery = { companies: [], evidence: new Map(), jobs: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: null, runId: null };
+  const out: HiringDiscovery = { companies: [], evidence: new Map(), jobs: new Map(), sizeClaims: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: null, runId: null };
   const drop = (why: string) => { out.dropped[why] = (out.dropped[why] ?? 0) + 1; };
   if (!invoke) { out.stopped = "apify_unavailable"; return out; }
   const worst = worstCaseUsd(SIGNAL_ACTORS.jobs, opts.maxItems);
@@ -121,6 +123,7 @@ export async function discoverHiringCompanies(
       .map((ev) => (ev.dimension === "hiring" || ev.dimension === "job") && newest ? { ...ev, occurred_at: ev.dimension === "job" ? ((ev.value as { posted_date?: string })?.posted_date ?? newest) : newest } : ev);
     out.evidence.set(slug, evidence);
     out.jobs.set(slug, jobs);
+    out.sizeClaims!.set(slug, norm.company_size_band ? { min: norm.company_size_band.min ?? null, max: norm.company_size_band.max ?? null } : null);
     out.companies.push({
       provider: "apify", recordId: norm.external_source_id, retrievedAt: at,
       name: norm.company_name, domain: norm.canonical_domain, linkedinUrl: norm.linkedin_company_url,

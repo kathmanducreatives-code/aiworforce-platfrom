@@ -53,7 +53,17 @@ const BLANK = {
 };
 export const STAGES = Object.freeze({
   s1: { query: "Find 1 US company currently hiring Account Executives.", proposal: BLANK, expect: "apify_only" },
-  s2: { query: "Find the founder at 1 US company currently hiring Account Executives.", proposal: { ...BLANK, decision_maker_roles: ["Founder"], output_intent: "contacts" }, expect: "apify_plus_leadocean" },
+  // Revised S2 (2026-11-01): current decision-makers, not founders only. The size is a
+  // PREFERENCE (ordering + a "Founding AE" search bias, never a gate). Writing "11-200" in
+  // the sentence would compile to a HARD size criterion, and "Founding" to a hard
+  // first-hire criterion no posting can prove, so the sentence states neither.
+  s2: {
+    query: "Find the CEO, founder, head of sales, CRO or VP of Sales at 1 US company currently hiring Account Executives. Smaller companies preferred.",
+    proposal: { ...BLANK, decision_maker_roles: ["CEO", "Founder", "Co-Founder", "Head of Sales", "Chief Revenue Officer", "VP of Sales"],
+      soft_preferences: [{ field: "employee_range", value: { min: 11, max: 200 }, reason: "smaller companies preferred" }],
+      required_signal_terms: ["Account Executive"], output_intent: "contacts" },
+    expect: "apify_plus_leadocean",
+  },
 });
 export const CANARY_CTX: StrategyContext = {
   providers: { leadocean: { enabled: true, connected: true, authorized: true }, apify: { enabled: true, connected: true, authorized: true } },
@@ -136,10 +146,9 @@ async function main() {
   const before = lim.current.monthlyUsageUsd;
   if ((lim.limits?.maxMonthlyUsageUsd ?? 0) - before < plan.estimate.apifyUsd) throw new Refusal("refused: Apify monthly headroom below the worst case");
   const lo = leadOceanGuard(realFetch, plan.estimate.leadoceanRecords);
-  if (plan.estimate.leadoceanRecords > 0) {
-    const a = await (await lo("https://api.leadocean.io/v1/account", { method: "GET", headers: { "x-api-key": "injected-by-proxy" } })).json() as { data?: { records?: { remaining?: number } } };
-    if ((a.data?.records?.remaining ?? 0) < plan.estimate.leadoceanRecords) throw new Refusal("refused: LeadOcean records below the cap");
-  }
+  const loRemaining = async () => ((await (await lo("https://api.leadocean.io/v1/account", { method: "GET", headers: { "x-api-key": "injected-by-proxy" } })).json()) as { data?: { records?: { remaining?: number } } }).data?.records?.remaining ?? null;
+  const loBefore = plan.estimate.leadoceanRecords > 0 ? await loRemaining() : null;
+  if (plan.estimate.leadoceanRecords > 0 && (loBefore ?? 0) < plan.estimate.leadoceanRecords) throw new Refusal("refused: LeadOcean records below the cap");
   const lock = arg("--lock") ?? `.strategy-canary-${stage}.lock`;
   try { await Deno.writeTextFile(lock, JSON.stringify({ stage, planHash: plan.planHash, commit, startedAt: new Date().toISOString() }), { createNew: true }); }
   catch { throw new Refusal(`refused: ${lock} exists — this stage already started once; reconcile first`); }
@@ -160,7 +169,7 @@ async function main() {
   }
   const report = {
     stage, strategy: run.strategy, planHash: run.planHash, commit, status: run.status, reason: run.reason, steps: run.steps, spend: run.spend,
-    reconciliation: { apifyRuns: apifyRaw.runs, apifyUsageBeforeUsd: before, apifyUsageAfterUsd: after, apifyDeltaUsd: Math.round((after - before) * 1e6) / 1e6, apifyCapUsd: plan.estimate.apifyUsd },
+    reconciliation: { leadoceanRemainingBefore: loBefore, leadoceanRemainingAfter: loBefore === null ? null : await loRemaining(), leadoceanCharged: run.spend.leadoceanRecords, apifyRuns: apifyRaw.runs, apifyUsageBeforeUsd: before, apifyUsageAfterUsd: after, apifyDeltaUsd: Math.round((after - before) * 1e6) / 1e6, apifyCapUsd: plan.estimate.apifyUsd },
     evidenceRefused: run.evidenceRefused,
     // Report-safe detail per lead (no contact values exist in discovery): identity, HQ as the
     // record states it, every shared-engine check with its reason and source, the person's
@@ -173,8 +182,19 @@ async function main() {
       providers: l.provenance.providers, enrichment: l.statuses.enrichment, phone: l.phone,
     })),
   };
+  // Person-to-company matching, per person LeadOcean returned: MATCHED when the person's
+  // employer merged into a company Apify discovered (same domain / LinkedIn, no identity
+  // conflict) and the title is a decision-maker family; UNMATCHED when LeadOcean's employer
+  // stayed a separate, LeadOcean-only company.
+  const all = [...run.queue, ...run.review, ...run.excluded];
+  const matching = all.filter((l) => l.person && l.provenance.providers.includes("leadocean")).map((l) => ({
+    company: l.company.domain, person: l.person!.name, title: l.person!.title, roleFamily: l.person!.roleFamily,
+    verdict: l.provenance.providers.includes("apify") ? (l.person!.roleFamily !== "other" ? "MATCHED" : "MATCHED_COMPANY_NON_DECISION_MAKER") : "UNMATCHED_COMPANY",
+    companyEligibility: l.statuses.qualification,
+  }));
+  Object.assign(report, { matching, companiesWithoutPeople: all.filter((l) => !l.person).map((l) => l.company.domain) });
   if (arg("--out")) await Deno.writeTextFile(arg("--out")!, JSON.stringify(report, null, 2));
-  console.log(JSON.stringify({ status: report.status, spend: report.spend, reconciliation: report.reconciliation }, null, 2));
+  console.log(JSON.stringify({ status: report.status, spend: report.spend, reconciliation: report.reconciliation, matching: (report as { matching?: unknown }).matching }, null, 2));
 }
 
 if (import.meta.main) await main();
