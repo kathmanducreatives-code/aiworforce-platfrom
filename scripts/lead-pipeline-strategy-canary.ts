@@ -162,7 +162,16 @@ async function main() {
     stage, strategy: run.strategy, planHash: run.planHash, commit, status: run.status, reason: run.reason, steps: run.steps, spend: run.spend,
     reconciliation: { apifyRuns: apifyRaw.runs, apifyUsageBeforeUsd: before, apifyUsageAfterUsd: after, apifyDeltaUsd: Math.round((after - before) * 1e6) / 1e6, apifyCapUsd: plan.estimate.apifyUsd },
     evidenceRefused: run.evidenceRefused,
-    leads: [...run.queue, ...run.review, ...run.excluded].map((l) => ({ company: l.company.domain, lane: l.rank.lane, qualification: l.statuses.qualification, gaps: l.qualification?.gaps, disproven: l.qualification?.disproven, record: l.canonicalRecord, person: l.person?.title ?? null, enrichment: l.statuses.enrichment })),
+    // Report-safe detail per lead (no contact values exist in discovery): identity, HQ as the
+    // record states it, every shared-engine check with its reason and source, the person's
+    // name/title/provider ids for identity matching, and the providers that contributed.
+    leads: [...run.queue, ...run.review, ...run.excluded].map((l) => ({
+      company: l.company.domain, name: l.company.name, linkedin: l.company.linkedinUrl, providerIds: l.company.providerCompanyIds,
+      hq: l.company.hq, lane: l.rank.lane, qualification: l.statuses.qualification, readiness: l.statuses.outreachReadiness,
+      gaps: l.qualification?.gaps, disproven: l.qualification?.disproven, checks: l.qualification?.checks, evidenceSources: l.qualification?.evidence_sources,
+      record: l.canonicalRecord, person: l.person ? { name: l.person.name, title: l.person.title, roleFamily: l.person.roleFamily, providerPersonId: l.person.providerPersonId } : null,
+      providers: l.provenance.providers, enrichment: l.statuses.enrichment, phone: l.phone,
+    })),
   };
   if (arg("--out")) await Deno.writeTextFile(arg("--out")!, JSON.stringify(report, null, 2));
   console.log(JSON.stringify({ status: report.status, spend: report.spend, reconciliation: report.reconciliation }, null, 2));
