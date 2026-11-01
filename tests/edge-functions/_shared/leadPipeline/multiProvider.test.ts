@@ -733,9 +733,12 @@ Deno.test("revised S2: 'smaller companies preferred' is a preference, never a ha
   assertEquals(discoveryJobTitles(spec), ["Founding account executive", "account executives"]);
   assertEquals(hiringTitles(spec), ["account executives"]);
   assertEquals(planStrategy(spec, CTX).strategy, "apify_plus_leadocean");
-  // The pitfall the canary avoids: the compiler reads a stated range as a hard criterion.
-  const hard = revisedS2("Find the CEO at 1 US company currently hiring Account Executives, ideally a smaller company of about 11-200 employees.");
+  // A range stated WITHOUT a hedge is a requirement; a hedged one ("ideally …") only ranks
+  // (missionCriteria.sizeClauseHedged, TEST planning 2026-11-01).
+  const hard = revisedS2("Find the CEO at 1 US company with 11-200 employees currently hiring Account Executives.");
   assertEquals(hard.employees, { min: 11, max: 200 });
+  const soft = revisedS2("Find the CEO at 1 US company currently hiring Account Executives, ideally a smaller company of about 11-200 employees.");
+  assertEquals([soft.employees, soft.preferredEmployees], [null, { min: 11, max: 200 }]);
   assertEquals(discoveryJobTitles(Q.hiringAE()), hiringTitles(Q.hiringAE()), "no preference: no bias");
 });
 

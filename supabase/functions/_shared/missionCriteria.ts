@@ -171,6 +171,21 @@ const TEMPORAL_CUE_RE =
   /\b(?:recent(?:ly)?|just|currently|actively|lately|newly|new|now|soon|this\s+(?:week|month|quarter|year)|in\s+the\s+(?:last|past))\b/i;
 const HEDGE_RE = /\b(prefer(?:ably|red|ence for)?|ideally|bonus if|nice to have|if possible)\b/i;
 
+/**
+ * Is the sentence that states this size range hedged? The sentence holding either
+ * bound's digits ("20–500", "under 100") is read for a preference word, or for an
+ * explicit invitation to go outside the range ("include … outside that range").
+ */
+export function sizeClauseHedged(query: string, range: { min?: number | null; max?: number | null }): boolean {
+  const nums = [range.min, range.max].filter((n): n is number => n != null).map(String);
+  if (!nums.length) return false;
+  for (const sentence of String(query ?? "").split(/(?<=[.;!?])\s+|\n+/)) {
+    if (!nums.some((n) => new RegExp(`(^|[^0-9])${n}([^0-9]|$)`).test(sentence.replace(/,/g, "")))) continue;
+    if (HEDGE_RE.test(sentence) || /\b(?:outside|beyond)\s+(?:that|this|the)\s+(?:range|band)\b/i.test(sentence)) return true;
+  }
+  return false;
+}
+
 const STAGE_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bpre-?seed\b/i, "pre-seed"],
   [/\bseed(?:[- ]stage)?\b/i, "seed"],
@@ -1318,7 +1333,14 @@ export function deriveMissionCriteria(
     // it is never widened to them silently. A Brain policy range keeps its old
     // behaviour (out of RC03's scope), and a target only ranks.
     const exact = er.min != null && er.max != null && er.min === er.max;
-    const kind = source === "user_explicit" || source === "company_brain_policy" ? "hard" : "target";
+    // A HEDGED SIZE RANKS AND NEVER REJECTS (TEST planning, 2026-11-01). "Prefer
+    // 20–500 employees, but include strong opportunities outside that range" was
+    // compiled to a HARD 20–500 criterion, so a company whose declared band lay
+    // outside it was disproven — the opposite of what was asked. The clause that
+    // states the range is read with the same HEDGE_RE that softens a stated stage
+    // and location; an unhedged stated range stays a requirement.
+    const sizeHedged = source === "user_explicit" && sizeClauseHedged(query, er);
+    const kind = !sizeHedged && (source === "user_explicit" || source === "company_brain_policy") ? "hard" : "target";
     const value = { min: er.min ?? null, max: er.max ?? null };
     const range = sizeRangeProvable(value);
     const unprovable = kind === "hard" && source === "user_explicit" && !range.provable;
@@ -1336,7 +1358,8 @@ export function deriveMissionCriteria(
         : source === "company_brain_policy"
         ? "your Company Brain's size rule, enforced on every mission"
         : source === "company_brain_preference"
-        ? "your Company Brain's size band; you did not state one" : "stated in the request",
+        ? "your Company Brain's size band; you did not state one"
+        : sizeHedged ? "stated as a preference: it ranks and never rejects" : "stated in the request",
       ...(unprovable ? { status: "unprovable_today" as const } : {}),
     });
   }
