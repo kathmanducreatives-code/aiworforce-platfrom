@@ -847,3 +847,24 @@ Deno.test("identity: when the provider's own row says the person is not current,
   assertEquals([north.person!.verification.status, north.statuses.outreachReadiness], ["employment_mismatch", "blocked"]);
   assert(north.outreachBlockers.some((b) => b.includes("does not show this person currently")));
 });
+
+Deno.test("service: strategy_plan explains hard vs soft and how the Company Brain was used", async () => {
+  const q = "Find 5 US B2B companies actively hiring salespeople. Prefer 20–500 employees, but include strong opportunities outside that range and explain why.";
+  const proposalSoft = { ...HIRING_PROPOSAL, requested_opportunity_count: 5, required_signal_terms: ["salespeople"],
+    soft_preferences: [{ field: "employee_range", value: { min: 20, max: 500 }, reason: "preferred" }] };
+  const { d, lo, ap } = sdeps({
+    interpret: (query, _ws, n) => Promise.resolve({
+      mission: compileLeadMission({ originalUserQuery: query, proposal: proposalSoft, requestedCount: n }).final_mission,
+      brain: { status: "absent", fields: [], applied: [], rejected: [] },
+    }),
+  });
+  const r = await handleStrategyRequest(sreq({ action: "strategy_plan", query: q, requested_count: 5 }), d);
+  assertEquals(r.status, 200);
+  const i = r.body.interpretation as { hard: { key: string }[]; preferences: { key: string; values: unknown }[]; signals: { kind: string; roleFamilies: string[] }[]; companyBrain: { status: string } };
+  assertEquals(i.hard.map((h) => h.key).sort(), ["geography_hq", "signal"], "US HQ and hiring are the only requirements");
+  assertEquals(i.preferences.find((p) => p.key === "employee_range")?.values, { min: 20, max: 500 }, "the size is a preference");
+  assertEquals(i.signals[0].roleFamilies, ["gtm_sales"]);
+  assertEquals(i.companyBrain.status, "absent");
+  assertEquals((r.body.plan as StrategyPlan).strategy, "apify_only");
+  assertEquals(lo.calls.length + ap.calls.length, 0, "planning calls no provider");
+});

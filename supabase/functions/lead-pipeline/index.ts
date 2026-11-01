@@ -18,8 +18,8 @@ import { supabaseConnectionStore, supabaseLedger } from "../_shared/discoveryPro
 import { leadOceanAdapter } from "../_shared/discoveryProviders/adapters/leadocean.ts";
 import { handleLeadPipeline, handleStrategyRequest, parsePipelineRequest, parseStrategyRequest, readPipelineFlags } from "../_shared/leadPipeline/service.ts";
 import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
-import { compileLeadMission } from "../_shared/leadMissionCompiler.ts";
 import { createStrategyAdvisorGenerateJson } from "../_shared/leadPipeline/strategyAdvisorModel.ts";
+import { compileWithBrain, loadBrainPlanningContext } from "../_shared/leadPipeline/brainContext.ts";
 import { supabaseEvidenceCache } from "../_shared/leadPipeline/evidenceCache.ts";
 import { supabaseCheckpointStore } from "../_shared/leadPipeline/checkpoint.ts";
 import { loadExistingRecords } from "../_shared/leadPipeline/history.ts";
@@ -92,10 +92,14 @@ Deno.serve(async (req) => {
         ...deps,
         // GPT reads the request (the mission compiler); no deterministic fallback stands in for it.
         interpret: async (query, ws, requestedCount) => {
+          // The workspace's own Company Brain as context (read-only, this workspace only,
+          // after the membership check in handleStrategyRequest): same path as the chat agent.
+          const brain = await loadBrainPlanningContext(admin as never, ws);
           const binding = buildMissionCompilerBinding({ workspaceId: ws });
-          const proposal = await binding.proposeMission!({ originalUserQuery: query, requestedCount });
+          const proposal = await binding.proposeMission!({ originalUserQuery: query, requestedCount, companyBrain: brain.context });
           if (!proposal) return { error: binding.lastModelFailure()?.code ?? "the model returned no usable interpretation" };
-          return { mission: compileLeadMission({ originalUserQuery: query, proposal, requestedCount }).final_mission };
+          const c = compileWithBrain({ query, proposal, requestedCount, brain });
+          return { mission: c.mission, brain: { status: brain.status, fields: brain.fields, applied: c.brainApplied, rejected: c.brainRejected } };
         },
         advisor: createStrategyAdvisorGenerateJson(),
       });
