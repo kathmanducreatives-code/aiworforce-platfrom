@@ -90,3 +90,27 @@ from Apify's per-run usage. (2) A person's decision-maker role and current emplo
 are LeadOcean's claim; independent confirmation needs the founder check (company
 employees), which is not approved. (3) The size preference only orders: the two
 verified employers were the closest to 11–200 of the four found, not necessarily inside it.
+
+### Identity-integrity review of the S2 people (offline, 2026-11-01)
+
+From the preserved S2 report only (no re-purchase; the report and lock are unchanged).
+
+| Person (LeadOcean claim) | Company identity | Established | Not established |
+|---|---|---|---|
+| Nathan Covey, "Co-founder" | harmony.one ↔ `linkedin.com/company/harmony-one` (Apify li_company:18655748 = LeadOcean 29976668) | the company: record identity matched, US HQ (Mountain View) and a dated AE posting proven | that he holds this role or works there now: title and employment are LeadOcean's claim |
+| Aaron Westover, "Principal Co-founder" | gce.com ↔ `linkedin.com/company/grand-canyon-education` (Apify li_company:11769435 = LeadOcean 28730868) | the company: same as above (HQ Phoenix) | the role — and "co-founder" at a long-established public company is implausible on its face |
+
+Finding: the matching was a correct **technical company match**, but nothing separated
+it from **verified employment**. The canary called both "MATCHED", the person's role
+family came only from the provider's title, and the ATLAS projection wrote a `qualified`
+lead (the company's verdict) with that contact and no verification label.
+
+Fix: every contact now carries `verification` — `employment` (provider_consistent /
+independent_current / mismatch / unknown), `role` (`provider_title_claim` unless an
+independent source confirms it) and `status`:
+`requires_role_verification` (default for every provider-sourced contact today),
+`employment_mismatch` (the provider's own row contradicts it → outreach blocked) or
+`verified` (independent source only; the founder check is not approved, so never today).
+The company stays eligible; the ATLAS row's `next_action` is `verify_contact_role`; the
+canary verdict is now `COMPANY_MATCHED` with the role status beside it. Both S2 contacts
+would be `requires_role_verification`.

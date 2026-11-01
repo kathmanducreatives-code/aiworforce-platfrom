@@ -181,18 +181,20 @@ async function main() {
       company: l.company.domain, name: l.company.name, linkedin: l.company.linkedinUrl, providerIds: l.company.providerCompanyIds,
       hq: l.company.hq, lane: l.rank.lane, qualification: l.statuses.qualification, readiness: l.statuses.outreachReadiness,
       gaps: l.qualification?.gaps, disproven: l.qualification?.disproven, checks: l.qualification?.checks, evidenceSources: l.qualification?.evidence_sources,
-      record: l.canonicalRecord, person: l.person ? { name: l.person.name, title: l.person.title, roleFamily: l.person.roleFamily, providerPersonId: l.person.providerPersonId } : null,
+      record: l.canonicalRecord, person: l.person ? { name: l.person.name, title: l.person.title, linkedin: l.person.linkedinUrl, roleFamily: l.person.roleFamily, providerPersonId: l.person.providerPersonId, verification: l.person.verification } : null,
       providers: l.provenance.providers, enrichment: l.statuses.enrichment, phone: l.phone,
     })),
   };
-  // Person-to-company matching, per person LeadOcean returned: MATCHED when the person's
-  // employer merged into a company Apify discovered (same domain / LinkedIn, no identity
-  // conflict) and the title is a decision-maker family; UNMATCHED when LeadOcean's employer
-  // stayed a separate, LeadOcean-only company.
+  // Person-to-company matching, per person LeadOcean returned: COMPANY_MATCHED when the
+  // person's employer merged into a company Apify discovered (same domain / LinkedIn, no
+  // identity conflict); UNMATCHED_COMPANY when it stayed a separate company. A company match
+  // is NOT verified employment: roleVerification says whether the role is established.
   const all = [...run.queue, ...run.review, ...run.excluded];
   const matching = all.filter((l) => l.person && l.provenance.providers.includes("leadocean")).map((l) => ({
     company: l.company.domain, person: l.person!.name, title: l.person!.title, roleFamily: l.person!.roleFamily,
-    verdict: l.provenance.providers.includes("apify") ? (l.person!.roleFamily !== "other" ? "MATCHED" : "MATCHED_COMPANY_NON_DECISION_MAKER") : "UNMATCHED_COMPANY",
+    // COMPANY identity only: the person's role/employment is reported separately (S2 review, 2026-11-01).
+    verdict: l.provenance.providers.includes("apify") ? "COMPANY_MATCHED" : "UNMATCHED_COMPANY",
+    titleClaimFamily: l.person!.roleFamily, roleVerification: l.person!.verification.status, employment: l.person!.verification.employment,
     companyEligibility: l.statuses.qualification,
   }));
   Object.assign(report, { matching, companiesWithoutPeople: all.filter((l) => !l.person).map((l) => l.company.domain) });

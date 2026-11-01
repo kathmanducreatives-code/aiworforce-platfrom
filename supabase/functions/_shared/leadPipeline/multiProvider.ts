@@ -42,7 +42,7 @@ import type { EvidenceCache } from "./evidenceCache.ts";
 import type { CheckpointStore } from "./checkpoint.ts";
 import type { ExclusionIndex } from "./exclusions.ts";
 import { NON_DECISION_TITLES } from "./icp.ts";
-import { bestContact, runLeadPipeline, PIPELINE_VERSION, type PipelineLead, type PipelineRun } from "./pipeline.ts";
+import { bestContact, personVerification, runLeadPipeline, PIPELINE_VERSION, type PipelineLead, type PipelineRun } from "./pipeline.ts";
 import { DEFAULT_WEIGHTS, rankLeads } from "./ranking.ts";
 import {
   APOLLO_ACCESS_VALIDATED, DISCOVERY_CAPABILITIES, discoveryJobTitles, icpFromSpec, postTopics, sizePreferenceDistance, leadoceanDiscoveryRequirements,
@@ -367,6 +367,8 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
     const facts = slug ? canonical.facts.get(`li:${slug}`) : undefined;
     const role = p ? classifyDecisionMakerRole(first(p.title)) : null;
     const blockers = h.reasons.filter((x) => !x.includes("already in Agentory"));
+    const pv = p ? personVerification(p, l.company.domain.map((d) => d.value)) : null;
+    if (pv?.status === "employment_mismatch") blockers.push("the provider's own record does not show this person currently at this company");
     return {
       version: PIPELINE_VERSION, leadKey: l.company.key, existingLeadIds: [...h.existingLeadIds], icpId: icp.id,
       company: {
@@ -379,10 +381,10 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
         description: facts?.description ?? null,
       },
       person: p ? { key: p.key, name: first(p.fullName), title: first(p.title), linkedinUrl: first(p.linkedinUrl),
-        providerPersonId: p.sources.find((s) => s.provider === "leadocean")?.recordId ?? null, roleFamily: role!.role_family, hasPhoneFlag: first(p.hasPhone) } : null,
+        providerPersonId: p.sources.find((s) => s.provider === "leadocean")?.recordId ?? null, roleFamily: role!.role_family, hasPhoneFlag: first(p.hasPhone), verification: pv! } : null,
       statuses: {
         discovery: h.existingLeadIds.length ? "existing" : "new", screening: "passed", qualification: eligibilityOf(l),
-        enrichment: "not_requested", outreachReadiness: h.blocksOutreach ? "blocked" : "not_ready",
+        enrichment: "not_requested", outreachReadiness: h.blocksOutreach || pv?.status === "employment_mismatch" ? "blocked" : "not_ready",
       },
       screeningReasons: [],
       qualification: l.shared ? { checks: l.shared.checks, gaps: l.shared.gaps, disproven: l.shared.disproven, evidence_sources: l.shared.evidence_sources } : null,

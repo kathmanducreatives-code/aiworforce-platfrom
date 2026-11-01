@@ -76,6 +76,8 @@ export interface PipelineLead {
   person: {
     key: string; name: string | null; title: string | null; linkedinUrl: string | null;
     providerPersonId: string | null; roleFamily: string; hasPhoneFlag: boolean | null;
+    /** Whether the person's role and CURRENT employment are established, kept apart from the company's eligibility. */
+    verification: PersonVerification;
   } | null;
   statuses: { discovery: DiscoveryStatus; screening: ScreeningStatus; qualification: Eligibility; enrichment: EnrichmentStatus; outreachReadiness: OutreachReadiness };
   /** Why the lead was screened out before verification (provider-reported, unverified); empty when it passed. */
@@ -88,6 +90,30 @@ export interface PipelineLead {
   phone: PhoneRecord | null;
   outreachBlockers: string[];
   provenance: { walkId: string; planHash: string; runAt: string; providers: string[] };
+}
+
+/**
+ * TECHNICAL MATCH IS NOT VERIFIED EMPLOYMENT. A person row merging into a verified
+ * company proves the provider NAMES that company as the employer; the title and the
+ * "current" flag are still the provider's claim. Only an independent source (the
+ * founder check, not approved today) makes a role `verified`. A company can be eligible
+ * while its contact `requires_role_verification`; a provider that itself contradicts the
+ * employment (`employment_mismatch`) blocks outreach to that person.
+ */
+export interface PersonVerification {
+  employment: "independent_current" | "provider_consistent" | "mismatch" | "unknown";
+  role: "provider_title_claim" | "independently_confirmed";
+  status: "verified" | "requires_role_verification" | "employment_mismatch";
+  sources: string[];
+}
+
+export function personVerification(p: CanonicalPerson, companyDomains: string[], independent?: { current: boolean; source: string; at: string } | null): PersonVerification {
+  const e = employmentFrom({ providerSaysCurrent: p.employerIsCurrent[0]?.value ?? null, providerEmployerDomain: companyDomains[0] ?? null, companyDomains, independent: independent ?? null });
+  return {
+    employment: e.status, role: e.status === "independent_current" ? "independently_confirmed" : "provider_title_claim",
+    status: e.status === "independent_current" ? "verified" : e.status === "mismatch" ? "employment_mismatch" : "requires_role_verification",
+    sources: [...new Set([...p.sources.map((s) => s.provider), ...e.sources])],
+  };
 }
 
 export interface PipelineApprovals {
@@ -336,9 +362,11 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
       : p && skippedOf.has(p.key) ? (r.lane === "queue" ? "skipped" : "not_eligible_for_lookup") : "not_eligible_for_lookup";
     const blockers = [...h.company.reasons.filter((x) => !x.includes("already in Agentory")), ...(h.person?.reasons.filter((x) => !x.includes("already in Agentory")) ?? [])];
     if (ph?.doNotCall) blockers.push("number is flagged do-not-call");
+    const pv = p ? personVerification(p, l.company.domain.map((d) => d.value)) : null;
+    if (pv?.status === "employment_mismatch") blockers.push("the provider's own record does not show this person currently at this company");
     const role = p ? classifyDecisionMakerRole(first(p.title)) : null;
     const dm = !!role && role.role_family !== "other";
-    const readiness: OutreachReadiness = blockers.length && (h.company.blocksOutreach || h.person?.blocksOutreach || ph?.doNotCall) ? "blocked"
+    const readiness: OutreachReadiness = blockers.length && (h.company.blocksOutreach || h.person?.blocksOutreach || ph?.doNotCall || pv?.status === "employment_mismatch") ? "blocked"
       : r.lane === "queue" && dm && (ph?.class === "unverified_person_associated" || ph?.class === "verified_person_direct") ? "ready_for_review" : "not_ready";
     const screening: ScreeningStatus = priorCompanies.has(l.company.key) ? "prior_walk" : screened.has(l.company.key) ? "screened_out" : "passed";
     return {
@@ -355,7 +383,7 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
         description: canonical?.facts.get(l.company.key)?.description ?? null,
       },
       person: p ? { key: p.key, name: first(p.fullName), title: first(p.title), linkedinUrl: first(p.linkedinUrl),
-        providerPersonId: p.sources.find((s) => s.provider === "leadocean")?.recordId ?? null, roleFamily: role!.role_family, hasPhoneFlag: first(p.hasPhone) } : null,
+        providerPersonId: p.sources.find((s) => s.provider === "leadocean")?.recordId ?? null, roleFamily: role!.role_family, hasPhoneFlag: first(p.hasPhone), verification: pv! } : null,
       statuses: { discovery: discoveryStatus, screening, qualification, enrichment, outreachReadiness: readiness },
       screeningReasons: screened.get(l.company.key) ?? [],
       qualification: l.shared ? { checks: l.shared.checks, gaps: l.shared.gaps, disproven: l.shared.disproven, evidence_sources: l.shared.evidence_sources } : null,

@@ -37,6 +37,8 @@ export function projectPipelineLead(l: PipelineLead, ctx: { workspaceId: string;
     rank: { score: l.rank.score, lane: l.rank.lane, explanation: l.rank.explanation, factors: l.rank.factors },
     signals: l.signals.map((s) => ({ id: s.signalId, type: s.type, source_url: s.sourceUrl, event_date: s.eventDate, collected_at: s.collectedAt, recency: s.recency, confidence: s.confidence, provider: s.provider, actor: s.actor, cost: s.cost, corroboration: s.corroboration, excerpt: s.evidence.excerpt })),
     outreach_blockers: l.outreachBlockers, provenance: l.provenance, company_ids: l.company.providerCompanyIds,
+    // `status: qualified` below is the COMPANY's verdict; the contact's role is verified separately.
+    contact_verification: l.person?.verification ?? null,
   };
   const loc = [l.company.hq.city, l.company.hq.region, l.company.hq.country].filter(Boolean).join(", ") || null;
   return {
@@ -50,14 +52,16 @@ export function projectPipelineLead(l: PipelineLead, ctx: { workspaceId: string;
     contact: l.person ? {
       workspace_id: ctx.workspaceId, full_name: l.person.name, title: l.person.title, linkedin_url: l.person.linkedinUrl, company: l.company.name,
       location: null, email: null, phone: writable ? v!.e164 : null, source: "lead_pipeline:leadocean",
-      raw: { agentory_pipeline: { version: PIPELINE_ATTRIBUTION_VERSION, person_key: l.person.key, provider_person_id: l.person.providerPersonId, role_family: l.person.roleFamily, phone: l.phone } },
+      raw: { agentory_pipeline: { version: PIPELINE_ATTRIBUTION_VERSION, person_key: l.person.key, provider_person_id: l.person.providerPersonId, role_family: l.person.roleFamily, role_family_source: l.person.verification.role, verification: l.person.verification, phone: l.phone } },
     } : null,
     lead_candidate: {
       workspace_id: ctx.workspaceId, lead_type: "lead_pipeline",
       status: l.statuses.qualification === "eligible" ? "qualified" : "new",
       fit_score: l.rank.score, priority: null,
       reason: l.rank.explanation,
-      next_action: l.statuses.outreachReadiness === "ready_for_review" ? "review_before_outreach" : null,
+      // A contact whose role rests on a provider's claim is verified before anything else.
+      next_action: l.person && l.person.verification.status === "requires_role_verification" ? "verify_contact_role"
+        : l.statuses.outreachReadiness === "ready_for_review" ? "review_before_outreach" : null,
       raw: { agentory_pipeline: attribution },
     },
   };

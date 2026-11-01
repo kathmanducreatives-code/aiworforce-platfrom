@@ -163,7 +163,10 @@ Deno.test("architecture: ten LeadOcean companies → Apify verification → shar
   const golf = rows.find((x) => x.d === "golf.example")!.row!;
   assertEquals(golf.existingLeadId, "lead-golf-1", "an existing Lead is updated, never re-created");
   for (const x of rows) if (x.row) {
-    assertEquals(x.row.lead_candidate.next_action, null, "no phone was approved, so nothing is ready for outreach");
+    // No phone was approved, so nothing is ready for outreach; a contact whose role rests on
+    // LeadOcean's title is sent to role verification first (S2 identity review, 2026-11-01).
+    assertFalse(x.row.lead_candidate.next_action === "review_before_outreach", "nothing is ready for outreach");
+    assertEquals(x.row.lead_candidate.next_action, x.row.contact ? "verify_contact_role" : null);
     assertEquals(x.row.contact?.phone ?? null, null);
     assertEquals(x.row.contact?.email ?? null, null);
   }

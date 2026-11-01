@@ -795,3 +795,52 @@ Deno.test("revised S2: when LeadOcean returns no one, the verified companies sta
   assertEquals(r.spend.leadoceanRecords, 0, "LeadOcean bills per row returned: no rows, no records");
   assertEquals(r.status, "completed");
 });
+
+// ── S2 identity review: a technical company match is not verified employment ──
+
+Deno.test("identity: an S2-shaped match keeps the company eligible and marks the person as requiring role verification", async () => {
+  // As live S2 (2026-11-01): Apify finds a large, long-established employer; LeadOcean's row at the
+  // same domain says "Principal Co-founder". The company match is real; the role is a title claim.
+  const spec = revisedS2();
+  const plan = planStrategy(spec, CTX);
+  const GCE = { slug: "grand-canyon-education", name: "Grand Canyon Education", website: "https://grand-canyon-education.example", hq: "Phoenix, Arizona, United States", band: [5001, 10000] as [number, number] };
+  const rec = companyRecord("grand-canyon-education", { name: "Grand Canyon Education", website: "https://grand-canyon-education.example", hqCountry: "US", city: "Phoenix", band: [5001, 10000] });
+  const invoke: ActorInvoker = (actor, input) => actor === "apify_linkedin_job_search"
+    ? Promise.resolve({ items: [job("g1", "Account Executive", "2026-10-28", GCE)], runId: "rj", chargedUsd: 0.002 })
+    : Promise.resolve({ items: (input.companies as string[]).length ? [rec] : [], runId: "rc", chargedUsd: 0.00405 });
+  const person: Synthetic = { id: "26195145", name: "Aaron Westover", title: "Principal Co-founder", company: "Grand Canyon Education", domain: "grand-canyon-education.example", industry: "Education", employees: 6000 };
+  const lo = leadOcean([person]);
+  // LeadOcean's row names the same domain AND LinkedIn page, as the live row did (a different
+  // LinkedIn page would be an identity conflict and never merge).
+  const { r } = await execute(spec, plan, { lo, ap: { invoke, calls: [] } });
+  assertEquals(all(r).length, 1, "one company, no duplicate");
+  const gce = byDomain(r)["grand-canyon-education.example"];
+  assertEquals(gce.statuses.qualification, "eligible", "the company's verdict stands");
+  assertEquals(gce.provenance.providers.sort(), ["apify", "leadocean"], "technical match: LeadOcean's employer merged into the Apify company");
+  assertEquals(gce.person!.roleFamily, "founder", "the title classifies as a founder…");
+  assertEquals(gce.person!.verification.role, "provider_title_claim", "…but only on LeadOcean's word");
+  assertEquals(gce.person!.verification.status, "requires_role_verification");
+  assertFalse(gce.person!.verification.status === "verified", "no provider claim ever verifies a role");
+  const row = projectPipelineLead(gce, { workspaceId: WS, values: [] })!;
+  assertEquals(row.lead_candidate.status, "qualified", "qualified = the company");
+  assertEquals(row.lead_candidate.next_action, "verify_contact_role");
+  assertEquals((row.contact!.raw.agentory_pipeline as { role_family_source: string }).role_family_source, "provider_title_claim");
+  assertEquals((row.lead_candidate.raw.agentory_pipeline as { contact_verification: { status: string } }).contact_verification.status, "requires_role_verification");
+});
+
+Deno.test("identity: when the provider's own row says the person is not current, outreach is blocked and the company stays eligible", async () => {
+  const spec = revisedS2();
+  const plan = planStrategy(spec, CTX);
+  const lo = leadOcean([FOUNDERS[0]]);
+  // Mark LeadOcean's experience as not current.
+  const realSearch = lo.adapter.search.bind(lo.adapter);
+  lo.adapter.search = async (...a: Parameters<typeof realSearch>) => {
+    const page = await realSearch(...a);
+    return { ...page, people: page.people.map((p) => ({ ...p, employerIsCurrent: false })) };
+  };
+  const { r } = await execute(spec, plan, { lo, ap: apifyMock({ jobs: [job("n1", "Account Executive", "2026-10-28", { ...NORTHWIND, band: [51, 200] })] }) });
+  const north = byDomain(r)["northwind.example"];
+  assertEquals(north.statuses.qualification, "eligible");
+  assertEquals([north.person!.verification.status, north.statuses.outreachReadiness], ["employment_mismatch", "blocked"]);
+  assert(north.outreachBlockers.some((b) => b.includes("does not show this person currently")));
+});
