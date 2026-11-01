@@ -7,6 +7,7 @@
 
 import type { EvidenceItem } from "../candidateObservation.ts";
 import type { CanonicalFacts } from "./canonical.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export interface CachedCompanyRecord { workspaceId: string; slug: string; evidence: EvidenceItem[]; facts: CanonicalFacts | null; observedAt: string }
 
@@ -28,8 +29,7 @@ export const isFresh = (r: CachedCompanyRecord, now: Date, maxAgeDays: number) =
   now.getTime() - Date.parse(r.observedAt) <= maxAgeDays * 86_400_000;
 
 /** The hosted cache (held migration 20261101120000_discovery_evidence_cache.sql; off unless DISCOVERY_EVIDENCE_CACHE_ENABLED). `admin` is a service-role client. */
-// deno-lint-ignore no-explicit-any
-export function supabaseEvidenceCache(admin: any): EvidenceCache {
+export function supabaseEvidenceCache(admin: SupabaseClient): EvidenceCache {
   return {
     async get(workspaceId, slug) {
       const { data, error } = await admin.from("discovery_evidence_cache").select("*").eq("workspace_id", workspaceId).eq("slug", slug).maybeSingle();
