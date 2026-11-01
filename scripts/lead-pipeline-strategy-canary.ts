@@ -163,7 +163,10 @@ async function main() {
     ledger: memoryLedger(), checkpoints: memoryCheckpointStore(), existing: new ExclusionIndex([]),
   });
   let after = before;
-  for (let i = 0; i < 6 && after <= before && apifyRaw.runs.length; i++) {
+  // Apify posts each run's charges separately and late: keep reading until the counter has
+  // moved by the spend the run recorded (S2, 2026-11-01: the first read caught only the
+  // job search's $0.005 of $0.01305), or ~2 minutes pass.
+  for (let i = 0; i < 12 && after - before < run.spend.apifyUsd - 1e-6 && apifyRaw.runs.length; i++) {
     await new Promise((r) => setTimeout(r, 10_000));
     after = ((await (await fetch("https://api.apify.com/v2/users/me/limits", { headers: { Authorization: "Bearer injected-by-proxy" } })).json()) as { data?: { current?: { monthlyUsageUsd?: number } } }).data?.current?.monthlyUsageUsd ?? after;
   }

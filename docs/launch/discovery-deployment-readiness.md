@@ -69,3 +69,24 @@ Apify actors charge the token's account: use the new account's token only.
 Production / TEST functions read `APIFY_API_TOKEN` and `OPENAI_API_KEY` from
 Supabase function secrets (set with `supabase secrets set` by the owner); the
 LeadOcean key is stored per workspace through `provider-connections` (Vault).
+
+## Live validation (2026-11-01, Apify account Prasidha / Starter, LeadOcean Free)
+
+| | S1 `apify_only` | S2 `apify_plus_leadocean` |
+|---|---|---|
+| Plan / commit | `8c852793` / `32d739553ae3` | `29e60928` / `425e56a5aea2` |
+| Request | 1 US company hiring Account Executives | CEO / founder / head of sales / CRO / VP Sales at 1 US company hiring AEs; smaller companies preferred |
+| Postings | 4 returned; 2 dropped (1 staffing agency, 1 role/window mismatch) | 4 returned, 4 distinct employers |
+| Records read | 2 of 2 (HP, Thermo Fisher) — both identity-matched | 2 of 2 budgeted (Grand Canyon Education, Harmony); HP and Thermo Fisher left `pending` (`skipped_budget`), kept for review |
+| Eligibility (shared engine) | 2 eligible (US HQ + dated AE posting) | 2 eligible; 2 pending (HQ unverified within budget) |
+| People | — | 2 returned, both **MATCHED** to the Apify-discovered company (same domain/LinkedIn): Co-founder at harmony.one, "Principal Co-founder" at gce.com; no unmatched or duplicate rows |
+| Apify (per-run `usageTotalUsd`) | $0.005 + $0.00805 = **$0.01305** | $0.005 + $0.00805 = **$0.01305** |
+| LeadOcean records | 0 | **2** (955 → 953) |
+| Phones / outreach / DB writes | none | none |
+
+Findings: (1) the canary's counter read caught Apify's charges before they were all
+posted — fixed (it now waits for the recorded spend); actual charges were confirmed
+from Apify's per-run usage. (2) A person's decision-maker role and current employment
+are LeadOcean's claim; independent confirmation needs the founder check (company
+employees), which is not approved. (3) The size preference only orders: the two
+verified employers were the closest to 11–200 of the four found, not necessarily inside it.
