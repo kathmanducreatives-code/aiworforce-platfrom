@@ -33,6 +33,7 @@ import { classifyRoleFamily } from "../roleFamilies.ts";
 import { COMPANY_RECORD_ACTOR } from "./canonical.ts";
 import { configureIcp, ICP_A, NON_DECISION_TITLES, type IcpConfig } from "./icp.ts";
 import { SIGNAL_ACTORS, worstCaseUsd } from "./signals.ts";
+import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
 
 export const STRATEGY_PLANNER_VERSION = "discovery-strategy-v1" as const;
 
@@ -63,9 +64,9 @@ export const isStrategy = (s: unknown): s is DiscoveryStrategyId => typeof s ===
 //                                 (adding one is a reviewed change, never a setting)
 
 export type CapabilityStatus = "available" | "disabled_pending_validation" | "not_approved";
-export type CapabilityRole = "discover_people" | "discover_companies" | "people_at_companies" | "verify_company";
+export type CapabilityRole = "discover_people" | "discover_companies" | "people_at_companies" | "verify_company" | "verify_person";
 /** Facts a capability can PROVE to the shared engine (evidenceAuthority rules), never mere claims. */
-export type Provable = "identity" | "headquarters" | "size_band" | "hiring";
+export type Provable = "identity" | "headquarters" | "size_band" | "hiring" | "current_employment";
 export type SignalKind = "hiring" | "funding" | "social_activity" | "expansion" | "leadership_change" | "other";
 
 export interface DiscoveryCapability {
@@ -80,10 +81,18 @@ export interface DiscoveryCapability {
   /** Signals its rows carry only as an unproven claim (ranking, never a gate). */
   claims: SignalKind[];
   proves: Provable[];
-  cost: { unit: "leadocean_record"; perRow: number } | { unit: "usd"; perItem: number; perStart: number };
+  /** `minimumUsd`: the actor bills at least this per run (catalogued floor). */
+  cost: { unit: "leadocean_record"; perRow: number } | { unit: "usd"; perItem: number; perStart: number; minimumUsd?: number };
   actorKey?: string;
   note: string;
 }
+
+/**
+ * An Apify capability is available only when its actor is on the pipeline allowlist
+ * (`PIPELINE_ACTORS`, which also prices it and caps maxItems at 100). The registry
+ * never widens that list: adding an actor is a reviewed change to apifyInvoker.ts.
+ */
+export const actorStatus = (key: string): CapabilityStatus => (Object.hasOwn(PIPELINE_ACTORS, key) ? "available" : "not_approved");
 
 /** Apollo People Search returned HTTP 403 (API_INACCESSIBLE) on 2026-10-30. Flipping this is a reviewed change after a validated, approved check. */
 export const APOLLO_ACCESS_VALIDATED = false as const;
@@ -115,11 +124,34 @@ export const DISCOVERY_CAPABILITIES: Readonly<Record<string, DiscoveryCapability
     actorKey: COMPANY_RECORD_ACTOR.key,
     note: "the HQ-flagged location and declared size band (AUTHORITY_RULES), on a record whose identity matches",
   },
+  // ── Catalogued Apify actors from PR #198, NOT on the allowlist (status derived) ──
   "apify.linkedin_post_search": {
-    id: "apify.linkedin_post_search", provider: "apify", role: "discover_companies", status: "not_approved",
+    id: "apify.linkedin_post_search", provider: "apify", role: "discover_companies", status: actorStatus("apify_linkedin_post_search"),
     filters: ["post_topic"], discoversBySignal: "social_activity", claims: [], proves: ["identity"],
-    cost: { unit: "usd", perItem: 0.002, perStart: 0.00005 },
-    note: "searching posts by topic needs a post-search actor; none is on the pipeline allowlist (PIPELINE_ACTORS)",
+    cost: { unit: "usd", perItem: 0.002, perStart: 0.00005, minimumUsd: 0.001 },
+    actorKey: "apify_linkedin_post_search",
+    note: "harvestapi/linkedin-post-search ($0.002/post + $0.00005/start, catalogue verified 2026-08-22): companies posting on a topic, dated. Only a COMPANY-page author names a company (a person's headline is not employment). Not on the pipeline allowlist (PIPELINE_ACTORS)",
+  },
+  "apify.company_employees": {
+    id: "apify.company_employees", provider: "apify", role: "people_at_companies", status: actorStatus("apify_linkedin_company_employees"),
+    filters: ["roles", "domain"], discoversBySignal: null, claims: [], proves: ["current_employment"],
+    cost: { unit: "usd", perItem: 0.003, perStart: 0.02, minimumUsd: 0.05 },
+    actorKey: "apify_linkedin_company_employees",
+    note: "harvestapi/linkedin-company-employees ($0.02/run + $0.003/short profile, $0.05 minimum): decision-makers at discovered companies by LinkedIn page; titles fuzzy (re-classified); a wrong profileScraperMode value silently bills the Full price. Not on the pipeline allowlist (PIPELINE_ACTORS)",
+  },
+  "apify.people_search": {
+    id: "apify.people_search", provider: "apify", role: "discover_people", status: actorStatus("apify_people_search"),
+    filters: ["roles", "geography"], discoversBySignal: null, claims: [], proves: [],
+    cost: { unit: "usd", perItem: 0.004, perStart: 0, minimumUsd: 0.10 },
+    actorKey: "apify_people_search",
+    note: "harvestapi/linkedin-profile-search ($0.004/profile, $0.10 minimum per run): no industry or size filter and no per-company cap; ~2x company-employees for the same recall. Not on the pipeline allowlist (PIPELINE_ACTORS)",
+  },
+  "apify.founder_check": {
+    id: "apify.founder_check", provider: "apify", role: "verify_person", status: actorStatus("apify_linkedin_company_employees"),
+    filters: [], discoversBySignal: null, claims: [], proves: ["current_employment"],
+    cost: { unit: "usd", perItem: 0.003, perStart: 0.02, minimumUsd: 0.05 },
+    actorKey: "apify_linkedin_company_employees",
+    note: "optional independent current-employment check of the discovered decision-maker (founderCheck.ts, ranking only, never a gate); uses company-employees, not on the pipeline allowlist",
   },
   "apify.funding_corroboration": {
     id: "apify.funding_corroboration", provider: "apify", role: "verify_company", status: "not_approved",
@@ -135,15 +167,27 @@ export const DISCOVERY_CAPABILITIES: Readonly<Record<string, DiscoveryCapability
   },
 } satisfies Record<string, DiscoveryCapability>);
 
-/** The capability chain each strategy runs, in order. */
-export const STRATEGY_CHAINS: Readonly<Record<DiscoveryStrategyId, readonly string[]>> = Object.freeze({
-  leadocean_only: ["leadocean.people_search"],
-  apify_only: ["apify.linkedin_job_search", "apify.linkedin_company_record"],
-  leadocean_plus_apify: ["leadocean.people_search", "apify.linkedin_company_record"],
-  // Companies are verified BEFORE their people are bought: no record is spent on a disproven company.
-  apify_plus_leadocean: ["apify.linkedin_job_search", "apify.linkedin_company_record", "leadocean.people_by_domain"],
-  apollo_plus_apify: ["apollo.people_search", "apify.linkedin_company_record"],
-});
+/**
+ * The capability chain a strategy runs for THIS request, in order. Apify-led
+ * strategies discover BY the request's defining signal: open roles → job search,
+ * posts on a topic → post search. Companies are verified BEFORE their people are
+ * bought, so no record is spent on a disproven company.
+ */
+export function chainFor(strategy: DiscoveryStrategyId, spec: DiscoverySpec): readonly string[] {
+  const kinds = new Set(spec.signals.map((x) => x.kind));
+  const seed = kinds.has("hiring") ? "apify.linkedin_job_search"
+    : kinds.has("social_activity") ? "apify.linkedin_post_search"
+    : spec.wantsPeople && strategy === "apify_only" ? "apify.people_search"
+    : "apify.linkedin_job_search";
+  const rec = "apify.linkedin_company_record";
+  switch (strategy) {
+    case "leadocean_only": return ["leadocean.people_search"];
+    case "leadocean_plus_apify": return ["leadocean.people_search", rec];
+    case "apollo_plus_apify": return ["apollo.people_search", rec];
+    case "apify_plus_leadocean": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, rec, "leadocean.people_by_domain"];
+    case "apify_only": return seed === "apify.people_search" ? [seed, rec] : [seed, rec, ...(spec.wantsPeople ? ["apify.company_employees"] : [])];
+  }
+}
 
 // ── What the request needs ──────────────────────────────────────────────────
 
@@ -154,6 +198,8 @@ export interface SpecSignal {
   windowDays: number | null;
   /** The literal role words of a hiring signal ("account executives"), for the job search and its post-filter. */
   roleTerms: string[];
+  /** Post topics of a social signal ("AI automation"), from the user's own words (required_signal_terms). */
+  topics: string[];
   roleFamilies: string[];
   phrase: string | null;
 }
@@ -182,6 +228,7 @@ interface MissionLike {
   requested_count?: number | null;
   target_entity?: string;
   criteria?: { kind?: string; dimension?: string; value?: unknown; time_window?: { days?: number } }[];
+  required_signal_terms?: string[];
   required_signals?: { type?: string; event?: string; timeframe_days?: number | null; role_families?: string[]; qualifier?: { role_terms?: string[]; role_families?: string[] }; phrase?: string }[];
 }
 
@@ -212,13 +259,14 @@ export function specFromMission(mission: MissionLike, opts: { defaultCount?: num
       kind, hard: criterion?.kind === "hard",
       windowDays: s.timeframe_days ?? criterion?.time_window?.days ?? null,
       roleTerms, roleFamilies, phrase: s.phrase ?? null,
+      topics: kind === "social_activity" ? (mission.required_signal_terms ?? []).filter((t) => typeof t === "string" && t.trim()).slice(0, 3) : [],
     });
   }
   // A hard signal criterion with no required_signals entry still counts.
   for (const c of hard) {
     const kind = kindOf(c.dimension);
     if (kind !== "other" && !signals.some((x) => x.kind === kind)) {
-      signals.push({ kind, hard: true, windowDays: c.time_window?.days ?? null, roleTerms: [], roleFamilies: [], phrase: null });
+      signals.push({ kind, hard: true, windowDays: c.time_window?.days ?? null, roleTerms: [], roleFamilies: [], phrase: null, topics: [] });
     }
   }
   const values = (k: string) => req.hard.filter((h) => h.key === k).flatMap((h) => (Array.isArray(h.values) ? h.values : []));
@@ -321,7 +369,7 @@ export interface StrategyPlan {
 }
 
 const r6 = (n: number) => Math.round(n * 1e6) / 1e6;
-const usd = (c: DiscoveryCapability, items: number) => c.cost.unit === "usd" ? r6(c.cost.perStart + c.cost.perItem * Math.max(1, items)) : 0;
+const usd = (c: DiscoveryCapability, items: number) => c.cost.unit === "usd" ? r6(Math.max(c.cost.minimumUsd ?? 0, c.cost.perStart + c.cost.perItem * Math.max(1, items))) : 0;
 
 /** Overfetch for discovery: the shared engine rejects some candidates (Test E: 7 of 10 eligible). */
 const OVERFETCH = 2;
@@ -343,6 +391,10 @@ export function hiringTitles(spec: DiscoverySpec): string[] {
   const s = spec.signals.find((x) => x.kind === "hiring");
   return (s?.roleTerms.length ? s.roleTerms : s?.roleFamilies.length ? s.roleFamilies.map((f) => FAMILY_TITLES[f]).filter((t): t is string => !!t) : []).slice(0, 3);
 }
+/** The post-search topics for the request's post signal (≤3), the user's own words. */
+export function postTopics(spec: DiscoverySpec): string[] {
+  return (spec.signals.find((x) => x.kind === "social_activity")?.topics ?? []).slice(0, 3);
+}
 /** Job-search titles for a role family the user named only as a family ("salespeople"). Fuzzy search input only; postings are post-filtered. */
 const FAMILY_TITLES: Record<string, string> = { gtm_sales: "Account Executive", sales_operations: "Sales Operations", marketing_growth: "Marketing Manager", growth: "Growth Manager", customer_success: "Customer Success Manager", engineering: "Software Engineer", finance: "Finance Manager", ops: "Operations Manager" };
 
@@ -350,7 +402,7 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   const refusals: string[] = [];
   const limitations: Limitation[] = [];
   const rationale: string[] = [];
-  const chain = STRATEGY_CHAINS[strategy].map((id) => DISCOVERY_CAPABILITIES[id]);
+  const chain = chainFor(strategy, spec).map((id) => DISCOVERY_CAPABILITIES[id]);
   const n = spec.requestedCount;
 
   // 1 every capability in the chain must be available, its provider usable here
@@ -367,8 +419,12 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   const peopleStep = chain.find((c) => c.role === "discover_people" || c.role === "people_at_companies");
   if (spec.wantsPeople && !peopleStep) refusals.push(`the request asks for people (${spec.roles.join(", ") || "decision-makers"}) and ${strategy} has no approved people source`);
   const hiring = spec.signals.find((s) => s.kind === "hiring");
-  if (discover.discoversBySignal === "hiring" && !hiring) refusals.push("job-search discovery finds employers by an open role; the request names no hiring signal");
+  const defining = spec.signals.find((s) => s.kind === "hiring" || s.kind === "social_activity");
+  if (discover.discoversBySignal && !spec.signals.some((x) => x.kind === discover.discoversBySignal)) {
+    refusals.push(`${discover.id} finds companies by a ${discover.discoversBySignal} signal; the request names none`);
+  }
   if (discover.discoversBySignal === "hiring" && hiring && !hiringTitles(spec).length) refusals.push("the hiring signal names no role to search postings for");
+  if (discover.discoversBySignal === "social_activity" && !postTopics(spec).length) refusals.push("the post signal names no topic to search posts for");
 
   // 3 what can be PROVED (the shared engine decides; this predicts honestly)
   const proves = new Set(chain.flatMap((c) => c.proves));
@@ -393,8 +449,11 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
       limitations.push({ code: "capability_not_approved", detail: DISCOVERY_CAPABILITIES["apify.funding_corroboration"].note });
       if (chain.some((c) => c.claims.includes("funding"))) limitations.push({ code: "unverified_claim", detail: "LeadOcean company_funding is a claim (a year alone is not a date; public-company securities included) — ranking only" });
     } else if (s.kind === "social_activity") {
-      need(label, false, s.hard);
-      limitations.push({ code: "signal_not_discoverable", detail: `${DISCOVERY_CAPABILITIES["apify.linkedin_post_search"].note}; posts can only be read per company after discovery (ranking)` });
+      need(label, false, s.hard); // no evidence dimension proves a post signal: it ranks
+      const ps = DISCOVERY_CAPABILITIES["apify.linkedin_post_search"];
+      if (discover.id !== ps.id) limitations.push({ code: ps.status === "available" ? "signal_not_discoverable" : "capability_not_approved", detail: ps.status === "available"
+        ? `the request is defined by a ${label}; ${strategy} does not discover by it, so it can only rank`
+        : `post-topic discovery: ${ps.note}; posts can only be read per company after discovery (ranking)` });
     } else need(label, false, s.hard);
   }
   if (spec.otherHard.length) limitations.push({ code: "unverifiable_requirement", detail: `not modelled by the planner, decided by the shared engine only: ${spec.otherHard.join("; ")}` });
@@ -422,17 +481,24 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
     let companies = 0;
     for (const c of chain) {
       const remaining = ctx.providers[c.provider]?.remaining ?? Infinity;
+      const lo = c.cost.unit === "leadocean_record";
+      // LeadOcean steps are bounded by records; Apify steps by the pipeline's 100-item cap.
+      const itemCap = lo ? Math.min(ctx.budget.maxLeadoceanRecords, remaining, 150) : 100;
+      const price = (items: number) => ({ leadoceanRecords: lo ? items * (c.cost as { perRow: number }).perRow : 0, apifyUsd: lo ? 0 : usd(c, items) });
       if (c.role === "discover_people") {
-        const max = Math.max(0, Math.min(cap, ctx.budget.maxLeadoceanRecords, remaining, 150));
+        const max = Math.max(0, Math.min(cap, itemCap));
         companies = max;
-        out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: { leadoceanRecords: c.cost.unit === "leadocean_record" ? max * c.cost.perRow : 0, apifyUsd: 0 }, why: "people and employers matching roles, geography, size and industry labels (narrowing only)" });
+        out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: price(max), why: "people and employers matching roles, geography, size and industry labels (narrowing only)" });
       } else if (c.role === "discover_companies") {
         const max = Math.max(1, Math.min(100, cap * JOB_ROWS_PER_COMPANY));
         companies = Math.ceil(max / JOB_ROWS_PER_COMPANY);
-        out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: { leadoceanRecords: 0, apifyUsd: usd(c, max) }, why: `employers with an open ${hiringTitles(spec).join(" / ") || "role"} posting${hiring?.windowDays ? ` in the last ${hiring.windowDays} days` : ""}` });
+        const why = c.discoversBySignal === "social_activity"
+          ? `companies posting about ${postTopics(spec).join(" / ") || "the topic"}${defining?.windowDays ? ` in the last ${defining.windowDays} days` : ""} (company-page authors only)`
+          : `employers with an open ${hiringTitles(spec).join(" / ") || "role"} posting${hiring?.windowDays ? ` in the last ${hiring.windowDays} days` : ""}`;
+        out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: price(max), why });
       } else if (c.role === "people_at_companies") {
-        const max = Math.max(0, Math.min(companies * peoplePer, ctx.budget.maxLeadoceanRecords, remaining, 150));
-        out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: { leadoceanRecords: max, apifyUsd: 0 }, why: `${spec.roles.join(" / ") || "decision-makers"} at the discovered companies, by exact domain` });
+        const max = Math.max(0, Math.min(companies * peoplePer, itemCap));
+        out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: price(max), why: `${spec.roles.join(" / ") || "decision-makers"} at the discovered companies, by ${lo ? "exact domain" : "LinkedIn company page"}` });
       } else if (c.role === "verify_company") {
         const max = Math.max(0, Math.min(100, companies - (ctx.cachedCompanyRecords ?? 0)));
         out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: Math.max(1, max), estimate: { leadoceanRecords: 0, apifyUsd: max ? usd(c, max) : 0 }, why: "identity, HQ-flagged location and declared size band for each discovered company (one batched run)" });
@@ -457,9 +523,9 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
 
   // 6 score (feasible candidates only are compared)
   let score = provable.length * 10;
-  if (hiring && discover.discoversBySignal === "hiring") { score += 25; rationale.push("discovers BY the requested hiring signal (dated postings), so every candidate already carries it"); }
-  if (hiring && discover.discoversBySignal !== "hiring") { score -= 15; rationale.push("discovers without the hiring signal: most candidates will not carry it"); }
-  if (!hiring && discover.role === "discover_people") { score += 10; rationale.push("structured people search matches roles, geography and size directly"); }
+  if (defining && discover.discoversBySignal === defining.kind) { score += 25; rationale.push(`discovers BY the requested ${defining.kind} signal (dated), so every candidate already carries it`); }
+  if (defining && discover.discoversBySignal !== defining.kind) { score -= 15; rationale.push(`discovers without the ${defining.kind} signal: most candidates will not carry it`); }
+  if (!defining && discover.role === "discover_people") { score += 10; rationale.push("structured people search matches roles, geography and size directly"); }
   if (verifies.length) rationale.push("Apify company record proves identity, HQ and size for the shared engine");
   score -= estimate.apifyUsd * 20 + estimate.leadoceanRecords * 0.05;
   score -= limitations.filter((l) => l.code === "unverifiable_requirement" || l.code === "unverified_claim").length * 3;

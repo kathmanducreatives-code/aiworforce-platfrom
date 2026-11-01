@@ -135,3 +135,31 @@ Execution requires `AGENTORY_PROVIDER_LIVE_TESTS=enabled`, the exact approval
 string the dry run prints (stage, strategy, plan hash, commit, caps), proxy-injected
 keys, free preflights, and writes a one-shot lock. Nothing is written to a
 database; no phone lookup is reachable.
+
+## 9. Consolidation with PR #198 (2026-11-01)
+
+PR #199 is the one engine. PR #198 (`_shared/discoveryEngine/`, `discovery-engine`
+function) was a parallel implementation of the same idea; its distinct capabilities
+are folded in here instead of keeping a second planner, executor, interpreter or
+edge function.
+
+| PR #198 capability | Decision | Where it lives now |
+|---|---|---|
+| Separate GPT interpreter (`spec.ts`, grounding check) | **Not ported.** The mission compiler is the only reader of the request; #198's `specToRequirements` also dropped signal criteria before the shared engine. | — |
+| Post search (`harvestapi/linkedin-post-search`) | **Registered, not approved.** Planned as the Apify seed for post-driven requests; parser ported with the catalogue rule that only company-page authors name a company. Posts rank; they cannot prove a criterion (no evidence dimension). | `apify.linkedin_post_search`, `companiesFromPostRows`, `discoverPostingCompanies` |
+| Company employees (`harvestapi/linkedin-company-employees`) | **Registered, not approved.** The Apify-only people step; $0.05 run minimum in the worst case; exact `Short ($4 per 1k)` mode pinned (any other value bills Full). | `apify.company_employees`, `peopleFromEmployeeRows`, `companyEmployeesInput` |
+| Profile search (`harvestapi/linkedin-profile-search`) | **Registered, not approved.** $0.10 minimum per run, no industry/size filter, no per-company cap, ~2× company-employees for the same recall: LeadOcean remains the people-search default. No executor until approved. | `apify.people_search` |
+| Founder check (independent current employment) | **Ported, not wired**: uses company employees. Ranking only, never a gate. | `founderCheck.ts`, `apify.founder_check` |
+| Workspace evidence cache | **Ported and wired** into every strategy (LeadOcean-led and Apify-led), off unless `DISCOVERY_EVIDENCE_CACHE_ENABLED`. Fresh found records are reused per workspace, never across workspaces; misses are asked again; cached evidence still passes the identity rule; a broken cache costs a purchase, never a verdict. | `evidenceCache.ts`, `readCompanyRecordsCached`, held migration `20261101120000_discovery_evidence_cache.sql` |
+| LeadOcean funding claim at most `low` confidence | **Ported.** | `signals.ts` |
+| Allowlist additions + `maxItems` 100 → 200 | **Not ported.** `PIPELINE_ACTORS` and the 100-item cap are unchanged (test-pinned). | — |
+| LeadOcean funding / technology filters as discovery | **Not ported.** Claims only (LEADOCEAN_FINAL_VERDICT); funding-gated requests stay refused or review-only. | — |
+
+Capability status for an Apify route is **derived from the allowlist**
+(`actorStatus`): approving an actor is exactly one reviewed change, adding it to
+`PIPELINE_ACTORS` with its price. Until then the planner refuses any strategy
+that needs it (naming the actor), `checkStrategyApproval` refuses any plan that
+contains it, and the ledgered invoker refuses its key — three independent stops.
+
+To approve one later (separately): confirm the actor's current price, add it to
+`PIPELINE_ACTORS`, run the offline suite, then a single canary with its own cap.

@@ -34,15 +34,18 @@ import type { EvidenceItem } from "../candidateObservation.ts";
 import type { Eligibility } from "../candidateEligibility.ts";
 import { classifyDecisionMakerRole } from "../decisionMaker/roleFamily.ts";
 import { ledgeredInvoker } from "./apifyInvoker.ts";
-import { discoverHiringCompanies, slugOf } from "./apifyDiscovery.ts";
-import { COMPANY_RECORD_ACTOR, readCompanyRecords, type CanonicalRun } from "./canonical.ts";
+import { COMPANY_EMPLOYEES_ACTOR_KEY, companyEmployeesInput, discoverHiringCompanies, discoverPostingCompanies, peopleFromEmployeeRows, slugOf } from "./apifyDiscovery.ts";
+import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
+import type { Signal } from "./signals.ts";
+import { COMPANY_RECORD_ACTOR, readCompanyRecordsCached } from "./canonical.ts";
+import type { EvidenceCache } from "./evidenceCache.ts";
 import type { CheckpointStore } from "./checkpoint.ts";
 import type { ExclusionIndex } from "./exclusions.ts";
 import { NON_DECISION_TITLES } from "./icp.ts";
 import { bestContact, runLeadPipeline, PIPELINE_VERSION, type PipelineLead, type PipelineRun } from "./pipeline.ts";
 import { DEFAULT_WEIGHTS, rankLeads } from "./ranking.ts";
 import {
-  APOLLO_ACCESS_VALIDATED, hiringTitles, icpFromSpec, leadoceanDiscoveryRequirements,
+  APOLLO_ACCESS_VALIDATED, DISCOVERY_CAPABILITIES, hiringTitles, icpFromSpec, postTopics, leadoceanDiscoveryRequirements,
   type DiscoverySpec, type DiscoveryStrategyId, type Limitation, type StrategyPlan,
 } from "./strategy.ts";
 
@@ -72,6 +75,8 @@ export interface StrategyRunInput {
   existing: ExclusionIndex;
   now?: () => Date;
   actorTimeoutMs?: number;
+  /** Per-workspace company-record cache (held migration 20261101120000); null/absent = buy every record. */
+  evidenceCache?: EvidenceCache | null;
 }
 
 export interface ProviderStepOutcome {
@@ -108,6 +113,10 @@ const r6 = (n: number) => Math.round(n * 1e6) / 1e6;
 export function checkStrategyApproval(plan: StrategyPlan, a: StrategyApproval | null): { ok: true } | { ok: false; reason: string } {
   if (plan.status !== "ready" || !plan.strategy) return { ok: false, reason: `plan is not runnable: ${plan.blockedReason ?? plan.status}` };
   if (plan.strategy === "apollo_plus_apify" && !APOLLO_ACCESS_VALIDATED) return { ok: false, reason: "Apollo discovery is disabled until its API access is validated" };
+  // Defense in depth: a plan naming a capability that is not available (an actor off the
+  // allowlist, a disabled provider) is never run, however it was produced.
+  const unavailable = plan.steps.filter((s) => DISCOVERY_CAPABILITIES[s.capability]?.status !== "available");
+  if (unavailable.length) return { ok: false, reason: `not runnable: ${unavailable.map((s) => `${s.capability} is ${DISCOVERY_CAPABILITIES[s.capability]?.status ?? "unknown"}`).join("; ")}` };
   if (!a) return { ok: false, reason: "no approval: nothing is called before an owner approves this plan" };
   if (a.planHash !== plan.planHash) return { ok: false, reason: "the approval names a different plan (it changed since it was approved)" };
   if (a.leadoceanRecords < plan.estimate.leadoceanRecords) return { ok: false, reason: `the approval covers ${a.leadoceanRecords} LeadOcean records; the plan needs up to ${plan.estimate.leadoceanRecords}` };
@@ -155,6 +164,7 @@ async function runLeadOceanLed(input: StrategyRunInput, cap: { leadoceanRecords:
     // No phone dependency is handed over: discovery cannot enrich.
     leadocean: input.leadocean, leadoceanDeps: null, apify: withApify ? input.apify : null,
     ledger: input.ledger, checkpoints: input.checkpoints, existing: input.existing, now, actorTimeoutMs: input.actorTimeoutMs,
+    evidenceCache: input.evidenceCache ?? null,
   };
   const dry = await runLeadPipeline({ ...base, dryRun: true });
   if (dry.status === "blocked") return { ...emptyRun(input, `LeadOcean plan blocked: ${dry.reason}`), status: "blocked" };
@@ -199,10 +209,16 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   // Every Apify run reserves its worst case in the durable ledger first: a re-run replays, an uncertain charge is never re-bought.
   const apify = timed ? ledgeredInvoker(timed, input.ledger, { workspaceId: input.workspaceId, missionId: `${mission}:apify`, maxUsd: cap.apifyUsd }) : null;
 
-  // 1 discovery by an open role
-  const jobStep = plan.steps.find((s) => s.capability === "apify.linkedin_job_search")!;
-  const titles = hiringTitles(spec);
-  const found = await discoverHiringCompanies(spec, titles, apify, { maxItems: jobStep.maxItems, maxUsd: Math.min(cap.apifyUsd, jobStep.estimate.apifyUsd), now: now(), idPrefix: mission, missionId: mission });
+  // 1 discovery by the defining signal: open roles (job search) or posts on a topic (post search)
+  const jobStep = plan.steps[0];
+  const seedUsd = Math.min(cap.apifyUsd, jobStep.estimate.apifyUsd);
+  const postActor = PIPELINE_ACTORS["apify_linkedin_post_search"];
+  const found: Awaited<ReturnType<typeof discoverHiringCompanies>> & { signals?: Signal[] } =
+    jobStep.capability === "apify.linkedin_job_search"
+      ? await discoverHiringCompanies(spec, hiringTitles(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission })
+      : jobStep.capability === "apify.linkedin_post_search" && postActor
+      ? await discoverPostingCompanies(spec, postTopics(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission, perItemUsd: postActor.perItemUsd, perStartUsd: postActor.perStartUsd })
+      : { companies: [], evidence: new Map(), jobs: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: `no executor for ${jobStep.capability}`, runId: null };
   steps.push({ capability: jobStep.capability, provider: "apify", status: found.stopped ? "failed" : "completed",
     reason: found.stopped ?? (Object.keys(found.dropped).length ? `dropped postings: ${Object.entries(found.dropped).map(([k, v]) => `${k} ${v}`).join(", ")}` : null),
     spend: { leadoceanRecords: 0, apifyUsd: r6(found.spentUsd) } });
@@ -218,17 +234,15 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   const recStep = plan.steps.find((s) => s.capability === "apify.linkedin_company_record")!;
   const targets = found.companies.map((c) => ({ companyKey: `li:${slugOf(c.linkedinUrl)}`, linkedinUrl: c.linkedinUrl ?? "" }));
   const recBudget = Math.max(0, Math.min(recStep.estimate.apifyUsd, cap.apifyUsd - apifySpent));
-  const fits = Math.max(0, Math.floor((recBudget - COMPANY_RECORD_ACTOR.perStartUsd + 1e-9) / COMPANY_RECORD_ACTOR.perItemUsd));
-  const bought = targets.slice(0, fits);
-  const unaffordable = targets.slice(fits);
-  const canonical: CanonicalRun = bought.length
-    ? await readCompanyRecords(bought, apify, { maxUsd: recBudget, now: now(), idPrefix: mission })
-    : { evidence: new Map(), facts: new Map(), statuses: [], spentUsd: 0, stopped: null };
-  for (const t of unaffordable) canonical.statuses.push({ companyKey: t.companyKey, state: "skipped_budget", reason: `the approved Apify ceiling ($${cap.apifyUsd}) is exhausted; left needs_verification` });
+  // Fresh records this workspace already bought are reused, not bought again; misses are
+  // bought only as far as the ceiling covers — the rest stay needs_verification.
+  const canonical = await readCompanyRecordsCached(targets, apify, { maxUsd: recBudget, now: now(), idPrefix: mission, cache: input.evidenceCache ?? null, workspaceId: input.workspaceId, truncateToBudget: true });
+  const unaffordable = canonical.statuses.filter((x) => x.state === "skipped_budget");
   apifySpent += canonical.spentUsd;
   steps.push({ capability: recStep.capability, provider: "apify",
     status: canonical.stopped ? "failed" : unaffordable.length ? "partial" : "completed",
-    reason: canonical.stopped ?? (unaffordable.length ? `budget: ${unaffordable.length} compan${unaffordable.length === 1 ? "y" : "ies"} left unverified` : null),
+    reason: canonical.stopped ?? ([unaffordable.length ? `budget: ${unaffordable.length} compan${unaffordable.length === 1 ? "y" : "ies"} left unverified` : null,
+      canonical.cached ? `${canonical.cached} reused from the evidence cache` : null, ...canonical.cacheErrors].filter(Boolean).join("; ") || null),
     spend: { leadoceanRecords: 0, apifyUsd: r6(canonical.spentUsd) } });
 
   // Evidence admitted per source, by its own identity.
@@ -238,7 +252,7 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
     const slugs = [...new Set(ids.linkedinUrls.map(slugOf).filter((s): s is string => !!s))];
     const out: EvidenceItem[] = [];
     for (const slug of slugs) {
-      for (const [source, items] of [["apify_linkedin_job_search", found.evidence.get(slug) ?? []], [COMPANY_RECORD_ACTOR.key, recordOf(slug)]] as const) {
+      for (const [source, items] of [[DISCOVERY_CAPABILITIES[jobStep.capability]?.actorKey ?? jobStep.capability, found.evidence.get(slug) ?? []], [COMPANY_RECORD_ACTOR.key, recordOf(slug)]] as const) {
         if (!items.length) continue;
         const v = evidenceIdentity(items, ids);
         if (v === "match") out.push(...items);
@@ -260,8 +274,23 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   let people: ProviderPerson[] = [];
   let loCompanies: ProviderCompany[] = [];
   let loRecords = 0;
-  const peopleStep = plan.steps.find((s) => s.capability === "leadocean.people_by_domain");
-  if (peopleStep) {
+  const peopleStep = plan.steps.find((s) => s.role === "people_at_companies");
+  if (peopleStep?.capability === "apify.company_employees") {
+    // Apify decision-makers by LinkedIn company page (PR #198). Reachable only once the
+    // actor is on PIPELINE_ACTORS: the approval check and the ledgered invoker refuse it today.
+    const urls = found.companies.filter((c) => !c.domain || !disproven.has(c.domain)).map((c) => c.linkedinUrl).filter((u): u is string => !!u);
+    const per = Math.max(1, Math.floor(peopleStep.maxItems / Math.max(1, urls.length)));
+    try {
+      const run = urls.length && apify ? await apify(COMPANY_EMPLOYEES_ACTOR_KEY, companyEmployeesInput(urls, spec.roles, per), { maxItems: per * urls.length, idempotencyKey: `${mission}:${COMPANY_EMPLOYEES_ACTOR_KEY}:people` }) : null;
+      people = run ? peopleFromEmployeeRows(run.items, new Set(urls.map((u) => slugOf(u)!)), at) : [];
+      const spent = run?.chargedUsd ?? (run ? peopleStep.estimate.apifyUsd : 0);
+      apifySpent += spent;
+      steps.push({ capability: peopleStep.capability, provider: "apify", status: run ? "completed" : "skipped", reason: run ? null : "no company to look up", spend: { leadoceanRecords: 0, apifyUsd: r6(spent) } });
+    } catch (e) {
+      apifySpent += peopleStep.estimate.apifyUsd;
+      steps.push({ capability: peopleStep.capability, provider: "apify", status: "failed", reason: `${(e as Error)?.message ?? "failed"}; not retried`, spend: { leadoceanRecords: 0, apifyUsd: peopleStep.estimate.apifyUsd } });
+    }
+  } else if (peopleStep) {
     const domains = [...new Set(found.companies.map((c) => c.domain).filter((d): d is string => !!d && !disproven.has(d)))];
     if (!domains.length) {
       steps.push({ capability: peopleStep.capability, provider: "leadocean", status: "skipped", reason: "no verified-or-pending company with a domain", spend: { leadoceanRecords: 0, apifyUsd: 0 } });
@@ -306,13 +335,14 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   const eligibilityOf = (l: VerifiedLead): Eligibility => l.shared?.eligibility ?? "pending";
   const history = new Map(leads.map((l) => [l.company.key, historyOf({ domains: l.company.domain.map((d) => d.value), linkedinUrls: l.company.linkedinUrl.map((d) => d.value), providerIds: l.company.sources.map((s) => s.recordId) })]));
   const first = <T>(xs: { value: T }[]): T | null => xs[0]?.value ?? null;
+  const postSignals = (slug: string | null) => (found.signals ?? []).filter((x) => slug && x.subject.key === `li:${slug}`);
   const ranked = rankLeads(leads.map((l) => {
     const p = bestContact(l);
     const slug = slugOf(first(l.company.linkedinUrl));
     return {
       leadKey: l.company.key, eligibility: eligibilityOf(l), title: p ? first(p.title) : null,
       companyText: [...l.company.industry.flatMap((c) => c.value), ...(slug && canonical.facts.get(`li:${slug}`)?.description ? [canonical.facts.get(`li:${slug}`)!.description!] : [])],
-      industryLabels: [...new Set(l.company.industry.flatMap((c) => c.value))], employeeCount: null, hasPhone: p ? first(p.hasPhone) : null, signals: [],
+      industryLabels: [...new Set(l.company.industry.flatMap((c) => c.value))], employeeCount: null, hasPhone: p ? first(p.hasPhone) : null, signals: postSignals(slug),
     };
   }), icp, DEFAULT_WEIGHTS);
   const byKey = new Map(leads.map((l) => [l.company.key, l]));
@@ -344,7 +374,7 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
       screeningReasons: [],
       qualification: l.shared ? { checks: l.shared.checks, gaps: l.shared.gaps, disproven: l.shared.disproven, evidence_sources: l.shared.evidence_sources } : null,
       canonicalRecord: canonical.statuses.find((s) => s.companyKey === (slug ? `li:${slug}` : ""))?.state ?? "not_requested",
-      signals: [], rank: r, phone: null, outreachBlockers: blockers,
+      signals: postSignals(slug), rank: r, phone: null, outreachBlockers: blockers,
       provenance: { walkId: input.walkId, planHash: plan.planHash, runAt: at, providers: [...new Set(l.company.sources.map((s) => s.provider))] },
     };
   });

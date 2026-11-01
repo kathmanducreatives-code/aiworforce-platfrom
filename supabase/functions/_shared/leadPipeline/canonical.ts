@@ -13,6 +13,7 @@ import type { EvidenceItem } from "../candidateObservation.ts";
 import { observationFromCompany } from "../candidateObservation.ts";
 import { normalizeLinkedInCompanyEnriched } from "../hiringActorNormalizers.ts";
 import type { ActorInvoker } from "../discoveryProviders/adapters/apify.ts";
+import { isFresh, type CachedCompanyRecord, type EvidenceCache } from "./evidenceCache.ts";
 
 export const COMPANY_RECORD_ACTOR = Object.freeze({ key: "apify_linkedin_company_details", actorId: "harvestapi/linkedin-company", perItemUsd: 0.004, perStartUsd: 0.00005 });
 
@@ -91,4 +92,55 @@ export async function readCompanyRecords(targets: readonly CanonicalTarget[], in
     for (const t of batch) statuses.push({ companyKey: t.companyKey, state: "unavailable", reason: `company record read failed (${(e as Error)?.name ?? "error"}); not retried` });
     return { evidence, facts, statuses, spentUsd: worst, stopped: "charge_uncertain" };
   }
+}
+
+/**
+ * `readCompanyRecords` with a per-workspace evidence cache (evidenceCache.ts, PR #198's
+ * design): a company record bought once is reused while fresh, so a second search
+ * that meets the same company buys nothing. Only the misses are bought (one batch,
+ * same ceiling rule). Cached evidence still passes the identity rule downstream —
+ * reuse never lends a record to a company it does not name. A cache that cannot be
+ * read is treated as empty; one that cannot be written loses nothing already bought.
+ */
+export async function readCompanyRecordsCached(
+  targets: readonly CanonicalTarget[], invoke: ActorInvoker | null,
+  opts: { maxUsd: number; now: Date; idPrefix: string; cache: EvidenceCache | null; workspaceId: string; maxAgeDays?: number; truncateToBudget?: boolean },
+): Promise<CanonicalRun & { cached: number; cacheErrors: string[] }> {
+  const cacheErrors: string[] = [];
+  // Buy only what the ceiling covers; the rest stays needs_verification (never dropped).
+  const buy = async (ts: readonly CanonicalTarget[]): Promise<CanonicalRun> => {
+    if (!opts.truncateToBudget) return readCompanyRecords(ts, invoke, opts);
+    const fits = Math.max(0, Math.floor((opts.maxUsd - COMPANY_RECORD_ACTOR.perStartUsd + 1e-9) / COMPANY_RECORD_ACTOR.perItemUsd));
+    const withUrl = ts.filter((t) => !!t.linkedinUrl);
+    const over = withUrl.slice(fits);
+    const r = await readCompanyRecords(ts.filter((t) => !over.includes(t)), invoke, opts);
+    for (const t of over) r.statuses.push({ companyKey: t.companyKey, state: "skipped_budget", reason: `the approved Apify ceiling ($${opts.maxUsd}) is exhausted; left needs_verification` });
+    return r;
+  };
+  if (!opts.cache) return { ...(await buy(targets)), cached: 0, cacheErrors };
+  const slug = (u: string) => /linkedin\.com\/company\/([^/?#\s]+)/i.exec(u)?.[1]?.toLowerCase() ?? null;
+  const hits = new Map<string, CachedCompanyRecord>();
+  for (const t of targets) {
+    const s = slug(t.linkedinUrl);
+    if (!s || hits.has(t.companyKey)) continue;
+    try {
+      const r = await opts.cache.get(opts.workspaceId, s);
+      if (r && r.workspaceId === opts.workspaceId && isFresh(r, opts.now, opts.maxAgeDays ?? 30)) hits.set(t.companyKey, r);
+    } catch (e) { cacheErrors.push(`cache read: ${(e as Error)?.message ?? e}`); }
+  }
+  const misses = targets.filter((t) => !hits.has(t.companyKey));
+  const run = await buy(misses);
+  for (const [key, r] of hits) {
+    run.evidence.set(key, r.evidence);
+    if (r.facts) run.facts.set(key, r.facts);
+    run.statuses.push({ companyKey: key, state: "read", reason: `reused from this workspace's evidence cache (observed ${r.observedAt.slice(0, 10)}); not bought again` });
+  }
+  for (const t of misses) {
+    const ev = run.evidence.get(t.companyKey);
+    const s = slug(t.linkedinUrl);
+    if (!ev?.length || !s) continue;
+    try { await opts.cache.put({ workspaceId: opts.workspaceId, slug: s, evidence: ev, facts: run.facts.get(t.companyKey) ?? null, observedAt: ev[0].observed_at }); }
+    catch (e) { cacheErrors.push(`cache write: ${(e as Error)?.message ?? e}`); }
+  }
+  return { ...run, cached: hits.size, cacheErrors };
 }

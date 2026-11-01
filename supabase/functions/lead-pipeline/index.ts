@@ -20,6 +20,7 @@ import { handleLeadPipeline, handleStrategyRequest, parsePipelineRequest, parseS
 import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
 import { compileLeadMission } from "../_shared/leadMissionCompiler.ts";
 import { createStrategyAdvisorGenerateJson } from "../_shared/leadPipeline/strategyAdvisorModel.ts";
+import { supabaseEvidenceCache } from "../_shared/leadPipeline/evidenceCache.ts";
 import { supabaseCheckpointStore } from "../_shared/leadPipeline/checkpoint.ts";
 import { loadExistingRecords } from "../_shared/leadPipeline/history.ts";
 import { pipelineApifyInvoker } from "../_shared/leadPipeline/apifyInvoker.ts";
@@ -82,6 +83,8 @@ Deno.serve(async (req) => {
     leadoceanFor: (apiKey: string) => { const d = { apiKey, fetch: f }; return { adapter: leadOceanAdapter(d), deps: d }; },
     apify: apifyToken ? pipelineApifyInvoker({ token: apifyToken, fetch: f }) : null,
     persist: (rows: PipelineRow[]) => persist(admin, rows),
+    // Off unless DISCOVERY_EVIDENCE_CACHE_ENABLED and the held cache migration is applied.
+    evidenceCache: ["1", "true", "yes", "on"].includes((env("DISCOVERY_EVIDENCE_CACHE_ENABLED") ?? "").trim().toLowerCase()) ? supabaseEvidenceCache(admin) : null,
   };
   try {
     if (strategyReq) {

@@ -24,6 +24,12 @@ import {
 } from "../../../../supabase/functions/_shared/leadPipeline/strategy.ts";
 import { conn, loPage, loPerson, mockFetch, noSleep, type Synthetic } from "../discoveryProviders/fixtures.ts";
 import { companyRecord, NOW, WS } from "./fixtures.ts";
+import { memoryEvidenceCache, type EvidenceCache } from "../../../../supabase/functions/_shared/leadPipeline/evidenceCache.ts";
+import { ApifyRefusal, ledgeredInvoker, PIPELINE_ACTORS, pipelineApifyInvoker } from "../../../../supabase/functions/_shared/leadPipeline/apifyInvoker.ts";
+import { companiesFromPostRows, companyEmployeesInput, peopleFromEmployeeRows } from "../../../../supabase/functions/_shared/leadPipeline/apifyDiscovery.ts";
+import { checkFounders } from "../../../../supabase/functions/_shared/leadPipeline/founderCheck.ts";
+import { checkStrategyApproval } from "../../../../supabase/functions/_shared/leadPipeline/multiProvider.ts";
+import { chainFor } from "../../../../supabase/functions/_shared/leadPipeline/strategy.ts";
 import { readFlags } from "../../../../supabase/functions/_shared/discoveryProviders/flags.ts";
 import { handleStrategyRequest, parseStrategyRequest, readPipelineFlags, type StrategyDeps } from "../../../../supabase/functions/_shared/leadPipeline/service.ts";
 import type { PipelineRow } from "../../../../supabase/functions/_shared/leadPipeline/projection.ts";
@@ -161,7 +167,7 @@ const LO_RECORDS: Record<string, unknown> = {
 
 const approve = (plan: StrategyPlan): StrategyApproval => ({ planHash: plan.planHash, leadoceanRecords: plan.estimate.leadoceanRecords, apifyUsd: plan.estimate.apifyUsd, approvedBy: "test-owner", approvedAt: NOW().toISOString() });
 
-async function execute(spec: DiscoverySpec, plan: StrategyPlan, o: { approval?: StrategyApproval | null; lo?: ReturnType<typeof leadOcean>; ap?: ReturnType<typeof apifyMock>; existing?: ExclusionIndex; ledger?: ReturnType<typeof memoryLedger> } = {}) {
+async function execute(spec: DiscoverySpec, plan: StrategyPlan, o: { approval?: StrategyApproval | null; lo?: ReturnType<typeof leadOcean>; ap?: ReturnType<typeof apifyMock>; existing?: ExclusionIndex; ledger?: ReturnType<typeof memoryLedger>; cache?: EvidenceCache | null; workspaceId?: string } = {}) {
   const lo = o.lo ?? leadOcean(FOUNDERS);
   const ap = o.ap ?? apifyMock();
   const ledger = o.ledger ?? memoryLedger();
@@ -169,7 +175,7 @@ async function execute(spec: DiscoverySpec, plan: StrategyPlan, o: { approval?: 
   globalThis.fetch = () => { throw new Error("no network in offline tests"); };
   try {
     const r = await runDiscoveryStrategy({
-      workspaceId: WS, walkId: "walk-mp", spec, plan, approval: o.approval === undefined ? approve(plan) : o.approval,
+      workspaceId: o.workspaceId ?? WS, walkId: "walk-mp", spec, plan, approval: o.approval === undefined ? approve(plan) : o.approval, evidenceCache: o.cache ?? null,
       leadocean: lo.adapter, apify: ap.invoke, connections: CONNECTIONS, ledger, checkpoints: memoryCheckpointStore(),
       existing: o.existing ?? new ExclusionIndex([], NOW), now: NOW,
     });
@@ -295,7 +301,7 @@ Deno.test("strategy: GPT picks LeadOcean + Apify for a structured founder query;
   assertEquals([plan.strategy, plan.selectedBy], ["leadocean_plus_apify", "model"]);
   const apifyOnly = plan.candidates.find((c) => c.strategy === "apify_only")!;
   assertFalse(apifyOnly.feasible);
-  assert(apifyOnly.refusals.some((x) => x.includes("no approved people source")));
+  assert(apifyOnly.refusals.some((x) => x.includes("apify.people_search is not approved")), JSON.stringify(apifyOnly.refusals));
   // 100 requested; the LeadOcean ceiling is 50 records: stated, not hidden.
   assert(plan.limitations.some((l) => l.code === "budget_limited"));
   assertEquals(plan.estimate.leadoceanRecords, 50);
@@ -311,7 +317,7 @@ Deno.test("strategy: a stated hiring requirement moves a founder query from Lead
   // …and refused — never silently switched — when it cannot be.
   const p = planStrategy(Q.foundersAtHiring(), { ...CTX, user: { strategy: "apify_only" } });
   assertEquals(p.status, "blocked");
-  assertStringIncludes(p.blockedReason!, "no approved people source");
+  assertStringIncludes(p.blockedReason!, "apify.company_employees is not approved");
 });
 
 Deno.test("strategy: 'recently hired salespeople' — no title survives compilation, the user's words still pick Apify-first", () => {
@@ -332,7 +338,7 @@ Deno.test("strategy: unsupported capabilities are explicit limitations or refusa
   // D: post-driven discovery has no approved actor. Agencies can still be found; posts only rank.
   const d = planStrategy(Q.agenciesPosting(), CTX);
   assertEquals(DISCOVERY_CAPABILITIES["apify.linkedin_post_search"].status, "not_approved");
-  assert(d.limitations.some((l) => l.code === "signal_not_discoverable"), JSON.stringify(d.limitations));
+  assert(d.limitations.some((l) => l.code === "capability_not_approved" && l.detail.includes("linkedin-post-search")), JSON.stringify(d.limitations));
   assertEquals(d.candidates.find((c) => c.strategy === "apify_only")!.feasible, false);
   // E: recent funding cannot be corroborated in this pipeline — refused, with the reason and the route.
   const e = planStrategy(Q.fundedFounders(), CTX);
@@ -570,4 +576,143 @@ Deno.test("service: an uninterpretable request is refused, not guessed; bad inpu
   assertEquals(parseStrategyRequest({ action: "strategy_plan", workspace_id: WS, walk_id: "w", query: "x", strategy: "apify_signals_plus_magic" }), null);
   assertEquals(parseStrategyRequest({ action: "strategy_plan", workspace_id: WS, walk_id: "w", query: "x", exclude_providers: ["clearbit"] }), null);
   assertEquals(parseStrategyRequest({ action: "strategy_plan", workspace_id: WS, walk_id: "w", query: "x", max_apify_usd: 50 }), null, "a client cannot raise the ceiling past $5");
+});
+
+// ── Consolidation with PR #198: one engine, its capabilities registered, allowlist unchanged ──
+
+Deno.test("consolidation: the Apify allowlist and its 100-item cap are unchanged", async () => {
+  assertEquals(Object.keys(PIPELINE_ACTORS).sort(), ["apify_linkedin_company_details", "apify_linkedin_company_posts", "apify_linkedin_job_search", "apify_linkedin_profile_posts"]);
+  const inv = pipelineApifyInvoker({ token: "t", fetch: (() => Promise.resolve(new Response("[]"))) as never });
+  let refused = "";
+  await inv("apify_linkedin_job_search", {}, { maxItems: 101, idempotencyKey: "k" }).catch((e) => { refused = String(e.message); });
+  assertStringIncludes(refused, "maxItems must be 1–100");
+});
+
+Deno.test("consolidation: PR #198's post search, profile search, company employees and founder check are registered, priced and NOT approved", () => {
+  for (const id of ["apify.linkedin_post_search", "apify.people_search", "apify.company_employees", "apify.founder_check"]) {
+    assertEquals(DISCOVERY_CAPABILITIES[id].status, "not_approved", id);
+    assertStringIncludes(DISCOVERY_CAPABILITIES[id].note, "allowlist");
+  }
+  // The catalogued per-run floors are part of the worst case, so a plan can never under-quote them.
+  assertEquals((DISCOVERY_CAPABILITIES["apify.company_employees"].cost as { minimumUsd: number }).minimumUsd, 0.05);
+  assertEquals((DISCOVERY_CAPABILITIES["apify.people_search"].cost as { minimumUsd: number }).minimumUsd, 0.10);
+});
+
+Deno.test("consolidation: Apify-led chains discover by the defining signal — open roles → job search, posts → post search", () => {
+  assertEquals(chainFor("apify_only", Q.hiringAE()), ["apify.linkedin_job_search", "apify.linkedin_company_record"]);
+  assertEquals(chainFor("apify_only", Q.agenciesPosting())[0], "apify.linkedin_post_search");
+  assertEquals(chainFor("apify_only", Q.foundersAtHiring()), ["apify.linkedin_job_search", "apify.linkedin_company_record", "apify.company_employees"]);
+  assertEquals(chainFor("apify_only", Q.founders(5))[0], "apify.people_search");
+  assertEquals(Q.agenciesPosting().signals[0].topics, ["AI automation"], "post topics are the user's own words");
+  // Not approved → the post-driven query is served by LeadOcean + Apify, and says why.
+  const d = planStrategy(Q.agenciesPosting(), CTX);
+  assertEquals(d.strategy, "leadocean_plus_apify");
+  assertStringIncludes(d.candidates.find((c) => c.strategy === "apify_only")!.refusals[0], "apify.linkedin_post_search is not approved");
+});
+
+Deno.test("consolidation: a plan naming an unapproved actor is refused before any call — and the invoker refuses it anyway", async () => {
+  const spec = Q.hiringAE();
+  const plan = planStrategy(spec, CTX);
+  const forged: StrategyPlan = { ...plan, steps: [{ ...plan.steps[0], capability: "apify.linkedin_post_search" }, ...plan.steps.slice(1)] };
+  const verdict = checkStrategyApproval(forged, approve(forged));
+  assertFalse(verdict.ok);
+  const { r, ap, lo } = await execute(spec, forged);
+  assertEquals([r.status, ap.calls.length + lo.calls.length], ["blocked", 0]);
+  // Second line: even a direct call through the ledgered invoker never reaches Apify.
+  let reached = 0;
+  const ledger = memoryLedger();
+  const inv = ledgeredInvoker(() => { reached++; return Promise.resolve({ items: [] }); }, ledger, { workspaceId: WS, missionId: "m", maxUsd: 1 });
+  for (const k of ["apify_linkedin_post_search", "apify_people_search", "apify_linkedin_company_employees"]) {
+    let err: unknown = null;
+    await inv(k, {}, { maxItems: 1, idempotencyKey: k }).catch((e) => { err = e; });
+    assert(err instanceof ApifyRefusal, k);
+  }
+  assertEquals([reached, ledger.entries.size], [0, 0]);
+});
+
+Deno.test("consolidation: ported post-search parser keeps only company-page authors and dates each post", () => {
+  const rows = [
+    { type: "post", author: { type: "company", name: "Brightwave Agency", linkedinUrl: "https://www.linkedin.com/company/brightwave/" }, content: "How we use AI automation for clients", postedAt: { date: "2026-10-28T10:00:00Z" }, linkedinUrl: "https://www.linkedin.com/posts/p1" },
+    { type: "post", author: { type: "company", name: "Brightwave Agency", linkedinUrl: "https://www.linkedin.com/company/brightwave" }, content: "AI automation, part 2", postedAt: { date: "2026-10-29T10:00:00Z" }, linkedinUrl: "https://www.linkedin.com/posts/p2" },
+    // A person's post: their headline is not employment.
+    { type: "post", author: { type: "profile", name: "Pat Poster", linkedinUrl: "https://www.linkedin.com/in/pat", info: "Founder at Somewhere" }, content: "AI automation!", linkedinUrl: "https://www.linkedin.com/posts/p3" },
+  ];
+  const out = companiesFromPostRows(rows, { now: NOW(), windowDays: 30, runId: "run-posts" });
+  assertEquals(out.companies.map((c) => c.linkedinUrl), ["https://www.linkedin.com/company/brightwave"], "one company for two posts");
+  assertEquals(out.dropped, { person_author_names_no_company: 1 });
+  assertEquals(out.evidence.get("brightwave")![0].dimension, "identity");
+  assert(out.signals.length >= 2, "each post is a ranking signal");
+});
+
+Deno.test("consolidation: ported company-employees parser trusts only a current position at a seed company; input pins the Short price", () => {
+  const rows = [
+    { id: "m1", fullName: "Nia North", linkedinUrl: "https://www.linkedin.com/in/ACwAAA1", currentPositions: [{ title: "Founder & CEO", companyLinkedinUrl: "https://www.linkedin.com/company/northwind", companyName: "Northwind Ledger", current: true }] },
+    { id: "m2", fullName: "Old Hand", currentPositions: [{ title: "CEO", companyLinkedinUrl: "https://www.linkedin.com/company/northwind", current: false }] },
+    { id: "m3", fullName: "Elsewhere", currentPositions: [{ title: "CEO", companyLinkedinUrl: "https://www.linkedin.com/company/other" }] },
+  ];
+  const people = peopleFromEmployeeRows(rows, new Set(["northwind"]), NOW().toISOString());
+  assertEquals(people.map((p) => p.fullName), ["Nia North"]);
+  assertEquals(people[0].company?.linkedinUrl, "https://www.linkedin.com/company/northwind");
+  assertEquals(companyEmployeesInput(["u"], ["Founder"], 2).profileScraperMode, "Short ($4 per 1k)");
+});
+
+Deno.test("consolidation: ported founder check — confirmed / other decision-maker / budget floor (offline invoker)", async () => {
+  const invoke: ActorInvoker = () => Promise.resolve({ items: [
+    { fullName: "Nia North", currentPositions: [{ title: "Founder & CEO", companyLinkedinUrl: "https://www.linkedin.com/company/northwind" }] },
+    { fullName: "Someone Else", currentPositions: [{ title: "CEO", companyLinkedinUrl: "https://www.linkedin.com/company/harbor" }] },
+  ], chargedUsd: 0.05 });
+  const r = await checkFounders([
+    { companyKey: "a", companyLinkedinUrl: "https://www.linkedin.com/company/northwind", personName: "Nia North" },
+    { companyKey: "b", companyLinkedinUrl: "https://www.linkedin.com/company/harbor", personName: "Hugo Hart" },
+  ], invoke, { maxUsd: 0.1, perCompany: 2, jobTitles: ["Founder", "CEO"], idPrefix: "t" });
+  assertEquals([r.checks.get("a")!.state, r.checks.get("b")!.state], ["confirmed", "other_decision_maker"]);
+  const tight = await checkFounders([{ companyKey: "a", companyLinkedinUrl: "https://www.linkedin.com/company/northwind", personName: "Nia North" }], invoke, { maxUsd: 0.04, perCompany: 1, jobTitles: ["CEO"], idPrefix: "t2" });
+  assertEquals([tight.stopped, tight.spentUsd], ["budget", 0], "the $0.05 run minimum is respected");
+});
+
+Deno.test("consolidation: the evidence cache reuses a fresh company record per workspace and never across workspaces", async () => {
+  const spec = Q.hiringAE();
+  const plan = planStrategy(spec, CTX);
+  const cache = memoryEvidenceCache();
+  const first = await execute(spec, plan, { cache });
+  const boughtFirst = first.ap.calls.filter((c) => c.actor === "apify_linkedin_company_details").flatMap((c) => c.input.companies as string[]).length;
+  assert(boughtFirst >= 2 && cache.rows.size >= 2);
+  // A second walk in the same workspace (fresh ledger): no record is bought again, verdicts unchanged.
+  const second = await execute(spec, plan, { cache });
+  const rebought = second.ap.calls.filter((c) => c.actor === "apify_linkedin_company_details").flatMap((c) => (c.input.companies as string[]).map((u) => /company\/([^/]+)/.exec(u)![1]));
+  assertEquals(rebought, ["harbor"], "every found record reused; only the company with no record is asked again (a miss is not cached)");
+  assertEquals(byDomain(second.r)["northwind.example"].statuses.qualification, "eligible");
+  assertEquals(byDomain(second.r)["mapleledger.example"].statuses.qualification, "ineligible");
+  // The wrong-company record stays refused even when it comes from the cache.
+  assert(second.r.evidenceRefused.some((x) => x.source === "apify_linkedin_company_details"));
+  // Another workspace reads nothing from this one's purchases.
+  const other = await execute(spec, plan, { cache, workspaceId: "33333333-3333-4333-8333-333333333333" });
+  assert(other.ap.calls.some((c) => c.actor === "apify_linkedin_company_details"), "bought for the other workspace");
+});
+
+Deno.test("consolidation: a stale or unreadable cache entry is bought again, never trusted", async () => {
+  const spec = Q.hiringAE();
+  const plan = planStrategy(spec, CTX);
+  const stale = memoryEvidenceCache();
+  await stale.put({ workspaceId: WS, slug: "northwind", evidence: [], facts: null, observedAt: "2026-01-01T00:00:00Z" });
+  const a = await execute(spec, plan, { cache: stale });
+  assert(a.ap.calls.find((c) => c.actor === "apify_linkedin_company_details")!.input.companies.toString().includes("northwind"));
+  const broken: EvidenceCache = { get: () => Promise.reject(new Error("table missing")), put: () => Promise.reject(new Error("table missing")) };
+  const b = await execute(spec, plan, { cache: broken });
+  assertEquals(byDomain(b.r)["northwind.example"].statuses.qualification, "eligible", "a broken cache costs a purchase, never a verdict");
+  assertStringIncludes(b.r.steps.find((x) => x.capability === "apify.linkedin_company_record")!.reason ?? "", "cache read");
+});
+
+Deno.test("consolidation: the LeadOcean-led strategy shares the same evidence cache", async () => {
+  const spec = Q.foundersIcpA(4);
+  const plan = planStrategy(spec, CTX);
+  const cache = memoryEvidenceCache();
+  const invoke = (calls: { actor: string; slugs?: string[] }[]): ActorInvoker => (actor, input) => { calls.push({ actor, slugs: (input.companies as string[]).map((u) => /company\/([^/]+)/.exec(u)![1]) }); return Promise.resolve({ items: (input.companies as string[]).map((u) => ({ ...RECORDS, ...LO_RECORDS })[/company\/([^/]+)/.exec(u)![1]]).filter(Boolean), runId: "r", chargedUsd: 0.01 }); };
+  const c1: { actor: string; slugs?: string[] }[] = [];
+  await execute(spec, plan, { cache, ap: { invoke: invoke(c1), calls: [] } as never });
+  assert(c1.length === 1 && cache.rows.has(`${WS}:acmesaas`));
+  const c2: { actor: string; slugs?: string[] }[] = [];
+  const again = await execute(spec, plan, { cache, ap: { invoke: invoke(c2), calls: [] } as never });
+  assertFalse(c2.flatMap((c) => c.slugs ?? []).includes("acmesaas"), "a record already bought is not bought twice");
+  assertEquals(byDomain(again.r)["acmesaas.example"].statuses.qualification, "eligible");
 });

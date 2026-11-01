@@ -86,6 +86,8 @@ export interface PipelineDeps {
   /** The Apify invoker when this deployment holds an Apify token; null = canonical and signals unavailable. */
   apify: ActorInvoker | null;
   persist(rows: PipelineRow[], contactValuesWritten: number): Promise<void>;
+  /** Per-workspace company-record cache; null unless DISCOVERY_EVIDENCE_CACHE_ENABLED (needs held migration 20261101120000). */
+  evidenceCache?: import("./evidenceCache.ts").EvidenceCache | null;
   now?: () => Date;
 }
 
@@ -121,6 +123,7 @@ export async function handleLeadPipeline(req: PipelineRequest, d: PipelineDeps):
     workspaceId: req.workspaceId, walkId: req.walkId, icp, connections, approvals,
     leadocean: lo?.adapter ?? null, leadoceanDeps: lo?.deps ?? null, apify: d.apify, ledger: d.ledger, checkpoints: d.checkpoints,
     existing: new ExclusionIndex(req.action === "run" ? await d.loadExisting(req.workspaceId) : [], now), now,
+    evidenceCache: d.evidenceCache ?? null,
   };
   const dry = await runLeadPipeline({ ...base, dryRun: true });
   if (req.action === "plan" || dry.status === "blocked") {
@@ -256,6 +259,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     approval: { ...req.approval, approvedBy: d.userId, approvedAt: now().toISOString() },
     leadocean: key ? d.leadoceanFor(key).adapter : null, apify: d.apify, connections,
     ledger: d.ledger, checkpoints: d.checkpoints, existing: new ExclusionIndex(await d.loadExisting(req.workspaceId), now), now,
+    evidenceCache: d.evidenceCache ?? null,
   });
   if (run.status === "blocked") return { status: 409, body: { error: run.reason, plan } };
   const projected = [...run.queue, ...run.review].map((l) => projectPipelineLead(l, { workspaceId: req.workspaceId, values: [] })).filter((x): x is PipelineRow => !!x);

@@ -35,7 +35,8 @@ import { compileIcp, icpContradictions, leadoceanHints, type IcpConfig } from ".
 import type { DiscoveryRequirements } from "../discoveryProviders/types.ts";
 import { advance, newCheckpoint, resumeHints, type CheckpointStore, type WalkCheckpoint } from "./checkpoint.ts";
 import { ExclusionIndex, type ExclusionVerdict } from "./exclusions.ts";
-import { readCompanyRecords, type CanonicalRun } from "./canonical.ts";
+import { readCompanyRecordsCached, type CanonicalRun } from "./canonical.ts";
+import type { EvidenceCache } from "./evidenceCache.ts";
 import { collectSignals, type Signal, type SignalPlan, type SignalStatus } from "./signals.ts";
 import { DEFAULT_WEIGHTS, rankLeads, type RankResult, type RankWeights } from "./ranking.ts";
 import { employmentFrom, enrichPhones, redactPhoneRecord, type PhoneClass, type PhoneRecord, type PhoneTarget } from "./phones.ts";
@@ -123,6 +124,8 @@ export interface PipelineInput {
   now?: () => Date;
   /** Per actor run; a run that does not finish in time counts its worst case and stops that step. */
   actorTimeoutMs?: number;
+  /** Per-workspace company-record cache: a fresh record already bought is reused, never bought again. */
+  evidenceCache?: EvidenceCache | null;
   /** The plan is computed and returned, nothing is bought. */
   dryRun?: boolean;
   /** USD per LeadOcean record for cost reporting (Free plan: 0 monetary); null = report records only. */
@@ -240,7 +243,7 @@ export async function runLeadPipeline(input: PipelineInput): Promise<PipelineRun
   if (input.approvals.canonicalMaxUsd != null) {
     const targets = run.leads.filter((l) => !screened.has(l.company.key) && l.status !== "rejected" && !priorCompanies.has(l.company.key))
       .map((l) => ({ companyKey: l.company.key, linkedinUrl: first(l.company.linkedinUrl) ?? "" }));
-    canonical = await readCompanyRecords(targets, apify, { maxUsd: input.approvals.canonicalMaxUsd, now: now(), idPrefix: missionId });
+    canonical = await readCompanyRecordsCached(targets, apify, { maxUsd: input.approvals.canonicalMaxUsd, now: now(), idPrefix: missionId, cache: input.evidenceCache ?? null, workspaceId: input.workspaceId });
     if (canonical.evidence.size) {
       const merged: MergeResult = {
         companies: run.leads.map((l) => l.company),
