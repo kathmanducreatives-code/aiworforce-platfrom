@@ -15,7 +15,7 @@ import { requirementsFromMission } from "../../../supabase/functions/_shared/dis
 import { sharedCriteria } from "../../../supabase/functions/_shared/discoveryProviders/sharedQualification.ts";
 import { evaluateEligibility } from "../../../supabase/functions/_shared/candidateEligibility.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
-import { specFromMission } from "../../../supabase/functions/_shared/leadPipeline/strategy.ts";
+import { discoveryJobTitles, hiringTitles, specFromMission } from "../../../supabase/functions/_shared/leadPipeline/strategy.ts";
 
 const QUERY = "Find 5 US B2B companies actively hiring salespeople. Prefer 20–500 employees, but include strong opportunities outside that range and explain why.";
 const proposal = (over: Record<string, unknown> = {}) => ({
@@ -67,4 +67,13 @@ Deno.test("hedged size: a company whose declared band is outside 20–500 is nev
     const r = evaluateEligibility(criteria, buildCompanyEvidenceGraph("c", [b as never], { now: new Date("2026-11-01T12:00:00Z") }));
     assert(!r.disproven.some((d) => d.startsWith("company_size")), `band ${JSON.stringify(b.value)} must not disprove: ${JSON.stringify(r.disproven)}`);
   }
+});
+
+Deno.test("job search terms: 'salespeople' is searched as the sales family's title, a real title as written", () => {
+  const spec = specFromMission(compileLeadMission({ originalUserQuery: QUERY, proposal: proposal(), requestedCount: 5 }).final_mission as never, { defaultCount: 5 });
+  assertEquals(spec.signals[0].roleTerms, ["salespeople"]);
+  assertEquals(hiringTitles(spec), ["Account Executive"]);
+  assertEquals(discoveryJobTitles(spec), ["Founding Account Executive", "Account Executive"], "the size preference adds a founding-role search bias only");
+  const ae = specFromMission(compileLeadMission({ originalUserQuery: "Find 5 US companies currently hiring Account Executives.", proposal: proposal({ required_signal_terms: ["Account Executive"], soft_preferences: [] }), requestedCount: 5 }).final_mission as never, { defaultCount: 5 });
+  assertEquals(hiringTitles(ae), ["account executives"], "a real title is unchanged (S1/S2 inputs unchanged)");
 });
