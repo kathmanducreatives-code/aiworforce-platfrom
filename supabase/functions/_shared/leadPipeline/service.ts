@@ -209,8 +209,13 @@ export function parseStrategyRequest(b: Record<string, unknown>): StrategyReques
 }
 
 export interface StrategyDeps extends PipelineDeps {
-  /** GPT interpretation: the mission compiler's final mission, or why there is none. Never a regex fallback. */
-  interpret(query: string, workspaceId: string, requestedCount: number | null): Promise<{ mission: unknown } | { error: string }>;
+  /**
+   * GPT interpretation: the mission compiler's final mission, or why there is none. Never a
+   * regex fallback. `brain` reports how the workspace's Company Brain informed it
+   * (brainContext.ts): the user's words outrank it; it fills open fields as targets only.
+   */
+  interpret(query: string, workspaceId: string, requestedCount: number | null): Promise<
+    { mission: unknown; brain?: { status: string; fields: string[]; applied: unknown[]; rejected: unknown[] } } | { error: string }>;
   /** GPT strategy advice; null = the deterministic choice only. */
   advisor: GenerateJsonFn | null;
 }
@@ -242,8 +247,18 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   };
   const base = planStrategy(spec, ctx);
   const plan: StrategyPlan = req.user?.strategy || !d.advisor ? base : planStrategy(spec, ctx, await adviseStrategy(spec, base.candidates, d.advisor, req.workspaceId));
+  // What the plan was built from, so a reviewer can see hard vs soft and the Brain's part.
+  const interpretation = {
+    hard: spec.requirements.hard.map((h) => ({ key: h.key, label: h.label })),
+    preferences: [
+      ...(spec.preferredEmployees ? [{ key: "employee_range", values: spec.preferredEmployees }] : []),
+      ...spec.requirements.preferences.map((p) => ({ key: p.key, values: p.values })),
+    ],
+    signals: spec.signals.map((s) => ({ kind: s.kind, hard: s.hard, windowDays: s.windowDays, roleTerms: s.roleTerms, roleFamilies: s.roleFamilies })),
+    companyBrain: "brain" in interpreted ? interpreted.brain ?? null : null,
+  };
   if (req.action === "strategy_plan" || plan.status === "blocked") {
-    return { status: plan.status === "blocked" ? 409 : 200, body: { status: plan.status, plan, worstCase: plan.estimate } };
+    return { status: plan.status === "blocked" ? 409 : 200, body: { status: plan.status, plan, worstCase: plan.estimate, interpretation } };
   }
   if (!req.approval) return { status: 400, body: { error: "a run needs an approval", plan } };
   if (req.approval.planHash !== plan.planHash) return { status: 409, body: { error: "plan changed since it was approved (re-interpretation or new limits); review the new plan", plan } };

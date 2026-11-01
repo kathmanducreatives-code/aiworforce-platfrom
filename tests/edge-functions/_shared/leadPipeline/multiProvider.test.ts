@@ -733,9 +733,12 @@ Deno.test("revised S2: 'smaller companies preferred' is a preference, never a ha
   assertEquals(discoveryJobTitles(spec), ["Founding account executive", "account executives"]);
   assertEquals(hiringTitles(spec), ["account executives"]);
   assertEquals(planStrategy(spec, CTX).strategy, "apify_plus_leadocean");
-  // The pitfall the canary avoids: the compiler reads a stated range as a hard criterion.
-  const hard = revisedS2("Find the CEO at 1 US company currently hiring Account Executives, ideally a smaller company of about 11-200 employees.");
+  // A range stated WITHOUT a hedge is a requirement; a hedged one ("ideally …") only ranks
+  // (missionCriteria.sizeClauseHedged, TEST planning 2026-11-01).
+  const hard = revisedS2("Find the CEO at 1 US company with 11-200 employees currently hiring Account Executives.");
   assertEquals(hard.employees, { min: 11, max: 200 });
+  const soft = revisedS2("Find the CEO at 1 US company currently hiring Account Executives, ideally a smaller company of about 11-200 employees.");
+  assertEquals([soft.employees, soft.preferredEmployees], [null, { min: 11, max: 200 }]);
   assertEquals(discoveryJobTitles(Q.hiringAE()), hiringTitles(Q.hiringAE()), "no preference: no bias");
 });
 
@@ -843,4 +846,25 @@ Deno.test("identity: when the provider's own row says the person is not current,
   assertEquals(north.statuses.qualification, "eligible");
   assertEquals([north.person!.verification.status, north.statuses.outreachReadiness], ["employment_mismatch", "blocked"]);
   assert(north.outreachBlockers.some((b) => b.includes("does not show this person currently")));
+});
+
+Deno.test("service: strategy_plan explains hard vs soft and how the Company Brain was used", async () => {
+  const q = "Find 5 US B2B companies actively hiring salespeople. Prefer 20–500 employees, but include strong opportunities outside that range and explain why.";
+  const proposalSoft = { ...HIRING_PROPOSAL, requested_opportunity_count: 5, required_signal_terms: ["salespeople"],
+    soft_preferences: [{ field: "employee_range", value: { min: 20, max: 500 }, reason: "preferred" }] };
+  const { d, lo, ap } = sdeps({
+    interpret: (query, _ws, n) => Promise.resolve({
+      mission: compileLeadMission({ originalUserQuery: query, proposal: proposalSoft, requestedCount: n }).final_mission,
+      brain: { status: "absent", fields: [], applied: [], rejected: [] },
+    }),
+  });
+  const r = await handleStrategyRequest(sreq({ action: "strategy_plan", query: q, requested_count: 5 }), d);
+  assertEquals(r.status, 200);
+  const i = r.body.interpretation as { hard: { key: string }[]; preferences: { key: string; values: unknown }[]; signals: { kind: string; roleFamilies: string[] }[]; companyBrain: { status: string } };
+  assertEquals(i.hard.map((h) => h.key).sort(), ["geography_hq", "signal"], "US HQ and hiring are the only requirements");
+  assertEquals(i.preferences.find((p) => p.key === "employee_range")?.values, { min: 20, max: 500 }, "the size is a preference");
+  assertEquals(i.signals[0].roleFamilies, ["gtm_sales"]);
+  assertEquals(i.companyBrain.status, "absent");
+  assertEquals((r.body.plan as StrategyPlan).strategy, "apify_only");
+  assertEquals(lo.calls.length + ap.calls.length, 0, "planning calls no provider");
 });

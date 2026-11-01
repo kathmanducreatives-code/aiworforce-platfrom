@@ -29,7 +29,7 @@ import { requirementsFromMission } from "../discoveryProviders/requirements.ts";
 import { stableHash } from "../discoveryProviders/routing.ts";
 import { translate } from "../discoveryProviders/vocabulary.ts";
 import type { GenerateJsonFn } from "../intelligence/plannerWrapper.ts";
-import { classifyRoleFamily } from "../roleFamilies.ts";
+import { classifyRoleFamily, roleFamilyAliases } from "../roleFamilies.ts";
 import { COMPANY_RECORD_ACTOR } from "./canonical.ts";
 import { configureIcp, ICP_A, NON_DECISION_TITLES, type IcpConfig } from "./icp.ts";
 import { SIGNAL_ACTORS, worstCaseUsd } from "./signals.ts";
@@ -423,7 +423,18 @@ function access(ctx: StrategyContext, p: ProviderId): string | null {
 /** The job-search titles for the request's hiring signal (≤3, the catalogued discovery limit). */
 export function hiringTitles(spec: DiscoverySpec): string[] {
   const s = spec.signals.find((x) => x.kind === "hiring");
-  return (s?.roleTerms.length ? s.roleTerms : s?.roleFamilies.length ? s.roleFamilies.map((f) => FAMILY_TITLES[f]).filter((t): t is string => !!t) : []).slice(0, 3);
+  if (!s) return [];
+  const familyTitles = s.roleFamilies.map((f) => FAMILY_TITLES[f]).filter((t): t is string => !!t);
+  if (!s.roleTerms.length) return familyTitles.slice(0, 3);
+  // A user's word that is not a job title ("salespeople", "sellers") is searched as its
+  // family's title; a real title ("account executives") is searched as written. The
+  // post-filter still judges every posting against the requested family either way.
+  const isTitle = (t: string) => s.roleFamilies.some((f) => roleFamilyAliases(f as never).some((a) => {
+    const norm = (x: string) => x.toLowerCase().replace(/[^a-z ]/g, "").replace(/s$/, "").trim();
+    return norm(a) === norm(t);
+  }));
+  const out = s.roleTerms.map((t) => (isTitle(t) || !familyTitles.length ? t : familyTitles[0]));
+  return [...new Set(out)].slice(0, 3);
 }
 /**
  * The job-search INPUT titles: the requested roles, plus — only when the user stated a

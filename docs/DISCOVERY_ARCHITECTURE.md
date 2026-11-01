@@ -163,3 +163,21 @@ contains it, and the ledgered invoker refuses its key — three independent stop
 
 To approve one later (separately): confirm the actor's current price, add it to
 `PIPELINE_ACTORS`, run the offline suite, then a single canary with its own cap.
+
+## 10. Company Brain and ATLAS (2026-11-01)
+
+Two stores, one direction. **Company Brain** (`company_brain`, one row per workspace)
+is the workspace's own context: who it is, what it sells, whom it targets, what it
+excludes. **ATLAS** (`accounts`, `contacts`, `lead_candidates`, attribution in
+`raw.agentory_pipeline`) is the canonical store of what discovery found. The Brain is
+READ by `strategy_plan` / `strategy_run` as planning context
+(`leadPipeline/brainContext.ts`) and never written; no lead is stored in it.
+
+Rules (same compiler path as the chat agent): the user's words outrank the Brain; the
+Brain fills only open fields, as targets; a Brain size rule never overrides a size the
+request states (ATLAS-specific, reported in `interpretation.companyBrain.rejected`); an
+unusable Brain (absent / not onboarded / empty / unreadable) is no context; the row is
+read by workspace id after the membership check, so one workspace's Brain never informs
+another's plan. Other agents read ATLAS leads through the existing lead library
+(`useLeadLibrary` → `canonicalLeadView`), which now honours each contact's
+`verification` status.
