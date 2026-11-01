@@ -8660,6 +8660,7 @@ export async function runCapabilityPlan(
       // company only when THIS run discovered it by a funding round, so a
       // hiring mission — which has no rounds — filters exactly as it did
       // before. Test 6 in `fundingCoverage.test.ts` pins that.
+      const missionRequiresSignal = (opts.mission.required_signals ?? []).length > 0;
       const eligible = companies.filter((c) =>
         c.record.stage === "hiring_verified" || c.hiring_jobs.length > 0 ||
         (c.hiring_assessment ? reachesCompanyBrain(c.hiring_assessment) : false) ||
@@ -8671,7 +8672,19 @@ export async function runCapabilityPlan(
         // statement that it expanded, or launched, carries evidence for the
         // signal the mission required — and a filter that only asks about
         // openings cannot see it.
-        Object.values(c.signal_evidence).some((a) => a.length > 0));
+        Object.values(c.signal_evidence).some((a) => a.length > 0) ||
+        // ── OR, FOR A MISSION THAT ASKS FOR NO SIGNAL AT ALL, ITS RECORD ───
+        //
+        // Every clause above asks about a SIGNAL, so a purely firmographic
+        // mission ("US manufacturers under 100 employees", "US marketing
+        // agencies with 5–200 employees") admitted nobody: the evaluator never
+        // ran, and an industry outside the controlled business-model
+        // vocabulary — which only the evaluator, citing the company's own
+        // words, can answer — stayed unknown forever. Such a mission qualified
+        // no one. With no signal required, a company whose company record
+        // ANSWERED (so headquarters and size are checkable) is admitted; the
+        // evaluation budget and the clock below still bound the calls.
+        (!missionRequiresSignal && enrichmentWasAnswered(asEnrichmentOutcome(c.enrichment_outcome))));
 
       // ── AND WHY EVERYONE ELSE IS NOT ────────────────────────────────────
       //

@@ -27,6 +27,7 @@
 
 import { hydrateOutreachStage } from "@/lib/outreachStageView";
 import { requirementEvidenceLines } from "./requirementEvidence";
+import { contactIsVerified, pipelineRoleVerification } from "./contactVerification";
 import type { OutreachStageView } from "@/lib/workbenchAccountView";
 
 // ----------------------------------------------------------------- inputs -----
@@ -160,6 +161,12 @@ export interface CanonicalSelectedRecipient {
   email: string | null;
   phone: string | null;
   verified: boolean;
+  /**
+   * The discovery pipeline's own verdict on this person's role and current employment
+   * (`raw.agentory_pipeline.verification.status`), when the contact came from it:
+   * `requires_role_verification` | `employment_mismatch` | `verified`. Null otherwise.
+   */
+  roleVerification?: string | null;
 }
 
 export interface CanonicalLeadView {
@@ -351,6 +358,9 @@ export function selectRepresentativeLead(rows: CanonicalLeadCandidate[]): Canoni
 // -------------------------------------------------------------- recipient -----
 
 function contactView(c: CanonicalContact): CanonicalSelectedRecipient {
+  // A contact the discovery pipeline wrote is verified only when ITS verification says so
+  // (contactVerification.ts; S2 identity review, 2026-11-01).
+  const roleVerification = pipelineRoleVerification(c.raw);
   return {
     contactId: c.id,
     fullName: str(c.full_name),
@@ -358,7 +368,8 @@ function contactView(c: CanonicalContact): CanonicalSelectedRecipient {
     linkedinUrl: str(c.linkedin_url),
     email: str(c.email),
     phone: str(c.phone),
-    verified: !!str(c.email) || !!str(c.linkedin_url),
+    verified: contactIsVerified(c),
+    roleVerification,
   };
 }
 

@@ -491,6 +491,34 @@ export function restatesFundingWindow(field: string, raw: unknown, signals: read
   return days === funding[0].timeframe_days;
 }
 
+/**
+ * The same restatement for the SIZE bound: "under 100 employees" arrives as
+ * `employee_range.max = 100` AND as `employee_max lte 100` in hard_constraints.
+ * The second compiled to a hard `constraint` no evidence dimension answers —
+ * `unprovable_today`, so every candidate of such a mission was held blocked
+ * (PR #198's provider tests failed on the merge with this branch for the same
+ * row). Skipped only for a size field and a bound operator from closed lists
+ * whose value EQUALS the mission's own range bound; a different bound ("at
+ * most 50" beside 100) is a requirement of its own and is kept.
+ */
+const RESTATED_MAX_FIELDS = new Set(["employee_max", "max_employees", "employee_count_max", "employees_max", "headcount_max"]);
+const RESTATED_MIN_FIELDS = new Set(["employee_min", "min_employees", "employee_count_min", "employees_min", "headcount_min"]);
+const RESTATED_MAX_OPS = new Set(["lte", "<=", "max", "at_most", "less_than_or_equal", "maximum"]);
+const RESTATED_MIN_OPS = new Set(["gte", ">=", "min", "at_least", "greater_than_or_equal", "minimum"]);
+export function restatesEmployeeBound(
+  field: string, raw: unknown, range: { min?: number | null; max?: number | null } | null | undefined,
+): boolean {
+  const f = field.toLowerCase();
+  const isMax = RESTATED_MAX_FIELDS.has(f), isMin = RESTATED_MIN_FIELDS.has(f);
+  if (!isMax && !isMin) return false;
+  const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { value: raw }) as { operator?: unknown; value?: unknown };
+  const op = String(c.operator ?? "").trim().toLowerCase();
+  if (!(isMax ? RESTATED_MAX_OPS : RESTATED_MIN_OPS).has(op)) return false;
+  const n = typeof c.value === "number" ? c.value : /^\d{1,7}$/.test(String(c.value ?? "").trim()) ? Number(c.value) : NaN;
+  const bound = isMax ? range?.max : range?.min;
+  return typeof bound === "number" && n === bound;
+}
+
 function signalWords(s: Partial<MissionSignal>): string {
   return [
     s.phrase ?? "", ...(s.qualifier?.role_terms ?? []), ...(s.role_families ?? []),
@@ -1320,6 +1348,7 @@ export function deriveMissionCriteria(
     if (handled.has(field)) continue;
     if (restatesHiringSignal(field, raw, mission.required_signals ?? [])) continue;
     if (restatesFundingWindow(field, raw, mission.required_signals ?? [])) continue;
+    if (restatesEmployeeBound(field, raw, cp.employee_range)) continue;
     const c = (raw ?? {}) as { operator?: string; value?: unknown; reason?: string };
     const value = c.value ?? raw;
     const values = Array.isArray(value) ? value.map(String) : [String(value ?? "")];

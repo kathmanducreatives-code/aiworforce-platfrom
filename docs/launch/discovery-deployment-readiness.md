@@ -1,0 +1,116 @@
+# Multi-provider discovery — deployment readiness (2026-11-01)
+
+Branch `claude/optimistic-hypatia-3bylnd`. Nothing below has been applied or deployed.
+
+## Projects (verified read-only)
+
+| Role | Ref | State |
+|---|---|---|
+| Production | `ohsdatpvfdjdemstoiuj` (agentory) | No `lead-pipeline`, `provider-connections`, `provider-discovery` or `discovery-engine` function deployed. None of the held tables exist. |
+| TEST | `tlvnfrxzjhsjgdofwehb` (agentory-discovery-test) | Same: the held tables are absent. 2 workspaces. |
+
+Dependencies present on **both**: `supabase_vault` extension, `public.workspaces`,
+`public.has_workspace_access(uuid, uuid)`, `lead_candidates`, `accounts`, `contacts`.
+
+## Migrations (in `supabase/migrations-held/`, never in `supabase/migrations/`)
+
+| Order | File | Creates | Isolation | Rollback |
+|---|---|---|---|---|
+| 1 | `20261027120000_provider_connections.sql` | `workspace_provider_connections` (key in Vault; row holds only the secret id), `provider_usage_ledger`, 6 `SECURITY DEFINER` functions with `search_path = ''` | RLS on; `anon`/`authenticated` revoked; members read selected columns only via `has_workspace_access` (the Vault id column is not granted); all functions execute as `service_role` only | `rollback/…provider_connections.down.sql`: one transaction; **refuses while any ledger row exists** (reconcile + export first); deletes the Vault secrets with their rows |
+| 2 | `20261031120000_lead_pipeline_checkpoints.sql` | `lead_pipeline_checkpoints` (PK workspace + walk) | RLS on; members read their own workspace's rows; `service_role` writes | `drop table if exists` |
+| 3 (optional) | `20261101120000_discovery_evidence_cache.sql` (ported from PR #198) | `discovery_evidence_cache` (PK workspace + LinkedIn slug) | RLS on; members read their own workspace's rows; `service_role` writes | `drop table if exists` |
+
+Purely additive: new tables and functions only. Nothing existing is altered,
+so applying them cannot change current behaviour; every new function is
+unreachable while the flags are off. Contract tests:
+`tests/db-contract/provider-connections/`.
+
+Migration 3 is needed only when `DISCOVERY_EVIDENCE_CACHE_ENABLED` is set; without
+it the function runs and simply buys every record.
+
+## Deployment order
+
+1. Merge into `launch/hardening` (PR, CI green, review).
+2. TEST project: apply migration 1, then 2 (then 3 only if the cache will be enabled); run the db-contract assertions.
+3. TEST: deploy `provider-connections` and `lead-pipeline`; health check with flags off (expect 404).
+4. TEST: set secrets; enable for one TEST workspace; non-billable checks (`strategy_plan` calls no provider).
+5. Production: repeat 2–4 only after a separate approval, starting with one workspace and explicit ceilings.
+
+## Secrets and flags
+
+Secrets: `OPENAI_API_KEY` (interpretation + advisor), `APIFY_API_TOKEN` (the new billed account), the LeadOcean key is stored per workspace through `provider-connections` (Vault), `SUPABASE_SERVICE_ROLE_KEY` (platform).
+
+Flags (all default off; unset = off): `LEAD_PIPELINE_ENABLED`, `LEAD_PIPELINE_WORKSPACES`,
+`PROVIDER_DISCOVERY_ENABLED`, `PROVIDER_DISCOVERY_WORKSPACES`, `PROVIDER_LEADOCEAN_ENABLED`,
+`LEADOCEAN_COMMERCIAL_TERMS_CONFIRMED`, `PROVIDER_APIFY_DISCOVERY_ENABLED`.
+`DISCOVERY_EVIDENCE_CACHE_ENABLED` (needs migration 3).
+Keep `LEAD_PIPELINE_SIGNALS_ENABLED`, `LEAD_PIPELINE_PHONES_ENABLED` and `PROVIDER_APOLLO_ENABLED` off.
+Apollo is also disabled in code (`APOLLO_ACCESS_VALIDATED = false`).
+
+Spending ceilings per request: `max_leadocean_records` ≤ 500 (default 50), `max_apify_usd` ≤ $5 (default $0.25); every run needs an owner/admin approval naming the plan hash.
+
+## Credentials for the live canaries (this cloud environment)
+
+The canary sends placeholders; the session's network proxy injects the real key
+per host, so no key is ever in the repository, the chat, a log or the report.
+In the Claude Code environment settings (environment menu → Edit → **Network
+secrets**):
+
+| Host | Header | Value |
+|---|---|---|
+| `api.apify.com` | `Authorization` | `Bearer <token of the NEW billed Apify account>` |
+| `api.leadocean.io` | `x-api-key` | `<LeadOcean key>` (s2 only) |
+
+A new session picks them up. The canary's free preflights then confirm, before
+any metered call: the Apify account answers `/v2/users/me` and has monthly
+headroom ≥ the cap, and LeadOcean `/v1/account` shows records ≥ the cap.
+Apify actors charge the token's account: use the new account's token only.
+
+Production / TEST functions read `APIFY_API_TOKEN` and `OPENAI_API_KEY` from
+Supabase function secrets (set with `supabase secrets set` by the owner); the
+LeadOcean key is stored per workspace through `provider-connections` (Vault).
+
+## Live validation (2026-11-01, Apify account Prasidha / Starter, LeadOcean Free)
+
+| | S1 `apify_only` | S2 `apify_plus_leadocean` |
+|---|---|---|
+| Plan / commit | `8c852793` / `32d739553ae3` | `29e60928` / `425e56a5aea2` |
+| Request | 1 US company hiring Account Executives | CEO / founder / head of sales / CRO / VP Sales at 1 US company hiring AEs; smaller companies preferred |
+| Postings | 4 returned; 2 dropped (1 staffing agency, 1 role/window mismatch) | 4 returned, 4 distinct employers |
+| Records read | 2 of 2 (HP, Thermo Fisher) — both identity-matched | 2 of 2 budgeted (Grand Canyon Education, Harmony); HP and Thermo Fisher left `pending` (`skipped_budget`), kept for review |
+| Eligibility (shared engine) | 2 eligible (US HQ + dated AE posting) | 2 eligible; 2 pending (HQ unverified within budget) |
+| People | — | 2 returned, both **MATCHED** to the Apify-discovered company (same domain/LinkedIn): Co-founder at harmony.one, "Principal Co-founder" at gce.com; no unmatched or duplicate rows |
+| Apify (per-run `usageTotalUsd`) | $0.005 + $0.00805 = **$0.01305** | $0.005 + $0.00805 = **$0.01305** |
+| LeadOcean records | 0 | **2** (955 → 953) |
+| Phones / outreach / DB writes | none | none |
+
+Findings: (1) the canary's counter read caught Apify's charges before they were all
+posted — fixed (it now waits for the recorded spend); actual charges were confirmed
+from Apify's per-run usage. (2) A person's decision-maker role and current employment
+are LeadOcean's claim; independent confirmation needs the founder check (company
+employees), which is not approved. (3) The size preference only orders: the two
+verified employers were the closest to 11–200 of the four found, not necessarily inside it.
+
+### Identity-integrity review of the S2 people (offline, 2026-11-01)
+
+From the preserved S2 report only (no re-purchase; the report and lock are unchanged).
+
+| Person (LeadOcean claim) | Company identity | Established | Not established |
+|---|---|---|---|
+| Nathan Covey, "Co-founder" | harmony.one ↔ `linkedin.com/company/harmony-one` (Apify li_company:18655748 = LeadOcean 29976668) | the company: record identity matched, US HQ (Mountain View) and a dated AE posting proven | that he holds this role or works there now: title and employment are LeadOcean's claim |
+| Aaron Westover, "Principal Co-founder" | gce.com ↔ `linkedin.com/company/grand-canyon-education` (Apify li_company:11769435 = LeadOcean 28730868) | the company: same as above (HQ Phoenix) | the role — and "co-founder" at a long-established public company is implausible on its face |
+
+Finding: the matching was a correct **technical company match**, but nothing separated
+it from **verified employment**. The canary called both "MATCHED", the person's role
+family came only from the provider's title, and the ATLAS projection wrote a `qualified`
+lead (the company's verdict) with that contact and no verification label.
+
+Fix: every contact now carries `verification` — `employment` (provider_consistent /
+independent_current / mismatch / unknown), `role` (`provider_title_claim` unless an
+independent source confirms it) and `status`:
+`requires_role_verification` (default for every provider-sourced contact today),
+`employment_mismatch` (the provider's own row contradicts it → outreach blocked) or
+`verified` (independent source only; the founder check is not approved, so never today).
+The company stays eligible; the ATLAS row's `next_action` is `verify_contact_role`; the
+canary verdict is now `COMPANY_MATCHED` with the role status beside it. Both S2 contacts
+would be `requires_role_verification`.

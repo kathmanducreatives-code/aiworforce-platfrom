@@ -298,3 +298,15 @@ Application roles now change or delete a membership **only** through #186's writ
   - deletes allowed;
   - TRUNCATE unguarded.
 - **Rollback:** `rollback/20261025160000_workspace_members_app_surface.down.sql`.
+
+## `20261101120000_discovery_evidence_cache.sql`
+
+Per-workspace reuse of purchased company records (`leadPipeline/evidenceCache.ts`,
+ported from PR #198). One table, `discovery_evidence_cache`, keyed by workspace and
+LinkedIn company slug: one workspace never reads another's purchases. RLS on;
+members read their own workspace's rows; only `service_role` writes. Additive.
+
+Optional: needed only when `DISCOVERY_EVIDENCE_CACHE_ENABLED` is set; without it
+the pipeline buys every record. **Not approved for production.** Rollback:
+`rollback/20261101120000_discovery_evidence_cache.down.sql` (drops the table; the
+records can be bought again).

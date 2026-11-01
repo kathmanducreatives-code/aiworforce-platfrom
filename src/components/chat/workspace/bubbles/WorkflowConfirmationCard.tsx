@@ -20,6 +20,7 @@ import { requestImpliesQualifiedLead } from '@/lib/qualifiedLead/routingExpectat
 import {
   cardCriteria, criteriaSectionsOf, criterionNote, criterionPhrase, missionTitle, type CardCriterion,
 } from '@/lib/leadMission/missionView';
+import { ProviderDiscoveryPanel } from '@/components/discovery/ProviderDiscoveryPanel';
 
 interface WorkflowConfirmationPayload {
   workflow_id: string;
@@ -526,6 +527,9 @@ export default function WorkflowConfirmationCard({ payload, conversationId, mess
           )}
         </div>
       )}
+
+      {/* Optional: search the workspace's own data providers (flagged off). */}
+      {mission && messageId && <ProviderDiscoveryPanel messageId={messageId} />}
 
       {/* Safety + credits — one quiet line */}
       <div className="mt-3 pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2 text-[12px] text-[#8B8F96]">

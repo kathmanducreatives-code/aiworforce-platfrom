@@ -11,6 +11,7 @@ import type {
   AccountStatus, ContactReadiness, OutreachStatus,
 } from "./types";
 import { fitTierFromScore } from "./types";
+import { readLeadAttribution } from "../providerDiscovery";
 import type {
   CanonicalLeadView, CanonicalAccount, CanonicalSelectedRecipient,
   CanonicalDiscoverySource, CanonicalAccountStatus, CanonicalOutreachStatus,
@@ -67,6 +68,7 @@ function toSelectedRecipient(r: CanonicalSelectedRecipient | null): SelectedReci
     email: r.email,
     phone: r.phone,
     verified: r.verified,
+    roleVerification: r.roleVerification ?? null,
   };
 }
 
@@ -163,5 +165,6 @@ export function canonicalToLeadRow(
     possibleDuplicateOf: null,
 
     canonical: view,
+    providerDiscovery: readLeadAttribution(account.raw),
   };
 }

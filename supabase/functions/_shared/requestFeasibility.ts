@@ -124,7 +124,14 @@ export type FeasibilityRefusalCode =
    * prove ("exactly 17", "20–100"). Every candidate would stay pending; running
    * it would either buy nothing or, if the size were dropped, widen the request.
    */
-  | "size_range_unprovable";
+  | "size_range_unprovable"
+  /**
+   * The request's own hard requirements cannot all hold at once (a size range
+   * whose minimum exceeds its maximum: "more than 500 and fewer than 50").
+   * No company can satisfy it, so nothing is bought; the user is asked which
+   * one they meant — never offered a "closest band" as if it were a range.
+   */
+  | "contradictory_requirements";
 
 export interface FeasibilityRefusal {
   code: FeasibilityRefusalCode;
@@ -576,6 +583,16 @@ export function assessRequestFeasibility(
   for (const c of deriveMissionCriteria(mission, policy)) {
     if (c.dimension !== "company_size" || c.kind !== "hard" || c.status !== "unprovable_today" || c.source !== "user_explicit") continue;
     const v = c.value as { min?: number | null; max?: number | null } | null;
+    if (v?.min != null && v.max != null && v.min > v.max) {
+      report.refusals.push({
+        code: "contradictory_requirements", requirement: `company_size:${v.min}>${v.max}`,
+        message:
+          `The request asks for companies with at least ${v.min} and at most ${v.max} employees, ` +
+          `which no company can be. Which did you mean — at least ${v.min}, or at most ${v.max}?`,
+        detail: { requested: v },
+      });
+      continue;
+    }
     const overlapping = sizeRangeProvable(v).overlapping;
     const asked = v?.min != null && v.min === v.max ? `exactly ${v.min} employees` : `${v?.min ?? 0}–${v?.max ?? "∞"} employees`;
     report.refusals.push({
