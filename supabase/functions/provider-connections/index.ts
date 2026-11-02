@@ -7,6 +7,7 @@
 // _shared/discoveryProviders/connections.ts; the key goes to Vault and is never
 // returned.
 
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authenticateUser, defaultAuthDeps } from "../_shared/requestAuth.ts";
 import { handleConnections, type ConnectionRequest, type Verifier } from "../_shared/discoveryProviders/connections.ts";
@@ -42,7 +43,8 @@ function parse(b: Record<string, unknown>): ConnectionRequest | null {
   return null;
 }
 
-Deno.serve(async (req) => {
+// Every response (an unauthenticated OPTIONS too) names the build: x-agentory-build.
+Deno.serve(withBuildStamp(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const flags = readFlags((k) => Deno.env.get(k));
   if (!flags.enabled) return json({ error: "disabled" }, 404);
@@ -62,4 +64,4 @@ Deno.serve(async (req) => {
     console.error("[provider-connections] failed", { action: parsed.action, error: (e as Error)?.message?.slice(0, 200) });
     return json({ error: "connection service unavailable" }, 503);
   }
-});
+}));

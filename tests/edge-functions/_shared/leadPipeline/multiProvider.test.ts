@@ -28,6 +28,7 @@ import { memoryEvidenceCache, type EvidenceCache } from "../../../../supabase/fu
 import { ApifyRefusal, ledgeredInvoker, PIPELINE_ACTORS, pipelineApifyInvoker } from "../../../../supabase/functions/_shared/leadPipeline/apifyInvoker.ts";
 import { companiesFromPostRows, companyEmployeesInput, peopleFromEmployeeRows } from "../../../../supabase/functions/_shared/leadPipeline/apifyDiscovery.ts";
 import { checkFounders } from "../../../../supabase/functions/_shared/leadPipeline/founderCheck.ts";
+import { planChecks } from "../../../../scripts/deploy/test-functions-smoke.ts";
 import { checkStrategyApproval } from "../../../../supabase/functions/_shared/leadPipeline/multiProvider.ts";
 import { chainFor, discoveryJobTitles, hiringTitles, sizePreferenceDistance } from "../../../../supabase/functions/_shared/leadPipeline/strategy.ts";
 import { readFlags } from "../../../../supabase/functions/_shared/discoveryProviders/flags.ts";
@@ -867,4 +868,9 @@ Deno.test("service: strategy_plan explains hard vs soft and how the Company Brai
   assertEquals(i.companyBrain.status, "absent");
   assertEquals((r.body.plan as StrategyPlan).strategy, "apify_only");
   assertEquals(lo.calls.length + ap.calls.length, 0, "planning calls no provider");
+
+  // The TEST smoke suite judges this exact response shape (scripts/deploy/test-functions-smoke.ts).
+  const smoke = planChecks(r.status, r.body as never);
+  assertEquals(smoke.filter((c) => c.status !== "pass").map((c) => `${c.id} ${c.detail}`), [], "the deployed planner must pass the TEST planning smoke");
+  assert(smoke.find((c) => c.id === "P3")!.detail.includes("Account Executive"), "salespeople → an Account Executive search");
 });

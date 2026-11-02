@@ -36,6 +36,9 @@ it the function runs and simply buys every record.
 4. TEST: set secrets; enable for one TEST workspace; non-billable checks (`strategy_plan` calls no provider).
 5. Production: repeat 2–4 only after a separate approval, starting with one workspace and explicit ceilings.
 
+Steps 3–4 are now automatic after every merge (deploy + smoke on TEST), and step 5's
+function deploy is the gated manual workflow: see `docs/launch/test-deploy-loop.md`.
+
 ## Secrets and flags
 
 Secrets: `OPENAI_API_KEY` (interpretation + advisor), `APIFY_API_TOKEN` (the new billed account), the LeadOcean key is stored per workspace through `provider-connections` (Vault), `SUPABASE_SERVICE_ROLE_KEY` (platform).
