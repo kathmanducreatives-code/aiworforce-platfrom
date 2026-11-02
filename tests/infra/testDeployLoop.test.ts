@@ -121,6 +121,13 @@ Deno.test("smoke: plan checks fail loudly on each regression", () => {
   const clone = () => structuredClone(good);
   const hardSize = clone(); hardSize.interpretation.hard.push({ key: "employee_range" });
   assertEquals(failed(hardSize), ["P1"]);
+  // TEST plans 116a1b45 (hard "B2B") and 6999eff6 (a restated hiring signal) passed P1 as
+  // "extra hard keys reported"; any requirement beyond US HQ + hiring now fails it.
+  for (const extra of ["unmappable", "industry", "business_model"]) {
+    const b = clone(); b.interpretation.hard.push({ key: extra });
+    assertEquals(failed(b), ["P1"], extra);
+    assert(planChecks(200, b as never).find((c) => c.id === "P1")!.likely_cause!.length > 10, "the failure names a likely cause");
+  }
   const narrowed = clone(); narrowed.interpretation.preferences[0].values = { min: 20, max: 200 };
   assertEquals(failed(narrowed), ["P2"]);
   const noSales = clone(); noSales.interpretation.signals[0].roleFamilies = ["engineering"]; noSales.interpretation.signals[0].roleTerms = ["engineers"];

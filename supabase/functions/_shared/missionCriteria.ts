@@ -52,6 +52,7 @@ import {
 } from "./leadMission.ts";
 import { isControlledPhrase, readFacets } from "./businessModelMatch.ts";
 import { sizeRangeProvable } from "./companySize.ts";
+import { classifyRoleFamily, roleFamilyAliases } from "./roleFamilies.ts";
 import { readSignalPhrase, type SignalQualifier } from "./missionSignalDescriptor.ts";
 import {
   CANONICAL_SIGNAL_KINDS, DEFAULT_SIGNAL_WINDOWS, EXEC_TITLE_RE, aliasKindFor,
@@ -532,17 +533,64 @@ const RESTATED_HIRING_FIELDS = new Set(["hiring", "hiring_role", "hiring_roles",
   "open_roles", "job_title", "job_titles"]);
 const RESTATED_HIRING_OPS = new Set(["", "currently_hiring", "actively_hiring", "is_hiring", "hiring", "has_open_role",
   "has_open_roles", "equals", "eq", "is", "in", "includes", "contains", "matches"]);
+/**
+ * TEST plan 6999eff6 ("Find 5 US B2B companies actively hiring salespeople …"):
+ * the model added `hiring_activity: "actively hiring salespeople"` beside the
+ * hiring signal that already carries "salespeople" (family gtm_sales). The field
+ * was not on the closed list and the value was not the role terms word for word,
+ * so it compiled to a hard `constraint` no evidence answers — every company would
+ * have stayed needs_verification on it.
+ *
+ * Also a restatement, read by meaning rather than spelling: a field that NAMES
+ * hiring (HIRING_FIELD_RE), a non-excluding, non-numeric operator, one hiring
+ * signal, and a value that — once the generic hiring words are removed — says
+ * nothing more ("actively hiring", true), says the same role terms, or names the
+ * same role FAMILY as the signal ("salespeople" ↔ gtm_sales). Kept as its own
+ * requirement: an exclusion, a count or threshold ("at least 5 open roles", any
+ * digit), a different family ("also hiring engineers"), or two hiring signals.
+ */
+const HIRING_FIELD_RE =
+  /^(?:is_|currently_|actively_|recent(?:ly)?_)?(?:hiring|hires?|open_?roles?|job_?(?:titles?|postings?|openings?|listings?)|vacanc(?:y|ies)|recruit(?:ing|ment)?)(?:_[a-z]+)*$/;
+const NOT_A_RESTATEMENT_OP_RE = /not|exclud|none|false|without|!=|<>|gte|lte|>|<|min|max|at_?least|at_?most|count|number|threshold|greater|less|above|below|more|fewer|over|under|between|range|before|after|older|newer/;
+const HIRING_FILLER_RE =
+  /\b(?:actively|currently|recently|now|still|is|are|be|being|hiring|hires?|hired|for|open|roles?|positions?|jobs?|postings?|openings?|vacanc(?:y|ies)|new|the|a|an|in|of|any|some|true|yes|active|activity|recruiting)\b/g;
+
 export function restatesHiringSignal(field: string, raw: unknown, signals: readonly Partial<MissionSignal>[]): boolean {
-  if (!RESTATED_HIRING_FIELDS.has(field.toLowerCase())) return false;
+  const f = field.toLowerCase();
   const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { value: raw }) as
     { operator?: unknown; value?: unknown };
-  if (!RESTATED_HIRING_OPS.has(String(c.operator ?? "").trim().toLowerCase())) return false;
+  const op = String(c.operator ?? "").trim().toLowerCase();
   const hiring = signals.filter((s) => kindOfSignal(s) === "hiring");
   if (hiring.length !== 1) return false;
   const form = (v: unknown) => String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ").replace(/s$/, "");
-  const stated = new Set((Array.isArray(c.value) ? c.value : [c.value]).map(form).filter(Boolean));
+  const values = Array.isArray(c.value) ? c.value : [c.value];
   const carried = new Set((hiring[0].qualifier?.role_terms ?? []).map(form).filter(Boolean));
-  return stated.size > 0 && stated.size === carried.size && [...stated].every((t) => carried.has(t));
+  // The original, exact rule (canary session 2).
+  if (RESTATED_HIRING_FIELDS.has(f) && RESTATED_HIRING_OPS.has(op)) {
+    const stated = new Set(values.map(form).filter(Boolean));
+    if (stated.size > 0 && stated.size === carried.size && [...stated].every((t) => carried.has(t))) return true;
+  }
+  // The same statement in other words.
+  if (!RESTATED_HIRING_FIELDS.has(f) && !HIRING_FIELD_RE.test(f)) return false;
+  if (op && NOT_A_RESTATEMENT_OP_RE.test(op)) return false;
+  if (!values.length || values.some((v) => typeof v === "number" || /\d/.test(String(v ?? "")))) return false;
+  const families = new Set<string>([
+    ...(hiring[0].qualifier?.role_families ?? []),
+    ...[...(hiring[0].qualifier?.role_terms ?? []), hiring[0].phrase ?? ""].map((t) => classifyRoleFamily(t)).filter((x): x is NonNullable<typeof x> => !!x),
+  ]);
+  return values.every((v) => {
+    if (v === true) return true;
+    const rest = String(v ?? "").toLowerCase().replace(HIRING_FILLER_RE, " ").replace(/[^a-z\s-]/g, " ").replace(/\s+/g, " ").trim();
+    if (!rest) return true; // "actively hiring": the signal itself
+    if (carried.has(form(rest))) return true;
+    const fam = classifyRoleFamily(rest);
+    if (!fam || !families.has(fam)) return false;
+    // A SPECIFIC title (a listed alias of its family: "SDR", "Account Executive") that
+    // the signal does not carry is a different role, kept. Only a generic word for the
+    // same family ("salespeople", "sellers") is the same statement.
+    const norm = (x: string) => x.toLowerCase().replace(/[^a-z ]/g, "").replace(/s$/, "").trim();
+    return !roleFamilyAliases(fam).some((a) => norm(a) === norm(rest));
+  });
 }
 
 /**
