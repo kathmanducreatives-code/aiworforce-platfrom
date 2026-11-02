@@ -3,54 +3,47 @@
 //
 //   node scripts/dev/pr-risk.mjs <pr-number> [--sha <tested head sha>]
 //
-// Encodes the owner-approved policy (docs/launch/test-deploy-loop.md, "Auto-merge
-// policy"). READ-ONLY: it fetches the PR and its file patches with `gh api` and
-// prints a verdict; it never enables auto-merge, merges or writes anything.
+// Encodes the owner-approved policy (docs/launch/test-deploy-loop.md, "Autonomous
+// merge policy", authorised 2026-11-02). READ-ONLY: it fetches the PR and its file
+// patches with `gh api` and prints a verdict; it never enables auto-merge, merges or
+// writes anything.
 //
-//   auto_merge_eligible  every check passed; auto-merge may be enabled (GitHub still
-//                        waits for the CI gate under the Active ruleset)
-//   owner_required       a sensitive path or change: the owner merges it
-//   not_eligible         wrong base, draft, closed, or the head moved since testing
+//   auto_merge_eligible  Claude may enable GitHub's native auto-merge; GitHub still
+//                        merges only when the Active ruleset is satisfied (CI gate)
+//   owner_required       production, GitHub permissions, database schema, paid-provider
+//                        enablement, phone/outreach, a deleted test, or this policy itself
+//   not_eligible         wrong base (production branches never), draft, closed, or the
+//                        head moved since testing
 //
-// Conservative by construction: anything it cannot read (a patch GitHub omitted, a
-// removed test) is owner_required. This file and its test are themselves on the
-// sensitive list, so the gate cannot be loosened by an auto-merged PR.
+// Routine code, edge functions, CI/CD and TEST deploy workflows, dependencies,
+// tooling, docs, auth and flag code, and recovery PRs are eligible: the owner
+// authorised them, and the CI gate and TEST smoke suite still have to pass.
+// Conservative where it cannot read: an omitted diff is owner_required.
 
 import { execFileSync } from "node:child_process";
 
 export const BASE = "launch/hardening";
 
-/** Paths whose change always needs the owner's merge, with the reason shown. */
+/** Paths whose change still needs the owner's merge, with the reason shown. */
 export const SENSITIVE_PATHS = [
-  [/^\.github\//, "workflows / repository automation"],
-  [/^scripts\/ci\//, "the CI gate and its planner"],
-  [/^scripts\/deploy\//, "deploy and smoke scripts"],
-  [/^scripts\/(supabase-target|verify-deploy-target)\.mjs$/, "Supabase project targeting"],
-  [/^scripts\/dev\/pr-risk\.mjs$/, "the auto-merge policy itself"],
-  [/^tests\/infra\/prRisk\.test\.ts$/, "the auto-merge policy's tests"],
+  [/^\.github\/workflows\/(?:deploy-production-[^/]*|deploy-held-back-functions)\.ya?ml$/, "a production deployment workflow"],
+  [/^\.github\/(?:CODEOWNERS|settings\.ya?ml|rulesets?\/)/, "GitHub permissions / repository settings"],
+  [/^scripts\/(?:supabase-target|verify-deploy-target)\.mjs$/, "production project targeting"],
+  [/^scripts\/dev\/pr-risk\.mjs$/, "the merge policy itself"],
+  [/^tests\/infra\/prRisk\.test\.ts$/, "the merge policy's tests"],
   [/^supabase\/migrations/, "database schema (migrations)"],
-  [/^supabase\/config\.toml$/, "Supabase project configuration"],
-  [/^supabase\/functions\/_shared\/requestAuth\.ts$/, "authentication"],
-  [/^supabase\/functions\/.*(?:^|\/)(?:auth|jwt|session)[A-Za-z]*\.tsx?$/i, "authentication"],
-  [/^supabase\/functions\/_shared\/discoveryProviders\/(?:flags|budget|supabaseStore|connections)\.ts$/, "feature flags / spending ledger / provider keys"],
-  [/^supabase\/functions\/_shared\/discoveryProviders\/adapters\//, "paid provider adapters"],
-  [/^supabase\/functions\/_shared\/leadPipeline\/apifyInvoker\.ts$/, "paid Apify invoker and actor allowlist"],
-  [/^supabase\/functions\/(?:provider-connections|lead-pipeline)\/index\.ts$/, "function wiring (keys, persistence)"],
   [/(?:^|\/)(?:phone|outreach|telnyx|twilio|send-scheduled-emails)[^/]*(?:\/|$)/i, "phone / outreach"],
-  [/(?:^|\/)(?:package(?:-lock)?\.json|deno\.lock|deno\.jsonc?|import_map\.json|bun\.lockb|yarn\.lock|pnpm-lock\.yaml)$/, "dependencies"],
-  [/^(?:railway\.json|netlify\.toml|Dockerfile|vercel\.json)$/, "hosting / production configuration"],
+  [/^(?:railway\.json|netlify\.toml|Dockerfile|vercel\.json)$/, "production hosting configuration"],
 ];
 
-/** Changed lines (in non-test, non-doc code) that touch money, flags, secrets, auth or production. */
+/** Changed lines (in non-test, non-doc files) that reach production, permissions or paid-provider enablement. */
 export const SENSITIVE_CONTENT = [
   [/ohsdatpvfdjdemstoiuj/, "names the production project"],
-  [/\b(?:perItemUsd|perStartUsd|perItem|perStart|minimumUsd|emptyUsd|maxApifyUsd|max_apify_usd|maxLeadoceanRecords|max_leadocean_records|maxTotalChargeUsd|APOLLO_ACCESS_VALIDATED|PIPELINE_ACTORS|actorStatus|COMMERCIAL_TERMS\w*)\b/, "spending: prices, ceilings or actor allowlist"],
-  [/\b[A-Z][A-Z0-9_]*_ENABLED\b/, "a feature flag"],
-  [/\b(?:SERVICE_ROLE\w*|\w*API_KEY|\w*API_TOKEN|\w*ACCESS_TOKEN|secrets\.\w+|Deno\.env\.get|process\.env\.)/, "secrets / environment"],
-  [/\b(?:verify_jwt|authenticateUser|getUser\(|auth\.uid)\b/, "authentication"],
+  [/\benvironment:\s*production\b/, "uses the production environment"],
+  [/\b[a-z][a-z-]*:\s*write\b/, "grants a GitHub token write permission"],
+  [/\b(?:perItemUsd|perStartUsd|perItem|perStart|minimumUsd|emptyUsd|maxApifyUsd|max_apify_usd|maxLeadoceanRecords|max_leadocean_records|maxTotalChargeUsd|APOLLO_ACCESS_VALIDATED|PIPELINE_ACTORS|actorStatus|COMMERCIAL_TERMS\w*)\b/, "paid providers: prices, ceilings or actor allowlist"],
 ];
 
-const RECOVERY_RE = /\b(?:recover(?:y)?|rollback|roll back|revert|hotfix)\b/i;
 const EXEMPT_FROM_CONTENT = /^(?:tests\/|docs\/|[^/]+\.md$)/;
 
 /**
@@ -67,7 +60,6 @@ export function classify(pr, files, testedSha = null) {
   if (pr.state !== "open") blockers.push(`PR is ${pr.state}`);
   if (pr.draft) blockers.push("PR is a draft");
   if (testedSha && testedSha !== pr.head) blockers.push(`head moved: tested ${testedSha.slice(0, 12)}, PR head ${String(pr.head).slice(0, 12)}`);
-  if (RECOVERY_RE.test(pr.title ?? "") || /recover/i.test(pr.branch ?? "")) owner.push("a recovery / rollback change");
   if (!files.length) owner.push("no changed files listed (cannot review)");
   for (const f of files) {
     const path = f.filename;

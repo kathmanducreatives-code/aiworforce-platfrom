@@ -19,40 +19,46 @@ Deno.test("routine logic, tests and docs are eligible for auto-merge", () => {
   assertEquals(r, { verdict: "auto_merge_eligible", blockers: [], reasons: [] });
 });
 
-Deno.test("every sensitive path needs the owner", () => {
+Deno.test("authorised 2026-11-02: workflows, CI, TEST deploy scripts, auth, flags, dependencies and recovery are eligible", () => {
   for (const p of [
-    ".github/workflows/ci.yml", "scripts/ci/gate.mjs", "scripts/deploy/test-functions-smoke.ts", "scripts/supabase-target.mjs",
-    "scripts/dev/pr-risk.mjs", "tests/infra/prRisk.test.ts", "supabase/migrations/20261102_x.sql", "supabase/config.toml",
-    "supabase/functions/_shared/requestAuth.ts", "supabase/functions/_shared/authHelpers.ts",
+    ".github/workflows/ci.yml", ".github/workflows/deploy-test-functions.yml", "scripts/ci/gate.mjs", "scripts/deploy/test-functions-smoke.ts",
+    "supabase/config.toml", "supabase/functions/_shared/requestAuth.ts", "supabase/functions/_shared/authHelpers.ts",
     "supabase/functions/_shared/discoveryProviders/flags.ts", "supabase/functions/_shared/discoveryProviders/budget.ts",
-    "supabase/functions/_shared/discoveryProviders/adapters/apify.ts", "supabase/functions/_shared/leadPipeline/apifyInvoker.ts",
-    "supabase/functions/lead-pipeline/index.ts", "supabase/functions/send-scheduled-emails/index.ts", "src/lib/phoneDialer.ts",
-    "package.json", "package-lock.json", "deno.lock", "supabase/functions/deno.json", "railway.json",
+    "supabase/functions/_shared/discoveryProviders/adapters/apify.ts", "supabase/functions/lead-pipeline/index.ts",
+    "package.json", "package-lock.json", "deno.lock", "supabase/functions/deno.json", "scripts/dev/loop-status.mjs",
+  ]) {
+    assertEquals(classify(PR, [file(p)]).verdict, "auto_merge_eligible", p);
+  }
+  // Ordinary changed lines touching flags, env, auth: careful testing, not an owner merge.
+  for (const line of ["+  if (env('PROVIDER_APOLLO_ENABLED'))", "+const key = Deno.env.get('OPENAI_API_KEY');", "+  verify_jwt: true", "+    permissions: { contents: read }"]) {
+    assertEquals(classify(PR, [file("supabase/functions/_shared/x.ts", `@@ -1 +1 @@\n${line}`)]).verdict, "auto_merge_eligible", line);
+  }
+  assertEquals(classify({ ...PR, title: "Recovery: fix TEST deploy" }, [file("scripts/deploy/test-functions-smoke.ts")]).verdict, "auto_merge_eligible");
+});
+
+Deno.test("still the owner's: production, GitHub permissions, schema, paid-provider enablement, outreach, the policy", () => {
+  for (const p of [
+    ".github/workflows/deploy-production-discovery.yml", ".github/workflows/deploy-held-back-functions.yml", ".github/CODEOWNERS",
+    "scripts/supabase-target.mjs", "scripts/verify-deploy-target.mjs", "scripts/dev/pr-risk.mjs", "tests/infra/prRisk.test.ts",
+    "supabase/migrations/20261102_x.sql", "supabase/functions/send-scheduled-emails/index.ts", "src/lib/phoneDialer.ts", "railway.json",
   ]) {
     assertEquals(classify(PR, [file(p)]).verdict, "owner_required", p);
   }
-});
-
-Deno.test("sensitive CONTENT in ordinary code needs the owner: money, flags, secrets, auth, production", () => {
   for (const line of [
-    "+  perItemUsd: 0.004,", "-  maxApifyUsd: 0.25,", "+export const APOLLO_ACCESS_VALIDATED = true;",
-    "+  if (env('PROVIDER_APOLLO_ENABLED'))", "+const key = Deno.env.get('OPENAI_API_KEY');", "+  verify_jwt: false",
-    "+const PROD = 'ohsdatpvfdjdemstoiuj';",
+    "+  perItemUsd: 0.004,", "-  maxApifyUsd: 0.25,", "+export const APOLLO_ACCESS_VALIDATED = true;", "+const PROD = 'ohsdatpvfdjdemstoiuj';",
+    "+    environment: production", "+      contents: write", "+      administration: write",
   ]) {
-    const r = classify(PR, [file("supabase/functions/_shared/leadPipeline/strategy.ts", `@@ -1 +1 @@\n${line}`)]);
-    assertEquals(r.verdict, "owner_required", line);
+    assertEquals(classify(PR, [file(".github/workflows/deploy-test-functions.yml", `@@ -1 +1 @@\n${line}`)]).verdict, "owner_required", line);
   }
   // Unchanged context lines are not changes.
   assertEquals(classify(PR, [file("supabase/functions/_shared/leadPipeline/strategy.ts", "@@ -1 +1 @@\n   perItemUsd: 0.004,\n+// a comment")]).verdict, "auto_merge_eligible");
 });
 
-Deno.test("what cannot be reviewed, deleted tests and recovery changes need the owner", () => {
+Deno.test("what cannot be reviewed, and deleted tests, need the owner", () => {
   assertEquals(classify(PR, [file("supabase/functions/_shared/big.ts", null)]).verdict, "owner_required", "GitHub omitted the diff");
-  assertEquals(classify(PR, [file("tests/edge-functions/_shared/x.test.ts", null, "removed")]).verdict, "owner_required");
-  assertEquals(classify({ ...PR, title: "Recovery: redeploy previous build" }, [file("src/a.ts")]).verdict, "owner_required");
-  assertEquals(classify({ ...PR, branch: "claude/recovery-deploy" }, [file("src/a.ts")]).verdict, "owner_required");
+  assertEquals(classify(PR, [file("tests/edge-functions/_shared/x.test.ts", null, "removed")]).verdict, "owner_required", "never weaken tests");
   assertEquals(classify(PR, []).verdict, "owner_required", "nothing listed");
-  assertEquals(classify(PR, [{ filename: "src/new.ts", status: "renamed", previous_filename: ".github/workflows/x.yml", patch: "" }]).verdict, "owner_required");
+  assertEquals(classify(PR, [{ filename: "src/new.ts", status: "renamed", previous_filename: "scripts/dev/pr-risk.mjs", patch: "" }]).verdict, "owner_required");
 });
 
 Deno.test("wrong base, draft, closed, or a head that moved since testing: not eligible at all", () => {
