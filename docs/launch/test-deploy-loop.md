@@ -130,40 +130,45 @@ not exist before, turn its flags off (404) or delete it.
    force pushes and deletion. Done: ruleset `launch/hardening` is Active with no
    bypass actors.
 
-## Auto-merge policy (approved 2026-11-02)
+## Autonomous merge policy (authorised 2026-11-02)
 
-Claude Code may enable **GitHub's native auto-merge** on a pull request into
-`launch/hardening`. GitHub then merges it only when the ruleset is satisfied: the
-**CI gate** has passed on the current head with the branch up to date, and any
-required reviews are in place. Nothing merges immediately, nothing uses `--admin`,
-and the ruleset is never changed. Requires *Settings → General → Allow auto-merge*,
-which the owner enables.
+Claude merges its own pull requests into `launch/hardening` through **GitHub's native
+auto-merge**: GitHub merges only when the Active ruleset is satisfied (the **CI gate**
+passed on the current head, branch up to date, any required reviews). No `--admin`, no
+bypass, no ruleset change. Production branches are never auto-merged.
 
-**Before enabling auto-merge, Claude checks every one of these:**
+**For every PR:** implement, run the affected local tests
+(`node scripts/dev/affected-tests.mjs --run`), push, then
+`node scripts/dev/pr-risk.mjs <pr> --sha <tested head>`; when it is `auto_merge_eligible`
+and CI is green on that head, enable auto-merge. A red CI is investigated and fixed with
+a new commit (tests are never weakened or skipped). After the merge, the automated TEST
+deploy and its smoke suite are monitored (`node scripts/dev/loop-status.mjs <pr>`).
 
-1. The PR targets `launch/hardening`.
-2. The local and CI results are for the PR's current head sha: no commit was
-   pushed after testing.
-3. The changed files have been reviewed, and **none** is security-sensitive (list below).
-4. It is not a recovery change for a failed deploy.
+**Authorised (eligible):** bug fixes, frontend and backend code, edge functions, CI/CD
+and TEST deployment workflows and scripts, dependencies and lockfiles, development
+tooling, documentation, test improvements, auth and flag code (with careful testing),
+and recovery PRs for TEST deployment failures.
 
-**Always the owner's explicit decision (never auto-merged).** A PR touching any of:
+**Still the owner's explicit decision** (`owner_required`):
 
-- `.github/workflows/**`, rulesets or branch protection, repository settings
-- `supabase/migrations*/**`, `supabase/config.toml` (database schema, project config)
-- `scripts/deploy/**`, `scripts/supabase-target.mjs`, `scripts/verify-deploy-target.mjs`
-- authentication: `supabase/functions/_shared/requestAuth.ts`, JWT or session handling
-- feature flags and secrets: `discoveryProviders/flags.ts`, any `*_ENABLED` default
-- provider spending: provider adapters, `apifyInvoker.ts`, budget and ledger code,
-  actor allowlists, prices and spending ceilings
-- production project references or deployment
-- `package.json`, lockfiles, `deno.lock`
+- production: production deployment workflows, `scripts/supabase-target.mjs` /
+  `verify-deploy-target.mjs`, hosting configuration, any changed line naming the
+  production project or `environment: production`
+- GitHub permissions: CODEOWNERS / settings / rulesets, a workflow granting a token
+  `write` permission
+- database schema: `supabase/migrations*/**`
+- paid-provider enablement: prices, spending ceilings, the actor allowlist,
+  `APOLLO_ACCESS_VALIDATED`
+- phone / outreach code
+- a deleted test, a diff GitHub does not show, and this policy itself (`pr-risk.mjs`
+  and its test)
 
-**After each auto-merge** Claude monitors the automatic TEST deploy and its smoke
-checks, and reports the PR, CI results, deployment status and any failure. On a
-failed deploy it stops, investigates, and opens a recovery PR for the owner to
-merge.
+**Recovery:** on a CI or TEST deploy failure, find the root cause, fix it, run
+regression tests, open a recovery PR and enable auto-merge once its CI passes. Stop
+after two unsuccessful recovery attempts, or when the cause is unclear, and report
+the blocker.
 
-**Never automatic:** production deployment, enabling paid providers, paid
-discovery (`strategy_run`), billing, secrets, branch protection, migrations,
-new credentials or repository permissions.
+**Never automatic, whatever is merged:** production deployment, production database,
+flags or secrets, billing, paid provider calls or paid discovery (`strategy_run`),
+outreach or calls, GitHub permission or protection changes, new credentials.
+Automatic deploys target TEST `tlvnfrxzjhsjgdofwehb` only.
