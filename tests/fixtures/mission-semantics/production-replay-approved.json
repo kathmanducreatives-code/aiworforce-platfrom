@@ -1,0 +1,4 @@
+{
+ "note": "OWNER-REVIEWED. Each entry approves one stored mission's exact change of meaning (before → after semantics fingerprint) on a production run-agent deploy. Generate candidates with scripts/dev/production-replay.ts --report; only the owner adds entries. Empty: no change to an existing production mission's meaning is approved.",
+ "approved": []
+}

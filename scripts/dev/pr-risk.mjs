@@ -32,6 +32,11 @@ export const SENSITIVE_PATHS = [
   [/^scripts\/dev\/pr-risk\.mjs$/, "the merge policy itself"],
   [/^tests\/infra\/prRisk\.test\.ts$/, "the merge policy's tests"],
   [/^supabase\/migrations/, "database schema (migrations)"],
+  // Option E: what a stored mission MEANS is the owner's decision (Stage 1 baseline,
+  // Stage 7 production replay gate and its approvals).
+  [/^tests\/fixtures\/mission-semantics\/baseline\.json$/, "a change in what a stored mission means (semantic baseline)"],
+  [/^tests\/fixtures\/mission-semantics\/production-replay-approved\.json$/, "an approval to change existing production missions' meaning"],
+  [/^scripts\/dev\/production-replay\.ts$/, "the production semantic replay gate"],
   [/(?:^|\/)(?:phone|outreach|telnyx|twilio|send-scheduled-emails)[^/]*(?:\/|$)/i, "phone / outreach"],
   [/^(?:railway\.json|netlify\.toml|Dockerfile|vercel\.json)$/, "production hosting configuration"],
 ];
