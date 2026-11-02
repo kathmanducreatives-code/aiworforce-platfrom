@@ -148,7 +148,13 @@ jobs:
         run: |
           test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::SUPABASE_ACCESS_TOKEN is not set in the supabase-test environment"; exit 1; }
           mkdir -p "$RUNNER_TEMP/report"
-          deno run --allow-net --allow-env --allow-read --allow-write --allow-run scripts/deploy/test-functions-smoke.ts snapshot "$RUNNER_TEMP/report/before.json"
+          # READ-ONLY step: at most 2 attempts for a transient failure (CDN or API glitch, run 41420805844).
+          # The deploy itself and the smoke suite (one GPT call) are never retried.
+          for attempt in 1 2; do
+            deno run --allow-net --allow-env --allow-read --allow-write --allow-run scripts/deploy/test-functions-smoke.ts snapshot "$RUNNER_TEMP/report/before.json" && break
+            [ "$attempt" = 2 ] && { echo "::error::read-only step failed twice; stopping"; exit 1; }
+            echo "::warning::read-only step failed (attempt $attempt of 2); retrying in 20s"; sleep 20
+          done
 
       - name: Decide which functions changed
         id: changed
@@ -156,7 +162,13 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          deno run --allow-net --allow-env --allow-read --allow-write --allow-run scripts/deploy/test-functions-smoke.ts changed "$TARGET_SHA"
+          # READ-ONLY step: at most 2 attempts for a transient failure (CDN or API glitch, run 41420805844).
+          # The deploy itself and the smoke suite (one GPT call) are never retried.
+          for attempt in 1 2; do
+            deno run --allow-net --allow-env --allow-read --allow-write --allow-run scripts/deploy/test-functions-smoke.ts changed "$TARGET_SHA" && break
+            [ "$attempt" = 2 ] && { echo "::error::read-only step failed twice; stopping"; exit 1; }
+            echo "::warning::read-only step failed (attempt $attempt of 2); retrying in 20s"; sleep 20
+          done
           live="$(grep '^live=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)"
           # Refuse to move TEST backwards unless this is an explicit rollback.
           for sha in $(echo "$live" | jq -r '.[].sha // empty' | sort -u); do
