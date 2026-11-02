@@ -176,9 +176,16 @@ export function planChecks(httpStatus: number, body: PlanBody): Check[] {
   const est = p.estimate ?? {};
   return [
     pass("P0", "strategy_plan answered", `HTTP 200, status ${p.status}`),
-    hard.includes("geography_hq") && hard.includes("signal") && !hard.includes("employee_range")
-      ? pass("P1", "Hard requirements", `${hard.join(", ")}${hard.length > 2 ? " (extra hard keys reported, not failed)" : ""}`)
-      : fail("P1", "Hard requirements", `hard = [${hard.join(", ")}]`, hard.includes("employee_range") ? "the size became HARD: the hedged-size fix is not in effect" : "US HQ and the hiring signal must both be hard"),
+    // EXACTLY US HQ and the hiring signal. Anything else the query does not require — an
+    // industry, a business model, a restated signal ("unmappable") — would leave every
+    // company needs_verification, so it fails here rather than passing as READY.
+    hard.includes("geography_hq") && hard.includes("signal") && hard.length === 2
+      ? pass("P1", "Hard requirements", hard.join(", "))
+      : fail("P1", "Hard requirements", `hard = [${(i.hard ?? []).map((h) => h.label ? `${h.key} (${h.label})` : h.key).join(", ")}]`,
+        hard.includes("employee_range") ? "the size became HARD: the hedged-size fix is not in effect"
+        : hard.includes("unmappable") ? "a hard requirement no evidence can answer — usually the model restating the hiring signal as a constraint (restatesHiringSignal)"
+        : hard.includes("industry") || hard.includes("business_model") ? "B2B (or an industry) became HARD: the business-model intent fix is not in effect"
+        : "US HQ and the hiring signal must be the only hard requirements"),
     size && size.min === 20 && size.max === 500
       ? pass("P2", "Soft employee-size preference", "employee_range 20–500 is a preference")
       : fail("P2", "Soft employee-size preference", `employee_range preference = ${JSON.stringify(size ?? null)}`, "the 20–500 range was dropped, narrowed (Company Brain?) or made hard"),

@@ -916,3 +916,12 @@ Deno.test("B2B required ('Only include verified B2B'): missing evidence is needs
   assertEquals(r.checks(nw).checks.find((c) => c.dimension === "business_model")!.result, "unknown");
   assert(r.checks(nw).gaps.includes("business_model"));
 });
+
+Deno.test("the model restating the hiring signal as a hard constraint (TEST plan 6999eff6) does not block qualification", async () => {
+  const r = await b2bRun("Find 5 US B2B companies actively hiring Account Executives.", ["B2B"], {
+    hard_constraints: [...US.hard_constraints, { field: "hiring_activity", operator: "equals", value: "actively hiring Account Executives", reason: "active hiring" }],
+  });
+  assertEquals(r.interpretation.hard.map((h) => h.key).sort(), ["geography_hq", "signal"], "no unmappable second requirement");
+  assertFalse(r.plan.limitations.some((l) => l.detail.includes("unmappable")));
+  assertEquals(r.o.written.filter((w) => w.lead_candidate.status === "qualified").map((w) => w.account.name), ["Northwind Ledger"]);
+});
