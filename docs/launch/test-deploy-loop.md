@@ -127,5 +127,43 @@ not exist before, turn its flags off (404) or delete it.
    `ROLLBACK_ARCHIVE_KEY`. Keep its required reviewers.
 3. **Branch protection for `launch/hardening`** (Settings → Rules → Rulesets, or
    Branches): require a pull request, require the status check **CI gate**, block
-   force pushes and deletion. Today the branch is unprotected, so "only after CI"
-   rests on the workflow's CI check rather than on GitHub.
+   force pushes and deletion. Done: ruleset `launch/hardening` is Active with no
+   bypass actors.
+
+## Auto-merge policy (approved 2026-11-02)
+
+Claude Code may enable **GitHub's native auto-merge** on a pull request into
+`launch/hardening`. GitHub then merges it only when the ruleset is satisfied: the
+**CI gate** has passed on the current head with the branch up to date, and any
+required reviews are in place. Nothing merges immediately, nothing uses `--admin`,
+and the ruleset is never changed. Requires *Settings → General → Allow auto-merge*,
+which the owner enables.
+
+**Before enabling auto-merge, Claude checks every one of these:**
+
+1. The PR targets `launch/hardening`.
+2. The local and CI results are for the PR's current head sha: no commit was
+   pushed after testing.
+3. The changed files have been reviewed, and **none** is security-sensitive (list below).
+4. It is not a recovery change for a failed deploy.
+
+**Always the owner's explicit decision (never auto-merged).** A PR touching any of:
+
+- `.github/workflows/**`, rulesets or branch protection, repository settings
+- `supabase/migrations*/**`, `supabase/config.toml` (database schema, project config)
+- `scripts/deploy/**`, `scripts/supabase-target.mjs`, `scripts/verify-deploy-target.mjs`
+- authentication: `supabase/functions/_shared/requestAuth.ts`, JWT or session handling
+- feature flags and secrets: `discoveryProviders/flags.ts`, any `*_ENABLED` default
+- provider spending: provider adapters, `apifyInvoker.ts`, budget and ledger code,
+  actor allowlists, prices and spending ceilings
+- production project references or deployment
+- `package.json`, lockfiles, `deno.lock`
+
+**After each auto-merge** Claude monitors the automatic TEST deploy and its smoke
+checks, and reports the PR, CI results, deployment status and any failure. On a
+failed deploy it stops, investigates, and opens a recovery PR for the owner to
+merge.
+
+**Never automatic:** production deployment, enabling paid providers, paid
+discovery (`strategy_run`), billing, secrets, branch protection, migrations,
+new credentials or repository permissions.
