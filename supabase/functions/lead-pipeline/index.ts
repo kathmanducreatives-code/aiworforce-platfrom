@@ -21,6 +21,7 @@ import { handleLeadPipeline, handleStrategyRequest, parsePipelineRequest, parseS
 import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
 import { createStrategyAdvisorGenerateJson } from "../_shared/leadPipeline/strategyAdvisorModel.ts";
 import { compileWithBrain, loadBrainPlanningContext } from "../_shared/leadPipeline/brainContext.ts";
+import { planSigner } from "../_shared/leadPipeline/planToken.ts";
 import { supabaseEvidenceCache } from "../_shared/leadPipeline/evidenceCache.ts";
 import { supabaseCheckpointStore } from "../_shared/leadPipeline/checkpoint.ts";
 import { loadExistingRecords } from "../_shared/leadPipeline/history.ts";
@@ -101,8 +102,20 @@ Deno.serve(withBuildStamp(async (req) => {
           const proposal = await binding.proposeMission!({ originalUserQuery: query, requestedCount, companyBrain: brain.context });
           if (!proposal) return { error: binding.lastModelFailure()?.code ?? "the model returned no usable interpretation" };
           const c = compileWithBrain({ query, proposal, requestedCount, brain });
-          return { mission: c.mission, brain: { status: brain.status, fields: brain.fields, applied: c.brainApplied, rejected: c.brainRejected } };
+          return {
+            mission: c.mission, brain: { status: brain.status, fields: brain.fields, applied: c.brainApplied, rejected: c.brainRejected },
+            // Signed into the approval token: a run rebuilds exactly this, with no model call.
+            replay: { proposal, brain: { status: brain.status, fields: brain.fields, context: brain.context } },
+          };
         },
+        // strategy_run: the signed proposal and Brain context, compiled again (deterministic).
+        recompile: (query, requestedCount, replay) => {
+          const brain = { status: replay.brain.status as never, fields: replay.brain.fields, context: replay.brain.context as never };
+          const c = compileWithBrain({ query, proposal: replay.proposal, requestedCount, brain });
+          return Promise.resolve({ mission: c.mission, brain: { status: brain.status, fields: brain.fields, applied: c.brainApplied, rejected: c.brainRejected } });
+        },
+        // Approval tokens are MAC'd with a key derived from the service-role key (no new secret).
+        signer: await planSigner(env("SUPABASE_SERVICE_ROLE_KEY") ?? ""),
         advisor: createStrategyAdvisorGenerateJson(),
       });
       return json(r.body, r.status);

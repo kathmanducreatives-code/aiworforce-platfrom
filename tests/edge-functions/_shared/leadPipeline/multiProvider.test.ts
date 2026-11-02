@@ -29,6 +29,19 @@ import { ApifyRefusal, ledgeredInvoker, PIPELINE_ACTORS, pipelineApifyInvoker } 
 import { companiesFromPostRows, companyEmployeesInput, peopleFromEmployeeRows } from "../../../../supabase/functions/_shared/leadPipeline/apifyDiscovery.ts";
 import { checkFounders } from "../../../../supabase/functions/_shared/leadPipeline/founderCheck.ts";
 import { planChecks } from "../../../../scripts/deploy/test-functions-smoke.ts";
+import { planSigner, type PlanReplay } from "../../../../supabase/functions/_shared/leadPipeline/planToken.ts";
+
+/** One test signer (planToken.ts); the real function derives its key from the service-role key. */
+const SIGNER = await planSigner("offline-test-secret-0123456789abcdef");
+/** An interpretation compiled from a fixed model proposal, carrying what a signed run rebuilds. */
+const fromProposal = (proposal: unknown) => (query: string, _ws: string, n: number | null) => Promise.resolve({
+  mission: compileLeadMission({ originalUserQuery: query, proposal: proposal as never, requestedCount: n }).final_mission,
+  brain: { status: "absent", fields: [], applied: [], rejected: [] },
+  replay: { proposal, brain: { status: "absent", fields: [], context: null } },
+});
+const recompileFromReplay = (query: string, n: number | null, replay: PlanReplay) => Promise.resolve({
+  mission: compileLeadMission({ originalUserQuery: query, proposal: replay.proposal as never, requestedCount: n }).final_mission,
+});
 import { checkStrategyApproval } from "../../../../supabase/functions/_shared/leadPipeline/multiProvider.ts";
 import { chainFor, discoveryJobTitles, hiringTitles, sizePreferenceDistance } from "../../../../supabase/functions/_shared/leadPipeline/strategy.ts";
 import { readFlags } from "../../../../supabase/functions/_shared/discoveryProviders/flags.ts";
@@ -536,7 +549,8 @@ function sdeps(over: Partial<StrategyDeps> = {}, env = SENV) {
     ledger: memoryLedger(), checkpoints: memoryCheckpointStore(), loadExisting: () => Promise.resolve([]),
     leadoceanFor: () => ({ adapter: lo.adapter, deps: null as never }), apify: ap.invoke,
     persist: (rows) => { written.push(...rows); return Promise.resolve(); }, now: NOW,
-    interpret: (query, _ws, n) => { interpretations++; return Promise.resolve({ mission: compileLeadMission({ originalUserQuery: query, proposal: HIRING_PROPOSAL, requestedCount: n }).final_mission }); },
+    interpret: (query, ws, n) => { interpretations++; return fromProposal(HIRING_PROPOSAL)(query, ws, n); },
+    recompile: recompileFromReplay, signer: SIGNER,
     advisor: recorded("apify_only"),
     ...over,
   };
@@ -554,15 +568,18 @@ Deno.test("service: strategy_plan is member-readable and calls no provider; stra
   assertEquals([plan.strategy, plan.selectedBy], ["apify_only", "model"]);
   assertFalse(plan.candidates.find((c) => c.strategy === "apollo_plus_apify")!.feasible, "Apollo flagged on and connected — still never planned");
   assertEquals(m.lo.calls.length + m.ap.calls.length, 0, "planning calls no provider");
-  assertEquals((await handleStrategyRequest(sreq({ action: "strategy_run", approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd } }), m.d)).status, 403, "a member cannot approve spend");
+  const token = planned.body.approval_token as string;
+  assert(typeof token === "string" && token.includes("."), "the plan carries a signed approval token");
+  assertEquals((await handleStrategyRequest(sreq({ action: "strategy_run", approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token } }), m.d)).status, 403, "a member cannot approve spend");
 
   const o = sdeps();
-  const stale = await handleStrategyRequest(sreq({ action: "strategy_run", approval: { plan_hash: "deadbeef", apify_usd: 1 } }), o.d);
+  const stale = await handleStrategyRequest(sreq({ action: "strategy_run", approval: { plan_hash: "deadbeef", apify_usd: 1, token } }), o.d);
   assertEquals(stale.status, 409);
   assertEquals(o.lo.calls.length + o.ap.calls.length, 0, "a stale approval buys nothing");
-  const ran = await handleStrategyRequest(sreq({ action: "strategy_run", approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd } }), o.d);
+  const ran = await handleStrategyRequest(sreq({ action: "strategy_run", approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token } }), o.d);
   assertEquals(ran.status, 200);
   assertEquals(ran.body.strategy, "apify_only");
+  assertEquals(o.interpretations(), 0, "the run never re-interprets: it executes the signed plan");
   assertEquals(o.lo.calls.length, 0);
   assert(o.written.length >= 2, "eligible and pending companies reach the Leads tables");
   assert(o.written.every((r) => r.contact === null || r.contact.phone === null));
@@ -854,10 +871,7 @@ Deno.test("service: strategy_plan explains hard vs soft and how the Company Brai
   const proposalSoft = { ...HIRING_PROPOSAL, requested_opportunity_count: 5, required_signal_terms: ["salespeople"],
     soft_preferences: [{ field: "employee_range", value: { min: 20, max: 500 }, reason: "preferred" }] };
   const { d, lo, ap } = sdeps({
-    interpret: (query, _ws, n) => Promise.resolve({
-      mission: compileLeadMission({ originalUserQuery: query, proposal: proposalSoft, requestedCount: n }).final_mission,
-      brain: { status: "absent", fields: [], applied: [], rejected: [] },
-    }),
+    interpret: fromProposal(proposalSoft),
   });
   const r = await handleStrategyRequest(sreq({ action: "strategy_plan", query: q, requested_count: 5 }), d);
   assertEquals(r.status, 200);
@@ -879,10 +893,10 @@ Deno.test("service: strategy_plan explains hard vs soft and how the Company Brai
 // On TEST, "Find 5 US B2B companies …" compiled "B2B" as a HARD industry, so every company
 // waited on a label no provider can establish. These runs use the mocked Apify actors.
 const b2bRun = async (query: string, companyTypes: string[], extra: Record<string, unknown> = {}) => {
-  const o = sdeps({ interpret: (q, _ws, n) => Promise.resolve({ mission: compileLeadMission({ originalUserQuery: q, proposal: { ...HIRING_PROPOSAL, company_types: companyTypes, ...extra }, requestedCount: n }).final_mission }) });
+  const o = sdeps({ interpret: fromProposal({ ...HIRING_PROPOSAL, company_types: companyTypes, ...extra }) });
   const planned = await handleStrategyRequest(sreq({ action: "strategy_plan", query }), o.d);
   const plan = planned.body.plan as StrategyPlan;
-  const ran = await handleStrategyRequest(sreq({ action: "strategy_run", query, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd } }), o.d);
+  const ran = await handleStrategyRequest(sreq({ action: "strategy_run", query, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } }), o.d);
   const checks = (r: PipelineRow) => ((r.lead_candidate.raw.agentory_pipeline as { qualification: { checks: { dimension: string; result: string }[]; gaps: string[] } }).qualification);
   return { planned, plan, ran, o, checks, interpretation: planned.body.interpretation as { hard: { key: string }[]; preferences: { key: string; values: unknown }[] } };
 };
@@ -924,4 +938,106 @@ Deno.test("the model restating the hiring signal as a hard constraint (TEST plan
   assertEquals(r.interpretation.hard.map((h) => h.key).sort(), ["geography_hq", "signal"], "no unmappable second requirement");
   assertFalse(r.plan.limitations.some((l) => l.detail.includes("unmappable")));
   assertEquals(r.o.written.filter((w) => w.lead_candidate.status === "qualified").map((w) => w.account.name), ["Northwind Ledger"]);
+});
+
+// ── Stage 3: strategy_run executes the signed plan; it never re-interprets ──────
+Deno.test("strategy_run: no token, a forged token, changed ceilings or another workspace buy nothing", async () => {
+  const m = sdeps({ userId: "u-member" });
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan" }), m.d);
+  const plan = planned.body.plan as StrategyPlan;
+  const token = planned.body.approval_token as string;
+  const o = sdeps();
+  const run = (b: Record<string, unknown>) => handleStrategyRequest(sreq({ action: "strategy_run", ...b }), o.d);
+  assertEquals((await run({ approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd } })).status, 400, "no token: re-plan");
+  const [body, sig] = token.split(".");
+  const forged = btoa(JSON.stringify({ ...JSON.parse(atob(body.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((body.length + 3) % 4))), requestedCount: 50 }))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  assertEquals((await run({ approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: `${forged}.${sig}` } })).status, 409, "forged");
+  assertEquals((await run({ max_apify_usd: 1, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token } })).status, 409, "a higher ceiling is a different plan");
+  assertEquals((await handleStrategyRequest(sreq({ action: "strategy_run", workspace_id: "ws-other", approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token } }), o.d)).status, 403, "another workspace is refused before the token");
+  assertEquals(o.lo.calls.length + o.ap.calls.length, 0, "no refused run reached a provider");
+  assertEquals(o.interpretations(), 0, "and none asked the model");
+});
+
+Deno.test("strategy_run is immune to model variance: a different reading at run time cannot change what runs", async () => {
+  const q = "Find 3 US companies actively hiring Account Executives.";
+  const planner = sdeps({ userId: "u-member" });
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan", query: q }), planner.d);
+  const plan = planned.body.plan as StrategyPlan;
+  // At run time the model would read "presence" — but the run does not ask it.
+  const o = sdeps({ interpret: fromProposal({ ...HIRING_PROPOSAL, geography_scope: "presence" }) });
+  const ran = await handleStrategyRequest(sreq({ action: "strategy_run", query: q, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } }), o.d);
+  assertEquals(ran.status, 200, JSON.stringify(ran.body).slice(0, 200));
+  assertEquals(ran.body.strategy, plan.strategy);
+});
+
+Deno.test("one approval buys each paid step at most once: a repeat replays from the ledger; another walk is refused", async () => {
+  const m = sdeps({ userId: "u-member" });
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan" }), m.d);
+  const plan = planned.body.plan as StrategyPlan;
+  const approval = { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token };
+  const o = sdeps();
+  const first = await handleStrategyRequest(sreq({ action: "strategy_run", approval }), o.d);
+  assertEquals(first.status, 200);
+  const bought = o.ap.calls.length;
+  assert(bought > 0, "the first run bought its steps");
+  const again = await handleStrategyRequest(sreq({ action: "strategy_run", approval }), o.d);
+  assertEquals(again.status, 200, "the same approved walk can be resumed");
+  assertEquals(o.ap.calls.length, bought, "and buys nothing twice: every step replays from the durable ledger");
+  const otherWalk = await handleStrategyRequest(sreq({ action: "strategy_run", walk_id: "walk-other", approval }), o.d);
+  assertEquals(otherWalk.status, 409, "the same approval cannot buy a second walk");
+  assertEquals(o.ap.calls.length, bought);
+});
+
+// ── Duplicate purchase under concurrency and interruption (owner safeguard 3) ──
+async function approvedRun() {
+  const m = sdeps({ userId: "u-member" });
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan" }), m.d);
+  const plan = planned.body.plan as StrategyPlan;
+  return { action: "strategy_run", approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } };
+}
+const keysOf = (calls: Call[]) => calls.map((c) => c.key);
+const unique = (xs: string[]) => [...new Set(xs)];
+
+Deno.test("idempotency: two concurrent runs of one approval buy each paid step at most once", async () => {
+  const body = await approvedRun();
+  const o = sdeps();
+  const inner = o.d.apify!;
+  o.d.apify = async (a, i, opts) => { await new Promise((r) => setTimeout(r, 5)); return inner(a, i, opts); };
+  const both = await Promise.all([handleStrategyRequest(sreq(body), o.d), handleStrategyRequest(sreq(body), o.d)]);
+  assert(both.some((r) => r.status === 200), `one run completes: ${both.map((r) => r.status)}`);
+  assertEquals(keysOf(o.ap.calls), unique(keysOf(o.ap.calls)), "no idempotency key reached Apify twice");
+  const solo = sdeps();
+  await handleStrategyRequest(sreq(body), solo.d);
+  assert(o.ap.calls.length <= solo.ap.calls.length, "two concurrent runs bought no more than one run does");
+});
+
+Deno.test("idempotency: a run interrupted after a provider charged, before the ledger settled, never re-buys that step", async () => {
+  const body = await approvedRun();
+  const o = sdeps();
+  // The isolate dies between Apify's charge and the ledger write: the reservation stays in flight.
+  const ledger = o.d.ledger;
+  let crash = true;
+  o.d.ledger = { ...ledger, reserve: (e) => ledger.reserve(e), settle: (k, a, r) => crash ? Promise.reject(new Error("isolate terminated")) : ledger.settle(k, a, r),
+    markUncertain: (k) => crash ? Promise.resolve() : ledger.markUncertain(k), release: (k) => ledger.release(k) } as typeof ledger;
+  const first = await handleStrategyRequest(sreq(body), o.d);
+  const bought = keysOf(o.ap.calls);
+  assert(bought.length > 0, `the first attempt reached Apify (${first.status})`);
+  crash = false;
+  await handleStrategyRequest(sreq(body), o.d);
+  assertEquals(keysOf(o.ap.calls).slice(bought.length).filter((k) => bought.includes(k)), [], "a charge the ledger never confirmed is not bought again");
+});
+
+Deno.test("idempotency: a provider failure is marked uncertain and a retry never re-buys it", async () => {
+  const body = await approvedRun();
+  const o = sdeps();
+  const inner = o.d.apify!;
+  let fail = true;
+  o.d.apify = (a, i, opts) => fail && a === "apify_linkedin_company_details" ? (o.ap.calls.push({ actor: a, input: i, key: opts.idempotencyKey }), Promise.reject(new Error("socket hang up"))) : inner(a, i, opts);
+  await handleStrategyRequest(sreq(body), o.d);
+  const failed = o.ap.calls.filter((c) => c.actor === "apify_linkedin_company_details").map((c) => c.key);
+  assert(failed.length > 0, "the company-record step was attempted");
+  fail = false;
+  const retry = await handleStrategyRequest(sreq(body), o.d);
+  assertEquals(o.ap.calls.filter((c) => failed.includes(c.key)).length, failed.length, `an uncertain charge is never retried (${retry.status})`);
 });
