@@ -123,6 +123,8 @@ export interface LeadRow {
   fitScore: number | null;
   fitTier: FitTier;
   whySelected: string | null;
+  /** Discovery-pipeline leads: hard requirements not yet established by evidence (needs verification). */
+  unverifiedRequirements?: string[];
 
   sources: LeadSource[];             // preserved history, never overwritten
   strongestSource: LeadSource | null;

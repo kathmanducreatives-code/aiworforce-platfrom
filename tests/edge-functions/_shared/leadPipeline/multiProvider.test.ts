@@ -874,3 +874,45 @@ Deno.test("service: strategy_plan explains hard vs soft and how the Company Brai
   assertEquals(smoke.filter((c) => c.status !== "pass").map((c) => `${c.id} ${c.detail}`), [], "the deployed planner must pass the TEST planning smoke");
   assert(smoke.find((c) => c.id === "P3")!.detail.includes("Account Executive"), "salespeople → an Account Executive search");
 });
+
+// ── B2B: a description ranks, only the user's own "only/must" requires (TEST plan 116a1b45) ──
+// On TEST, "Find 5 US B2B companies …" compiled "B2B" as a HARD industry, so every company
+// waited on a label no provider can establish. These runs use the mocked Apify actors.
+const b2bRun = async (query: string, companyTypes: string[], extra: Record<string, unknown> = {}) => {
+  const o = sdeps({ interpret: (q, _ws, n) => Promise.resolve({ mission: compileLeadMission({ originalUserQuery: q, proposal: { ...HIRING_PROPOSAL, company_types: companyTypes, ...extra }, requestedCount: n }).final_mission }) });
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan", query }), o.d);
+  const plan = planned.body.plan as StrategyPlan;
+  const ran = await handleStrategyRequest(sreq({ action: "strategy_run", query, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd } }), o.d);
+  const checks = (r: PipelineRow) => ((r.lead_candidate.raw.agentory_pipeline as { qualification: { checks: { dimension: string; result: string }[]; gaps: string[] } }).qualification);
+  return { planned, plan, ran, o, checks, interpretation: planned.body.interpretation as { hard: { key: string }[]; preferences: { key: string; values: unknown }[] } };
+};
+
+Deno.test("B2B described ('US B2B companies'): a preference — a proven company qualifies without B2B evidence", async () => {
+  const r = await b2bRun("Find 5 US B2B companies currently hiring Account Executives. Prefer 300–500 employees.", ["B2B"], { employee_range: { min: 300, max: 500 } });
+  assertEquals(r.planned.status, 200);
+  assertEquals(r.interpretation.hard.map((h) => h.key).sort(), ["geography_hq", "signal"], "B2B is not hard");
+  assertEquals(r.interpretation.preferences.map((p) => p.key).sort(), ["business_model", "employee_range"]);
+  assertEquals([r.plan.status, r.plan.strategy], ["ready", "apify_only"]);
+  assertFalse(r.plan.limitations.some((l) => /industry|business_model/.test(l.detail)), "no unverifiable B2B requirement is disclosed: there is none");
+  const q = r.o.written.filter((w) => w.lead_candidate.status === "qualified");
+  assertEquals(q.map((w) => w.account.name), ["Northwind Ledger"], "the company with proven US HQ and hiring qualifies");
+  // Northwind's LinkedIn record declares 51–200 employees: outside the preferred 300–500, still qualified.
+  assert(sizePreferenceDistance({ min: 51, max: 200 }, { min: 300, max: 500 }) > 0, "outside the preferred range: ranked, never rejected");
+  assertEquals(r.interpretation.preferences.find((p) => p.key === "employee_range")!.values, { min: 300, max: 500 });
+  for (const w of r.o.written) {
+    assertFalse(r.checks(w).checks.some((c) => c.dimension === "business_model"), "a preference is never reported as met or failed");
+  }
+});
+
+Deno.test("B2B required ('Only include verified B2B'): missing evidence is needs_verification — never proof, never a rejection", async () => {
+  const r = await b2bRun("Find 5 US companies currently hiring Account Executives. Only include verified B2B companies.", ["B2B"]);
+  assertEquals(r.interpretation.hard.map((h) => h.key).sort(), ["business_model", "geography_hq", "signal"]);
+  assertEquals(r.plan.status, "ready", "an unverifiable requirement is disclosed, not a blocked plan");
+  assert(r.plan.limitations.some((l) => l.detail.includes("business_model")), "disclosed at planning");
+  assertEquals(r.o.written.filter((w) => w.lead_candidate.status === "qualified").length, 0, "nothing qualifies on an unproven B2B");
+  const nw = r.o.written.find((w) => w.account.name === "Northwind Ledger")!;
+  assert(nw, "the proven company is kept for review, not dropped");
+  assertEquals(nw.lead_candidate.status, "new");
+  assertEquals(r.checks(nw).checks.find((c) => c.dimension === "business_model")!.result, "unknown");
+  assert(r.checks(nw).gaps.includes("business_model"));
+});

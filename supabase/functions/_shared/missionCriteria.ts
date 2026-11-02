@@ -50,7 +50,7 @@ import {
   canonicalSignalType, containsPhrase, hedgedLocations, isHiringSignal, sameLocation,
   type FieldProvenance, type LeadMissionV1, type MissionSignal,
 } from "./leadMission.ts";
-import { isControlledPhrase } from "./businessModelMatch.ts";
+import { isControlledPhrase, readFacets } from "./businessModelMatch.ts";
 import { sizeRangeProvable } from "./companySize.ts";
 import { readSignalPhrase, type SignalQualifier } from "./missionSignalDescriptor.ts";
 import {
@@ -184,6 +184,68 @@ export function sizeClauseHedged(query: string, range: { min?: number | null; ma
     if (HEDGE_RE.test(sentence) || /\b(?:outside|beyond)\s+(?:that|this|the)\s+(?:range|band)\b/i.test(sentence)) return true;
   }
   return false;
+}
+
+// ── BUSINESS-MODEL AUDIENCE: REQUIRED ONLY WHEN THE USER SAYS SO ─────────────
+//
+// "Find US B2B companies hiring Account Executives" DESCRIBES the companies; it
+// does not make B2B a filter. The model files "B2B" under company_types, the
+// value is in the request's words, and `profileList` used to compile every such
+// value as a HARD industry — so on TEST (plan 116a1b45) every company stayed
+// needs_verification on "B2B", a label no discovery provider can establish.
+//
+// An AUDIENCE descriptor (B2B / B2C / D2C, read by the controlled vocabulary in
+// businessModelMatch.ts, never by substring) is a business model, and how hard it
+// is comes from the user's own words in the clause that names it:
+//   exclude   "exclude B2C", "no B2C", "not D2C"           → hard exclusion
+//   require   "only B2B", "must be B2B", "B2B only"         → hard requirement
+//             (no provider verifies it, so a company without evidence stays
+//             needs_verification — missing evidence is never proof)
+//   prefer    "prefer B2B", "ideally B2B"                    → preference
+//   permit    "include strong B2C opportunities"             → no restriction
+//   describe  "US B2B companies"                             → preference
+// A value mixing in anything else ("B2B SaaS", "fintech") is not an audience
+// descriptor and keeps the existing rule.
+
+const B2B_WORDS_RE = /\b(?:b2b|business[\s-]+to[\s-]+business)\b/i;
+const CONSUMER_WORDS_RE = /\b(?:b2c|d2c|dtc|direct[\s-]+to[\s-]+consumers?|business[\s-]+to[\s-]+consumers?|consumers?)\b/i;
+const AUDIENCE_EXCLUDE_RE = /\b(?:exclude[sd]?|excluding|no|not|non|without|except|avoid|never|other\s+than)\b/i;
+const AUDIENCE_REQUIRE_RE = /\b(?:only|must|required?|requires|requirement|exclusively|strictly|solely|mandatory)\b/i;
+const AUDIENCE_PERMIT_RE = /\b(?:include|including|also|open\s+to|welcome|fine|ok(?:ay)?|acceptable|consider|allow(?:ed)?)\b/i;
+
+export type AudienceIntent = "exclude" | "require" | "prefer" | "permit" | "describe" | "absent";
+
+/** The audience a value names when it is ONLY an audience descriptor ("B2B", "B2C companies"), else null. */
+export function audienceDescriptor(value: unknown): "b2b" | "consumer" | null {
+  const text = String(value ?? "");
+  const f = readFacets(text);
+  if (f.audience === null || f.delivery !== null || f.ai || f.other.length) return null;
+  const re = f.audience === "b2b" ? B2B_WORDS_RE : CONSUMER_WORDS_RE;
+  return re.test(text) ? f.audience : null;
+}
+
+/** How the request's own words treat this audience (see the table above). "absent": the request never names it. */
+export function audienceIntent(query: string, audience: "b2b" | "consumer"): AudienceIntent {
+  const re = audience === "b2b" ? B2B_WORDS_RE : CONSUMER_WORDS_RE;
+  const clauses = String(query ?? "").split(/[.;!?\n]+|,?\s+but\s+|,\s*(?=(?:and\s+)?(?:exclude|excluding|include|prefer|ideally|only)\b)/i);
+  let found: AudienceIntent = "absent";
+  const rank: AudienceIntent[] = ["absent", "describe", "permit", "prefer", "require", "exclude"];
+  for (const clause of clauses) {
+    const m = re.exec(clause);
+    if (!m) continue;
+    // Only the words just before the term speak about it ("Only include verified B2B",
+    // "exclude B2C"); a "no" further back ("no outside funding … B2B") does not.
+    const before = clause.slice(0, m.index).trim().split(/\s+/).slice(-4).join(" ");
+    const after = clause.slice(m.index + m[0].length).split(/\s+/).slice(0, 4).join(" ");
+    const intent: AudienceIntent = AUDIENCE_EXCLUDE_RE.test(before) ? "exclude"
+      : AUDIENCE_REQUIRE_RE.test(before) || /^\s*(?:\w+\s+)?(?:only|exclusively)\b/i.test(after) ? "require"
+      : HEDGE_RE.test(clause) ? "prefer"
+      : AUDIENCE_PERMIT_RE.test(before) ? "permit"
+      : "describe";
+    // The strongest statement about the audience anywhere in the request wins.
+    if (rank.indexOf(intent) > rank.indexOf(found)) found = intent;
+  }
+  return found;
 }
 
 const STAGE_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
@@ -1140,6 +1202,44 @@ export function deriveMissionCriteria(
       rationale, ...(evaluable ? {} : { status: "unprovable_today" as const }),
     });
   };
+  /**
+   * Compile an audience descriptor by the request's own words (see `audienceIntent`).
+   * Returns false when the value is not an audience descriptor or the request never
+   * names that audience (the caller's existing rule then applies: not in the
+   * request's words → a target).
+   */
+  const audienceCriterion = (v: string, how: string): boolean => {
+    const audience = audienceDescriptor(v);
+    if (!audience) return false;
+    const intent = audienceIntent(query, audience);
+    if (intent === "absent") return false;
+    const said = inQuery(v) ? v : "";
+    if (intent === "exclude") {
+      push({
+        kind: "hard", dimension: "exclusion", value: { field: "excluded_company_types", value: [v] },
+        label: `Excluding: ${v}`, source: "user_explicit", elevated_by: "excluding", user_phrase: said,
+        rationale: "the request excludes it; a company is rejected only on evidence that it is one",
+      });
+    } else if (intent === "require") {
+      push({
+        kind: "hard", dimension: "business_model", value: v, label: `Business model: ${v}`, source: "user_explicit",
+        user_phrase: said,
+        rationale: "the request requires it; no discovery provider verifies a business model, so a company " +
+          "without evidence stays needs_verification — missing evidence is never taken as proof",
+      });
+    } else if (intent === "prefer" || intent === "describe") {
+      push({
+        kind: "target", dimension: "business_model", value: v, label: `Business model preference: ${v}`,
+        source: "user_explicit", user_phrase: said,
+        rationale: intent === "prefer"
+          ? "stated as a preference; can rank, never reject"
+          : `${how} describing the companies, not a stated requirement: it ranks and never rejects ` +
+            "(no provider can verify a business model; say \"only\" to require it)",
+      });
+    }
+    // "permit" ("include strong B2C opportunities"): nothing restricts it, so no criterion.
+    return true;
+  };
   const profileList = (
     dimension: CriterionDimension, field: string, values: readonly string[], label: string,
   ) => {
@@ -1158,6 +1258,9 @@ export function deriveMissionCriteria(
         continue;
       }
       const source = sourceFromProvenance(prov[field], inQuery(v));
+      // An audience descriptor ("B2B") the request names: hard only in the user's words.
+      if ((dimension === "industry" || dimension === "business_model") && source !== "company_brain_policy" &&
+        source !== "company_brain_preference" && audienceCriterion(v, "proposed as a company type")) continue;
       const split = source === "user_explicit" && !inQuery(v) ? QUALIFIED.exec(v.trim()) : null;
       const head = split?.[1]?.trim() ?? "";
       const tail = (split?.[2] ?? split?.[3] ?? split?.[4] ?? "").trim();
@@ -1377,6 +1480,16 @@ export function deriveMissionCriteria(
     const values = Array.isArray(value) ? value.map(String) : [String(value ?? "")];
     const stated = values.some(inQuery);
     const excluding = /not|exclud/i.test(String(c.operator ?? ""));
+    // AN AUDIENCE THE MODEL MARKED HARD IS STILL DECIDED BY THE USER'S WORDS. "B2B" in
+    // hard_constraints is the model's reading, not the request's; an exclusion of an
+    // audience the request already excludes (compiled above) is not added twice.
+    const audiences = values.map(audienceDescriptor);
+    if (values.length && audiences.every((a) => a !== null)) {
+      if (excluding && audiences.every((a) => out.some((x) => x.dimension === "exclusion" &&
+        ((x.value as { value?: unknown[] })?.value ?? []).some((e) => audienceDescriptor(e) === a)))) continue;
+      if (!excluding && values.every((v) => audienceCriterion(v, "proposed as a hard constraint") ||
+        out.some((x) => x.dimension === "business_model" && audienceDescriptor(x.value) === audienceDescriptor(v)))) continue;
+    }
     // A HARD `constraint` IS A REQUIREMENT NO EVIDENCE DIMENSION ANSWERS. It used
     // to compile as status "ok", so the approval card called it provable, the
     // interpretation gate passed it, and every candidate stayed unknown on it

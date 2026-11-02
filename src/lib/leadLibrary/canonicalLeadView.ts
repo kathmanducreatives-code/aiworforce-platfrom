@@ -27,7 +27,7 @@
 
 import { hydrateOutreachStage } from "@/lib/outreachStageView";
 import { requirementEvidenceLines } from "./requirementEvidence";
-import { contactIsVerified, pipelineRoleVerification } from "./contactVerification";
+import { contactIsVerified, pipelineRoleVerification, pipelineUnverifiedRequirements } from "./contactVerification";
 import type { OutreachStageView } from "@/lib/workbenchAccountView";
 
 // ----------------------------------------------------------------- inputs -----
@@ -194,6 +194,12 @@ export interface CanonicalLeadView {
     verdict: string | null;
     recommendedAction: string | null;
     hardDisqualifiers: string[];
+    /**
+     * Discovery-pipeline leads: hard requirements no evidence established yet
+     * (e.g. "business_model" for "only verified B2B"). The lead needs verification on
+     * these — they are neither met nor failed.
+     */
+    unverifiedRequirements: string[];
     requiresReview: boolean;
   };
   research: {
@@ -588,7 +594,9 @@ export function deriveCanonicalLeadView(input: DeriveCanonicalLeadInput): Canoni
     recommendedAction: str(repJsonb.recommended_next_action) ?? str(repJsonb.next_action) ?? null,
     hardDisqualifiers: Array.isArray(repJsonb.disqualifiers_hit)
       ? (repJsonb.disqualifiers_hit as unknown[]).filter((x): x is string => typeof x === "string") : [],
-    requiresReview: str(repJsonb.gate_decision) === "manual_review" || accountStatus === "watch",
+    unverifiedRequirements: pipelineUnverifiedRequirements(repJsonb),
+    requiresReview: str(repJsonb.gate_decision) === "manual_review" || accountStatus === "watch" ||
+      pipelineUnverifiedRequirements(repJsonb).length > 0,
   };
 
   // ---- provenance -----------------------------------------------------------
