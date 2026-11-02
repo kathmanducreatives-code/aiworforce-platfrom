@@ -17,6 +17,7 @@
 // (PROVIDER_LEADOCEAN_ENABLED + commercial terms) — the same connection, key
 // vault and usage ledger. Company Brain is neither read nor written.
 
+import { activeMissionContract } from "../missionInterpretationContract.ts";
 import type { ActorInvoker } from "../discoveryProviders/adapters/apify.ts";
 import type { AdapterDeps, DiscoveryAdapter } from "../discoveryProviders/adapter.ts";
 import type { DiscoveryApproval, UsageLedger } from "../discoveryProviders/budget.ts";
@@ -218,6 +219,8 @@ export interface StrategyDeps extends PipelineDeps {
     { mission: unknown; brain?: { status: string; fields: string[]; applied: unknown[]; rejected: unknown[] } } | { error: string }>;
   /** GPT strategy advice; null = the deterministic choice only. */
   advisor: GenerateJsonFn | null;
+  /** The mission interpretation contract in force (default: AGENTORY_MISSION_CONTRACT, v1). */
+  contractVersion?: string;
 }
 
 export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDeps): Promise<{ status: number; body: Record<string, unknown> }> {
@@ -244,6 +247,8 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       apollo: { enabled: f.enabled && f.provider.apollo && f.commercialTerms.apollo, connected: ap?.status === "connected", authorized: true },
     },
     budget: req.budget, user: req.user,
+    // The plan hash binds the workspace and the interpretation contract it was read under.
+    binding: { workspaceId: req.workspaceId, contractVersion: d.contractVersion ?? activeMissionContract() },
   };
   const base = planStrategy(spec, ctx);
   const plan: StrategyPlan = req.user?.strategy || !d.advisor ? base : planStrategy(spec, ctx, await adviseStrategy(spec, base.candidates, d.advisor, req.workspaceId));
