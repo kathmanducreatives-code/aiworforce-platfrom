@@ -143,6 +143,7 @@ export function canonicalToLeadRow(
     fitScore: view.qualification.fitScore,
     fitTier: fitTierFromScore(view.qualification.fitScore),
     whySelected: view.qualification.verdict ?? account.description ?? null,
+    unverifiedRequirements: view.qualification.unverifiedRequirements,
 
     sources,
     strongestSource: sources[0] ?? null,

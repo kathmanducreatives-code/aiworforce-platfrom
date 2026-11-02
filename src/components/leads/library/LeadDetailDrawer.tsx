@@ -132,6 +132,10 @@ export function LeadDetailDrawer({
             v={lead.fitScore != null ? `${lead.fitScore}/100 · ${fitTierLabel(lead.fitTier)}` : null}
           />
           {lead.whySelected && <Field k="Why" v={lead.whySelected} />}
+          {/* A requirement no evidence established yet is shown as such: not met, not failed. */}
+          {lead.unverifiedRequirements && lead.unverifiedRequirements.length > 0 && (
+            <Field k="Needs verification" v={lead.unverifiedRequirements.map((d) => d.replace(/_/g, " ")).join(", ")} />
+          )}
         </Section>
 
         {/* Why this lead appeared */}
