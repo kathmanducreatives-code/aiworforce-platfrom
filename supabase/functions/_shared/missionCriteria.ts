@@ -555,8 +555,17 @@ const NOT_A_RESTATEMENT_OP_RE = /not|exclud|except|other_?than|unless|outside|^n
 const HIRING_FILLER_RE =
   /\b(?:actively|currently|recently|now|still|is|are|be|being|hiring|hires?|hired|for|open|roles?|positions?|jobs?|postings?|openings?|vacanc(?:y|ies)|new|the|a|an|in|of|any|some|true|yes|active|activity|recruiting)\b/g;
 
+/**
+ * A constraint FIELD name in one spelling: "hiring.role", "hiring role", "hiring-role",
+ * "hiringRole" and "HiringRole" are all "hiring_role" (TEST plan run 41466774814: the
+ * model wrote the field with a dot, which the closed lists below did not match).
+ */
+export function normaliseFieldName(field: string): string {
+  return String(field ?? "").trim().replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().replace(/[.\s-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+}
+
 export function restatesHiringSignal(field: string, raw: unknown, signals: readonly Partial<MissionSignal>[]): boolean {
-  const f = field.toLowerCase();
+  const f = normaliseFieldName(field);
   const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { value: raw }) as
     { operator?: unknown; value?: unknown };
   const op = String(c.operator ?? "").trim().toLowerCase();
@@ -606,7 +615,7 @@ const RESTATED_FUNDING_FIELDS = new Set(["funding_event", "funding", "funding_ro
 const RESTATED_FUNDING_OPS = new Set(["announced_within_last_days", "within_last_days", "within_days", "within",
   "raised_within_days", "announced_within_days", "max_age_days", "at_most_days", "<=", "lte"]);
 export function restatesFundingWindow(field: string, raw: unknown, signals: readonly Partial<MissionSignal>[]): boolean {
-  if (!RESTATED_FUNDING_FIELDS.has(field.toLowerCase())) return false;
+  if (!RESTATED_FUNDING_FIELDS.has(normaliseFieldName(field))) return false;
   const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { value: raw }) as
     { operator?: unknown; value?: unknown };
   if (!RESTATED_FUNDING_OPS.has(String(c.operator ?? "").trim().toLowerCase())) return false;
@@ -633,7 +642,7 @@ const RESTATED_MIN_OPS = new Set(["gte", ">=", "min", "at_least", "greater_than_
 export function restatesEmployeeBound(
   field: string, raw: unknown, range: { min?: number | null; max?: number | null } | null | undefined,
 ): boolean {
-  const f = field.toLowerCase();
+  const f = normaliseFieldName(field);
   const isMax = RESTATED_MAX_FIELDS.has(f), isMin = RESTATED_MIN_FIELDS.has(f);
   if (!isMax && !isMin) return false;
   const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { value: raw }) as { operator?: unknown; value?: unknown };

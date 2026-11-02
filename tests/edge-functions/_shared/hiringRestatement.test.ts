@@ -9,7 +9,7 @@
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
-import { restatesHiringSignal } from "../../../supabase/functions/_shared/missionCriteria.ts";
+import { normaliseFieldName, restatesEmployeeBound, restatesHiringSignal } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import { requirementsFromMission } from "../../../supabase/functions/_shared/discoveryProviders/requirements.ts";
 import { specFromMission } from "../../../supabase/functions/_shared/leadPipeline/strategy.ts";
 
@@ -94,4 +94,33 @@ Deno.test("a distinct stated requirement beside it still compiles as its own har
   const kept = ((stated as { criteria?: { dimension: string; value?: { field?: string } }[] }).criteria ?? [])
     .filter((c) => c.dimension === "constraint" && c.value?.field === "open_roles");
   assertEquals(kept.length, 1, "a count is never swallowed as a restatement of the signal");
+});
+
+// TEST plan run 41466774814: the model wrote the restatement's FIELD as "hiring.role"
+// ("hiring role: Account Executives"); only "hiring_role" was recognised, so it compiled
+// to an unmappable hard requirement and the plan-only workflow refused the plan.
+Deno.test("the field name is read in any spelling: hiring.role, hiring role, hiringRole", () => {
+  for (const f of ["hiring_role", "hiring.role", "hiring role", "hiring-role", "hiringRole", "HiringRole", " Hiring.Role "]) {
+    assertEquals(normaliseFieldName(f), "hiring_role", f);
+    assert(restatesHiringSignal(f, { operator: "equals", value: "Account Executives" }, AE), f);
+  }
+  assertEquals(normaliseFieldName("employeeMax"), "employee_max");
+  assert(restatesEmployeeBound("employee.max", { operator: "lte", value: 500 }, { min: 20, max: 500 }), "the size restatement too");
+  // A normalised name never turns a different requirement into a restatement.
+  assert(!restatesHiringSignal("hiring.role", { operator: "except", value: "Account Executives" }, AE));
+  assert(!restatesHiringSignal("hiring.role", { operator: "equals", value: "SDRs" }, AE));
+  assert(!restatesHiringSignal("sales.headcount", { operator: "equals", value: "Account Executives" }, AE));
+});
+
+Deno.test("the owner's paid-run query with the model's hiring.role restatement compiles to exactly US HQ + hiring", () => {
+  const q = "Find 3 US companies actively hiring Account Executives. Prefer B2B companies with 20–500 employees, but include strong opportunities outside that range.";
+  const m = compileLeadMission({
+    originalUserQuery: q, requestedCount: 3,
+    proposal: {
+      ...BLANK, geographies: ["United States"], company_types: ["B2B"], employee_range: { min: 20, max: 500 }, requested_opportunity_count: 3,
+      preferred_signals: ["hiring"], signal_recency_days: 30, strategies: ["hiring"], output_intent: "companies", required_signal_terms: ["Account Executives"],
+      hard_constraints: [US_HARD, { field: "hiring.role", operator: "equals", value: "Account Executives", reason: "the role" }],
+    },
+  }).final_mission;
+  assertEquals(requirementsFromMission(m as never).hard.map((h) => h.key).sort(), ["geography_hq", "signal"]);
 });
