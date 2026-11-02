@@ -1,0 +1,926 @@
+{
+ "version": "requirement-vocabulary-v1",
+ "entries": {
+  "corpus:distinct_role_kept": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "hiring_role",
+     "as": "hiring_role → hiring_role"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:fintech_industry_hard": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:gpt_hiring_activity_restated": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "hiring_activity",
+     "as": "hiring_role → hiring_role"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:gpt_hiring_dot_role_restated": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "hiring.role",
+     "as": "hiring_role → hiring_role"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:gpt_presence_for_us_companies": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:hq_explicit": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:offices_in_us_presence": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:open_roles_count_kept": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "open_roles",
+     "as": "hiring_count → open_roles"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:operating_in_us_is_not_hq": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:paid_run_ae": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:query_a_b2b_described": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:query_b_b2b_required_b2c_excluded": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "excluded_company_types",
+     "as": "excluded_company_types → excluded_company_types"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:query_c_b2b_preferred_b2c_permitted": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:query_d_size_ideally": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:size_stated_hard": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "corpus:smoke_b2b_salespeople": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:docs/audits/live-validation-2026-09-21/task-3bc526e2-result.json#$.lead_mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/edge-functions/_shared/fixtures/missionHiringSalesRoles.json#$": {
+   "constraints": [
+    {
+     "field": "hiring_activity",
+     "as": "hiring_role → hiring_role"
+    },
+    {
+     "field": "industry_or_company_type",
+     "as": "industry → industry_or_company_type"
+    }
+   ],
+   "refused": false,
+   "renameDiff": [
+    "removed hard constraint:_field_hiring_activity_value_sales_roles_",
+    "added hard constraint:_field_hiring_role_value_sales_roles_"
+   ]
+  },
+  "persisted:tests/edge-functions/_shared/fixtures/providers-off-evidence.json#$.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/canary-1156c062/result.json#$.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/canary-62c8b188-mission.json#$": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/canary-98ce374b-mission.json#$": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[0].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[1].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[10].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[11].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[12].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[13].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[14].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[15].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[16].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[17].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[18].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[19].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[2].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[20].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[21].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[22].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[23].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[3].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[4].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[5].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[6].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[7].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[8].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[9].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[0].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[10].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[12].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[14].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[16].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[18].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[2].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[4].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[6].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[8].mission": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/run-1e52d43c/plan.json#$.steps[0].metadata.tool_input.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    },
+    {
+     "field": "stage",
+     "as": "company_stage → stage"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/run-4250f181/plan.json#$.steps[0].metadata.tool_input.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    },
+    {
+     "field": "stage",
+     "as": "company_stage → stage"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/salvo-0b7baab9/mission.json#$": {
+   "constraints": [],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/fixtures/lead-v2/size-semantics-replay-2026-09-24/canary_companies.json#$.mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A01.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A06.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A08.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A09.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A10.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.C07.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E01.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E05.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E07.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E08.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.F01.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.F12.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.G08.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H04.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H05.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H06.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H07.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H08.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.J06.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.J07.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K01.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K02.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K03.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K05.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L03.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L04.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L05.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.N03.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.P01.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.P04.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.R01.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.RND39.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.S01.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.S04.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.Z08.lead_mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/replay/fixtures/canary8.hiring-affordability.json#$.mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/replay/fixtures/canarySession2.contract2.json#$.mission": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "hiring",
+     "as": "hiring_role → hiring_role"
+    },
+    {
+     "field": "funding_event",
+     "as": "funding_event → funding_event"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/replay/fixtures/g5.funding-screen.json#$.mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
+  "persisted:tests/replay/fixtures/queryBa9a6791a.job-first.json#$.mission": {
+   "constraints": [
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  }
+ }
+}
