@@ -1356,10 +1356,18 @@ export function deriveMissionCriteria(
   // HEADQUARTERS — "a US company" is a company headquartered in the US. A
   // compiled scope is never replaced by an evaluator's (#113 refuses a verdict
   // whose scope disagrees).
-  const geographyScope = cp.geography_scope ?? scopeFromWords(query);
+  //
+  // PRESENCE ONLY IN THE USER'S WORDS. The model's "presence" is kept only when the
+  // request itself speaks of an office / presence / operations in the place; a bare
+  // "US companies" stays HEADQUARTERS whatever the model proposed (TEST smoke on
+  // ea30436: "Find 5 US B2B companies …" compiled as US presence). The model's
+  // "headquarters" is always kept: it is the stricter reading.
+  const wordsScope = scopeFromWords(query);
+  const geographyScope = cp.geography_scope === "presence" && wordsScope !== "presence"
+    ? "headquarters" : cp.geography_scope ?? wordsScope;
   for (const c of out) {
     if (c.dimension !== "geography") continue;
-    const scope = cp.geography_scope ?? (c.kind === "hard" ? geographyScope : undefined);
+    const scope = cp.geography_scope || c.kind === "hard" ? geographyScope : undefined;
     if (scope) {
       c.geography_scope = scope;
       if (scope === "headquarters") c.label = `Headquarters: ${String(c.value)}`;
