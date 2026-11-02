@@ -53,7 +53,7 @@ loop modifies code by itself: every change is a reviewed pull request (step 6).
 | 8 | Spending ledger unchanged | row counts before/after: `provider_usage_ledger`, `lead_execution_calls`; and no lead/ATLAS writes |
 | 9 | No phones / outreach | `call_attempts`, `scheduled_emails`, `outreach_*` unchanged |
 | 10 | No production mutation | production `OPTIONS` status + build header of both functions unchanged |
-| P0–P6 | GPT `strategy_plan` | ONE call with the query below: answered; hard = US HQ + hiring signal (size NOT hard); 20–500 soft preference; sales title (the planner's own `discoveryJobTitles`, e.g. "Founding Account Executive", "Account Executive"); strategy `apify_only`/`apify_plus_leadocean` with no disabled step; 8-hex plan hash; worst case within $0.25 Apify / 50 LeadOcean records |
+| P0–P6 | GPT `strategy_plan` | ONE call with the query below: answered; hard = US HQ + hiring signal (size NOT hard); 20–500 soft preference; sales title (the planner's own `discoveryJobTitles`, e.g. "Founding Account Executive", "Account Executive"); strategy `apify_only`/`apify_plus_leadocean` with no disabled step; SHA-256 plan hash (64 hex, binding the plan semantics); worst case within $0.25 Apify / 50 LeadOcean records |
 
 Query: *"Find 5 US B2B companies actively hiring salespeople. Prefer 20–500
 employees, but include strong opportunities outside that range."*

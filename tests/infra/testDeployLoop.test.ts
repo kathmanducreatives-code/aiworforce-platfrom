@@ -113,7 +113,7 @@ Deno.test("smoke: state, flags and registry checks", () => {
 
 Deno.test("smoke: plan checks fail loudly on each regression", () => {
   const good = {
-    plan: { status: "ready", strategy: "apify_only", selectedBy: "model", planHash: "0123abcd", estimate: { leadoceanRecords: 0, apifyUsd: 0.06105 },
+    plan: { status: "ready", strategy: "apify_only", selectedBy: "model", planHash: "0123abcd".repeat(8), estimate: { leadoceanRecords: 0, apifyUsd: 0.06105 },
       steps: [{ capability: "apify.linkedin_job_search", provider: "apify", maxItems: 20 }, { capability: "apify.linkedin_company_record", provider: "apify", maxItems: 10 }] },
     interpretation: { hard: [{ key: "geography_hq" }, { key: "signal" }], preferences: [{ key: "employee_range", values: { min: 20, max: 500 } }],
       signals: [{ kind: "hiring", hard: true, windowDays: 30, roleTerms: ["salespeople"], roleFamilies: ["gtm_sales"] }], companyBrain: { status: "absent" } },
@@ -183,7 +183,7 @@ Deno.test("plan-only request: bounded, plan action only, no LeadOcean records fo
     try { planRequest({ ...base, ...bad }); } catch { threw = true; }
     assert(threw, JSON.stringify(bad));
   }
-  const ok = { plan: { status: "ready", strategy: "apify_only", planHash: "0123abcd", estimate: { apifyUsd: 0.03705, leadoceanRecords: 0 },
+  const ok = { plan: { status: "ready", strategy: "apify_only", planHash: "0123abcd".repeat(8), estimate: { apifyUsd: 0.03705, leadoceanRecords: 0 },
     steps: [{ capability: "apify.linkedin_job_search", provider: "apify", maxItems: 12 }, { capability: "apify.linkedin_company_record", provider: "apify", maxItems: 6 }] },
     interpretation: { hard: [{ key: "signal" }, { key: "geography_hq" }], preferences: [], signals: [] } };
   assert(planOnlyChecks(200, ok, base).every((c) => c.status === "pass"));

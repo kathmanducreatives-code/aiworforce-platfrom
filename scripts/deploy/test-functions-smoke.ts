@@ -196,7 +196,7 @@ export function planChecks(httpStatus: number, body: PlanBody): Check[] {
       ? pass("P4", "Strategy selection", `${p.strategy} (selected by ${p.selectedBy}); steps: ${steps.map((s) => `${s.capability}≤${s.maxItems}`).join(", ")}`)
       : fail("P4", "Strategy selection", `status ${p.status}, strategy ${p.strategy}, blocked: ${p.blockedReason ?? "-"}${bad.length ? `, forbidden steps: ${bad.join(", ")}` : ""}`,
         bad.length ? "a disabled capability was planned" : "a hiring query must be led by Apify job search (apify_only / apify_plus_leadocean)"),
-    /^[0-9a-f]{8}$/.test(p.planHash ?? "")
+    /^[0-9a-f]{64}$/.test(p.planHash ?? "")
       ? pass("P5", "Valid plan hash", p.planHash!)
       : fail("P5", "Valid plan hash", `planHash = ${JSON.stringify(p.planHash)}`, "the planner did not bind the plan"),
     (est.apifyUsd ?? Infinity) <= SMOKE_BUDGET.max_apify_usd && (est.leadoceanRecords ?? Infinity) <= SMOKE_BUDGET.max_leadocean_records
@@ -495,7 +495,7 @@ export function planOnlyChecks(httpStatus: number, body: PlanBody, i: PlanReques
     (est.apifyUsd ?? Infinity) <= i.maxApifyUsd && (i.strategy !== "apify_only" || (est.leadoceanRecords ?? Infinity) === 0)
       ? pass("Q3", "Within the requested budget", `worst case $${est.apifyUsd} Apify, ${est.leadoceanRecords} LeadOcean records (ceiling $${i.maxApifyUsd})`)
       : fail("Q3", "Within the requested budget", JSON.stringify(est), "the cost sizer did not fit the ceiling"),
-    /^[0-9a-f]{8}$/.test(p.planHash ?? "") ? pass("Q4", "Plan hash", p.planHash!) : fail("Q4", "Plan hash", String(p.planHash), "the planner did not bind the plan"),
+    /^[0-9a-f]{64}$/.test(p.planHash ?? "") ? pass("Q4", "Plan hash", p.planHash!) : fail("Q4", "Plan hash", String(p.planHash), "the planner did not bind the plan"),
   ];
 }
 
