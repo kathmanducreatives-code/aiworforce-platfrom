@@ -26,7 +26,10 @@
 
 import type { DiscoveryRequirements, ProviderId, Range } from "../discoveryProviders/types.ts";
 import { requirementsFromMission } from "../discoveryProviders/requirements.ts";
+// stableHash: the ICP id (checkpoint identity) only — kept unchanged for checkpoint compatibility.
 import { stableHash } from "../discoveryProviders/routing.ts";
+import { MISSION_SEMANTICS_VERSION, semanticCriteria } from "../missionSemantics.ts";
+import { canonicalJson, sha256Hex } from "../providerInputFingerprint.ts";
 import { translate } from "../discoveryProviders/vocabulary.ts";
 import type { GenerateJsonFn } from "../intelligence/plannerWrapper.ts";
 import { classifyRoleFamily, roleFamilyAliases } from "../roleFamilies.ts";
@@ -35,7 +38,7 @@ import { configureIcp, ICP_A, NON_DECISION_TITLES, type IcpConfig } from "./icp.
 import { SIGNAL_ACTORS, worstCaseUsd } from "./signals.ts";
 import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
 
-export const STRATEGY_PLANNER_VERSION = "discovery-strategy-v1" as const;
+export const STRATEGY_PLANNER_VERSION = "discovery-strategy-v2" as const;
 
 // ── Strategies ──────────────────────────────────────────────────────────────
 
@@ -345,6 +348,8 @@ export interface StrategyContext {
   user?: { strategy?: DiscoveryStrategyId; excludeProviders?: ProviderId[]; allowReviewOnly?: boolean };
   /** People to look up per discovered company (apify_plus_leadocean). */
   peoplePerCompany?: number;
+  /** Who the plan is for and under which interpretation contract: bound into the plan hash. */
+  binding?: { workspaceId: string; contractVersion: string };
 }
 
 // ── The plan ────────────────────────────────────────────────────────────────
@@ -398,8 +403,17 @@ export interface StrategyPlan {
   estimate: { leadoceanRecords: number; apifyUsd: number };
   candidates: StrategyCandidate[];
   modelAdvice: ModelAdvice | null;
-  /** Binds an approval to exactly this strategy, these steps, ceilings and limitations. */
+  /**
+   * Binds an approval to exactly this plan's MEANING and cost: SHA-256 over the planner
+   * and semantics versions, the workspace and interpretation contract, the request,
+   * every requirement with its kind / scope / value / window / status, the signals, the
+   * size preference, the strategy, steps (providers, capabilities, item ceilings,
+   * estimates), limitations, the spending ceilings and the user's provider choices.
+   * v1 hashed criterion IDs only, so a US-headquarters and a US-presence plan collided.
+   */
   planHash: string;
+  /** What the hash binds, for audit (the semantic part has its own fingerprint). */
+  binding: { version: typeof STRATEGY_PLANNER_VERSION; semanticsFingerprint: string; workspace: string | null; contract: string | null; ceilings: StrategyContext["budget"] };
 }
 
 const r6 = (n: number) => Math.round(n * 1e6) / 1e6;
@@ -628,6 +642,25 @@ export async function adviseStrategy(spec: DiscoverySpec, candidates: readonly S
  * (if feasible — otherwise the plan is BLOCKED with the reason, never switched),
  * else the model's advice (if feasible), else the best-scoring feasible one.
  */
+/**
+ * What the plan MEANS: the request, every requirement as the shared engine will judge it
+ * (kind, dimension, value, scope, window, alternatives, status), the signals and the
+ * size preference. Display text is excluded. Pure.
+ */
+export function planSemantics(spec: DiscoverySpec) {
+  const sorted = (xs: readonly string[]) => [...xs].map((x) => x.toLowerCase()).sort();
+  return {
+    v: MISSION_SEMANTICS_VERSION,
+    request: { q: spec.query, n: spec.requestedCount, people: spec.wantsPeople },
+    requirements: semanticCriteria(spec.requirements.criteria),
+    signals: spec.signals.map((x) => ({ kind: x.kind, hard: x.hard, windowDays: x.windowDays, roleTerms: sorted(x.roleTerms), roleFamilies: sorted(x.roleFamilies), topics: sorted(x.topics) }))
+      .sort((a, b) => canonicalJson(a).localeCompare(canonicalJson(b))),
+    preferredEmployees: spec.preferredEmployees ?? null,
+    roles: sorted(spec.roles),
+    forbidBroadening: sorted(spec.forbidBroadening),
+  };
+}
+
 export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?: { proposed: DiscoveryStrategyId | null; rationale: string; model: string | null; error: string | null } | null): StrategyPlan {
   const candidates = DISCOVERY_STRATEGIES.map((s) => judge(s, spec, ctx));
   const feasible = candidates.filter((c) => c.feasible).sort((a, b) => b.score - a.score || DISCOVERY_STRATEGIES.indexOf(a.strategy) - DISCOVERY_STRATEGIES.indexOf(b.strategy));
@@ -663,7 +696,16 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
     ...chosen.rationale,
     ...candidates.filter((c) => c !== chosen).map((c) => c.feasible ? `${c.strategy}: feasible, scored ${c.score} vs ${chosen!.score}` : `${c.strategy}: ${c.refusals[0]}`),
   ] : [];
-  const body = { strategy: chosen?.strategy ?? null, steps: chosen?.steps ?? [], limitations: chosen?.limitations ?? [], estimate: chosen?.estimate ?? null, spec: { q: spec.query, n: spec.requestedCount, criteria: spec.requirements.criteria.map((c) => c.id) } };
+  const meaning = planSemantics(spec);
+  const semanticsFingerprint = sha256Hex(canonicalJson(meaning));
+  const body = {
+    v: STRATEGY_PLANNER_VERSION, workspace: ctx.binding?.workspaceId ?? null, contract: ctx.binding?.contractVersion ?? null,
+    meaning, strategy: chosen?.strategy ?? null,
+    steps: (chosen?.steps ?? []).map((x) => ({ capability: x.capability, provider: x.provider, role: x.role, maxItems: x.maxItems, estimate: x.estimate })),
+    limitations: (chosen?.limitations ?? []).map((l) => ({ code: l.code, detail: l.detail })), estimate: chosen?.estimate ?? null,
+    ceilings: { maxLeadoceanRecords: ctx.budget.maxLeadoceanRecords, maxApifyUsd: ctx.budget.maxApifyUsd },
+    user: { strategy: ctx.user?.strategy ?? null, excludeProviders: [...(ctx.user?.excludeProviders ?? [])].sort(), allowReviewOnly: ctx.user?.allowReviewOnly === true },
+  };
   return {
     version: STRATEGY_PLANNER_VERSION,
     status: chosen ? "ready" : "blocked",
@@ -676,7 +718,8 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
     estimate: chosen?.estimate ?? { leadoceanRecords: 0, apifyUsd: 0 },
     candidates,
     modelAdvice,
-    planHash: stableHash(body),
+    planHash: sha256Hex(canonicalJson(body)),
+    binding: { version: STRATEGY_PLANNER_VERSION, semanticsFingerprint, workspace: body.workspace, contract: body.contract, ceilings: body.ceilings },
   };
 }
 
