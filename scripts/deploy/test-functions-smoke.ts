@@ -453,10 +453,88 @@ async function cmdVerify(beforePath: string, outDir: string) {
   if (checks.some((c) => c.status === "fail")) Deno.exit(1);
 }
 
+// ------------------------------------------------------------------ plan-only (owner-requested plans)
+
+/** The ceiling a plan-only request may ask for: the function's own default maximum. */
+export const PLAN_MAX_APIFY_USD = 0.25;
+export const PLAN_STRATEGIES = ["apify_only", "apify_plus_leadocean", "leadocean_only", "leadocean_plus_apify"] as const;
+
+export interface PlanRequestInput { query: string; count: number; maxApifyUsd: number; strategy: string; expectHard: string[] }
+
+/** Pure: validate a plan-only request before anything is sent. Throws on anything out of bounds. */
+export function planRequest(i: PlanRequestInput): Record<string, unknown> {
+  if (!i.query.trim() || i.query.length > 2000) throw new Error("query must be 1-2000 characters");
+  if (!Number.isInteger(i.count) || i.count < 1 || i.count > 25) throw new Error("count must be an integer 1-25");
+  if (!(i.maxApifyUsd >= 0 && i.maxApifyUsd <= PLAN_MAX_APIFY_USD)) throw new Error(`max_apify_usd must be 0-${PLAN_MAX_APIFY_USD}`);
+  if (!(PLAN_STRATEGIES as readonly string[]).includes(i.strategy)) throw new Error(`strategy must be one of ${PLAN_STRATEGIES.join(", ")}`);
+  return {
+    action: PLAN_ACTION, workspace_id: TEST_WORKSPACE, walk_id: `plan-${Date.now()}`, query: i.query.trim(),
+    requested_count: i.count, strategy: i.strategy, max_apify_usd: i.maxApifyUsd,
+    // A plan that does not use LeadOcean asks for none of its records.
+    max_leadocean_records: i.strategy === "apify_only" ? 0 : 50,
+  };
+}
+
+/** Pure: judge a plan-only answer against the request. */
+export function planOnlyChecks(httpStatus: number, body: PlanBody, i: PlanRequestInput): Check[] {
+  const p = body.plan, it = body.interpretation;
+  if (httpStatus !== 200 || !p || !it) return [fail("Q0", "strategy_plan answered", `HTTP ${httpStatus}: ${JSON.stringify(body).slice(0, 200)}`, "see the function log")];
+  const hard = (it.hard ?? []).map((h) => h.key).sort();
+  const want = [...i.expectHard].sort();
+  const est = p.estimate ?? {};
+  const bad = (p.steps ?? []).filter((s) => NEVER_PLANNED.test(s.capability) || s.provider === "apollo").map((s) => s.capability);
+  return [
+    pass("Q0", "strategy_plan answered", `HTTP 200, status ${p.status}`),
+    JSON.stringify(hard) === JSON.stringify(want)
+      ? pass("Q1", "Hard requirements exactly as expected", hard.join(", "))
+      : fail("Q1", "Hard requirements exactly as expected", `hard = [${(it.hard ?? []).map((h) => h.label ? `${h.key} (${h.label})` : h.key).join(", ")}], expected [${want.join(", ")}]`,
+        hard.includes("unmappable") ? "an unverifiable hard requirement (restated signal or unknown constraint)" : "the interpretation differs from the request"),
+    p.status === "ready" && p.strategy === i.strategy && !bad.length
+      ? pass("Q2", "Strategy", `${p.strategy}; steps: ${(p.steps ?? []).map((s) => `${s.capability}≤${s.maxItems}`).join(", ")}`)
+      : fail("Q2", "Strategy", `status ${p.status}, strategy ${p.strategy}, blocked: ${p.blockedReason ?? "-"}${bad.length ? `, forbidden: ${bad.join(", ")}` : ""}`, "the requested strategy is not feasible on TEST"),
+    (est.apifyUsd ?? Infinity) <= i.maxApifyUsd && (i.strategy !== "apify_only" || (est.leadoceanRecords ?? Infinity) === 0)
+      ? pass("Q3", "Within the requested budget", `worst case $${est.apifyUsd} Apify, ${est.leadoceanRecords} LeadOcean records (ceiling $${i.maxApifyUsd})`)
+      : fail("Q3", "Within the requested budget", JSON.stringify(est), "the cost sizer did not fit the ceiling"),
+    /^[0-9a-f]{8}$/.test(p.planHash ?? "") ? pass("Q4", "Plan hash", p.planHash!) : fail("Q4", "Plan hash", String(p.planHash), "the planner did not bind the plan"),
+  ];
+}
+
+async function cmdPlan(outDir: string) {
+  const i: PlanRequestInput = {
+    query: env("PLAN_QUERY"), count: Number(env("PLAN_COUNT")), maxApifyUsd: Number(env("PLAN_MAX_APIFY_USD")),
+    strategy: env("PLAN_STRATEGY"), expectHard: env("PLAN_EXPECT_HARD").split(",").map((x) => x.trim()).filter(Boolean),
+  };
+  const body = planRequest(i);
+  const before = await counts();
+  const token = await signIn();
+  if (!token) throw new Error("SMOKE_USER_EMAIL / SMOKE_USER_PASSWORD not configured");
+  const res = await call("lead-pipeline", body, token);
+  const checks = [...planOnlyChecks(res.status, res.body as PlanBody, i), ...countChecks(before, await counts())];
+  const plan = (res.body as PlanBody).plan ?? null, it = (res.body as PlanBody).interpretation ?? null;
+  await Deno.writeTextFile(`${outDir}/plan.json`, JSON.stringify({ request: { ...body, walk_id: undefined }, http: res.status, plan, interpretation: it, checks }, null, 2));
+  const titles = it ? titlesFromInterpretation(it) : [];
+  const md = [
+    `## Plan only — ${verdict(checks) === "READY" ? "✅ valid" : "❌ NOT valid"}`, "",
+    `- Query: ${i.query}`, `- Strategy requested: ${i.strategy} · ceiling $${i.maxApifyUsd} · count ${i.count}`,
+    `- Plan hash: \`${plan?.planHash ?? "—"}\` · worst case ${JSON.stringify(plan?.estimate ?? null)}`,
+    `- Steps: ${(plan?.steps ?? []).map((s) => `${s.capability} ≤${s.maxItems}`).join(", ") || "—"}`,
+    `- Hard: ${(it?.hard ?? []).map((h) => h.label ?? h.key).join("; ") || "—"}`,
+    `- Preferences: ${(it?.preferences ?? []).map((p) => `${p.key} ${JSON.stringify(p.values)}`).join("; ") || "—"}`,
+    `- Titles searched: ${titles.join(" | ") || "—"}`, "",
+    "| # | Check | Result | Detail |", "|---|---|---|---|",
+    ...checks.map((c) => `| ${c.id} | ${c.name} | ${c.status} | ${c.detail.replace(/\|/g, "\\|")} |`),
+  ].join("\n") + "\n";
+  const summary = Deno.env.get("GITHUB_STEP_SUMMARY");
+  if (summary) await Deno.writeTextFile(summary, md, { append: true });
+  console.log(md);
+  if (checks.some((c) => c.status === "fail")) Deno.exit(1);
+}
+
 if (import.meta.main) {
   const [cmd, a, b] = Deno.args;
   if (cmd === "changed" && a) await cmdChanged(a);
   else if (cmd === "snapshot" && a) await cmdSnapshot(a);
   else if (cmd === "verify" && a && b) await cmdVerify(a, b);
-  else { console.error("usage: test-functions-smoke.ts changed <sha> | snapshot <out.json> | verify <before.json> <outdir>"); Deno.exit(2); }
+  else if (cmd === "plan" && a) await cmdPlan(a);
+  else { console.error("usage: test-functions-smoke.ts changed <sha> | snapshot <out.json> | verify <before.json> <outdir> | plan <outdir>"); Deno.exit(2); }
 }

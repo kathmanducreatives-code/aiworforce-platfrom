@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { parse } from "https://deno.land/std@0.224.0/yaml/mod.ts";
 import {
-  buildShaOf, countChecks, functionsToDeploy, PLAN_ACTION, planChecks, PROD_REF, registryCheck, renderSummary,
+  buildShaOf, countChecks, functionsToDeploy, PLAN_ACTION, planChecks, planOnlyChecks, planRequest, PROD_REF, registryCheck, renderSummary,
   secretChecks, SMOKE_QUERY, TEST_REF, verdict,
 } from "../../scripts/deploy/test-functions-smoke.ts";
 
@@ -13,7 +13,7 @@ const ROOT = new URL("../../", import.meta.url);
 const read = (p: string) => Deno.readTextFileSync(new URL(p, ROOT));
 // deno-lint-ignore no-explicit-any
 type Loose = any; // eslint-disable-line @typescript-eslint/no-explicit-any
-type Wf = { on: Record<string, Loose>; concurrency: { group: string; "cancel-in-progress": boolean }; env: Record<string, string>; jobs: Record<string, Loose> };
+type Wf = { on: Record<string, Loose>; permissions?: Record<string, string>; concurrency: { group: string; "cancel-in-progress": boolean }; env: Record<string, string>; jobs: Record<string, Loose> };
 const TEST_WF = read(".github/workflows/deploy-test-functions.yml");
 const PROD_WF = read(".github/workflows/deploy-production-discovery.yml");
 const SMOKE = read("scripts/deploy/test-functions-smoke.ts");
@@ -157,4 +157,43 @@ Deno.test("TEST deploy: only the read-only steps retry, at most twice; the deplo
     assertFalse(/attempt|retry/i.test(run(name)), `${name}: never retried`);
   }
   assertEquals([...TEST_WF.matchAll(/for attempt in 1 2; do/g)].length, 2, "no other retry loop");
+});
+
+const PLAN_WF = read(".github/workflows/plan-test-strategy.yml");
+const planWf = parse(PLAN_WF) as Wf;
+
+Deno.test("plan-only workflow: manual, TEST environment, read-only token, can only plan", () => {
+  assertEquals(Object.keys(planWf.on), ["workflow_dispatch"]);
+  assertEquals(planWf.jobs.plan.environment, "supabase-test");
+  assertEquals(planWf.permissions, { contents: "read" });
+  assert(planWf.jobs.plan.if.includes("refs/heads/launch/hardening"));
+  for (const banned of [PROD_REF, "strategy_run", "functions deploy", "secrets set", "environment: production", ": write"]) assertFalse(PLAN_WF.includes(banned), banned);
+  // Inputs reach the script only through the environment, never the shell text.
+  const run = (planWf.jobs.plan.steps as { run?: string }[]).map((x) => x.run ?? "").join("\n");
+  assertFalse(run.includes("${{"), "no expression interpolated into the shell");
+  assert(SMOKE.includes('"plan" && a) await cmdPlan(a)'));
+});
+
+Deno.test("plan-only request: bounded, plan action only, no LeadOcean records for apify_only", () => {
+  const base = { query: "Find 3 US companies hiring Account Executives.", count: 3, maxApifyUsd: 0.04, strategy: "apify_only", expectHard: ["geography_hq", "signal"] };
+  const b = planRequest(base);
+  assertEquals([b.action, b.max_apify_usd, b.max_leadocean_records, b.strategy, b.requested_count], ["strategy_plan", 0.04, 0, "apify_only", 3]);
+  for (const bad of [{ maxApifyUsd: 0.26 }, { maxApifyUsd: -1 }, { count: 0 }, { count: 26 }, { strategy: "apollo_plus_apify" }, { query: " " }]) {
+    let threw = false;
+    try { planRequest({ ...base, ...bad }); } catch { threw = true; }
+    assert(threw, JSON.stringify(bad));
+  }
+  const ok = { plan: { status: "ready", strategy: "apify_only", planHash: "0123abcd", estimate: { apifyUsd: 0.03705, leadoceanRecords: 0 },
+    steps: [{ capability: "apify.linkedin_job_search", provider: "apify", maxItems: 12 }, { capability: "apify.linkedin_company_record", provider: "apify", maxItems: 6 }] },
+    interpretation: { hard: [{ key: "signal" }, { key: "geography_hq" }], preferences: [], signals: [] } };
+  assert(planOnlyChecks(200, ok, base).every((c) => c.status === "pass"));
+  const failed = (b: unknown) => planOnlyChecks(200, b as never, base).filter((c) => c.status === "fail").map((c) => c.id);
+  const extra = structuredClone(ok); extra.interpretation.hard.push({ key: "unmappable" });
+  assertEquals(failed(extra), ["Q1"]);
+  const over = structuredClone(ok); over.plan.estimate.apifyUsd = 0.05;
+  assertEquals(failed(over), ["Q3"]);
+  const lo = structuredClone(ok); lo.plan.estimate.leadoceanRecords = 2;
+  assertEquals(failed(lo), ["Q3"]);
+  const other = structuredClone(ok); other.plan.strategy = "apify_plus_leadocean";
+  assertEquals(failed(other), ["Q2"]);
 });
