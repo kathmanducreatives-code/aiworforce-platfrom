@@ -41,12 +41,16 @@ Deno.test("an unknown field is `other`, quoted only when the request itself says
   assertEquals(classifyConstraints({ "hiring.role": { operator: "eq", value: "AEs" } }, q)[0].kind, "canonical");
 });
 
-Deno.test("ACTIVATION BLOCKER (Stage 6): a canonical `industry` constraint is skipped by the compiler", () => {
-  // missionHiringSalesRoles: renaming `industry_or_company_type` to `industry` drops a
-  // preference, because deriveMissionCriteria reads industries from company_profile and
-  // skips an `industry` hard constraint. The strict contract must not activate until the
-  // compiler routes canonical industry constraints; this test then changes deliberately.
+Deno.test("the strict contract validates and never renames: no stored mission is refused or changes meaning", () => {
+  const s = summarise(recorded);
+  assertEquals(s.refused, 0, "every stored constraint is a known type or quotes the request");
+  // RESOLVED (Stage 4 finding): renaming `industry_or_company_type` to `industry` dropped a
+  // preference, because the compiler skips an `industry` hard constraint. Industry now
+  // keeps its field (COMPILER_FIELD.industry = null) and the contract never renames.
   const e = recorded.entries["persisted:tests/edge-functions/_shared/fixtures/missionHiringSalesRoles.json#$"];
-  assert(e.diff.some((d: string) => d.startsWith("removed target constraint:_field_industry_or_company_type")), JSON.stringify(e.diff));
-  assertEquals(summarise(recorded).missionsWithSemanticChange, 1, "the only mission whose meaning the vocabulary would change");
+  assert(!e.renameDiff.some((d: string) => d.includes("industry_or_company_type")), JSON.stringify(e.renameDiff));
+  // Information only: renaming hiring_activity would change that constraint's criterion id
+  // (same kind, same value). Not applied: in-flight results are keyed by criterion id.
+  assertEquals(s.renameWouldChange, 1);
+  assert(e.renameDiff.every((d: string) => /hiring_(activity|role)/.test(d)), JSON.stringify(e.renameDiff));
 });

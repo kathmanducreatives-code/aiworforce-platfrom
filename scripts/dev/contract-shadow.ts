@@ -10,9 +10,8 @@
 //      that type, re-derives the criteria, and diffs the MEANING against today's
 //      (missionSemantics.ts).
 //
-// A non-empty diff is exactly what activating the strict contract would change for that
-// mission. Stage 4 records the report; Stage 6 may activate only once every difference is
-// either intended or fixed in the compiler.
+// The contract VALIDATES (refuses an unquoted `other`) and never renames, so activation
+// changes no accepted mission's meaning. The rename diff is recorded for information only.
 
 import { deriveMissionCriteria } from "../../supabase/functions/_shared/missionCriteria.ts";
 import { missionSemantics, semanticDiff } from "../../supabase/functions/_shared/missionSemantics.ts";
@@ -22,9 +21,15 @@ import { compileCaseMission, corpusCases, persistedMissions } from "./mission-se
 const ROOT = new URL("../../", import.meta.url);
 export const SHADOW_REPORT_PATH = "tests/fixtures/mission-semantics/shadow-report.json";
 
-/** The field name the current compiler routes for each canonical type. */
-export const COMPILER_FIELD: Record<CanonicalRequirement, string> = {
-  geography: "geography", geography_presence: "presence", company_stage: "stage", industry: "industry",
+/**
+ * The field name the current compiler routes for each canonical type; `null` keeps the
+ * field exactly as proposed. INDUSTRY KEEPS ITS FIELD: the compiler reads industries from
+ * company_profile and skips an `industry` hard constraint, so renaming one would silently
+ * drop it (the Stage 4 shadow found this on missionHiringSalesRoles). The vocabulary still
+ * CLASSIFIES it as `industry`; only the routing is preserved, so meaning is unchanged.
+ */
+export const COMPILER_FIELD: Record<CanonicalRequirement, string | null> = {
+  geography: "geography", geography_presence: "presence", company_stage: "stage", industry: null,
   business_model: "business_model", hiring_role: "hiring_role", hiring_count: "open_roles", hiring_window: "hiring_signal_recency",
   funding_event: "funding_event", funding_window: "funding_recency_days", employee_range: "employee_range",
   employee_min: "employee_min", employee_max: "employee_max", excluded_company_types: "excluded_company_types",
@@ -33,8 +38,19 @@ export const COMPILER_FIELD: Record<CanonicalRequirement, string> = {
 
 export interface ShadowEntry {
   constraints: { field: string; as: string }[];
-  /** What renaming to the canonical fields changes in the mission's meaning (empty: nothing). */
-  diff: string[];
+  /**
+   * Would the strict contract REFUSE this mission? Only an `other` constraint whose value
+   * is not quoted from the request is refused (it is the model's own idea). The contract
+   * validates; it never renames what the compiler receives, so an accepted mission's
+   * meaning is unchanged by construction.
+   */
+  refused: boolean;
+  /**
+   * INFORMATION ONLY, never applied: what renaming each constraint to its canonical field
+   * would change. A rename changes criterion ids (in-flight results are keyed by them), so
+   * renaming stays out of the contract unless an owner approves the listed change.
+   */
+  renameDiff: string[];
 }
 
 export function shadowMission(mission: Record<string, unknown>): ShadowEntry {
@@ -45,15 +61,17 @@ export function shadowMission(mission: Record<string, unknown>): ShadowEntry {
   const constraints: ShadowEntry["constraints"] = [];
   for (const [field, raw] of Object.entries(hard)) {
     const c = classified.find((x) => x.originalField === field)!;
-    const as = c.kind === "canonical" ? COMPILER_FIELD[c.field] : c.quoted ? "other (quoted)" : "other (NOT quoted)";
-    constraints.push({ field, as: c.kind === "canonical" ? `${c.field} → ${as}` : as });
-    renamed[c.kind === "canonical" ? COMPILER_FIELD[c.field] : field] = raw;
+    const target = c.kind === "canonical" ? COMPILER_FIELD[c.field] ?? field : field;
+    const as = c.kind === "canonical" ? `${c.field} → ${target}` : c.quoted ? "other (quoted)" : "other (NOT quoted)";
+    constraints.push({ field, as });
+    renamed[target] = raw;
   }
   const before = missionSemantics(mission as never, deriveMissionCriteria(mission as never));
   const shadowed = { ...mission, hard_constraints: renamed };
   delete (shadowed as { criteria?: unknown }).criteria;
   const after = missionSemantics(shadowed as never, deriveMissionCriteria(shadowed as never));
-  return { constraints, diff: semanticDiff(before, after) };
+  const refused = classified.some((c) => c.kind === "other" && !c.quoted);
+  return { constraints, refused, renameDiff: semanticDiff(before, after) };
 }
 
 export async function shadowReport(): Promise<{ version: string; entries: Record<string, ShadowEntry> }> {
@@ -72,7 +90,8 @@ export function summarise(r: { entries: Record<string, ShadowEntry> }) {
     canonical: all.filter((c) => !c.as.startsWith("other")).length,
     otherQuoted: all.filter((c) => c.as === "other (quoted)").length,
     otherUnquoted: all.filter((c) => c.as === "other (NOT quoted)").length,
-    missionsWithSemanticChange: Object.values(r.entries).filter((e) => e.diff.length).length,
+    refused: Object.values(r.entries).filter((e) => e.refused).length,
+    renameWouldChange: Object.values(r.entries).filter((e) => e.renameDiff.length).length,
   };
 }
 
@@ -83,6 +102,9 @@ if (import.meta.main) {
     console.log(`wrote ${SHADOW_REPORT_PATH}`, JSON.stringify(summarise(r)));
   } else {
     console.log(JSON.stringify(summarise(r)));
-    for (const [k, e] of Object.entries(r.entries)) if (e.diff.length) console.log(`${k}\n   ${e.diff.join(" | ")}`);
+    for (const [k, e] of Object.entries(r.entries)) {
+      if (e.refused) console.log(`REFUSED ${k}`);
+      if (e.renameDiff.length) console.log(`rename (info only) ${k}\n   ${e.renameDiff.join(" | ")}`);
+    }
   }
 }

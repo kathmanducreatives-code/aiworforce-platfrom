@@ -16,7 +16,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:fintech_industry_hard": {
    "constraints": [
@@ -29,7 +30,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:gpt_hiring_activity_restated": {
    "constraints": [
@@ -46,7 +48,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:gpt_hiring_dot_role_restated": {
    "constraints": [
@@ -63,7 +66,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:gpt_presence_for_us_companies": {
    "constraints": [
@@ -76,7 +80,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:hq_explicit": {
    "constraints": [
@@ -89,7 +94,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:offices_in_us_presence": {
    "constraints": [
@@ -102,7 +108,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:open_roles_count_kept": {
    "constraints": [
@@ -119,7 +126,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:operating_in_us_is_not_hq": {
    "constraints": [
@@ -132,7 +140,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:paid_run_ae": {
    "constraints": [
@@ -145,7 +154,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:query_a_b2b_described": {
    "constraints": [
@@ -158,7 +168,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:query_b_b2b_required_b2c_excluded": {
    "constraints": [
@@ -175,7 +186,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:query_c_b2b_preferred_b2c_permitted": {
    "constraints": [
@@ -188,7 +200,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:query_d_size_ideally": {
    "constraints": [
@@ -201,7 +214,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:size_stated_hard": {
    "constraints": [
@@ -214,7 +228,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "corpus:smoke_b2b_salespeople": {
    "constraints": [
@@ -227,11 +242,13 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:docs/audits/live-validation-2026-09-21/task-3bc526e2-result.json#$.lead_mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/edge-functions/_shared/fixtures/missionHiringSalesRoles.json#$": {
    "constraints": [
@@ -241,12 +258,12 @@
     },
     {
      "field": "industry_or_company_type",
-     "as": "industry → industry"
+     "as": "industry → industry_or_company_type"
     }
    ],
-   "diff": [
+   "refused": false,
+   "renameDiff": [
     "removed hard constraint:_field_hiring_activity_value_sales_roles_",
-    "removed target constraint:_field_industry_or_company_type_value_b2b_saas_founder_led_o",
     "added hard constraint:_field_hiring_role_value_sales_roles_"
    ]
   },
@@ -257,7 +274,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/canary-1156c062/result.json#$.lead_mission": {
    "constraints": [
@@ -266,7 +284,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/canary-62c8b188-mission.json#$": {
    "constraints": [
@@ -275,7 +294,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/canary-98ce374b-mission.json#$": {
    "constraints": [
@@ -284,143 +304,178 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[0].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[1].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[10].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[11].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[12].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[13].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[14].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[15].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[16].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[17].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[18].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[19].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[2].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[20].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[21].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[22].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[23].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[3].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[4].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[5].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[6].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[7].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[8].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[9].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[0].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[10].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[12].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[14].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[16].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[18].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[2].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[4].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[6].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[8].mission": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/run-1e52d43c/plan.json#$.steps[0].metadata.tool_input.lead_mission": {
    "constraints": [
@@ -433,7 +488,8 @@
      "as": "company_stage → stage"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/run-4250f181/plan.json#$.steps[0].metadata.tool_input.lead_mission": {
    "constraints": [
@@ -446,11 +502,13 @@
      "as": "company_stage → stage"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/salvo-0b7baab9/mission.json#$": {
    "constraints": [],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/fixtures/lead-v2/size-semantics-replay-2026-09-24/canary_companies.json#$.mission": {
    "constraints": [
@@ -459,7 +517,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A01.lead_mission": {
    "constraints": [
@@ -468,7 +527,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A06.lead_mission": {
    "constraints": [
@@ -477,7 +537,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A08.lead_mission": {
    "constraints": [
@@ -486,7 +547,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A09.lead_mission": {
    "constraints": [
@@ -495,7 +557,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A10.lead_mission": {
    "constraints": [
@@ -504,7 +567,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.C07.lead_mission": {
    "constraints": [
@@ -513,7 +577,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E01.lead_mission": {
    "constraints": [
@@ -522,7 +587,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E05.lead_mission": {
    "constraints": [
@@ -531,7 +597,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E07.lead_mission": {
    "constraints": [
@@ -540,7 +607,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E08.lead_mission": {
    "constraints": [
@@ -549,7 +617,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.F01.lead_mission": {
    "constraints": [
@@ -558,7 +627,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.F12.lead_mission": {
    "constraints": [
@@ -567,7 +637,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.G08.lead_mission": {
    "constraints": [
@@ -576,7 +647,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H04.lead_mission": {
    "constraints": [
@@ -585,7 +657,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H05.lead_mission": {
    "constraints": [
@@ -594,7 +667,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H06.lead_mission": {
    "constraints": [
@@ -603,7 +677,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H07.lead_mission": {
    "constraints": [
@@ -612,7 +687,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H08.lead_mission": {
    "constraints": [
@@ -621,7 +697,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.J06.lead_mission": {
    "constraints": [
@@ -630,7 +707,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.J07.lead_mission": {
    "constraints": [
@@ -639,7 +717,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K01.lead_mission": {
    "constraints": [
@@ -648,7 +727,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K02.lead_mission": {
    "constraints": [
@@ -657,7 +737,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K03.lead_mission": {
    "constraints": [
@@ -666,7 +747,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K05.lead_mission": {
    "constraints": [
@@ -675,7 +757,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L03.lead_mission": {
    "constraints": [
@@ -684,7 +767,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L04.lead_mission": {
    "constraints": [
@@ -693,7 +777,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L05.lead_mission": {
    "constraints": [
@@ -702,7 +787,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.N03.lead_mission": {
    "constraints": [
@@ -711,7 +797,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.P01.lead_mission": {
    "constraints": [
@@ -720,7 +807,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.P04.lead_mission": {
    "constraints": [
@@ -729,7 +817,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.R01.lead_mission": {
    "constraints": [
@@ -738,7 +827,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.RND39.lead_mission": {
    "constraints": [
@@ -747,7 +837,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.S01.lead_mission": {
    "constraints": [
@@ -756,7 +847,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.S04.lead_mission": {
    "constraints": [
@@ -765,7 +857,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.Z08.lead_mission": {
    "constraints": [
@@ -774,7 +867,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/replay/fixtures/canary8.hiring-affordability.json#$.mission": {
    "constraints": [
@@ -783,7 +877,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/replay/fixtures/canarySession2.contract2.json#$.mission": {
    "constraints": [
@@ -804,7 +899,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/replay/fixtures/g5.funding-screen.json#$.mission": {
    "constraints": [
@@ -813,7 +909,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   },
   "persisted:tests/replay/fixtures/queryBa9a6791a.job-first.json#$.mission": {
    "constraints": [
@@ -822,7 +919,8 @@
      "as": "geography → geography"
     }
    ],
-   "diff": []
+   "refused": false,
+   "renameDiff": []
   }
  }
 }
