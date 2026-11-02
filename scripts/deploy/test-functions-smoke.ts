@@ -315,7 +315,10 @@ async function git(...args: string[]): Promise<{ ok: boolean; out: string }> {
 }
 
 async function graphOf(fn: string): Promise<string[]> {
-  const o = await new Deno.Command(Deno.execPath(), { args: ["info", "--json", `supabase/functions/${fn}/index.ts`], stdout: "piped", stderr: "inherit" }).output();
+  // --no-lock: only the LOCAL files of the graph matter here. A remote module whose CDN
+  // build drifted from deno.lock (esm.sh tslib, run 41420805844) must not stop change
+  // detection; lock integrity is still enforced by CI's tests and the deploy's bundler.
+  const o = await new Deno.Command(Deno.execPath(), { args: ["info", "--no-lock", "--json", `supabase/functions/${fn}/index.ts`], stdout: "piped", stderr: "inherit" }).output();
   if (!o.success) throw new Error(`deno info ${fn} failed`);
   const root = `file://${Deno.cwd()}/`;
   const mods = (JSON.parse(new TextDecoder().decode(o.stdout)).modules ?? []) as { specifier: string }[];

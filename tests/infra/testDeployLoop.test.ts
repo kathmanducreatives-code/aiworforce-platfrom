@@ -75,6 +75,8 @@ Deno.test("smoke script: plans only, never runs, prints no secret", () => {
   assert(SMOKE.includes("refusing a management call outside TEST"), "management calls are pinned to TEST");
   assertFalse(/console\.log\([^)]*(SMOKE_USER_PASSWORD|SUPABASE_ACCESS_TOKEN|password)/.test(SMOKE));
   assert(SMOKE_QUERY.includes("Prefer 20–500 employees"));
+  // Change detection reads local files only; CDN drift in a remote module (run 41420805844) must not stop it.
+  assert(/"info", "--no-lock", "--json"/.test(SMOKE), "deno info runs without the lock file");
 });
 
 Deno.test("smoke: build header and change detection", () => {
