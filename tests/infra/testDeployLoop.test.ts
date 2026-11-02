@@ -145,3 +145,16 @@ Deno.test("smoke: plan checks fail loudly on each regression", () => {
   assert(md.includes("✅ READY"));
   assertEquals(verdict([{ id: "x", name: "x", status: "skip", detail: "" }]), "NOT READY", "a skipped check is not readiness");
 });
+
+Deno.test("TEST deploy: only the read-only steps retry, at most twice; the deploy and the smoke suite never retry", () => {
+  const steps = (test.jobs.deploy.steps as { name?: string; run?: string }[]);
+  const run = (name: string) => steps.find((x) => x.name?.startsWith(name))?.run ?? "";
+  for (const name of ["Snapshot TEST before the deploy", "Decide which functions changed"]) {
+    assert(/for attempt in 1 2; do/.test(run(name)), `${name}: bounded retry`);
+    assert(/\[ "\$attempt" = 2 \] && \{[^}]*exit 1; \}/.test(run(name)), `${name}: stops after the second failure`);
+  }
+  for (const name of ["Deploy changed functions to TEST", "Smoke-test TEST", "Stamp the build"]) {
+    assertFalse(/attempt|retry/i.test(run(name)), `${name}: never retried`);
+  }
+  assertEquals([...TEST_WF.matchAll(/for attempt in 1 2; do/g)].length, 2, "no other retry loop");
+});
