@@ -551,7 +551,7 @@ const RESTATED_HIRING_OPS = new Set(["", "currently_hiring", "actively_hiring", 
  */
 const HIRING_FIELD_RE =
   /^(?:is_|currently_|actively_|recent(?:ly)?_)?(?:hiring|hires?|open_?roles?|job_?(?:titles?|postings?|openings?|listings?)|vacanc(?:y|ies)|recruit(?:ing|ment)?)(?:_[a-z]+)*$/;
-const NOT_A_RESTATEMENT_OP_RE = /not|exclud|none|false|without|!=|<>|gte|lte|>|<|min|max|at_?least|at_?most|count|number|threshold|greater|less|above|below|more|fewer|over|under|between|range|before|after|older|newer/;
+const NOT_A_RESTATEMENT_OP_RE = /not|exclud|except|other_?than|unless|outside|^neq?$|none|false|without|!=|<>|gte|lte|>|<|min|max|at_?least|at_?most|count|number|threshold|greater|less|above|below|more|fewer|over|under|between|range|before|after|older|newer/;
 const HIRING_FILLER_RE =
   /\b(?:actively|currently|recently|now|still|is|are|be|being|hiring|hires?|hired|for|open|roles?|positions?|jobs?|postings?|openings?|vacanc(?:y|ies)|new|the|a|an|in|of|any|some|true|yes|active|activity|recruiting)\b/g;
 

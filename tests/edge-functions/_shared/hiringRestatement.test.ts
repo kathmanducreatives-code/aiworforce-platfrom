@@ -40,6 +40,9 @@ Deno.test("a genuinely different hiring requirement is kept", () => {
   assert(!restatesHiringSignal("hiring", { operator: "greater_than", value: "salespeople" }, SALES));
   // An exclusion.
   assert(!restatesHiringSignal("hiring_activity", { operator: "not_equals", value: "salespeople" }, SALES));
+  for (const operator of ["except", "other_than", "unless", "neq", "ne", "outside"]) {
+    assert(!restatesHiringSignal("hiring_role", { operator, value: "salespeople" }, SALES), operator);
+  }
   // A field that does not name hiring.
   assert(!restatesHiringSignal("sales_headcount", { operator: "equals", value: "salespeople" }, SALES));
   assert(!restatesHiringSignal("company_activity", { operator: "equals", value: "actively hiring salespeople" }, SALES));
