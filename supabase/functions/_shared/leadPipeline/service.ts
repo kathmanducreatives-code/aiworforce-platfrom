@@ -257,7 +257,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     if (!req.approval) return { status: 400, body: { error: "a run needs an approval" } };
     if (!d.signer || !d.recompile) return { status: 503, body: { error: "signed plan approvals are not available; nothing ran" } };
     if (!req.approval.token) return { status: 400, body: { error: "a run needs the approval_token returned by strategy_plan; plan again and approve that plan" } };
-    const v = await d.signer.verify(req.approval.token, { workspaceId: req.workspaceId, planHash: req.approval.planHash }, now());
+    const v = await d.signer.verify(req.approval.token, { workspaceId: req.workspaceId, planHash: req.approval.planHash, walkId: req.walkId }, now());
     if (!v.ok) return { status: 409, body: { error: v.reason } };
     token = v.payload;
   }
@@ -299,7 +299,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   if (req.action === "strategy_plan" || plan.status === "blocked") {
     // The approval token: what an owner/admin approves, and all a run may execute.
     const approval_token = req.action === "strategy_plan" && plan.status === "ready" && d.signer && interpreted.replay
-      ? await d.signer.sign({ workspaceId: req.workspaceId, plannedBy: d.userId, planHash: plan.planHash, query: req.query, requestedCount: req.requestedCount, replay: { ...interpreted.replay, advice } }, now())
+      ? await d.signer.sign({ workspaceId: req.workspaceId, walkId: req.walkId, plannedBy: d.userId, planHash: plan.planHash, query: req.query, requestedCount: req.requestedCount, replay: { ...interpreted.replay, advice } }, now())
       : null;
     return { status: plan.status === "blocked" ? 409 : 200, body: { status: plan.status, plan, worstCase: plan.estimate, interpretation, ...(approval_token ? { approval_token } : {}) } };
   }

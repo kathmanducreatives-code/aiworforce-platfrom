@@ -970,3 +970,21 @@ Deno.test("strategy_run is immune to model variance: a different reading at run 
   assertEquals(ran.status, 200, JSON.stringify(ran.body).slice(0, 200));
   assertEquals(ran.body.strategy, plan.strategy);
 });
+
+Deno.test("one approval buys each paid step at most once: a repeat replays from the ledger; another walk is refused", async () => {
+  const m = sdeps({ userId: "u-member" });
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan" }), m.d);
+  const plan = planned.body.plan as StrategyPlan;
+  const approval = { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token };
+  const o = sdeps();
+  const first = await handleStrategyRequest(sreq({ action: "strategy_run", approval }), o.d);
+  assertEquals(first.status, 200);
+  const bought = o.ap.calls.length;
+  assert(bought > 0, "the first run bought its steps");
+  const again = await handleStrategyRequest(sreq({ action: "strategy_run", approval }), o.d);
+  assertEquals(again.status, 200, "the same approved walk can be resumed");
+  assertEquals(o.ap.calls.length, bought, "and buys nothing twice: every step replays from the durable ledger");
+  const otherWalk = await handleStrategyRequest(sreq({ action: "strategy_run", walk_id: "walk-other", approval }), o.d);
+  assertEquals(otherWalk.status, 409, "the same approval cannot buy a second walk");
+  assertEquals(o.ap.calls.length, bought);
+});

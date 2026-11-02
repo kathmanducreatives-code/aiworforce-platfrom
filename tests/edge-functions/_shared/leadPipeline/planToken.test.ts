@@ -6,7 +6,7 @@ import { planSigner, PLAN_TOKEN_TTL_MS } from "../../../../supabase/functions/_s
 
 const NOW = new Date("2026-11-02T12:00:00Z");
 const P = {
-  workspaceId: "ws-1", plannedBy: "u-member", planHash: "a".repeat(64), query: "Find 3 US companies hiring Account Executives.", requestedCount: 3,
+  workspaceId: "ws-1", walkId: "walk-1", plannedBy: "u-member", planHash: "a".repeat(64), query: "Find 3 US companies hiring Account Executives.", requestedCount: 3,
   replay: { proposal: { geography_scope: "headquarters" }, brain: { status: "absent", fields: [], context: null }, advice: null },
 };
 const enc = (o: unknown) => btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -15,7 +15,7 @@ const dec = (s: string) => JSON.parse(atob(s.replace(/-/g, "+").replace(/_/g, "/
 Deno.test("a token round-trips and binds workspace, hash and expiry", async () => {
   const s = await planSigner("server-secret-0123456789abcdef");
   const t = await s.sign(P, NOW);
-  const v = await s.verify(t, { workspaceId: "ws-1", planHash: P.planHash }, NOW);
+  const v = await s.verify(t, { workspaceId: "ws-1", planHash: P.planHash, walkId: "walk-1" }, NOW);
   assert(v.ok);
   if (v.ok) {
     assertEquals(v.payload.replay, P.replay);
@@ -27,7 +27,7 @@ Deno.test("tampering, another key, expiry, another workspace or hash: refused wi
   const s = await planSigner("server-secret-0123456789abcdef");
   const t = await s.sign(P, NOW);
   const [body, sig] = t.split(".");
-  const reason = async (token: string, expect = { workspaceId: "ws-1", planHash: P.planHash }, now = NOW) => {
+  const reason = async (token: string, expect = { workspaceId: "ws-1", planHash: P.planHash, walkId: "walk-1" }, now = NOW) => {
     const v = await s.verify(token, expect, now);
     assertFalse(v.ok, token.slice(0, 20));
     return v.ok ? "" : v.reason;
@@ -39,8 +39,9 @@ Deno.test("tampering, another key, expiry, another workspace or hash: refused wi
   const other = await planSigner("a-different-server-secret-0123");
   assert((await reason(await other.sign(P, NOW))).includes("signature"), "signed with another key");
   assert((await reason(t, undefined, new Date(NOW.getTime() + PLAN_TOKEN_TTL_MS + 1))).includes("expired"));
-  assert((await reason(t, { workspaceId: "ws-2", planHash: P.planHash })).includes("another workspace"));
-  assert((await reason(t, { workspaceId: "ws-1", planHash: "b".repeat(64) })).includes("different plan"));
+  assert((await reason(t, { workspaceId: "ws-2", planHash: P.planHash, walkId: "walk-1" })).includes("another workspace"));
+  assert((await reason(t, { workspaceId: "ws-1", planHash: "b".repeat(64), walkId: "walk-1" })).includes("different plan"));
+  assert((await reason(t, { workspaceId: "ws-1", planHash: P.planHash, walkId: "walk-2" })).includes("another walk"), "one approval, one walk");
   for (const bad of ["", "x", "a.b.c", `${body}`]) assert((await reason(bad)).includes("malformed"), JSON.stringify(bad));
 });
 

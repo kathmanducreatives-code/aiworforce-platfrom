@@ -34,6 +34,13 @@ export interface PlanReplay {
 export interface PlanTokenPayload {
   v: typeof PLAN_TOKEN_VERSION;
   workspaceId: string;
+  /**
+   * The walk the plan was made for. Every paid call of a run is keyed by walk + plan
+   * hash in the durable ledger, so binding the walk makes one approval buy each step at
+   * most once: running the same token again replays the settled results (no new spend),
+   * and a different walk_id is refused.
+   */
+  walkId: string;
   plannedBy: string;
   issuedAt: number;
   expiresAt: number;
@@ -45,7 +52,7 @@ export interface PlanTokenPayload {
 
 export interface PlanSigner {
   sign(p: Omit<PlanTokenPayload, "v" | "issuedAt" | "expiresAt">, now?: Date): Promise<string>;
-  verify(token: string, expect: { workspaceId: string; planHash: string }, now?: Date): Promise<{ ok: true; payload: PlanTokenPayload } | { ok: false; reason: string }>;
+  verify(token: string, expect: { workspaceId: string; planHash: string; walkId: string }, now?: Date): Promise<{ ok: true; payload: PlanTokenPayload } | { ok: false; reason: string }>;
 }
 
 const te = new TextEncoder();
@@ -92,6 +99,7 @@ export async function planSigner(serverSecret: string): Promise<PlanSigner> {
       if (now.getTime() > payload.expiresAt) return { ok: false, reason: "approval token expired; re-plan" };
       if (payload.workspaceId !== expect.workspaceId) return { ok: false, reason: "approval token is for another workspace" };
       if (payload.planHash !== expect.planHash) return { ok: false, reason: "the approval names a different plan than the token" };
+      if (payload.walkId !== expect.walkId) return { ok: false, reason: "approval token is for another walk; one approval runs one walk" };
       return { ok: true, payload };
     },
   };
