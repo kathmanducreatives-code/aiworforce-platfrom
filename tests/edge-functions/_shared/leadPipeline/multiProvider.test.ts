@@ -988,3 +988,56 @@ Deno.test("one approval buys each paid step at most once: a repeat replays from 
   assertEquals(otherWalk.status, 409, "the same approval cannot buy a second walk");
   assertEquals(o.ap.calls.length, bought);
 });
+
+// ── Duplicate purchase under concurrency and interruption (owner safeguard 3) ──
+async function approvedRun() {
+  const m = sdeps({ userId: "u-member" });
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan" }), m.d);
+  const plan = planned.body.plan as StrategyPlan;
+  return { action: "strategy_run", approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } };
+}
+const keysOf = (calls: Call[]) => calls.map((c) => c.key);
+const unique = (xs: string[]) => [...new Set(xs)];
+
+Deno.test("idempotency: two concurrent runs of one approval buy each paid step at most once", async () => {
+  const body = await approvedRun();
+  const o = sdeps();
+  const inner = o.d.apify!;
+  o.d.apify = async (a, i, opts) => { await new Promise((r) => setTimeout(r, 5)); return inner(a, i, opts); };
+  const both = await Promise.all([handleStrategyRequest(sreq(body), o.d), handleStrategyRequest(sreq(body), o.d)]);
+  assert(both.some((r) => r.status === 200), `one run completes: ${both.map((r) => r.status)}`);
+  assertEquals(keysOf(o.ap.calls), unique(keysOf(o.ap.calls)), "no idempotency key reached Apify twice");
+  const solo = sdeps();
+  await handleStrategyRequest(sreq(body), solo.d);
+  assert(o.ap.calls.length <= solo.ap.calls.length, "two concurrent runs bought no more than one run does");
+});
+
+Deno.test("idempotency: a run interrupted after a provider charged, before the ledger settled, never re-buys that step", async () => {
+  const body = await approvedRun();
+  const o = sdeps();
+  // The isolate dies between Apify's charge and the ledger write: the reservation stays in flight.
+  const ledger = o.d.ledger;
+  let crash = true;
+  o.d.ledger = { ...ledger, reserve: (e) => ledger.reserve(e), settle: (k, a, r) => crash ? Promise.reject(new Error("isolate terminated")) : ledger.settle(k, a, r),
+    markUncertain: (k) => crash ? Promise.resolve() : ledger.markUncertain(k), release: (k) => ledger.release(k) } as typeof ledger;
+  const first = await handleStrategyRequest(sreq(body), o.d);
+  const bought = keysOf(o.ap.calls);
+  assert(bought.length > 0, `the first attempt reached Apify (${first.status})`);
+  crash = false;
+  await handleStrategyRequest(sreq(body), o.d);
+  assertEquals(keysOf(o.ap.calls).slice(bought.length).filter((k) => bought.includes(k)), [], "a charge the ledger never confirmed is not bought again");
+});
+
+Deno.test("idempotency: a provider failure is marked uncertain and a retry never re-buys it", async () => {
+  const body = await approvedRun();
+  const o = sdeps();
+  const inner = o.d.apify!;
+  let fail = true;
+  o.d.apify = (a, i, opts) => fail && a === "apify_linkedin_company_details" ? (o.ap.calls.push({ actor: a, input: i, key: opts.idempotencyKey }), Promise.reject(new Error("socket hang up"))) : inner(a, i, opts);
+  await handleStrategyRequest(sreq(body), o.d);
+  const failed = o.ap.calls.filter((c) => c.actor === "apify_linkedin_company_details").map((c) => c.key);
+  assert(failed.length > 0, "the company-record step was attempted");
+  fail = false;
+  const retry = await handleStrategyRequest(sreq(body), o.d);
+  assertEquals(o.ap.calls.filter((c) => failed.includes(c.key)).length, failed.length, `an uncertain charge is never retried (${retry.status})`);
+});
