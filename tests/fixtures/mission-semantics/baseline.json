@@ -1,0 +1,7191 @@
+{
+ "corpus:distinct_role_kept": {
+  "source": "corpus",
+  "fingerprint": "5f756fb30b1bd68782338a1441c53ae54cc248f6be37df160f9d37049af5544e",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "constraint:_field_hiring_role_value_sdrs_",
+     "kind": "hard",
+     "dimension": "constraint",
+     "value": {
+      "field": "hiring_role",
+      "value": "SDRs"
+     },
+     "status": "unprovable_today"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:fintech_industry_hard": {
+  "source": "corpus",
+  "fingerprint": "382567114ff9578010a745053321e4af383cb5fa6dd13b654a1efaa4cafd5173",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:gpt_hiring_activity_restated": {
+  "source": "corpus",
+  "fingerprint": "1c544b1a9046fa946982cc6dbec39ba416ade8f3cb3102f0b382c7f6d91774c9",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "business_model:b2b",
+     "kind": "target",
+     "dimension": "business_model",
+     "value": "B2B",
+     "status": "ok"
+    },
+    {
+     "id": "company_size:_min_20_max_500_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 20,
+      "max": 500
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_salespeop",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "salespeople"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "salespeople"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:gpt_hiring_dot_role_restated": {
+  "source": "corpus",
+  "fingerprint": "dbda48450b74d4250499caeaf8786bf5cba0d91e2c43c821d70f6fde0c2c3336",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 3,
+   "criteria": [
+    {
+     "id": "business_model:b2b",
+     "kind": "target",
+     "dimension": "business_model",
+     "value": "B2B",
+     "status": "ok"
+    },
+    {
+     "id": "company_size:_min_20_max_500_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 20,
+      "max": 500
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:gpt_presence_for_us_companies": {
+  "source": "corpus",
+  "fingerprint": "1c544b1a9046fa946982cc6dbec39ba416ade8f3cb3102f0b382c7f6d91774c9",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "business_model:b2b",
+     "kind": "target",
+     "dimension": "business_model",
+     "value": "B2B",
+     "status": "ok"
+    },
+    {
+     "id": "company_size:_min_20_max_500_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 20,
+      "max": 500
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_salespeop",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "salespeople"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "salespeople"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:hq_explicit": {
+  "source": "corpus",
+  "fingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 3,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:offices_in_us_presence": {
+  "source": "corpus",
+  "fingerprint": "63f0ed922c56eb85be30f286af65df1cff70fe7b15c020ccca3e0b45740b8f28",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 3,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "presence"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:open_roles_count_kept": {
+  "source": "corpus",
+  "fingerprint": "b9c457a647b1f8f36d4fb934e6692cac97b8fe9e2a12453acec88d36c9f26f43",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "job",
+   "requested_output": "job_listings",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "constraint:_field_open_roles_value_5_",
+     "kind": "target",
+     "dimension": "constraint",
+     "value": {
+      "field": "open_roles",
+      "value": "5"
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_salespeop",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "salespeople"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "salespeople"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:operating_in_us_is_not_hq": {
+  "source": "corpus",
+  "fingerprint": "63f0ed922c56eb85be30f286af65df1cff70fe7b15c020ccca3e0b45740b8f28",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 3,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "presence"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:paid_run_ae": {
+  "source": "corpus",
+  "fingerprint": "dbda48450b74d4250499caeaf8786bf5cba0d91e2c43c821d70f6fde0c2c3336",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 3,
+   "criteria": [
+    {
+     "id": "business_model:b2b",
+     "kind": "target",
+     "dimension": "business_model",
+     "value": "B2B",
+     "status": "ok"
+    },
+    {
+     "id": "company_size:_min_20_max_500_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 20,
+      "max": 500
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:query_a_b2b_described": {
+  "source": "corpus",
+  "fingerprint": "465383e8b87d62d5913666f49c4c244f66918b53315f849e16b6818aa96ddad4",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "business_model:b2b",
+     "kind": "target",
+     "dimension": "business_model",
+     "value": "B2B",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:query_b_b2b_required_b2c_excluded": {
+  "source": "corpus",
+  "fingerprint": "2834548b11e2fe1dd3087e554c2967ae9e57387b46f9efd80d263bda83147c28",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "business_model:b2b",
+     "kind": "hard",
+     "dimension": "business_model",
+     "value": "B2B",
+     "status": "ok"
+    },
+    {
+     "id": "exclusion:_field_excluded_company_types_value_b2c_",
+     "kind": "hard",
+     "dimension": "exclusion",
+     "value": {
+      "field": "excluded_company_types",
+      "value": [
+       "B2C"
+      ]
+     },
+     "status": "ok",
+     "elevated_by": "excluding"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:query_c_b2b_preferred_b2c_permitted": {
+  "source": "corpus",
+  "fingerprint": "465383e8b87d62d5913666f49c4c244f66918b53315f849e16b6818aa96ddad4",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "business_model:b2b",
+     "kind": "target",
+     "dimension": "business_model",
+     "value": "B2B",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:query_d_size_ideally": {
+  "source": "corpus",
+  "fingerprint": "b22d5af671df5c8f11c00691deba643073c0f12449e99fb0ee772c9bcfe8527e",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_20_max_500_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 20,
+      "max": 500
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_salespeop",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "salespeople"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "salespeople"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:size_stated_hard": {
+  "source": "corpus",
+  "fingerprint": "aa23dd810b0fe82e0a049bce3d54aacd5b3a11a6bd97997692957d497ff719e3",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_20_max_500_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 20,
+      "max": 500
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "corpus:smoke_b2b_salespeople": {
+  "source": "corpus",
+  "fingerprint": "1c544b1a9046fa946982cc6dbec39ba416ade8f3cb3102f0b382c7f6d91774c9",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "business_model:b2b",
+     "kind": "target",
+     "dimension": "business_model",
+     "value": "B2B",
+     "status": "ok"
+    },
+    {
+     "id": "company_size:_min_20_max_500_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 20,
+      "max": 500
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_salespeop",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "salespeople"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "salespeople"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:docs/audits/live-validation-2026-09-21/task-3bc526e2-result.json#$.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "c6f0efe24c6b27943a21a044d6d2db54104d95c81392811082b0309a9046f7b4",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 1,
+   "criteria": [
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_growth_ma",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "growth marketer"
+       ],
+       "role_families": [
+        "marketing_growth"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "growth marketer"
+     ],
+     "role_families": [
+      "marketing_growth"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/edge-functions/_shared/fixtures/missionHiringSalesRoles.json#$": {
+  "source": "persisted",
+  "fingerprint": "d4a366689735e5648e4fca58e50d47bdb2d7178eb5cfb6dfc5919f3f043276e0",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "constraint:_field_hiring_activity_value_sales_roles_",
+     "kind": "hard",
+     "dimension": "constraint",
+     "value": {
+      "field": "hiring_activity",
+      "value": "sales roles"
+     },
+     "status": "unprovable_today"
+    },
+    {
+     "id": "constraint:_field_industry_or_company_type_value_b2b_saas_founder_led_o",
+     "kind": "target",
+     "dimension": "constraint",
+     "value": {
+      "field": "industry_or_company_type",
+      "value": [
+       "B2B SaaS (founder-led or small teams)",
+       "Recruiting / Talent Acquisition / Staffing Agencies"
+      ]
+     },
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas_founder_led_or_small_teams_",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "B2B SaaS (founder-led or small teams)",
+     "status": "ok"
+    },
+    {
+     "id": "industry:recruiting_talent_acquisition_staffing_agencies",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "Recruiting / Talent Acquisition / Staffing Agencies",
+     "status": "ok"
+    },
+    {
+     "id": "unrecognised_signal:sales_roles",
+     "kind": "target",
+     "dimension": "unrecognised_signal",
+     "value": "sales roles",
+     "status": "unrecognised"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "sales roles",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/edge-functions/_shared/fixtures/providers-off-evidence.json#$.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "c5f0c23546f1aa5b82e519040b6bf9f250057ca38c87500b6cb4d4ba2f904369",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 1,
+   "criteria": [
+    {
+     "id": "company_size:_min_11_max_50_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 11,
+      "max": 50
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executive"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_software",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "B2B software",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executive"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/canary-1156c062/result.json#$.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "a8bb52b2a52ae4b6b2621512e897d853747b92d1ca70e7a91a1170f14c605ac4",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 1,
+   "criteria": [
+    {
+     "id": "company_size:_min_11_max_50_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 11,
+      "max": 50
+     },
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 365,
+      "basis": "announced",
+      "source": "user_explicit",
+      "rule": "recently funded / raised",
+      "enforced": false
+     },
+     "elevated_by": "must"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_growth_ro",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "growth role"
+       ],
+       "role_families": [
+        "growth"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     },
+     "elevated_by": "must"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "growth role"
+     ],
+     "role_families": [
+      "growth"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 365,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/canary-62c8b188-mission.json#$": {
+  "source": "persisted",
+  "fingerprint": "6ce99cc68bd1737077951f30ed18e9b7f0e3a7ac0dce507ded26cdb96c146976",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 1,
+   "criteria": [
+    {
+     "id": "company_size:_min_1_max_150_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 1,
+      "max": 150
+     },
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_growth_ma",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "growth marketer"
+       ],
+       "role_families": [
+        "marketing_growth"
+       ],
+       "first_in_function": {
+        "phrase": "first growth marketer",
+        "source": "user_explicit"
+       }
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:founder_led_or_small_teams",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "founder-led or small teams",
+     "status": "unprovable_today"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "growth marketer"
+     ],
+     "role_families": [
+      "marketing_growth"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/canary-98ce374b-mission.json#$": {
+  "source": "persisted",
+  "fingerprint": "8f2ada76e9ad30910c0e5b6afcb42878e9990b4442e3e42bac104f942e73b985",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "company_size:_min_11_max_50_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 11,
+      "max": 50
+     },
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 730,
+      "basis": "announced",
+      "source": "user_explicit",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales role"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:ai_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "ai saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_founder_led_or_small_teams",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b founder-led or small teams",
+     "status": "unprovable_today"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "sales role"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 730,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[0].mission": {
+  "source": "persisted",
+  "fingerprint": "da5ea5c6ce8308d93161a97c74be9fcc3b8bc9f155e9a69534ef98e44ffb489a",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_families_market",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "marketing_growth"
+       ],
+       "role_terms": [
+        "growth marketers"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "growth marketers"
+     ],
+     "role_families": [
+      "marketing_growth"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[1].mission": {
+  "source": "persisted",
+  "fingerprint": "2db2f1c729f95661184a172f459b64ce1cd0d7beb2cf67650a0dea0ba76bce28",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_families_market",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "marketing_growth"
+       ],
+       "role_terms": [
+        "growth marketers"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "growth marketers"
+     ],
+     "role_families": [
+      "marketing_growth"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[10].mission": {
+  "source": "persisted",
+  "fingerprint": "b990ef5bd22fc6a54c8020dbf1c4c1e2b877308a88b375225934533d68e30996",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "gtm_sales"
+       ],
+       "role_terms": [
+        "account executives"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[11].mission": {
+  "source": "persisted",
+  "fingerprint": "0052218ddf093808b14ceaca6ae30fc7aef42556ed4d39376ed1b869fc9cb33b",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_families_engine",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "engineering"
+       ],
+       "role_terms": [
+        "software engineers"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "software engineers"
+     ],
+     "role_families": [
+      "engineering"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[12].mission": {
+  "source": "persisted",
+  "fingerprint": "ff9998f546ee405d1d43f3da16671f54ac96a3529c8b87b74cc952ef3d7fc1cf",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "expansion:_event_expansion_subject_company_qualifier_region_europe_",
+     "kind": "target",
+     "dimension": "expansion",
+     "value": {
+      "event": "expansion",
+      "subject": "company",
+      "qualifier": {
+       "region": "europe"
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "published",
+      "source": "system_default",
+      "rule": "recently expanded / opened an office",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:cybersecurity",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "cybersecurity",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "expansion",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[13].mission": {
+  "source": "persisted",
+  "fingerprint": "8123fe2f72144c9a4d6e6748ea1714bb879730f54c1b35fc91f7ecb7fa74bd43",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "announced",
+      "source": "system_default",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_families_ops_ro",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "ops"
+       ],
+       "role_terms": [
+        "revops that recently raised"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "revops that recently raised"
+     ],
+     "role_families": [
+      "ops"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[14].mission": {
+  "source": "persisted",
+  "fingerprint": "44efc1c8ffdc4f7fc58c0e4965b5776987f6a63176aaf046ae506c7a69234925",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [
+      "marketing_growth"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[15].mission": {
+  "source": "persisted",
+  "fingerprint": "7482b780081372bde96044759cfbc683cb87e0a89066827ea8e2cdfe463d0238",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[16].mission": {
+  "source": "persisted",
+  "fingerprint": "05a89bc2751b72eb93ba45c41b0108d38fc031d16d49ec56645d0cfd75b5e554",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "expansion:_event_expansion_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "expansion",
+     "value": {
+      "event": "expansion",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "expansion",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[17].mission": {
+  "source": "persisted",
+  "fingerprint": "f695b6e0f24ac15ce451eb5b11bc7d3d637561f9ec73a6e5bd7108d5f865c1f1",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    },
+    {
+     "id": "product_launch:_event_product_launch_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "product_launch",
+     "value": {
+      "event": "product_launch",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "product_launch",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[18].mission": {
+  "source": "persisted",
+  "fingerprint": "db83c581f4501d0f3a18fd278ab20a36ff94b4ad637b493dd77ae6d2e81beec9",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    },
+    {
+     "id": "technology:_event_technology_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "technology",
+     "value": {
+      "event": "technology",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "technology",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[19].mission": {
+  "source": "persisted",
+  "fingerprint": "c0029a1992eccb656f7429b518cb855eca4ee3ad866aadd687f66733f1a4d8c3",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    },
+    {
+     "id": "leadership_change:_event_leadership_change_subject_leadership_qualifier_",
+     "kind": "target",
+     "dimension": "leadership_change",
+     "value": {
+      "event": "leadership_change",
+      "subject": "leadership",
+      "qualifier": {}
+     },
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "leadership_change",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[2].mission": {
+  "source": "persisted",
+  "fingerprint": "42f2d2bb9de5463a88537d7b04c5a17d64aed73902ca55b734649054a3f1457d",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 3,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_families_market",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "marketing_growth"
+       ],
+       "role_terms": [
+        "their first growth marketer"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "their first growth marketer"
+     ],
+     "role_families": [
+      "marketing_growth"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[20].mission": {
+  "source": "persisted",
+  "fingerprint": "b6452905a258c145a4bfdd035aa92ae378c001dc4d9fe7542b84f90b080683e1",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    },
+    {
+     "id": "social_activity:_event_post_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "social_activity",
+     "value": {
+      "event": "post",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "post",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[21].mission": {
+  "source": "persisted",
+  "fingerprint": "16c5bd97f13ccb3758912dc0939e3fd9b9048d82fee2a693bd4c8024480f2d7f",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "headcount_growth:_event_headcount_change_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "headcount_growth",
+     "value": {
+      "event": "headcount_change",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "headcount_change",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[22].mission": {
+  "source": "persisted",
+  "fingerprint": "ca1b886144aeb6aab477945cb71af8cb793180a7cce0d9ca72174a14764cfbb9",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    },
+    {
+     "id": "product_launch:_event_product_launch_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "product_launch",
+     "value": {
+      "event": "product_launch",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [
+      "engineering"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "product_launch",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[23].mission": {
+  "source": "persisted",
+  "fingerprint": "f8964dc830694517a1af30df4409fcf4ea72e3c5ff4c61ee79688dfce351bf12",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    },
+    {
+     "id": "technology:_event_technology_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "technology",
+     "value": {
+      "event": "technology",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [
+      "engineering"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "technology",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[3].mission": {
+  "source": "persisted",
+  "fingerprint": "516039f4ca0264535bec1af59ceff2fba3804fd534ae7ab68eaa03257a3abf6e",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "announced",
+      "source": "system_default",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[4].mission": {
+  "source": "persisted",
+  "fingerprint": "a6d1c4b7ec6b21f477f43ee9b4a4583c130d3e42f249a35dd9a0333ce41899d5",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "product_launch:_event_product_launch_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "product_launch",
+     "value": {
+      "event": "product_launch",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "published",
+      "source": "system_default",
+      "rule": "recently launched",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "product_launch",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[5].mission": {
+  "source": "persisted",
+  "fingerprint": "4608d4ccb8fc2ecf1038daf0d3496fbffa220a62cd2b086410a8bb6b7993ce75",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "expansion:_event_expansion_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "expansion",
+     "value": {
+      "event": "expansion",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "published",
+      "source": "system_default",
+      "rule": "recently expanded / opened an office",
+      "enforced": false
+     }
+    },
+    {
+     "id": "headcount_growth:_event_headcount_change_subject_company_qualifier_direction_",
+     "kind": "target",
+     "dimension": "headcount_growth",
+     "value": {
+      "event": "headcount_change",
+      "subject": "company",
+      "qualifier": {
+       "direction": "increase"
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "observed",
+      "source": "system_default",
+      "rule": "growing headcount",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "expansion",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "headcount_change",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[6].mission": {
+  "source": "persisted",
+  "fingerprint": "51283e81ce5ff01073d766562a8ef6119d3bd928a6584ad97b98570378a863b4",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "technology:_event_technology_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "technology",
+     "value": {
+      "event": "technology",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "technology",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[7].mission": {
+  "source": "persisted",
+  "fingerprint": "d782f69ef8badde190dbfb57affdc942a89856366346d4858b625e00276fb362",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "leadership_change:_event_leadership_change_subject_leadership_qualifier_",
+     "kind": "target",
+     "dimension": "leadership_change",
+     "value": {
+      "event": "leadership_change",
+      "subject": "leadership",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "observed",
+      "source": "system_default",
+      "rule": "recently hired / appointed an executive",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "leadership_change",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[8].mission": {
+  "source": "persisted",
+  "fingerprint": "69e726dc1ce33d4bafc409b59ee459f47bf58c472a0c060fe454baa4f0de4331",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "presence"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[9].mission": {
+  "source": "persisted",
+  "fingerprint": "da953db5d2834de1654068c25ed264106870d22fa4f4d71aece6135bfb290121",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[0].mission": {
+  "source": "persisted",
+  "fingerprint": "04fbb3ff3d007504b79764fb7f06748f18f04cacc587cf27999efe3ad364378d",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_1_max_150_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 1,
+      "max": 150
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[10].mission": {
+  "source": "persisted",
+  "fingerprint": "18bfc22710106faf3d36cd6dc0e5680210ec7dba879cef07ac98882589cef6d0",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_1_max_150_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 1,
+      "max": 150
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "leadership_change:_event_leadership_change_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "leadership_change",
+     "value": {
+      "event": "leadership_change",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "observed",
+      "source": "system_default",
+      "rule": "recently hired / appointed an executive",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "leadership_change",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[12].mission": {
+  "source": "persisted",
+  "fingerprint": "7f13390cfb07b92773f0e0a5f8cb69b22845eaa43b14eec0b7699c5193fa562a",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_1_max_150_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 1,
+      "max": 150
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "social_activity:_event_post_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "social_activity",
+     "value": {
+      "event": "post",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "published",
+      "source": "system_default",
+      "rule": "recent social activity",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "post",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[14].mission": {
+  "source": "persisted",
+  "fingerprint": "3e29cca38c68a0fa14d66ff8d1d21b0958aa81742d8b1da129ac655319ce9247",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_1_max_150_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 1,
+      "max": 150
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "social_activity:_event_comment_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "social_activity",
+     "value": {
+      "event": "comment",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "published",
+      "source": "system_default",
+      "rule": "recent social activity",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "comment",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[16].mission": {
+  "source": "persisted",
+  "fingerprint": "283b67396ec5c41bc7660db26efd79c8d52f0501414e25f8ad90e3e08afd1a3d",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_1_max_150_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 1,
+      "max": 150
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok"
+    },
+    {
+     "id": "headcount_growth:_event_headcount_change_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "headcount_growth",
+     "value": {
+      "event": "headcount_change",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "observed",
+      "source": "system_default",
+      "rule": "growing headcount",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "headcount_change",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[18].mission": {
+  "source": "persisted",
+  "fingerprint": "14cf363c8623a00984dd86c0f6521faccc718ebbabef10e6e8deb52cbd73cf2b",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_1_max_150_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 1,
+      "max": 150
+     },
+     "status": "ok"
+    },
+    {
+     "id": "expansion:_event_expansion_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "expansion",
+     "value": {
+      "event": "expansion",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "published",
+      "source": "system_default",
+      "rule": "recently expanded / opened an office",
+      "enforced": false
+     }
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "announced",
+      "source": "system_default",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "known_companies:_rival_io_",
+     "kind": "hard",
+     "dimension": "known_companies",
+     "value": [
+      "rival.io"
+     ],
+     "status": "ok"
+    },
+    {
+     "id": "product_launch:_event_product_launch_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "product_launch",
+     "value": {
+      "event": "product_launch",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "published",
+      "source": "system_default",
+      "rule": "recently launched",
+      "enforced": false
+     }
+    },
+    {
+     "id": "technology:_event_technology_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "technology",
+     "value": {
+      "event": "technology",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "observed",
+      "source": "system_default",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "expansion",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "product_launch",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "technology",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[2].mission": {
+  "source": "persisted",
+  "fingerprint": "dbcb1075e2cbcfd7ace0a8ca7b380d64c7dc8c432e705ff70624fdd2d58a5081",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_1_max_150_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 1,
+      "max": 150
+     },
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "announced",
+      "source": "system_default",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[4].mission": {
+  "source": "persisted",
+  "fingerprint": "a5d584f7d8f5a14c15495906c6d6ccd52693b85fbc88fdfe0e9d246c8e765cba",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_1_max_150_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 1,
+      "max": 150
+     },
+     "status": "ok"
+    },
+    {
+     "id": "expansion:_event_expansion_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "expansion",
+     "value": {
+      "event": "expansion",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "published",
+      "source": "system_default",
+      "rule": "recently expanded / opened an office",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "expansion",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[6].mission": {
+  "source": "persisted",
+  "fingerprint": "420846301c29cd70b86308fc41fb3687a9f2a2cb6508d58003ea8ef6df0eabc5",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_1_max_150_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 1,
+      "max": 150
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "product_launch:_event_product_launch_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "product_launch",
+     "value": {
+      "event": "product_launch",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "published",
+      "source": "system_default",
+      "rule": "recently launched",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "product_launch",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[8].mission": {
+  "source": "persisted",
+  "fingerprint": "e55e2fe8ae7b2500c8513304b8a3428f69ff15563b021a815e474947223f46b9",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_1_max_150_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 1,
+      "max": 150
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "technology:_event_technology_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "technology",
+     "value": {
+      "event": "technology",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "observed",
+      "source": "system_default",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "technology",
+     "timeframe_days": 30,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/run-1e52d43c/plan.json#$.steps[0].metadata.tool_input.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "2cbd380a02130e49417dac8b4e8fa5afb9bd516d957dbd6510cffd70e2bcac90",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 3,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_families_market",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "marketing_growth"
+       ],
+       "role_terms": [
+        "growth marketer"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:founder_led_or_small_teams",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "founder-led or small teams",
+     "status": "unprovable_today"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "growth marketer"
+     ],
+     "role_families": [
+      "marketing_growth"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/run-4250f181/plan.json#$.steps[0].metadata.tool_input.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "2cbd380a02130e49417dac8b4e8fa5afb9bd516d957dbd6510cffd70e2bcac90",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 3,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_families_market",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "marketing_growth"
+       ],
+       "role_terms": [
+        "growth marketer"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:founder_led_or_small_teams",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "founder-led or small teams",
+     "status": "unprovable_today"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "growth marketer"
+     ],
+     "role_families": [
+      "marketing_growth"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/salvo-0b7baab9/mission.json#$": {
+  "source": "persisted",
+  "fingerprint": "ff0c63a38e66b0dce3d6bf1043c4aa7eba30a59c02db7227c8a469e4c33c2737",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 1,
+   "criteria": [
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 1095,
+      "basis": "announced",
+      "source": "user_explicit",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "known_companies:_https_www_linkedin_com_company_salvosoftware_",
+     "kind": "hard",
+     "dimension": "known_companies",
+     "value": [
+      "https://www.linkedin.com/company/salvosoftware"
+     ],
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": 1095,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/fixtures/lead-v2/size-semantics-replay-2026-09-24/canary_companies.json#$.mission": {
+  "source": "persisted",
+  "fingerprint": "d15282fb7d9804576c2119b0792281dc8ed21ac6d703e9687829f792742f8c08",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 1,
+   "criteria": [
+    {
+     "id": "company_size:_min_11_max_50_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 11,
+      "max": 50
+     },
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 730,
+      "basis": "announced",
+      "source": "user_explicit",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": 730,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A01.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "5d94d10910e33d6c38c25690f78b39e33b9f073a11df458cf5f1eb5869779fb5",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales role"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    },
+    {
+     "id": "known_companies:_llamaindex_",
+     "kind": "hard",
+     "dimension": "known_companies",
+     "value": [
+      "LlamaIndex"
+     ],
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "sales role"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A06.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "9b2169d0524dbebf5dcc4cd77cc60916bac6fd694fb71f79c9b557416b36e05d",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 1,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "announced",
+      "source": "system_default",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    },
+    {
+     "id": "known_companies:_llamaindex_",
+     "kind": "hard",
+     "dimension": "known_companies",
+     "value": [
+      "LlamaIndex"
+     ],
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A08.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "2a28f06cf5f168c821e8d69394bd8d2424eda1bc0f3162b9eab443f15e5acf94",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_pos",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales positions"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    },
+    {
+     "id": "known_companies:_delta_lake_",
+     "kind": "hard",
+     "dimension": "known_companies",
+     "value": [
+      "Delta Lake"
+     ],
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "sales positions"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A09.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "18d07d9b29559550142633de28e4e789630f6db4f236a0b63fac242b35016bcd",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    },
+    {
+     "id": "known_companies:_anthropic_",
+     "kind": "hard",
+     "dimension": "known_companies",
+     "value": [
+      "Anthropic"
+     ],
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A10.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "7032016befbff9808400ce19559d2e4610b1201b20ed7b908d0322d1146b9ddf",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    },
+    {
+     "id": "known_companies:_openai_",
+     "kind": "hard",
+     "dimension": "known_companies",
+     "value": [
+      "OpenAI"
+     ],
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "sales"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": [
+    "sales"
+   ]
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.C07.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "21a5963eb6f933638571775155ab13d6c7fa3acd03397b6f0e8c5c5830e10bfd",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 10,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:ai_infrastructure",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI infrastructure",
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E01.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "cdb05243dbe43af4040effa0fb4622911065197ab6609dc030bfd28c82febdef",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_presence_venture_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {},
+      "presence": "venture"
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:ai",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E05.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "48e0615c5ec2fd14b27a603362fc7b7a0cdc92384c5feb44b1d9a883757ce4e5",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "company_stage:series_a_series_b",
+     "kind": "hard",
+     "dimension": "company_stage",
+     "value": "series_a|series_b",
+     "status": "ok",
+     "any_of": [
+      "series_a",
+      "series_b"
+     ]
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:ai",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E07.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "236606f50e684e5937e880f8b2bac8d20c407b60a44075609fe0391c97de341f",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_presence_venture_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {},
+      "presence": "venture"
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E08.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "4b4befdc2330304031bd02f09daf436b6317c93d92afc9275e007643772aa405",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "announced",
+      "source": "system_default",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.F01.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "d60ba8a98ba3034b4002bab374e37456a6ea5945b4cab791274a184537e59588",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_salespeop",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "salespeople"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "salespeople"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.F12.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "dd0d11c20eb5f51aae649f0f84878de472203583819678fbdb0c847025cb0226",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales roles"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "sales roles"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.G08.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "118137dc8cc8053b09665e202993f804a98bf0b40ee57f8e22f190b5c6f482f9",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H04.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "90bc1c59df2a1f4e802f0125631b2bb7325789bb4b0d36170f2b55e77bf096ed",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_0_max_49_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 0,
+      "max": 49
+     },
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H05.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "85f1567a1827d16cc8d13bce6163e1a50ba4223a3ae89ed52d2bdb6a06585f5b",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_100_max_0_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 100,
+      "max": 0
+     },
+     "status": "unprovable_today"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H06.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "f08d9548fc5a123be02c5040d1baf80d32ec2855afd0395c595db5b6d45b45c1",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_20_max_100_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 20,
+      "max": 100
+     },
+     "status": "unprovable_today"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H07.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "f7c33f12ece25af2c00156c10c9c1a05478dc73f0d1f6691f41d6f10212851b8",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_size:_min_0_max_0_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 0,
+      "max": 0
+     },
+     "status": "unprovable_today"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H08.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "f4c2d5dc2b3fc5410be4f373099ed9c80d9a4fe3a94181349b99ee7130c3e023",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "company_size:_min_25_max_75_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 25,
+      "max": 75
+     },
+     "status": "unprovable_today"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:ai",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI",
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.J06.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "9bc2ea5cdbf2837f76f182f04d624a49c2e4080f4cf300977db90fa14101b82a",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 10,
+   "criteria": [
+    {
+     "id": "company_size:_min_11_max_50_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 11,
+      "max": 50
+     },
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:seed_series_a",
+     "kind": "hard",
+     "dimension": "company_stage",
+     "value": "seed|series_a",
+     "status": "ok",
+     "any_of": [
+      "seed",
+      "series_a"
+     ]
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:recruiting_tech",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "recruiting-tech",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "sales"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.J07.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "e0675e2db1cfd0825aa1f9b592b1ed0436d4cc7f22c9a370c6f6bf35b72675ef",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 20,
+   "criteria": [
+    {
+     "id": "company_size:_min_11_max_200_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 11,
+      "max": 200
+     },
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "target",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 730,
+      "basis": "announced",
+      "source": "user_inferred",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_revenue_r",
+     "kind": "target",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "revenue-related"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 730,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:ai_infrastructure",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI infrastructure",
+     "status": "ok"
+    },
+    {
+     "id": "unrepresentable_evidence:financial_performance_such_as_revenue_arr_or_churn_no_regist",
+     "kind": "target",
+     "dimension": "unrepresentable_evidence",
+     "value": "financial performance such as revenue, ARR or churn — no registered source returns company financials",
+     "status": "unrepresentable"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 730,
+     "role_terms": [
+      "revenue-related"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 730,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K01.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "ff96b369ef6f604c53f998dc2f95086f3fba9266f8140215971be5c4dbe272e2",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:ai",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "sales"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K02.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "fad2d8125e6b944cbd32c4e672f9c7397687b88bced17d70135b2c95dbaa023c",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_presence_venture_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {},
+      "presence": "venture"
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:ai",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": null,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K03.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "118137dc8cc8053b09665e202993f804a98bf0b40ee57f8e22f190b5c6f482f9",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K05.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "c9dbd867fedf9327412b75c019e11e44caefedaa9e52ee2d3e14f09c31a9e68a",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:_field_stage_value_startup_",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": {
+      "field": "stage",
+      "value": "startup"
+     },
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "announced",
+      "source": "system_default",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:ai",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "sales"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L03.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "70b8aa3bcbc3de58a0879c2cae1c2dae3de151f5980451d8bb530fc36f043650",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:california",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "California",
+     "status": "ok",
+     "geography_scope": "headquarters",
+     "any_of": [
+      "california",
+      "new york"
+     ]
+    },
+    {
+     "id": "geography:new_york",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "New York",
+     "status": "ok",
+     "geography_scope": "headquarters",
+     "any_of": [
+      "california",
+      "new york"
+     ]
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L04.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "23d1a23a8abab4749884c80c2ddf91c57a2d9784136c04ef8bd4dea316f7c7bd",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:ai",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI",
+     "status": "ok",
+     "any_of": [
+      "ai",
+      "developer-tools"
+     ]
+    },
+    {
+     "id": "industry:developer_tools",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "developer-tools",
+     "status": "ok",
+     "any_of": [
+      "ai",
+      "developer-tools"
+     ]
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L05.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "8458e047361c668cda82b3789aa63793eda11f536092591741b9c1dce2625542",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "announced",
+      "source": "system_default",
+      "rule": "recently funded / raised",
+      "enforced": false
+     },
+     "any_of": [
+      "signal:funding",
+      "signal:hiring"
+     ]
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     },
+     "any_of": [
+      "signal:funding",
+      "signal:hiring"
+     ]
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "sales"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.N03.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "ff96b369ef6f604c53f998dc2f95086f3fba9266f8140215971be5c4dbe272e2",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:ai",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "sales"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.P01.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "749b8728f535fe890dd80e995a64cc87af42ecda1d089a84185a3cb826bd225e",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 100,
+   "criteria": [
+    {
+     "id": "company_size:_min_17_max_17_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 17,
+      "max": 17
+     },
+     "status": "unprovable_today"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "industry:ai",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI",
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.P04.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "352ba2d7f5f18ba48a7f41098e2cc795990508febe2e3fe41f5a982a226bcfd3",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 100,
+   "criteria": [
+    {
+     "id": "company_size:_min_42_max_42_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 42,
+      "max": 42
+     },
+     "status": "unprovable_today"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:recruiting_agencies",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "recruiting agencies",
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.R01.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "6e48d2ce74f28c3d600bfc383fd9ccc15dda5bf0d12ff071e1f03e6d10ce7512",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 2,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    },
+    {
+     "id": "known_companies:_llamaindex_llama_index_",
+     "kind": "hard",
+     "dimension": "known_companies",
+     "value": [
+      "LlamaIndex",
+      "Llama Index"
+     ],
+     "status": "ok"
+    }
+   ],
+   "signals": [],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.RND39.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "cda0e65fe76d6c53688764adafb64e0180d5a97301ed9eef502cae3f3c3f0577",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 10,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 730,
+      "basis": "announced",
+      "source": "user_explicit",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 730,
+      "basis": "posted",
+      "source": "user_explicit",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:developer_tools",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "developer tools",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 730,
+     "role_terms": [
+      "sales"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 730,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.S01.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "54e73c2b34f203dac7d64a77aba9bf049687022011cd988d1ed267dc284e1369",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 279,
+      "basis": "announced",
+      "source": "user_explicit",
+      "rule": "this year",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "funding",
+     "timeframe_days": 279,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.S04.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "ba693661ac3e84308dcd5fb8fdff7a9750e73917007149254813b86bbaf1c8da",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": null,
+   "criteria": [
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "target",
+     "dimension": "geography",
+     "value": "united states",
+     "status": "ok"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:b2b_saas",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:fintech",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "fintech",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "sales"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.Z08.lead_mission": {
+  "source": "persisted",
+  "fingerprint": "8a98f03606aa7ef7baa49e4c3404db1ec84db801805623a7fe79c21786e7153b",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "company_size:_min_11_max_50_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 11,
+      "max": 50
+     },
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_funding_kind_ventur",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {},
+      "funding_kind": "venture"
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 730,
+      "basis": "announced",
+      "source": "user_explicit",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_aes_role_",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "aes"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 730,
+      "basis": "posted",
+      "source": "user_explicit",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:ai_companies",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "AI companies",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 730,
+     "role_terms": [
+      "aes"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 730,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/replay/fixtures/canary8.hiring-affordability.json#$.mission": {
+  "source": "persisted",
+  "fingerprint": "2e91169e0e42a4c2c0dfa26ee70d6566cde277c84a819cb82013fb5d6f859d59",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "company_size:_min_11_max_50_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 11,
+      "max": 50
+     },
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 730,
+      "basis": "announced",
+      "source": "user_explicit",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "sales"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:ai_saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "ai saas",
+     "status": "ok"
+    },
+    {
+     "id": "industry:b2b_founder_led_or_small_teams",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "b2b founder-led or small teams",
+     "status": "unprovable_today"
+    },
+    {
+     "id": "industry:saas",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "saas",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "sales"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 730,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/replay/fixtures/canarySession2.contract2.json#$.mission": {
+  "source": "persisted",
+  "fingerprint": "6591be54bfe9401820393197a0959042ff219b2297e6ba46e647aac1ba6984c4",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 1,
+   "criteria": [
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 180,
+      "basis": "announced",
+      "source": "user_explicit",
+      "rule": "recently funded / raised",
+      "enforced": false
+     }
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "account executives"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 180,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/replay/fixtures/g5.funding-screen.json#$.mission": {
+  "source": "persisted",
+  "fingerprint": "48e59475350ac82e8f40dd9f622ee1d520b69a8ae0f4469719f73ab3c00e9149",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 1,
+   "criteria": [
+    {
+     "id": "company_size:_min_11_max_50_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 11,
+      "max": 50
+     },
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:seed",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "seed",
+     "status": "ok"
+    },
+    {
+     "id": "company_stage:series_a",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "series_a",
+     "status": "ok"
+    },
+    {
+     "id": "funding:_event_funding_subject_company_qualifier_",
+     "kind": "hard",
+     "dimension": "funding",
+     "value": {
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {}
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 365,
+      "basis": "announced",
+      "source": "user_explicit",
+      "rule": "recently funded / raised",
+      "enforced": false
+     },
+     "elevated_by": "must"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_growth_ro",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "growth role"
+       ],
+       "role_families": [
+        "growth"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     },
+     "elevated_by": "must"
+    },
+    {
+     "id": "industry:software",
+     "kind": "target",
+     "dimension": "industry",
+     "value": "software",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "growth role"
+     ],
+     "role_families": [
+      "growth"
+     ],
+     "excluded_role_terms": []
+    },
+    {
+     "type": "funding",
+     "timeframe_days": 365,
+     "role_terms": [],
+     "role_families": [],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
+ "persisted:tests/replay/fixtures/queryBa9a6791a.job-first.json#$.mission": {
+  "source": "persisted",
+  "fingerprint": "ae495383101f751a73583813d1bfe11336589b25962bfc6e1263b31d32cd00a6",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 3,
+   "criteria": [
+    {
+     "id": "company_size:_min_11_max_50_",
+     "kind": "hard",
+     "dimension": "company_size",
+     "value": {
+      "min": 11,
+      "max": 50
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "gtm_sales"
+       ],
+       "role_terms": [
+        "sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "system_default",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    },
+    {
+     "id": "industry:software",
+     "kind": "hard",
+     "dimension": "industry",
+     "value": "software",
+     "status": "ok"
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": null,
+     "role_terms": [
+      "sales"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ }
+}
