@@ -1041,3 +1041,41 @@ Deno.test("idempotency: a provider failure is marked uncertain and a retry never
   const retry = await handleStrategyRequest(sreq(body), o.d);
   assertEquals(o.ap.calls.filter((c) => failed.includes(c.key)).length, failed.length, `an uncertain charge is never retried (${retry.status})`);
 });
+
+// ── Stage 6: the closed requirement vocabulary, behind LEAD_STRICT_REQUIREMENTS_ENABLED ──
+const INVENTED = { ...HIRING_PROPOSAL, hard_constraints: [...US.hard_constraints, { field: "culture_fit", operator: "equals", value: "remote-first engineering culture", reason: "model guess" }] };
+const QUOTED = { ...HIRING_PROPOSAL, hard_constraints: [...US.hard_constraints, { field: "culture_fit", operator: "equals", value: "remote-first", reason: "stated" }] };
+const STRICT = { ...SENV, LEAD_STRICT_REQUIREMENTS_ENABLED: "true" };
+
+Deno.test("strict vocabulary OFF (default): an invented requirement is only reported; the plan is unchanged", async () => {
+  const off = sdeps({ userId: "u-member", interpret: fromProposal(INVENTED) });
+  const r = await handleStrategyRequest(sreq({ action: "strategy_plan" }), off.d);
+  assertEquals(r.status, 200);
+  const contract = (r.body.interpretation as { contract: { enforced: boolean; unsupported: string[] } }).contract;
+  assertEquals([contract.enforced, contract.unsupported], [false, ["culture_fit"]]);
+  const plain = await handleStrategyRequest(sreq({ action: "strategy_plan" }), sdeps({ userId: "u-member" }).d);
+  assertEquals((plain.body.interpretation as { contract: { unsupported: string[] } }).contract.unsupported, [], "a canonical-only proposal has nothing to report");
+});
+
+Deno.test("strict vocabulary ON: an invented requirement is refused explicitly (422), never dropped; nothing is bought", async () => {
+  const on = sdeps({ userId: "u-member", interpret: fromProposal(INVENTED) }, STRICT);
+  const r = await handleStrategyRequest(sreq({ action: "strategy_plan" }), on.d);
+  assertEquals(r.status, 422);
+  assertEquals((r.body.contract as { unsupported: string[] }).unsupported, ["culture_fit"]);
+  assertEquals(on.lo.calls.length + on.ap.calls.length, 0);
+  // The user's own words are not refused: the same field, quoted from the request, plans.
+  const quoted = await handleStrategyRequest(sreq({ action: "strategy_plan", query: "Find US companies hiring Account Executives, remote-first only." }), sdeps({ userId: "u-member", interpret: fromProposal(QUOTED) }, STRICT).d);
+  assertEquals(quoted.status, 200);
+  // Canonical requirements are unaffected.
+  assertEquals((await handleStrategyRequest(sreq({ action: "strategy_plan" }), sdeps({ userId: "u-member" }, STRICT).d)).status, 200);
+});
+
+Deno.test("strict vocabulary ON at run time refuses a plan signed while it was off — from the SIGNED proposal, before any purchase", async () => {
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan" }), sdeps({ userId: "u-member", interpret: fromProposal(INVENTED) }).d);
+  assertEquals(planned.status, 200);
+  const plan = planned.body.plan as StrategyPlan;
+  const o = sdeps({}, STRICT);
+  const r = await handleStrategyRequest(sreq({ action: "strategy_run", approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } }), o.d);
+  assertEquals(r.status, 422);
+  assertEquals(o.lo.calls.length + o.ap.calls.length + o.interpretations(), 0);
+});

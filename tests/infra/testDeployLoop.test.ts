@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { parse } from "https://deno.land/std@0.224.0/yaml/mod.ts";
 import {
-  buildShaOf, countChecks, functionsToDeploy, PLAN_ACTION, planChecks, planOnlyChecks, planRequest, PROD_REF, registryCheck, renderSummary,
+  buildShaOf, countChecks, functionsToDeploy, PLAN_ACTION, planChecks, planOnlyChecks, planRequest, PROD_REF, shown, tokenCheck, registryCheck, renderSummary,
   secretChecks, SMOKE_QUERY, TEST_REF, verdict,
 } from "../../scripts/deploy/test-functions-smoke.ts";
 
@@ -196,4 +196,21 @@ Deno.test("plan-only request: bounded, plan action only, no LeadOcean records fo
   assertEquals(failed(lo), ["Q3"]);
   const other = structuredClone(ok); other.plan.strategy = "apify_plus_leadocean";
   assertEquals(failed(other), ["Q2"]);
+});
+
+Deno.test("smoke P7: a ready plan must carry a walk-bound, expiring approval token for this workspace; its value is never shown", async () => {
+  const { planSigner } = await import("../../supabase/functions/_shared/leadPipeline/planToken.ts");
+  const signer = await planSigner("smoke-test-secret-0123456789abcdef");
+  const ws = "40e2512f-09b6-433e-97fe-f9999a1f1897";
+  const plan = { status: "ready", planHash: "a".repeat(64) };
+  const now = new Date(Date.UTC(2026, 10, 2));
+  const token = await signer.sign({ workspaceId: ws, walkId: "w1", plannedBy: "u", planHash: plan.planHash, query: "q", requestedCount: 3, replay: { proposal: {}, brain: { status: "absent", fields: [], context: null }, advice: null } }, now);
+  const ok = tokenCheck({ plan, approval_token: token } as never, ws);
+  assertEquals(ok.status, "pass", JSON.stringify(ok));
+  assertFalse(JSON.stringify(ok).includes(token.split(".")[1]), "the check never echoes the token");
+  assertEquals(tokenCheck({ plan } as never, ws).status, "fail", "a ready plan without a token");
+  assertEquals(tokenCheck({ plan, approval_token: token } as never, "9d09038b-2d39-49ca-b687-e3946ea7266d").status, "fail", "another workspace");
+  assertEquals(tokenCheck({ plan: { ...plan, planHash: "b".repeat(64) }, approval_token: token } as never, ws).status, "fail", "another plan");
+  assertEquals(tokenCheck({ plan: { status: "blocked" } } as never, ws).status, "pass", "a blocked plan has no token");
+  assertFalse(shown({ error: "x", approval_token: token }).includes(token.slice(0, 20)), "error output redacts the token");
 });
