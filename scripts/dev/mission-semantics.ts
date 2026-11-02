@@ -40,7 +40,14 @@ export const BLANK_PROPOSAL = {
 };
 const US_HARD = { field: "geography", operator: "in", value: ["United States"], reason: "US" };
 
-interface CorpusCase { name: string; query: string; proposal: Record<string, unknown> & { extra_hard?: unknown[] } }
+export interface CorpusCase { name: string; query: string; proposal: Record<string, unknown> & { extra_hard?: unknown[] } }
+
+/** The compiled mission of a corpus case. */
+export function compileCaseMission(c: CorpusCase): Record<string, unknown> {
+  const { extra_hard, ...rest } = c.proposal;
+  const proposal = { ...BLANK_PROPOSAL, ...rest, hard_constraints: [US_HARD, ...(extra_hard ?? [])] };
+  return compileLeadMission({ originalUserQuery: c.query, proposal: proposal as never, requestedCount: (rest.requested_opportunity_count as number) ?? null }).final_mission as unknown as Record<string, unknown>;
+}
 
 export function compileCase(c: CorpusCase): MissionSemantics {
   const { extra_hard, ...rest } = c.proposal;
@@ -65,9 +72,9 @@ async function* jsonFiles(dir: string): AsyncGenerator<string> {
   }
 }
 
-/** Every entry, keyed. Persisted missions are de-duplicated by content (the first path wins). */
-export async function build(): Promise<Record<string, Entry>> {
-  const out: Record<string, Entry> = {};
+/** Every distinct persisted lead-mission-v1 fixture, keyed `persisted:<file>#<path>` (first path wins). */
+export async function persistedMissions(): Promise<[string, Record<string, unknown>][]> {
+  const out: [string, Record<string, unknown>][] = [];
   const seen = new Set<string>();
   const files: string[] = [];
   for (const d of FIXTURE_DIRS) for await (const f of jsonFiles(d)) files.push(f);
@@ -78,11 +85,24 @@ export async function build(): Promise<Record<string, Entry>> {
       const content = sha256Hex(canonicalJson(mission));
       if (seen.has(content)) continue;
       seen.add(content);
-      const s = missionSemantics(mission as never, deriveMissionCriteria(mission as never));
-      out[`persisted:${f}#${path}`] = { source: "persisted", fingerprint: semanticsFingerprint(s), semantics: s };
+      out.push([`persisted:${f}#${path}`, mission]);
     }
   }
-  const corpus = JSON.parse(await Deno.readTextFile(new URL(CORPUS_PATH, ROOT))) as { cases: CorpusCase[] };
+  return out;
+}
+
+export async function corpusCases(): Promise<CorpusCase[]> {
+  return (JSON.parse(await Deno.readTextFile(new URL(CORPUS_PATH, ROOT))) as { cases: CorpusCase[] }).cases;
+}
+
+/** Every entry, keyed. Persisted missions are de-duplicated by content (the first path wins). */
+export async function build(): Promise<Record<string, Entry>> {
+  const out: Record<string, Entry> = {};
+  for (const [key, mission] of await persistedMissions()) {
+    const s = missionSemantics(mission as never, deriveMissionCriteria(mission as never));
+    out[key] = { source: "persisted", fingerprint: semanticsFingerprint(s), semantics: s };
+  }
+  const corpus = { cases: await corpusCases() };
   for (const c of corpus.cases) {
     const s = compileCase(c);
     out[`corpus:${c.name}`] = { source: "corpus", fingerprint: semanticsFingerprint(s), semantics: s };
