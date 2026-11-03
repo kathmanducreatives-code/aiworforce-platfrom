@@ -3151,7 +3151,7 @@
  },
  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[0].mission": {
   "source": "persisted",
-  "fingerprint": "04fbb3ff3d007504b79764fb7f06748f18f04cacc587cf27999efe3ad364378d",
+  "fingerprint": "c125e2fbc5c9428100539200edd14df817163caf5eef021666142619987bbe1e",
   "semantics": {
    "v": "mission-semantics-v1",
    "target_entity": "company",
@@ -3167,6 +3167,13 @@
       "max": 150
      },
      "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
     },
     {
      "id": "geography:united_states",
@@ -3215,7 +3222,7 @@
  },
  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[10].mission": {
   "source": "persisted",
-  "fingerprint": "18bfc22710106faf3d36cd6dc0e5680210ec7dba879cef07ac98882589cef6d0",
+  "fingerprint": "9467e2c7ead62f4b5889f185d7563b37a7f1291fca9755b2dd21901848778f2b",
   "semantics": {
    "v": "mission-semantics-v1",
    "target_entity": "company",
@@ -3231,6 +3238,13 @@
       "max": 150
      },
      "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
     },
     {
      "id": "geography:united_states",
@@ -3279,7 +3293,7 @@
  },
  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[12].mission": {
   "source": "persisted",
-  "fingerprint": "7f13390cfb07b92773f0e0a5f8cb69b22845eaa43b14eec0b7699c5193fa562a",
+  "fingerprint": "faeceabdabaa349386d4685c7b10de4754ef59e633d91bf12ff39f105a3a23bc",
   "semantics": {
    "v": "mission-semantics-v1",
    "target_entity": "company",
@@ -3295,6 +3309,13 @@
       "max": 150
      },
      "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
     },
     {
      "id": "geography:united_states",
@@ -3343,7 +3364,7 @@
  },
  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[14].mission": {
   "source": "persisted",
-  "fingerprint": "3e29cca38c68a0fa14d66ff8d1d21b0958aa81742d8b1da129ac655319ce9247",
+  "fingerprint": "331432ae04cfbd70388d542ce93958bf061e6b1e9e30734c1898bb6b1fb9f5ad",
   "semantics": {
    "v": "mission-semantics-v1",
    "target_entity": "company",
@@ -3359,6 +3380,13 @@
       "max": 150
      },
      "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
     },
     {
      "id": "geography:united_states",
@@ -3407,7 +3435,7 @@
  },
  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[16].mission": {
   "source": "persisted",
-  "fingerprint": "283b67396ec5c41bc7660db26efd79c8d52f0501414e25f8ad90e3e08afd1a3d",
+  "fingerprint": "6ac9b4d020e632d9dcd8c03df3eb2a3e6f83a3962bb1fe3adb0f600224683371",
   "semantics": {
    "v": "mission-semantics-v1",
    "target_entity": "company",
@@ -3423,6 +3451,13 @@
       "max": 150
      },
      "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
     },
     {
      "id": "geography:united_states",
@@ -3471,7 +3506,7 @@
  },
  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[18].mission": {
   "source": "persisted",
-  "fingerprint": "14cf363c8623a00984dd86c0f6521faccc718ebbabef10e6e8deb52cbd73cf2b",
+  "fingerprint": "5970ff771ca3c68fbd44440931c32aec0b452cec2ff2bd5697313525051f24d6",
   "semantics": {
    "v": "mission-semantics-v1",
    "target_entity": "company",
@@ -3487,6 +3522,13 @@
       "max": 150
      },
      "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
     },
     {
      "id": "expansion:_event_expansion_subject_company_qualifier_",
@@ -3643,7 +3685,7 @@
  },
  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[2].mission": {
   "source": "persisted",
-  "fingerprint": "dbcb1075e2cbcfd7ace0a8ca7b380d64c7dc8c432e705ff70624fdd2d58a5081",
+  "fingerprint": "4a43a1f6ad05ddbc2bf83a9d1240eee6f718c24c842f97567664204b2afa28a9",
   "semantics": {
    "v": "mission-semantics-v1",
    "target_entity": "company",
@@ -3659,6 +3701,13 @@
       "max": 150
      },
      "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
     },
     {
      "id": "funding:_event_funding_subject_company_qualifier_",
@@ -3707,7 +3756,7 @@
  },
  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[4].mission": {
   "source": "persisted",
-  "fingerprint": "a5d584f7d8f5a14c15495906c6d6ccd52693b85fbc88fdfe0e9d246c8e765cba",
+  "fingerprint": "605569607984f9401576c5eec17a72cf82f03927c7abc84ee7abf08fe645a272",
   "semantics": {
    "v": "mission-semantics-v1",
    "target_entity": "company",
@@ -3723,6 +3772,13 @@
       "max": 150
      },
      "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
     },
     {
      "id": "expansion:_event_expansion_subject_company_qualifier_",
@@ -3771,7 +3827,7 @@
  },
  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[6].mission": {
   "source": "persisted",
-  "fingerprint": "420846301c29cd70b86308fc41fb3687a9f2a2cb6508d58003ea8ef6df0eabc5",
+  "fingerprint": "2a4bfb66ee5c5b9184a4fb6267754df8b0879f4b9de2ccdfcf7dcb97787e8865",
   "semantics": {
    "v": "mission-semantics-v1",
    "target_entity": "company",
@@ -3787,6 +3843,13 @@
       "max": 150
      },
      "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
     },
     {
      "id": "geography:united_states",
@@ -3835,7 +3898,7 @@
  },
  "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[8].mission": {
   "source": "persisted",
-  "fingerprint": "e55e2fe8ae7b2500c8513304b8a3428f69ff15563b021a815e474947223f46b9",
+  "fingerprint": "f669f2160a79ae31db8eb08d5a35cd418419e1eab30ffcc97b8b6ad74b66fa54",
   "semantics": {
    "v": "mission-semantics-v1",
    "target_entity": "company",
@@ -3851,6 +3914,13 @@
       "max": 150
      },
      "status": "ok"
+    },
+    {
+     "id": "company_stage:startup",
+     "kind": "target",
+     "dimension": "company_stage",
+     "value": "startup",
+     "status": "unprovable_today"
     },
     {
      "id": "geography:united_states",

@@ -144,6 +144,27 @@ jobs:
             || { echo "::error::$RELEASE_SHA is not on launch/hardening"; exit 1; }
           echo "checked out $RELEASE_SHA, clean, on launch/hardening"
 
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.8.2
+
+      # OPTION E, STAGE 7 — MANDATORY. run-agent re-derives every stored mission's
+      # criteria at run time, so replacing it changes what missions ALREADY in
+      # production mean. Before any credential is used, replay every stored mission
+      # through the LIVE run-agent build and through this release, offline. Any change
+      # of meaning not approved, mission by mission, in
+      # tests/fixtures/mission-semantics/production-replay-approved.json (an
+      # owner-required file) stops the deploy. The gate and the fixtures come from
+      # launch/hardening, so it also judges a release older than the gate.
+      - name: Production semantic replay gate
+        run: |
+          git worktree add --quiet --detach "$RUNNER_TEMP/gate" FETCH_HEAD
+          git worktree add --quiet --detach "$RUNNER_TEMP/live" "$LIVE_RUN_AGENT_SHA"
+          cd "$RUNNER_TEMP/gate"
+          deno run --allow-read --allow-env --allow-write="$RUNNER_TEMP" scripts/dev/production-replay.ts \
+            --release-dir "$RUNNER_TEMP/live" --release "$LIVE_RUN_AGENT_SHA" \
+            --candidate-dir "$GITHUB_WORKSPACE" --report "$RUNNER_TEMP/semantic-replay.json"
+
       - uses: supabase/setup-cli@v1
         with:
           version: 2.118.0
