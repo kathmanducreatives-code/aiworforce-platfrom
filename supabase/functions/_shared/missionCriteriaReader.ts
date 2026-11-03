@@ -42,7 +42,7 @@ export const CRITERIA_SOURCE_FIELDS = Object.freeze([
   "original_user_query", "company_profile", "required_signals", "required_signal_terms", "hard_constraints",
   "soft_preferences", "field_provenance", "unrepresented_requirements", "mission_semantics", "brain_refinements",
   "confidence", "directives", "decision_makers", "target_entity", "geography_is_hard", "mission_type",
-  "mission_objective", "requested_output", "strategies",
+  "mission_objective", "requested_output", "strategies", "understanding",
 ] as const);
 
 function fnv(json: string, seed: number): string {

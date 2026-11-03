@@ -25,10 +25,16 @@ import { canonicalTitleOf, classifyRoleFamily } from "../../supabase/functions/_
 const ROOT = new URL("../../", import.meta.url);
 export const CASES_PATH = "tests/fixtures/mission-reliability/v1/cases.json";
 
-export interface Expect { geo: string[]; roles: string[]; roleMatch: string; excluded: string[]; hard: string[]; anyOf: string[][]; hiringWindowDays?: number }
-export interface Phrasing { label: string; query: string; proposal: Record<string, unknown>; defect?: string }
+export interface Expect { geo: string[]; roles: string[]; roleMatch: string; excluded: string[]; hard: string[]; anyOf: string[][]; hiringWindowDays?: number; hiringHard?: boolean }
+/**
+ * `proposal` is the v1/v2 model reading; `understanding` the contract v3 reading a correct
+ * model gives (S4). `defect` labels a v1 failure; v3 is the acceptance suite, so a v3
+ * failure is only ever allowed by an explicit `defect_v3` (none today).
+ */
+export interface Phrasing { label: string; query: string; proposal: Record<string, unknown>; understanding?: unknown; defect?: string; defect_v3?: string }
+export type CorpusMode = "v1" | "v3";
 export interface Case { id: string; title: string; expect: Expect; phrasings: Phrasing[] }
-export interface Summary { geo: string[]; roles: string[]; roleMatch: string; excluded: string[]; hard: string[]; anyOf: string[][]; unmappable: boolean; hiringWindowDays: number | null }
+export interface Summary { geo: string[]; roles: string[]; roleMatch: string; excluded: string[]; hard: string[]; anyOf: string[][]; unmappable: boolean; hiringWindowDays: number | null; hiringHard: boolean }
 export interface PhrasingResult { case: string; label: string; ok: boolean; defect: string | null; mismatches: string[]; summary: Summary }
 
 export const loadCases = (): Case[] => JSON.parse(Deno.readTextFileSync(new URL(CASES_PATH, ROOT))).cases;
@@ -44,7 +50,7 @@ const BLANK = {
   confidence: 0.85, unknowns: [], known_companies: [], signal_recency_days: 30, required_signal_terms: [], no_broadening_requested: false,
   geography_is_hard: true, prohibitions: [], output_intent: "companies", strategies: ["hiring"],
 };
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim().replace(/s$/, "");
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim().replace(/ies$/, "y").replace(/s$/, "");
 /**
  * A role by MEANING: a registered title by its id (exact, Stage 2 policy); a broad word
  * ("salespeople", "sales people", "sellers", "sales roles") by its family; anything else
@@ -59,23 +65,31 @@ const role = (t: string) => {
 
 type Crit = { kind: string; dimension: string; value: unknown; any_of?: string[]; geography_scope?: string; time_window?: { days?: number } };
 
-export function compilePhrasing(p: Phrasing) {
+export function compilePhrasing(p: Phrasing, mode: CorpusMode = "v1") {
   const { extra_hard, geo_hard, ...rest } = p.proposal as Record<string, unknown> & { extra_hard?: unknown[]; geo_hard?: string[] };
   const geo = geo_hard ?? ["United States"];
-  const proposal = { ...BLANK, ...rest, hard_constraints: [{ field: "geography", operator: "in", value: geo, reason: "stated" }, ...(extra_hard ?? [])] };
-  return compileLeadMission({ originalUserQuery: p.query, proposal: proposal as never, requestedCount: 5 }).final_mission as unknown as Record<string, unknown>;
+  const proposal = {
+    ...BLANK, ...rest,
+    hard_constraints: [...(geo.length ? [{ field: "geography", operator: "in", value: geo, reason: "stated" }] : []), ...(extra_hard ?? [])],
+    ...(mode === "v3" && p.understanding ? { understanding: p.understanding } : {}),
+  };
+  return compileLeadMission({ originalUserQuery: p.query, proposal: proposal as never, requestedCount: 5, contract: mode === "v3" ? "v3" : "v1" })
+    .final_mission as unknown as Record<string, unknown>;
 }
 
 export function summarise(m: Record<string, unknown>): Summary {
   const cs = ((m.criteria ?? []) as Crit[]).filter((c) => c.kind === "hard");
   const hiring = cs.find((c) => c.dimension === "hiring");
   const q = ((hiring?.value as { qualifier?: Record<string, unknown> } | undefined)?.qualifier ?? {}) as
-    { role_terms?: string[]; excluded_role_terms?: string[]; role_match?: string };
+    { role_terms?: string[]; role_families?: string[]; excluded_role_terms?: string[]; role_match?: string };
+  // Roles by EXECUTION identity: the terms when there are any, otherwise the families the
+  // requirement is matched by (a broad word the model filed as a family, S4).
+  const roleIds = (q.role_terms ?? []).length ? (q.role_terms ?? []).map(role) : (q.role_families ?? []).map((f) => `family:${f}`);
   const val = (v: unknown) => typeof v === "string" ? v : Array.isArray(v) ? v.join("|") : JSON.stringify(v);
   const specHard = specFromMission(m as never, { defaultCount: 5 }).requirements.hard.map((h) => h.key);
   return {
     geo: cs.filter((c) => c.dimension === "geography").map((c) => `${val(c.value).toLowerCase()}@${c.geography_scope ?? "-"}`).sort(),
-    roles: [...new Set((q.role_terms ?? []).map(role))].sort(),
+    roles: [...new Set(roleIds)].sort(),
     roleMatch: q.role_match ?? "any",
     excluded: [...new Set((q.excluded_role_terms ?? []).map(role))].sort(),
     hard: cs.filter((c) => !["geography", "hiring"].includes(c.dimension))
@@ -83,6 +97,7 @@ export function summarise(m: Record<string, unknown>): Summary {
     anyOf: [...new Set(cs.filter((c) => (c.any_of?.length ?? 0) > 1).map((c) => JSON.stringify([...c.any_of!].sort())))].map((s) => JSON.parse(s)).sort(),
     unmappable: specHard.includes("unmappable"),
     hiringWindowDays: hiring?.time_window?.days ?? null,
+    hiringHard: !!hiring,
   };
 }
 
@@ -100,16 +115,18 @@ export function compare(e: Expect, s: Summary): string[] {
   eq("anyOf", e.anyOf.map((g) => [...g].sort()).sort(), s.anyOf);
   if (s.unmappable) out.push("unmappable: an extra hard requirement no evidence can answer reaches execution");
   if (e.hiringWindowDays !== undefined) eq("hiringWindowDays", e.hiringWindowDays, s.hiringWindowDays);
+  if (e.hiringHard !== undefined) eq("hiringHard", e.hiringHard, s.hiringHard);
   return out;
 }
 
-export function runCases(cases = loadCases()): PhrasingResult[] {
+export function runCases(cases = loadCases(), mode: CorpusMode = "v1"): PhrasingResult[] {
   const out: PhrasingResult[] = [];
   for (const c of cases) {
     for (const p of c.phrasings) {
-      const s = summarise(compilePhrasing(p));
+      const s = summarise(compilePhrasing(p, mode));
       const mismatches = compare(c.expect, s);
-      out.push({ case: c.id, label: p.label, ok: mismatches.length === 0, defect: p.defect ?? null, mismatches, summary: s });
+      const defect = mode === "v3" ? p.defect_v3 ?? null : p.defect ?? null;
+      out.push({ case: c.id, label: p.label, ok: mismatches.length === 0, defect, mismatches, summary: s });
     }
   }
   return out;
@@ -129,7 +146,9 @@ export function unstableCases(results: PhrasingResult[]): string[] {
 }
 
 if (import.meta.main) {
-  const r = runCases();
+  const mode: CorpusMode = Deno.args.includes("--v3") ? "v3" : "v1";
+  const r = runCases(loadCases(), mode);
+  console.log(`mode ${mode}`);
   for (const x of r) console.log(`${x.ok ? "ok  " : "FAIL"} ${x.case} ${x.label}${x.defect ? ` [${x.defect}]` : ""}${x.ok ? "" : `\n      ${x.mismatches.join("\n      ")}`}`);
   console.log(JSON.stringify({ phrasings: r.length, correct: r.filter((x) => x.ok).length, wrongLabelled: r.filter((x) => !x.ok && x.defect).length,
     wrongUnlabelled: r.filter((x) => !x.ok && !x.defect).map((x) => `${x.case}:${x.label}`), fixedButLabelled: r.filter((x) => x.ok && x.defect).map((x) => `${x.case}:${x.label}`),

@@ -79,6 +79,8 @@ export async function consistency(): Promise<Record<string, Category[]>> {
   const out: Record<string, Category[]> = {};
   for (const [k, m] of await persistedMissions()) out[k] = check(m);
   for (const c of loadCases()) for (const p of c.phrasings) out[`corpus:${c.id}:${p.label}`] = check(compilePhrasing(p));
+  // S4: the same requests compiled under contract v3 (the model's validated understanding).
+  for (const c of loadCases()) for (const p of c.phrasings) out[`corpus-v3:${c.id}:${p.label}`] = check(compilePhrasing(p, "v3"));
   return Object.fromEntries(Object.entries(out).filter(([, v]) => v.length).sort(([a], [b]) => a.localeCompare(b)));
 }
 
@@ -92,7 +94,7 @@ export function counts(r: Record<string, Category[]>, total: number) {
 
 if (import.meta.main) {
   const r = await consistency();
-  const total = (await persistedMissions()).length + loadCases().reduce((n, c) => n + c.phrasings.length, 0);
+  const total = (await persistedMissions()).length + 2 * loadCases().reduce((n, c) => n + c.phrasings.length, 0);
   const s = counts(r, total);
   if (Deno.args.includes("--write")) {
     await Deno.writeTextFile(new URL(CONSISTENCY_BASELINE_PATH, ROOT), JSON.stringify({ summary: s, disagreements: r }, null, 1) + "\n");

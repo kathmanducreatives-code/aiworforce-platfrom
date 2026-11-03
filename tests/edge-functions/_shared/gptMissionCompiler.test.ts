@@ -16,7 +16,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   GPT_MISSION_SCHEMA,
-  GPT_MISSION_SCHEMA_V2,
+  GPT_MISSION_SCHEMA_V2, GPT_MISSION_SCHEMA_V3,
   MISSION_PROPOSAL_FIELDS,
 } from "../../../supabase/functions/_shared/gptMissionSchema.ts";
 import {
@@ -64,7 +64,12 @@ Deno.test("1. every field the parser reads is present in the GPT schema", () => 
     (GPT_MISSION_SCHEMA_V2.schema as { properties: Record<string, unknown> }).properties,
   ).filter((f) => !MISSION_PROPOSAL_FIELDS.includes(f)));
   assertEquals([...v2Only], ["signal_windows"], "v2 adds exactly one field");
-  const missing = parserFields().filter((f) => !MISSION_PROPOSAL_FIELDS.includes(f) && !v2Only.has(f));
+  // Contract v3 (S4) adds exactly `understanding` on top of v2 — the same guard, per contract.
+  const v3Only = new Set(Object.keys(
+    (GPT_MISSION_SCHEMA_V3.schema as { properties: Record<string, unknown> }).properties,
+  ).filter((f) => !MISSION_PROPOSAL_FIELDS.includes(f) && !v2Only.has(f)));
+  assertEquals([...v3Only], ["understanding"], "v3 adds exactly one field");
+  const missing = parserFields().filter((f) => !MISSION_PROPOSAL_FIELDS.includes(f) && !v2Only.has(f) && !v3Only.has(f));
   assertEquals(
     missing, [],
     "these fields are read by parseMissionProposal but absent from " +

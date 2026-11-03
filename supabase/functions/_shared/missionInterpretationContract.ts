@@ -46,7 +46,9 @@ import { SIGNAL_EVENTS } from "./missionSignalDescriptor.ts";
 import { calendarWindow } from "./missionCriteria.ts";
 
 export const MISSION_CONTRACT_ENV = "AGENTORY_MISSION_CONTRACT";
-export type MissionContractVersion = "v1" | "v2";
+export type MissionContractVersion = "v1" | "v2" | "v3";
+/** v3 (S4: the model's `understanding`) includes everything v2 does. */
+export const atLeastV2 = (c: MissionContractVersion | null | undefined) => c === "v2" || c === "v3";
 /** The compiler's existing ceiling on a signal window (`MAX_SIGNAL_RECENCY_DAYS`). */
 export const MAX_CONTRACT_WINDOW_DAYS = 730;
 
@@ -56,7 +58,8 @@ export function activeMissionContract(
     catch { return undefined; }
   },
 ): MissionContractVersion {
-  return String(read(MISSION_CONTRACT_ENV) ?? "").trim().toLowerCase() === "v2" ? "v2" : "v1";
+  const v = String(read(MISSION_CONTRACT_ENV) ?? "").trim().toLowerCase();
+  return v === "v3" ? "v3" : v === "v2" ? "v2" : "v1";
 }
 
 /** One timeframe the model attributed to one signal. */
