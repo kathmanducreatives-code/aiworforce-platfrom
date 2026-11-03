@@ -20,8 +20,9 @@
 //
 // Pure. No network, no model, no database.
 
+import { criteriaOf } from "./missionCriteriaReader.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
-import { deriveMissionCriteria, type MissionCriterion } from "./missionCriteria.ts";
+import type { MissionCriterion } from "./missionCriteria.ts";
 
 export const CRITERIA_EXECUTION_POLICY_VERSION = "criteria-execution-policy-v1" as const;
 
@@ -67,7 +68,7 @@ function dimensionOf(c: MissionCriterion): ExecutionDimension | null {
 }
 
 export function criteriaExecutionPolicy(mission: LeadMissionV1): CriteriaExecutionPolicy {
-  const criteria = mission.criteria ?? deriveMissionCriteria(mission);
+  const criteria = criteriaOf(mission);
   const dims = {} as Record<ExecutionDimension, DimensionAuthority>;
   for (const d of ["geography", "industry", "company_size", "company_stage", "company_kind", "exclusion"] as const) {
     dims[d] = { dimension: d, hard_values: [], target_values: [], may_filter: false, may_reject: false, hard_sources: [] };
@@ -134,7 +135,7 @@ export function hardConstraintsBackedByCriteria(
   mission: LeadMissionV1, hard: Record<string, unknown>,
 ): Record<string, unknown> {
   const policy = criteriaExecutionPolicy(mission);
-  const criteria = mission.criteria ?? deriveMissionCriteria(mission);
+  const criteria = criteriaOf(mission);
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(hard ?? {})) {
     if (key === "company_profile.locations" || key === "geography" || key === "location") {

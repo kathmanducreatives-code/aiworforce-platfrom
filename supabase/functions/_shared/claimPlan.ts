@@ -17,7 +17,8 @@
 //
 // Pure.
 
-import { deriveMissionCriteria, type MissionCriterion } from "./missionCriteria.ts";
+import { criteriaOf } from "./missionCriteriaReader.ts";
+import type { MissionCriterion } from "./missionCriteria.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 import { CLAIM_REGISTRY, claimFor, type ClaimDefinition } from "./evidenceGapRouter.ts";
 import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
@@ -137,7 +138,7 @@ export function verifiedAfterEligibility(
   mission: LeadMissionV1, entry: string | null, readiness: ReadinessPolicy = PRODUCTION_READINESS,
   registry: readonly ClaimDefinition[] = CLAIM_REGISTRY,
 ): VerifiedAfterEligibility[] {
-  const plan = buildClaimPlan(deriveMissionCriteria(mission, readiness), entry, readiness, registry);
+  const plan = buildClaimPlan(criteriaOf(mission, { readiness: readiness, legacy: "rederive" }), entry, readiness, registry);
   return plan.hard
     .filter((h) => h.status === "verifiable" && h.claim)
     .map((h) => ({

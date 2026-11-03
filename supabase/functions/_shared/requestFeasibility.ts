@@ -43,6 +43,7 @@
 //
 // Pure. No network, no provider, no model call, no I/O.
 
+import { criteriaOf } from "./missionCriteriaReader.ts";
 import {
   CAPABILITY_REGISTRY,
   CLAIM_TO_EVENT,
@@ -59,7 +60,6 @@ import {
 } from "./capabilityExecutability.ts";
 import { capabilityRunnable, PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import { verifiedAfterEligibility, type VerifiedAfterEligibility } from "./claimPlan.ts";
-import { deriveMissionCriteria } from "./missionCriteria.ts";
 import { sizeRangeProvable } from "./companySize.ts";
 
 export const FEASIBILITY_VERSION = "request-feasibility-v1" as const;
@@ -546,7 +546,7 @@ export function assessRequestFeasibility(
   // told so at approval, by name. Disclosed, never blocking (as the stage above):
   // the company's own words can still answer it. A stated size no band proves
   // is asked about below instead, and a funding stage is already graded above.
-  for (const c of deriveMissionCriteria(mission, policy)) {
+  for (const c of criteriaOf(mission, { readiness: policy, legacy: "rederive" })) {
     if (c.kind !== "hard" || c.status === "ok" || c.dimension === "company_size") continue;
     if (c.dimension === "company_stage" && stageValue && c.value !== "startup") continue;
     (report.constraints ??= []).push({
@@ -580,7 +580,7 @@ export function assessRequestFeasibility(
   // RC03: A STATED SIZE NO BAND CAN PROVE IS ASKED ABOUT, NOT RUN. The criterion
   // is already disclosed as unprovable (`deriveMissionCriteria`); eligibility
   // skips a non-ok criterion, so running anyway would quietly drop the size.
-  for (const c of deriveMissionCriteria(mission, policy)) {
+  for (const c of criteriaOf(mission, { readiness: policy, legacy: "rederive" })) {
     if (c.dimension !== "company_size" || c.kind !== "hard" || c.status !== "unprovable_today" || c.source !== "user_explicit") continue;
     const v = c.value as { min?: number | null; max?: number | null } | null;
     if (v?.min != null && v.max != null && v.min > v.max) {

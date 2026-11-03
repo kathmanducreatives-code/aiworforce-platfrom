@@ -11,6 +11,7 @@
 // Nothing here re-implements a provider normalizer, an Actor input compiler, an
 // identity resolver or the Company Brain gate. Those are correct, tested, and
 // the source of the evidence discipline this engine depends on. The engine
+import { criteriaOf } from "./missionCriteriaReader.ts";
 import { sizeBandLabel } from "./companySize.ts";
 import { YC_MEMO23_MAX_SIZES } from "./hiringActorCatalog.ts";
 import { normalizeCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
@@ -262,7 +263,7 @@ import { bucketOf, candidateDecision, decisionCounts, decisionSummary, type Cand
 import { evaluateEligibility } from "./candidateEligibility.ts";
 import type { RequirementEvidence } from "./compoundSourcingPipeline.ts";
 import { canStillQualify, evidenceGapsFor } from "./evidenceGapRouter.ts";
-import { deriveMissionCriteria, type MissionCriterion } from "./missionCriteria.ts";
+import type { MissionCriterion } from "./missionCriteria.ts";
 import { fundingRecordEvidenceItem, fundingRecordFromDiscoveredRound } from "./fundingCorroboration.ts";
 import {
   decideFundingStage, fundingStageEvidenceItem, normalizeRoundType, requiredStagesOf, stageRank,
@@ -2914,7 +2915,7 @@ export async function runCapabilityPlan(
    * Several acceptable rungs travel joined by "|" ("series_a|series_b", RC02) and are decided as one set.
    */
   const requiredRoundStage: string | null = (() => {
-    const c = deriveMissionCriteria(opts.mission, guardPolicy).find((x) => x.dimension === "company_stage" &&
+    const c = criteriaOf(opts.mission, { readiness: guardPolicy, legacy: "rederive" }).find((x) => x.dimension === "company_stage" &&
       typeof x.value === "string" && requiredStagesOf(x.value).length > 0 &&
       requiredStagesOf(x.value).every((s) => stageRank(normalizeRoundType(s)) !== null));
     return c ? String(c.value) : null;
@@ -11839,6 +11840,21 @@ function normaliseGroundedItem(e: EvidenceItem): EvidenceItem {
   return e.status === "proven" && e.confidence === "low" ? { ...e, status: "plausible" } : e;
 }
 
+/**
+ * The authority-layer source id of a normalized posting's `source`. Normalizers record
+ * the actor id ("harvestapi/linkedin-job-search"); the authority rules are keyed by the
+ * route's actor key ("apify_linkedin_job_search"). An unknown source maps to itself and
+ * so meets no proving rule.
+ */
+const JOB_SOURCE_AUTHORITY: Readonly<Record<string, string>> = Object.freeze({
+  "harvestapi/linkedin-job-search": "apify_linkedin_job_search",
+  "memo23/y-combinator-scraper": "apify_yc_companies_memo23",
+});
+export function jobAuthoritySource(source: string | null | undefined): string {
+  const s = String(source ?? "");
+  return JOB_SOURCE_AUTHORITY[s] ?? s;
+}
+
 /** Every evidence item for one company: route observations, the registry, derived verdict facts. */
 export function companyEvidenceItems(c: EngineCompany, missionId: string | null = null) {
   const items = [
@@ -11897,7 +11913,32 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
     });
   }
   if (c.hiring_assessment?.verdict === "hiring_verified") {
-    derived("hiring", true, "proven", c.hiring_jobs.map((j) => j.job_url ?? "").filter(Boolean).slice(0, 5), "high");
+    // ── R7 (mission reliability S2): A VERDICT IS NOT AUTHORITY ───────────────
+    //
+    // This item used to be `proven` straight from the verdict, the one evidence
+    // producer that bypassed `authorityForEvidence`. Now the verdict's postings are
+    // put through the same rule every other producer uses (`job_evidence`: a dated
+    // posting from a job source proves `open_role`), keyed by the posting's own
+    // source. A verdict resting only on postings no rule lets prove anything is
+    // `plausible`: it ranks, it never qualifies. Freshness stays the verdict's own
+    // window check (the clock is the retrieval time, so a replay is not time-bound).
+    const decisions = c.hiring_jobs.map((j) => {
+      const observed = j.retrieved_at ?? at;
+      return authorityForEvidence({
+        claim: "open_role", source: jobAuthoritySource(j.source), field: "job_posting",
+        observed_at: observed, now: new Date(observed),
+      });
+    });
+    const best = decisions.find((d) => d.authority === "proven") ?? decisions[0] ?? null;
+    const status = best?.authority === "proven" ? "proven" : "plausible";
+    items.push({
+      evidence_id: `drv_${c.key}_hiring`, company_key: c.key, dimension: "hiring", value: true, status,
+      ...(best ? { authority: authorityRecord(best) } : {}),
+      source: { provider: "engine", actor: "deterministic_verdict", provider_call_id: null,
+        url: c.hiring_jobs.find((j) => j.job_url)?.job_url ?? null, excerpt: null },
+      method: "deterministic_derivation", observed_at: at, valid_until: null, confidence: status === "proven" ? "high" : "medium",
+      derived_from: c.hiring_jobs.map((j) => j.job_url ?? "").filter(Boolean).slice(0, 5), mission_id: missionId, origin: "lead_mission",
+    });
     // ── THE POSTINGS BEHIND THE VERDICT, WITH THEIR TITLES (ATLAS review D1) ──
     //
     // Qualification re-checks a NAMED title ("Account Executives") against the
@@ -11910,7 +11951,10 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
       if (!j.title) continue;
       items.push({
         evidence_id: `drv_${c.key}_job_${i}`, company_key: c.key, dimension: "job",
-        value: { title: j.title, posted_date: j.posted_date, location: j.location }, status: "proven",
+        value: { title: j.title, posted_date: j.posted_date, location: j.location },
+        // R7: each posting carries its OWN authority, not the verdict's.
+        status: decisions[i]?.authority === "proven" ? "proven" : "plausible",
+        ...(decisions[i] ? { authority: authorityRecord(decisions[i]) } : {}),
         source: { provider: "engine", actor: "deterministic_verdict", provider_call_id: null, url: j.job_url ?? null, excerpt: j.title },
         method: "deterministic_derivation", observed_at: at, valid_until: null, confidence: "high",
         derived_from: [j.job_url ?? j.job_id ?? ""].filter(Boolean), mission_id: missionId, origin: "lead_mission",
@@ -12037,7 +12081,7 @@ export function canonicalDecisions(
     readiness?: ReadinessPolicy;
   },
 ): Map<string, CandidateDecision> {
-  const criteria = deriveMissionCriteria(opts.mission, opts.readiness ?? PRODUCTION_READINESS);
+  const criteria = criteriaOf(opts.mission, { readiness: opts.readiness ?? PRODUCTION_READINESS, legacy: "rederive" });
   const anchor = anchorForCapability(String(opts.plan.entry_capability ?? "")) ?? null;
   const out = new Map<string, CandidateDecision>();
   for (const candidate of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
@@ -12055,7 +12099,7 @@ export function canonicalDecisions(
 export function canonicalHardEvidence(
   companies: readonly EngineCompany[], opts: Parameters<typeof canonicalDecisions>[1],
 ): Map<string, RequirementEvidence[]> {
-  const criteria = deriveMissionCriteria(opts.mission, opts.readiness ?? PRODUCTION_READINESS);
+  const criteria = criteriaOf(opts.mission, { readiness: opts.readiness ?? PRODUCTION_READINESS, legacy: "rederive" });
   const out = new Map<string, RequirementEvidence[]>();
   for (const c of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
     const e = evaluateEligibility(criteria, c.graph, c.criterion_verdicts, c.holds);
@@ -12112,7 +12156,7 @@ export function canonicallyWorkableKeys(
   companies: readonly EngineCompany[], opts: Parameters<typeof canonicalDecisions>[1],
 ): Set<string> {
   const readiness = opts.readiness ?? PRODUCTION_READINESS;
-  const criteria = deriveMissionCriteria(opts.mission, readiness);
+  const criteria = criteriaOf(opts.mission, { readiness: readiness, legacy: "rederive" });
   const out = new Set<string>();
   for (const c of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
     const eligibility = evaluateEligibility(criteria, c.graph, c.criterion_verdicts, c.holds);
@@ -12155,7 +12199,7 @@ export function canonicalDecisionSummary(
     readiness?: ReadinessPolicy;
   },
 ) {
-  const criteria = deriveMissionCriteria(opts.mission, opts.readiness ?? PRODUCTION_READINESS);
+  const criteria = criteriaOf(opts.mission, { readiness: opts.readiness ?? PRODUCTION_READINESS, legacy: "rederive" });
   const candidates = missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null });
   return decisionSummary(decisionCounts({
     criteria, candidates, anchor: anchorForCapability(String(opts.plan.entry_capability ?? "")) ?? null,

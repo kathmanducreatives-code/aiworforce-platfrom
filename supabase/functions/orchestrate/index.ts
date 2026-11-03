@@ -3,6 +3,7 @@
 // content, screening, brief) with tool + approval metadata, then deterministic
 // expansion to guarantee depth. Tool availability is annotated, never faked.
 
+import { criteriaOf } from "../_shared/missionCriteriaReader.ts";
 import { type GuardDb, legacyExecutionGuard, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
 import { bindEffectPrincipal, type EffectPrincipalDb, installEffectFence, withEffectScope } from "../_shared/effectFence.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
@@ -33,7 +34,6 @@ import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedg
 import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
 import { executabilityGateFor } from "../_shared/capabilityExecutability.ts";
 import { readinessPolicyFor } from "../_shared/routeReadiness.ts";
-import { deriveMissionCriteria } from "../_shared/missionCriteria.ts";
 import {
   defaultScreenRunBudget, kickoffRunBudget, screenDownstreamVerifiersUsd, type DefaultScreenBudget,
 } from "../_shared/fundingScreenDefaults.ts";
@@ -1763,7 +1763,7 @@ Return ONLY valid JSON, no prose, no markdown:
         const read = (k: string) => Deno.env.get(k);
         const readiness = readinessPolicyFor(workspace_id, read);
         const executability = executabilityGateFor(workspace_id, read);
-        const criteria = deriveMissionCriteria(missionForRouting, readiness);
+        const criteria = criteriaOf(missionForRouting, { readiness: readiness, legacy: "rederive" });
         return defaultScreenRunBudget({
           leadV2: executability === "enforce",
           entryCapability: buildCapabilityGraph(missionForRouting, { executability, readiness }).entry_capability,
