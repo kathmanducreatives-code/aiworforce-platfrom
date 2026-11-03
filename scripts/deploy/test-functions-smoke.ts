@@ -147,6 +147,8 @@ interface PlanBody {
   status?: string;
   plan?: { status?: string; strategy?: string | null; planHash?: string; estimate?: { leadoceanRecords?: number; apifyUsd?: number };
     steps?: { capability: string; provider: string; maxItems: number }[]; selectedBy?: string | null; blockedReason?: string | null };
+  /** The signed approval token (Stage 3). A credential for one walk: checked, NEVER printed. */
+  approval_token?: string;
   interpretation?: { hard?: { key: string; label?: string }[]; preferences?: { key: string; values: unknown }[];
     signals?: { kind: string; hard?: boolean; windowDays?: number | null; roleTerms?: string[]; roleFamilies?: string[] }[]; companyBrain?: { status?: string } | null };
 }
@@ -160,10 +162,31 @@ export function titlesFromInterpretation(i: PlanBody["interpretation"]): string[
 
 export const ACCEPTED_STRATEGIES = ["apify_only", "apify_plus_leadocean"];
 
+/** The body for an error message, without the approval token (the repository is public). */
+export function shown(body: unknown): string {
+  const b = body && typeof body === "object" ? { ...(body as Record<string, unknown>) } : body;
+  if (b && typeof b === "object" && "approval_token" in b) (b as Record<string, unknown>).approval_token = "[redacted]";
+  return JSON.stringify(b).slice(0, 200);
+}
+
+/** P7: the plan carries a signed, walk-bound approval token that expires — shape and claims only, never the value. */
+export function tokenCheck(body: PlanBody, workspaceId: string): Check {
+  const t = body.approval_token;
+  if (body.plan?.status !== "ready") return pass("P7", "Signed approval token", "plan not ready: no token is issued (correct)");
+  const parts = typeof t === "string" ? t.split(".") : [];
+  let claims: Record<string, unknown> | null = null;
+  try { claims = parts.length === 2 ? JSON.parse(atob(parts[0].replace(/-/g, "+").replace(/_/g, "/") + "===".slice((parts[0].length + 3) % 4))) : null; } catch { claims = null; }
+  const ttlH = claims ? (Number(claims.expiresAt) - Number(claims.issuedAt)) / 3_600_000 : NaN;
+  return claims && claims.v === "plan-token-v1" && claims.workspaceId === workspaceId && claims.planHash === body.plan?.planHash && typeof claims.walkId === "string" && ttlH > 0 && ttlH <= 24
+    ? pass("P7", "Signed approval token", `issued (value not shown): plan-token-v1, this workspace and plan hash, one walk, expires in ${ttlH}h`)
+    : fail("P7", "Signed approval token", t ? "token present but its claims do not bind this workspace, plan hash and walk with an expiry" : "no approval_token on a ready plan",
+      "Stage 3 (signed plan approval) is not deployed, or the signer is not configured");
+}
+
 export function planChecks(httpStatus: number, body: PlanBody): Check[] {
   const p = body.plan, i = body.interpretation;
   if (httpStatus !== 200 || !p || !i) {
-    return [fail("P0", "strategy_plan answered", `HTTP ${httpStatus}: ${JSON.stringify(body).slice(0, 200)}`,
+    return [fail("P0", "strategy_plan answered", `HTTP ${httpStatus}: ${shown(body)}`,
       httpStatus === 401 ? "the smoke account could not authenticate" : httpStatus === 403 ? "the smoke account is not a member of the TEST workspace, or the allowlist lacks it"
       : httpStatus === 404 ? "flags not in effect on TEST" : "interpretation failed (OpenAI key/quota) or the function errored — read the function log")];
   }
@@ -425,7 +448,7 @@ async function cmdVerify(beforePath: string, outDir: string) {
       const plan = await call("lead-pipeline", {
         action: PLAN_ACTION, workspace_id: TEST_WORKSPACE, walk_id: `smoke-${sha.slice(0, 12)}`, query: SMOKE_QUERY, requested_count: 5, ...SMOKE_BUDGET,
       }, token);
-      checks.push(...planChecks(plan.status, plan.body as PlanBody));
+      checks.push(...planChecks(plan.status, plan.body as PlanBody), ...(plan.status === 200 ? [tokenCheck(plan.body as PlanBody, TEST_WORKSPACE)] : []));
       await Deno.writeTextFile(`${outDir}/plan.json`, JSON.stringify({ http: plan.status, plan: plan.body.plan ?? null, interpretation: plan.body.interpretation ?? null, error: plan.body.error ?? null }, null, 2));
     }
 
@@ -478,7 +501,7 @@ export function planRequest(i: PlanRequestInput): Record<string, unknown> {
 /** Pure: judge a plan-only answer against the request. */
 export function planOnlyChecks(httpStatus: number, body: PlanBody, i: PlanRequestInput): Check[] {
   const p = body.plan, it = body.interpretation;
-  if (httpStatus !== 200 || !p || !it) return [fail("Q0", "strategy_plan answered", `HTTP ${httpStatus}: ${JSON.stringify(body).slice(0, 200)}`, "see the function log")];
+  if (httpStatus !== 200 || !p || !it) return [fail("Q0", "strategy_plan answered", `HTTP ${httpStatus}: ${shown(body)}`, "see the function log")];
   const hard = (it.hard ?? []).map((h) => h.key).sort();
   const want = [...i.expectHard].sort();
   const est = p.estimate ?? {};

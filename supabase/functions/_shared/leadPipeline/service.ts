@@ -17,6 +17,7 @@
 // (PROVIDER_LEADOCEAN_ENABLED + commercial terms) — the same connection, key
 // vault and usage ledger. Company Brain is neither read nor written.
 
+import { classifyConstraints, REQUIREMENT_VOCABULARY_VERSION } from "../requirementVocabulary.ts";
 import type { PlanReplay, PlanSigner, PlanTokenPayload } from "./planToken.ts";
 import { activeMissionContract } from "../missionInterpretationContract.ts";
 import type { ActorInvoker } from "../discoveryProviders/adapters/apify.ts";
@@ -37,7 +38,7 @@ import { adviseStrategy, isStrategy, planStrategy, specFromMission, type Discove
 
 const on = (v: string | undefined) => !!v && ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
 
-export interface PipelineFlags { enabled: boolean; workspaces: Set<string>; signals: boolean; phones: boolean }
+export interface PipelineFlags { enabled: boolean; workspaces: Set<string>; signals: boolean; phones: boolean; strictRequirements?: boolean }
 export function readPipelineFlags(env: Env): PipelineFlags {
   return {
     enabled: on(env("LEAD_PIPELINE_ENABLED")),
@@ -45,6 +46,9 @@ export function readPipelineFlags(env: Env): PipelineFlags {
     // Unfinished-in-production steps have their own switches, off by default.
     signals: on(env("LEAD_PIPELINE_SIGNALS_ENABLED")),
     phones: on(env("LEAD_PIPELINE_PHONES_ENABLED")),
+    // Option E Stage 6: refuse a model-invented requirement outside the closed vocabulary.
+    // Off by default; until it is on, the plan only REPORTS what it would refuse.
+    strictRequirements: on(env("LEAD_STRICT_REQUIREMENTS_ENABLED")),
   };
 }
 
@@ -265,6 +269,19 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     ? await d.recompile!(token.query, token.requestedCount, token.replay)
     : await d.interpret(req.query, req.workspaceId, req.requestedCount);
   if ("error" in interpreted) return { status: 422, body: { error: `the request could not be interpreted: ${interpreted.error}` } };
+  // CLOSED REQUIREMENT VOCABULARY (Option E Stage 6; requirementVocabulary.ts). It VALIDATES
+  // and never renames, so an accepted request means exactly what it meant before. A proposed
+  // hard constraint it cannot place, whose value is not in the user's own words, is the
+  // model's idea: with the flag on it is refused explicitly (422, nothing bought), never
+  // dropped and never quietly satisfied. With the flag off it is only reported.
+  // A run checks the proposal the plan SIGNED (the rebuilt interpretation carries no replay).
+  const proposed = ((token?.replay ?? interpreted.replay)?.proposal as { hard_constraints?: unknown } | undefined)?.hard_constraints;
+  const unsupported = classifyConstraints(proposed ?? [], token?.query ?? req.query)
+    .filter((c) => c.kind === "other" && !c.quoted).map((c) => c.originalField);
+  const contract = { version: REQUIREMENT_VOCABULARY_VERSION, enforced: !!d.flags.strictRequirements, unsupported };
+  if (unsupported.length && contract.enforced) {
+    return { status: 422, body: { error: "the request was read with a requirement ATLAS cannot place and you did not state; rephrase the request or remove it", contract } };
+  }
   const spec = specFromMission(interpreted.mission as never, { defaultCount: req.requestedCount ?? 25 });
 
   const rows = await d.store.list(req.workspaceId);
@@ -295,6 +312,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     ],
     signals: spec.signals.map((s) => ({ kind: s.kind, hard: s.hard, windowDays: s.windowDays, roleTerms: s.roleTerms, roleFamilies: s.roleFamilies })),
     companyBrain: "brain" in interpreted ? interpreted.brain ?? null : null,
+    contract,
   };
   if (req.action === "strategy_plan" || plan.status === "blocked") {
     // The approval token: what an owner/admin approves, and all a run may execute.
