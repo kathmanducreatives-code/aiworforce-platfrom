@@ -286,6 +286,82 @@
    "decision_maker_roles": []
   }
  },
+ "corpus:gpt_hiring_status_role_only": {
+  "source": "corpus",
+  "fingerprint": "1c544b1a9046fa946982cc6dbec39ba416ade8f3cb3102f0b382c7f6d91774c9",
+  "semantics": {
+   "v": "mission-semantics-v1",
+   "target_entity": "company",
+   "requested_output": "qualified_companies",
+   "requested_count": 5,
+   "criteria": [
+    {
+     "id": "business_model:b2b",
+     "kind": "target",
+     "dimension": "business_model",
+     "value": "B2B",
+     "status": "ok"
+    },
+    {
+     "id": "company_size:_min_20_max_500_",
+     "kind": "target",
+     "dimension": "company_size",
+     "value": {
+      "min": 20,
+      "max": 500
+     },
+     "status": "ok"
+    },
+    {
+     "id": "geography:united_states",
+     "kind": "hard",
+     "dimension": "geography",
+     "value": "United States",
+     "status": "ok",
+     "geography_scope": "headquarters"
+    },
+    {
+     "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_salespeop",
+     "kind": "hard",
+     "dimension": "hiring",
+     "value": {
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_terms": [
+        "salespeople"
+       ],
+       "role_families": [
+        "gtm_sales"
+       ]
+      }
+     },
+     "status": "ok",
+     "time_window": {
+      "days": 30,
+      "basis": "posted",
+      "source": "user_inferred",
+      "rule": "currently / actively hiring",
+      "enforced": false
+     }
+    }
+   ],
+   "signals": [
+    {
+     "type": "hiring",
+     "timeframe_days": 30,
+     "role_terms": [
+      "salespeople"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ],
+     "excluded_role_terms": []
+    }
+   ],
+   "decision_maker_roles": []
+  }
+ },
  "corpus:gpt_presence_for_us_companies": {
   "source": "corpus",
   "fingerprint": "1c544b1a9046fa946982cc6dbec39ba416ade8f3cb3102f0b382c7f6d91774c9",

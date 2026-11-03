@@ -17,6 +17,8 @@
 // (PROVIDER_LEADOCEAN_ENABLED + commercial terms) — the same connection, key
 // vault and usage ledger. Company Brain is neither read nor written.
 
+import { classifyConstraints, REQUIREMENT_VOCABULARY_VERSION } from "../requirementVocabulary.ts";
+import type { PlanReplay, PlanSigner, PlanTokenPayload } from "./planToken.ts";
 import { activeMissionContract } from "../missionInterpretationContract.ts";
 import type { ActorInvoker } from "../discoveryProviders/adapters/apify.ts";
 import type { AdapterDeps, DiscoveryAdapter } from "../discoveryProviders/adapter.ts";
@@ -36,7 +38,7 @@ import { adviseStrategy, isStrategy, planStrategy, specFromMission, type Discove
 
 const on = (v: string | undefined) => !!v && ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
 
-export interface PipelineFlags { enabled: boolean; workspaces: Set<string>; signals: boolean; phones: boolean }
+export interface PipelineFlags { enabled: boolean; workspaces: Set<string>; signals: boolean; phones: boolean; strictRequirements?: boolean }
 export function readPipelineFlags(env: Env): PipelineFlags {
   return {
     enabled: on(env("LEAD_PIPELINE_ENABLED")),
@@ -44,6 +46,9 @@ export function readPipelineFlags(env: Env): PipelineFlags {
     // Unfinished-in-production steps have their own switches, off by default.
     signals: on(env("LEAD_PIPELINE_SIGNALS_ENABLED")),
     phones: on(env("LEAD_PIPELINE_PHONES_ENABLED")),
+    // Option E Stage 6: refuse a model-invented requirement outside the closed vocabulary.
+    // Off by default; until it is on, the plan only REPORTS what it would refuse.
+    strictRequirements: on(env("LEAD_STRICT_REQUIREMENTS_ENABLED")),
   };
 }
 
@@ -178,7 +183,7 @@ export interface StrategyRequest {
   requestedCount: number | null;
   user: StrategyContext["user"];
   budget: StrategyContext["budget"];
-  approval: { planHash: string; leadoceanRecords: number; apifyUsd: number } | null;
+  approval: { planHash: string; leadoceanRecords: number; apifyUsd: number; token: string | null } | null;
 }
 
 const PROVIDER_NAMES: readonly ProviderId[] = ["leadocean", "apify", "apollo"];
@@ -200,7 +205,8 @@ export function parseStrategyRequest(b: Record<string, unknown>): StrategyReques
   if (a) {
     const lo = num(a.leadocean_records ?? 0, 500), usd = num(a.apify_usd ?? 0, 5);
     if (typeof a.plan_hash !== "string" || lo === null || usd === null || !Number.isInteger(lo)) return null;
-    approval = { planHash: a.plan_hash, leadoceanRecords: lo, apifyUsd: usd };
+    if (a.token !== undefined && typeof a.token !== "string") return null;
+    approval = { planHash: a.plan_hash, leadoceanRecords: lo, apifyUsd: usd, token: typeof a.token === "string" ? a.token : null };
   }
   return {
     action: b.action, workspaceId: b.workspace_id, walkId: b.walk_id, query: b.query.trim(), requestedCount: count,
@@ -209,14 +215,27 @@ export function parseStrategyRequest(b: Record<string, unknown>): StrategyReques
   };
 }
 
+export interface Interpreted {
+  mission: unknown;
+  brain?: { status: string; fields: string[]; applied: unknown[]; rejected: unknown[] };
+  /** What a strategy_run needs to rebuild this interpretation without the model. */
+  replay?: Omit<PlanReplay, "advice">;
+}
+
 export interface StrategyDeps extends PipelineDeps {
   /**
    * GPT interpretation: the mission compiler's final mission, or why there is none. Never a
    * regex fallback. `brain` reports how the workspace's Company Brain informed it
    * (brainContext.ts): the user's words outrank it; it fills open fields as targets only.
    */
-  interpret(query: string, workspaceId: string, requestedCount: number | null): Promise<
-    { mission: unknown; brain?: { status: string; fields: string[]; applied: unknown[]; rejected: unknown[] } } | { error: string }>;
+  interpret(query: string, workspaceId: string, requestedCount: number | null): Promise<Interpreted | { error: string }>;
+  /**
+   * The SAME interpretation, rebuilt from what the plan signed: the model's proposal and
+   * the Company Brain context it was compiled with. Deterministic; no model call.
+   */
+  recompile?(query: string, requestedCount: number | null, replay: PlanReplay): Promise<Interpreted | { error: string }>;
+  /** Signs and verifies approval tokens (planToken.ts). Absent: strategy_run is refused. */
+  signer?: PlanSigner | null;
   /** GPT strategy advice; null = the deterministic choice only. */
   advisor: GenerateJsonFn | null;
   /** The mission interpretation contract in force (default: AGENTORY_MISSION_CONTRACT, v1). */
@@ -232,8 +251,37 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   if (!role) return { status: 403, body: { error: "not a member of this workspace" } };
   if (req.action === "strategy_run" && !ADMIN.has(role)) return { status: 403, body: { error: "only a workspace owner or admin can approve a paid run" } };
 
-  const interpreted = await d.interpret(req.query, req.workspaceId, req.requestedCount);
+  // ── STRATEGY_RUN EXECUTES THE APPROVED PLAN, NOT A NEW READING (Stage 3) ──
+  // The run never calls the model. It verifies the signed approval token from
+  // strategy_plan (MAC, expiry, workspace, hash), rebuilds the interpretation from the
+  // proposal the token carries, and re-plans with the signed advisor pick; the result
+  // must have the approved hash (which binds meaning, ceilings and workspace).
+  let token: PlanTokenPayload | null = null;
+  if (req.action === "strategy_run") {
+    if (!req.approval) return { status: 400, body: { error: "a run needs an approval" } };
+    if (!d.signer || !d.recompile) return { status: 503, body: { error: "signed plan approvals are not available; nothing ran" } };
+    if (!req.approval.token) return { status: 400, body: { error: "a run needs the approval_token returned by strategy_plan; plan again and approve that plan" } };
+    const v = await d.signer.verify(req.approval.token, { workspaceId: req.workspaceId, planHash: req.approval.planHash, walkId: req.walkId }, now());
+    if (!v.ok) return { status: 409, body: { error: v.reason } };
+    token = v.payload;
+  }
+  const interpreted = token
+    ? await d.recompile!(token.query, token.requestedCount, token.replay)
+    : await d.interpret(req.query, req.workspaceId, req.requestedCount);
   if ("error" in interpreted) return { status: 422, body: { error: `the request could not be interpreted: ${interpreted.error}` } };
+  // CLOSED REQUIREMENT VOCABULARY (Option E Stage 6; requirementVocabulary.ts). It VALIDATES
+  // and never renames, so an accepted request means exactly what it meant before. A proposed
+  // hard constraint it cannot place, whose value is not in the user's own words, is the
+  // model's idea: with the flag on it is refused explicitly (422, nothing bought), never
+  // dropped and never quietly satisfied. With the flag off it is only reported.
+  // A run checks the proposal the plan SIGNED (the rebuilt interpretation carries no replay).
+  const proposed = ((token?.replay ?? interpreted.replay)?.proposal as { hard_constraints?: unknown } | undefined)?.hard_constraints;
+  const unsupported = classifyConstraints(proposed ?? [], token?.query ?? req.query)
+    .filter((c) => c.kind === "other" && !c.quoted).map((c) => c.originalField);
+  const contract = { version: REQUIREMENT_VOCABULARY_VERSION, enforced: !!d.flags.strictRequirements, unsupported };
+  if (unsupported.length && contract.enforced) {
+    return { status: 422, body: { error: "the request was read with a requirement ATLAS cannot place and you did not state; rephrase the request or remove it", contract } };
+  }
   const spec = specFromMission(interpreted.mission as never, { defaultCount: req.requestedCount ?? 25 });
 
   const rows = await d.store.list(req.workspaceId);
@@ -251,7 +299,10 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     binding: { workspaceId: req.workspaceId, contractVersion: d.contractVersion ?? activeMissionContract() },
   };
   const base = planStrategy(spec, ctx);
-  const plan: StrategyPlan = req.user?.strategy || !d.advisor ? base : planStrategy(spec, ctx, await adviseStrategy(spec, base.candidates, d.advisor, req.workspaceId));
+  // A run reuses the advisor pick the plan signed; a plan asks the advisor (unless the user chose).
+  const advice: PlanReplay["advice"] = token ? token.replay.advice
+    : req.user?.strategy || !d.advisor ? null : await adviseStrategy(spec, base.candidates, d.advisor, req.workspaceId);
+  const plan: StrategyPlan = advice ? planStrategy(spec, ctx, advice as never) : base;
   // What the plan was built from, so a reviewer can see hard vs soft and the Brain's part.
   const interpretation = {
     hard: spec.requirements.hard.map((h) => ({ key: h.key, label: h.label })),
@@ -261,9 +312,14 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     ],
     signals: spec.signals.map((s) => ({ kind: s.kind, hard: s.hard, windowDays: s.windowDays, roleTerms: s.roleTerms, roleFamilies: s.roleFamilies })),
     companyBrain: "brain" in interpreted ? interpreted.brain ?? null : null,
+    contract,
   };
   if (req.action === "strategy_plan" || plan.status === "blocked") {
-    return { status: plan.status === "blocked" ? 409 : 200, body: { status: plan.status, plan, worstCase: plan.estimate, interpretation } };
+    // The approval token: what an owner/admin approves, and all a run may execute.
+    const approval_token = req.action === "strategy_plan" && plan.status === "ready" && d.signer && interpreted.replay
+      ? await d.signer.sign({ workspaceId: req.workspaceId, walkId: req.walkId, plannedBy: d.userId, planHash: plan.planHash, query: req.query, requestedCount: req.requestedCount, replay: { ...interpreted.replay, advice } }, now())
+      : null;
+    return { status: plan.status === "blocked" ? 409 : 200, body: { status: plan.status, plan, worstCase: plan.estimate, interpretation, ...(approval_token ? { approval_token } : {}) } };
   }
   if (!req.approval) return { status: 400, body: { error: "a run needs an approval", plan } };
   if (req.approval.planHash !== plan.planHash) return { status: 409, body: { error: "plan changed since it was approved (re-interpretation or new limits); review the new plan", plan } };
@@ -276,7 +332,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   }];
   const run: StrategyRun = await runDiscoveryStrategy({
     workspaceId: req.workspaceId, walkId: req.walkId, spec, plan,
-    approval: { ...req.approval, approvedBy: d.userId, approvedAt: now().toISOString() },
+    approval: { planHash: req.approval.planHash, leadoceanRecords: req.approval.leadoceanRecords, apifyUsd: req.approval.apifyUsd, approvedBy: d.userId, approvedAt: now().toISOString() },
     leadocean: key ? d.leadoceanFor(key).adapter : null, apify: d.apify, connections,
     ledger: d.ledger, checkpoints: d.checkpoints, existing: new ExclusionIndex(await d.loadExisting(req.workspaceId), now), now,
     evidenceCache: d.evidenceCache ?? null,

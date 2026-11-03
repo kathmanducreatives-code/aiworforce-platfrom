@@ -49,7 +49,7 @@
 // PURE. No network, provider, model or database access — the caller injects the
 // model call and passes its raw output in.
 
-import { compileMissionSemantics } from "./missionCriteria.ts";
+import { compileMissionSemantics, quotedHiringRoleWords } from "./missionCriteria.ts";
 import { readRoleQualifier, readSignalPhrase } from "./missionSignalDescriptor.ts";
 import { explicitWindowDays, kindForEvent } from "./signalKinds.ts";
 import {
@@ -1869,6 +1869,22 @@ function qualifierAbsorbs(
   return false;
 }
 
+/**
+ * The proposal's signals, read as before. Only when the hiring signal arrives with NO
+ * role at all are the role words a hard hiring constraint QUOTES from the request
+ * (quotedHiringRoleWords) offered to it as well — the user's role, wherever the model
+ * filed it. A signal that already carries a role is never touched, so a distinct role
+ * ("Account Executives … and SDRs") stays its own requirement.
+ */
+function signalsWithQuotedRole(p: GptMissionProposal, query: string): Array<Record<string, unknown>> {
+  const read = readSignalPhrases(p.preferred_signals, p.required_signal_terms);
+  const hiring = read.filter((d) => String(d.event ?? d.type) === "hiring");
+  const q = (d: Record<string, unknown>) => (d.qualifier ?? {}) as { role_terms?: string[]; role_families?: string[] };
+  if (hiring.length !== 1 || (q(hiring[0]).role_terms ?? []).length || (q(hiring[0]).role_families ?? []).length) return read;
+  const quoted = quotedHiringRoleWords(p.hard_constraints, query);
+  return quoted.length ? readSignalPhrases(p.preferred_signals, [...p.required_signal_terms, ...quoted]) : read;
+}
+
 function proposalToMissionCandidate(
   p: GptMissionProposal, internal: CapabilityId[], base: LeadMissionV1,
   recencyByEvent: Record<string, number> | null = null,
@@ -1947,7 +1963,7 @@ function proposalToMissionCandidate(
     // both paths turn the same words into the same requirement. A phrase it
     // cannot read yields null — recorded below as unrepresented, never rounded
     // to the nearest event.
-    required_signals: readSignalPhrases(p.preferred_signals, p.required_signal_terms).map((d) => ({
+    required_signals: signalsWithQuotedRole(p, base.original_user_query).map((d) => ({
       ...d,
       // ONE WINDOW PER SIGNAL (RC06): with per-event windows a signal carries only
       // its own — funding's 730 days never becomes "currently hiring"'s window.
