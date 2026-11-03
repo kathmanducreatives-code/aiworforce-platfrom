@@ -1,0 +1,2921 @@
+{
+ "version": "atlas-discovery-baseline-v1",
+ "mode": "offline",
+ "generatedAt": "2026-11-03",
+ "summary": [
+  {
+   "id": "A1",
+   "group": "A",
+   "title": "Apify — US companies hiring Account Executives",
+   "verdict": "FAIL",
+   "strategy": "apify_only",
+   "planStatus": "ready",
+   "planHash": "74d3eee5a963181c908b1f440e7eac8087c0c708cd989099adf256e74795f85e",
+   "semanticFingerprint": "c0efa9f40821ee80af2f9d096493dd1f77dfb33934c41a9f0727ebcf28c9afcb",
+   "hardRequirements": 2,
+   "hardPreserved": true,
+   "providerCalls": 2,
+   "apifyItems": 16,
+   "leadoceanRecords": 0,
+   "candidates": 7,
+   "uniqueCompanies": 7,
+   "qualified": 5,
+   "rejected": 1,
+   "review": 1,
+   "falseQualified": 3,
+   "precision": 0.4,
+   "recall": 1,
+   "apifyUsdUpperBound": 0.03505,
+   "costPerQualifiedUsd": 0.00701,
+   "errors": 0,
+   "dbWrites": 6
+  },
+  {
+   "id": "A2",
+   "group": "A",
+   "title": "LeadOcean — US B2B SaaS, 20–500 employees",
+   "verdict": "PASS",
+   "strategy": "leadocean_only",
+   "planStatus": "ready",
+   "planHash": "7fa5f84c1ef5678370f3bd92a24bac1b423c7c85025576946a9c536be294dd4c",
+   "semanticFingerprint": "b8f992cacf93ad6ab17db1a4e4129f61dd213c8b315d41e58785debf8f0d3e4c",
+   "hardRequirements": 4,
+   "hardPreserved": true,
+   "providerCalls": 1,
+   "apifyItems": 0,
+   "leadoceanRecords": 4,
+   "candidates": 3,
+   "uniqueCompanies": 3,
+   "qualified": 0,
+   "rejected": 0,
+   "review": 3,
+   "falseQualified": 0,
+   "precision": null,
+   "recall": null,
+   "apifyUsdUpperBound": 0,
+   "costPerQualifiedUsd": null,
+   "errors": 0,
+   "dbWrites": 2
+  },
+  {
+   "id": "A3",
+   "group": "A",
+   "title": "Apify — US manufacturers hiring sales representatives",
+   "verdict": "PASS",
+   "strategy": "apify_only",
+   "planStatus": "ready",
+   "planHash": "5c06ee384d704a3191ece2be92ef9282ff7d7e748f2c795850ed11988125b5cd",
+   "semanticFingerprint": "0a29f86b9483c6a0280ca51b23ce83845b0b04bd54d9d81983ba52b32a7cea89",
+   "hardRequirements": 3,
+   "hardPreserved": true,
+   "providerCalls": 2,
+   "apifyItems": 16,
+   "leadoceanRecords": 0,
+   "candidates": 7,
+   "uniqueCompanies": 7,
+   "qualified": 0,
+   "rejected": 1,
+   "review": 6,
+   "falseQualified": 0,
+   "precision": null,
+   "recall": null,
+   "apifyUsdUpperBound": 0.03505,
+   "costPerQualifiedUsd": null,
+   "errors": 0,
+   "dbWrites": 6
+  },
+  {
+   "id": "A4",
+   "group": "A",
+   "title": "LeadOcean — US insurance agencies, 10–100 employees",
+   "verdict": "FAIL",
+   "strategy": "leadocean_only",
+   "planStatus": "ready",
+   "planHash": "d0a85ec05fdd7769037e6b6a547da760badaf7f2fd66fad37f2886adb81c072f",
+   "semanticFingerprint": "c808a9dfa6d718e9bafaa3263daacacb32277ae28ed17fe5fee9e80ad1bbba35",
+   "hardRequirements": 2,
+   "hardPreserved": true,
+   "providerCalls": 1,
+   "apifyItems": 0,
+   "leadoceanRecords": 2,
+   "candidates": 2,
+   "uniqueCompanies": 2,
+   "qualified": 0,
+   "rejected": 0,
+   "review": 2,
+   "falseQualified": 0,
+   "precision": null,
+   "recall": null,
+   "apifyUsdUpperBound": 0,
+   "costPerQualifiedUsd": null,
+   "errors": 0,
+   "dbWrites": 2
+  },
+  {
+   "id": "B1",
+   "group": "B",
+   "title": "Apify discovery → LeadOcean company enrichment",
+   "verdict": "UNSUPPORTED",
+   "strategy": null,
+   "planStatus": "not_run",
+   "planHash": null,
+   "semanticFingerprint": null,
+   "hardRequirements": 0,
+   "hardPreserved": null,
+   "providerCalls": 0,
+   "apifyItems": 0,
+   "leadoceanRecords": 0,
+   "candidates": 0,
+   "uniqueCompanies": 0,
+   "qualified": 0,
+   "rejected": 0,
+   "review": 0,
+   "falseQualified": 0,
+   "precision": null,
+   "recall": null,
+   "apifyUsdUpperBound": 0,
+   "costPerQualifiedUsd": null,
+   "errors": 0,
+   "dbWrites": 0
+  },
+  {
+   "id": "B2",
+   "group": "B",
+   "title": "LeadOcean discovery → Apify hiring verification",
+   "verdict": "UNSUPPORTED",
+   "strategy": null,
+   "planStatus": "blocked",
+   "planHash": null,
+   "semanticFingerprint": "b38e032fee64e75d8657d74cb242979310fa2a02764338adfbc1b5e2e3d6e970",
+   "hardRequirements": 4,
+   "hardPreserved": true,
+   "providerCalls": 0,
+   "apifyItems": 0,
+   "leadoceanRecords": 0,
+   "candidates": 0,
+   "uniqueCompanies": 0,
+   "qualified": 0,
+   "rejected": 0,
+   "review": 0,
+   "falseQualified": 0,
+   "precision": null,
+   "recall": null,
+   "apifyUsdUpperBound": 0,
+   "costPerQualifiedUsd": null,
+   "errors": 0,
+   "dbWrites": 0
+  },
+  {
+   "id": "B3",
+   "group": "B",
+   "title": "Both providers discover US manufacturers, then deduplicate",
+   "verdict": "UNSUPPORTED",
+   "strategy": null,
+   "planStatus": "not_run",
+   "planHash": null,
+   "semanticFingerprint": null,
+   "hardRequirements": 0,
+   "hardPreserved": null,
+   "providerCalls": 0,
+   "apifyItems": 0,
+   "leadoceanRecords": 0,
+   "candidates": 0,
+   "uniqueCompanies": 0,
+   "qualified": 0,
+   "rejected": 0,
+   "review": 0,
+   "falseQualified": 0,
+   "precision": null,
+   "recall": null,
+   "apifyUsdUpperBound": 0,
+   "costPerQualifiedUsd": null,
+   "errors": 0,
+   "dbWrites": 0
+  },
+  {
+   "id": "B4",
+   "group": "B",
+   "title": "Hiring OR expansion opportunities",
+   "verdict": "FAIL",
+   "strategy": "apify_only",
+   "planStatus": "ready",
+   "planHash": "174bd17b248b97f4e265cabcfeae56281006754f42d486138e0b5a2ccd8876a0",
+   "semanticFingerprint": "9867ec64d33c0c751c8009db60c2f3483bde09c4029fc27c5e848be63b9a88ff",
+   "hardRequirements": 2,
+   "hardPreserved": true,
+   "providerCalls": 2,
+   "apifyItems": 16,
+   "leadoceanRecords": 0,
+   "candidates": 7,
+   "uniqueCompanies": 7,
+   "qualified": 5,
+   "rejected": 1,
+   "review": 1,
+   "falseQualified": 3,
+   "precision": 0.4,
+   "recall": 1,
+   "apifyUsdUpperBound": 0.03505,
+   "costPerQualifiedUsd": 0.00701,
+   "errors": 0,
+   "dbWrites": 6
+  },
+  {
+   "id": "X1",
+   "group": "X",
+   "title": "Combined: Apify → LeadOcean (decision-makers at hiring companies)",
+   "verdict": "PASS",
+   "strategy": "apify_plus_leadocean",
+   "planStatus": "ready",
+   "planHash": "447f41d85ede6637cb51842e50383cd978a9b77b0e13c9cf6f04a3ffdada0f6e",
+   "semanticFingerprint": "dfa407d579d63bed11fab9bc49c8dc2e8c00051d453d3d085c645e68667704e0",
+   "hardRequirements": 2,
+   "hardPreserved": true,
+   "providerCalls": 3,
+   "apifyItems": 15,
+   "leadoceanRecords": 3,
+   "candidates": 7,
+   "uniqueCompanies": 7,
+   "qualified": 4,
+   "rejected": 1,
+   "review": 2,
+   "falseQualified": 2,
+   "precision": 0.5,
+   "recall": 1,
+   "apifyUsdUpperBound": 0.03105,
+   "costPerQualifiedUsd": 0.007763,
+   "errors": 1,
+   "dbWrites": 6
+  },
+  {
+   "id": "X2",
+   "group": "X",
+   "title": "Combined: LeadOcean → Apify (founders, verified companies)",
+   "verdict": "PASS",
+   "strategy": "leadocean_plus_apify",
+   "planStatus": "ready",
+   "planHash": "fc5170661448d66b30bbf280fb8e83eb9c9c021fed504a07f0fcb937322d3471",
+   "semanticFingerprint": "19c8394937c0fb22e04264bc6a6087b509fd175c2c8f4e99bd11456dc98a1172",
+   "hardRequirements": 2,
+   "hardPreserved": true,
+   "providerCalls": 2,
+   "apifyItems": 3,
+   "leadoceanRecords": 4,
+   "candidates": 4,
+   "uniqueCompanies": 4,
+   "qualified": 1,
+   "rejected": 1,
+   "review": 2,
+   "falseQualified": 0,
+   "precision": 1,
+   "recall": 0.5,
+   "apifyUsdUpperBound": 0.01205,
+   "costPerQualifiedUsd": 0.01205,
+   "errors": 0,
+   "dbWrites": 3
+  },
+  {
+   "id": "F1",
+   "group": "F",
+   "title": "Fault: unrecognised geography (Atlantis)",
+   "verdict": "FAIL",
+   "strategy": "apify_only",
+   "planStatus": "ready",
+   "planHash": "1ca17f8b5edb24d4cbf0e38d49867795e95f03dd48a5b32bbe75effe4478073a",
+   "semanticFingerprint": "03864d6aba69b43d5d851a4ca79022f9c0d7c934d6e6f537c234c237bebec6bb",
+   "hardRequirements": 2,
+   "hardPreserved": true,
+   "providerCalls": 2,
+   "apifyItems": 16,
+   "leadoceanRecords": 0,
+   "candidates": 7,
+   "uniqueCompanies": 7,
+   "qualified": 6,
+   "rejected": 0,
+   "review": 1,
+   "falseQualified": 6,
+   "precision": 0,
+   "recall": null,
+   "apifyUsdUpperBound": 0.03505,
+   "costPerQualifiedUsd": 0.005842,
+   "errors": 0,
+   "dbWrites": 7
+  },
+  {
+   "id": "F2",
+   "group": "F",
+   "title": "Fault: sub-national geography (Texas)",
+   "verdict": "FAIL",
+   "strategy": "apify_only",
+   "planStatus": "ready",
+   "planHash": "93bc60b7cc1b3828d2c384fe0f685fd34e63693e2ed628d703a048332b1cbac7",
+   "semanticFingerprint": "545e16ce3442f0469d7ef855961fc8d0b26188bd5333a55769e09c609f15acf7",
+   "hardRequirements": 2,
+   "hardPreserved": true,
+   "providerCalls": 2,
+   "apifyItems": 16,
+   "leadoceanRecords": 0,
+   "candidates": 7,
+   "uniqueCompanies": 7,
+   "qualified": 6,
+   "rejected": 0,
+   "review": 1,
+   "falseQualified": 5,
+   "precision": 0.17,
+   "recall": 1,
+   "apifyUsdUpperBound": 0.03505,
+   "costPerQualifiedUsd": 0.005842,
+   "errors": 0,
+   "dbWrites": 7
+  },
+  {
+   "id": "C1",
+   "group": "C",
+   "title": "US-headquartered companies hiring AEs",
+   "verdict": "PASS",
+   "strategy": "apify_only",
+   "planStatus": "ready",
+   "planHash": "c3fc03ff17cdbe7764b9f70673c68eff572f9f1e55da57429a319e2735df5aef",
+   "semanticFingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
+   "hardRequirements": 2,
+   "hardPreserved": true,
+   "providerCalls": 2,
+   "apifyItems": 15,
+   "leadoceanRecords": 0,
+   "candidates": 7,
+   "uniqueCompanies": 7,
+   "qualified": 4,
+   "rejected": 1,
+   "review": 2,
+   "falseQualified": 2,
+   "precision": 0.5,
+   "recall": 1,
+   "apifyUsdUpperBound": 0.03105,
+   "costPerQualifiedUsd": 0.007763,
+   "errors": 1,
+   "dbWrites": 6
+  },
+  {
+   "id": "C2",
+   "group": "C",
+   "title": "Companies operating in the US",
+   "verdict": "PASS",
+   "strategy": "apify_only",
+   "planStatus": "ready",
+   "planHash": "18d3322129c94f98a69bc03ae2a1f107d8ee1f57c036093df874defd0f72a21d",
+   "semanticFingerprint": "63f0ed922c56eb85be30f286af65df1cff70fe7b15c020ccca3e0b45740b8f28",
+   "hardRequirements": 2,
+   "hardPreserved": true,
+   "providerCalls": 2,
+   "apifyItems": 15,
+   "leadoceanRecords": 0,
+   "candidates": 7,
+   "uniqueCompanies": 7,
+   "qualified": 4,
+   "rejected": 1,
+   "review": 2,
+   "falseQualified": 2,
+   "precision": 0.5,
+   "recall": 1,
+   "apifyUsdUpperBound": 0.03105,
+   "costPerQualifiedUsd": 0.007763,
+   "errors": 1,
+   "dbWrites": 6
+  },
+  {
+   "id": "C3",
+   "group": "C",
+   "title": "Prefer B2B but allow B2C",
+   "verdict": "PASS",
+   "strategy": "apify_only",
+   "planStatus": "ready",
+   "planHash": "47c6df4203c052f820d73b264b7d790a1af113849df7165f6492f2adbca384ab",
+   "semanticFingerprint": "3df8ae017cfe36ac57f83f928ad973115e61b92c78f570d4fdf9674bae997e10",
+   "hardRequirements": 2,
+   "hardPreserved": true,
+   "providerCalls": 2,
+   "apifyItems": 15,
+   "leadoceanRecords": 0,
+   "candidates": 7,
+   "uniqueCompanies": 7,
+   "qualified": 4,
+   "rejected": 1,
+   "review": 2,
+   "falseQualified": 2,
+   "precision": 0.5,
+   "recall": 1,
+   "apifyUsdUpperBound": 0.03105,
+   "costPerQualifiedUsd": 0.007763,
+   "errors": 1,
+   "dbWrites": 6
+  },
+  {
+   "id": "C4",
+   "group": "C",
+   "title": "Hiring SDRs or AEs",
+   "verdict": "FAIL",
+   "strategy": "apify_only",
+   "planStatus": "ready",
+   "planHash": "0ebbb5efbf79fe45b5321fbb98b6e52cf9f57f6ea63ecb10437c31749d079f2f",
+   "semanticFingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
+   "hardRequirements": 2,
+   "hardPreserved": true,
+   "providerCalls": 2,
+   "apifyItems": 15,
+   "leadoceanRecords": 0,
+   "candidates": 7,
+   "uniqueCompanies": 7,
+   "qualified": 4,
+   "rejected": 1,
+   "review": 2,
+   "falseQualified": 1,
+   "precision": 0.75,
+   "recall": 1,
+   "apifyUsdUpperBound": 0.03105,
+   "costPerQualifiedUsd": 0.007763,
+   "errors": 1,
+   "dbWrites": 6
+  }
+ ],
+ "results": [
+  {
+   "id": "A1",
+   "title": "Apify — US companies hiring Account Executives",
+   "group": "A",
+   "verdict": "FAIL",
+   "detail": "qualified glowcart.example, ironworks.example, northwind.example, plainsteel.example, quartzlabs.example; false-qualified glowcart.example, ironworks.example, plainsteel.example (postings for SDR / Sales Representative counted as Account Executive hiring)",
+   "spec": {
+    "hard": [
+     "US headquarters",
+     "hiring Account Executives (≤30 days)"
+    ],
+    "preferences": [],
+    "verification": [
+     "HQ from the company record's HQ-flagged location",
+     "a dated AE posting"
+    ],
+    "providers": "Apify job search (discovers by the hiring signal) + Apify company record (proves identity, HQ, size)",
+    "expected": "Northwind and Quartz qualify; Maple (Toronto HQ) rejected; the staffing agency and the 3-month-old posting never become candidates; Harbor (no record) needs review",
+    "pass": "Northwind and Quartz qualified; NO company qualified without an Account Executive posting (precision 1.0 vs ground truth); Maple and Apex not qualified; hard requirements preserved"
+   },
+   "record": {
+    "scenario": "A1",
+    "request": "Find 5 US companies currently hiring Account Executives.",
+    "strategy": "apify_only",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
+     "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
+    ],
+    "planHash": "74d3eee5a963181c908b1f440e7eac8087c0c708cd989099adf256e74795f85e",
+    "semanticFingerprint": "c0efa9f40821ee80af2f9d096493dd1f77dfb33934c41a9f0727ebcf28c9afcb",
+    "hardRequirements": [
+     "geography:United States",
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}"
+    ],
+    "preferences": [],
+    "geographyScope": "headquarters",
+    "searchedTitles": [
+     "account executives"
+    ],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_job_search",
+      "items": 10
+     },
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_company_details",
+      "items": 6
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 16,
+     "leadoceanRecords": 0
+    },
+    "candidates": 7,
+    "uniqueCompanies": 7,
+    "qualified": 5,
+    "rejected": 1,
+    "review": 1,
+    "companies": [
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx5",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Harbor Metrics",
+      "domain": "harbor.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     }
+    ],
+    "falseQualified": [
+     "glowcart.example",
+     "ironworks.example",
+     "plainsteel.example"
+    ],
+    "missedQualified": [],
+    "precision": 0.4,
+    "recall": 1,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0.03505,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 0,
+    "costPerQualifiedUsd": 0.00701,
+    "errors": [],
+    "retries": 0,
+    "dbWrites": 6,
+    "ledger": {
+     "reserved": 0,
+     "settled": 2,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "A2",
+   "title": "LeadOcean — US B2B SaaS, 20–500 employees",
+   "group": "A",
+   "verdict": "PASS",
+   "detail": "3 unique companies, 0 qualified, 3 for review",
+   "spec": {
+    "hard": [
+     "US headquarters",
+     "20–500 employees",
+     "B2B SaaS"
+    ],
+    "preferences": [],
+    "verification": [
+     "HQ and size need a source that proves them; LeadOcean's are claims (HQ wrong for ~29% in LEADOCEAN_FINAL_VERDICT)"
+    ],
+    "providers": "LeadOcean people search (people + employer rows, narrowing filters, claims only)",
+    "expected": "companies discovered from employer rows and deduplicated; NONE qualified (nothing proves HQ or size); all honestly flagged for review",
+    "pass": "≥2 unique companies discovered, 0 qualified, every discovered company needs review, the limitation is stated in the plan"
+   },
+   "record": {
+    "scenario": "A2",
+    "request": "Find 5 US B2B SaaS companies with 20–500 employees.",
+    "strategy": "leadocean_only",
+    "strategyRationale": "the request named this strategy and it passed every check structured people search matches roles, geography and size directly apify_only: apify.linkedin_job_search finds companies by a hiring signal; the request names none leadocean_plus_apify: feasible, scored 35.7 vs -2.5 apify_plus_leadocean: apify.linkedin_job_search finds companies by a hiring signal; the request names none apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "unverifiable_requirement: headquarters in United States: no step of leadocean_only can prove it; leads stay needs_verification on it",
+     "unverifiable_requirement: size 20–500 employees: no step of leadocean_only can prove it; leads stay needs_verification on it",
+     "unverifiable_requirement: industry \"b2b saas, saas\": a taxonomy label proves no industry; it narrows discovery only and leads stay needs_verification on it",
+     "unverified_claim: LeadOcean HQ, size and funding are claims; with no Apify company record every lead stays needs_verification"
+    ],
+    "planHash": "7fa5f84c1ef5678370f3bd92a24bac1b423c7c85025576946a9c536be294dd4c",
+    "semanticFingerprint": "b8f992cacf93ad6ab17db1a4e4129f61dd213c8b315d41e58785debf8f0d3e4c",
+    "hardRequirements": [
+     "industry:b2b saas",
+     "industry:saas",
+     "geography:United States",
+     "company_size:{\"min\":20,\"max\":500}"
+    ],
+    "preferences": [],
+    "geographyScope": "headquarters",
+    "searchedTitles": [],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "leadocean",
+      "capability": "POST /v1/search",
+      "items": 10,
+      "filters": [
+       "excludeTitle",
+       "hqCountry",
+       "maxEmployees",
+       "minEmployees",
+       "seniority"
+      ]
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 0,
+     "leadoceanRecords": 4
+    },
+    "candidates": 3,
+    "uniqueCompanies": 3,
+    "qualified": 0,
+    "rejected": 0,
+    "review": 3,
+    "companies": [
+     {
+      "name": "Cobalt Desk",
+      "domain": "cobaltdesk.example",
+      "verdict": "review",
+      "sources": [
+       "leadocean"
+      ],
+      "evidence": [
+       "leadocean_discoveryx4"
+      ],
+      "gaps": [
+       "industry",
+       "geography",
+       "company_size_band"
+      ]
+     },
+     {
+      "name": "Pinecrest Apps",
+      "domain": "pinecrest.example",
+      "verdict": "review",
+      "sources": [
+       "leadocean"
+      ],
+      "evidence": [
+       "leadocean_discoveryx4"
+      ],
+      "gaps": [
+       "industry",
+       "geography",
+       "company_size_band"
+      ]
+     },
+     {
+      "name": "Tinyloop",
+      "domain": "tinyloop.example",
+      "verdict": "review",
+      "sources": [
+       "leadocean"
+      ],
+      "evidence": [
+       "leadocean_discoveryx4"
+      ],
+      "gaps": [
+       "industry",
+       "geography",
+       "company_size_band"
+      ]
+     }
+    ],
+    "falseQualified": [],
+    "missedQualified": [],
+    "precision": null,
+    "recall": null,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 4,
+    "costPerQualifiedUsd": null,
+    "errors": [],
+    "retries": 0,
+    "dbWrites": 2,
+    "ledger": {
+     "reserved": 0,
+     "settled": 1,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "A3",
+   "title": "Apify — US manufacturers hiring sales representatives",
+   "group": "A",
+   "verdict": "PASS",
+   "detail": "manufacturers found: true; industry hard: true; qualified 0",
+   "spec": {
+    "hard": [
+     "US headquarters",
+     "manufacturer",
+     "hiring sales representatives (≤30 days)"
+    ],
+    "preferences": [],
+    "verification": [
+     "HQ (company record)",
+     "posting (job search)",
+     "manufacturing: a taxonomy label proves no industry — it stays to be verified"
+    ],
+    "providers": "Apify job search + company record (no industry filter on the job search)",
+    "expected": "Ironworks and Plain Steel found by their sales-rep postings; the industry requirement is never dropped and never satisfied by a label",
+    "pass": "the manufacturing requirement is preserved as hard, both manufacturers are discovered, and no company is qualified on industry without evidence"
+   },
+   "record": {
+    "scenario": "A3",
+    "request": "Find 5 US manufacturers hiring sales representatives.",
+    "strategy": "apify_only",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 50.62 vs 51.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "unverifiable_requirement: industry \"manufacturing\": a taxonomy label proves no industry; it narrows discovery only and leads stay needs_verification on it",
+     "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
+     "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
+    ],
+    "planHash": "5c06ee384d704a3191ece2be92ef9282ff7d7e748f2c795850ed11988125b5cd",
+    "semanticFingerprint": "0a29f86b9483c6a0280ca51b23ce83845b0b04bd54d9d81983ba52b32a7cea89",
+    "hardRequirements": [
+     "industry:manufacturing",
+     "geography:United States",
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"sales representatives\"],\"role_families\":[\"gtm_sales\"]}}"
+    ],
+    "preferences": [],
+    "geographyScope": "headquarters",
+    "searchedTitles": [
+     "sales representatives"
+    ],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_job_search",
+      "items": 10
+     },
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_company_details",
+      "items": 6
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 16,
+     "leadoceanRecords": 0
+    },
+    "candidates": 7,
+    "uniqueCompanies": 7,
+    "qualified": 0,
+    "rejected": 1,
+    "review": 6,
+    "companies": [
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "industry"
+      ]
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "industry"
+      ]
+     },
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "industry"
+      ]
+     },
+     {
+      "name": "Harbor Metrics",
+      "domain": "harbor.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "industry",
+       "geography"
+      ]
+     },
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx5",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "industry"
+      ]
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "industry"
+      ]
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "industry"
+      ]
+     }
+    ],
+    "falseQualified": [],
+    "missedQualified": [],
+    "precision": null,
+    "recall": null,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0.03505,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 0,
+    "costPerQualifiedUsd": null,
+    "errors": [],
+    "retries": 0,
+    "dbWrites": 6,
+    "ledger": {
+     "reserved": 0,
+     "settled": 2,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "A4",
+   "title": "LeadOcean — US insurance agencies, 10–100 employees",
+   "group": "A",
+   "verdict": "FAIL",
+   "detail": "2 unique companies, 0 qualified; industry hard: false (preferences: industry:insurance agency)",
+   "spec": {
+    "hard": [
+     "US headquarters",
+     "10–100 employees",
+     "insurance agency"
+    ],
+    "preferences": [],
+    "verification": [
+     "as A2: LeadOcean HQ and size are claims"
+    ],
+    "providers": "LeadOcean people search with the industry label filter",
+    "expected": "both agencies discovered, none qualified, all for review",
+    "pass": "≥2 unique companies discovered, 0 qualified, limitation stated, and the stated industry stays a HARD requirement"
+   },
+   "record": {
+    "scenario": "A4",
+    "request": "Find 5 US insurance agencies with 10–100 employees.",
+    "strategy": "leadocean_only",
+    "strategyRationale": "the request named this strategy and it passed every check structured people search matches roles, geography and size directly apify_only: apify.linkedin_job_search finds companies by a hiring signal; the request names none leadocean_plus_apify: feasible, scored 38.7 vs 0.5 apify_plus_leadocean: apify.linkedin_job_search finds companies by a hiring signal; the request names none apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "unverifiable_requirement: headquarters in United States: no step of leadocean_only can prove it; leads stay needs_verification on it",
+     "unverifiable_requirement: size 10–100 employees: no step of leadocean_only can prove it; leads stay needs_verification on it",
+     "unverified_claim: LeadOcean HQ, size and funding are claims; with no Apify company record every lead stays needs_verification"
+    ],
+    "planHash": "d0a85ec05fdd7769037e6b6a547da760badaf7f2fd66fad37f2886adb81c072f",
+    "semanticFingerprint": "c808a9dfa6d718e9bafaa3263daacacb32277ae28ed17fe5fee9e80ad1bbba35",
+    "hardRequirements": [
+     "geography:United States",
+     "company_size:{\"min\":10,\"max\":100}"
+    ],
+    "preferences": [
+     "industry:insurance agency"
+    ],
+    "geographyScope": "headquarters",
+    "searchedTitles": [],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "leadocean",
+      "capability": "POST /v1/search",
+      "items": 10,
+      "filters": [
+       "excludeTitle",
+       "hqCountry",
+       "maxEmployees",
+       "minEmployees",
+       "seniority"
+      ]
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 0,
+     "leadoceanRecords": 2
+    },
+    "candidates": 2,
+    "uniqueCompanies": 2,
+    "qualified": 0,
+    "rejected": 0,
+    "review": 2,
+    "companies": [
+     {
+      "name": "Lakeside Insurance Agency",
+      "domain": "lakeside-ins.example",
+      "verdict": "review",
+      "sources": [
+       "leadocean"
+      ],
+      "evidence": [
+       "leadocean_discoveryx4"
+      ],
+      "gaps": [
+       "geography",
+       "company_size_band"
+      ]
+     },
+     {
+      "name": "Summit Risk Partners",
+      "domain": "summitrisk.example",
+      "verdict": "review",
+      "sources": [
+       "leadocean"
+      ],
+      "evidence": [
+       "leadocean_discoveryx4"
+      ],
+      "gaps": [
+       "geography",
+       "company_size_band"
+      ]
+     }
+    ],
+    "falseQualified": [],
+    "missedQualified": [],
+    "precision": null,
+    "recall": null,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 2,
+    "costPerQualifiedUsd": null,
+    "errors": [],
+    "retries": 0,
+    "dbWrites": 2,
+    "ledger": {
+     "reserved": 0,
+     "settled": 1,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "B1",
+   "title": "Apify discovery → LeadOcean company enrichment",
+   "group": "B",
+   "verdict": "UNSUPPORTED",
+   "detail": "No LeadOcean company-enrichment capability exists in the planner registry (DISCOVERY_CAPABILITIES has leadocean.people_search and leadocean.people_by_domain only). apify_plus_leadocean uses LeadOcean for DECISION-MAKERS by domain, not company enrichment; the adapter's /v1/companies/enrich is not wired into any strategy.",
+   "spec": {
+    "hard": [
+     "US headquarters",
+     "hiring AEs"
+    ],
+    "preferences": [],
+    "verification": [
+     "Apify company record already proves identity/HQ/size"
+    ],
+    "providers": "would need leadocean.company_enrich (not registered)",
+    "expected": "UNSUPPORTED",
+    "pass": "n/a"
+   },
+   "record": null
+  },
+  {
+   "id": "B2",
+   "title": "LeadOcean discovery → Apify hiring verification",
+   "group": "B",
+   "verdict": "UNSUPPORTED",
+   "detail": "the planner refuses it: the requested strategy leadocean_plus_apify cannot run: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review)",
+   "spec": {
+    "hard": [
+     "US headquarters",
+     "20–500 employees",
+     "software",
+     "hiring AEs"
+    ],
+    "preferences": [],
+    "verification": [
+     "hiring must be proven per company"
+    ],
+    "providers": "LeadOcean people search → Apify company record (proves HQ and size, NOT hiring)",
+    "expected": "the planner refuses or states that hiring cannot be proven on this chain",
+    "pass": "the plan does not claim hiring verification it cannot do"
+   },
+   "record": {
+    "scenario": "B2",
+    "request": "Find 5 US software companies with 20–500 employees that are hiring Account Executives.",
+    "strategy": null,
+    "strategyRationale": "",
+    "planStatus": "blocked",
+    "planBlockedReason": "the requested strategy leadocean_plus_apify cannot run: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review)",
+    "planLimitations": [],
+    "planHash": null,
+    "semanticFingerprint": "b38e032fee64e75d8657d74cb242979310fa2a02764338adfbc1b5e2e3d6e970",
+    "hardRequirements": [
+     "industry:software",
+     "geography:United States",
+     "company_size:{\"min\":20,\"max\":500}",
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}"
+    ],
+    "preferences": [],
+    "geographyScope": "headquarters",
+    "searchedTitles": [],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [],
+    "itemsPurchased": {
+     "apify": 0,
+     "leadoceanRecords": 0
+    },
+    "candidates": 0,
+    "uniqueCompanies": 0,
+    "qualified": 0,
+    "rejected": 0,
+    "review": 0,
+    "companies": [],
+    "falseQualified": [],
+    "missedQualified": [],
+    "precision": null,
+    "recall": null,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 0,
+    "costPerQualifiedUsd": null,
+    "errors": [],
+    "retries": 0,
+    "dbWrites": 0,
+    "ledger": {
+     "reserved": 0,
+     "settled": 0,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "B3",
+   "title": "Both providers discover US manufacturers, then deduplicate",
+   "group": "B",
+   "verdict": "UNSUPPORTED",
+   "detail": "No strategy discovers from both providers in parallel (chainFor: every chain has ONE discovery step). Apify's discovery steps are signal-led (job search / post search) with no industry or firmographic filter, so 'manufacturers' with no signal cannot be discovered by Apify at all.",
+   "spec": {
+    "hard": [
+     "US headquarters",
+     "50–500 employees",
+     "manufacturer"
+    ],
+    "preferences": [],
+    "verification": [],
+    "providers": "would need parallel discovery + firmographic Apify search (neither exists)",
+    "expected": "UNSUPPORTED",
+    "pass": "n/a"
+   },
+   "record": null
+  },
+  {
+   "id": "B4",
+   "title": "Hiring OR expansion opportunities",
+   "group": "B",
+   "verdict": "FAIL",
+   "detail": "either/or kept: false; expansion is a preference only; expansion limitation stated: false",
+   "spec": {
+    "hard": [
+     "US headquarters",
+     "hiring AEs OR expansion (one either/or requirement)"
+    ],
+    "preferences": [],
+    "verification": [
+     "hiring: dated posting",
+     "expansion: no capability proves it"
+    ],
+    "providers": "Apify job search covers the hiring branch; no capability discovers or proves expansion",
+    "expected": "hiring branch discovered and proven; expansion branch stated as a limitation, not silently dropped",
+    "pass": "the either/or requirement is preserved (not narrowed to hiring-only), the expansion limitation is stated"
+   },
+   "record": {
+    "scenario": "B4",
+    "request": "Find 5 US companies that are either hiring Account Executives or expanding into new offices.",
+    "strategy": "apify_only",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
+     "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
+    ],
+    "planHash": "174bd17b248b97f4e265cabcfeae56281006754f42d486138e0b5a2ccd8876a0",
+    "semanticFingerprint": "9867ec64d33c0c751c8009db60c2f3483bde09c4029fc27c5e848be63b9a88ff",
+    "hardRequirements": [
+     "geography:United States",
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}"
+    ],
+    "preferences": [
+     "expansion:{\"event\":\"expansion\",\"subject\":\"company\",\"qualifier\":{}}"
+    ],
+    "geographyScope": "headquarters",
+    "searchedTitles": [
+     "account executives"
+    ],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_job_search",
+      "items": 10
+     },
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_company_details",
+      "items": 6
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 16,
+     "leadoceanRecords": 0
+    },
+    "candidates": 7,
+    "uniqueCompanies": 7,
+    "qualified": 5,
+    "rejected": 1,
+    "review": 1,
+    "companies": [
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx5",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Harbor Metrics",
+      "domain": "harbor.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     }
+    ],
+    "falseQualified": [
+     "glowcart.example",
+     "ironworks.example",
+     "plainsteel.example"
+    ],
+    "missedQualified": [],
+    "precision": 0.4,
+    "recall": 1,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0.03505,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 0,
+    "costPerQualifiedUsd": 0.00701,
+    "errors": [],
+    "retries": 0,
+    "dbWrites": 6,
+    "ledger": {
+     "reserved": 0,
+     "settled": 2,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "X1",
+   "title": "Combined: Apify → LeadOcean (decision-makers at hiring companies)",
+   "group": "X",
+   "verdict": "PASS",
+   "detail": "qualified northwind.example, quartzlabs.example, glowcart.example, ironworks.example; LeadOcean records 3; apify $0.03105",
+   "spec": {
+    "hard": [
+     "US HQ",
+     "hiring AEs",
+     "a founder/CEO contact"
+    ],
+    "preferences": [],
+    "verification": [
+     "company: HQ + posting (Apify)",
+     "person: provider title claim only (requires role verification)"
+    ],
+    "providers": "Apify job search → Apify company record → LeadOcean people by domain (only for verified companies)",
+    "expected": "people bought only for companies that passed verification; one company, one lead",
+    "pass": "Maple (disproven) never qualifies and hard requirements are preserved"
+   },
+   "record": {
+    "scenario": "X1",
+    "request": "Find the founder or CEO at 3 US companies currently hiring Account Executives.",
+    "strategy": "apify_plus_leadocean",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_only: apify.company_employees is not approved: harvestapi/linkedin-company-employees ($0.02/run + $0.003/short profile, $0.05 minimum): decision-makers at discovered companies by LinkedIn page; titles fuzzy (re-classified); a wrong profileScraperMode value silently bills the Full price. Not on the pipeline allowlist (PIPELINE_ACTORS) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
+    ],
+    "planHash": "447f41d85ede6637cb51842e50383cd978a9b77b0e13c9cf6f04a3ffdada0f6e",
+    "semanticFingerprint": "dfa407d579d63bed11fab9bc49c8dc2e8c00051d453d3d085c645e68667704e0",
+    "hardRequirements": [
+     "geography:United States",
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}"
+    ],
+    "preferences": [],
+    "geographyScope": "headquarters",
+    "searchedTitles": [
+     "account executives"
+    ],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_job_search",
+      "items": 10
+     },
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_company_details",
+      "items": 5
+     },
+     {
+      "provider": "leadocean",
+      "capability": "POST /v1/search",
+      "items": 6,
+      "filters": [
+       "domain",
+       "excludeTitle",
+       "title"
+      ],
+      "domains": [
+       "northwind.example",
+       "quartzlabs.example",
+       "glowcart.example",
+       "ironworks.example",
+       "harbor.example",
+       "plainsteel.example"
+      ]
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 15,
+     "leadoceanRecords": 3
+    },
+    "candidates": 7,
+    "uniqueCompanies": 7,
+    "qualified": 4,
+    "rejected": 1,
+    "review": 2,
+    "companies": [
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify",
+       "leadocean"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "leadocean_discoveryx4",
+       "apify_linkedin_job_searchx5",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify",
+       "leadocean"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "leadocean_discoveryx4",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Harbor Metrics",
+      "domain": "harbor.example",
+      "verdict": "review",
+      "sources": [
+       "apify",
+       "leadocean"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "leadocean_discoveryx4",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     }
+    ],
+    "falseQualified": [
+     "glowcart.example",
+     "ironworks.example"
+    ],
+    "missedQualified": [],
+    "precision": 0.5,
+    "recall": 1,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0.03105,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 3,
+    "costPerQualifiedUsd": 0.007763,
+    "errors": [
+     "apify.linkedin_company_record: partial — budget: 1 company left unverified"
+    ],
+    "retries": 0,
+    "dbWrites": 6,
+    "ledger": {
+     "reserved": 0,
+     "settled": 3,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "X2",
+   "title": "Combined: LeadOcean → Apify (founders, verified companies)",
+   "group": "X",
+   "verdict": "PASS",
+   "detail": "qualified northwind.example; maple rejected; harbor review",
+   "spec": {
+    "hard": [
+     "US HQ",
+     "20–200 employees",
+     "a founder/CEO contact"
+    ],
+    "preferences": [],
+    "verification": [
+     "HQ and size from the Apify company record; LeadOcean's are claims"
+    ],
+    "providers": "LeadOcean people search → Apify company record",
+    "expected": "Maple (Canadian HQ) rejected on the record; Harbor (no record) stays for review",
+    "pass": "Maple not qualified; at least one US company qualified on Apify evidence"
+   },
+   "record": {
+    "scenario": "X2",
+    "request": "Find the founder or CEO at 3 US-headquartered companies with 20–200 employees.",
+    "strategy": "leadocean_plus_apify",
+    "strategyRationale": "the request named this strategy and it passed every check structured people search matches roles, geography and size directly Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; size 20–200 employees cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_only: apify.people_search is not approved: harvestapi/linkedin-profile-search ($0.004/profile, $0.10 minimum per run): no industry or size filter and no per-company cap; ~2x company-employees for the same recall. Not on the pipeline allowlist (PIPELINE_ACTORS) apify_plus_leadocean: apify.linkedin_job_search finds companies by a hiring signal; the request names none apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [],
+    "planHash": "fc5170661448d66b30bbf280fb8e83eb9c9c021fed504a07f0fcb937322d3471",
+    "semanticFingerprint": "19c8394937c0fb22e04264bc6a6087b509fd175c2c8f4e99bd11456dc98a1172",
+    "hardRequirements": [
+     "geography:United States",
+     "company_size:{\"min\":20,\"max\":200}"
+    ],
+    "preferences": [],
+    "geographyScope": "headquarters",
+    "searchedTitles": [],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_company_details",
+      "items": 3
+     },
+     {
+      "provider": "leadocean",
+      "capability": "POST /v1/search",
+      "items": 6,
+      "filters": [
+       "excludeTitle",
+       "hqCountry",
+       "maxEmployees",
+       "minEmployees",
+       "seniority",
+       "title"
+      ]
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 3,
+     "leadoceanRecords": 4
+    },
+    "candidates": 4,
+    "uniqueCompanies": 4,
+    "qualified": 1,
+    "rejected": 1,
+    "review": 2,
+    "companies": [
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "qualified",
+      "sources": [
+       "leadocean"
+      ],
+      "evidence": [
+       "leadocean_discoveryx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Harbor Metrics",
+      "domain": "harbor.example",
+      "verdict": "review",
+      "sources": [
+       "leadocean"
+      ],
+      "evidence": [
+       "leadocean_discoveryx4"
+      ],
+      "gaps": [
+       "geography",
+       "company_size_band"
+      ]
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "review",
+      "sources": [
+       "leadocean"
+      ],
+      "evidence": [
+       "leadocean_discoveryx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "company_size_band"
+      ]
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "rejected",
+      "sources": [
+       "leadocean"
+      ],
+      "evidence": [
+       "leadocean_discoveryx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     }
+    ],
+    "falseQualified": [],
+    "missedQualified": [
+     "quartzlabs.example"
+    ],
+    "precision": 1,
+    "recall": 0.5,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0.01205,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 4,
+    "costPerQualifiedUsd": 0.01205,
+    "errors": [],
+    "retries": 0,
+    "dbWrites": 3,
+    "ledger": {
+     "reserved": 0,
+     "settled": 2,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "F1",
+   "title": "Fault: unrecognised geography (Atlantis)",
+   "group": "F",
+   "verdict": "FAIL",
+   "detail": "qualified glowcart.example, ironworks.example, mapleledger.example, northwind.example, plainsteel.example, quartzlabs.example — an unrecognised place is treated as matched by ANY proven HQ (candidateEligibility geography check via geographyContradicts)",
+   "spec": {
+    "hard": [
+     "HQ in Atlantis",
+     "hiring AEs"
+    ],
+    "preferences": [],
+    "verification": [
+     "an HQ that ATLAS cannot place inside the requirement is unknown, never a match"
+    ],
+    "providers": "Apify",
+    "expected": "nothing qualifies: no HQ is in Atlantis",
+    "pass": "0 qualified"
+   },
+   "record": {
+    "scenario": "F1",
+    "request": "Find 5 companies headquartered in Atlantis currently hiring Account Executives.",
+    "strategy": "apify_only",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in Atlantis; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
+     "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
+    ],
+    "planHash": "1ca17f8b5edb24d4cbf0e38d49867795e95f03dd48a5b32bbe75effe4478073a",
+    "semanticFingerprint": "03864d6aba69b43d5d851a4ca79022f9c0d7c934d6e6f537c234c237bebec6bb",
+    "hardRequirements": [
+     "geography:Atlantis",
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}"
+    ],
+    "preferences": [],
+    "geographyScope": "headquarters",
+    "searchedTitles": [
+     "account executives"
+    ],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_job_search",
+      "items": 10
+     },
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_company_details",
+      "items": 6
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 16,
+     "leadoceanRecords": 0
+    },
+    "candidates": 7,
+    "uniqueCompanies": 7,
+    "qualified": 6,
+    "rejected": 0,
+    "review": 1,
+    "companies": [
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx5",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Harbor Metrics",
+      "domain": "harbor.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     }
+    ],
+    "falseQualified": [
+     "glowcart.example",
+     "ironworks.example",
+     "mapleledger.example",
+     "northwind.example",
+     "plainsteel.example",
+     "quartzlabs.example"
+    ],
+    "missedQualified": [],
+    "precision": 0,
+    "recall": null,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0.03505,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 0,
+    "costPerQualifiedUsd": 0.005842,
+    "errors": [],
+    "retries": 0,
+    "dbWrites": 7,
+    "ledger": {
+     "reserved": 0,
+     "settled": 2,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "F2",
+   "title": "Fault: sub-national geography (Texas)",
+   "group": "F",
+   "verdict": "FAIL",
+   "detail": "qualified glowcart.example, ironworks.example, mapleledger.example, northwind.example, plainsteel.example, quartzlabs.example; outside Texas: glowcart.example, ironworks.example, mapleledger.example, plainsteel.example, quartzlabs.example",
+   "spec": {
+    "hard": [
+     "HQ in Texas",
+     "hiring AEs"
+    ],
+    "preferences": [],
+    "verification": [
+     "HQ-flagged location inside Texas"
+    ],
+    "providers": "Apify",
+    "expected": "only Northwind (Austin, TX) qualifies; Ohio, Colorado, Florida and Toronto HQs do not",
+    "pass": "precision 1.0: no company outside Texas qualifies"
+   },
+   "record": {
+    "scenario": "F2",
+    "request": "Find 5 companies headquartered in Texas currently hiring Account Executives.",
+    "strategy": "apify_only",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in Texas; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
+     "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
+    ],
+    "planHash": "93bc60b7cc1b3828d2c384fe0f685fd34e63693e2ed628d703a048332b1cbac7",
+    "semanticFingerprint": "545e16ce3442f0469d7ef855961fc8d0b26188bd5333a55769e09c609f15acf7",
+    "hardRequirements": [
+     "geography:Texas",
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}"
+    ],
+    "preferences": [],
+    "geographyScope": "headquarters",
+    "searchedTitles": [
+     "account executives"
+    ],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_job_search",
+      "items": 10
+     },
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_company_details",
+      "items": 6
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 16,
+     "leadoceanRecords": 0
+    },
+    "candidates": 7,
+    "uniqueCompanies": 7,
+    "qualified": 6,
+    "rejected": 0,
+    "review": 1,
+    "companies": [
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx5",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Harbor Metrics",
+      "domain": "harbor.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     }
+    ],
+    "falseQualified": [
+     "glowcart.example",
+     "ironworks.example",
+     "mapleledger.example",
+     "plainsteel.example",
+     "quartzlabs.example"
+    ],
+    "missedQualified": [],
+    "precision": 0.17,
+    "recall": 1,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0.03505,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 0,
+    "costPerQualifiedUsd": 0.005842,
+    "errors": [],
+    "retries": 0,
+    "dbWrites": 7,
+    "ledger": {
+     "reserved": 0,
+     "settled": 2,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "C1",
+   "title": "US-headquartered companies hiring AEs",
+   "group": "C",
+   "verdict": "PASS",
+   "detail": "scope headquarters; maple rejected",
+   "spec": {
+    "hard": [
+     "HQ in the US (scope: headquarters)",
+     "hiring AEs"
+    ],
+    "preferences": [],
+    "verification": [
+     "HQ-flagged location"
+    ],
+    "providers": "Apify",
+    "expected": "geography compiled with scope headquarters; Maple (CA HQ) rejected",
+    "pass": "geography scope = headquarters and Maple not qualified"
+   },
+   "record": {
+    "scenario": "C1",
+    "request": "Find 3 US-headquartered companies hiring Account Executives.",
+    "strategy": "apify_only",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
+    ],
+    "planHash": "c3fc03ff17cdbe7764b9f70673c68eff572f9f1e55da57429a319e2735df5aef",
+    "semanticFingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
+    "hardRequirements": [
+     "geography:United States",
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}"
+    ],
+    "preferences": [],
+    "geographyScope": "headquarters",
+    "searchedTitles": [
+     "account executives"
+    ],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_job_search",
+      "items": 10
+     },
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_company_details",
+      "items": 5
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 15,
+     "leadoceanRecords": 0
+    },
+    "candidates": 7,
+    "uniqueCompanies": 7,
+    "qualified": 4,
+    "rejected": 1,
+    "review": 2,
+    "companies": [
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx5",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Harbor Metrics",
+      "domain": "harbor.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     }
+    ],
+    "falseQualified": [
+     "glowcart.example",
+     "ironworks.example"
+    ],
+    "missedQualified": [],
+    "precision": 0.5,
+    "recall": 1,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0.03105,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 0,
+    "costPerQualifiedUsd": 0.007763,
+    "errors": [
+     "apify.linkedin_company_record: partial — budget: 1 company left unverified"
+    ],
+    "retries": 0,
+    "dbWrites": 6,
+    "ledger": {
+     "reserved": 0,
+     "settled": 2,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "C2",
+   "title": "Companies operating in the US",
+   "group": "C",
+   "verdict": "PASS",
+   "detail": "scope presence; qualified 4",
+   "spec": {
+    "hard": [
+     "operates in the US (scope: presence — NOT headquarters)",
+     "hiring AEs"
+    ],
+    "preferences": [],
+    "verification": [
+     "presence: a US location, not necessarily the HQ"
+    ],
+    "providers": "Apify",
+    "expected": "geography compiled with scope presence; a US posting location is presence evidence",
+    "pass": "geography scope = presence (never silently headquarters)"
+   },
+   "record": {
+    "scenario": "C2",
+    "request": "Find 3 companies operating in the US that are hiring Account Executives.",
+    "strategy": "apify_only",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
+    ],
+    "planHash": "18d3322129c94f98a69bc03ae2a1f107d8ee1f57c036093df874defd0f72a21d",
+    "semanticFingerprint": "63f0ed922c56eb85be30f286af65df1cff70fe7b15c020ccca3e0b45740b8f28",
+    "hardRequirements": [
+     "geography:United States",
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}"
+    ],
+    "preferences": [],
+    "geographyScope": "presence",
+    "searchedTitles": [
+     "account executives"
+    ],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_job_search",
+      "items": 10
+     },
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_company_details",
+      "items": 5
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 15,
+     "leadoceanRecords": 0
+    },
+    "candidates": 7,
+    "uniqueCompanies": 7,
+    "qualified": 4,
+    "rejected": 1,
+    "review": 2,
+    "companies": [
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx5",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Harbor Metrics",
+      "domain": "harbor.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     }
+    ],
+    "falseQualified": [
+     "glowcart.example",
+     "ironworks.example"
+    ],
+    "missedQualified": [],
+    "precision": 0.5,
+    "recall": 1,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0.03105,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 0,
+    "costPerQualifiedUsd": 0.007763,
+    "errors": [
+     "apify.linkedin_company_record: partial — budget: 1 company left unverified"
+    ],
+    "retries": 0,
+    "dbWrites": 6,
+    "ledger": {
+     "reserved": 0,
+     "settled": 2,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "C3",
+   "title": "Prefer B2B but allow B2C",
+   "group": "C",
+   "verdict": "PASS",
+   "detail": "hard: geography:United States | hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}; preferences: business_model:B2B",
+   "spec": {
+    "hard": [
+     "US HQ",
+     "hiring AEs"
+    ],
+    "preferences": [
+     "B2B (ranks, never rejects)"
+    ],
+    "verification": [],
+    "providers": "Apify",
+    "expected": "B2B is a preference; B2C companies are not rejected for being B2C",
+    "pass": "no hard business-model requirement; B2B kept as a preference"
+   },
+   "record": {
+    "scenario": "C3",
+    "request": "Find 3 US companies hiring Account Executives. Prefer B2B companies, but include strong B2C opportunities.",
+    "strategy": "apify_only",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
+    ],
+    "planHash": "47c6df4203c052f820d73b264b7d790a1af113849df7165f6492f2adbca384ab",
+    "semanticFingerprint": "3df8ae017cfe36ac57f83f928ad973115e61b92c78f570d4fdf9674bae997e10",
+    "hardRequirements": [
+     "geography:United States",
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}"
+    ],
+    "preferences": [
+     "business_model:B2B"
+    ],
+    "geographyScope": "headquarters",
+    "searchedTitles": [
+     "account executives"
+    ],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_job_search",
+      "items": 10
+     },
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_company_details",
+      "items": 5
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 15,
+     "leadoceanRecords": 0
+    },
+    "candidates": 7,
+    "uniqueCompanies": 7,
+    "qualified": 4,
+    "rejected": 1,
+    "review": 2,
+    "companies": [
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx5",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Harbor Metrics",
+      "domain": "harbor.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     }
+    ],
+    "falseQualified": [
+     "glowcart.example",
+     "ironworks.example"
+    ],
+    "missedQualified": [],
+    "precision": 0.5,
+    "recall": 1,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0.03105,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 0,
+    "costPerQualifiedUsd": 0.007763,
+    "errors": [
+     "apify.linkedin_company_record: partial — budget: 1 company left unverified"
+    ],
+    "retries": 0,
+    "dbWrites": 6,
+    "ledger": {
+     "reserved": 0,
+     "settled": 2,
+     "uncertain": 0
+    }
+   }
+  },
+  {
+   "id": "C4",
+   "title": "Hiring SDRs or AEs",
+   "group": "C",
+   "verdict": "FAIL",
+   "detail": "titles account executives; glowcart qualified",
+   "spec": {
+    "hard": [
+     "US HQ",
+     "hiring SDRs or AEs (one hiring requirement, either role)"
+    ],
+    "preferences": [],
+    "verification": [
+     "a dated posting for either role"
+    ],
+    "providers": "Apify job search with both titles",
+    "expected": "both roles searched; an SDR-only company (Glowcart) counts",
+    "pass": "both role terms reach the hiring requirement and the search, and Glowcart (SDR posting) is a candidate"
+   },
+   "record": {
+    "scenario": "C4",
+    "request": "Find 3 US companies hiring SDRs or Account Executives.",
+    "strategy": "apify_only",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "planStatus": "ready",
+    "planBlockedReason": null,
+    "planLimitations": [
+     "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
+    ],
+    "planHash": "0ebbb5efbf79fe45b5321fbb98b6e52cf9f57f6ea63ecb10437c31749d079f2f",
+    "semanticFingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
+    "hardRequirements": [
+     "geography:United States",
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}"
+    ],
+    "preferences": [],
+    "geographyScope": "headquarters",
+    "searchedTitles": [
+     "account executives"
+    ],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
+    "providerCalls": [
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_job_search",
+      "items": 10
+     },
+     {
+      "provider": "apify",
+      "capability": "apify_linkedin_company_details",
+      "items": 5
+     }
+    ],
+    "itemsPurchased": {
+     "apify": 15,
+     "leadoceanRecords": 0
+    },
+    "candidates": 7,
+    "uniqueCompanies": 7,
+    "qualified": 4,
+    "rejected": 1,
+    "review": 2,
+    "companies": [
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx5",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Harbor Metrics",
+      "domain": "harbor.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     }
+    ],
+    "falseQualified": [
+     "ironworks.example"
+    ],
+    "missedQualified": [],
+    "precision": 0.75,
+    "recall": 1,
+    "anyOf": false,
+    "costUsd": {
+     "apify": 0.03105,
+     "apifyBasis": "estimated_upper_bound"
+    },
+    "leadoceanRecords": 0,
+    "costPerQualifiedUsd": 0.007763,
+    "errors": [
+     "apify.linkedin_company_record: partial — budget: 1 company left unverified"
+    ],
+    "retries": 0,
+    "dbWrites": 6,
+    "ledger": {
+     "reserved": 0,
+     "settled": 2,
+     "uncertain": 0
+    }
+   }
+  }
+ ]
+}
