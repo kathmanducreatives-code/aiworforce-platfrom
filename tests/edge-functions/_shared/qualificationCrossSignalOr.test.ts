@@ -73,18 +73,33 @@ const CRITERIA = deriveMissionCriteria(mission(OR));
 const AND_CRITERIA = deriveMissionCriteria(mission(AND));
 const hiring = (status: EvidenceItem["status"] = "proven") => item("hiring", status === "proven", status);
 const funding = () => item("funding", { round: "series_a" }, "disproven");
+// The posting behind a proven opening, as job discovery records it (ATLAS review D1:
+// a NAMED title — "Account Executives" — is re-checked against the posting's title).
+const posting = (title: string) => item("job", { title, posted_date: NOW.toISOString(), location: "Austin, TX" });
 
 Deno.test("decide: hiring proven answers the group — funding is never bought", () => {
-  const e = evaluateEligibility(CRITERIA, graph([hiring()]));
+  const e = evaluateEligibility(CRITERIA, graph([hiring(), posting("Account Executive")]));
   assertEquals(e.eligibility, "eligible");
   const f = e.checks.find((c) => c.dimension === "funding")!;
   assertEquals(f.result, "pass");
   assert(/answered by the alternative Hiring/.test(f.reason), f.reason);
   assertFalse(e.gaps.includes("funding"));
   // The control: the same evidence under AND still needs the funding.
-  const and = evaluateEligibility(AND_CRITERIA, graph([hiring()]));
+  const and = evaluateEligibility(AND_CRITERIA, graph([hiring(), posting("Account Executive")]));
   assertEquals(and.eligibility, "pending");
   assert(and.gaps.includes("funding"));
+});
+
+Deno.test("decide: an opening recorded WITHOUT its title cannot prove 'hiring Account Executives' — pending, never eligible", () => {
+  const e = evaluateEligibility(CRITERIA, graph([hiring()]));
+  assertEquals(e.eligibility, "pending");
+  const h = e.checks.find((c) => c.dimension === "hiring")!;
+  assertEquals(h.result, "unknown");
+  assert(/without its title/.test(h.reason), h.reason);
+  // An opening whose title is another role (SDR) does not prove it either.
+  const sdr = evaluateEligibility(CRITERIA, graph([hiring(), posting("Sales Development Representative")]));
+  assertEquals(sdr.eligibility, "pending");
+  assert(/none is account executives/.test(sdr.checks.find((c) => c.dimension === "hiring")!.reason));
 });
 
 Deno.test("decide: a failed alternative cannot reject while the other is open; every alternative failing does", () => {
