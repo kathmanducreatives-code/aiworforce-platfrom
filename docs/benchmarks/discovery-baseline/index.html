@@ -21,12 +21,12 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 </style></head><body><main>
 <h1>ATLAS discovery baseline</h1>
 <p class="sub">atlas-discovery-baseline-v1 · offline (synthetic providers, network blocked) · generated 2026-11-03</p>
-<div class="tiles"><div class="tile"><b class="PASS">5</b>PASS</div><div class="tile"><b class="FAIL">4</b>FAIL</div>
+<div class="tiles"><div class="tile"><b class="PASS">6</b>PASS</div><div class="tile"><b class="FAIL">3</b>FAIL</div>
 <div class="tile"><b class="BLOCKED">0</b>BLOCKED</div><div class="tile"><b class="UNSUPPORTED">3</b>UNSUPPORTED</div></div>
 <div class="table-wrap"><table><thead><tr><th>ID</th><th>Scenario</th><th>Verdict</th><th>Strategy</th><th>Unique</th><th>Qualified</th><th>Rejected</th><th>Review</th><th>Precision</th><th>Apify (≤)</th><th>LO records</th><th>$ / qualified</th></tr></thead>
-<tbody><tr class="v-FAIL"><td class="id">A1</td><td>Apify — US companies hiring Account Executives</td><td><span class="pill FAIL">FAIL</span></td>
-<td>apify_only</td><td class="n">7</td><td class="n">5</td><td class="n">1</td><td class="n">1</td>
-<td class="n">0.4</td><td class="n">$0.0350</td><td class="n">0</td><td class="n">$0.0070</td></tr>
+<tbody><tr class="v-PASS"><td class="id">A1</td><td>Apify — US companies hiring Account Executives</td><td><span class="pill PASS">PASS</span></td>
+<td>apify_only</td><td class="n">4</td><td class="n">2</td><td class="n">1</td><td class="n">1</td>
+<td class="n">1</td><td class="n">$0.0231</td><td class="n">0</td><td class="n">$0.0115</td></tr>
 <tr class="v-PASS"><td class="id">A2</td><td>LeadOcean — US B2B SaaS, 20–500 employees</td><td><span class="pill PASS">PASS</span></td>
 <td>leadocean_only</td><td class="n">3</td><td class="n">0</td><td class="n">0</td><td class="n">3</td>
 <td class="n">—</td><td class="n">$0.0000</td><td class="n">4</td><td class="n">—</td></tr>
@@ -46,37 +46,37 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <td>—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td>
 <td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
 <tr class="v-FAIL"><td class="id">B4</td><td>Hiring OR expansion opportunities</td><td><span class="pill FAIL">FAIL</span></td>
-<td>apify_only</td><td class="n">7</td><td class="n">5</td><td class="n">1</td><td class="n">1</td>
-<td class="n">0.4</td><td class="n">$0.0350</td><td class="n">0</td><td class="n">$0.0070</td></tr>
+<td>apify_only</td><td class="n">4</td><td class="n">2</td><td class="n">1</td><td class="n">1</td>
+<td class="n">1</td><td class="n">$0.0231</td><td class="n">0</td><td class="n">$0.0115</td></tr>
 <tr class="v-PASS"><td class="id">X1</td><td>Combined: Apify → LeadOcean (decision-makers at hiring companies)</td><td><span class="pill PASS">PASS</span></td>
-<td>apify_plus_leadocean</td><td class="n">7</td><td class="n">4</td><td class="n">1</td><td class="n">2</td>
-<td class="n">0.5</td><td class="n">$0.0311</td><td class="n">3</td><td class="n">$0.0078</td></tr>
+<td>apify_plus_leadocean</td><td class="n">4</td><td class="n">2</td><td class="n">1</td><td class="n">1</td>
+<td class="n">1</td><td class="n">$0.0231</td><td class="n">3</td><td class="n">$0.0115</td></tr>
 <tr class="v-PASS"><td class="id">X2</td><td>Combined: LeadOcean → Apify (founders, verified companies)</td><td><span class="pill PASS">PASS</span></td>
 <td>leadocean_plus_apify</td><td class="n">4</td><td class="n">1</td><td class="n">1</td><td class="n">2</td>
 <td class="n">1</td><td class="n">$0.0120</td><td class="n">4</td><td class="n">$0.0120</td></tr>
 <tr class="v-PASS"><td class="id">F1</td><td>Fault: unrecognised geography (Atlantis)</td><td><span class="pill PASS">PASS</span></td>
-<td>apify_only</td><td class="n">7</td><td class="n">0</td><td class="n">0</td><td class="n">7</td>
-<td class="n">—</td><td class="n">$0.0350</td><td class="n">0</td><td class="n">—</td></tr>
+<td>apify_only</td><td class="n">4</td><td class="n">0</td><td class="n">0</td><td class="n">4</td>
+<td class="n">—</td><td class="n">$0.0231</td><td class="n">0</td><td class="n">—</td></tr>
 <tr class="v-PASS"><td class="id">F2</td><td>Fault: sub-national geography (Texas)</td><td><span class="pill PASS">PASS</span></td>
-<td>apify_only</td><td class="n">7</td><td class="n">1</td><td class="n">5</td><td class="n">1</td>
-<td class="n">1</td><td class="n">$0.0350</td><td class="n">0</td><td class="n">$0.0350</td></tr>
+<td>apify_only</td><td class="n">4</td><td class="n">1</td><td class="n">2</td><td class="n">1</td>
+<td class="n">1</td><td class="n">$0.0231</td><td class="n">0</td><td class="n">$0.0231</td></tr>
 <tr class="v-PASS"><td class="id">C1</td><td>US-headquartered companies hiring AEs</td><td><span class="pill PASS">PASS</span></td>
-<td>apify_only</td><td class="n">7</td><td class="n">4</td><td class="n">1</td><td class="n">2</td>
-<td class="n">0.5</td><td class="n">$0.0311</td><td class="n">0</td><td class="n">$0.0078</td></tr>
+<td>apify_only</td><td class="n">4</td><td class="n">2</td><td class="n">1</td><td class="n">1</td>
+<td class="n">1</td><td class="n">$0.0231</td><td class="n">0</td><td class="n">$0.0115</td></tr>
 <tr class="v-PASS"><td class="id">C2</td><td>Companies operating in the US</td><td><span class="pill PASS">PASS</span></td>
-<td>apify_only</td><td class="n">7</td><td class="n">4</td><td class="n">1</td><td class="n">2</td>
-<td class="n">0.5</td><td class="n">$0.0311</td><td class="n">0</td><td class="n">$0.0078</td></tr>
+<td>apify_only</td><td class="n">4</td><td class="n">2</td><td class="n">1</td><td class="n">1</td>
+<td class="n">1</td><td class="n">$0.0231</td><td class="n">0</td><td class="n">$0.0115</td></tr>
 <tr class="v-PASS"><td class="id">C3</td><td>Prefer B2B but allow B2C</td><td><span class="pill PASS">PASS</span></td>
-<td>apify_only</td><td class="n">7</td><td class="n">4</td><td class="n">1</td><td class="n">2</td>
-<td class="n">0.5</td><td class="n">$0.0311</td><td class="n">0</td><td class="n">$0.0078</td></tr>
+<td>apify_only</td><td class="n">4</td><td class="n">2</td><td class="n">1</td><td class="n">1</td>
+<td class="n">1</td><td class="n">$0.0231</td><td class="n">0</td><td class="n">$0.0115</td></tr>
 <tr class="v-FAIL"><td class="id">C4</td><td>Hiring SDRs or AEs</td><td><span class="pill FAIL">FAIL</span></td>
-<td>apify_only</td><td class="n">7</td><td class="n">4</td><td class="n">1</td><td class="n">2</td>
-<td class="n">0.75</td><td class="n">$0.0311</td><td class="n">0</td><td class="n">$0.0078</td></tr></tbody></table></div>
+<td>apify_only</td><td class="n">4</td><td class="n">2</td><td class="n">1</td><td class="n">1</td>
+<td class="n">1</td><td class="n">$0.0231</td><td class="n">0</td><td class="n">$0.0115</td></tr></tbody></table></div>
 <h2>Scenarios</h2>
-<details id="A1"><summary><b>A1</b> Apify — US companies hiring Account Executives <span class="pill FAIL">FAIL</span></summary>
+<details id="A1"><summary><b>A1</b> Apify — US companies hiring Account Executives <span class="pill PASS">PASS</span></summary>
 <p class="req">“Find 5 US companies currently hiring Account Executives.”</p>
 <dl>
-<dt>Result</dt><dd>qualified glowcart.example, ironworks.example, northwind.example, plainsteel.example, quartzlabs.example; false-qualified glowcart.example, ironworks.example, plainsteel.example (postings for SDR / Sales Representative counted as Account Executive hiring)</dd>
+<dt>Result</dt><dd>qualified northwind.example, quartzlabs.example; false-qualified none (postings for SDR / Sales Representative counted as Account Executive hiring)</dd>
 <dt>Hard (stated)</dt><dd>US headquarters · hiring Account Executives (≤30 days)</dd>
 <dt>Hard (compiled)</dt><dd>geography:United States · hiring:{&quot;event&quot;:&quot;hiring&quot;,&quot;subject&quot;:&quot;company&quot;,&quot;qualifier&quot;:{&quot;role_terms&quot;:[&quot;account executives&quot;],&quot;role_families&quot;:[&quot;gtm_sales&quot;]}}</dd>
 <dt>Preferences</dt><dd>—</dd>
@@ -86,10 +86,10 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>PASS condition</dt><dd>Northwind and Quartz qualified; NO company qualified without an Account Executive posting (precision 1.0 vs ground truth); Maple and Apex not qualified; hard requirements preserved</dd>
 <dt>Plan</dt><dd>ready · hash <code>74d3eee5a963181c…</code> · semantics <code>c0efa9f40821ee80…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts | budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings</dd>
-<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (6)</dd>
+<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
 <dt>Errors</dt><dd>none</dd>
-<dt>Writes (TEST rows it would project)</dt><dd>6</dd>
-</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Glowcart <code>glowcart.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Ironworks Fabrication <code>ironworks.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Plain Steel Components <code>plainsteel.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
+<dt>Writes (TEST rows it would project)</dt><dd>3</dd>
+</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
 <details id="A2"><summary><b>A2</b> LeadOcean — US B2B SaaS, 20–500 employees <span class="pill PASS">PASS</span></summary>
 <p class="req">“Find 5 US B2B SaaS companies with 20–500 employees.”</p>
 <dl>
@@ -197,14 +197,14 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>PASS condition</dt><dd>the either/or requirement is preserved (not narrowed to hiring-only), the expansion limitation is stated</dd>
 <dt>Plan</dt><dd>ready · hash <code>174bd17b248b97f4…</code> · semantics <code>9867ec64d33c0c75…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts | budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings</dd>
-<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (6)</dd>
+<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
 <dt>Errors</dt><dd>none</dd>
-<dt>Writes (TEST rows it would project)</dt><dd>6</dd>
-</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Glowcart <code>glowcart.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Ironworks Fabrication <code>ironworks.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Plain Steel Components <code>plainsteel.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
+<dt>Writes (TEST rows it would project)</dt><dd>3</dd>
+</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
 <details id="X1"><summary><b>X1</b> Combined: Apify → LeadOcean (decision-makers at hiring companies) <span class="pill PASS">PASS</span></summary>
 <p class="req">“Find the founder or CEO at 3 US companies currently hiring Account Executives.”</p>
 <dl>
-<dt>Result</dt><dd>qualified northwind.example, quartzlabs.example, glowcart.example, ironworks.example; LeadOcean records 3; apify $0.03105</dd>
+<dt>Result</dt><dd>qualified northwind.example, quartzlabs.example; LeadOcean records 3; apify $0.02305</dd>
 <dt>Hard (stated)</dt><dd>US HQ · hiring AEs · a founder/CEO contact</dd>
 <dt>Hard (compiled)</dt><dd>geography:United States · hiring:{&quot;event&quot;:&quot;hiring&quot;,&quot;subject&quot;:&quot;company&quot;,&quot;qualifier&quot;:{&quot;role_terms&quot;:[&quot;account executives&quot;],&quot;role_families&quot;:[&quot;gtm_sales&quot;]}}</dd>
 <dt>Preferences</dt><dd>—</dd>
@@ -214,10 +214,10 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>PASS condition</dt><dd>Maple (disproven) never qualifies and hard requirements are preserved</dd>
 <dt>Plan</dt><dd>ready · hash <code>447f41d85ede6637…</code> · semantics <code>dfa407d579d63bed…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts</dd>
-<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (5) · leadocean POST /v1/search (6)</dd>
-<dt>Errors</dt><dd>apify.linkedin_company_record: partial — budget: 1 company left unverified</dd>
-<dt>Writes (TEST rows it would project)</dt><dd>6</dd>
-</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, leadocean_discoveryx4, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, leadocean_discoveryx4, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Glowcart <code>glowcart.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Ironworks Fabrication <code>ironworks.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, leadocean_discoveryx4, apify_linkedin_job_searchx4</small></li><li><span class="pill BLOCKED">review</span> Plain Steel Components <code>plainsteel.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
+<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3) · leadocean POST /v1/search (6)</dd>
+<dt>Errors</dt><dd>none</dd>
+<dt>Writes (TEST rows it would project)</dt><dd>3</dd>
+</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, leadocean_discoveryx4, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, leadocean_discoveryx4, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, leadocean_discoveryx4, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
 <details id="X2"><summary><b>X2</b> Combined: LeadOcean → Apify (founders, verified companies) <span class="pill PASS">PASS</span></summary>
 <p class="req">“Find the founder or CEO at 3 US-headquartered companies with 20–200 employees.”</p>
 <dl>
@@ -248,10 +248,10 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>PASS condition</dt><dd>0 qualified</dd>
 <dt>Plan</dt><dd>ready · hash <code>1ca17f8b5edb24d4…</code> · semantics <code>03864d6aba69b43d…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts | budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings</dd>
-<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (6)</dd>
+<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
 <dt>Errors</dt><dd>none</dd>
-<dt>Writes (TEST rows it would project)</dt><dd>7</dd>
-</dl><ul class="cos"><li><span class="pill BLOCKED">review</span> Glowcart <code>glowcart.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill BLOCKED">review</span> Ironworks Fabrication <code>ironworks.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Maple Ledger <code>mapleledger.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Northwind Ledger <code>northwind.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Plain Steel Components <code>plainsteel.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Quartz Labs <code>quartzlabs.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
+<dt>Writes (TEST rows it would project)</dt><dd>4</dd>
+</dl><ul class="cos"><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill BLOCKED">review</span> Maple Ledger <code>mapleledger.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Northwind Ledger <code>northwind.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Quartz Labs <code>quartzlabs.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
 <details id="F2"><summary><b>F2</b> Fault: sub-national geography (Texas) <span class="pill PASS">PASS</span></summary>
 <p class="req">“Find 5 companies headquartered in Texas currently hiring Account Executives.”</p>
 <dl>
@@ -265,10 +265,10 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>PASS condition</dt><dd>precision 1.0: no company outside Texas qualifies</dd>
 <dt>Plan</dt><dd>ready · hash <code>93bc60b7cc1b3828…</code> · semantics <code>545e16ce3442f046…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts | budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings</dd>
-<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (6)</dd>
+<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
 <dt>Errors</dt><dd>none</dd>
 <dt>Writes (TEST rows it would project)</dt><dd>2</dd>
-</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Glowcart <code>glowcart.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill FAIL">rejected</span> Ironworks Fabrication <code>ironworks.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill FAIL">rejected</span> Plain Steel Components <code>plainsteel.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill FAIL">rejected</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
+</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill FAIL">rejected</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
 <details id="C1"><summary><b>C1</b> US-headquartered companies hiring AEs <span class="pill PASS">PASS</span></summary>
 <p class="req">“Find 3 US-headquartered companies hiring Account Executives.”</p>
 <dl>
@@ -282,14 +282,14 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>PASS condition</dt><dd>geography scope = headquarters and Maple not qualified</dd>
 <dt>Plan</dt><dd>ready · hash <code>c3fc03ff17cdbe77…</code> · semantics <code>0a5eb0bb807782d4…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts</dd>
-<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (5)</dd>
-<dt>Errors</dt><dd>apify.linkedin_company_record: partial — budget: 1 company left unverified</dd>
-<dt>Writes (TEST rows it would project)</dt><dd>6</dd>
-</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Glowcart <code>glowcart.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Ironworks Fabrication <code>ironworks.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill BLOCKED">review</span> Plain Steel Components <code>plainsteel.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
+<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
+<dt>Errors</dt><dd>none</dd>
+<dt>Writes (TEST rows it would project)</dt><dd>3</dd>
+</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
 <details id="C2"><summary><b>C2</b> Companies operating in the US <span class="pill PASS">PASS</span></summary>
 <p class="req">“Find 3 companies operating in the US that are hiring Account Executives.”</p>
 <dl>
-<dt>Result</dt><dd>scope presence; qualified 4</dd>
+<dt>Result</dt><dd>scope presence; qualified 2</dd>
 <dt>Hard (stated)</dt><dd>operates in the US (scope: presence — NOT headquarters) · hiring AEs</dd>
 <dt>Hard (compiled)</dt><dd>geography:United States · hiring:{&quot;event&quot;:&quot;hiring&quot;,&quot;subject&quot;:&quot;company&quot;,&quot;qualifier&quot;:{&quot;role_terms&quot;:[&quot;account executives&quot;],&quot;role_families&quot;:[&quot;gtm_sales&quot;]}}</dd>
 <dt>Preferences</dt><dd>—</dd>
@@ -299,10 +299,10 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>PASS condition</dt><dd>geography scope = presence (never silently headquarters)</dd>
 <dt>Plan</dt><dd>ready · hash <code>18d3322129c94f98…</code> · semantics <code>63f0ed922c56eb85…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts</dd>
-<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (5)</dd>
-<dt>Errors</dt><dd>apify.linkedin_company_record: partial — budget: 1 company left unverified</dd>
-<dt>Writes (TEST rows it would project)</dt><dd>6</dd>
-</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Glowcart <code>glowcart.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Ironworks Fabrication <code>ironworks.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill BLOCKED">review</span> Plain Steel Components <code>plainsteel.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
+<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
+<dt>Errors</dt><dd>none</dd>
+<dt>Writes (TEST rows it would project)</dt><dd>3</dd>
+</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
 <details id="C3"><summary><b>C3</b> Prefer B2B but allow B2C <span class="pill PASS">PASS</span></summary>
 <p class="req">“Find 3 US companies hiring Account Executives. Prefer B2B companies, but include strong B2C opportunities.”</p>
 <dl>
@@ -316,14 +316,14 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>PASS condition</dt><dd>no hard business-model requirement; B2B kept as a preference</dd>
 <dt>Plan</dt><dd>ready · hash <code>47c6df4203c052f8…</code> · semantics <code>3df8ae017cfe36ac…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts</dd>
-<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (5)</dd>
-<dt>Errors</dt><dd>apify.linkedin_company_record: partial — budget: 1 company left unverified</dd>
-<dt>Writes (TEST rows it would project)</dt><dd>6</dd>
-</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Glowcart <code>glowcart.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Ironworks Fabrication <code>ironworks.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill BLOCKED">review</span> Plain Steel Components <code>plainsteel.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
+<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
+<dt>Errors</dt><dd>none</dd>
+<dt>Writes (TEST rows it would project)</dt><dd>3</dd>
+</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
 <details id="C4"><summary><b>C4</b> Hiring SDRs or AEs <span class="pill FAIL">FAIL</span></summary>
 <p class="req">“Find 3 US companies hiring SDRs or Account Executives.”</p>
 <dl>
-<dt>Result</dt><dd>titles account executives; glowcart qualified</dd>
+<dt>Result</dt><dd>titles account executives; glowcart absent</dd>
 <dt>Hard (stated)</dt><dd>US HQ · hiring SDRs or AEs (one hiring requirement, either role)</dd>
 <dt>Hard (compiled)</dt><dd>geography:United States · hiring:{&quot;event&quot;:&quot;hiring&quot;,&quot;subject&quot;:&quot;company&quot;,&quot;qualifier&quot;:{&quot;role_terms&quot;:[&quot;account executives&quot;],&quot;role_families&quot;:[&quot;gtm_sales&quot;]}}</dd>
 <dt>Preferences</dt><dd>—</dd>
@@ -333,9 +333,9 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>PASS condition</dt><dd>both role terms reach the hiring requirement and the search, and Glowcart (SDR posting) is a candidate</dd>
 <dt>Plan</dt><dd>ready · hash <code>0ebbb5efbf79fe45…</code> · semantics <code>0a5eb0bb807782d4…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts</dd>
-<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (5)</dd>
-<dt>Errors</dt><dd>apify.linkedin_company_record: partial — budget: 1 company left unverified</dd>
-<dt>Writes (TEST rows it would project)</dt><dd>6</dd>
-</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Glowcart <code>glowcart.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Ironworks Fabrication <code>ironworks.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill BLOCKED">review</span> Plain Steel Components <code>plainsteel.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
+<dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
+<dt>Errors</dt><dd>none</dd>
+<dt>Writes (TEST rows it would project)</dt><dd>3</dd>
+</dl><ul class="cos"><li><span class="pill PASS">qualified</span> Northwind Ledger <code>northwind.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx5, apify_linkedin_company_detailsx4</small></li><li><span class="pill PASS">qualified</span> Quartz Labs <code>quartzlabs.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li><li><span class="pill BLOCKED">review</span> Harbor Metrics <code>harbor.example</code> — unproven: geography<br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4</small></li><li><span class="pill FAIL">rejected</span> Maple Ledger <code>mapleledger.example</code><br><small>evidence: apify_discoveryx2, apify_linkedin_job_searchx4, apify_linkedin_company_detailsx4</small></li></ul></details>
 <p class="note">Apify cost is an estimated UPPER BOUND: the synchronous actor run reports no charge, so the ledger records the worst case for the items returned. LeadOcean is billed in records. Precision and recall are measured against each scenario's ground truth over synthetic data; they show what ATLAS's rules do, not live provider quality. X1–X2 are supplementary combined-strategy runs and F1–F2 failure-injection runs; both are outside the 12-scenario matrix (the tiles count only the 12).</p>
 </main></body></html>

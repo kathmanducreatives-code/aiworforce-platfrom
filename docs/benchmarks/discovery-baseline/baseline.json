@@ -7,7 +7,7 @@
    "id": "A1",
    "group": "A",
    "title": "Apify — US companies hiring Account Executives",
-   "verdict": "FAIL",
+   "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
    "planHash": "74d3eee5a963181c908b1f440e7eac8087c0c708cd989099adf256e74795f85e",
@@ -15,20 +15,20 @@
    "hardRequirements": 2,
    "hardPreserved": true,
    "providerCalls": 2,
-   "apifyItems": 16,
+   "apifyItems": 13,
    "leadoceanRecords": 0,
-   "candidates": 7,
-   "uniqueCompanies": 7,
-   "qualified": 5,
+   "candidates": 4,
+   "uniqueCompanies": 4,
+   "qualified": 2,
    "rejected": 1,
    "review": 1,
-   "falseQualified": 3,
-   "precision": 0.4,
+   "falseQualified": 0,
+   "precision": 1,
    "recall": 1,
-   "apifyUsdUpperBound": 0.03505,
-   "costPerQualifiedUsd": 0.00701,
+   "apifyUsdUpperBound": 0.02305,
+   "costPerQualifiedUsd": 0.011525,
    "errors": 0,
-   "dbWrites": 6
+   "dbWrites": 3
   },
   {
    "id": "A2",
@@ -204,20 +204,20 @@
    "hardRequirements": 2,
    "hardPreserved": true,
    "providerCalls": 2,
-   "apifyItems": 16,
+   "apifyItems": 13,
    "leadoceanRecords": 0,
-   "candidates": 7,
-   "uniqueCompanies": 7,
-   "qualified": 5,
+   "candidates": 4,
+   "uniqueCompanies": 4,
+   "qualified": 2,
    "rejected": 1,
    "review": 1,
-   "falseQualified": 3,
-   "precision": 0.4,
+   "falseQualified": 0,
+   "precision": 1,
    "recall": 1,
-   "apifyUsdUpperBound": 0.03505,
-   "costPerQualifiedUsd": 0.00701,
+   "apifyUsdUpperBound": 0.02305,
+   "costPerQualifiedUsd": 0.011525,
    "errors": 0,
-   "dbWrites": 6
+   "dbWrites": 3
   },
   {
    "id": "X1",
@@ -231,20 +231,20 @@
    "hardRequirements": 2,
    "hardPreserved": true,
    "providerCalls": 3,
-   "apifyItems": 15,
+   "apifyItems": 13,
    "leadoceanRecords": 3,
-   "candidates": 7,
-   "uniqueCompanies": 7,
-   "qualified": 4,
+   "candidates": 4,
+   "uniqueCompanies": 4,
+   "qualified": 2,
    "rejected": 1,
-   "review": 2,
-   "falseQualified": 2,
-   "precision": 0.5,
+   "review": 1,
+   "falseQualified": 0,
+   "precision": 1,
    "recall": 1,
-   "apifyUsdUpperBound": 0.03105,
-   "costPerQualifiedUsd": 0.007763,
-   "errors": 1,
-   "dbWrites": 6
+   "apifyUsdUpperBound": 0.02305,
+   "costPerQualifiedUsd": 0.011525,
+   "errors": 0,
+   "dbWrites": 3
   },
   {
    "id": "X2",
@@ -285,20 +285,20 @@
    "hardRequirements": 2,
    "hardPreserved": true,
    "providerCalls": 2,
-   "apifyItems": 16,
+   "apifyItems": 13,
    "leadoceanRecords": 0,
-   "candidates": 7,
-   "uniqueCompanies": 7,
+   "candidates": 4,
+   "uniqueCompanies": 4,
    "qualified": 0,
    "rejected": 0,
-   "review": 7,
+   "review": 4,
    "falseQualified": 0,
    "precision": null,
    "recall": null,
-   "apifyUsdUpperBound": 0.03505,
+   "apifyUsdUpperBound": 0.02305,
    "costPerQualifiedUsd": null,
    "errors": 0,
-   "dbWrites": 7
+   "dbWrites": 4
   },
   {
    "id": "F2",
@@ -312,18 +312,18 @@
    "hardRequirements": 2,
    "hardPreserved": true,
    "providerCalls": 2,
-   "apifyItems": 16,
+   "apifyItems": 13,
    "leadoceanRecords": 0,
-   "candidates": 7,
-   "uniqueCompanies": 7,
+   "candidates": 4,
+   "uniqueCompanies": 4,
    "qualified": 1,
-   "rejected": 5,
+   "rejected": 2,
    "review": 1,
    "falseQualified": 0,
    "precision": 1,
    "recall": 1,
-   "apifyUsdUpperBound": 0.03505,
-   "costPerQualifiedUsd": 0.03505,
+   "apifyUsdUpperBound": 0.02305,
+   "costPerQualifiedUsd": 0.02305,
    "errors": 0,
    "dbWrites": 2
   },
@@ -339,20 +339,20 @@
    "hardRequirements": 2,
    "hardPreserved": true,
    "providerCalls": 2,
-   "apifyItems": 15,
+   "apifyItems": 13,
    "leadoceanRecords": 0,
-   "candidates": 7,
-   "uniqueCompanies": 7,
-   "qualified": 4,
+   "candidates": 4,
+   "uniqueCompanies": 4,
+   "qualified": 2,
    "rejected": 1,
-   "review": 2,
-   "falseQualified": 2,
-   "precision": 0.5,
+   "review": 1,
+   "falseQualified": 0,
+   "precision": 1,
    "recall": 1,
-   "apifyUsdUpperBound": 0.03105,
-   "costPerQualifiedUsd": 0.007763,
-   "errors": 1,
-   "dbWrites": 6
+   "apifyUsdUpperBound": 0.02305,
+   "costPerQualifiedUsd": 0.011525,
+   "errors": 0,
+   "dbWrites": 3
   },
   {
    "id": "C2",
@@ -366,20 +366,20 @@
    "hardRequirements": 2,
    "hardPreserved": true,
    "providerCalls": 2,
-   "apifyItems": 15,
+   "apifyItems": 13,
    "leadoceanRecords": 0,
-   "candidates": 7,
-   "uniqueCompanies": 7,
-   "qualified": 4,
+   "candidates": 4,
+   "uniqueCompanies": 4,
+   "qualified": 2,
    "rejected": 1,
-   "review": 2,
-   "falseQualified": 2,
-   "precision": 0.5,
+   "review": 1,
+   "falseQualified": 0,
+   "precision": 1,
    "recall": 1,
-   "apifyUsdUpperBound": 0.03105,
-   "costPerQualifiedUsd": 0.007763,
-   "errors": 1,
-   "dbWrites": 6
+   "apifyUsdUpperBound": 0.02305,
+   "costPerQualifiedUsd": 0.011525,
+   "errors": 0,
+   "dbWrites": 3
   },
   {
    "id": "C3",
@@ -393,20 +393,20 @@
    "hardRequirements": 2,
    "hardPreserved": true,
    "providerCalls": 2,
-   "apifyItems": 15,
+   "apifyItems": 13,
    "leadoceanRecords": 0,
-   "candidates": 7,
-   "uniqueCompanies": 7,
-   "qualified": 4,
+   "candidates": 4,
+   "uniqueCompanies": 4,
+   "qualified": 2,
    "rejected": 1,
-   "review": 2,
-   "falseQualified": 2,
-   "precision": 0.5,
+   "review": 1,
+   "falseQualified": 0,
+   "precision": 1,
    "recall": 1,
-   "apifyUsdUpperBound": 0.03105,
-   "costPerQualifiedUsd": 0.007763,
-   "errors": 1,
-   "dbWrites": 6
+   "apifyUsdUpperBound": 0.02305,
+   "costPerQualifiedUsd": 0.011525,
+   "errors": 0,
+   "dbWrites": 3
   },
   {
    "id": "C4",
@@ -420,20 +420,20 @@
    "hardRequirements": 2,
    "hardPreserved": true,
    "providerCalls": 2,
-   "apifyItems": 15,
+   "apifyItems": 13,
    "leadoceanRecords": 0,
-   "candidates": 7,
-   "uniqueCompanies": 7,
-   "qualified": 4,
+   "candidates": 4,
+   "uniqueCompanies": 4,
+   "qualified": 2,
    "rejected": 1,
-   "review": 2,
-   "falseQualified": 1,
-   "precision": 0.75,
-   "recall": 1,
-   "apifyUsdUpperBound": 0.03105,
-   "costPerQualifiedUsd": 0.007763,
-   "errors": 1,
-   "dbWrites": 6
+   "review": 1,
+   "falseQualified": 0,
+   "precision": 1,
+   "recall": 0.67,
+   "apifyUsdUpperBound": 0.02305,
+   "costPerQualifiedUsd": 0.011525,
+   "errors": 0,
+   "dbWrites": 3
   }
  ],
  "results": [
@@ -441,8 +441,8 @@
    "id": "A1",
    "title": "Apify — US companies hiring Account Executives",
    "group": "A",
-   "verdict": "FAIL",
-   "detail": "qualified glowcart.example, ironworks.example, northwind.example, plainsteel.example, quartzlabs.example; false-qualified glowcart.example, ironworks.example, plainsteel.example (postings for SDR / Sales Representative counted as Account Executive hiring)",
+   "verdict": "PASS",
+   "detail": "qualified northwind.example, quartzlabs.example; false-qualified none (postings for SDR / Sales Representative counted as Account Executive hiring)",
    "spec": {
     "hard": [
      "US headquarters",
@@ -490,47 +490,19 @@
      {
       "provider": "apify",
       "capability": "apify_linkedin_company_details",
-      "items": 6
+      "items": 3
      }
     ],
     "itemsPurchased": {
-     "apify": 16,
+     "apify": 13,
      "leadoceanRecords": 0
     },
-    "candidates": 7,
-    "uniqueCompanies": 7,
-    "qualified": 5,
+    "candidates": 4,
+    "uniqueCompanies": 4,
+    "qualified": 2,
     "rejected": 1,
     "review": 1,
     "companies": [
-     {
-      "name": "Glowcart",
-      "domain": "glowcart.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Ironworks Fabrication",
-      "domain": "ironworks.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
      {
       "name": "Northwind Ledger",
       "domain": "northwind.example",
@@ -541,20 +513,6 @@
       "evidence": [
        "apify_discoveryx2",
        "apify_linkedin_job_searchx5",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Plain Steel Components",
-      "domain": "plainsteel.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
        "apify_linkedin_company_detailsx4"
       ],
       "gaps": []
@@ -603,24 +561,20 @@
       "gaps": []
      }
     ],
-    "falseQualified": [
-     "glowcart.example",
-     "ironworks.example",
-     "plainsteel.example"
-    ],
+    "falseQualified": [],
     "missedQualified": [],
-    "precision": 0.4,
+    "precision": 1,
     "recall": 1,
     "anyOf": false,
     "costUsd": {
-     "apify": 0.03505,
+     "apify": 0.02305,
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 0,
-    "costPerQualifiedUsd": 0.00701,
+    "costPerQualifiedUsd": 0.011525,
     "errors": [],
     "retries": 0,
-    "dbWrites": 6,
+    "dbWrites": 3,
     "ledger": {
      "reserved": 0,
      "settled": 2,
@@ -1263,47 +1217,19 @@
      {
       "provider": "apify",
       "capability": "apify_linkedin_company_details",
-      "items": 6
+      "items": 3
      }
     ],
     "itemsPurchased": {
-     "apify": 16,
+     "apify": 13,
      "leadoceanRecords": 0
     },
-    "candidates": 7,
-    "uniqueCompanies": 7,
-    "qualified": 5,
+    "candidates": 4,
+    "uniqueCompanies": 4,
+    "qualified": 2,
     "rejected": 1,
     "review": 1,
     "companies": [
-     {
-      "name": "Glowcart",
-      "domain": "glowcart.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Ironworks Fabrication",
-      "domain": "ironworks.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
      {
       "name": "Northwind Ledger",
       "domain": "northwind.example",
@@ -1314,20 +1240,6 @@
       "evidence": [
        "apify_discoveryx2",
        "apify_linkedin_job_searchx5",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Plain Steel Components",
-      "domain": "plainsteel.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
        "apify_linkedin_company_detailsx4"
       ],
       "gaps": []
@@ -1376,24 +1288,20 @@
       "gaps": []
      }
     ],
-    "falseQualified": [
-     "glowcart.example",
-     "ironworks.example",
-     "plainsteel.example"
-    ],
+    "falseQualified": [],
     "missedQualified": [],
-    "precision": 0.4,
+    "precision": 1,
     "recall": 1,
     "anyOf": false,
     "costUsd": {
-     "apify": 0.03505,
+     "apify": 0.02305,
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 0,
-    "costPerQualifiedUsd": 0.00701,
+    "costPerQualifiedUsd": 0.011525,
     "errors": [],
     "retries": 0,
-    "dbWrites": 6,
+    "dbWrites": 3,
     "ledger": {
      "reserved": 0,
      "settled": 2,
@@ -1406,7 +1314,7 @@
    "title": "Combined: Apify → LeadOcean (decision-makers at hiring companies)",
    "group": "X",
    "verdict": "PASS",
-   "detail": "qualified northwind.example, quartzlabs.example, glowcart.example, ironworks.example; LeadOcean records 3; apify $0.03105",
+   "detail": "qualified northwind.example, quartzlabs.example; LeadOcean records 3; apify $0.02305",
    "spec": {
     "hard": [
      "US HQ",
@@ -1454,7 +1362,7 @@
      {
       "provider": "apify",
       "capability": "apify_linkedin_company_details",
-      "items": 5
+      "items": 3
      },
      {
       "provider": "leadocean",
@@ -1468,22 +1376,19 @@
       "domains": [
        "northwind.example",
        "quartzlabs.example",
-       "glowcart.example",
-       "ironworks.example",
-       "harbor.example",
-       "plainsteel.example"
+       "harbor.example"
       ]
      }
     ],
     "itemsPurchased": {
-     "apify": 15,
+     "apify": 13,
      "leadoceanRecords": 3
     },
-    "candidates": 7,
-    "uniqueCompanies": 7,
-    "qualified": 4,
+    "candidates": 4,
+    "uniqueCompanies": 4,
+    "qualified": 2,
     "rejected": 1,
-    "review": 2,
+    "review": 1,
     "companies": [
      {
       "name": "Northwind Ledger",
@@ -1518,34 +1423,6 @@
       "gaps": []
      },
      {
-      "name": "Glowcart",
-      "domain": "glowcart.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Ironworks Fabrication",
-      "domain": "ironworks.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
       "name": "Harbor Metrics",
       "domain": "harbor.example",
       "verdict": "review",
@@ -1556,21 +1433,6 @@
       "evidence": [
        "apify_discoveryx2",
        "leadocean_discoveryx4",
-       "apify_linkedin_job_searchx4"
-      ],
-      "gaps": [
-       "geography"
-      ]
-     },
-     {
-      "name": "Plain Steel Components",
-      "domain": "plainsteel.example",
-      "verdict": "review",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
        "apify_linkedin_job_searchx4"
       ],
       "gaps": [
@@ -1592,25 +1454,20 @@
       "gaps": []
      }
     ],
-    "falseQualified": [
-     "glowcart.example",
-     "ironworks.example"
-    ],
+    "falseQualified": [],
     "missedQualified": [],
-    "precision": 0.5,
+    "precision": 1,
     "recall": 1,
     "anyOf": false,
     "costUsd": {
-     "apify": 0.03105,
+     "apify": 0.02305,
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 3,
-    "costPerQualifiedUsd": 0.007763,
-    "errors": [
-     "apify.linkedin_company_record: partial — budget: 1 company left unverified"
-    ],
+    "costPerQualifiedUsd": 0.011525,
+    "errors": [],
     "retries": 0,
-    "dbWrites": 6,
+    "dbWrites": 3,
     "ledger": {
      "reserved": 0,
      "settled": 3,
@@ -1819,35 +1676,19 @@
      {
       "provider": "apify",
       "capability": "apify_linkedin_company_details",
-      "items": 6
+      "items": 3
      }
     ],
     "itemsPurchased": {
-     "apify": 16,
+     "apify": 13,
      "leadoceanRecords": 0
     },
-    "candidates": 7,
-    "uniqueCompanies": 7,
+    "candidates": 4,
+    "uniqueCompanies": 4,
     "qualified": 0,
     "rejected": 0,
-    "review": 7,
+    "review": 4,
     "companies": [
-     {
-      "name": "Glowcart",
-      "domain": "glowcart.example",
-      "verdict": "review",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": [
-       "geography"
-      ]
-     },
      {
       "name": "Harbor Metrics",
       "domain": "harbor.example",
@@ -1858,22 +1699,6 @@
       "evidence": [
        "apify_discoveryx2",
        "apify_linkedin_job_searchx4"
-      ],
-      "gaps": [
-       "geography"
-      ]
-     },
-     {
-      "name": "Ironworks Fabrication",
-      "domain": "ironworks.example",
-      "verdict": "review",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
       ],
       "gaps": [
        "geography"
@@ -1912,22 +1737,6 @@
       ]
      },
      {
-      "name": "Plain Steel Components",
-      "domain": "plainsteel.example",
-      "verdict": "review",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": [
-       "geography"
-      ]
-     },
-     {
       "name": "Quartz Labs",
       "domain": "quartzlabs.example",
       "verdict": "review",
@@ -1950,14 +1759,14 @@
     "recall": null,
     "anyOf": false,
     "costUsd": {
-     "apify": 0.03505,
+     "apify": 0.02305,
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 0,
     "costPerQualifiedUsd": null,
     "errors": [],
     "retries": 0,
-    "dbWrites": 7,
+    "dbWrites": 4,
     "ledger": {
      "reserved": 0,
      "settled": 2,
@@ -2017,17 +1826,17 @@
      {
       "provider": "apify",
       "capability": "apify_linkedin_company_details",
-      "items": 6
+      "items": 3
      }
     ],
     "itemsPurchased": {
-     "apify": 16,
+     "apify": 13,
      "leadoceanRecords": 0
     },
-    "candidates": 7,
-    "uniqueCompanies": 7,
+    "candidates": 4,
+    "uniqueCompanies": 4,
     "qualified": 1,
-    "rejected": 5,
+    "rejected": 2,
     "review": 1,
     "companies": [
      {
@@ -2060,50 +1869,8 @@
       ]
      },
      {
-      "name": "Glowcart",
-      "domain": "glowcart.example",
-      "verdict": "rejected",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Ironworks Fabrication",
-      "domain": "ironworks.example",
-      "verdict": "rejected",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
       "name": "Maple Ledger",
       "domain": "mapleledger.example",
-      "verdict": "rejected",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Plain Steel Components",
-      "domain": "plainsteel.example",
       "verdict": "rejected",
       "sources": [
        "apify"
@@ -2136,11 +1903,11 @@
     "recall": 1,
     "anyOf": false,
     "costUsd": {
-     "apify": 0.03505,
+     "apify": 0.02305,
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 0,
-    "costPerQualifiedUsd": 0.03505,
+    "costPerQualifiedUsd": 0.02305,
     "errors": [],
     "retries": 0,
     "dbWrites": 2,
@@ -2202,47 +1969,19 @@
      {
       "provider": "apify",
       "capability": "apify_linkedin_company_details",
-      "items": 5
+      "items": 3
      }
     ],
     "itemsPurchased": {
-     "apify": 15,
+     "apify": 13,
      "leadoceanRecords": 0
     },
-    "candidates": 7,
-    "uniqueCompanies": 7,
-    "qualified": 4,
+    "candidates": 4,
+    "uniqueCompanies": 4,
+    "qualified": 2,
     "rejected": 1,
-    "review": 2,
+    "review": 1,
     "companies": [
-     {
-      "name": "Glowcart",
-      "domain": "glowcart.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Ironworks Fabrication",
-      "domain": "ironworks.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
      {
       "name": "Northwind Ledger",
       "domain": "northwind.example",
@@ -2287,21 +2026,6 @@
       ]
      },
      {
-      "name": "Plain Steel Components",
-      "domain": "plainsteel.example",
-      "verdict": "review",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4"
-      ],
-      "gaps": [
-       "geography"
-      ]
-     },
-     {
       "name": "Maple Ledger",
       "domain": "mapleledger.example",
       "verdict": "rejected",
@@ -2316,25 +2040,20 @@
       "gaps": []
      }
     ],
-    "falseQualified": [
-     "glowcart.example",
-     "ironworks.example"
-    ],
+    "falseQualified": [],
     "missedQualified": [],
-    "precision": 0.5,
+    "precision": 1,
     "recall": 1,
     "anyOf": false,
     "costUsd": {
-     "apify": 0.03105,
+     "apify": 0.02305,
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 0,
-    "costPerQualifiedUsd": 0.007763,
-    "errors": [
-     "apify.linkedin_company_record: partial — budget: 1 company left unverified"
-    ],
+    "costPerQualifiedUsd": 0.011525,
+    "errors": [],
     "retries": 0,
-    "dbWrites": 6,
+    "dbWrites": 3,
     "ledger": {
      "reserved": 0,
      "settled": 2,
@@ -2347,7 +2066,7 @@
    "title": "Companies operating in the US",
    "group": "C",
    "verdict": "PASS",
-   "detail": "scope presence; qualified 4",
+   "detail": "scope presence; qualified 2",
    "spec": {
     "hard": [
      "operates in the US (scope: presence — NOT headquarters)",
@@ -2393,47 +2112,19 @@
      {
       "provider": "apify",
       "capability": "apify_linkedin_company_details",
-      "items": 5
+      "items": 3
      }
     ],
     "itemsPurchased": {
-     "apify": 15,
+     "apify": 13,
      "leadoceanRecords": 0
     },
-    "candidates": 7,
-    "uniqueCompanies": 7,
-    "qualified": 4,
+    "candidates": 4,
+    "uniqueCompanies": 4,
+    "qualified": 2,
     "rejected": 1,
-    "review": 2,
+    "review": 1,
     "companies": [
-     {
-      "name": "Glowcart",
-      "domain": "glowcart.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Ironworks Fabrication",
-      "domain": "ironworks.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
      {
       "name": "Northwind Ledger",
       "domain": "northwind.example",
@@ -2478,21 +2169,6 @@
       ]
      },
      {
-      "name": "Plain Steel Components",
-      "domain": "plainsteel.example",
-      "verdict": "review",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4"
-      ],
-      "gaps": [
-       "geography"
-      ]
-     },
-     {
       "name": "Maple Ledger",
       "domain": "mapleledger.example",
       "verdict": "rejected",
@@ -2507,25 +2183,20 @@
       "gaps": []
      }
     ],
-    "falseQualified": [
-     "glowcart.example",
-     "ironworks.example"
-    ],
+    "falseQualified": [],
     "missedQualified": [],
-    "precision": 0.5,
+    "precision": 1,
     "recall": 1,
     "anyOf": false,
     "costUsd": {
-     "apify": 0.03105,
+     "apify": 0.02305,
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 0,
-    "costPerQualifiedUsd": 0.007763,
-    "errors": [
-     "apify.linkedin_company_record: partial — budget: 1 company left unverified"
-    ],
+    "costPerQualifiedUsd": 0.011525,
+    "errors": [],
     "retries": 0,
-    "dbWrites": 6,
+    "dbWrites": 3,
     "ledger": {
      "reserved": 0,
      "settled": 2,
@@ -2586,47 +2257,19 @@
      {
       "provider": "apify",
       "capability": "apify_linkedin_company_details",
-      "items": 5
+      "items": 3
      }
     ],
     "itemsPurchased": {
-     "apify": 15,
+     "apify": 13,
      "leadoceanRecords": 0
     },
-    "candidates": 7,
-    "uniqueCompanies": 7,
-    "qualified": 4,
+    "candidates": 4,
+    "uniqueCompanies": 4,
+    "qualified": 2,
     "rejected": 1,
-    "review": 2,
+    "review": 1,
     "companies": [
-     {
-      "name": "Glowcart",
-      "domain": "glowcart.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Ironworks Fabrication",
-      "domain": "ironworks.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
      {
       "name": "Northwind Ledger",
       "domain": "northwind.example",
@@ -2671,21 +2314,6 @@
       ]
      },
      {
-      "name": "Plain Steel Components",
-      "domain": "plainsteel.example",
-      "verdict": "review",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4"
-      ],
-      "gaps": [
-       "geography"
-      ]
-     },
-     {
       "name": "Maple Ledger",
       "domain": "mapleledger.example",
       "verdict": "rejected",
@@ -2700,25 +2328,20 @@
       "gaps": []
      }
     ],
-    "falseQualified": [
-     "glowcart.example",
-     "ironworks.example"
-    ],
+    "falseQualified": [],
     "missedQualified": [],
-    "precision": 0.5,
+    "precision": 1,
     "recall": 1,
     "anyOf": false,
     "costUsd": {
-     "apify": 0.03105,
+     "apify": 0.02305,
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 0,
-    "costPerQualifiedUsd": 0.007763,
-    "errors": [
-     "apify.linkedin_company_record: partial — budget: 1 company left unverified"
-    ],
+    "costPerQualifiedUsd": 0.011525,
+    "errors": [],
     "retries": 0,
-    "dbWrites": 6,
+    "dbWrites": 3,
     "ledger": {
      "reserved": 0,
      "settled": 2,
@@ -2731,7 +2354,7 @@
    "title": "Hiring SDRs or AEs",
    "group": "C",
    "verdict": "FAIL",
-   "detail": "titles account executives; glowcart qualified",
+   "detail": "titles account executives; glowcart absent",
    "spec": {
     "hard": [
      "US HQ",
@@ -2777,47 +2400,19 @@
      {
       "provider": "apify",
       "capability": "apify_linkedin_company_details",
-      "items": 5
+      "items": 3
      }
     ],
     "itemsPurchased": {
-     "apify": 15,
+     "apify": 13,
      "leadoceanRecords": 0
     },
-    "candidates": 7,
-    "uniqueCompanies": 7,
-    "qualified": 4,
+    "candidates": 4,
+    "uniqueCompanies": 4,
+    "qualified": 2,
     "rejected": 1,
-    "review": 2,
+    "review": 1,
     "companies": [
-     {
-      "name": "Glowcart",
-      "domain": "glowcart.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Ironworks Fabrication",
-      "domain": "ironworks.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
      {
       "name": "Northwind Ledger",
       "domain": "northwind.example",
@@ -2862,21 +2457,6 @@
       ]
      },
      {
-      "name": "Plain Steel Components",
-      "domain": "plainsteel.example",
-      "verdict": "review",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4"
-      ],
-      "gaps": [
-       "geography"
-      ]
-     },
-     {
       "name": "Maple Ledger",
       "domain": "mapleledger.example",
       "verdict": "rejected",
@@ -2891,24 +2471,22 @@
       "gaps": []
      }
     ],
-    "falseQualified": [
-     "ironworks.example"
+    "falseQualified": [],
+    "missedQualified": [
+     "glowcart.example"
     ],
-    "missedQualified": [],
-    "precision": 0.75,
-    "recall": 1,
+    "precision": 1,
+    "recall": 0.67,
     "anyOf": false,
     "costUsd": {
-     "apify": 0.03105,
+     "apify": 0.02305,
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 0,
-    "costPerQualifiedUsd": 0.007763,
-    "errors": [
-     "apify.linkedin_company_record: partial — budget: 1 company left unverified"
-    ],
+    "costPerQualifiedUsd": 0.011525,
+    "errors": [],
     "retries": 0,
-    "dbWrites": 6,
+    "dbWrites": 3,
     "ledger": {
      "reserved": 0,
      "settled": 2,

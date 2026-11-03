@@ -1,17 +1,17 @@
 id,group,title,verdict,strategy,planStatus,hardRequirements,hardPreserved,providerCalls,apifyItems,leadoceanRecords,candidates,uniqueCompanies,qualified,rejected,review,falseQualified,precision,recall,apifyUsdUpperBound,costPerQualifiedUsd,errors,dbWrites
-A1,A,Apify — US companies hiring Account Executives,FAIL,apify_only,ready,2,true,2,16,0,7,7,5,1,1,3,0.4,1,0.03505,0.00701,0,6
+A1,A,Apify — US companies hiring Account Executives,PASS,apify_only,ready,2,true,2,13,0,4,4,2,1,1,0,1,1,0.02305,0.011525,0,3
 A2,A,"LeadOcean — US B2B SaaS, 20–500 employees",PASS,leadocean_only,ready,4,true,1,0,4,3,3,0,0,3,0,,,0,,0,2
 A3,A,Apify — US manufacturers hiring sales representatives,PASS,apify_only,ready,3,true,2,16,0,7,7,0,1,6,0,,,0.03505,,0,6
 A4,A,"LeadOcean — US insurance agencies, 10–100 employees",FAIL,leadocean_only,ready,2,true,1,0,2,2,2,0,0,2,0,,,0,,0,2
 B1,B,Apify discovery → LeadOcean company enrichment,UNSUPPORTED,,not_run,0,,0,0,0,0,0,0,0,0,0,,,0,,0,0
 B2,B,LeadOcean discovery → Apify hiring verification,UNSUPPORTED,,blocked,4,true,0,0,0,0,0,0,0,0,0,,,0,,0,0
 B3,B,"Both providers discover US manufacturers, then deduplicate",UNSUPPORTED,,not_run,0,,0,0,0,0,0,0,0,0,0,,,0,,0,0
-B4,B,Hiring OR expansion opportunities,FAIL,apify_only,ready,2,true,2,16,0,7,7,5,1,1,3,0.4,1,0.03505,0.00701,0,6
-X1,X,Combined: Apify → LeadOcean (decision-makers at hiring companies),PASS,apify_plus_leadocean,ready,2,true,3,15,3,7,7,4,1,2,2,0.5,1,0.03105,0.007763,1,6
+B4,B,Hiring OR expansion opportunities,FAIL,apify_only,ready,2,true,2,13,0,4,4,2,1,1,0,1,1,0.02305,0.011525,0,3
+X1,X,Combined: Apify → LeadOcean (decision-makers at hiring companies),PASS,apify_plus_leadocean,ready,2,true,3,13,3,4,4,2,1,1,0,1,1,0.02305,0.011525,0,3
 X2,X,"Combined: LeadOcean → Apify (founders, verified companies)",PASS,leadocean_plus_apify,ready,2,true,2,3,4,4,4,1,1,2,0,1,0.5,0.01205,0.01205,0,3
-F1,F,Fault: unrecognised geography (Atlantis),PASS,apify_only,ready,2,true,2,16,0,7,7,0,0,7,0,,,0.03505,,0,7
-F2,F,Fault: sub-national geography (Texas),PASS,apify_only,ready,2,true,2,16,0,7,7,1,5,1,0,1,1,0.03505,0.03505,0,2
-C1,C,US-headquartered companies hiring AEs,PASS,apify_only,ready,2,true,2,15,0,7,7,4,1,2,2,0.5,1,0.03105,0.007763,1,6
-C2,C,Companies operating in the US,PASS,apify_only,ready,2,true,2,15,0,7,7,4,1,2,2,0.5,1,0.03105,0.007763,1,6
-C3,C,Prefer B2B but allow B2C,PASS,apify_only,ready,2,true,2,15,0,7,7,4,1,2,2,0.5,1,0.03105,0.007763,1,6
-C4,C,Hiring SDRs or AEs,FAIL,apify_only,ready,2,true,2,15,0,7,7,4,1,2,1,0.75,1,0.03105,0.007763,1,6
+F1,F,Fault: unrecognised geography (Atlantis),PASS,apify_only,ready,2,true,2,13,0,4,4,0,0,4,0,,,0.02305,,0,4
+F2,F,Fault: sub-national geography (Texas),PASS,apify_only,ready,2,true,2,13,0,4,4,1,2,1,0,1,1,0.02305,0.02305,0,2
+C1,C,US-headquartered companies hiring AEs,PASS,apify_only,ready,2,true,2,13,0,4,4,2,1,1,0,1,1,0.02305,0.011525,0,3
+C2,C,Companies operating in the US,PASS,apify_only,ready,2,true,2,13,0,4,4,2,1,1,0,1,1,0.02305,0.011525,0,3
+C3,C,Prefer B2B but allow B2C,PASS,apify_only,ready,2,true,2,13,0,4,4,2,1,1,0,1,1,0.02305,0.011525,0,3
+C4,C,Hiring SDRs or AEs,FAIL,apify_only,ready,2,true,2,13,0,4,4,2,1,1,0,1,0.67,0.02305,0.011525,0,3
