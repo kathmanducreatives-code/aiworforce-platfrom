@@ -277,7 +277,7 @@
    "id": "F1",
    "group": "F",
    "title": "Fault: unrecognised geography (Atlantis)",
-   "verdict": "FAIL",
+   "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
    "planHash": "1ca17f8b5edb24d4cbf0e38d49867795e95f03dd48a5b32bbe75effe4478073a",
@@ -289,14 +289,14 @@
    "leadoceanRecords": 0,
    "candidates": 7,
    "uniqueCompanies": 7,
-   "qualified": 6,
+   "qualified": 0,
    "rejected": 0,
-   "review": 1,
-   "falseQualified": 6,
-   "precision": 0,
+   "review": 7,
+   "falseQualified": 0,
+   "precision": null,
    "recall": null,
    "apifyUsdUpperBound": 0.03505,
-   "costPerQualifiedUsd": 0.005842,
+   "costPerQualifiedUsd": null,
    "errors": 0,
    "dbWrites": 7
   },
@@ -304,7 +304,7 @@
    "id": "F2",
    "group": "F",
    "title": "Fault: sub-national geography (Texas)",
-   "verdict": "FAIL",
+   "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
    "planHash": "93bc60b7cc1b3828d2c384fe0f685fd34e63693e2ed628d703a048332b1cbac7",
@@ -316,16 +316,16 @@
    "leadoceanRecords": 0,
    "candidates": 7,
    "uniqueCompanies": 7,
-   "qualified": 6,
-   "rejected": 0,
+   "qualified": 1,
+   "rejected": 5,
    "review": 1,
-   "falseQualified": 5,
-   "precision": 0.17,
+   "falseQualified": 0,
+   "precision": 1,
    "recall": 1,
    "apifyUsdUpperBound": 0.03505,
-   "costPerQualifiedUsd": 0.005842,
+   "costPerQualifiedUsd": 0.03505,
    "errors": 0,
-   "dbWrites": 7
+   "dbWrites": 2
   },
   {
    "id": "C1",
@@ -1771,8 +1771,8 @@
    "id": "F1",
    "title": "Fault: unrecognised geography (Atlantis)",
    "group": "F",
-   "verdict": "FAIL",
-   "detail": "qualified glowcart.example, ironworks.example, mapleledger.example, northwind.example, plainsteel.example, quartzlabs.example — an unrecognised place is treated as matched by ANY proven HQ (candidateEligibility geography check via geographyContradicts)",
+   "verdict": "PASS",
+   "detail": "qualified none — an unrecognised place is treated as matched by ANY proven HQ (candidateEligibility geography check via geographyContradicts)",
    "spec": {
     "hard": [
      "HQ in Atlantis",
@@ -1828,14 +1828,14 @@
     },
     "candidates": 7,
     "uniqueCompanies": 7,
-    "qualified": 6,
+    "qualified": 0,
     "rejected": 0,
-    "review": 1,
+    "review": 7,
     "companies": [
      {
       "name": "Glowcart",
       "domain": "glowcart.example",
-      "verdict": "qualified",
+      "verdict": "review",
       "sources": [
        "apify"
       ],
@@ -1844,77 +1844,9 @@
        "apify_linkedin_job_searchx4",
        "apify_linkedin_company_detailsx4"
       ],
-      "gaps": []
-     },
-     {
-      "name": "Ironworks Fabrication",
-      "domain": "ironworks.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Maple Ledger",
-      "domain": "mapleledger.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Northwind Ledger",
-      "domain": "northwind.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx5",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Plain Steel Components",
-      "domain": "plainsteel.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Quartz Labs",
-      "domain": "quartzlabs.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
+      "gaps": [
+       "geography"
+      ]
      },
      {
       "name": "Harbor Metrics",
@@ -1930,18 +1862,91 @@
       "gaps": [
        "geography"
       ]
+     },
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Northwind Ledger",
+      "domain": "northwind.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx5",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "review",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": [
+       "geography"
+      ]
      }
     ],
-    "falseQualified": [
-     "glowcart.example",
-     "ironworks.example",
-     "mapleledger.example",
-     "northwind.example",
-     "plainsteel.example",
-     "quartzlabs.example"
-    ],
+    "falseQualified": [],
     "missedQualified": [],
-    "precision": 0,
+    "precision": null,
     "recall": null,
     "anyOf": false,
     "costUsd": {
@@ -1949,7 +1954,7 @@
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 0,
-    "costPerQualifiedUsd": 0.005842,
+    "costPerQualifiedUsd": null,
     "errors": [],
     "retries": 0,
     "dbWrites": 7,
@@ -1964,8 +1969,8 @@
    "id": "F2",
    "title": "Fault: sub-national geography (Texas)",
    "group": "F",
-   "verdict": "FAIL",
-   "detail": "qualified glowcart.example, ironworks.example, mapleledger.example, northwind.example, plainsteel.example, quartzlabs.example; outside Texas: glowcart.example, ironworks.example, mapleledger.example, plainsteel.example, quartzlabs.example",
+   "verdict": "PASS",
+   "detail": "qualified northwind.example; outside Texas: none",
    "spec": {
     "hard": [
      "HQ in Texas",
@@ -2021,52 +2026,10 @@
     },
     "candidates": 7,
     "uniqueCompanies": 7,
-    "qualified": 6,
-    "rejected": 0,
+    "qualified": 1,
+    "rejected": 5,
     "review": 1,
     "companies": [
-     {
-      "name": "Glowcart",
-      "domain": "glowcart.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Ironworks Fabrication",
-      "domain": "ironworks.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Maple Ledger",
-      "domain": "mapleledger.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
      {
       "name": "Northwind Ledger",
       "domain": "northwind.example",
@@ -2077,34 +2040,6 @@
       "evidence": [
        "apify_discoveryx2",
        "apify_linkedin_job_searchx5",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Plain Steel Components",
-      "domain": "plainsteel.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
-       "apify_linkedin_company_detailsx4"
-      ],
-      "gaps": []
-     },
-     {
-      "name": "Quartz Labs",
-      "domain": "quartzlabs.example",
-      "verdict": "qualified",
-      "sources": [
-       "apify"
-      ],
-      "evidence": [
-       "apify_discoveryx2",
-       "apify_linkedin_job_searchx4",
        "apify_linkedin_company_detailsx4"
       ],
       "gaps": []
@@ -2123,17 +2058,81 @@
       "gaps": [
        "geography"
       ]
+     },
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Ironworks Fabrication",
+      "domain": "ironworks.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Maple Ledger",
+      "domain": "mapleledger.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Plain Steel Components",
+      "domain": "plainsteel.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
+     {
+      "name": "Quartz Labs",
+      "domain": "quartzlabs.example",
+      "verdict": "rejected",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
      }
     ],
-    "falseQualified": [
-     "glowcart.example",
-     "ironworks.example",
-     "mapleledger.example",
-     "plainsteel.example",
-     "quartzlabs.example"
-    ],
+    "falseQualified": [],
     "missedQualified": [],
-    "precision": 0.17,
+    "precision": 1,
     "recall": 1,
     "anyOf": false,
     "costUsd": {
@@ -2141,10 +2140,10 @@
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 0,
-    "costPerQualifiedUsd": 0.005842,
+    "costPerQualifiedUsd": 0.03505,
     "errors": [],
     "retries": 0,
-    "dbWrites": 7,
+    "dbWrites": 2,
     "ledger": {
      "reserved": 0,
      "settled": 2,

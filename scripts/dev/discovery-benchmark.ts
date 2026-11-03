@@ -71,9 +71,14 @@ export const JOBS = [
   job("j9", "Sales Representative", "2026-10-23", COMPANIES.ironworks),
   job("j10", "Outside Sales Representative", "2026-10-19", COMPANIES.plainsteel),
 ];
-const record = (c: Co) => companyRecord(c.slug, {
-  name: c.name, website: c.website, hqCountry: c.hq.endsWith("Canada") ? "CA" : "US", city: c.hq.split(",")[0], band: c.band,
-});
+/** A company record whose HQ location carries the full place text, as LinkedIn states it ("Austin, Texas, United States"). */
+const record = (c: Co) => {
+  const r = companyRecord(c.slug, {
+    name: c.name, website: c.website, hqCountry: c.hq.endsWith("Canada") ? "CA" : "US", city: c.hq.split(",")[0], band: c.band,
+  }) as { locations: { parsed: { text: string } }[] };
+  r.locations[0].parsed.text = c.hq;
+  return r;
+};
 export const RECORDS: Record<string, unknown> = Object.fromEntries(Object.values(COMPANIES).filter((c) => !NO_RECORD.has(c.slug)).map((c) => [c.slug, record(c)]));
 
 const person = (id: string, name: string, title: string, c: Pick<Synthetic, "company" | "domain" | "industry" | "employees">): Synthetic => ({ id, name, title, ...c });
