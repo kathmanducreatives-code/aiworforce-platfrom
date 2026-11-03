@@ -1,10 +1,10 @@
 {
  "summary": {
-  "missions": 109,
-  "withDisagreement": 25,
+  "missions": 132,
+  "withDisagreement": 26,
   "by": {
    "geography_planner_differs": 17,
-   "hard_signals_planner_differs": 10,
+   "hard_signals_planner_differs": 11,
    "exclusions_absent_from_orion": 2,
    "roles_missing_from_orion_vocabulary": 1,
    "or_groups_not_in_planner": 1
@@ -22,6 +22,9 @@
   ],
   "corpus:M08:signals listed": [
    "or_groups_not_in_planner"
+  ],
+  "corpus:M14:growing the sales team": [
+   "hard_signals_planner_differs"
   ],
   "persisted:tests/edge-functions/_shared/fixtures/missionHiringSalesRoles.json#$": [
    "hard_signals_planner_differs"

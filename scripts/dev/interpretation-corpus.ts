@@ -20,7 +20,7 @@
 
 import { compileLeadMission } from "../../supabase/functions/_shared/leadMissionCompiler.ts";
 import { specFromMission } from "../../supabase/functions/_shared/leadPipeline/strategy.ts";
-import { canonicalTitleOf } from "../../supabase/functions/_shared/roleFamilies.ts";
+import { canonicalTitleOf, classifyRoleFamily } from "../../supabase/functions/_shared/roleFamilies.ts";
 
 const ROOT = new URL("../../", import.meta.url);
 export const CASES_PATH = "tests/fixtures/mission-reliability/v1/cases.json";
@@ -32,6 +32,9 @@ export interface Summary { geo: string[]; roles: string[]; roleMatch: string; ex
 export interface PhrasingResult { case: string; label: string; ok: boolean; defect: string | null; mismatches: string[]; summary: Summary }
 
 export const loadCases = (): Case[] => JSON.parse(Deno.readTextFileSync(new URL(CASES_PATH, ROOT))).cases;
+/** Pairs of cases that mean DIFFERENT things: their canonical summaries must differ. */
+export interface Contrast { a: string; b: string; why: string }
+export const loadContrasts = (): Contrast[] => JSON.parse(Deno.readTextFileSync(new URL(CASES_PATH, ROOT))).contrasts ?? [];
 
 const BLANK = {
   requested_opportunity_count: 5, requested_contact_ready_count: null, company_types: [], geographies: ["United States"], employee_range: { min: null, max: null },
@@ -41,8 +44,18 @@ const BLANK = {
   confidence: 0.85, unknowns: [], known_companies: [], signal_recency_days: 30, required_signal_terms: [], no_broadening_requested: false,
   geography_is_hard: true, prohibitions: [], output_intent: "companies", strategies: ["hiring"],
 };
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim().replace(/s$/, "");
-const role = (t: string) => canonicalTitleOf(t) ?? norm(t);
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim().replace(/s$/, "");
+/**
+ * A role by MEANING: a registered title by its id (exact, Stage 2 policy); a broad word
+ * ("salespeople", "sales people", "sellers", "sales roles") by its family; anything else
+ * literally. So paraphrases of one role compare equal and distinct roles stay distinct.
+ */
+const role = (t: string) => {
+  const k = canonicalTitleOf(t);
+  if (k) return k;
+  const f = classifyRoleFamily(t);
+  return f && f !== "custom" ? `family:${f}` : norm(t);
+};
 
 type Crit = { kind: string; dimension: string; value: unknown; any_of?: string[]; geography_scope?: string; time_window?: { days?: number } };
 
@@ -102,6 +115,12 @@ export function runCases(cases = loadCases()): PhrasingResult[] {
   return out;
 }
 
+/** Contrast pairs whose first (defect-free) phrasings compile to the SAME summary: a distinction lost. */
+export function collapsedContrasts(results: PhrasingResult[], contrasts = loadContrasts()): string[] {
+  const first = (id: string) => results.find((r) => r.case === id && !r.defect)?.summary;
+  return contrasts.filter((c) => JSON.stringify(first(c.a)) === JSON.stringify(first(c.b))).map((c) => `${c.a} vs ${c.b} (${c.why})`);
+}
+
 /** Paraphrase stability: phrasings of one case that compile to DIFFERENT summaries. */
 export function unstableCases(results: PhrasingResult[]): string[] {
   const by = new Map<string, Set<string>>();
@@ -114,5 +133,5 @@ if (import.meta.main) {
   for (const x of r) console.log(`${x.ok ? "ok  " : "FAIL"} ${x.case} ${x.label}${x.defect ? ` [${x.defect}]` : ""}${x.ok ? "" : `\n      ${x.mismatches.join("\n      ")}`}`);
   console.log(JSON.stringify({ phrasings: r.length, correct: r.filter((x) => x.ok).length, wrongLabelled: r.filter((x) => !x.ok && x.defect).length,
     wrongUnlabelled: r.filter((x) => !x.ok && !x.defect).map((x) => `${x.case}:${x.label}`), fixedButLabelled: r.filter((x) => x.ok && x.defect).map((x) => `${x.case}:${x.label}`),
-    unstableCases: unstableCases(r) }));
+    unstableCases: unstableCases(r), collapsedContrasts: collapsedContrasts(r) }));
 }
