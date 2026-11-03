@@ -69,6 +69,24 @@
    "refused": false,
    "renameDiff": []
   },
+  "corpus:gpt_hiring_status_role_only": {
+   "constraints": [
+    {
+     "field": "geography",
+     "as": "geography → geography"
+    },
+    {
+     "field": "hiring_status",
+     "as": "hiring_role → hiring_role"
+    },
+    {
+     "field": "company_profile.locations",
+     "as": "geography → geography"
+    }
+   ],
+   "refused": false,
+   "renameDiff": []
+  },
   "corpus:gpt_presence_for_us_companies": {
    "constraints": [
     {
