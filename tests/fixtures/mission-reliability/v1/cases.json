@@ -1,110 +1,998 @@
 {
  "version": "mission-reliability-v1",
- "about": "Interpretation corpus (mission reliability S0). Each case is ONE meaning, expressed as several phrasings and/or recorded model readings. Every phrasing must compile to the labelled canonical summary: hard geography (+scope), hiring roles (canonical) and role match, excluded roles, other hard requirements, OR groups, and no unmappable hard requirement. Labels are written from the request's meaning and the owner's policies, never from code output. `defect` marks a phrasing the current code is KNOWN to get wrong.",
+ "about": "Interpretation corpus (mission reliability S0). Each case is ONE meaning, expressed as several phrasings and/or recorded model readings. Every phrasing must compile to the labelled canonical summary: hard geography (+scope), hiring roles (canonical) and role match, excluded roles, other hard requirements, OR groups, and no unmappable hard requirement. Labels are written from the request's meaning and the owner's policies, never from code output. `defect` marks a phrasing the current code is KNOWN to get wrong. Roles compare by MEANING: a registered title by its id, a broad word by its role family (family:<id>). Readings follow the CURRENT proposal contract, which tells the model to copy the user's role words verbatim into required_signal_terms; geography the model normalises. `contrasts` lists pairs of cases that mean different things and must compile differently.",
  "cases": [
   {
-   "id": "M01", "title": "TEST smoke P1 incident (cf55180): the role restated as 'signal role'",
-   "expect": { "geo": ["united states@headquarters"], "roles": ["salespeople"], "roleMatch": "any", "excluded": [], "hard": [], "anyOf": [] },
+   "id": "M01",
+   "title": "TEST smoke P1 incident (cf55180): the role restated as 'signal role'",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "family:gtm_sales"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
    "phrasings": [
-    { "label": "clean reading", "query": "Find 5 US B2B companies actively hiring salespeople. Prefer 20–500 employees, but include strong opportunities outside that range.",
-      "proposal": { "company_types": ["B2B"], "employee_range": { "min": 20, "max": 500 }, "required_signal_terms": ["salespeople"] } },
-    { "label": "cf55180: role restated as hard 'signal role'", "defect": "R1", "query": "Find 5 US B2B companies actively hiring salespeople. Prefer 20–500 employees, but include strong opportunities outside that range.",
-      "proposal": { "company_types": ["B2B"], "employee_range": { "min": 20, "max": 500 }, "required_signal_terms": ["salespeople"], "extra_hard": [{ "field": "signal role", "operator": "equals", "value": "salespeople", "reason": "role" }] } },
-    { "label": "9fee47ba: role only as hard 'hiring_status' (fixed #219)", "query": "Find 5 US B2B companies actively hiring salespeople. Prefer 20–500 employees, but include strong opportunities outside that range.",
-      "proposal": { "company_types": ["B2B"], "employee_range": { "min": 20, "max": 500 }, "required_signal_terms": [], "extra_hard": [{ "field": "hiring_status", "operator": "equals", "value": "actively hiring salespeople", "reason": "active hiring" }] } }
+    {
+     "label": "clean reading",
+     "query": "Find 5 US B2B companies actively hiring salespeople. Prefer 20–500 employees, but include strong opportunities outside that range.",
+     "proposal": {
+      "company_types": [
+       "B2B"
+      ],
+      "employee_range": {
+       "min": 20,
+       "max": 500
+      },
+      "required_signal_terms": [
+       "salespeople"
+      ]
+     }
+    },
+    {
+     "label": "cf55180: role restated as hard 'signal role'",
+     "defect": "R1",
+     "query": "Find 5 US B2B companies actively hiring salespeople. Prefer 20–500 employees, but include strong opportunities outside that range.",
+     "proposal": {
+      "company_types": [
+       "B2B"
+      ],
+      "employee_range": {
+       "min": 20,
+       "max": 500
+      },
+      "required_signal_terms": [
+       "salespeople"
+      ],
+      "extra_hard": [
+       {
+        "field": "signal role",
+        "operator": "equals",
+        "value": "salespeople",
+        "reason": "role"
+       }
+      ]
+     }
+    },
+    {
+     "label": "9fee47ba: role only as hard 'hiring_status' (fixed #219)",
+     "query": "Find 5 US B2B companies actively hiring salespeople. Prefer 20–500 employees, but include strong opportunities outside that range.",
+     "proposal": {
+      "company_types": [
+       "B2B"
+      ],
+      "employee_range": {
+       "min": 20,
+       "max": 500
+      },
+      "required_signal_terms": [],
+      "extra_hard": [
+       {
+        "field": "hiring_status",
+        "operator": "equals",
+        "value": "actively hiring salespeople",
+        "reason": "active hiring"
+       }
+      ]
+     }
+    }
    ]
   },
   {
-   "id": "M02", "title": "Account Executive paraphrases",
-   "expect": { "geo": ["united states@headquarters"], "roles": ["account_executive"], "roleMatch": "any", "excluded": [], "hard": [], "anyOf": [] },
+   "id": "M02",
+   "title": "Account Executive paraphrases",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "account_executive"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
    "phrasings": [
-    { "label": "Account Executives", "query": "Find 5 US companies hiring Account Executives.", "proposal": { "required_signal_terms": ["Account Executive"] } },
-    { "label": "AEs", "query": "Find 5 US companies hiring AEs.", "proposal": { "required_signal_terms": ["AE"] } },
-    { "label": "account execs", "query": "Find 5 US companies hiring account execs.", "proposal": { "required_signal_terms": ["account exec"] } },
-    { "label": "phrase-only reading", "query": "Find 5 US companies hiring Account Executives.", "proposal": { "preferred_signals": ["hiring Account Executives"] } }
+    {
+     "label": "Account Executives",
+     "query": "Find 5 US companies hiring Account Executives.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    },
+    {
+     "label": "AEs",
+     "query": "Find 5 US companies hiring AEs.",
+     "proposal": {
+      "required_signal_terms": [
+       "AE"
+      ]
+     }
+    },
+    {
+     "label": "account execs",
+     "query": "Find 5 US companies hiring account execs.",
+     "proposal": {
+      "required_signal_terms": [
+       "account exec"
+      ]
+     }
+    },
+    {
+     "label": "phrase-only reading",
+     "query": "Find 5 US companies hiring Account Executives.",
+     "proposal": {
+      "preferred_signals": [
+       "hiring Account Executives"
+      ]
+     }
+    }
    ]
   },
   {
-   "id": "M03", "title": "US headquarters paraphrases",
-   "expect": { "geo": ["united states@headquarters"], "roles": ["account_executive"], "roleMatch": "any", "excluded": [], "hard": [], "anyOf": [] },
+   "id": "M03",
+   "title": "US headquarters paraphrases",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "account_executive"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
    "phrasings": [
-    { "label": "US companies", "query": "Find 5 US companies hiring Account Executives.", "proposal": { "required_signal_terms": ["Account Executive"] } },
-    { "label": "US-based", "query": "Find 5 US-based companies hiring Account Executives.", "proposal": { "required_signal_terms": ["Account Executive"] } },
-    { "label": "headquartered in the US", "query": "Find 5 companies headquartered in the US hiring Account Executives.", "proposal": { "required_signal_terms": ["Account Executive"] } },
-    { "label": "American companies", "query": "Find 5 American companies hiring Account Executives.", "proposal": { "required_signal_terms": ["Account Executive"] } }
+    {
+     "label": "US companies",
+     "query": "Find 5 US companies hiring Account Executives.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    },
+    {
+     "label": "US-based",
+     "query": "Find 5 US-based companies hiring Account Executives.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    },
+    {
+     "label": "headquartered in the US",
+     "query": "Find 5 companies headquartered in the US hiring Account Executives.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    },
+    {
+     "label": "American companies",
+     "query": "Find 5 American companies hiring Account Executives.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    }
    ]
   },
   {
-   "id": "M04", "title": "Operating in the US is presence, not headquarters",
-   "expect": { "geo": ["united states@presence"], "roles": ["account_executive"], "roleMatch": "any", "excluded": [], "hard": [], "anyOf": [] },
+   "id": "M04",
+   "title": "Operating in the US is presence, not headquarters",
+   "expect": {
+    "geo": [
+     "united states@presence"
+    ],
+    "roles": [
+     "account_executive"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
    "phrasings": [
-    { "label": "operating in the US", "query": "Find 5 companies operating in the US hiring Account Executives.", "proposal": { "required_signal_terms": ["Account Executive"] } },
-    { "label": "with offices in the US", "query": "Find 5 companies with offices in the US hiring Account Executives.", "proposal": { "required_signal_terms": ["Account Executive"] } }
+    {
+     "label": "operating in the US",
+     "query": "Find 5 companies operating in the US hiring Account Executives.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    },
+    {
+     "label": "with offices in the US",
+     "query": "Find 5 companies with offices in the US hiring Account Executives.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    }
    ]
   },
   {
-   "id": "M05", "title": "SDRs OR AEs keeps both alternatives",
-   "expect": { "geo": ["united states@headquarters"], "roles": ["account_executive", "sales_development_representative"], "roleMatch": "any", "excluded": [], "hard": [], "anyOf": [] },
+   "id": "M05",
+   "title": "SDRs OR AEs keeps both alternatives",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "account_executive",
+     "sales_development_representative"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
    "phrasings": [
-    { "label": "one phrase", "query": "Find 5 US companies hiring SDRs or Account Executives.", "proposal": { "preferred_signals": ["hiring SDRs or Account Executives"] } },
-    { "label": "roles listed separately", "defect": "D4", "query": "Find 5 US companies hiring SDRs or Account Executives.", "proposal": { "required_signal_terms": ["SDR", "Account Executive"] } }
+    {
+     "label": "one phrase",
+     "query": "Find 5 US companies hiring SDRs or Account Executives.",
+     "proposal": {
+      "preferred_signals": [
+       "hiring SDRs or Account Executives"
+      ]
+     }
+    },
+    {
+     "label": "roles listed separately",
+     "defect": "D4",
+     "query": "Find 5 US companies hiring SDRs or Account Executives.",
+     "proposal": {
+      "required_signal_terms": [
+       "SDR",
+       "Account Executive"
+      ]
+     }
+    }
    ]
   },
   {
-   "id": "M06", "title": "Distinct roles are never merged into one",
-   "expect": { "geo": ["united states@headquarters"], "roles": ["sales_development_representative"], "roleMatch": "any", "excluded": [], "hard": [], "anyOf": [] },
+   "id": "M06",
+   "title": "Distinct roles are never merged into one",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "sales_development_representative"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
    "phrasings": [
-    { "label": "SDRs only", "query": "Find 5 US companies hiring SDRs.", "proposal": { "required_signal_terms": ["SDR"] } },
-    { "label": "SDRs (phrase)", "query": "Find 5 US companies hiring Sales Development Representatives.", "proposal": { "preferred_signals": ["hiring Sales Development Representatives"] } }
+    {
+     "label": "SDRs only",
+     "query": "Find 5 US companies hiring SDRs.",
+     "proposal": {
+      "required_signal_terms": [
+       "SDR"
+      ]
+     }
+    },
+    {
+     "label": "SDRs (phrase)",
+     "query": "Find 5 US companies hiring Sales Development Representatives.",
+     "proposal": {
+      "preferred_signals": [
+       "hiring Sales Development Representatives"
+      ]
+     }
+    }
    ]
   },
   {
-   "id": "M07", "title": "A negated role is an exclusion, never a requirement",
-   "expect": { "geo": ["united states@headquarters"], "roles": ["account_executive"], "roleMatch": "any", "excluded": ["sales_development_representative"], "hard": [], "anyOf": [] },
+   "id": "M07",
+   "title": "A negated role is an exclusion, never a requirement",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "account_executive"
+    ],
+    "roleMatch": "any",
+    "excluded": [
+     "sales_development_representative"
+    ],
+    "hard": [],
+    "anyOf": []
+   },
    "phrasings": [
-    { "label": "one phrase", "query": "Find 5 US companies hiring Account Executives but not SDRs.", "proposal": { "preferred_signals": ["hiring Account Executives but not SDRs"] } },
-    { "label": "exclusion restated as hard 'excluded_roles'", "defect": "R1", "query": "Find 5 US companies hiring Account Executives but not SDRs.",
-      "proposal": { "preferred_signals": ["hiring Account Executives but not SDRs"], "extra_hard": [{ "field": "excluded_roles", "operator": "excludes", "value": "SDRs", "reason": "not SDRs" }] } }
+    {
+     "label": "one phrase",
+     "query": "Find 5 US companies hiring Account Executives but not SDRs.",
+     "proposal": {
+      "preferred_signals": [
+       "hiring Account Executives but not SDRs"
+      ]
+     }
+    },
+    {
+     "label": "exclusion restated as hard 'excluded_roles'",
+     "defect": "R1",
+     "query": "Find 5 US companies hiring Account Executives but not SDRs.",
+     "proposal": {
+      "preferred_signals": [
+       "hiring Account Executives but not SDRs"
+      ],
+      "extra_hard": [
+       {
+        "field": "excluded_roles",
+        "operator": "excludes",
+        "value": "SDRs",
+        "reason": "not SDRs"
+       }
+      ]
+     }
+    }
    ]
   },
   {
-   "id": "M08", "title": "Hiring OR funding is one either/or requirement",
-   "expect": { "geo": ["united states@headquarters"], "roles": ["sales role"], "roleMatch": "any", "excluded": [], "hard": ["funding"], "anyOf": [["signal:funding", "signal:hiring"]] },
+   "id": "M08",
+   "title": "Hiring OR funding is one either/or requirement",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "family:gtm_sales"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [
+     "funding"
+    ],
+    "anyOf": [
+     [
+      "signal:funding",
+      "signal:hiring"
+     ]
+    ]
+   },
    "phrasings": [
-    { "label": "signals listed", "query": "Find 5 US companies that either raised funding recently or are hiring sales roles.", "proposal": { "preferred_signals": ["funding", "hiring"], "required_signal_terms": ["sales roles"] } }
+    {
+     "label": "signals listed",
+     "query": "Find 5 US companies that either raised funding recently or are hiring sales roles.",
+     "proposal": {
+      "preferred_signals": [
+       "funding",
+       "hiring"
+      ],
+      "required_signal_terms": [
+       "sales roles"
+      ]
+     }
+    }
    ]
   },
   {
-   "id": "M09", "title": "Hiring OR expansion is one either/or requirement",
-   "expect": { "geo": ["united states@headquarters"], "roles": ["account_executive"], "roleMatch": "any", "excluded": [], "hard": ["expansion"], "anyOf": [["signal:expansion", "signal:hiring"]] },
+   "id": "M09",
+   "title": "Hiring OR expansion is one either/or requirement",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "account_executive"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [
+     "expansion"
+    ],
+    "anyOf": [
+     [
+      "signal:expansion",
+      "signal:hiring"
+     ]
+    ]
+   },
    "phrasings": [
-    { "label": "signals listed", "defect": "D3", "query": "Find 5 US companies that are either hiring Account Executives or expanding into new offices.", "proposal": { "preferred_signals": ["hiring", "expansion"], "required_signal_terms": ["Account Executive"] } }
+    {
+     "label": "signals listed",
+     "defect": "D3",
+     "query": "Find 5 US companies that are either hiring Account Executives or expanding into new offices.",
+     "proposal": {
+      "preferred_signals": [
+       "hiring",
+       "expansion"
+      ],
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    }
    ]
   },
   {
-   "id": "M10", "title": "A stated industry stays hard whatever its grammatical number",
-   "expect": { "geo": ["united states@headquarters"], "roles": [], "roleMatch": "any", "excluded": [], "hard": ["industry:insurance agenc", "company_size"], "anyOf": [] },
+   "id": "M10",
+   "title": "A stated industry stays hard whatever its grammatical number",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [
+     "industry:insurance agenc",
+     "company_size"
+    ],
+    "anyOf": []
+   },
    "phrasings": [
-    { "label": "model wrote the plural", "query": "Find 5 US insurance agencies with 10–100 employees.", "proposal": { "preferred_signals": [], "strategies": [], "company_types": ["insurance agencies"], "employee_range": { "min": 10, "max": 100 } } },
-    { "label": "model wrote the singular", "defect": "D2", "query": "Find 5 US insurance agencies with 10–100 employees.", "proposal": { "preferred_signals": [], "strategies": [], "company_types": ["insurance agency"], "employee_range": { "min": 10, "max": 100 } } }
+    {
+     "label": "model wrote the plural",
+     "query": "Find 5 US insurance agencies with 10–100 employees.",
+     "proposal": {
+      "preferred_signals": [],
+      "strategies": [],
+      "company_types": [
+       "insurance agencies"
+      ],
+      "employee_range": {
+       "min": 10,
+       "max": 100
+      }
+     }
+    },
+    {
+     "label": "model wrote the singular",
+     "defect": "D2",
+     "query": "Find 5 US insurance agencies with 10–100 employees.",
+     "proposal": {
+      "preferred_signals": [],
+      "strategies": [],
+      "company_types": [
+       "insurance agency"
+      ],
+      "employee_range": {
+       "min": 10,
+       "max": 100
+      }
+     }
+    }
    ]
   },
   {
-   "id": "M11", "title": "A stated region is never narrowed to one country",
-   "expect": { "geo": ["north america@headquarters"], "roles": ["account_executive"], "roleMatch": "any", "excluded": [], "hard": [], "anyOf": [] },
+   "id": "M11",
+   "title": "A stated region is never narrowed to one country",
+   "expect": {
+    "geo": [
+     "north america@headquarters"
+    ],
+    "roles": [
+     "account_executive"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
    "phrasings": [
-    { "label": "North America", "defect": "D6", "query": "Find 5 companies headquartered in North America hiring Account Executives.",
-      "proposal": { "geographies": ["North America"], "geo_hard": ["North America"], "required_signal_terms": ["Account Executive"] } }
+    {
+     "label": "North America",
+     "defect": "D6",
+     "query": "Find 5 companies headquartered in North America hiring Account Executives.",
+     "proposal": {
+      "geographies": [
+       "North America"
+      ],
+      "geo_hard": [
+       "North America"
+      ],
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    }
    ]
   },
   {
-   "id": "M12", "title": "A stated hiring window is kept",
-   "expect": { "geo": ["united states@headquarters"], "roles": ["account_executive"], "roleMatch": "any", "excluded": [], "hard": [], "anyOf": [], "hiringWindowDays": 30 },
+   "id": "M12",
+   "title": "A stated hiring window is kept",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "account_executive"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": [],
+    "hiringWindowDays": 30
+   },
    "phrasings": [
-    { "label": "window in signal_recency_days", "query": "Find 5 US companies hiring Account Executives in the last 30 days.", "proposal": { "required_signal_terms": ["Account Executive"], "signal_recency_days": 30 } },
-    { "label": "window restated as hard 'hiring_window'", "defect": "R1", "query": "Find 5 US companies hiring Account Executives in the last 30 days.",
-      "proposal": { "required_signal_terms": ["Account Executive"], "signal_recency_days": 30, "extra_hard": [{ "field": "hiring_window", "operator": "within_days", "value": 30, "reason": "last 30 days" }] } }
+    {
+     "label": "window in signal_recency_days",
+     "query": "Find 5 US companies hiring Account Executives in the last 30 days.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ],
+      "signal_recency_days": 30
+     }
+    },
+    {
+     "label": "window restated as hard 'hiring_window'",
+     "defect": "R1",
+     "query": "Find 5 US companies hiring Account Executives in the last 30 days.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ],
+      "signal_recency_days": 30,
+      "extra_hard": [
+       {
+        "field": "hiring_window",
+        "operator": "within_days",
+        "value": 30,
+        "reason": "last 30 days"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M13",
+   "title": "Account Executives — casual, typos, abbreviations, indirect",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "account_executive"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
+   "phrasings": [
+    {
+     "label": "casual + abbreviation",
+     "query": "need like 5 us cos hiring AEs rn",
+     "proposal": {
+      "required_signal_terms": [
+       "AEs"
+      ]
+     }
+    },
+    {
+     "label": "typo (model corrects the title)",
+     "query": "find me 5 companies in the states that r hiring acount executives",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executives"
+      ]
+     },
+     "defect": "NL1+NL3"
+    },
+    {
+     "label": "typo copied verbatim (current contract)",
+     "query": "find me 5 companies in the states that r hiring acount executives",
+     "proposal": {
+      "required_signal_terms": [
+       "acount executives"
+      ]
+     },
+     "defect": "NL1+NL3"
+    },
+    {
+     "label": "indirect question",
+     "query": "any US companies looking to bring on account execs? need 5",
+     "proposal": {
+      "required_signal_terms": [
+       "account execs"
+      ]
+     },
+     "defect": "NL1+NL2"
+    },
+    {
+     "label": "open roles phrasing",
+     "query": "5 American companies with open Account Executive roles",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M14",
+   "title": "Salespeople — synonyms and casual wording",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "family:gtm_sales"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
+   "phrasings": [
+    {
+     "label": "salespeople",
+     "query": "Find 5 US companies hiring salespeople.",
+     "proposal": {
+      "required_signal_terms": [
+       "salespeople"
+      ]
+     }
+    },
+    {
+     "label": "sales ppl (casual)",
+     "query": "5 us companies that need sales ppl",
+     "proposal": {
+      "required_signal_terms": [
+       "sales ppl"
+      ]
+     },
+     "defect": "NL1+NL2"
+    },
+    {
+     "label": "growing the sales team",
+     "query": "US companies growing their sales team — find me 5",
+     "proposal": {
+      "required_signal_terms": [
+       "sales team"
+      ]
+     },
+     "defect": "NL1"
+    },
+    {
+     "label": "sellers (synonym, verbatim)",
+     "query": "Find 5 US companies hiring sellers.",
+     "proposal": {
+      "required_signal_terms": [
+       "sellers"
+      ]
+     },
+     "defect": "NL1"
+    },
+    {
+     "label": "sales reps",
+     "query": "who's hiring sales reps in the US? give me 5",
+     "proposal": {
+      "required_signal_terms": [
+       "sales reps"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M15",
+   "title": "US headquarters — synonyms and typos",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "account_executive"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
+   "phrasings": [
+    {
+     "label": "HQ'd in the US",
+     "query": "Find 5 companies HQ'd in the US hiring Account Executives.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    },
+    {
+     "label": "headquarterd (typo)",
+     "query": "5 companies headquarterd in USA hiring Account Executives",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     }
+    },
+    {
+     "label": "based out of the states",
+     "query": "companies based out of the states hiring AEs, 5 please",
+     "proposal": {
+      "required_signal_terms": [
+       "AEs"
+      ]
+     },
+     "defect": "NL3"
+    }
+   ]
+  },
+  {
+   "id": "M16",
+   "title": "US presence — synonyms (operating, office, doing business)",
+   "expect": {
+    "geo": [
+     "united states@presence"
+    ],
+    "roles": [
+     "account_executive"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
+   "phrasings": [
+    {
+     "label": "operate in the US",
+     "query": "Find 5 companies that operate in the US and are hiring Account Executives.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     },
+     "defect": "NL4"
+    },
+    {
+     "label": "have a US office",
+     "query": "5 companies that have a US office and are hiring AEs",
+     "proposal": {
+      "required_signal_terms": [
+       "AEs"
+      ]
+     },
+     "defect": "NL4"
+    },
+    {
+     "label": "doing business in America",
+     "query": "companies doing business in America hiring account executives — 5 of them",
+     "proposal": {
+      "required_signal_terms": [
+       "account executives"
+      ]
+     },
+     "defect": "NL4"
+    },
+    {
+     "label": "operatng (typo)",
+     "query": "5 companies operatng in the US hiring Account Executives",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ]
+     },
+     "defect": "NL4"
+    }
+   ]
+  },
+  {
+   "id": "M17",
+   "title": "Complex multi-constraint mission",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "account_executive"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [
+     "company_size",
+     "funding",
+     "industry:b2b saa",
+     "industry:saa"
+    ],
+    "anyOf": []
+   },
+   "phrasings": [
+    {
+     "label": "formal",
+     "query": "Find 10 B2B SaaS companies headquartered in the US with 50–200 employees that raised funding in the last 12 months and are hiring Account Executives.",
+     "proposal": {
+      "required_signal_terms": [
+       "Account Executive"
+      ],
+      "preferred_signals": [
+       "hiring",
+       "funding"
+      ],
+      "company_types": [
+       "B2B SaaS"
+      ],
+      "employee_range": {
+       "min": 50,
+       "max": 200
+      },
+      "strategies": [
+       "hiring",
+       "funding"
+      ],
+      "requested_opportunity_count": 10
+     }
+    },
+    {
+     "label": "casual",
+     "query": "looking for ~10 US b2b saas cos, 50-200 ppl, raised money in the past year, hiring AEs",
+     "proposal": {
+      "required_signal_terms": [
+       "AEs"
+      ],
+      "preferred_signals": [
+       "hiring",
+       "funding"
+      ],
+      "company_types": [
+       "B2B SaaS"
+      ],
+      "employee_range": {
+       "min": 50,
+       "max": 200
+      },
+      "strategies": [
+       "hiring",
+       "funding"
+      ],
+      "requested_opportunity_count": 10
+     }
+    }
+   ],
+   "expect_note": "'B2B SaaS' compiles to 'b2b saas' plus an implied 'saas' industry: redundant (every B2B SaaS company is SaaS), neither narrowing nor broadening; accepted as meaning-equivalent."
+  },
+  {
+   "id": "M18",
+   "title": "Hiring AND funding is two requirements (contrast to M08)",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "family:gtm_sales"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [
+     "funding"
+    ],
+    "anyOf": []
+   },
+   "phrasings": [
+    {
+     "label": "and",
+     "query": "Find 5 US companies that raised funding recently and are hiring sales roles.",
+     "proposal": {
+      "required_signal_terms": [
+       "sales roles"
+      ],
+      "preferred_signals": [
+       "funding",
+       "hiring"
+      ]
+     }
+    },
+    {
+     "label": "both (casual)",
+     "query": "5 us cos that both raised money lately AND are hiring for sales",
+     "proposal": {
+      "required_signal_terms": [
+       "sales"
+      ],
+      "preferred_signals": [
+       "funding",
+       "hiring"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M19",
+   "title": "SDRs or BDRs — two abbreviated titles, either one",
+   "expect": {
+    "geo": [
+     "united states@headquarters"
+    ],
+    "roles": [
+     "business_development_representative",
+     "sales_development_representative"
+    ],
+    "roleMatch": "any",
+    "excluded": [],
+    "hard": [],
+    "anyOf": []
+   },
+   "phrasings": [
+    {
+     "label": "slash",
+     "query": "5 US companies hiring SDRs/BDRs",
+     "proposal": {
+      "preferred_signals": [
+       "hiring SDRs or BDRs"
+      ]
+     }
+    },
+    {
+     "label": "lowercase or",
+     "query": "us companies hiring sdrs or bdrs - 5",
+     "proposal": {
+      "preferred_signals": [
+       "hiring sdrs or bdrs"
+      ]
+     }
+    }
    ]
   }
- ]
+ ],
+ "contrasts": [
+  {
+   "a": "M02",
+   "b": "M06",
+   "why": "Account Executives vs SDRs are different roles"
+  },
+  {
+   "a": "M03",
+   "b": "M04",
+   "why": "headquartered vs operating in the US"
+  },
+  {
+   "a": "M08",
+   "b": "M18",
+   "why": "hiring OR funding vs hiring AND funding"
+  },
+  {
+   "a": "M07",
+   "b": "M05",
+   "why": "AEs but not SDRs vs SDRs or AEs"
+  },
+  {
+   "a": "M02",
+   "b": "M14",
+   "why": "a named title (exact) vs a broad sales word (family)"
+  },
+  {
+   "a": "M15",
+   "b": "M16",
+   "why": "HQ synonyms vs presence synonyms"
+  }
+ ],
+ "defects": {
+  "R1": "a requirement restated in hard_constraints under a field name the compiler does not recognise becomes an unmappable hard requirement",
+  "D2": "a stated industry in another grammatical number is demoted to a preference",
+  "D3": "an either/or across hiring and expansion loses its OR",
+  "D4": "roles the model lists separately collapse to one",
+  "D6": "a stated region is narrowed to one country",
+  "NL1": "role words are resolved by keyword lists after interpretation: typos, abbreviations, slang and synonyms leave the role dropped or unresolved",
+  "NL2": "hard-vs-preference for a signal needs a keyword cue in the user's words: indirect wording ('looking to bring on', 'need') demotes a required signal to a preference",
+  "NL3": "locations are recognised by a fixed word list: 'the states' demotes the hard US requirement to a preference",
+  "NL4": "headquarters vs presence is read from a keyword list: presence synonyms ('operate in', 'have a US office', 'doing business in') read as headquarters"
+ }
 }

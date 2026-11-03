@@ -3,7 +3,7 @@
 // recorded baseline is a reviewed re-record; an improvement shows as a diff, never silently.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { FUZZ_BASELINE_PATH, fuzz, summarise as fuzzSummary } from "../../../scripts/dev/interpretation-fuzz.ts";
-import { loadCases, runCases, unstableCases } from "../../../scripts/dev/interpretation-corpus.ts";
+import { collapsedContrasts, loadCases, loadContrasts, runCases, unstableCases } from "../../../scripts/dev/interpretation-corpus.ts";
 import { consistency, CONSISTENCY_BASELINE_PATH } from "../../../scripts/dev/consistency-check.ts";
 import { coverage, KNOWN_LOSSES } from "../../../scripts/dev/requirement-coverage.ts";
 
@@ -31,6 +31,16 @@ Deno.test("corpus: paraphrases of one meaning are unstable ONLY where a known de
   const r = runCases();
   const withDefect = new Set(loadCases().filter((c) => c.phrasings.some((p) => p.defect)).map((c) => c.id));
   assertEquals(unstableCases(r).filter((id) => !withDefect.has(id)), []);
+});
+
+Deno.test("corpus: requests that mean DIFFERENT things never compile to the same canonical requirements", () => {
+  assert(loadContrasts().length >= 6, "the contrast set is in place");
+  assertEquals(collapsedContrasts(runCases()), []);
+});
+
+Deno.test("corpus: natural-language variety is covered (casual, typos, abbreviations, synonyms, indirect, multi-constraint)", () => {
+  const ids = new Set(loadCases().map((c) => c.id));
+  for (const id of ["M13", "M14", "M15", "M16", "M17", "M18", "M19"]) assert(ids.has(id), id);
 });
 
 Deno.test("consistency: planner / ORION / qualification disagreements match the recorded baseline", async () => {

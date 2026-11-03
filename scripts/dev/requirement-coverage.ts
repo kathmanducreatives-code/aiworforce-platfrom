@@ -131,6 +131,9 @@ export function findings(m: Mission, crit: Crit[]): Finding[] {
  */
 export const KNOWN_LOSSES: Readonly<Record<string, string>> = Object.freeze({
   "reliability:M05:roles listed separately|role=sales_development_representative": "KNOWN:D4",
+  // NL1: the model corrected "acount executives" to "Account Executives"; the compiler keeps
+  // a role only if the user's (misspelt) words contain it, so the role is dropped.
+  "reliability:M13:typo (model corrects the title)|role=account_executive": "KNOWN:NL1",
   // Stored production missions (found by this check, mission reliability S0):
   // "salespeople, sales reps, account executives, AEs" stored as role_terms ["aes"] only —
   // D4 collapse; with Stage 2's exact titles it would NARROW the mission to AE postings.
