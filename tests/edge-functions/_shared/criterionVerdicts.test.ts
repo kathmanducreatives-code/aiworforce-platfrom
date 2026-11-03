@@ -54,7 +54,16 @@ Deno.test("explicit no-role-broadening retains terms, permits modifiers and reje
   const flexible = requestedHiringFromSignals(sig);
   assertEquals(jobProvesRequestedHiring({ title: "Enterprise Account Executive", posted_date: null }, exact), true);
   assertEquals(jobProvesRequestedHiring({ title: "Sales Development Representative", posted_date: null }, exact), false);
-  assertEquals(jobProvesRequestedHiring({ title: "Sales Development Representative", posted_date: null }, flexible), true);
+  // OWNER POLICY (2026-11-03, ATLAS review D1): a NAMED title is exact even without an
+  // explicit no-broadening instruction — "Account Executive" is not satisfied by an SDR,
+  // BDR or Sales Representative opening. This assertion used to require the opposite.
+  for (const t of ["Sales Development Representative", "Business Development Representative", "Sales Representative"]) {
+    assertEquals(jobProvesRequestedHiring({ title: t, posted_date: null }, flexible), false, t);
+  }
+  assertEquals(jobProvesRequestedHiring({ title: "Founding Account Executive", posted_date: null }, flexible), true);
+  // A BROAD word keeps the family: "salespeople" is satisfied by an SDR opening.
+  const broad = requestedHiringFromSignals([{ role_families: ["gtm_sales"], qualifier: { role_terms: ["salespeople"] } }]);
+  assertEquals(jobProvesRequestedHiring({ title: "Sales Development Representative", posted_date: null }, broad), true);
 });
 Deno.test("unparseable evaluator output retains UNKNOWN mandatory verdicts", () => {
   const p = parseMissionEvaluationStrict("not JSON", registry, [hiring]);

@@ -11898,6 +11898,24 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
   }
   if (c.hiring_assessment?.verdict === "hiring_verified") {
     derived("hiring", true, "proven", c.hiring_jobs.map((j) => j.job_url ?? "").filter(Boolean).slice(0, 5), "high");
+    // ── THE POSTINGS BEHIND THE VERDICT, WITH THEIR TITLES (ATLAS review D1) ──
+    //
+    // Qualification re-checks a NAMED title ("Account Executives") against the
+    // posting titles the evidence carries; a bare `hiring: true` proves no title.
+    // The verdict above cites only URLs, so each posting is recorded as the `job`
+    // item job discovery already emits (candidateObservation): its own title, date
+    // and location, with the posting URL as provenance. Nothing else reads `job`
+    // items; the hiring item itself is unchanged.
+    for (const [i, j] of c.hiring_jobs.slice(0, 5).entries()) {
+      if (!j.title) continue;
+      items.push({
+        evidence_id: `drv_${c.key}_job_${i}`, company_key: c.key, dimension: "job",
+        value: { title: j.title, posted_date: j.posted_date, location: j.location }, status: "proven",
+        source: { provider: "engine", actor: "deterministic_verdict", provider_call_id: null, url: j.job_url ?? null, excerpt: j.title },
+        method: "deterministic_derivation", observed_at: at, valid_until: null, confidence: "high",
+        derived_from: [j.job_url ?? j.job_id ?? ""].filter(Boolean), mission_id: missionId, origin: "lead_mission",
+      });
+    }
   }
   const f = c.first_in_function;
   if (f) {

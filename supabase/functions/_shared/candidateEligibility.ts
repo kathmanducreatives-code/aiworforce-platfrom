@@ -47,6 +47,7 @@ import { eventWithinWindow, type EvidenceDimension, type EvidenceItem } from "./
 import { anyOfGroupKey, type CriterionDimension, type MissionCriterion } from "./missionCriteria.ts";
 import type { CriterionVerdict } from "./missionEvaluation.ts";
 import type { QualificationHold } from "./qualificationHold.ts";
+import { excludedByRole, namedTitles, titleSatisfiesNamedRole } from "./roleFamilies.ts";
 import { geographyVerdict } from "./geographyResolver.ts";
 import { isControlledPhrase, matchBusinessModel } from "./businessModelMatch.ts";
 import {
@@ -150,6 +151,15 @@ function provenanceOf(item: EvidenceItem): CheckProvenance {
 /** The item that currently speaks for a dimension, and what it says. */
 function currentItem(graph: CompanyEvidenceGraph, dim: EvidenceDimension): EvidenceItem | null {
   return graph.claims.find((c) => c.dimension === dim)?.current ?? null;
+}
+
+/** Posting titles a hiring item carries: the verifier's `titles`, and every proven `job` item in the graph. */
+function hiringTitlesOf(item: EvidenceItem, graph: CompanyEvidenceGraph): string[] {
+  const own = item.value && typeof item.value === "object" ? ((item.value as { titles?: unknown }).titles ?? []) : [];
+  const jobs = graph.claims.find((c) => c.dimension === "job");
+  const fromJobs = jobs ? [jobs.current, ...jobs.supporting].filter((e): e is EvidenceItem => !!e && e.status === "proven")
+    .map((e) => (e.value as { title?: unknown } | null)?.title) : [];
+  return [...new Set([...(Array.isArray(own) ? own : []), ...fromJobs].filter((t): t is string => typeof t === "string" && !!t.trim()))];
 }
 
 /**
@@ -392,6 +402,28 @@ function checkAgainst(c: MissionCriterion, graph: CompanyEvidenceGraph): Criteri
         ? ((item.value as { role_families?: unknown }).role_families ?? []) as unknown[] : null;
       if (found !== null && wanted.length > 0 && !wanted.some((w) => found.includes(w))) {
         return { ...base, result: "unknown", reason: `an open role was found, but not in ${wanted.join(" / ")}`, evidence_ids: ids, provenance };
+      }
+      // ── A NAMED TITLE IS RE-CHECKED HERE, NEVER TRUSTED (ATLAS review D1) ──
+      //
+      // When the request names a title ("Account Executives") or excludes one
+      // ("not SDRs"), the posting titles the evidence carries (the verifier's
+      // `titles`, discovery's `job` items) must show it. A bare `hiring: true` from
+      // an upstream layer is not enough: that is how an SDR opening proved "hiring
+      // Account Executives". No recorded title ⇒ unknown, never pass.
+      {
+        const q = ((c.value as { qualifier?: { role_terms?: string[]; role_families?: string[]; excluded_role_terms?: string[] } } | null)?.qualifier ?? {});
+        const role = { roleTerms: q.role_terms ?? [], roleFamilies: q.role_families ?? [], excludedRoleTerms: q.excluded_role_terms ?? [] };
+        const named = namedTitles(role);
+        if (named.length > 0 || role.excludedRoleTerms.length > 0) {
+          const titles = hiringTitlesOf(item, graph);
+          const satisfies = (t: string) => named.length > 0 ? titleSatisfiesNamedRole(t, role) : !excludedByRole(t, role);
+          if (!titles.length) {
+            return { ...base, result: "unknown", reason: `an opening is recorded without its title, so it cannot show ${named.length ? role.roleTerms.join(" or ") : "the role is not an excluded one"}`, evidence_ids: ids, provenance };
+          }
+          if (!titles.some(satisfies)) {
+            return { ...base, result: "unknown", reason: `open roles found (${titles.slice(0, 3).join("; ")}), none is ${named.length ? role.roleTerms.join(" or ") : "outside the excluded roles"}`, evidence_ids: ids, provenance };
+          }
+        }
       }
       // ── Q2 — "THE FIRST HIRE IN THE FUNCTION" IS PART OF THE REQUIREMENT ───
       //

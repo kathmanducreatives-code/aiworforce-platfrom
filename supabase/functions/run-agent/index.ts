@@ -13,7 +13,7 @@ import { bindEffectPrincipal, type EffectPrincipalDb, installEffectFence, withEf
 import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
 import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
 import { hiringSearchTitles } from "../_shared/hiringSearchVocabulary.ts";
-import { roleMatchesFamily, type RoleFamily } from "../_shared/roleFamilies.ts";
+import { namedTitles, roleMatchesFamily, titleSatisfiesNamedRole, type RoleFamily } from "../_shared/roleFamilies.ts";
 import { sizeBandLabel } from "../_shared/companySize.ts";
 import { PendingModelDrain } from "../_shared/executionLedger.ts";
 import { leadQuotaProvenance } from "../_shared/leadMissionV2Request.ts";
@@ -5666,10 +5666,16 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   const vocab = buildQualificationContext(vMission, { criteriaAuthority: true }).role_vocabulary;
                   const titles = hiringSearchTitles(vocab);
                   const lowered = vocab.required_titles.map((t) => String(t).toLowerCase());
+                  // A TITLE the request names ("Account Executives") is matched as that title by
+                  // the one shared role test (ATLAS review D1); otherwise the family rule as before.
+                  const q = ((hiringCriterion.value as { qualifier?: { role_terms?: string[]; excluded_role_terms?: string[] } } | null)?.qualifier ?? {});
+                  const namedRole = { roleTerms: q.role_terms ?? [], roleFamilies: families, excludedRoleTerms: q.excluded_role_terms ?? [] };
+                  const byTitle = namedTitles(namedRole).length > 0;
                   return hiringClaimVerifier({
                     titles, role_families: families,
                     window_days: hiringCriterion.time_window?.days ?? null,
-                    matchesRole: (title) => families.length > 0
+                    matchesRole: (title) => byTitle ? titleSatisfiesNamedRole(title, namedRole)
+                      : families.length > 0
                       ? families.some((f) => roleMatchesFamily(title, f as RoleFamily))
                       : lowered.some((t) => title.toLowerCase().includes(t)),
                   });

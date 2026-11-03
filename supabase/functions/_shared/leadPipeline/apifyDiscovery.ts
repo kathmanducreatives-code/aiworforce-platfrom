@@ -77,7 +77,8 @@ export async function discoverHiringCompanies(
   if (worst > opts.maxUsd + 1e-9) { out.stopped = "budget"; return out; }
 
   const hiring = spec.signals.find((s) => s.kind === "hiring");
-  const requested = hiring ? requestedHiringFromSignals([{ role_families: hiring.roleFamilies, timeframe_days: hiring.windowDays, qualifier: { role_terms: hiring.roleTerms } }]) : null;
+  const requested = hiring ? requestedHiringFromSignals([{ role_families: hiring.roleFamilies, timeframe_days: hiring.windowDays,
+    qualifier: { role_terms: hiring.roleTerms, excluded_role_terms: hiring.excludedRoleTerms ?? [] } }]) : null;
   let items: unknown[];
   try {
     const run = await invoke(SIGNAL_ACTORS.jobs.key, jobDiscoveryInput(spec, titles, opts.maxItems), { maxItems: opts.maxItems, idempotencyKey: `${opts.idPrefix}:${SIGNAL_ACTORS.jobs.key}:discovery` });

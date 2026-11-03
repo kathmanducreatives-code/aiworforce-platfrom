@@ -204,6 +204,8 @@ export interface SpecSignal {
   /** Post topics of a social signal ("AI automation"), from the user's own words (required_signal_terms). */
   topics: string[];
   roleFamilies: string[];
+  /** Roles the user excluded ("not SDRs"): a posting for one never counts (ATLAS review D1). */
+  excludedRoleTerms?: string[];
   phrase: string | null;
 }
 
@@ -237,7 +239,7 @@ interface MissionLike {
   target_entity?: string;
   criteria?: { kind?: string; dimension?: string; value?: unknown; time_window?: { days?: number } }[];
   required_signal_terms?: string[];
-  required_signals?: { type?: string; event?: string; timeframe_days?: number | null; role_families?: string[]; qualifier?: { role_terms?: string[]; role_families?: string[] }; phrase?: string }[];
+  required_signals?: { type?: string; event?: string; timeframe_days?: number | null; role_families?: string[]; qualifier?: { role_terms?: string[]; role_families?: string[]; excluded_role_terms?: string[] }; phrase?: string }[];
 }
 
 const SIGNAL_OF: Record<string, SignalKind> = {
@@ -267,6 +269,7 @@ export function specFromMission(mission: MissionLike, opts: { defaultCount?: num
       kind, hard: criterion?.kind === "hard",
       windowDays: s.timeframe_days ?? criterion?.time_window?.days ?? null,
       roleTerms, roleFamilies, phrase: s.phrase ?? null,
+      ...(s.qualifier?.excluded_role_terms?.length ? { excludedRoleTerms: [...s.qualifier.excluded_role_terms] } : {}),
       topics: kind === "social_activity" ? (mission.required_signal_terms ?? []).filter((t) => typeof t === "string" && t.trim()).slice(0, 3) : [],
     });
   }
