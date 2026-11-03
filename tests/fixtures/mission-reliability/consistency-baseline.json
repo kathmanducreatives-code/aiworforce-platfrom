@@ -1,0 +1,96 @@
+{
+ "summary": {
+  "missions": 109,
+  "withDisagreement": 25,
+  "by": {
+   "geography_planner_differs": 17,
+   "hard_signals_planner_differs": 10,
+   "exclusions_absent_from_orion": 2,
+   "roles_missing_from_orion_vocabulary": 1,
+   "or_groups_not_in_planner": 1
+  }
+ },
+ "disagreements": {
+  "corpus:M01:9fee47ba: role only as hard 'hiring_status' (fixed #219)": [
+   "roles_missing_from_orion_vocabulary"
+  ],
+  "corpus:M07:exclusion restated as hard 'excluded_roles'": [
+   "exclusions_absent_from_orion"
+  ],
+  "corpus:M07:one phrase": [
+   "exclusions_absent_from_orion"
+  ],
+  "corpus:M08:signals listed": [
+   "or_groups_not_in_planner"
+  ],
+  "persisted:tests/edge-functions/_shared/fixtures/missionHiringSalesRoles.json#$": [
+   "hard_signals_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[0].mission": [
+   "geography_planner_differs",
+   "hard_signals_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[1].mission": [
+   "geography_planner_differs",
+   "hard_signals_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[10].mission": [
+   "hard_signals_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[11].mission": [
+   "hard_signals_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[13].mission": [
+   "hard_signals_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[14].mission": [
+   "geography_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[15].mission": [
+   "geography_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[16].mission": [
+   "geography_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[17].mission": [
+   "geography_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[18].mission": [
+   "geography_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[19].mission": [
+   "geography_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[2].mission": [
+   "geography_planner_differs",
+   "hard_signals_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[20].mission": [
+   "geography_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[21].mission": [
+   "geography_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[22].mission": [
+   "geography_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[23].mission": [
+   "geography_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[3].mission": [
+   "geography_planner_differs",
+   "hard_signals_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[8].mission": [
+   "geography_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/run-1e52d43c/plan.json#$.steps[0].metadata.tool_input.lead_mission": [
+   "geography_planner_differs",
+   "hard_signals_planner_differs"
+  ],
+  "persisted:tests/fixtures/lead-v2/run-4250f181/plan.json#$.steps[0].metadata.tool_input.lead_mission": [
+   "geography_planner_differs",
+   "hard_signals_planner_differs"
+  ]
+ }
+}

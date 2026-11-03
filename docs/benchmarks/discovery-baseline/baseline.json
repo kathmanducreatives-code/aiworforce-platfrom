@@ -418,7 +418,7 @@
    "planHash": "0ebbb5efbf79fe45b5321fbb98b6e52cf9f57f6ea63ecb10437c31749d079f2f",
    "semanticFingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
    "hardRequirements": 2,
-   "hardPreserved": true,
+   "hardPreserved": false,
    "providerCalls": 2,
    "apifyItems": 13,
    "leadoceanRecords": 0,
@@ -2389,8 +2389,10 @@
     "searchedTitles": [
      "account executives"
     ],
-    "hardPreserved": true,
-    "coverageUnexplained": [],
+    "hardPreserved": false,
+    "coverageUnexplained": [
+     "dropped role=sales_development_representative"
+    ],
     "providerCalls": [
      {
       "provider": "apify",

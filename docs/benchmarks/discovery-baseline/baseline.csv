@@ -14,4 +14,4 @@ F2,F,Fault: sub-national geography (Texas),PASS,apify_only,ready,2,true,2,13,0,4
 C1,C,US-headquartered companies hiring AEs,PASS,apify_only,ready,2,true,2,13,0,4,4,2,1,1,0,1,1,0.02305,0.011525,0,3
 C2,C,Companies operating in the US,PASS,apify_only,ready,2,true,2,13,0,4,4,2,1,1,0,1,1,0.02305,0.011525,0,3
 C3,C,Prefer B2B but allow B2C,PASS,apify_only,ready,2,true,2,13,0,4,4,2,1,1,0,1,1,0.02305,0.011525,0,3
-C4,C,Hiring SDRs or AEs,FAIL,apify_only,ready,2,true,2,13,0,4,4,2,1,1,0,1,0.67,0.02305,0.011525,0,3
+C4,C,Hiring SDRs or AEs,FAIL,apify_only,ready,2,false,2,13,0,4,4,2,1,1,0,1,0.67,0.02305,0.011525,0,3
