@@ -53,6 +53,10 @@
         "extra_hard": [{ "field": "open_roles", "operator": "gte", "value": "5", "reason": "stated" }] } },
     { "name": "fintech_industry_hard", "origin": "a real industry the user states stays hard",
       "query": "Find US fintech companies hiring Account Executives.",
-      "proposal": { "company_types": ["fintech"], "required_signal_terms": ["Account Executives"] } }
+      "proposal": { "company_types": ["fintech"], "required_signal_terms": ["Account Executives"] } },
+    { "name": "gpt_hiring_status_role_only", "origin": "TEST deploy 9fee47ba: the model left required_signal_terms empty and filed the role only as hiring_status (plan blocked: no role to search)",
+      "query": "Find 5 US B2B companies actively hiring salespeople. Prefer 20–500 employees, but include strong opportunities outside that range and explain why.",
+      "proposal": { "requested_opportunity_count": 5, "company_types": ["B2B"], "employee_range": { "min": 20, "max": 500 }, "required_signal_terms": [],
+        "extra_hard": [{ "field": "hiring_status", "operator": "equals", "value": "actively hiring salespeople", "reason": "active hiring" }] } }
   ]
 }
