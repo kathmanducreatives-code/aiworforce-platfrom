@@ -8,7 +8,7 @@
 // production `restoreWorkingSet`, judged through ORION's own evidence path.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { evaluateEligibility } from "../../../supabase/functions/_shared/candidateEligibility.ts";
-import { missionCandidatesFrom, restoreWorkingSet } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
+import { type EngineCompany, missionCandidatesFrom, restoreWorkingSet } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import type { MissionCriterion } from "../../../supabase/functions/_shared/missionCriteria.ts";
 
 const NOW = new Date("2026-10-01T00:00:00Z");
@@ -22,11 +22,9 @@ const hiringCriterion = (qualifier: Record<string, unknown>): MissionCriterion =
 const AE = hiringCriterion({ role_terms: ["account executives"], role_families: ["gtm_sales"] });
 const GROWTH = hiringCriterion({ role_terms: ["growth marketers"], role_families: ["marketing_growth"] });
 
-// deno-lint-ignore no-explicit-any
-function judge(mutate: (c: any) => void, criterion: MissionCriterion) {
-  // deno-lint-ignore no-explicit-any
-  const cos = restoreWorkingSet(structuredClone(records)) as any[];
-  const c = cos.find((x) => String(x.key).includes("safetykit"));
+function judge(mutate: (c: EngineCompany) => void, criterion: MissionCriterion) {
+  const cos = restoreWorkingSet(structuredClone(records));
+  const c = cos.find((x) => String(x.key).includes("safetykit"))!;
   assert(c, "the stored SafetyKit company is in the fixture");
   assertEquals(c.hiring_assessment?.verdict, "hiring_verified", "it carries ORION's verified-hiring verdict");
   mutate(c);
@@ -35,9 +33,8 @@ function judge(mutate: (c: any) => void, criterion: MissionCriterion) {
 }
 
 Deno.test("ORION: the stored verified postings' titles reach qualification (with their URLs as provenance)", () => {
-  // deno-lint-ignore no-explicit-any
-  const cos = restoreWorkingSet(structuredClone(records)) as any[];
-  const c = cos.find((x) => String(x.key).includes("safetykit"));
+  const cos = restoreWorkingSet(structuredClone(records));
+  const c = cos.find((x) => String(x.key).includes("safetykit"))!;
   const g = missionCandidatesFrom({ companies: [c] }, { missionId: "t", now: NOW })[0].graph;
   const jobs = g.claims.find((x) => x.dimension === "job");
   assert(jobs, "a job claim is recorded for the verified postings");
