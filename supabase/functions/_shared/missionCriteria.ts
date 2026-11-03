@@ -564,6 +564,43 @@ export function normaliseFieldName(field: string): string {
   return String(field ?? "").trim().replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().replace(/[.\s-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
 }
 
+/**
+ * The role words a HARD HIRING CONSTRAINT quotes from the user's request — for the
+ * compiler to offer to the hiring signal, exactly like `required_signal_terms`.
+ *
+ * TEST deploy 9fee47ba (2026-11-02): for "Find 5 US B2B companies actively hiring
+ * salespeople" the model left `required_signal_terms` empty and wrote the role as
+ * `hiring_status: "actively hiring salespeople"`. The signal reached the mission with
+ * no role, so Apify had nothing to search, the plan was blocked, and the constraint
+ * compiled as an `unmappable` hard requirement. The role is the USER'S, word for word.
+ *
+ * Only a field that names hiring, a non-excluding non-count operator, no digit, and a
+ * value found verbatim in the request: never the model's own words, never a count or an
+ * exclusion. Whether the words qualify the signal is still decided by the signal reader.
+ */
+export function quotedHiringRoleWords(hardConstraints: unknown, query: string): string[] {
+  const q = String(query ?? "").toLowerCase().replace(/\s+/g, " ");
+  const list = Array.isArray(hardConstraints) ? hardConstraints : [];
+  const out: string[] = [];
+  for (const c of list) {
+    if (!c || typeof c !== "object") continue;
+    const { field, operator, value } = c as { field?: unknown; operator?: unknown; value?: unknown };
+    const f = normaliseFieldName(String(field ?? ""));
+    if (!RESTATED_HIRING_FIELDS.has(f) && !HIRING_FIELD_RE.test(f)) continue;
+    if (NOT_A_RESTATEMENT_OP_RE.test(String(operator ?? "").trim().toLowerCase())) continue;
+    for (const v of Array.isArray(value) ? value : [value]) {
+      if (typeof v !== "string" || /\d/.test(v)) continue;
+      const t = v.trim().toLowerCase().replace(/\s+/g, " ");
+      if (t.length <= 2 || !q.includes(t)) continue;
+      // The ROLE words only: "actively hiring salespeople" offers "salespeople" (the same
+      // filler restatesHiringSignal strips). "actively hiring" alone names no role.
+      const role = t.replace(HIRING_FILLER_RE, " ").replace(/[^a-z\s-]/g, " ").replace(/\s+/g, " ").trim();
+      if (role) out.push(role);
+    }
+  }
+  return out;
+}
+
 export function restatesHiringSignal(field: string, raw: unknown, signals: readonly Partial<MissionSignal>[]): boolean {
   const f = normaliseFieldName(field);
   const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { value: raw }) as

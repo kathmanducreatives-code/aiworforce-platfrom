@@ -1042,6 +1042,25 @@ Deno.test("idempotency: a provider failure is marked uncertain and a retry never
   assertEquals(o.ap.calls.filter((c) => failed.includes(c.key)).length, failed.length, `an uncertain charge is never retried (${retry.status})`);
 });
 
+// ── TEST deploy 9fee47ba: the role filed only as a hard "hiring status" constraint ──
+Deno.test("interpretation: a role the model filed only as a quoted hiring-status constraint still reaches the signal; the smoke plan passes", async () => {
+  const { planChecks, SMOKE_QUERY } = await import("../../../../scripts/deploy/test-functions-smoke.ts");
+  const proposal = { ...BLANK, ...US, requested_opportunity_count: 5, company_types: ["B2B"], employee_range: { min: 20, max: 500 },
+    preferred_signals: ["hiring"], required_signal_terms: [], strategies: ["hiring"], output_intent: "companies",
+    hard_constraints: [...US.hard_constraints, { field: "hiring_status", operator: "equals", value: "actively hiring salespeople", reason: "active hiring" }] };
+  const m = sdeps({ userId: "u-member", interpret: fromProposal(proposal) });
+  const r = await handleStrategyRequest(sreq({ action: "strategy_plan", query: SMOKE_QUERY, requested_count: 5, max_apify_usd: 0.25, max_leadocean_records: 50 }), m.d);
+  const failed = planChecks(r.status, r.body as never).filter((c) => c.status === "fail");
+  assertEquals(failed, [], JSON.stringify(failed));
+  // And the guard is narrow: a count or an exclusion is never lifted into the role.
+  const { quotedHiringRoleWords } = await import("../../../../supabase/functions/_shared/missionCriteria.ts");
+  const q = "Find US companies actively hiring salespeople but not engineers, with at least 5 open roles.";
+  assertEquals(quotedHiringRoleWords([{ field: "hiring_status", operator: "equals", value: "actively hiring salespeople" }], q), ["salespeople"]);
+  assertEquals(quotedHiringRoleWords([{ field: "hiring", operator: "excludes", value: "engineers" }], q), [], "an exclusion is not a role");
+  assertEquals(quotedHiringRoleWords([{ field: "open_roles", operator: "at_least", value: "5 open roles" }], q), [], "a count is not a role");
+  assertEquals(quotedHiringRoleWords([{ field: "hiring_status", operator: "equals", value: "hiring account executives" }], q), [], "words the user did not write are never lifted");
+});
+
 // ── Stage 6: the closed requirement vocabulary, behind LEAD_STRICT_REQUIREMENTS_ENABLED ──
 const INVENTED = { ...HIRING_PROPOSAL, hard_constraints: [...US.hard_constraints, { field: "culture_fit", operator: "equals", value: "remote-first engineering culture", reason: "model guess" }] };
 const QUOTED = { ...HIRING_PROPOSAL, hard_constraints: [...US.hard_constraints, { field: "culture_fit", operator: "equals", value: "remote-first", reason: "stated" }] };
