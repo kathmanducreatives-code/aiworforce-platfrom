@@ -24,12 +24,12 @@ Deno.test("baseline: no qualified company ever lacks provider evidence, and no d
   for (const x of all) {
     for (const c of x.record?.companies ?? []) if (c.verdict === "qualified") assert(c.evidence.some((e) => e.startsWith("apify_linkedin_company_details")), `${x.id} ${c.domain}: qualified without a company record`);
   }
-  // F1/F2 record the OPEN geography defect (an unrecognised or sub-national place is
-  // matched by any HQ) as FAIL verdicts in the baseline; every other run must hold.
-  for (const x of all.filter((y) => y.group !== "F")) {
+  // F1/F2 recorded the geography defect D5 as FAIL; fixed by the shared geography
+  // resolver (ATLAS review Stage 1), so the invariant now holds for every run.
+  for (const x of all) {
     assert(!(x.record?.companies ?? []).some((c) => c.domain === "mapleledger.example" && c.verdict === "qualified"), `${x.id}: a Canadian-HQ company qualified`);
   }
-  assertEquals(all.filter((y) => y.group === "F").map((y) => y.verdict), ["FAIL", "FAIL"], "the geography defect is still open: when fixed, re-record and flip these");
+  assertEquals(all.filter((y) => y.group === "F").map((y) => y.verdict), ["PASS", "PASS"], "D5 stays fixed: an unrecognised or sub-national place never qualifies an HQ outside it");
 });
 
 // ── Failure injection ───────────────────────────────────────────────────────

@@ -47,7 +47,7 @@ import { eventWithinWindow, type EvidenceDimension, type EvidenceItem } from "./
 import { anyOfGroupKey, type CriterionDimension, type MissionCriterion } from "./missionCriteria.ts";
 import type { CriterionVerdict } from "./missionEvaluation.ts";
 import type { QualificationHold } from "./qualificationHold.ts";
-import { geographyContradicts } from "./leadEligiblePool.ts";
+import { geographyVerdict } from "./geographyResolver.ts";
 import { isControlledPhrase, matchBusinessModel } from "./businessModelMatch.ts";
 import {
   decideHasRaised, decideRecentlyFunded, fundingKindOf, fundingPresenceOf, normalizeRoundType, requiredStagesOf, stageRequirement,
@@ -287,10 +287,21 @@ function checkAgainst(c: MissionCriterion, graph: CompanyEvidenceGraph): Criteri
     case "geography": {
       const required = Array.isArray(c.value) ? c.value.map(String) : [String(c.value ?? "")];
       const claimed = typeof item.value === "string" ? item.value : null;
-      if (geographyContradicts(claimed, required.filter(Boolean))) {
+      // ── A HARD GEOGRAPHY PASSES ONLY ON A POSITIVE MATCH (ATLAS review, D5) ──
+      //
+      // This used to ask `geographyContradicts` and treat "not contradicted" as
+      // satisfied. That function answers the POOL's question (may this company be
+      // excluded?), where "cannot tell" must not exclude. Here "cannot tell" must
+      // not qualify: a requirement the resolver cannot place ("Atlantis") or a
+      // location it cannot place stays unknown. One resolver answers both.
+      const verdict = geographyVerdict(claimed, required.filter(Boolean));
+      if (verdict === "contradict") {
         return proven
           ? { ...base, result: "fail", reason: `geography ${claimed} is outside ${required.join(", ")}`, evidence_ids: ids, provenance }
           : { ...base, result: "unknown", reason: `geography ${claimed} is reported outside ${required.join(", ")}, not verified`, evidence_ids: ids, provenance };
+      }
+      if (verdict === "unresolvable") {
+        return { ...base, result: "unknown", reason: `geography ${claimed ?? "(none)"} cannot be placed inside ${required.join(", ")}`, evidence_ids: ids, provenance };
       }
       return proven
         ? { ...base, result: "pass", reason: `geography ${claimed} matches ${required.join(", ")}`, evidence_ids: ids, provenance }
