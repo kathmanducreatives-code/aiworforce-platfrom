@@ -24,6 +24,7 @@
 import { deriveMissionCriteria } from "../../supabase/functions/_shared/missionCriteria.ts";
 import { type MissionSemantics, missionSemantics, semanticDiff, semanticsFingerprint } from "../../supabase/functions/_shared/missionSemantics.ts";
 import { persistedMissions } from "./mission-semantics.ts";
+import { diffVerdicts, verdicts } from "./verdict-replay.ts";
 
 const ROOT = new URL("../../", import.meta.url);
 export const APPROVED_PATH = "tests/fixtures/mission-semantics/production-replay-approved.json";
@@ -77,15 +78,34 @@ if (import.meta.main) {
     rows.forEach((r, i) => missions.push([`stored:${r.id ?? i}`, r.mission]));
   }
   let approved: Approval[] = [];
-  try { approved = JSON.parse(await Deno.readTextFile(new URL(APPROVED_PATH, ROOT))).approved ?? []; } catch { /* none approved */ }
+  let approvedVerdicts: { key: string; before: string; after: string }[] = [];
+  try {
+    const f = JSON.parse(await Deno.readTextFile(new URL(APPROVED_PATH, ROOT)));
+    approved = f.approved ?? [];
+    approvedVerdicts = f.approvedVerdicts ?? [];
+  } catch { /* none approved */ }
   const cand = arg("--candidate-dir");
   const candidate = cand
     ? ((await import(new URL(`file://${Deno.realPathSync(cand)}/supabase/functions/_shared/missionCriteria.ts`).href)) as { deriveMissionCriteria: Derive }).deriveMissionCriteria
     : deriveMissionCriteria as Derive;
   const r = replay(missions, release.deriveMissionCriteria, candidate, approved, arg("--release") ?? dir);
+
+  // QUALIFICATION VERDICTS (ATLAS review Stage 0). Criteria replay cannot see a change to the
+  // shared qualification engine; this replays the engine on every stored production
+  // candidate (scripts/dev/verdict-replay.ts), each side with its own code. A change of a
+  // candidate's ELIGIBILITY must be approved like a change of meaning; check-level changes
+  // that leave eligibility alone are reported.
+  const verdictBefore = await verdicts(dir);
+  const verdictAfter = await verdicts(cand ?? undefined);
+  const vd = diffVerdicts(verdictBefore, verdictAfter);
+  const okVerdict = new Set(approvedVerdicts.map((a) => `${a.key}|${a.before}|${a.after}`));
+  const unapprovedVerdicts = vd.filter((c) => c.eligibilityChanged && !okVerdict.has(`${c.key}|${c.before?.eligibility ?? "-"}|${c.after?.eligibility ?? "-"}`));
+
   const out = arg("--report");
-  if (out) await Deno.writeTextFile(out, JSON.stringify({ ...r, categories: categories(r) }, null, 1) + "\n");
-  console.log(JSON.stringify({ missions: r.missions, changed: r.changed.length, unapproved: r.unapproved.length, categories: categories(r) }));
+  if (out) await Deno.writeTextFile(out, JSON.stringify({ ...r, categories: categories(r), verdicts: { changed: vd, unapproved: unapprovedVerdicts } }, null, 1) + "\n");
+  console.log(JSON.stringify({ missions: r.missions, changed: r.changed.length, unapproved: r.unapproved.length, categories: categories(r),
+    verdicts: { candidates: Object.keys(verdictAfter).length, changed: vd.length, eligibilityChanged: vd.filter((c) => c.eligibilityChanged).length, unapproved: unapprovedVerdicts.length } }));
   for (const c of r.unapproved) console.log(`UNAPPROVED ${c.key}\n   ${c.diff.join(" | ")}`);
-  if (r.unapproved.length) Deno.exit(1);
+  for (const c of unapprovedVerdicts) console.log(`UNAPPROVED VERDICT ${c.key}: ${c.before?.eligibility ?? "-"} → ${c.after?.eligibility ?? "-"}\n   ${c.checks.join(" | ")}`);
+  if (r.unapproved.length || unapprovedVerdicts.length) Deno.exit(1);
 }

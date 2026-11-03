@@ -1,0 +1,637 @@
+{
+ "canary8.hiring-affordability#before_hiring_verification:slice1#https://www.linkedin.com/company/llamaindex": {
+  "eligibility": "pending",
+  "checks": {
+   "company_size:company_size:_min_11_max_50_": "pass",
+   "funding:funding:_event_funding_subject_company_qualifier_": "pass",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol": "unknown",
+   "industry:industry:ai_saas": "pass",
+   "industry:industry:saas": "pass"
+  }
+ },
+ "canary8.hiring-affordability#before_hiring_verification:slice2#https://www.linkedin.com/company/solanalabs": {
+  "eligibility": "pending",
+  "checks": {
+   "company_size:company_size:_min_11_max_50_": "pass",
+   "funding:funding:_event_funding_subject_company_qualifier_": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol": "unknown",
+   "industry:industry:ai_saas": "unknown",
+   "industry:industry:saas": "unknown"
+  }
+ },
+ "canary8.hiring-affordability#before_hiring_verification:slice4#https://www.linkedin.com/company/deltalake": {
+  "eligibility": "pending",
+  "checks": {
+   "company_size:company_size:_min_11_max_50_": "pass",
+   "funding:funding:_event_funding_subject_company_qualifier_": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol": "unknown",
+   "industry:industry:ai_saas": "unknown",
+   "industry:industry:saas": "unknown"
+  }
+ },
+ "canary8.hiring-affordability#before_hiring_verification:slice6#https://www.linkedin.com/company/actioneer-hq": {
+  "eligibility": "pending",
+  "checks": {
+   "company_size:company_size:_min_11_max_50_": "pass",
+   "funding:funding:_event_funding_subject_company_qualifier_": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_terms_sales_rol": "unknown",
+   "industry:industry:ai_saas": "unknown",
+   "industry:industry:saas": "unknown"
+  }
+ },
+ "canarySession2.contract2#end_of_slice#https://www.linkedin.com/company/baseten": {
+  "eligibility": "pending",
+  "checks": {
+   "funding:funding:_event_funding_subject_company_qualifier_": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_terms_account_e": "pass"
+  }
+ },
+ "canarySession2.contract2#end_of_slice#https://www.linkedin.com/company/langchain": {
+  "eligibility": "pending",
+  "checks": {
+   "funding:funding:_event_funding_subject_company_qualifier_": "unknown",
+   "geography:geography:united_states": "pass",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_terms_account_e": "pass"
+  }
+ },
+ "canarySession2.contract2#end_of_slice#https://www.linkedin.com/company/oscilar-inc": {
+  "eligibility": "pending",
+  "checks": {
+   "funding:funding:_event_funding_subject_company_qualifier_": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_terms_account_e": "pass"
+  }
+ },
+ "run-1e52d43c#lineage#10xscience.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#bitmovin.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#bymason.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#deepgram.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#every.io": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#furtherai.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "pass",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#fuseai.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "pass",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#gemnote.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#gojiberry.ai": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#hyperspell.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#lab0.ai": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#manicule.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#mashgin.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#moss.dev": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#mux.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#nango.dev": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#pasito.ai": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "pass",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#poly.app": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#propelauth.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#quartzy.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#safetykit.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "pass",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#sembleai.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#shipbob.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#snapmagic.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#streak.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#tara.ai": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#tasklet.ai": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#uplane.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#withnixo.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-1e52d43c#lineage#zentail.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#10xscience.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#bitmovin.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#bymason.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#contrario.ai": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#deepgram.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#every.io": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#furtherai.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#fuseai.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#gemnote.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#getauctor.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#gojiberry.ai": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#hemut.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#joinergo.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#joinmarble.ai": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#lab0.ai": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#lemonlime.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#mashgin.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#mux.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#nango.dev": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#pasito.ai": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#poly.app": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#propelauth.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#quartzy.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#safetykit.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#salespatriot.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#sembleai.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#shipbob.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#snapmagic.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#streak.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#tara.ai": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#uplane.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#wozcode.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ },
+ "run-4250f181#lineage#zentail.com": {
+  "eligibility": "pending",
+  "checks": {
+   "company_stage:company_stage:seed": "unknown",
+   "geography:geography:united_states": "unknown",
+   "hiring:hiring:_event_hiring_subject_company_qualifier_role_families_market": "unknown",
+   "industry:industry:b2b_saas": "unknown"
+  }
+ }
+}
