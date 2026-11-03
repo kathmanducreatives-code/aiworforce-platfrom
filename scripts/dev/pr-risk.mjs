@@ -40,6 +40,7 @@ export const SENSITIVE_PATHS = [
   // ATLAS review Stage 0: qualification verdicts and the labelled corpus are owner decisions.
   [/^tests\/fixtures\/atlas-eval\/verdict-baseline\.json$/, "a change in stored candidates' qualification verdicts"],
   [/^tests\/fixtures\/atlas-eval\/v\d+\/corpus\.json$/, "the labelled evaluation corpus (owner policy and labels)"],
+  [/^tests\/fixtures\/mission-reliability\/v\d+\/cases\.json$/, "the labelled interpretation corpus (owner policy and labels)"],
   [/^scripts\/dev\/verdict-replay\.ts$/, "the qualification-verdict replay gate"],
   [/(?:^|\/)(?:phone|outreach|telnyx|twilio|send-scheduled-emails)[^/]*(?:\/|$)/i, "phone / outreach"],
   [/^(?:railway\.json|netlify\.toml|Dockerfile|vercel\.json)$/, "production hosting configuration"],
