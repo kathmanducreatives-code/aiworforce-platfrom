@@ -26,7 +26,7 @@ export const FUZZ_BASELINE_PATH = "tests/fixtures/mission-reliability/fuzz-basel
 
 export type Outcome = "ok" | "unmappable" | "dropped" | "inverted";
 
-const BLANK = {
+export const BLANK = {
   requested_opportunity_count: 5, requested_contact_ready_count: null, company_types: [], geographies: ["United States"], employee_range: { min: null, max: null },
   decision_maker_roles: [], soft_preferences: [], preferred_signals: ["hiring"], adjacent_signals: [], excluded_signals: [],
   allowed_broadening: { role_families: [], company_types: [], geographies: [], employee_range: { min: null, max: null } }, disallowed_broadening: [],

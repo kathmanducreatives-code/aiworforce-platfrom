@@ -412,28 +412,28 @@
    "id": "C4",
    "group": "C",
    "title": "Hiring SDRs or AEs",
-   "verdict": "FAIL",
+   "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "0ebbb5efbf79fe45b5321fbb98b6e52cf9f57f6ea63ecb10437c31749d079f2f",
-   "semanticFingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
+   "planHash": "b5501b142dd2afc9bc990b0f39d50776509e49b5f55daa8b8eaf7632b7a41242",
+   "semanticFingerprint": "1f99b1ebd32558da60db9439de3e192640f29c203d3b792a2d8d1eee71197c90",
    "hardRequirements": 2,
-   "hardPreserved": false,
+   "hardPreserved": true,
    "providerCalls": 2,
-   "apifyItems": 13,
+   "apifyItems": 14,
    "leadoceanRecords": 0,
-   "candidates": 4,
-   "uniqueCompanies": 4,
-   "qualified": 2,
+   "candidates": 5,
+   "uniqueCompanies": 5,
+   "qualified": 3,
    "rejected": 1,
    "review": 1,
    "falseQualified": 0,
    "precision": 1,
-   "recall": 0.67,
-   "apifyUsdUpperBound": 0.02305,
-   "costPerQualifiedUsd": 0.011525,
+   "recall": 1,
+   "apifyUsdUpperBound": 0.02705,
+   "costPerQualifiedUsd": 0.009017,
    "errors": 0,
-   "dbWrites": 3
+   "dbWrites": 4
   }
  ],
  "results": [
@@ -2353,8 +2353,8 @@
    "id": "C4",
    "title": "Hiring SDRs or AEs",
    "group": "C",
-   "verdict": "FAIL",
-   "detail": "titles account executives; glowcart absent",
+   "verdict": "PASS",
+   "detail": "titles sdrs | account executives; glowcart qualified",
    "spec": {
     "hard": [
      "US HQ",
@@ -2378,21 +2378,20 @@
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     ],
-    "planHash": "0ebbb5efbf79fe45b5321fbb98b6e52cf9f57f6ea63ecb10437c31749d079f2f",
-    "semanticFingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
+    "planHash": "b5501b142dd2afc9bc990b0f39d50776509e49b5f55daa8b8eaf7632b7a41242",
+    "semanticFingerprint": "1f99b1ebd32558da60db9439de3e192640f29c203d3b792a2d8d1eee71197c90",
     "hardRequirements": [
      "geography:United States",
-     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"]}}"
+     "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"sdrs\",\"account executives\"],\"role_families\":[\"gtm_sales\"],\"role_match\":\"any\"}}"
     ],
     "preferences": [],
     "geographyScope": "headquarters",
     "searchedTitles": [
+     "sdrs",
      "account executives"
     ],
-    "hardPreserved": false,
-    "coverageUnexplained": [
-     "dropped role=sales_development_representative"
-    ],
+    "hardPreserved": true,
+    "coverageUnexplained": [],
     "providerCalls": [
      {
       "provider": "apify",
@@ -2402,19 +2401,33 @@
      {
       "provider": "apify",
       "capability": "apify_linkedin_company_details",
-      "items": 3
+      "items": 4
      }
     ],
     "itemsPurchased": {
-     "apify": 13,
+     "apify": 14,
      "leadoceanRecords": 0
     },
-    "candidates": 4,
-    "uniqueCompanies": 4,
-    "qualified": 2,
+    "candidates": 5,
+    "uniqueCompanies": 5,
+    "qualified": 3,
     "rejected": 1,
     "review": 1,
     "companies": [
+     {
+      "name": "Glowcart",
+      "domain": "glowcart.example",
+      "verdict": "qualified",
+      "sources": [
+       "apify"
+      ],
+      "evidence": [
+       "apify_discoveryx2",
+       "apify_linkedin_job_searchx4",
+       "apify_linkedin_company_detailsx4"
+      ],
+      "gaps": []
+     },
      {
       "name": "Northwind Ledger",
       "domain": "northwind.example",
@@ -2474,21 +2487,19 @@
      }
     ],
     "falseQualified": [],
-    "missedQualified": [
-     "glowcart.example"
-    ],
+    "missedQualified": [],
     "precision": 1,
-    "recall": 0.67,
+    "recall": 1,
     "anyOf": false,
     "costUsd": {
-     "apify": 0.02305,
+     "apify": 0.02705,
      "apifyBasis": "estimated_upper_bound"
     },
     "leadoceanRecords": 0,
-    "costPerQualifiedUsd": 0.011525,
+    "costPerQualifiedUsd": 0.009017,
     "errors": [],
     "retries": 0,
-    "dbWrites": 3,
+    "dbWrites": 4,
     "ledger": {
      "reserved": 0,
      "settled": 2,

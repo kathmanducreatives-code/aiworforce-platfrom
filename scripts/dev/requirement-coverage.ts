@@ -15,7 +15,7 @@
 // Each must be explained by one of GUARDS below, or the check fails. A new guard that
 // drops or softens something must add its rule here — reviewed — rather than hide it.
 
-import { audienceDescriptor, audienceIntent, deriveMissionCriteria, restatesHiringSignal } from "../../supabase/functions/_shared/missionCriteria.ts";
+import { audienceDescriptor, audienceIntent, deriveMissionCriteria } from "../../supabase/functions/_shared/missionCriteria.ts";
 import { compileCaseMission, corpusCases, persistedMissions } from "./mission-semantics.ts";
 import { canonicalTitleOf, classifyRoleFamily } from "../../supabase/functions/_shared/roleFamilies.ts";
 import { compilePhrasing, loadCases } from "./interpretation-corpus.ts";
@@ -47,20 +47,10 @@ export const GUARDS: { name: string; applies: (f: Omit<Finding, "guard">, m: Mis
       !/\bstart-?ups?\b/i.test(String(m.original_user_query ?? "")) &&
       crit.some((c) => c.dimension === "company_stage" && c.kind === "hard"),
   },
-  {
-    // #203/#211: a hard constraint restating the hiring signal IS the signal; its role
-    // must survive on a HARD hiring criterion, or the restatement was a loss.
-    name: "hiring-restatement-is-the-signal",
-    applies: (f, m, crit) => {
-      if (f.kind !== "dropped" || !f.item.startsWith("hard.")) return false;
-      const field = f.item.slice(5);
-      const raw = ((m.hard_constraints ?? {}) as Record<string, { value?: unknown }>)[field];
-      const value = raw && typeof raw === "object" && !Array.isArray(raw) ? raw.value : raw;
-      const signals = (m.required_signals ?? []) as never[];
-      return restatesHiringSignal(field, value, signals) &&
-        crit.some((c) => c.dimension === "hiring" && c.kind === "hard");
-    },
-  },
+  // (S1) "hiring-restatement-is-the-signal" retired: the compiler now reconciles every
+  // restatement by VALUE before the mission is stored (restatementReconciler.ts), so no
+  // compiled mission carries one; the fuzz's `represented` check and the reconciler tests
+  // prove the requirement survives. No stored mission carries one either (this check).
   {
     // #202: an audience the request only PERMITS ("include strong B2C opportunities")
     // is no requirement and no preference — keeping it would filter or rank by it.
@@ -130,15 +120,17 @@ export function findings(m: Mission, crit: Crit[]): Finding[] {
  * the entry in the same reviewed change.
  */
 export const KNOWN_LOSSES: Readonly<Record<string, string>> = Object.freeze({
-  "reliability:M05:roles listed separately|role=sales_development_representative": "KNOWN:D4",
   // NL1: the model corrected "acount executives" to "Account Executives"; the compiler keeps
   // a role only if the user's (misspelt) words contain it, so the role is dropped.
   "reliability:M13:typo (model corrects the title)|role=account_executive": "KNOWN:NL1",
   // Stored production missions (found by this check, mission reliability S0):
   // "salespeople, sales reps, account executives, AEs" stored as role_terms ["aes"] only —
   // D4 collapse; with Stage 2's exact titles it would NARROW the mission to AE postings.
-  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.Z08.lead_mission|role=salespeople": "KNOWN:D4",
-  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.Z08.lead_mission|role=sales rep": "KNOWN:D4",
+  // S1 fixed the compiler (the same words now compile to all four roles: see
+  // restatementReconciler.test.ts "D4"); the STORED record keeps its recorded meaning and
+  // is listed for the owner in the S5 migration report — never rewritten silently.
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.Z08.lead_mission|role=salespeople": "KNOWN:D4-stored",
+  "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.Z08.lead_mission|role=sales rep": "KNOWN:D4-stored",
   // "actively hiring sales roles": the role became an unrecognised signal and an unprovable
   // hard constraint (production replay decision D) — the hiring requirement carries no role.
   "persisted:tests/edge-functions/_shared/fixtures/missionHiringSalesRoles.json#$|role=sales role": "KNOWN:R2",

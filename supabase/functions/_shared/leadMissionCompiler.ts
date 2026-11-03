@@ -70,6 +70,7 @@ import {
 } from "./leadMission.ts";
 import { buildMissionBriefing } from "./agentoryBriefing.ts";
 import { CAPABILITY_AVAILABILITY_INSTRUCTION, capabilityContextForPrompt } from "./capabilityContext.ts";
+import { reconcileRestatements } from "./restatementReconciler.ts";
 import { isCapabilityId, type CapabilityId } from "./leadCapabilityGraph.ts";
 import {
   catalogueForPrompt, isPublicCapability, offersFrom, toInternalCapabilities,
@@ -1243,6 +1244,8 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
       }
     }
     mission = dedupeEquivalentConstraints(mission, changes);
+    // S1: any remaining restatement is reconciled by its VALUE, whatever its field name.
+    mission = reconcileRestatements(mission, changes);
   }
   if ((hedged.length > 0 || negated.length > 0) && statedLocations.length === 0) delete mission.geography_is_hard;
 
@@ -1786,13 +1789,27 @@ export function readSignalPhrases(
       const hostPhrase = String(host.d!.phrase ?? host.phrase).toLowerCase();
       if (hostPhrase.includes(t.toLowerCase())) break;
       if (qualifierAbsorbs(host.d!.qualifier, t)) break; // already expressed
+      // D4 (mission reliability): ROLES LISTED SEPARATELY ARE A LIST, NEVER A
+      // REPLACEMENT. `required_signal_terms: ["SDR", "Account Executive"]` used to
+      // merge one at a time: "hiring SDR" took the first, then "hiring SDR Account
+      // Executive" read as ONE role and the SDR alternative was lost (quality run
+      // Z08 kept only "AEs" of "salespeople, sales reps, account executives, AEs").
+      // A term joins a host that already carries roles as a list item (the
+      // reader's own "a, b" = any of), and a merge is accepted only if every role
+      // the host already carried survives it.
+      const before = (host.d!.qualifier?.role_terms ?? []).map((x) => x.toLowerCase());
+      const hostText = String(host.d!.phrase ?? host.phrase);
+      const shapes = before.length
+        ? [`${hostText}, ${t}`, `${host.phrase} ${t}`, `${t} ${host.phrase}`]
+        : [`${host.phrase} ${t}`, `${t} ${host.phrase}`];
       let merged = null;
-      for (const combined of [`${host.phrase} ${t}`, `${t} ${host.phrase}`]) {
+      for (const combined of shapes) {
         const r = readSignalPhrase(combined);
-        if (r && r.type === host.d!.type && qualifierAbsorbs(r.qualifier, t)) {
-          merged = r;
-          break;
-        }
+        if (!r || r.type !== host.d!.type || !qualifierAbsorbs(r.qualifier, t)) continue;
+        const after = new Set((r.qualifier?.role_terms ?? []).map((x) => x.toLowerCase()));
+        if (!before.every((b) => after.has(b))) continue;
+        merged = r;
+        break;
       }
       if (merged) { host.d = merged; break; }
     }
