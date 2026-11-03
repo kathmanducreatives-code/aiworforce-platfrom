@@ -1458,7 +1458,15 @@ export function deriveMissionCriteria(
     // MANDATORY, user_explicit "Company kind: startup" nothing can prove. The
     // stage word is already its own criterion (`stageIntent`); the company kind
     // is a criterion only when the request itself says "startup".
-    if (st === "startup" && source === "user_explicit" && !STARTUP_NOUN.test(query)) continue;
+    //
+    // A MONITORING mission has no request text: its profile IS the workspace's
+    // stored ICP (field_provenance.company_profile = "monitoring_subject") and its
+    // query is a placeholder. The test above is about the user's words, so it
+    // cannot apply — skipping there silently dropped the ICP's "startup" from
+    // every monitor (production replay, Stage 7). The ICP states it; it is kept,
+    // disclosed and ranking, as the target the code below makes it.
+    const fromMonitor = (prov as Record<string, unknown>)["company_profile"] === "monitoring_subject";
+    if (st === "startup" && source === "user_explicit" && !fromMonitor && !STARTUP_NOUN.test(query)) continue;
     if (st === "startup") {
       // The noun ("startups") is the company kind; a stage word, when the
       // sentence has one, is pushed separately below.
@@ -1487,6 +1495,7 @@ export function deriveMissionCriteria(
         rationale: source === "company_brain_preference"
           ? "your Company Brain's ICP"
           : required ? `"${required[0]}" makes it a requirement`
+          : fromMonitor ? "the monitored ICP names the company kind; disclosed, it ranks and never rejects"
           : "the company kind in the request, stated as a description, so a target",
         status: "unprovable_today",
       });
