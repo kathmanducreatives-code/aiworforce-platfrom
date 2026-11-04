@@ -54,7 +54,16 @@ export const DISCOVERY_STRATEGIES = [
   "apify_plus_leadocean",
   /** Apollo finds people; Apify verifies. Disabled until Apollo API access is validated. */
   "apollo_plus_apify",
+  /**
+   * BOTH discover at once, on the same mission: Apify by the defining signal (open roles),
+   * LeadOcean by the mission's filters it can express. Each runs and fails independently;
+   * Apify's company record verifies the union; one deterministic merge keeps every source;
+   * the shared engine decides. USER-SELECTED ONLY: never chosen by score or model advice.
+   */
+  "apify_leadocean_concurrent",
 ] as const;
+/** Strategies that run only when the request (or its owner) names them. */
+export const USER_SELECTED_ONLY: ReadonlySet<DiscoveryStrategyId> = new Set(["apify_leadocean_concurrent"]);
 export type DiscoveryStrategyId = typeof DISCOVERY_STRATEGIES[number];
 export const isStrategy = (s: unknown): s is DiscoveryStrategyId => typeof s === "string" && (DISCOVERY_STRATEGIES as readonly string[]).includes(s);
 
@@ -190,6 +199,7 @@ export function chainFor(strategy: DiscoveryStrategyId, spec: DiscoverySpec): re
     case "apollo_plus_apify": return ["apollo.people_search", rec];
     case "apify_plus_leadocean": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, rec, "leadocean.people_by_domain"];
     case "apify_only": return seed === "apify.people_search" ? [seed, rec] : [seed, rec, ...(spec.wantsPeople ? ["apify.company_employees"] : [])];
+    case "apify_leadocean_concurrent": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, "leadocean.people_search", rec];
   }
 }
 
@@ -587,7 +597,9 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
       const price = (items: number) => ({ leadoceanRecords: lo ? items * (c.cost as { perRow: number }).perRow : 0, apifyUsd: lo ? 0 : usd(c, items) });
       if (c.role === "discover_people") {
         const max = Math.max(0, Math.min(cap, itemCap));
-        companies = max;
+        // After a company-discovery step (the concurrent strategy) its employers ADD to the
+        // companies to verify; first in a chain (every other strategy) they are all of them.
+        companies = out.some((x) => x.role === "discover_companies") ? companies + max : max;
         out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: price(max), why: "people and employers matching roles, geography, size and industry labels (narrowing only)" });
       } else if (c.role === "discover_companies") {
         const max = Math.max(1, Math.min(100, cap * JOB_ROWS_PER_COMPANY));
@@ -691,7 +703,7 @@ export function planSemantics(spec: DiscoverySpec) {
 
 export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?: { proposed: DiscoveryStrategyId | null; rationale: string; model: string | null; error: string | null } | null): StrategyPlan {
   const candidates = DISCOVERY_STRATEGIES.map((s) => judge(s, spec, ctx));
-  const feasible = candidates.filter((c) => c.feasible).sort((a, b) => b.score - a.score || DISCOVERY_STRATEGIES.indexOf(a.strategy) - DISCOVERY_STRATEGIES.indexOf(b.strategy));
+  const feasible = candidates.filter((c) => c.feasible && !USER_SELECTED_ONLY.has(c.strategy)).sort((a, b) => b.score - a.score || DISCOVERY_STRATEGIES.indexOf(a.strategy) - DISCOVERY_STRATEGIES.indexOf(b.strategy));
   let chosen: StrategyCandidate | null = null;
   let selectedBy: StrategyPlan["selectedBy"] = null;
   let blockedReason: string | null = null;
@@ -705,7 +717,7 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
   } else {
     if (advice) {
       const c = advice.proposed ? candidates.find((x) => x.strategy === advice.proposed) : null;
-      const accepted = !!c?.feasible;
+      const accepted = !!c?.feasible && !USER_SELECTED_ONLY.has(c!.strategy);
       modelAdvice = {
         proposed: advice.proposed, rationale: advice.rationale, accepted, model: advice.model,
         reason: accepted ? "the proposed strategy passed every deterministic check"

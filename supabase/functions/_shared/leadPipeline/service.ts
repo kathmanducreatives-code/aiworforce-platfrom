@@ -21,6 +21,7 @@ import { classifyConstraints, REQUIREMENT_VOCABULARY_VERSION } from "../requirem
 import type { PlanReplay, PlanSigner, PlanTokenPayload } from "./planToken.ts";
 import { activeMissionContract } from "../missionInterpretationContract.ts";
 import { understandingOf } from "../missionUnderstanding.ts";
+import { summarizeProviderRun } from "./providerRunSummary.ts";
 import { criteriaFreezeState } from "../missionCriteriaReader.ts";
 
 /** What the running service used to read this mission — for review and the TEST smoke (P8). */
@@ -363,6 +364,8 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     body: {
       status: run.status, reason: run.reason, strategy: run.strategy, steps: run.steps, spend: run.spend, limitations: run.limitations,
       evidenceRefused: run.evidenceRefused, queue: run.queue, review: run.review, excludedCount: run.excluded.length, written: projected.length,
+      // Per provider and combined: discovered, unique, qualified, pending, rejected, spend, errors.
+      providerSummary: summarizeProviderRun(run),
     },
   };
 }

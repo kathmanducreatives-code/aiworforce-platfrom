@@ -145,7 +145,7 @@ export async function runDiscoveryStrategy(input: StrategyRunInput): Promise<Str
   // The server's estimate is the ceiling: an approval naming more never raises it.
   const cap = { leadoceanRecords: Math.min(a.leadoceanRecords, plan.estimate.leadoceanRecords), apifyUsd: Math.min(a.apifyUsd, plan.estimate.apifyUsd) };
   if (plan.strategy === "leadocean_only" || plan.strategy === "leadocean_plus_apify") return runLeadOceanLed(input, cap, now);
-  if (plan.strategy === "apify_only" || plan.strategy === "apify_plus_leadocean") return runApifyLed(input, cap, now);
+  if (plan.strategy === "apify_only" || plan.strategy === "apify_plus_leadocean" || plan.strategy === "apify_leadocean_concurrent") return runApifyLed(input, cap, now);
   return blocked(`strategy ${plan.strategy} has no executor`);
 }
 
@@ -198,6 +198,34 @@ function emptyRun(input: StrategyRunInput, reason: string | null): StrategyRun {
   };
 }
 
+// ── Concurrent LeadOcean discovery (apify_leadocean_concurrent) ─────────────
+
+/**
+ * LeadOcean's half of the concurrent strategy: the mission's requirements it can express
+ * (`leadoceanDiscoveryRequirements`: never the hiring signal, never a label it cannot
+ * filter exactly), bounded by the plan step and the approved record ceiling. Its rows are
+ * candidates and claims — the shared engine decides on proof.
+ */
+async function leadOceanConcurrentDiscovery(input: StrategyRunInput, step: StrategyPlan["steps"][number], cap: { leadoceanRecords: number }, mission: string):
+  Promise<{ companies: ProviderCompany[]; people: ProviderPerson[]; records: number; status: ProviderStepOutcome["status"]; reason: string | null }> {
+  const max = Math.min(step.maxItems, cap.leadoceanRecords);
+  if (!input.leadocean) return { companies: [], people: [], records: 0, status: "failed", reason: "LeadOcean not connected" };
+  if (max < 1) return { companies: [], people: [], records: 0, status: "skipped", reason: "no LeadOcean records approved" };
+  const req = leadoceanDiscoveryRequirements(input.spec);
+  const sub = planDiscovery({ requirements: req, connections: input.connections, selection: ["leadocean"],
+    limits: { maxRecordsPerStep: max, overfetch: 1, maxCreditsPerMission: max, maxCreditsPerProvider: { leadocean: max } } });
+  if (sub.status !== "ready") return { companies: [], people: [], records: 0, status: "failed", reason: sub.blockedReason ?? "LeadOcean plan blocked" };
+  const est = Math.min(sub.estimatedCredits.leadocean ?? 0, max);
+  const run = await runDiscovery({
+    workspaceId: input.workspaceId, missionId: `${mission}:lo-concurrent`, requirements: req, plan: sub,
+    approval: { kind: "discovery", workspaceId: input.workspaceId, missionId: `${mission}:lo-concurrent`, planHash: sub.planHash, maxCredits: { leadocean: est }, approvedBy: input.approval!.approvedBy, approvedAt: input.approval!.approvedAt },
+    adapters: { leadocean: input.leadocean }, verifier: null, ledger: input.ledger, now: input.now ?? (() => new Date()),
+  });
+  return { companies: run.rows?.companies ?? [], people: run.rows?.people ?? [], records: run.credits.leadocean ?? 0,
+    status: run.status === "completed" ? "completed" : run.status === "partial" ? "partial" : "failed",
+    reason: run.reason ?? run.steps.find((x) => x.reason)?.reason ?? null };
+}
+
 // ── Apify-led: discover by an open role ─────────────────────────────────────
 
 async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: number; apifyUsd: number }, now: () => Date): Promise<StrategyRun> {
@@ -213,17 +241,38 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   const jobStep = plan.steps[0];
   const seedUsd = Math.min(cap.apifyUsd, jobStep.estimate.apifyUsd);
   const postActor = PIPELINE_ACTORS["apify_linkedin_post_search"];
-  const found: Awaited<ReturnType<typeof discoverHiringCompanies>> & { signals?: Signal[] } =
+  const apifyDiscovery = async (): Promise<Awaited<ReturnType<typeof discoverHiringCompanies>> & { signals?: Signal[] }> =>
     jobStep.capability === "apify.linkedin_job_search"
       ? await discoverHiringCompanies(spec, discoveryJobTitles(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission })
       : jobStep.capability === "apify.linkedin_post_search" && postActor
       ? await discoverPostingCompanies(spec, postTopics(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission, perItemUsd: postActor.perItemUsd, perStartUsd: postActor.perStartUsd })
       : { companies: [], evidence: new Map(), jobs: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: `no executor for ${jobStep.capability}`, runId: null };
+  // CONCURRENT (apify_leadocean_concurrent): LeadOcean searches the SAME mission at the same
+  // time, by the filters it can express (never the hiring signal, which only Apify proves).
+  // Each provider fails on its own: one's error never stops or erases the other's results.
+  const loStep = plan.strategy === "apify_leadocean_concurrent" ? plan.steps.find((x) => x.role === "discover_people") ?? null : null;
+  const [apifySettled, loSettled] = await Promise.allSettled([
+    apifyDiscovery(),
+    loStep ? leadOceanConcurrentDiscovery(input, loStep, cap, mission) : Promise.resolve(null),
+  ]);
+  const found: Awaited<ReturnType<typeof apifyDiscovery>> = apifySettled.status === "fulfilled" ? apifySettled.value
+    : { companies: [], evidence: new Map(), jobs: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: `${(apifySettled.reason as Error)?.message ?? "failed"}; not retried`, runId: null };
   steps.push({ capability: jobStep.capability, provider: "apify", status: found.stopped ? "failed" : "completed",
     reason: found.stopped ?? (Object.keys(found.dropped).length ? `dropped postings: ${Object.entries(found.dropped).map(([k, v]) => `${k} ${v}`).join(", ")}` : null),
     spend: { leadoceanRecords: 0, apifyUsd: r6(found.spentUsd) } });
-  if (found.stopped && !found.companies.length) {
-    return { ...emptyRun(input, `discovery failed: ${found.stopped}`), status: "blocked", steps, spend: { leadoceanRecords: 0, apifyUsd: r6(found.spentUsd) } };
+  const concurrentLO = loStep ? (loSettled.status === "fulfilled" && loSettled.value ? loSettled.value
+    : { companies: [] as ProviderCompany[], people: [] as ProviderPerson[], records: 0, status: "failed" as const,
+      reason: loSettled.status === "rejected" ? `${(loSettled.reason as Error)?.message ?? "failed"}; not retried` : "not run" }) : null;
+  if (loStep && concurrentLO) {
+    steps.push({ capability: loStep.capability, provider: "leadocean", status: concurrentLO.status, reason: concurrentLO.reason,
+      spend: { leadoceanRecords: concurrentLO.records, apifyUsd: 0 } });
+  }
+  // A people search names employers INSIDE each person row (`person.company`), not as company
+  // rows: both are LeadOcean's companies — counted, verified and merged alike.
+  const loEmployers = [...(concurrentLO?.companies ?? []), ...(concurrentLO?.people ?? []).map((x) => x.company).filter((c): c is ProviderCompany => !!c)];
+  if (found.stopped && !found.companies.length && !loEmployers.length) {
+    return { ...emptyRun(input, `discovery failed: ${found.stopped}`), status: "blocked", steps,
+      spend: { leadoceanRecords: concurrentLO?.records ?? 0, apifyUsd: r6(found.spentUsd) } };
   }
   let apifySpent = found.spentUsd;
 
@@ -236,7 +285,10 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   // people lookups) — the job row's band is a claim, used for ordering only, never as a gate.
   const prefOrder = (c: ProviderCompany) => sizePreferenceDistance(found.sizeClaims?.get(slugOf(c.linkedinUrl) ?? "") ?? null, spec.preferredEmployees);
   found.companies.sort((a, b) => prefOrder(a) - prefOrder(b));
-  const targets = found.companies.map((c) => ({ companyKey: `li:${slugOf(c.linkedinUrl)}`, linkedinUrl: c.linkedinUrl ?? "" }));
+  // Concurrent: LeadOcean's employers are verified by the SAME record read (their HQ and
+  // size are claims until the company record says otherwise); one target per LinkedIn page.
+  const verifyRows = [...found.companies, ...loEmployers.filter((c) => !!slugOf(c.linkedinUrl))];
+  const targets = [...new Map(verifyRows.map((c) => [slugOf(c.linkedinUrl), { companyKey: `li:${slugOf(c.linkedinUrl)}`, linkedinUrl: c.linkedinUrl ?? "" }])).values()];
   const recBudget = Math.max(0, Math.min(recStep.estimate.apifyUsd, cap.apifyUsd - apifySpent));
   // Fresh records this workspace already bought are reused, not bought again; misses are
   // bought only as far as the ceiling covers — the rest stay needs_verification.
@@ -275,9 +327,9 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   const disproven = new Set(firstPass.filter((l) => l.shared?.eligibility === "ineligible").flatMap((l) => l.company.domain.map((d) => d.value)));
 
   // 4 decision-makers by exact domain
-  let people: ProviderPerson[] = [];
-  let loCompanies: ProviderCompany[] = [];
-  let loRecords = 0;
+  let people: ProviderPerson[] = concurrentLO?.people ?? [];
+  let loCompanies: ProviderCompany[] = concurrentLO?.companies ?? [];
+  let loRecords = concurrentLO?.records ?? 0;
   const peopleStep = plan.steps.find((s) => s.role === "people_at_companies");
   if (peopleStep?.capability === "apify.company_employees") {
     // Apify decision-makers by LinkedIn company page (PR #198). Reachable only once the
@@ -390,7 +442,8 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
       qualification: l.shared ? { checks: l.shared.checks, gaps: l.shared.gaps, disproven: l.shared.disproven, evidence_sources: l.shared.evidence_sources } : null,
       canonicalRecord: canonical.statuses.find((s) => s.companyKey === (slug ? `li:${slug}` : ""))?.state ?? "not_requested",
       signals: postSignals(slug), rank: r, phone: null, outreachBlockers: blockers,
-      provenance: { walkId: input.walkId, planHash: plan.planHash, runAt: at, providers: [...new Set(l.company.sources.map((s) => s.provider))] },
+      provenance: { walkId: input.walkId, planHash: plan.planHash, runAt: at, providers: [...new Set(l.company.sources.map((s) => s.provider))],
+        ...(l.company.conflicts.length ? { conflicts: l.company.conflicts.map((c) => ({ field: c.field, values: c.values.map((v) => ({ provider: v.provider, value: v.value })) })) } : {}) },
     };
   });
 
