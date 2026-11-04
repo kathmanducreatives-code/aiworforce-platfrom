@@ -29,9 +29,10 @@ const ctx = { originalUserQuery: "Find companies hiring Account Executives whose
 
 // ── v1 IS THE DEFAULT AND IS UNCHANGED ─────────────────────────────────────
 
-Deno.test("contract: v1 unless AGENTORY_MISSION_CONTRACT=v2", () => {
+Deno.test("contract: v1 unless AGENTORY_MISSION_CONTRACT=v2 (or v3, S4)", () => {
   const r = (v?: string) => (k: string) => (k === MISSION_CONTRACT_ENV ? v : undefined);
-  for (const v of [undefined, "", "V3", "2", "true"]) assertEquals(activeMissionContract(r(v)), "v1", String(v));
+  for (const v of [undefined, "", "V4", "2", "3", "true"]) assertEquals(activeMissionContract(r(v)), "v1", String(v));
+  assertEquals(activeMissionContract(r("v3")), "v3");
   assertEquals(activeMissionContract(r("v2")), "v2");
   assertEquals(activeMissionContract(r(" V2 ")), "v2");
 });

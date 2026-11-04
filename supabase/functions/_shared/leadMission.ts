@@ -643,6 +643,14 @@ export interface LeadMissionV1 {
   // derives criteria on the fly. NOT part of `missionHash` — they restate the
   // question the hashed fields already ask.
   criteria?: import("./missionCriteria.ts").MissionCriterion[];
+  /** S3: present ⇒ `criteria` are the frozen, approved meaning (missionCriteriaReader.ts). */
+  criteria_contract_version?: string;
+  /** S3: fingerprint of the criteria and the fields they were derived from. */
+  criteria_fingerprint?: string;
+  /** S5: "migration" when a stored mission was frozen at its production meaning (option A). */
+  criteria_freeze_origin?: "migration";
+  /** S4: the model's validated understanding (contract v3), read by the criteria derivation. */
+  understanding?: import("./missionUnderstanding.ts").ValidatedUnderstanding;
   mission_semantics?: import("./missionCriteria.ts").MissionSemanticsRecord;
 }
 

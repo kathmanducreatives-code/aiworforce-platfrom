@@ -123,10 +123,11 @@ Deno.test("criteria: the evaluator answers exactly the criteria the decision rea
   assert(engine.includes('{ criteriaAuthority: opts.specMode === "enforce", readiness: opts.readiness });'),
     "the engine builds the evaluator's criteria under the run's readiness");
   const runAgent = Deno.readTextFileSync(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
-  for (const site of ["deriveMissionCriteria(persistedMission!, leadReadiness)", "deriveMissionCriteria(persistedMission, leadReadiness)"]) {
+  for (const site of ['criteriaOf(persistedMission!, { readiness: leadReadiness, legacy: "rederive" })', 'criteriaOf(persistedMission, { readiness: leadReadiness, legacy: "rederive" })']) {
     assert(runAgent.includes(site), site);
   }
   assertFalse(/deriveMissionCriteria\(persistedMission!?\)/.test(runAgent), "no run-agent decision site derives without readiness");
+  assertFalse(/criteriaOf\(persistedMission!?\)/.test(runAgent), "no run-agent decision site reads criteria without readiness");
 });
 
 Deno.test("callers: every eligibility decision passes the verdicts and the holds", () => {

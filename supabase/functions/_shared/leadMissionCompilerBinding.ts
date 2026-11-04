@@ -66,7 +66,7 @@ import {
   type CompilerPromptContext,
 } from "./leadMissionCompiler.ts";
 import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
-import { activeMissionContract } from "./missionInterpretationContract.ts";
+import { activeMissionContract, atLeastV2 } from "./missionInterpretationContract.ts";
 import { createGptMissionGenerateJson, GPT_MISSION_MODEL_ID } from "./gptMissionModel.ts";
 import type { GptDeps } from "./gptProvider.ts";
 import {
@@ -119,11 +119,14 @@ export class MissionCompilationFailedError extends Error {
    */
   readonly providerCode: string | null;
   readonly providerDetail: string | null;
+  /** S4: the questions to ask when the request is genuinely ambiguous. */
+  readonly clarifications: string[];
 
   constructor(
     workspaceId: string,
     enablementReason: CompilerEnablementReason,
     failure?: ModelFailure | null,
+    clarifications: string[] = [],
   ) {
     super(
       `mission compilation failed after ${MAX_COMPILATION_ATTEMPTS} attempt(s) for a ` +
@@ -137,6 +140,7 @@ export class MissionCompilationFailedError extends Error {
     this.enablementReason = enablementReason;
     this.providerCode = failure?.reported ? failure.code : null;
     this.providerDetail = failure?.detail ?? null;
+    this.clarifications = clarifications;
   }
 }
 
@@ -248,7 +252,7 @@ export function buildMissionCompilerBinding(input: {
             // model is asked once more with the compiler's exact objections;
             // the last answer is returned whatever it is, and the compile then
             // accepts it or fails closed. v1 is unchanged: returned as before.
-            const problems = contract === "v2" && attempt < MAX_COMPILATION_ATTEMPTS
+            const problems = atLeastV2(contract) && attempt < MAX_COMPILATION_ATTEMPTS
               ? interpretationProblems(ctx.originalUserQuery, r.json, ctx.requestedCount ?? null) : [];
             if (problems.length === 0) return r.json;
             console.log("[mission-compiler][v2-repair]", { attempt, problems });

@@ -53,7 +53,7 @@ import { compileMissionSemantics, quotedHiringRoleWords } from "./missionCriteri
 import { readRoleQualifier, readSignalPhrase } from "./missionSignalDescriptor.ts";
 import { explicitWindowDays, kindForEvent } from "./signalKinds.ts";
 import {
-  activeMissionContract, MAX_CONTRACT_WINDOW_DAYS, type MissionContractVersion, parseSignalWindows,
+  activeMissionContract, atLeastV2, MAX_CONTRACT_WINDOW_DAYS, type MissionContractVersion, parseSignalWindows,
   type ProposedSignalWindow, SIGNAL_WINDOWS_INSTRUCTION, type SignalWindowDecision, timeframeAudit,
   validateSignalWindows,
 } from "./missionInterpretationContract.ts";
@@ -71,6 +71,8 @@ import {
 import { buildMissionBriefing } from "./agentoryBriefing.ts";
 import { CAPABILITY_AVAILABILITY_INSTRUCTION, capabilityContextForPrompt } from "./capabilityContext.ts";
 import { reconcileRestatements } from "./restatementReconciler.ts";
+import { freezeCriteria } from "./missionCriteriaReader.ts";
+import { applyUnderstanding, parseUnderstanding, UNDERSTANDING_INSTRUCTION, validateUnderstanding } from "./missionUnderstanding.ts";
 import { isCapabilityId, type CapabilityId } from "./leadCapabilityGraph.ts";
 import {
   catalogueForPrompt, isPublicCapability, offersFrom, toInternalCapabilities,
@@ -457,7 +459,8 @@ export function buildMissionCompilerPayload(
   ctx: CompilerPromptContext,
 ): Record<string, unknown> {
   const v1 = buildMissionCompilerPayloadV1(ctx);
-  if ((ctx.contract ?? activeMissionContract()) !== "v2") return v1;
+  const contract = ctx.contract ?? activeMissionContract();
+  if (!atLeastV2(contract)) return v1;
   // ── CONTRACT v2 ─────────────────────────────────────────────────────────
   //
   // Same payload, three changes, each with its own evidence:
@@ -468,15 +471,20 @@ export function buildMissionCompilerPayload(
   //     call, so the provider's prompt cache can serve it. In v1 the request
   //     sat fourth and roughly 9k characters of fixed text followed it.
   const { user_query, company_brain_context, response_shape, ...fixed } = v1;
+  // CONTRACT v3 (S4): v2 plus `understanding` — the request's meaning in the closed
+  // vocabulary, every item quoted (missionUnderstanding.ts).
+  const v3 = contract === "v3";
   return {
     ...fixed,
-    contract_version: "v2",
-    instruction: [MISSION_COMPILER_SYSTEM_PROMPT, SIGNAL_WINDOWS_INSTRUCTION, CAPABILITY_AVAILABILITY_INSTRUCTION].join(" "),
+    contract_version: v3 ? "v3" : "v2",
+    instruction: [MISSION_COMPILER_SYSTEM_PROMPT, SIGNAL_WINDOWS_INSTRUCTION, CAPABILITY_AVAILABILITY_INSTRUCTION,
+      ...(v3 ? [UNDERSTANDING_INSTRUCTION] : [])].join(" "),
     capability_catalogue: capabilityContextForPrompt(),
     response_shape: {
       ...(response_shape as Record<string, unknown>),
       signal_recency_days: "null — use signal_windows",
       signal_windows: "[{ event, days: number|null, phrase: the user's exact words, signal: the signal phrase it qualifies or null }] — one per signal with a stated timeframe",
+      ...(v3 ? { understanding: "{ roles, role_match, places, signals, signal_logic, ambiguities, unsupported } — see the schema" } : {}),
     },
     company_brain_context,
     user_query,
@@ -765,6 +773,8 @@ export function parseMissionProposal(raw: unknown, userText = ""): ParsedProposa
       signal_recency_days: recencyDays(c.signal_recency_days, repairs),
       // Only a v2 proposal carries the key, so a v1 proposal parses unchanged.
       ...(Array.isArray(c.signal_windows) ? { signal_windows: parseSignalWindows(c.signal_windows) ?? [] } : {}),
+      // Only a v3 proposal carries the key; validated (never trusted) at compile.
+      ...(c.understanding && typeof c.understanding === "object" ? { understanding: c.understanding } : {}),
       required_signal_terms: strArray(c.required_signal_terms),
       no_broadening_requested: c.no_broadening_requested === true,
       geography_is_hard: c.geography_is_hard === true,
@@ -936,6 +946,32 @@ export class MissionCompilationBlockedError extends Error {
 }
 
 /**
+ * S4: THE REQUEST IS GENUINELY AMBIGUOUS. The model's validated understanding listed a
+ * question whose answer changes which companies qualify; nothing is guessed and nothing
+ * is spent — the user is asked. A clear request never reaches here.
+ */
+/** What the user is asked when the request is genuinely ambiguous (S4). One wording, everywhere. */
+export function clarificationMessage(questions: readonly string[]): string {
+  return [
+    "Before I start, I need to check " + (questions.length === 1 ? "one thing" : "a few things") + " — the answer changes which companies qualify:",
+    "",
+    ...questions.map((q) => `• ${q}`),
+    "",
+    "Nothing has been started or charged.",
+  ].join("\n");
+}
+
+export class MissionNeedsClarificationError extends MissionCompilationBlockedError {
+  readonly questions: string[];
+  constructor(query: string, questions: string[]) {
+    super(query, questions.map((q) => `needs_clarification:${q}`));
+    this.name = "MissionNeedsClarificationError";
+    this.questions = questions;
+    (this as { userMessage: string }).userMessage = clarificationMessage(questions);
+  }
+}
+
+/**
  * THE EXPLANATION THE USER ASKED TO RECEIVE, in their own words.
  *
  * "…and explain why each could be relevant to Agentory" compiled to a mission
@@ -1014,7 +1050,7 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
       // CONTRACT v2: the model said which signal each timeframe belongs to;
       // code checks the words are the user's and computes the days. A caller's
       // own per-event windows (the Chat Brain path) still win.
-      if (parsed.proposal.signal_windows && contract === "v2") {
+      if (parsed.proposal.signal_windows && atLeastV2(contract)) {
         contractWindows = validateSignalWindows(query, parsed.proposal.signal_windows);
         for (const c of contractWindows.changes) changes.push(c);
       } else if (parsed.proposal.signal_windows) {
@@ -1246,6 +1282,20 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
     mission = dedupeEquivalentConstraints(mission, changes);
     // S1: any remaining restatement is reconciled by its VALUE, whatever its field name.
     mission = reconcileRestatements(mission, changes);
+    // ── S4: CONTRACT v3 — THE MODEL'S UNDERSTANDING, VALIDATED, IS THE MEANING ──
+    const rawUnderstanding = (p as { understanding?: unknown }).understanding;
+    if (rawUnderstanding && contract === "v3") {
+      const proposed = parseUnderstanding(rawUnderstanding);
+      if (proposed) {
+        const understood = validateUnderstanding(query, proposed);
+        if (understood.ambiguities.length) {
+          throw new MissionNeedsClarificationError(query, understood.ambiguities.map((a) => a.question || `What did you mean by "${a.span}"?`));
+        }
+        mission = applyUnderstanding(mission, understood, changes);
+      }
+    } else if (rawUnderstanding) {
+      changes.push(`understanding_ignored:contract_${contract}`);
+    }
   }
   if ((hedged.length > 0 || negated.length > 0) && statedLocations.length === 0) delete mission.geography_is_hard;
 
@@ -1348,6 +1398,12 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
     planner_runtime: runtimeIdentity("planner", "lead-mission-compiler") as unknown as Record<string, unknown>,
     lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION,
   };
+  // ── S3: THE MEANING IS FROZEN HERE ──────────────────────────────────────
+  // The criteria were derived from this mission's final fields (a test pins that they
+  // equal a re-derivation for every corpus mission); every component now reads THEM
+  // (missionCriteriaReader.ts), so a later compiler change cannot alter what this
+  // mission means. Not part of `missionHash` (its field list is explicit).
+  if (Array.isArray(mission.criteria) && mission.criteria.length) mission = freezeCriteria(mission);
 
   const offers = offersFrom(approvedCaps);
   return {

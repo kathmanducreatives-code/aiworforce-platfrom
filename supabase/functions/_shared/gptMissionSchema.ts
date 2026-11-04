@@ -26,6 +26,7 @@
 // So "the model may omit this" is spelled `["string", "null"]`, and the parser's
 // defensive readers (`strArray`, `numOrNull`) already treat null as empty.
 
+import { UNDERSTANDING_SCHEMA } from "./missionUnderstanding.ts";
 import { MISSION_STRATEGIES, REQUESTED_OUTPUTS } from "./leadMission.ts";
 import { PUBLIC_CAPABILITY_IDS } from "./leadCapabilityCatalogue.ts";
 import { SOURCE_STRATEGIES } from "./leadMissionCompiler.ts";
@@ -224,7 +225,23 @@ export const GPT_MISSION_SCHEMA_V2 = {
   },
 } as unknown as { name: string; schema: Record<string, unknown> };
 
+/**
+ * CONTRACT v3 (S4, `missionUnderstanding`): v2 plus `understanding` — the request's
+ * meaning in a closed vocabulary (registered titles, role families, registry places,
+ * scope, necessity, AND/OR), each item quoting the user's words. Used only when
+ * AGENTORY_MISSION_CONTRACT=v3.
+ */
+export const GPT_MISSION_SCHEMA_V3 = {
+  name: "lead_mission_proposal_v3",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: [...MISSION_PROPOSAL_FIELDS, "signal_windows", "understanding"],
+    properties: { ...MISSION_PROPOSAL_PROPERTIES, signal_windows: SIGNAL_WINDOWS_PROPERTY, understanding: UNDERSTANDING_SCHEMA },
+  },
+} as unknown as { name: string; schema: Record<string, unknown> };
+
 /** The structured-output schema for a contract version. */
 export function gptMissionSchemaFor(contract: MissionContractVersion) {
-  return contract === "v2" ? GPT_MISSION_SCHEMA_V2 : GPT_MISSION_SCHEMA;
+  return contract === "v3" ? GPT_MISSION_SCHEMA_V3 : contract === "v2" ? GPT_MISSION_SCHEMA_V2 : GPT_MISSION_SCHEMA;
 }

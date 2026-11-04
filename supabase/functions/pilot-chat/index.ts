@@ -3,6 +3,7 @@
 // Input: { message, workspace_id, conversation_id? }
 // Auth:  verify_jwt = true (user identity needed for conversations.user_id)
 
+import { freezeCriteria } from "../_shared/missionCriteriaReader.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
 import {
   authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend, spendRefusalMessage,
@@ -128,7 +129,7 @@ import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 import { executabilityGateFor, type ExecutabilityGateMode } from "../_shared/capabilityExecutability.ts";
 import { PRODUCTION_READINESS, readinessPolicyFor, type ReadinessPolicy } from "../_shared/routeReadiness.ts";
 import { deriveMissionCriteria } from "../_shared/missionCriteria.ts";
-import { MissionCompilationBlockedError } from "../_shared/leadMissionCompiler.ts";
+import { clarificationMessage, MissionCompilationBlockedError, MissionNeedsClarificationError } from "../_shared/leadMissionCompiler.ts";
 import { compileLeadMission } from "../_shared/leadMissionCompiler.ts";
 import {
   runtimeIdentity, LEAD_INTELLIGENCE_CONTRACT_VERSION,
@@ -411,7 +412,9 @@ function buildMissionForPrompt(
     executability,
     readiness,
   });
-  return {
+  // S3: frozen HERE — after the Company Brain merge, with the criteria the approval
+  // card shows — so the run executes exactly what was approved (missionCriteriaReader.ts).
+  return freezeCriteria({
     ...merged.mission,
     // ── WHICH BUILD COMPILED THIS, AND WHAT CONTRACT IT SPEAKS ────────────
     // Stamped here because this is where the mission is actually produced, and
@@ -466,7 +469,7 @@ function buildMissionForPrompt(
           !plan.steps.some((s) => s.capability === "hiring_verification"),
       },
     },
-  };
+  });
 }
 
 /**
@@ -822,6 +825,10 @@ async function compileCanonicalLeadMission(i: {
     mission = buildMissionForPrompt(i.prompt, i.requestedCount, brainContext, gptProposal,
       executabilityGateFor(i.workspaceId), readinessPolicyFor(i.workspaceId, (k) => Deno.env.get(k)));
   } catch (e) {
+    if (e instanceof MissionNeedsClarificationError) {
+      console.log("[pilot-chat][mission-needs-clarification]", { workspace_id: i.workspaceId, questions: e.questions.length });
+      throw new MissionCompilationFailedError(i.workspaceId, "needs_clarification", null, e.questions);
+    }
     if (e instanceof MissionCompilationBlockedError) {
       console.log("[pilot-chat][mission-compilation-blocked]", {
         workspace_id: i.workspaceId, reasons: e.reasons,
@@ -978,6 +985,10 @@ async function generateWorkflowConfirmation(
       cardMission = buildMissionForPrompt(prompt, null, cardBrainContext, gptProposal,
         executabilityGateFor(workspaceId), readinessPolicyFor(workspaceId, (k) => Deno.env.get(k)));
     } catch (e) {
+      if (e instanceof MissionNeedsClarificationError) {
+        console.log("[pilot-chat][card-mission-needs-clarification]", { workspace_id: workspaceId, questions: e.questions.length });
+        throw new MissionCompilationFailedError(workspaceId, "needs_clarification", null, e.questions);
+      }
       if (e instanceof MissionCompilationBlockedError) {
         console.log("[pilot-chat][card-mission-compilation-blocked]", {
           workspace_id: workspaceId, reasons: e.reasons,
@@ -4409,6 +4420,8 @@ interface FailureContext {
 
 /** What the user is told. Honest about the class, silent about internals. */
 function failureMessageFor(e: unknown): string {
+  // S4: a genuinely ambiguous request is ASKED about, never guessed and never failed.
+  if (e instanceof MissionCompilationFailedError && e.clarifications.length) return clarificationMessage(e.clarifications);
   if (e instanceof MissionCompilationFailedError) {
     // NAMES THE STAGE, NOT THE CAUSE — DELIBERATELY, AND NO LONGER FOR LACK OF
     // KNOWING IT.

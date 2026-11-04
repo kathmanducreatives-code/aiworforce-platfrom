@@ -54,6 +54,7 @@ import { isControlledPhrase, readFacets } from "./businessModelMatch.ts";
 import { sizeRangeProvable } from "./companySize.ts";
 import { classifyRoleFamily, roleFamilyAliases } from "./roleFamilies.ts";
 import { readSignalPhrase, type SignalQualifier } from "./missionSignalDescriptor.ts";
+import { placeName, understandingOf, type ValidatedUnderstanding } from "./missionUnderstanding.ts";
 import {
   CANONICAL_SIGNAL_KINDS, DEFAULT_SIGNAL_WINDOWS, EXEC_TITLE_RE, aliasKindFor,
   companyAgeWindowDays, descriptorForReading, explicitWindowDays, explicitWindowMatch, kindForEvent, readCanonicalSignals,
@@ -1388,9 +1389,54 @@ export function deriveMissionCriteria(
       source: "user_explicit", user_phrase: "", rationale: "the request names these companies",
     });
   }
-  profileList("industry", "company_profile.verticals", cp.verticals ?? [], "Industry");
-  profileList("business_model", "company_profile.business_models", cp.business_models ?? [], "Business model");
-  profileList("geography", "company_profile.locations", cp.locations ?? [], "Geography");
+  // S4 (D2): a v3 mission's stated industries carry the model's validated necessity;
+  // the request's own words need not repeat the value letter for letter ("insurance
+  // agency" for "insurance agencies", a typo, a synonym).
+  const U4 = understandingOf(mission);
+  const sing = (x: string) => x.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim().replace(/ies$/, "y").replace(/s$/, "");
+  const industryOf = (v: string) => U4?.industries?.find((x) => sing(x.industry) === sing(v)) ?? null;
+  for (const [field, list, dimension, label] of [
+    ["company_profile.verticals", cp.verticals ?? [], "industry", "Industry"],
+    ["company_profile.business_models", cp.business_models ?? [], "business_model", "Business model"],
+  ] as const) {
+    const rest: string[] = [];
+    for (const v of list) {
+      const x = industryOf(v);
+      if (!x || x.necessity === "excluded" || audienceDescriptor(v) !== null) { rest.push(v); continue; }
+      push({
+        kind: x.necessity === "required" ? "hard" : "target", dimension, value: v,
+        label: x.necessity === "required" ? `${label}: ${v}` : `${label} preference: ${v}`, source: "user_explicit", user_phrase: x.span,
+        rationale: x.necessity === "required" ? `stated in the request ("${x.span}")` : `stated as a preference ("${x.span}"); can rank, never reject`,
+      });
+    }
+    if (field === "company_profile.verticals") profileList("industry", field, rest, label);
+    else profileList("business_model", field, rest, label);
+  }
+  // ── S4: A v3 MISSION'S PLACES ARE THE MODEL'S VALIDATED READING ─────────
+  //
+  // Necessity and scope come from the understanding (each place quoted from the
+  // request and checked against the registry), not from a fixed list of country words
+  // (NL3: "the states" was demoted to a preference) or office words (NL4). A location
+  // the understanding does not name keeps the v1 reading.
+  const U = understandingOf(mission);
+  const placeOf = (v: string) => U?.places.find((p) =>
+    (p.place ? placeName(p.place) : String(p.other_place ?? "")).toLowerCase() === String(v).toLowerCase()) ?? null;
+  if (U && U.places.length) {
+    const rest: string[] = [];
+    for (const v of cp.locations ?? []) {
+      const p = placeOf(v);
+      if (!p || p.necessity === "excluded") { if (!p) rest.push(v); continue; }
+      push({
+        kind: p.necessity === "required" ? "hard" : "target", dimension: "geography", value: v,
+        label: p.necessity === "required" ? `${p.scope === "headquarters" ? "Headquarters" : "Geography"}: ${v}` : `Geography preference: ${v}`,
+        source: "user_explicit", user_phrase: p.span, geography_scope: p.scope,
+        rationale: p.necessity === "required" ? `stated in the request ("${p.span}")` : `stated as a preference ("${p.span}"); can rank, never reject`,
+      });
+    }
+    profileList("geography", "company_profile.locations", rest, "Geography");
+  } else {
+    profileList("geography", "company_profile.locations", cp.locations ?? [], "Geography");
+  }
   // ── Q3 — A HARD GEOGRAPHY IS ALWAYS COMPILED WITH A SCOPE (A7 S02, S03b) ──
   //
   // The scope reached a criterion only from the model's proposal; when that was
@@ -1413,6 +1459,7 @@ export function deriveMissionCriteria(
     ? "headquarters" : cp.geography_scope ?? wordsScope;
   for (const c of out) {
     if (c.dimension !== "geography") continue;
+    if (U && placeOf(String(c.value))) continue; // S4: its scope is the understanding's own
     const scope = cp.geography_scope || c.kind === "hard" ? geographyScope : undefined;
     if (scope) {
       c.geography_scope = scope;
@@ -1659,8 +1706,13 @@ export function deriveMissionCriteria(
     // sales role" names hiring although the reader did not label it, so it was
     // tagged `user_inferred` — the request's own cue says otherwise.
     const cueStated = SIGNAL_CUE[k]?.test(q) ?? false;
-    const source: CriterionSource = userKinds.has(k) || cueStated ? "user_explicit" : "user_inferred";
-    const asserted = !elevated && statedHiringRequirement(k, source, query);
+    // S4 (NL2): a v3 mission's necessity is the model's validated reading of the user's
+    // words, however indirect ("looking to bring on…", "need sales ppl"), not a cue word.
+    const uSig = understandingSignal(U, k);
+    const source: CriterionSource = uSig || userKinds.has(k) || cueStated ? "user_explicit" : "user_inferred";
+    const asserted = uSig
+      ? uSig.necessity === "required" && k !== "funding" && !elevated
+      : !elevated && statedHiringRequirement(k, source, query);
     const def = DEFAULT_SIGNAL_WINDOWS[k];
     const ws = sem?.window_sources?.[k];
     const carried = s.timeframe_days != null;
@@ -1767,7 +1819,8 @@ export function deriveMissionCriteria(
       ? "venture" : null;
     if (presenceClaim) time_window = undefined; // presence has no window; a bound is `before`
     push({
-      kind: elevated || fundingWindow || fundingRecency || calendar || fundingPresence || asserted ? "hard" : "target",
+      kind: uSig?.necessity === "preferred" ? "target"
+        : elevated || fundingWindow || fundingRecency || calendar || fundingPresence || asserted ? "hard" : "target",
       dimension: k, value: {
         event: eventOf(s), subject: s.subject ?? "company", qualifier: s.qualifier ?? {},
         ...(presenceClaim ? { presence: presenceKind, ...(presenceBefore ? { before: presenceBefore } : {}) } : {}),
@@ -1843,8 +1896,16 @@ export function deriveMissionCriteria(
   // carry the same `any_of` (`signal:<kind>`), and `anyOfGroupKey` makes them
   // one group wherever a decision is made. AND keeps them two requirements; a
   // member the request hedged is not part of the requirement at all.
-  for (const group of crossSignalAlternatives(query,
-    out.filter((c) => c.kind === "hard" && SIGNAL_CUE[c.dimension as CanonicalSignalKind]).map((c) => c.dimension as CanonicalSignalKind))) {
+  // S4: a v3 mission's AND/OR is the model's validated `signal_logic` (D3: "hiring OR
+  // expansion" lost its OR because "expansion" has no cue word here).
+  const signalGroups = U
+    ? (U.signal_logic === "any"
+      ? [[...new Set(out.filter((c) => c.kind === "hard" && U.signals.some((x) => x.necessity === "required" && x.kind === c.dimension))
+        .map((c) => c.dimension as CanonicalSignalKind))]]
+      : [])
+    : crossSignalAlternatives(query,
+      out.filter((c) => c.kind === "hard" && SIGNAL_CUE[c.dimension as CanonicalSignalKind]).map((c) => c.dimension as CanonicalSignalKind));
+  for (const group of signalGroups) {
     const members = out.filter((c) => c.kind === "hard" && group.includes(c.dimension as CanonicalSignalKind));
     if (new Set(members.map((c) => c.dimension)).size < 2) continue;
     const anyOf = group.map((k) => `signal:${k}`);
@@ -1892,6 +1953,13 @@ export function anyOfGroupKey(c: Pick<MissionCriterion, "kind" | "dimension" | "
   if (c.kind !== "hard" || (c.any_of?.length ?? 0) < 2) return null;
   const sorted = [...c.any_of!].sort().join("|");
   return c.any_of!.every((a) => a.startsWith("signal:")) ? `signals|${sorted}` : `${c.dimension}|${sorted}`;
+}
+
+/** The understanding's statement about one signal kind (S4), when the mission has one. */
+function understandingSignal(u: ValidatedUnderstanding | null, kind: string) {
+  if (!u) return null;
+  const k = kind === "headcount_growth" ? ["headcount_growth"] : [kind];
+  return u.signals.find((s) => k.includes(s.kind)) ?? null;
 }
 
 /** Attach freshly derived criteria (after a Company Brain merge, say). */

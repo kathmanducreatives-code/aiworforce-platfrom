@@ -33,6 +33,7 @@ import { canonicalJson, sha256Hex } from "../providerInputFingerprint.ts";
 import { translate } from "../discoveryProviders/vocabulary.ts";
 import type { GenerateJsonFn } from "../intelligence/plannerWrapper.ts";
 import { classifyRoleFamily, roleFamilyAliases } from "../roleFamilies.ts";
+import { criteriaOf, signalAlternativesOf } from "../missionCriteriaReader.ts";
 import { COMPANY_RECORD_ACTOR } from "./canonical.ts";
 import { configureIcp, ICP_A, NON_DECISION_TITLES, type IcpConfig } from "./icp.ts";
 import { SIGNAL_ACTORS, worstCaseUsd } from "./signals.ts";
@@ -226,6 +227,12 @@ export interface DiscoverySpec {
   industry: string[];
   /** Signals the request is DEFINED by (required_signals), hard or ranking-only. */
   signals: SpecSignal[];
+  /**
+   * Signal kinds the request accepts as ALTERNATIVES ("raised funding OR hiring sales"):
+   * one hard requirement satisfied by any member, never each member on its own (S2).
+   * Read from the criteria's `any_of`; already part of the plan hash through them.
+   */
+  signalAlternatives?: string[][];
   /** Hard requirements no planner capability models (they stay the shared engine's, and block nothing here). */
   otherHard: string[];
   forbidBroadening: string[];
@@ -251,11 +258,19 @@ const kindOf = (s: string | undefined): SignalKind => SIGNAL_OF[String(s ?? "")]
 /** Read the compiled mission into planner terms. The compiler already did all the interpreting. */
 export function specFromMission(mission: MissionLike, opts: { defaultCount?: number } = {}): DiscoverySpec {
   const req = requirementsFromMission({ ...mission, requested_count: mission.requested_count ?? opts.defaultCount ?? 25 } as never);
-  const hard = (mission.criteria ?? []).filter((c) => c.kind === "hard");
+  // S2: the one reader (a legacy mission stored without criteria is derived).
+  const criteria = criteriaOf(mission as never) as unknown as NonNullable<MissionLike["criteria"]>;
+  const hard = criteria.filter((c) => c.kind === "hard");
   const signals: SpecSignal[] = [];
   for (const s of mission.required_signals ?? []) {
     const kind = kindOf(s.event ?? s.type);
-    const criterion = (mission.criteria ?? []).find((c) => kindOf(c.dimension) === kind && c.dimension !== "other");
+    // The signal's OWN criterion: by its dimension, else by a modelled kind. An unmodelled
+    // kind ("other": product_launch, headcount_change) used to match ANY criterion whose
+    // kind is also "other" — a hard industry or geography — and so turned a ranking-only
+    // signal into a hard requirement the planner then refused as unprovable (S2).
+    const dim = String(s.event ?? s.type ?? "");
+    const criterion = criteria.find((c) => c.dimension === dim) ??
+      (kind !== "other" ? criteria.find((c) => kindOf(c.dimension) === kind) : undefined);
     if (signals.some((x) => x.kind === kind)) continue;
     const roleTerms = s.qualifier?.role_terms ?? [];
     let roleFamilies = s.qualifier?.role_families ?? s.role_families ?? [];
@@ -294,6 +309,7 @@ export function specFromMission(mission: MissionLike, opts: { defaultCount?: num
     preferredEmployees: preferredSize(mission),
     industry: values("industry"),
     signals,
+    signalAlternatives: signalAlternativesOf(criteria as never).map((g) => g.map(kindOf)),
     otherHard: req.hard.filter((h) => !modelled.has(h.key)).map((h) => `${h.key}: ${h.label}`),
     forbidBroadening: req.forbidBroadening,
     requirements: req,
@@ -513,7 +529,16 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   if (spec.geography.length) need(`headquarters in ${spec.geography.join(" or ")}`, proves.has("headquarters"), true);
   if (spec.employees) need(`size ${spec.employees.min ?? "?"}–${spec.employees.max ?? "?"} employees`, proves.has("size_band"), true);
   if (spec.industry.length) limitations.push({ code: "unverifiable_requirement", detail: `industry "${spec.industry.join(", ")}": a taxonomy label proves no industry; it narrows discovery only and leads stay needs_verification on it` });
-  for (const s of spec.signals) {
+  // S2: an either/or group is ONE requirement, met when ANY member can be proven; its
+  // members are judged below as ranking signals, never as hard requirements on their own.
+  const inGroup = new Set((spec.signalAlternatives ?? []).flat());
+  for (const g of spec.signalAlternatives ?? []) {
+    const members = spec.signals.filter((s) => g.includes(s.kind));
+    const ok = members.some((s) => s.kind === "hiring" && proves.has("hiring"));
+    need(`${g.join(" or ")} signal (any one)`, ok, members.some((s) => s.hard));
+  }
+  for (const s0 of spec.signals) {
+    const s = inGroup.has(s0.kind) ? { ...s0, hard: false } : s0;
     const label = `${s.kind} signal${s.windowDays ? ` (last ${s.windowDays} days)` : ""}`;
     if (s.kind === "hiring") {
       need(label, proves.has("hiring"), s.hard);

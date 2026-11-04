@@ -39,14 +39,42 @@ Deno.test("corpus: requests that mean DIFFERENT things never compile to the same
   assertEquals(collapsedContrasts(runCases()), []);
 });
 
+// ── S4: CONTRACT v3 IS THE ACCEPTANCE SUITE ─────────────────────────────────
+
+Deno.test("v3 acceptance: every phrasing compiles to its labelled meaning — no defect label applies", () => {
+  const r = runCases(loadCases(), "v3");
+  assertEquals(r.filter((x) => !x.ok).map((x) => `${x.case}:${x.label}: ${x.mismatches.join("; ")}`), []);
+  assertEquals(r.filter((x) => x.defect).length, 0, "v3 failures are never labelled away");
+});
+
+Deno.test("v3 acceptance: equivalent requests produce equivalent canonical requirements (no unstable case)", () => {
+  assertEquals(unstableCases(runCases(loadCases(), "v3")), []);
+});
+
+Deno.test("v3 acceptance: requests that mean different things stay different", () => {
+  assert(loadContrasts().length >= 10);
+  assertEquals(collapsedContrasts(runCases(loadCases(), "v3")), []);
+});
+
+Deno.test("v3 acceptance: every phrasing carries the v3 reading it is judged by", () => {
+  assertEquals(loadCases().flatMap((c) => c.phrasings.filter((p) => !p.understanding).map((p) => `${c.id}:${p.label}`)), []);
+});
+
 Deno.test("corpus: natural-language variety is covered (casual, typos, abbreviations, synonyms, indirect, multi-constraint)", () => {
   const ids = new Set(loadCases().map((c) => c.id));
-  for (const id of ["M13", "M14", "M15", "M16", "M17", "M18", "M19"]) assert(ids.has(id), id);
+  for (const id of ["M13", "M14", "M15", "M16", "M17", "M18", "M19", "M20", "M21", "M22", "M23", "M24", "M25", "M26"]) assert(ids.has(id), id);
 });
 
 Deno.test("consistency: planner / ORION / qualification disagreements match the recorded baseline", async () => {
   const recorded = (await read(CONSISTENCY_BASELINE_PATH)).disagreements;
   assertEquals(await consistency(), recorded);
+});
+
+Deno.test("consistency (S2): one mission means one thing — no disagreement except legacy stored-copy drift (S5)", async () => {
+  const r = await consistency();
+  assertEquals(Object.entries(r).filter(([, v]) => !v.includes("legacy_stored_criteria_drift")).map(([k, v]) => `${k}: ${v}`), []);
+  // Every freshly compiled mission (the whole interpretation corpus) agrees completely.
+  assertEquals(Object.keys(r).filter((k) => k.startsWith("corpus:") || k.startsWith("corpus-v3:")), []);
 });
 
 Deno.test("coverage: every labelled known loss still occurs (a fixed loss must be unlabelled in the same change)", async () => {

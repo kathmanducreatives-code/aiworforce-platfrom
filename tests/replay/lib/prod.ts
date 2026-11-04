@@ -23,7 +23,7 @@ import { isUnfinishedFrontier } from "../../../supabase/functions/_shared/leadIn
 import type { LeadMissionV1 } from "../../../supabase/functions/_shared/leadMission.ts";
 import type { MissionCriterion } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import { buildQualificationContext } from "../../../supabase/functions/_shared/missionQualificationContext.ts";
-import { namedTitles, roleMatchesFamily, titleSatisfiesNamedRole, type RoleFamily } from "../../../supabase/functions/_shared/roleFamilies.ts";
+import { hiringRequirementOf, hiringTitleMatcher } from "../../../supabase/functions/_shared/missionCriteriaReader.ts";
 
 export const BINDING = "PR #24 (bbbaf3ff)";
 
@@ -80,18 +80,12 @@ export function missionHiringVerifier(vMission: LeadMissionV1, vCriteria: readon
     ?.qualifier?.role_families ?? []) as unknown[]).map(String);
   const vocab = buildQualificationContext(vMission, { criteriaAuthority: true }).role_vocabulary;
   const titles = hiringSearchTitles(vocab);
-  const lowered = vocab.required_titles.map((t) => String(t).toLowerCase());
-  // Verbatim with run-agent (ATLAS review D1): a named title is matched as that title.
-  const q = ((hiringCriterion.value as { qualifier?: { role_terms?: string[]; excluded_role_terms?: string[] } } | null)?.qualifier ?? {});
-  const namedRole = { roleTerms: q.role_terms ?? [], roleFamilies: families, excludedRoleTerms: q.excluded_role_terms ?? [] };
-  const byTitle = namedTitles(namedRole).length > 0;
+  // Verbatim with run-agent (S2): the ONE posting test, exclusions on every branch.
+  const req = hiringRequirementOf([hiringCriterion])!;
   return hiringClaimVerifier({
     titles, role_families: families,
     window_days: hiringCriterion.time_window?.days ?? null,
-    matchesRole: (title) => byTitle ? titleSatisfiesNamedRole(title, namedRole)
-      : families.length > 0
-      ? families.some((f) => roleMatchesFamily(title, f as RoleFamily))
-      : lowered.some((t) => title.toLowerCase().includes(t)),
+    matchesRole: hiringTitleMatcher({ ...req, roleFamilies: families }, vocab.required_titles),
   });
 }
 
