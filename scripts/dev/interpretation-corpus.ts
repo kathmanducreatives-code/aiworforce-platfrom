@@ -65,15 +65,19 @@ const role = (t: string) => {
 
 type Crit = { kind: string; dimension: string; value: unknown; any_of?: string[]; geography_scope?: string; time_window?: { days?: number } };
 
-export function compilePhrasing(p: Phrasing, mode: CorpusMode = "v1") {
+/** The complete model proposal a phrasing records (the corpus stores only what differs from BLANK). */
+export function fullProposal(p: Phrasing, mode: CorpusMode = "v1"): Record<string, unknown> {
   const { extra_hard, geo_hard, ...rest } = p.proposal as Record<string, unknown> & { extra_hard?: unknown[]; geo_hard?: string[] };
   const geo = geo_hard ?? ["United States"];
-  const proposal = {
+  return {
     ...BLANK, ...rest,
     hard_constraints: [...(geo.length ? [{ field: "geography", operator: "in", value: geo, reason: "stated" }] : []), ...(extra_hard ?? [])],
     ...(mode === "v3" && p.understanding ? { understanding: p.understanding } : {}),
   };
-  return compileLeadMission({ originalUserQuery: p.query, proposal: proposal as never, requestedCount: 5, contract: mode === "v3" ? "v3" : "v1" })
+}
+
+export function compilePhrasing(p: Phrasing, mode: CorpusMode = "v1") {
+  return compileLeadMission({ originalUserQuery: p.query, proposal: fullProposal(p, mode) as never, requestedCount: 5, contract: mode === "v3" ? "v3" : "v1" })
     .final_mission as unknown as Record<string, unknown>;
 }
 

@@ -112,7 +112,8 @@ What it returns depends on the mission:
 - **One posting test**, `hiringTitleMatcher`, is shared by run-agent's verifier and the replay mirror. An excluded role never satisfies on **any** branch; the family branch used to ignore exclusions.
 - **Planner OR groups:** `DiscoverySpec.signalAlternatives`. "Raised funding OR hiring sales" is one requirement, met when any member can be proven. It is no longer two hard requirements, one of which (funding) is unprovable and refused the plan. AND stays two requirements.
 - **Planner bug fixed:** a ranking-only signal the planner does not model (`product_launch`, `headcount_change`) was made **hard** by any unrelated hard criterion of kind "other" (industry, geography, known companies), and the planner then refused it as unprovable.
-- **R7:** the engine's derived `hiring: proven` (and each derived `job` item) now goes through `authorityForEvidence`, keyed by the posting's own source. A verdict resting on postings no rule lets prove anything is `plausible`: it ranks and never qualifies. Every stored fixture's postings come from real job sources, so verdicts are unchanged; a negative test proves the gap is closed.
+- **R7:** the engine's derived `hiring: proven` (and each derived `job` item) is now **gated** by `authorityForEvidence`, keyed by the posting's own source. A verdict resting only on postings that no rule lets prove anything is `plausible`: it ranks and never qualifies. Every stored fixture's postings come from real job sources, so verdicts are unchanged, and a negative test proves the gap is closed.
+  - No authority *record* is attached to the derived items. In the first cut it was attached, and DB-contract S10d (CI on #228) caught the consequence: `authorityResolvesAbstention` then kept the hiring check passing over an evaluator's "the required role is not established", whereas the reviewed contract says that unknown **vetoes**. The fix was reproduced and verified locally against Postgres and PostgREST, and the unfixed code fails the same test.
 
 ### Numbers
 
@@ -205,3 +206,23 @@ Every item quotes the user's words (`span`).
   - a contradiction is asked about;
   - v1 ignores an understanding and records that it did;
   - the schema is strict at every level, with closed ID enums and no free field names.
+
+### Live paraphrase study (owner-authorised, ≤ $2, ≤ 180 calls): harness ready, **not run**
+
+`scripts/dev/live-paraphrase-study.ts` sends every corpus phrasing to the production `mission_compilation` route, using the v3 payload and strict schema, `--repeats` times (3 × 55 = 165 calls). It compiles the model's own proposal with the real compiler and scores it against the labels. It also reports paraphrase stability and contrast collapse.
+
+**How spending is enforced (transport guard, tested in `liveStudyBudget.test.ts`):**
+- every HTTP request reserves its worst case (input estimated from the request body, plus the 4000-token output ceiling, at list price) and is **refused before sending** if it would cross the budget or the call cap;
+- the provider client's own retries go through the same guard;
+- a response without usage is booked at its worst case;
+- only `api.openai.com` is reachable;
+- an unpriced model refuses to run at all;
+- the loop stops at the first refusal.
+
+**Expected cost:** the dry run (`--dry-run`: real pipeline, stub transport) prices 165 calls on `gpt-5.6-luna` at about **$0.58** worst-case-estimated input, against the $2 cap.
+
+**Why it was not run:** this session has no model credential. The configured key lives only in the TEST project's Supabase secrets. Running it through TEST would also need the v3 flag set there and the unmerged code deployed, and both are owner actions. To run it, with `OPENAI_API_KEY` in the environment:
+
+```
+deno run --allow-read --allow-write --allow-env --allow-net=api.openai.com scripts/dev/live-paraphrase-study.ts --repeats 3
+```
