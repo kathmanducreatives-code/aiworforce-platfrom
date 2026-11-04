@@ -11922,6 +11922,13 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
     // source. A verdict resting only on postings no rule lets prove anything is
     // `plausible`: it ranks, it never qualifies. Freshness stays the verdict's own
     // window check (the clock is the retrieval time, so a replay is not time-bound).
+    //
+    // GATED BY AUTHORITY, BUT CARRYING NO AUTHORITY RECORD. A record with level
+    // "proven" would let `authorityResolvesAbstention` keep this check passing over
+    // an evaluator's "the required role is not established" — and the reviewed
+    // contract (qualificationHardening S10d) is that such an unknown VETOES. So the
+    // authority decides only whether the verdict may be proof at all; qualification
+    // weighs it exactly as before.
     const decisions = c.hiring_jobs.map((j) => {
       const observed = j.retrieved_at ?? at;
       return authorityForEvidence({
@@ -11933,7 +11940,6 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
     const status = best?.authority === "proven" ? "proven" : "plausible";
     items.push({
       evidence_id: `drv_${c.key}_hiring`, company_key: c.key, dimension: "hiring", value: true, status,
-      ...(best ? { authority: authorityRecord(best) } : {}),
       source: { provider: "engine", actor: "deterministic_verdict", provider_call_id: null,
         url: c.hiring_jobs.find((j) => j.job_url)?.job_url ?? null, excerpt: null },
       method: "deterministic_derivation", observed_at: at, valid_until: null, confidence: status === "proven" ? "high" : "medium",
@@ -11952,9 +11958,8 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
       items.push({
         evidence_id: `drv_${c.key}_job_${i}`, company_key: c.key, dimension: "job",
         value: { title: j.title, posted_date: j.posted_date, location: j.location },
-        // R7: each posting carries its OWN authority, not the verdict's.
+        // R7: each posting's status follows its OWN authority decision (no record: see above).
         status: decisions[i]?.authority === "proven" ? "proven" : "plausible",
-        ...(decisions[i] ? { authority: authorityRecord(decisions[i]) } : {}),
         source: { provider: "engine", actor: "deterministic_verdict", provider_call_id: null, url: j.job_url ?? null, excerpt: j.title },
         method: "deterministic_derivation", observed_at: at, valid_until: null, confidence: "high",
         derived_from: [j.job_url ?? j.job_id ?? ""].filter(Boolean), mission_id: missionId, origin: "lead_mission",

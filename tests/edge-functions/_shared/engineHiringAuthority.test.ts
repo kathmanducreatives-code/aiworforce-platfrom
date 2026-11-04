@@ -27,11 +27,13 @@ const hiringItem = (c: EngineCompany) => companyEvidenceItems(c, "t").find((e) =
 const check = (c: EngineCompany) =>
   evaluateEligibility([HIRING], missionCandidatesFrom({ companies: [c] }, { missionId: "t", now: NOW })[0].graph).checks.find((k) => k.dimension === "hiring")!;
 
-Deno.test("R7: a verdict on real job-search postings is proven, WITH the authority record that says why", () => {
+Deno.test("R7: a verdict on real job-search postings is proven (the job_evidence rule allows it)", () => {
   const c = company();
   const item = hiringItem(c);
   assertEquals(item.status, "proven");
-  assertEquals(item.authority?.rule, "job_evidence");
+  // No authority RECORD on a derived item: an evaluator's abstention must still veto
+  // (qualificationHardening S10d) — `authorityResolvesAbstention` reads that record.
+  assertEquals(item.authority, undefined);
   assertEquals(check(c).result, "pass");
 });
 
@@ -39,7 +41,6 @@ Deno.test("R7 negative: the same verdict on postings from a source that cannot p
   const c = company((x) => { x.hiring_jobs = x.hiring_jobs.map((j) => ({ ...j, source: "linkedin_company_profile" })); });
   const item = hiringItem(c);
   assertEquals(item.status, "plausible", "a verdict is not authority");
-  assert(item.authority && item.authority.level !== "proven");
   assert(check(c).result !== "pass", "missing authority can never qualify a company");
   // Each posting carries its own authority too.
   const jobs = companyEvidenceItems(c, "t").filter((e) => e.dimension === "job");
