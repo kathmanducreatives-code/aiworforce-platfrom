@@ -13,7 +13,7 @@ import { bindEffectPrincipal, type EffectPrincipalDb, installEffectFence, withEf
 import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
 import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
 import { hiringSearchTitles } from "../_shared/hiringSearchVocabulary.ts";
-import { namedTitles, roleMatchesFamily, titleSatisfiesNamedRole, type RoleFamily } from "../_shared/roleFamilies.ts";
+import { criteriaFreezeState, criteriaOf, hiringRequirementOf, hiringTitleMatcher } from "../_shared/missionCriteriaReader.ts";
 import { sizeBandLabel } from "../_shared/companySize.ts";
 import { PendingModelDrain } from "../_shared/executionLedger.ts";
 import { leadQuotaProvenance } from "../_shared/leadMissionV2Request.ts";
@@ -114,7 +114,7 @@ import { makeGptExecutionPlanner } from "../_shared/gptExecutionPlanner.ts";
 import { makeGptRouteController } from "../_shared/gptRouteController.ts";
 import { canonicalDecisions, canonicalHardEvidence, canonicalQualifiedKeys, projectResearchFabric, researchFabricSummary } from "../_shared/leadCapabilityEngine.ts";
 import { requiredEvidenceDimensions } from "../_shared/evidenceGraph.ts";
-import { criteriaSections, deriveMissionCriteria } from "../_shared/missionCriteria.ts";
+import { criteriaSections } from "../_shared/missionCriteria.ts";
 import { effectiveRequestedCount as p5RequestedCount } from "../_shared/leadMission.ts";
 import { buildWorkbenchMissionView, decisionSummary, missionCostFromLedgers } from "../_shared/workbenchMissionView.ts";
 import { makeGptOpportunityReasoner, reasonForCandidates } from "../_shared/opportunityReasoningRun.ts";
@@ -2620,7 +2620,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             missionPlan?.entry_capability !== "general_company_discovery") {
             return { plan: null, reason: "not_lead_v2_general_discovery", priced: [] };
           }
-          const criteria = deriveMissionCriteria(persistedMission, leadReadiness);
+          const criteria = criteriaOf(persistedMission, { readiness: leadReadiness, legacy: "rederive" });
+          // S3: which meaning this run executes — frozen (approved), legacy (re-derived) or void.
+          console.log("[run-agent][criteria]", { task_id: task.id, freeze: criteriaFreezeState(persistedMission), criteria: criteria.length });
           // THE SAME downstream estimate orchestrate priced the default budget with.
           return fundingScreenPlan({
             criteria, runBudget, requestedCount: quota.requestedLeadCount,
@@ -5340,7 +5342,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   // saas delivery", because nothing ever re-read them.
                   let regroundReport: Awaited<ReturnType<typeof regroundPendingClaims>> | null = null;
                   try {
-                    const phaseCCriteria = deriveMissionCriteria(persistedMission!, leadReadiness);
+                    const phaseCCriteria = criteriaOf(persistedMission!, { readiness: leadReadiness, legacy: "rederive" });
                     const phaseCCandidates = missionCandidatesFrom(engineRun, { missionId: String(task.id) });
                     const pendingByKey = new Map(phaseCCandidates.map((cand) => {
                       const e = evaluateEligibility(phaseCCriteria, cand.graph, cand.criterion_verdicts, cand.holds);
@@ -5499,7 +5501,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // Under the mission's readiness, as at the compile site and in
                 // the engine: a round stage is hard exactly when a verifier this
                 // mission may run can prove it.
-                const vCriteria = deriveMissionCriteria(vMission, leadReadiness);
+                const vCriteria = criteriaOf(vMission, { readiness: leadReadiness, legacy: "rederive" });
                 // The canonical decision (Q1): a held or vetoed candidate is not a
                 // verification target, and the same verdicts decide. Shared with
                 // the Replay Lab so the two cannot drift (`verifiableCandidatesFrom`).
@@ -5665,19 +5667,14 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     ?.qualifier?.role_families ?? []) as unknown[]).map(String);
                   const vocab = buildQualificationContext(vMission, { criteriaAuthority: true }).role_vocabulary;
                   const titles = hiringSearchTitles(vocab);
-                  const lowered = vocab.required_titles.map((t) => String(t).toLowerCase());
-                  // A TITLE the request names ("Account Executives") is matched as that title by
-                  // the one shared role test (ATLAS review D1); otherwise the family rule as before.
-                  const q = ((hiringCriterion.value as { qualifier?: { role_terms?: string[]; excluded_role_terms?: string[] } } | null)?.qualifier ?? {});
-                  const namedRole = { roleTerms: q.role_terms ?? [], roleFamilies: families, excludedRoleTerms: q.excluded_role_terms ?? [] };
-                  const byTitle = namedTitles(namedRole).length > 0;
+                  // ONE posting test (S2), shared with qualification and the replay mirror: a
+                  // named title as that title (ATLAS review D1), else the families, else the
+                  // vocabulary — and an EXCLUDED role never satisfies, on every branch.
+                  const req = hiringRequirementOf([hiringCriterion])!;
                   return hiringClaimVerifier({
                     titles, role_families: families,
                     window_days: hiringCriterion.time_window?.days ?? null,
-                    matchesRole: (title) => byTitle ? titleSatisfiesNamedRole(title, namedRole)
-                      : families.length > 0
-                      ? families.some((f) => roleMatchesFamily(title, f as RoleFamily))
-                      : lowered.some((t) => title.toLowerCase().includes(t)),
+                    matchesRole: hiringTitleMatcher({ ...req, roleFamilies: families }, vocab.required_titles),
                   });
                 })();
                 // THE CLAIM PLAN: which HARD claims the mission needs, which the
@@ -6872,7 +6869,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // from a card compiled before P5.2 said it was not.
                 // Q1 — under the run's readiness, as the engine's canonical
                 // decision derives them, so the view and the count agree.
-                const criteria = deriveMissionCriteria(persistedMission, leadReadiness);
+                const criteria = criteriaOf(persistedMission, { readiness: leadReadiness, legacy: "rederive" });
                 const anchor = anchorForCapability(String(missionPlan?.entry_capability ?? "")) ?? null;
                 const candidates = missionCandidatesFrom(capabilityRun, {
                   missionId: String(task.id),

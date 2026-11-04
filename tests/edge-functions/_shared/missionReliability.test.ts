@@ -49,6 +49,13 @@ Deno.test("consistency: planner / ORION / qualification disagreements match the 
   assertEquals(await consistency(), recorded);
 });
 
+Deno.test("consistency (S2): one mission means one thing — no disagreement except legacy stored-copy drift (S5)", async () => {
+  const r = await consistency();
+  assertEquals(Object.entries(r).filter(([, v]) => !v.includes("legacy_stored_criteria_drift")).map(([k, v]) => `${k}: ${v}`), []);
+  // Every freshly compiled mission (the whole interpretation corpus) agrees completely.
+  assertEquals(Object.keys(r).filter((k) => k.startsWith("corpus:")), []);
+});
+
 Deno.test("coverage: every labelled known loss still occurs (a fixed loss must be unlabelled in the same change)", async () => {
   const c = await coverage();
   const occurring = new Set(Object.entries(c).flatMap(([k, fs]) => fs.map((f) => `${k}|${f.item}`)));

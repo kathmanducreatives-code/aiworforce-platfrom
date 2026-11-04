@@ -71,6 +71,7 @@ import {
 import { buildMissionBriefing } from "./agentoryBriefing.ts";
 import { CAPABILITY_AVAILABILITY_INSTRUCTION, capabilityContextForPrompt } from "./capabilityContext.ts";
 import { reconcileRestatements } from "./restatementReconciler.ts";
+import { freezeCriteria } from "./missionCriteriaReader.ts";
 import { isCapabilityId, type CapabilityId } from "./leadCapabilityGraph.ts";
 import {
   catalogueForPrompt, isPublicCapability, offersFrom, toInternalCapabilities,
@@ -1348,6 +1349,12 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
     planner_runtime: runtimeIdentity("planner", "lead-mission-compiler") as unknown as Record<string, unknown>,
     lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION,
   };
+  // ── S3: THE MEANING IS FROZEN HERE ──────────────────────────────────────
+  // The criteria were derived from this mission's final fields (a test pins that they
+  // equal a re-derivation for every corpus mission); every component now reads THEM
+  // (missionCriteriaReader.ts), so a later compiler change cannot alter what this
+  // mission means. Not part of `missionHash` (its field list is explicit).
+  if (Array.isArray(mission.criteria) && mission.criteria.length) mission = freezeCriteria(mission);
 
   const offers = offersFrom(approvedCaps);
   return {

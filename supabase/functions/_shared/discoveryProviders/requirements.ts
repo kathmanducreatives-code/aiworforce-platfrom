@@ -10,6 +10,7 @@
 
 import type { DiscoveryRequirements, FilterKey, HardRequirement, Range } from "./types.ts";
 import { sharedCriteria } from "./sharedQualification.ts";
+import { criteriaOf } from "../missionCriteriaReader.ts";
 
 interface CriterionLike {
   id?: string; kind?: string; dimension?: string; value?: unknown; label?: string;
@@ -161,12 +162,15 @@ export function requirementsFromMission(mission: MissionLike): DiscoveryRequirem
   const hard: HardRequirement[] = [];
   const preferences: DiscoveryRequirements["preferences"] = [];
   const seen = new Set<string>();
-  const hardCriteria = (mission.criteria ?? []).filter((c) => c.kind === "hard");
+  // S2: the one reader. A legacy mission stored WITHOUT criteria is derived, never read
+  // as "no requirements"; a stored copy (and its plan hash) is kept as before.
+  const criteria = criteriaOf(mission as never) as unknown as CriterionLike[];
+  const hardCriteria = criteria.filter((c) => c.kind === "hard");
   const covered: Covered = {
     sizeRange: asRange(hardCriteria.find((c) => c.dimension === "company_size")?.value),
     geography: hardCriteria.some((c) => c.dimension === "geography"),
   };
-  for (const c of mission.criteria ?? []) {
+  for (const c of criteria) {
     if (c.kind === "hard") {
       const r = mapHard(c, covered);
       if (!r) continue;
@@ -194,7 +198,7 @@ export function requirementsFromMission(mission: MissionLike): DiscoveryRequirem
     hard,
     preferences,
     roles,
-    criteria: sharedCriteria(mission as { criteria?: unknown[] }),
+    criteria: sharedCriteria({ criteria } as { criteria?: unknown[] }),
     ...(() => {
       const b = canonicalBroadening(mission.directives?.disallowed_broadening ?? []);
       return { forbidBroadening: b.dims, forbidBroadeningUnread: b.unread };

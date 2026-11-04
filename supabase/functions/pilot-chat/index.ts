@@ -3,6 +3,7 @@
 // Input: { message, workspace_id, conversation_id? }
 // Auth:  verify_jwt = true (user identity needed for conversations.user_id)
 
+import { freezeCriteria } from "../_shared/missionCriteriaReader.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
 import {
   authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend, spendRefusalMessage,
@@ -411,7 +412,9 @@ function buildMissionForPrompt(
     executability,
     readiness,
   });
-  return {
+  // S3: frozen HERE — after the Company Brain merge, with the criteria the approval
+  // card shows — so the run executes exactly what was approved (missionCriteriaReader.ts).
+  return freezeCriteria({
     ...merged.mission,
     // ── WHICH BUILD COMPILED THIS, AND WHAT CONTRACT IT SPEAKS ────────────
     // Stamped here because this is where the mission is actually produced, and
@@ -466,7 +469,7 @@ function buildMissionForPrompt(
           !plan.steps.some((s) => s.capability === "hiring_verification"),
       },
     },
-  };
+  });
 }
 
 /**
