@@ -225,7 +225,8 @@ export function parseStrategyRequest(b: Record<string, unknown>): StrategyReques
   }
   return {
     action: b.action, workspaceId: b.workspace_id, walkId: b.walk_id, query: b.query.trim(), requestedCount: count,
-    user: { ...(b.strategy ? { strategy: b.strategy as DiscoveryStrategyId } : {}), excludeProviders: exclude as ProviderId[], allowReviewOnly: b.allow_review_only === true },
+    user: { ...(b.strategy ? { strategy: b.strategy as DiscoveryStrategyId } : {}), excludeProviders: exclude as ProviderId[], allowReviewOnly: b.allow_review_only === true,
+      ...(b.verify_hiring_by_company === true ? { verifyHiringByCompany: true } : {}) },
     budget: { maxLeadoceanRecords: maxLo, maxApifyUsd: maxUsd }, approval,
   };
 }

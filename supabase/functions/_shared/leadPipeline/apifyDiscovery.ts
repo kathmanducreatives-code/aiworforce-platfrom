@@ -66,13 +66,34 @@ export function jobDiscoveryInput(spec: DiscoverySpec, titles: string[], maxItem
   };
 }
 
+/**
+ * The run's input when hiring is checked AT NAMED COMPANIES (`company[]`, ≤ 10 LinkedIn
+ * pages). No location filter: where the role is posted is not the requirement (HQ is the
+ * company record's). The actor's maxItems counts per title, so the total is split across them.
+ */
+export function jobByCompanyInput(spec: DiscoverySpec, titles: string[], companyUrls: string[], maxItems: number): Record<string, unknown> {
+  const hiring = spec.signals.find((s) => s.kind === "hiring");
+  const t = titles.slice(0, 3);
+  return {
+    company: companyUrls.slice(0, 10),
+    jobTitles: t,
+    postedLimit: postedLimit(hiring?.windowDays ?? null),
+    sortBy: "date",
+    maxItems: Math.max(1, Math.floor(maxItems / Math.max(1, t.length))),
+  };
+}
+
 export async function discoverHiringCompanies(
   spec: DiscoverySpec, titles: string[], invoke: ActorInvoker | null,
-  opts: { maxItems: number; maxUsd: number; now: Date; idPrefix: string; missionId?: string | null },
+  opts: { maxItems: number; maxUsd: number; now: Date; idPrefix: string; missionId?: string | null;
+    /** Check hiring AT these LinkedIn company pages only (≤ 10); a row naming any other employer is dropped. */
+    companyScope?: string[] },
 ): Promise<HiringDiscovery> {
   const out: HiringDiscovery = { companies: [], evidence: new Map(), jobs: new Map(), sizeClaims: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: null, runId: null };
   const drop = (why: string) => { out.dropped[why] = (out.dropped[why] ?? 0) + 1; };
   if (!invoke) { out.stopped = "apify_unavailable"; return out; }
+  const scope = opts.companyScope ? new Set(opts.companyScope.slice(0, 10).map(slugOf).filter((x): x is string => !!x)) : null;
+  if (scope && !scope.size) { out.stopped = "no company to check"; return out; }
   const worst = worstCaseUsd(SIGNAL_ACTORS.jobs, opts.maxItems);
   if (worst > opts.maxUsd + 1e-9) { out.stopped = "budget"; return out; }
 
@@ -81,7 +102,8 @@ export async function discoverHiringCompanies(
     qualifier: { role_terms: hiring.roleTerms, excluded_role_terms: hiring.excludedRoleTerms ?? [] } }]) : null;
   let items: unknown[];
   try {
-    const run = await invoke(SIGNAL_ACTORS.jobs.key, jobDiscoveryInput(spec, titles, opts.maxItems), { maxItems: opts.maxItems, idempotencyKey: `${opts.idPrefix}:${SIGNAL_ACTORS.jobs.key}:discovery` });
+    const input = scope ? jobByCompanyInput(spec, titles, opts.companyScope!.filter((u) => scope.has(slugOf(u) ?? "")), opts.maxItems) : jobDiscoveryInput(spec, titles, opts.maxItems);
+    const run = await invoke(SIGNAL_ACTORS.jobs.key, input, { maxItems: opts.maxItems, idempotencyKey: `${opts.idPrefix}:${SIGNAL_ACTORS.jobs.key}:${scope ? "by_company" : "discovery"}` });
     items = run.items;
     out.runId = run.runId ?? null;
     out.spentUsd = run.chargedUsd ?? (items.length ? worstCaseUsd(SIGNAL_ACTORS.jobs, items.length) : SIGNAL_ACTORS.jobs.perStartUsd);
@@ -103,6 +125,8 @@ export async function discoverHiringCompanies(
     if (!jobProvesRequestedHiring(job, requested, opts.now)) { drop("role_or_window_mismatch"); continue; }
     const slug = slugOf(((r.company ?? {}) as Record<string, unknown>).linkedinUrl as string);
     if (!slug) { drop("no_employer_linkedin"); continue; }
+    // Scoped: the posting must be AT one of the named companies, never a neighbour's.
+    if (scope && !scope.has(slug)) { drop("outside_company_scope"); continue; }
     const e = employers.get(slug) ?? { row: r, jobs: [] };
     e.jobs.push(job);
     employers.set(slug, e);

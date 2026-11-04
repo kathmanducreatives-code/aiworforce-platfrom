@@ -109,7 +109,35 @@ Two bugs were caught by the new tests and fixed before commit, both caused by Le
 
 This is the existing deterministic planner's behaviour, plus the new opt-in concurrent mode. Not every provider is forced onto every mission: LeadOcean-only stays **refused** for hiring missions unless review-only candidates are explicitly allowed.
 
-**Next step (not built yet).** An Apify job search **by company** for LeadOcean-only companies would let LeadOcean's candidates qualify on hiring. That is a new paid step and needs owner approval.
+### 5a. Hiring checked at LeadOcean's employers (opt-in prototype, offline)
+
+LeadOcean cannot prove hiring, so a company only LeadOcean proposed stays pending on hiring. The new opt-in step **`apify.job_search_by_company`** closes that gap. It runs the **same allowlisted** `harvestapi/linkedin-job-search` actor, scoped with its `company[]` input.
+
+| Control | How |
+|---|---|
+| Opt-in only | Request field `verify_hiring_by_company: true`, on `apify_leadocean_concurrent` hiring missions only. When the field is absent, there is no step and **every existing plan hash is unchanged**. |
+| Priced and approved | A plan with the step is a **different plan** (new hash, higher worst case). An approval of the plan without it is refused. |
+| Bounded | One run covers at most **10** companies (the actor's `company[]` limit). Each company gets 3 rows, and the per-title `maxItems` is split so the total stays at the cap. The worst case is reserved in the ledger first. If what the ceiling leaves cannot cover it, the step is **skipped** and the companies stay pending. |
+| Which companies | Only LeadOcean companies that the discovery search did not return, and that their company record has not disproven. Read records come first, then companies matching the size preference. |
+| Never retried | Same rule as discovery: a failure is counted at its worst case and not retried. |
+| Same proof | Every row goes through the discovery post-filter: title and window, agencies dropped, employer identity conflicts dropped. A row naming **another** employer is dropped (`outside_company_scope`), and evidence is admitted only if its identity names the company. |
+| Absence proves nothing | No qualifying posting means the company stays **pending**, never rejected. |
+
+**Offline result, same mission.** The recorded world adds two postings that only a scoped search returns:
+- **Cobalt Desk:** an Account Executive posting. Cobalt Desk now **qualifies**.
+- **Pinecrest:** only an SDR posting, the excluded role. Pinecrest **stays pending** on hiring.
+
+| | Concurrent | Concurrent + hiring check |
+|---|---|---|
+| Unique companies | 6 | 6 |
+| Qualified | 2 | **3** |
+| Pending | 3 | 2 |
+| Rejected | 1 | 1 |
+| False qualifications | 0 | 0 |
+| Apify cost (est. upper bound) | $0.03105 | $0.03405 (+$0.003) |
+| LeadOcean records | 5 | 5 |
+
+Tests: `tests/edge-functions/_shared/leadPipeline/hiringByCompany.test.ts` (7). **Not run live.** Like every paid step, it needs the owner-approved budget and its own plan approval.
 
 ## 6. Live TEST evaluation: prepared, not run
 

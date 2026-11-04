@@ -77,7 +77,7 @@ export const isStrategy = (s: unknown): s is DiscoveryStrategyId => typeof s ===
 //                                 (adding one is a reviewed change, never a setting)
 
 export type CapabilityStatus = "available" | "disabled_pending_validation" | "not_approved";
-export type CapabilityRole = "discover_people" | "discover_companies" | "people_at_companies" | "verify_company" | "verify_person";
+export type CapabilityRole = "discover_people" | "discover_companies" | "people_at_companies" | "verify_company" | "verify_hiring" | "verify_person";
 /** Facts a capability can PROVE to the shared engine (evidenceAuthority rules), never mere claims. */
 export type Provable = "identity" | "headquarters" | "size_band" | "hiring" | "current_employment";
 export type SignalKind = "hiring" | "funding" | "social_activity" | "expansion" | "leadership_change" | "other";
@@ -137,6 +137,17 @@ export const DISCOVERY_CAPABILITIES: Readonly<Record<string, DiscoveryCapability
     actorKey: COMPANY_RECORD_ACTOR.key,
     note: "the HQ-flagged location and declared size band (AUTHORITY_RULES), on a record whose identity matches",
   },
+  // The SAME allowlisted job-search actor, scoped to named LinkedIn company pages
+  // (`company[]`, at most 10 per run; zero cross-company leakage observed, and every row
+  // is still post-filtered to the named set). Opt-in only (`verifyHiringByCompany`): it
+  // lets a company LeadOcean proposed qualify on a dated posting instead of staying pending.
+  "apify.job_search_by_company": {
+    id: "apify.job_search_by_company", provider: "apify", role: "verify_hiring", status: "available",
+    filters: ["job_title"], discoversBySignal: null, claims: [], proves: ["hiring"],
+    cost: { unit: "usd", perItem: SIGNAL_ACTORS.jobs.perItemUsd, perStart: SIGNAL_ACTORS.jobs.perStartUsd },
+    actorKey: SIGNAL_ACTORS.jobs.key,
+    note: "open roles at up to 10 named companies (LeadOcean's employers the discovery search did not return); same title and window post-filter; rows naming another employer are dropped",
+  },
   // ── Catalogued Apify actors from PR #198, NOT on the allowlist (status derived) ──
   "apify.linkedin_post_search": {
     id: "apify.linkedin_post_search", provider: "apify", role: "discover_companies", status: actorStatus("apify_linkedin_post_search"),
@@ -186,7 +197,7 @@ export const DISCOVERY_CAPABILITIES: Readonly<Record<string, DiscoveryCapability
  * posts on a topic → post search. Companies are verified BEFORE their people are
  * bought, so no record is spent on a disproven company.
  */
-export function chainFor(strategy: DiscoveryStrategyId, spec: DiscoverySpec): readonly string[] {
+export function chainFor(strategy: DiscoveryStrategyId, spec: DiscoverySpec, opts: { verifyHiringByCompany?: boolean } = {}): readonly string[] {
   const kinds = new Set(spec.signals.map((x) => x.kind));
   const seed = kinds.has("hiring") ? "apify.linkedin_job_search"
     : kinds.has("social_activity") ? "apify.linkedin_post_search"
@@ -199,7 +210,11 @@ export function chainFor(strategy: DiscoveryStrategyId, spec: DiscoverySpec): re
     case "apollo_plus_apify": return ["apollo.people_search", rec];
     case "apify_plus_leadocean": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, rec, "leadocean.people_by_domain"];
     case "apify_only": return seed === "apify.people_search" ? [seed, rec] : [seed, rec, ...(spec.wantsPeople ? ["apify.company_employees"] : [])];
-    case "apify_leadocean_concurrent": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, "leadocean.people_search", rec];
+    case "apify_leadocean_concurrent": {
+      const head = [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, "leadocean.people_search", rec];
+      // Opt-in: a hiring mission may check LeadOcean's own employers for the posting too.
+      return opts.verifyHiringByCompany && kinds.has("hiring") ? [...head, "apify.job_search_by_company"] : head;
+    }
   }
 }
 
@@ -374,7 +389,9 @@ export interface StrategyContext {
   /** Company records already held (fresh), by LinkedIn slug: not bought again. */
   cachedCompanyRecords?: number;
   /** What the USER stated about providers. Honoured only when feasible; never silently switched. */
-  user?: { strategy?: DiscoveryStrategyId; excludeProviders?: ProviderId[]; allowReviewOnly?: boolean };
+  user?: { strategy?: DiscoveryStrategyId; excludeProviders?: ProviderId[]; allowReviewOnly?: boolean;
+    /** Opt-in paid step (concurrent hiring missions): job search scoped to LeadOcean's employers. Never implied. */
+    verifyHiringByCompany?: boolean };
   /** People to look up per discovered company (apify_plus_leadocean). */
   peoplePerCompany?: number;
   /** Who the plan is for and under which interpretation contract: bound into the plan hash. */
@@ -451,6 +468,9 @@ const usd = (c: DiscoveryCapability, items: number) => c.cost.unit === "usd" ? r
 /** Overfetch for discovery: the shared engine rejects some candidates (Test E: 7 of 10 eligible). */
 const OVERFETCH = 2;
 const JOB_ROWS_PER_COMPANY = 2;
+/** Job search by company: the actor's `company[]` limit, and the rows bought per named company. */
+export const BY_COMPANY_MAX = 10;
+export const BY_COMPANY_ROWS = 3;
 
 function access(ctx: StrategyContext, p: ProviderId): string | null {
   if (ctx.user?.excludeProviders?.includes(p)) return `${p} excluded by the request`;
@@ -503,7 +523,7 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   const refusals: string[] = [];
   const limitations: Limitation[] = [];
   const rationale: string[] = [];
-  const chain = chainFor(strategy, spec).map((id) => DISCOVERY_CAPABILITIES[id]);
+  const chain = chainFor(strategy, spec, { verifyHiringByCompany: ctx.user?.verifyHiringByCompany === true }).map((id) => DISCOVERY_CAPABILITIES[id]);
   const n = spec.requestedCount;
 
   // 1 every capability in the chain must be available, its provider usable here
@@ -614,6 +634,12 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
       } else if (c.role === "verify_company") {
         const max = Math.max(0, Math.min(100, companies - (ctx.cachedCompanyRecords ?? 0)));
         out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: Math.max(1, max), estimate: { leadoceanRecords: 0, apifyUsd: max ? usd(c, max) : 0 }, why: "identity, HQ-flagged location and declared size band for each discovered company (one batched run)" });
+      } else if (c.role === "verify_hiring") {
+        // At most BY_COMPANY_MAX companies (the actor's company[] limit), from LeadOcean's step.
+        const loMax = out.find((x) => x.role === "discover_people")?.maxItems ?? 0;
+        const max = Math.min(BY_COMPANY_MAX, loMax) * BY_COMPANY_ROWS;
+        out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: Math.max(1, max), estimate: { leadoceanRecords: 0, apifyUsd: max ? usd(c, max) : 0 },
+          why: `open ${hiringTitles(spec).join(" / ") || "role"} postings at up to ${Math.min(BY_COMPANY_MAX, loMax)} LeadOcean-proposed companies the discovery search did not return (one scoped run)` });
       }
     }
     const est = { leadoceanRecords: out.reduce((a, x) => a + x.estimate.leadoceanRecords, 0), apifyUsd: r6(out.reduce((a, x) => a + x.estimate.apifyUsd, 0)) };
@@ -744,7 +770,8 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
     steps: (chosen?.steps ?? []).map((x) => ({ capability: x.capability, provider: x.provider, role: x.role, maxItems: x.maxItems, estimate: x.estimate })),
     limitations: (chosen?.limitations ?? []).map((l) => ({ code: l.code, detail: l.detail })), estimate: chosen?.estimate ?? null,
     ceilings: { maxLeadoceanRecords: ctx.budget.maxLeadoceanRecords, maxApifyUsd: ctx.budget.maxApifyUsd },
-    user: { strategy: ctx.user?.strategy ?? null, excludeProviders: [...(ctx.user?.excludeProviders ?? [])].sort(), allowReviewOnly: ctx.user?.allowReviewOnly === true },
+    user: { strategy: ctx.user?.strategy ?? null, excludeProviders: [...(ctx.user?.excludeProviders ?? [])].sort(), allowReviewOnly: ctx.user?.allowReviewOnly === true,
+      ...(ctx.user?.verifyHiringByCompany ? { verifyHiringByCompany: true } : {}) },
   };
   return {
     version: STRATEGY_PLANNER_VERSION,
