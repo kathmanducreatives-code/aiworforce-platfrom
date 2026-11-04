@@ -1,11 +1,11 @@
 {
  "summary": {
   "cases": 80,
-  "failing": 42,
+  "failing": 0,
   "by": {
    "role": {
-    "ok": 11,
-    "unmappable": 19,
+    "ok": 30,
+    "unmappable": 0,
     "dropped": 0,
     "inverted": 0
    },
@@ -22,20 +22,20 @@
     "inverted": 0
    },
    "industry": {
-    "ok": 4,
-    "unmappable": 6,
+    "ok": 10,
+    "unmappable": 0,
     "dropped": 0,
     "inverted": 0
    },
    "role_exclusion": {
-    "ok": 0,
-    "unmappable": 10,
+    "ok": 10,
+    "unmappable": 0,
     "dropped": 0,
     "inverted": 0
    },
    "hiring_window": {
-    "ok": 3,
-    "unmappable": 7,
+    "ok": 10,
+    "unmappable": 0,
     "dropped": 0,
     "inverted": 0
    }
@@ -95,67 +95,67 @@
   {
    "category": "role",
    "spelling": "signal role",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "signal.role",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "signal_role",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "role",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "roles",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "target_role",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "target_roles",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "required_role",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "role_requirement",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "position",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "positions",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "open_position",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "job_role",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
@@ -165,32 +165,32 @@
   {
    "category": "role",
    "spelling": "sales_role",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "role_family",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "job_function",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "function",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "signal_detail",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role",
    "spelling": "signal_qualifier",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "size_preference",
@@ -310,7 +310,7 @@
   {
    "category": "industry",
    "spelling": "sector",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "industry",
@@ -320,82 +320,82 @@
   {
    "category": "industry",
    "spelling": "market_segment",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "industry",
    "spelling": "business_type",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "industry",
    "spelling": "category",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "industry",
    "spelling": "niche",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "industry",
    "spelling": "domain",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role_exclusion",
    "spelling": "excluded_roles",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role_exclusion",
    "spelling": "exclude_roles",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role_exclusion",
    "spelling": "excluded_role_terms",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role_exclusion",
    "spelling": "role_exclusions",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role_exclusion",
    "spelling": "excluded_titles",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role_exclusion",
    "spelling": "not_roles",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role_exclusion",
    "spelling": "exclude",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role_exclusion",
    "spelling": "excluded",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role_exclusion",
    "spelling": "roles_to_exclude",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "role_exclusion",
    "spelling": "negative_roles",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "hiring_window",
    "spelling": "hiring_window",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "hiring_window",
@@ -410,32 +410,32 @@
   {
    "category": "hiring_window",
    "spelling": "recency",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "hiring_window",
    "spelling": "within_days",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "hiring_window",
    "spelling": "posted_within",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "hiring_window",
    "spelling": "timeframe",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "hiring_window",
    "spelling": "time_window",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "hiring_window",
    "spelling": "freshness",
-   "outcome": "unmappable"
+   "outcome": "ok"
   },
   {
    "category": "hiring_window",

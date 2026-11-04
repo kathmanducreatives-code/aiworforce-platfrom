@@ -14,9 +14,10 @@ Deno.test("fuzz: every field spelling's outcome matches the recorded baseline", 
   assertEquals(fuzz().map(({ category, spelling, outcome }) => ({ category, spelling, outcome })), recorded);
 });
 
-Deno.test("fuzz: the cf55180 incident is pinned — 'signal role' reaches execution as an unmappable hard requirement today", () => {
+Deno.test("fuzz: the cf55180 incident is fixed (S1) — 'signal role' is the hiring signal's own role, and no spelling fails", () => {
   const r = fuzz().find((x) => x.category === "role" && x.spelling === "signal role")!;
-  assertEquals(r.outcome, "unmappable", "when S1 fixes this, re-record the baseline and flip this assertion");
+  assertEquals(r.outcome, "ok");
+  assertEquals(fuzzSummary(fuzz()).failing, 0, "S1: every covered restatement reconciles by value");
   const s = fuzzSummary(fuzz());
   assert(s.by.size_preference.unmappable === 0 && s.by.geography.unmappable === 0, "value-matched categories stay robust");
 });

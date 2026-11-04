@@ -40,10 +40,6 @@
      "as": "geography → geography"
     },
     {
-     "field": "hiring_activity",
-     "as": "hiring_role → hiring_role"
-    },
-    {
      "field": "company_profile.locations",
      "as": "geography → geography"
     }
@@ -58,10 +54,6 @@
      "as": "geography → geography"
     },
     {
-     "field": "hiring.role",
-     "as": "hiring_role → hiring_role"
-    },
-    {
      "field": "company_profile.locations",
      "as": "geography → geography"
     }
@@ -74,10 +66,6 @@
     {
      "field": "geography",
      "as": "geography → geography"
-    },
-    {
-     "field": "hiring_status",
-     "as": "hiring_role → hiring_role"
     },
     {
      "field": "company_profile.locations",
