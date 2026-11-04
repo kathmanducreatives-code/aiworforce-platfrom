@@ -228,6 +228,25 @@ jobs:
             -f description="${desc:0:139}" -f target_url="$RUN_URL" > /dev/null
           echo "agentory/test-smoke = $state ($desc)"
 
+      - name: Record the interpretation contract in effect (commit status agentory/test-interpretation)
+        # P8's own detail — which contract the RUNNING lead-pipeline used, whether the model's
+        # v3 understanding was applied, and the criteria freeze state — as its own status, so
+        # it is readable without the artifact. Informational: the production gate reads only
+        # agentory/test-smoke.
+        if: always() && steps.commit.outputs.superseded == 'false'
+        run: |
+          report="$RUNNER_TEMP/report/smoke-report.json"
+          [ -f "$report" ] || { echo "no smoke report: nothing to record"; exit 0; }
+          p8="$(jq -c '[.checks[] | select(.id=="P8")][0] // empty' "$report")"
+          if [ -z "$p8" ]; then state=pending; desc="P8 not run (the plan did not reach it)";
+          else
+            [ "$(jq -r .status <<<"$p8")" = "pass" ] && state=success || state=failure
+            desc="$(jq -r .detail <<<"$p8")"
+          fi
+          gh api "repos/$REPO/statuses/$TARGET_SHA" -f state="$state" -f context=agentory/test-interpretation \
+            -f description="${desc:0:139}" -f target_url="$RUN_URL" > /dev/null
+          echo "agentory/test-interpretation = $state ($desc)"
+
       - name: Upload the report (before-state, smoke report, plan)
         if: always() && steps.commit.outputs.superseded == 'false'
         uses: actions/upload-artifact@v4

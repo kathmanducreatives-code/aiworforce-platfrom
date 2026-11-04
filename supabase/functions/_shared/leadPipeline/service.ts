@@ -20,6 +20,20 @@
 import { classifyConstraints, REQUIREMENT_VOCABULARY_VERSION } from "../requirementVocabulary.ts";
 import type { PlanReplay, PlanSigner, PlanTokenPayload } from "./planToken.ts";
 import { activeMissionContract } from "../missionInterpretationContract.ts";
+import { understandingOf } from "../missionUnderstanding.ts";
+import { criteriaFreezeState } from "../missionCriteriaReader.ts";
+
+/** What the running service used to read this mission — for review and the TEST smoke (P8). */
+export function understandingReport(mission: unknown, contract: string) {
+  const u = understandingOf(mission);
+  return {
+    contract,
+    version: u?.version ?? null,
+    roles: u?.roles.length ?? 0, places: u?.places.length ?? 0, signals: u?.signals.length ?? 0,
+    rejected: u?.rejected.length ?? 0, ambiguities: u?.ambiguities.length ?? 0,
+    freeze: criteriaFreezeState(mission as never),
+  };
+}
 import type { ActorInvoker } from "../discoveryProviders/adapters/apify.ts";
 import type { AdapterDeps, DiscoveryAdapter } from "../discoveryProviders/adapter.ts";
 import type { DiscoveryApproval, UsageLedger } from "../discoveryProviders/budget.ts";
@@ -313,6 +327,10 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     signals: spec.signals.map((s) => ({ kind: s.kind, hard: s.hard, windowDays: s.windowDays, roleTerms: s.roleTerms, roleFamilies: s.roleFamilies })),
     companyBrain: "brain" in interpreted ? interpreted.brain ?? null : null,
     contract,
+    // WHICH READING THE RUNNING SERVICE USED (mission reliability S4): the interpretation
+    // contract in effect, whether the model's v3 understanding was validated and applied,
+    // and whether the mission's meaning is frozen. Metadata only — not in the plan hash.
+    understanding: understandingReport(interpreted.mission, d.contractVersion ?? activeMissionContract()),
   };
   if (req.action === "strategy_plan" || plan.status === "blocked") {
     // The approval token: what an owner/admin approves, and all a run may execute.
