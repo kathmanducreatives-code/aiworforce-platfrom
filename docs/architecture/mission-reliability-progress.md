@@ -256,3 +256,24 @@ With `--missions <export>` (an owner-run, read-only production export), the tool
 **Found while building it:** criterion IDs depend on JSON key order, and Postgres `jsonb` reorders keys. The tool therefore derives in `jsonb` order, so frozen IDs equal what production computes, and checkpoints and verdicts keep resolving. The order-dependence of IDs itself is a latent fragility, listed under limitations.
 
 **Z08 (D4)** remains a separate owner decision. Option A preserves its narrowed stored meaning (`aes`). Recompiling it from the user's words would broaden it back to all four roles.
+
+## S6: retirement, by proof only
+
+The register is in `docs/architecture/mission-reliability-retirement.md`; the proofs are in `legacyReaderRetirement.test.ts`.
+
+**Retired:** these paths were superseded and are proven unused:
+- the duplicate inline role matchers;
+- the planner's direct criteria read;
+- the unmodelled-signal mismatch;
+- the R7 authority bypass;
+- the dead coverage guard.
+
+**No longer decides a v3 mission:** seven keyword readers, each with a witness phrasing where the reader is wrong under v1 and v3 is right. They are kept for v1/v2 until v3 is the default (owner flag) and the live study accepts GPT's reading.
+
+**Still needed, with explicit gates:**
+- the derive-time restatement guards: until Option A is applied, after which no stored mission reaches them;
+- the compile-time dedupe: disabling it fails 23 reviewed tests;
+- ORION's legacy vocabulary;
+- legacy re-derivation.
+
+Nothing was deleted without proof.
