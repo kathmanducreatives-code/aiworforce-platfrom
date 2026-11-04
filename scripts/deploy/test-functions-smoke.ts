@@ -149,7 +149,9 @@ interface PlanBody {
     steps?: { capability: string; provider: string; maxItems: number }[]; selectedBy?: string | null; blockedReason?: string | null };
   /** The signed approval token (Stage 3). A credential for one walk: checked, NEVER printed. */
   approval_token?: string;
-  interpretation?: { hard?: { key: string; label?: string }[]; preferences?: { key: string; values: unknown }[];
+  interpretation?: {
+    understanding?: { contract: string; version: string | null; roles: number; places: number; signals: number; rejected: number; ambiguities: number; freeze: string };
+    hard?: { key: string; label?: string }[]; preferences?: { key: string; values: unknown }[];
     signals?: { kind: string; hard?: boolean; windowDays?: number | null; roleTerms?: string[]; roleFamilies?: string[] }[]; companyBrain?: { status?: string } | null };
 }
 
@@ -181,6 +183,21 @@ export function tokenCheck(body: PlanBody, workspaceId: string): Check {
     ? pass("P7", "Signed approval token", `issued (value not shown): plan-token-v1, this workspace and plan hash, one walk, expires in ${ttlH}h`)
     : fail("P7", "Signed approval token", t ? "token present but its claims do not bind this workspace, plan hash and walk with an expiry" : "no approval_token on a ready plan",
       "Stage 3 (signed plan approval) is not deployed, or the signer is not configured");
+}
+
+/**
+ * P8 — WHICH READING THE RUNNING SERVICE USED (mission reliability S4/S3). Proves the
+ * interpretation contract is ACTIVE in the deployed function, not merely configured: under
+ * v3 the compiled mission must carry the model's validated understanding. Every compiled
+ * mission must be frozen (its approved meaning). A build that predates the report says so.
+ */
+export function understandingCheck(body: PlanBody): Check {
+  const u = body.interpretation?.understanding;
+  if (!u) return fail("P8", "Interpretation contract in effect", "the response carries no understanding report", "TEST runs a build older than the report — redeploy");
+  const detail = `contract ${u.contract}; understanding ${u.version ?? "none"} (roles ${u.roles}, places ${u.places}, signals ${u.signals}, rejected ${u.rejected}, ambiguities ${u.ambiguities}); criteria ${u.freeze}`;
+  if (u.freeze !== "frozen") return fail("P8", "Interpretation contract in effect", detail, "the compiled mission's criteria are not frozen (S3)");
+  if (u.contract === "v3" && !u.version) return fail("P8", "Interpretation contract in effect", detail, "v3 is configured but the model's understanding was not applied (model reply or validation)");
+  return pass("P8", "Interpretation contract in effect", detail);
 }
 
 export function planChecks(httpStatus: number, body: PlanBody): Check[] {
@@ -448,7 +465,8 @@ async function cmdVerify(beforePath: string, outDir: string) {
       const plan = await call("lead-pipeline", {
         action: PLAN_ACTION, workspace_id: TEST_WORKSPACE, walk_id: `smoke-${sha.slice(0, 12)}`, query: SMOKE_QUERY, requested_count: 5, ...SMOKE_BUDGET,
       }, token);
-      checks.push(...planChecks(plan.status, plan.body as PlanBody), ...(plan.status === 200 ? [tokenCheck(plan.body as PlanBody, TEST_WORKSPACE)] : []));
+      checks.push(...planChecks(plan.status, plan.body as PlanBody),
+        ...(plan.status === 200 ? [tokenCheck(plan.body as PlanBody, TEST_WORKSPACE), understandingCheck(plan.body as PlanBody)] : []));
       await Deno.writeTextFile(`${outDir}/plan.json`, JSON.stringify({ http: plan.status, plan: plan.body.plan ?? null, interpretation: plan.body.interpretation ?? null, error: plan.body.error ?? null }, null, 2));
     }
 
