@@ -112,7 +112,8 @@ What it returns depends on the mission:
 - **One posting test**, `hiringTitleMatcher`, is shared by run-agent's verifier and the replay mirror. An excluded role never satisfies on **any** branch; the family branch used to ignore exclusions.
 - **Planner OR groups:** `DiscoverySpec.signalAlternatives`. "Raised funding OR hiring sales" is one requirement, met when any member can be proven. It is no longer two hard requirements, one of which (funding) is unprovable and refused the plan. AND stays two requirements.
 - **Planner bug fixed:** a ranking-only signal the planner does not model (`product_launch`, `headcount_change`) was made **hard** by any unrelated hard criterion of kind "other" (industry, geography, known companies), and the planner then refused it as unprovable.
-- **R7:** the engine's derived `hiring: proven` (and each derived `job` item) now goes through `authorityForEvidence`, keyed by the posting's own source. A verdict resting on postings no rule lets prove anything is `plausible`: it ranks and never qualifies. Every stored fixture's postings come from real job sources, so verdicts are unchanged; a negative test proves the gap is closed.
+- **R7:** the engine's derived `hiring: proven` (and each derived `job` item) is now **gated** by `authorityForEvidence`, keyed by the posting's own source. A verdict resting only on postings that no rule lets prove anything is `plausible`: it ranks and never qualifies. Every stored fixture's postings come from real job sources, so verdicts are unchanged, and a negative test proves the gap is closed.
+  - No authority *record* is attached to the derived items. In the first cut it was attached, and DB-contract S10d (CI on #228) caught the consequence: `authorityResolvesAbstention` then kept the hiring check passing over an evaluator's "the required role is not established", whereas the reviewed contract says that unknown **vetoes**. The fix was reproduced and verified locally against Postgres and PostgREST, and the unfixed code fails the same test.
 
 ### Numbers
 
@@ -126,3 +127,102 @@ What it returns depends on the mission:
 | Plan hashes (benchmark, 16 scenarios) | — | — | unchanged |
 
 The S0 checker hard-coded "exclusions" and "OR groups" as unrepresentable. It now measures the new representations. Its "criteria" side is the reader qualification actually uses. Legacy drift is its own visible category (`legacy_stored_criteria_drift`), never hidden.
+
+## S4: contract v3, natural-language understanding (NL1–NL4, D2, D3, D6)
+
+**Principle (owner, 2026-11-03):** natural-language-first.
+- The model interprets.
+- Code validates and executes.
+- No growing keyword lists.
+
+### `missionUnderstanding.ts`
+
+**The model's job.** Contract v3 adds one strict, schema-enforced block, `understanding`, to the existing GPT structured output. In it the model states the request's **meaning** in a closed vocabulary:
+
+| Item | Closed vocabulary (schema enums) |
+|---|---|
+| `roles[]` | a registered title id, **or** a role family id; required or excluded; `role_match` any/all |
+| `places[]` | a geography-registry place (or a named other place); scope `headquarters`/`presence`; necessity |
+| `industries[]` | the kind of company; necessity |
+| `signals[]` | a canonical signal kind; necessity; `signal_logic` all/any (AND/OR) |
+| `ambiguities[]` | a question, only when the answer changes which companies qualify |
+| `unsupported[]` | what the vocabulary cannot express |
+
+Every item quotes the user's words (`span`).
+
+**The code's job.** It validates; it does not re-decide:
+- **Each quote must occur in the request.** The check is token-wise Damerau–Levenshtein with a small tolerance: 0 edits up to 4 letters, 1 up to 8, 2 beyond, and never a different first letter, so SDRs ≠ BDRs.
+  - The user's typo and the model's correction of it both verify.
+  - Words the user never wrote do not.
+- **Each ID is checked again against its registry.**
+- **Contradictions become questions:** a role that is both required and excluded is asked about.
+- **Invalid items are not applied.** The v1 reading stands for them, and each refusal is recorded in `validator_changes`.
+
+**The decision points.** For a v3 mission these read the validated understanding, not keywords:
+- **Roles (NL1):** the hiring qualifier is set to the registered title ("Account Executive"), or to the family for a broad word. Abbreviations, slang, synonyms and typos reach the same identity, because the model resolved them.
+- **Signal necessity (NL2):** whether a signal is required comes from the model's reading of the words, however indirect ("looking to bring on…"). Funding still respects verifier readiness.
+- **Places (NL3) and scope (NL4):** a registry place with the stated scope, for example "the states" → hard US HQ, and "have a US office" → presence.
+- **Industries (D2):** grammatical number, typos and synonyms no longer demote a stated industry.
+- **AND/OR (D3):** comes from `signal_logic`.
+- **Regions (D6):** "North America" is the registry place itself.
+
+**Ambiguity.** A validated ambiguity raises `MissionNeedsClarificationError` before anything is spent. pilot-chat then asks the question (`clarificationMessage`) instead of failing.
+
+**Unsupported requirements.** Each one becomes an explicit `unrepresentable_evidence` criterion, which the approval card lists. It is never dropped.
+
+**The approval card** renders from the same frozen criteria that execute (S3), so what the user approves is what runs.
+
+### Off by default
+
+- `AGENTORY_MISSION_CONTRACT=v3` turns it on: v3 includes v2's per-signal windows plus the understanding block.
+- Without it, every compile is byte-identical: mission semantics, verdict replay, benchmark and production replay are all unchanged.
+- **Enabling it on TEST is a flag change for the owner.**
+
+### Acceptance suite: `tests/fixtures/mission-reliability/v1/cases.json`
+
+**Corpus.**
+- Now 26 meanings and 55 phrasings, with 10 contrast pairs.
+- New cases are the owner's own examples:
+  - "sales guys";
+  - "recruiting AEs but no SDRs";
+  - "taking on more staff in the States";
+  - "a US office" vs "headquartered in the US";
+  - "getting bigger and needing salespeople".
+- "Growing the sales team" now has its own meaning: team growth is **headcount growth, not proof of open roles**. The owner's rule corrects my S0 corpus, which had filed it with "hiring salespeople".
+- Every phrasing carries the v3 reading a correct model gives. The live study measures how often GPT actually gives it.
+
+**Results.**
+
+| Mode | Correct | Wrong (labelled) | Unstable paraphrase groups | Collapsed contrasts |
+|---|---|---|---|---|
+| v1 (today's contract) | 36 / 55 | 19 (NL1–NL4, D2, D3, D6) | 4 | 0 |
+| **v3** | **55 / 55** | **0** (labels never apply to v3) | **0** | **0** |
+
+- v3-compiled missions add **0** cross-component disagreements: the consistency check now also runs over the v3-compiled corpus.
+- Negative tests (`missionUnderstanding.test.ts`):
+  - invented quotes, unknown IDs and empty roles are refused;
+  - an invented place is never applied;
+  - SDR vs BDR is never treated as a typo;
+  - a contradiction is asked about;
+  - v1 ignores an understanding and records that it did;
+  - the schema is strict at every level, with closed ID enums and no free field names.
+
+### Live paraphrase study (owner-authorised, ≤ $2, ≤ 180 calls): harness ready, **not run**
+
+`scripts/dev/live-paraphrase-study.ts` sends every corpus phrasing to the production `mission_compilation` route, using the v3 payload and strict schema, `--repeats` times (3 × 55 = 165 calls). It compiles the model's own proposal with the real compiler and scores it against the labels. It also reports paraphrase stability and contrast collapse.
+
+**How spending is enforced (transport guard, tested in `liveStudyBudget.test.ts`):**
+- every HTTP request reserves its worst case (input estimated from the request body, plus the 4000-token output ceiling, at list price) and is **refused before sending** if it would cross the budget or the call cap;
+- the provider client's own retries go through the same guard;
+- a response without usage is booked at its worst case;
+- only `api.openai.com` is reachable;
+- an unpriced model refuses to run at all;
+- the loop stops at the first refusal.
+
+**Expected cost:** the dry run (`--dry-run`: real pipeline, stub transport) prices 165 calls on `gpt-5.6-luna` at about **$0.58** worst-case-estimated input, against the $2 cap.
+
+**Why it was not run:** this session has no model credential. The configured key lives only in the TEST project's Supabase secrets. Running it through TEST would also need the v3 flag set there and the unmerged code deployed, and both are owner actions. To run it, with `OPENAI_API_KEY` in the environment:
+
+```
+deno run --allow-read --allow-write --allow-env --allow-net=api.openai.com scripts/dev/live-paraphrase-study.ts --repeats 3
+```

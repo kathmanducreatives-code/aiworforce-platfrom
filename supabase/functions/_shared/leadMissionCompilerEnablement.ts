@@ -59,7 +59,9 @@ export type CompilerEnablementReason =
   // about whether the stage was allowed to RUN: this one means it ran, was asked
   // twice, and could not read the request into a mission. `compileLeadMission`
   // no longer answers that with a regex reading of the sentence.
-  | "compilation_blocked";
+  | "compilation_blocked"
+  // S4: the request is genuinely ambiguous; the user is asked, nothing is guessed.
+  | "needs_clarification";
 
 export interface CompilerEnablement {
   enabled: boolean;
