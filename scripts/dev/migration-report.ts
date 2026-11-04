@@ -28,6 +28,7 @@ import { missionSemantics, semanticDiff } from "../../supabase/functions/_shared
 import { deriveMissionCriteria } from "../../supabase/functions/_shared/missionCriteria.ts";
 import { criteriaFreezeState, criteriaOf, freezeCriteria } from "../../supabase/functions/_shared/missionCriteriaReader.ts";
 import { missionHash } from "../../supabase/functions/_shared/leadMission.ts";
+import { buildQualificationContext } from "../../supabase/functions/_shared/missionQualificationContext.ts";
 
 type Derive = (m: never) => unknown[];
 
@@ -119,13 +120,17 @@ export async function freezePlan(missions: [string, Record<string, unknown>][], 
     if (criteriaFreezeState(m as never) === "frozen") continue; // already frozen: nothing to do
     const production = releaseDerive(m as never);
     if (!production.length) { skipped.push(key); continue; } // no requirement either way: nothing to freeze
-    const frozen = freezeCriteria({ ...m, criteria: production }) as Record<string, unknown>;
+    const frozen = freezeCriteria({ ...m, criteria: production }, "migration") as Record<string, unknown>;
     // Verification: frozen, means exactly what production runs, approvals untouched.
     if (criteriaFreezeState(frozen as never) !== "frozen") failures.push(`${key}: does not read back as frozen`);
     if (JSON.stringify(criteriaOf(frozen as never, { legacy: "rederive" })) !== JSON.stringify(production)) failures.push(`${key}: executed criteria ≠ production`);
     if (await missionHash(frozen as never) !== await missionHash(m as never)) failures.push(`${key}: missionHash would change`);
-    plan.push({ key, set: { criteria: production, criteria_contract_version: frozen.criteria_contract_version, criteria_fingerprint: frozen.criteria_fingerprint } });
-    rollback.push({ key, restore: { criteria: m.criteria ?? null, criteria_contract_version: m.criteria_contract_version ?? null, criteria_fingerprint: m.criteria_fingerprint ?? null } });
+    // ORION's search vocabulary must not change either (a compile-frozen mission sources
+    // it from criteria; a migration-frozen one keeps the vocabulary it ran with).
+    const vocab = (x: unknown) => JSON.stringify(buildQualificationContext(x as never, { criteriaAuthority: true }).role_vocabulary);
+    if (vocab(frozen) !== vocab(m)) failures.push(`${key}: ORION's role vocabulary would change`);
+    plan.push({ key, set: { criteria: production, criteria_contract_version: frozen.criteria_contract_version, criteria_fingerprint: frozen.criteria_fingerprint, criteria_freeze_origin: "migration" } });
+    rollback.push({ key, restore: { criteria: m.criteria ?? null, criteria_contract_version: m.criteria_contract_version ?? null, criteria_fingerprint: m.criteria_fingerprint ?? null, criteria_freeze_origin: m.criteria_freeze_origin ?? null } });
   }
   return { plan, rollback, failures, skipped };
 }

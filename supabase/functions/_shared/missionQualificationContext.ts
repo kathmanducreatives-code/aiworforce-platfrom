@@ -45,7 +45,7 @@
 import { criteriaExecutionPolicy, hardConstraintsBackedByCriteria, rejectingAxes } from "./criteriaExecutionPolicy.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 import type { MissionCriterion } from "./missionCriteria.ts";
-import { criteriaFrozen, criteriaOf, hiringRequirementOf } from "./missionCriteriaReader.ts";
+import { criteriaFrozenAtCompile, criteriaOf, hiringRequirementOf } from "./missionCriteriaReader.ts";
 import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import {
   classifyRoleFamily, excludedByRole, roleFamilyAliases, type RoleFamily,
@@ -262,7 +262,7 @@ export function buildQualificationContext(
   // the vocabulary it ran with in production: measured over the 83 stored missions, the
   // criteria source would have changed 5 legacy searches — Z08's narrowed to its D4-damaged
   // criteria — so legacy is unchanged here and listed for the owner (S5) instead.
-  const fromCriteria = criteriaFrozen(mission) && !!hiringReq &&
+  const fromCriteria = criteriaFrozenAtCompile(mission) && !!hiringReq &&
     (hiringReq.roleTerms.length > 0 || hiringReq.roleFamilies.length > 0);
   // Families are KEYS and must be expanded to titles; terms are already phrases.
   const fromFamilies = (fromCriteria ? [hiringReq!.roleFamilies] : signals.map((s) => strs(s?.role_families)))

@@ -60,7 +60,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "9c383715b0600e64"
+    "criteria_fingerprint": "2269b7fb830b0340",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -161,7 +162,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "309f4e6ce79bba6b"
+    "criteria_fingerprint": "4216a116333a0707",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -235,7 +237,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "c824e70541c3b850"
+    "criteria_fingerprint": "eb230523f6798314",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -366,7 +369,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "d38596ab12d079c6"
+    "criteria_fingerprint": "a88582ef50c0acf8",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -479,7 +483,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "27b41f1c0e55f651"
+    "criteria_fingerprint": "f2fb2120143036b7",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -597,7 +602,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "56c52ee759cd7672"
+    "criteria_fingerprint": "2368fe6350b16e04",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -668,7 +674,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "96ef049f11523f1c"
+    "criteria_fingerprint": "acf1122b0dd4b65a",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -750,7 +757,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "4f2cfb05835c959c"
+    "criteria_fingerprint": "416bff37fab756d0",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -844,7 +852,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "901208d41aececcb"
+    "criteria_fingerprint": "cf468b3039f1143d",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -908,7 +917,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "240b546c0c258a33"
+    "criteria_fingerprint": "ab45464a66d011b7",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -939,7 +949,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "166bca3364ad7cc8"
+    "criteria_fingerprint": "0a393927b65bd532",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1006,7 +1017,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "5a14ec67fcc385b4"
+    "criteria_fingerprint": "dce2bff3ad1522fa",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1030,7 +1042,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "4ba61e78b94133ab"
+    "criteria_fingerprint": "65011facefee0b65",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1061,7 +1074,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "c67cd88d3e5fbafa"
+    "criteria_fingerprint": "2d002a6123d9aadc",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1081,7 +1095,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "058745936c224b18"
+    "criteria_fingerprint": "06a14091205b3474",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1130,7 +1145,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "d725baa9f09aa83a"
+    "criteria_fingerprint": "98b373e5093bcbe8",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1179,7 +1195,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "d74037a537a534b2"
+    "criteria_fingerprint": "6992cc81151450a0",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1223,7 +1240,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "0aa17175f567a95c"
+    "criteria_fingerprint": "396a87ab571ab8b8",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1305,7 +1323,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "55c78fef2d462c4e"
+    "criteria_fingerprint": "fd74c5d5ed01256a",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1370,7 +1389,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "42bb08cc0f82c3f1"
+    "criteria_fingerprint": "35c64750f9a5f473",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1428,7 +1448,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "92b19a3659b373d3"
+    "criteria_fingerprint": "770887c4458be1e7",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1486,7 +1507,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "715859763574eabb"
+    "criteria_fingerprint": "bfc1fd2ce452bb1f",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1544,7 +1566,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "468633a125e20954"
+    "criteria_fingerprint": "9b2dba9515e308f6",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1602,7 +1625,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "2499b00e451909df"
+    "criteria_fingerprint": "5e5e560258ec9825",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1660,7 +1684,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "3131938421f5f46d"
+    "criteria_fingerprint": "24e6297eb1890d69",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1718,7 +1743,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "316dc8fea55ec511"
+    "criteria_fingerprint": "755b30c0f7bb1595",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1776,7 +1802,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "623d70178f5cf644"
+    "criteria_fingerprint": "2e7580bb4945d8f6",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1857,7 +1884,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "8712406532c64a6e"
+    "criteria_fingerprint": "045d9f8b31826c42",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -1938,7 +1966,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "7b89f036870074a9"
+    "criteria_fingerprint": "eabbb6203794268d",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -2020,7 +2049,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "c1baff6d1934be3c"
+    "criteria_fingerprint": "9693977735902400",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -2102,7 +2132,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "a872baa787d53fc6"
+    "criteria_fingerprint": "2e0f1f29b8fdeb12",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -2184,7 +2215,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "bcf6f9d776915542"
+    "criteria_fingerprint": "263d6b3157ddecfe",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -2266,7 +2298,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "337ed764e5a7d0bb"
+    "criteria_fingerprint": "c7c05c18a42260a1",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -2347,7 +2380,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "b6e53749f509bc8e"
+    "criteria_fingerprint": "c89ad42500a86ab0",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -2429,7 +2463,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "b55d0780fba7c555"
+    "criteria_fingerprint": "d124bad2ff94f051",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -2511,7 +2546,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "6791fdddb894c77c"
+    "criteria_fingerprint": "52853ae1528f4092",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -2593,7 +2629,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "7f1ecc747e03e283"
+    "criteria_fingerprint": "f9d04910f34bf3c1",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -2675,7 +2712,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "b891ff837394d0c6"
+    "criteria_fingerprint": "f31fec6712d5acf8",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -2861,7 +2899,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "a8417f0cc890839f"
+    "criteria_fingerprint": "b92671f08eccad59",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -2956,7 +2995,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "653563040895b9d1"
+    "criteria_fingerprint": "95dbbed2b706da65",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3051,7 +3091,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "b9779171e6ce4134"
+    "criteria_fingerprint": "83b1c4e5ac7148fa",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3095,7 +3136,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "4efe01ee3f368685"
+    "criteria_fingerprint": "3e86984c62b10f69",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3195,7 +3237,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "5b8b834d4917310c"
+    "criteria_fingerprint": "0f64970f694c32a0",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3273,7 +3316,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "ec619381abfe027e"
+    "criteria_fingerprint": "001fe41f7e22d262",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3351,7 +3395,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "b22c89e182d7b3c0"
+    "criteria_fingerprint": "1548b4ab7de6d5c4",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3429,7 +3474,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "586f012e8bee1db1"
+    "criteria_fingerprint": "e557fbca063c108b",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3507,7 +3553,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "3e2afec226a80b19"
+    "criteria_fingerprint": "4a0e66f6b27a327b",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3574,7 +3621,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "d41123df8568ed18"
+    "criteria_fingerprint": "c1ef9a338c27deba",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3641,7 +3689,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "89e644065ece572b"
+    "criteria_fingerprint": "9153763ad8a4d48d",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3708,7 +3757,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "856e00029bf036ed"
+    "criteria_fingerprint": "3af65e4c7b41cba1",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3790,7 +3840,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "024ebeafdb27d57e"
+    "criteria_fingerprint": "1a9840a9e9fb9552",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3859,7 +3910,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "eee995f90b534cbc"
+    "criteria_fingerprint": "52ed129dec1d283a",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -3923,7 +3975,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "e6afb4c97d3bc978"
+    "criteria_fingerprint": "685884559d992d7e",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -4030,7 +4083,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "c2b5865e3b9fe309"
+    "criteria_fingerprint": "d9881540ed56bb25",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -4110,7 +4164,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "30eaec1a140af1e1"
+    "criteria_fingerprint": "d94259fcc1fa5c25",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -4197,7 +4252,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "f8ef88a6c91a59df"
+    "criteria_fingerprint": "90f5ee9220e532f1",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -4261,7 +4317,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "8134f2d2debd4cc1"
+    "criteria_fingerprint": "d44f46f05061a27d",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -4354,7 +4411,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "f8f658f6a0593c3b"
+    "criteria_fingerprint": "9ca170ba75d055c9",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -4437,7 +4495,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "8fae7cb7172c8448"
+    "criteria_fingerprint": "1df829cdb167a974",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -4509,7 +4568,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "c4df9774a4f60797"
+    "criteria_fingerprint": "798427c2cb221603",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -4624,7 +4684,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "4104a470283421f3"
+    "criteria_fingerprint": "8711bcde003cd2af",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -4697,7 +4758,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "ed5ffa4086176995"
+    "criteria_fingerprint": "fe9f98640be20233",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -4813,7 +4875,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "80ec21740a0caf15"
+    "criteria_fingerprint": "0e4f8140c373e047",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -4919,7 +4982,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "59c88a27162bdaba"
+    "criteria_fingerprint": "d0a7c7a39c0896b0",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -5025,7 +5089,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "7b6098aa797f9a7b"
+    "criteria_fingerprint": "f88b761ca6b2891f",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -5131,7 +5196,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "a7592e007b1d2b21"
+    "criteria_fingerprint": "23a1d77e10966d25",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -5224,7 +5290,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "7a4b3df85e72a76d"
+    "criteria_fingerprint": "b9a47096a5113ba9",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -5306,7 +5373,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "e31fd19c4b79d81f"
+    "criteria_fingerprint": "953d055a24ca9163",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -5399,7 +5467,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "399c5638151b90a3"
+    "criteria_fingerprint": "4edaab9e7aee3fd7",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -5485,7 +5554,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "9ec14b6240dba429"
+    "criteria_fingerprint": "fab5ff962c90834b",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -5543,7 +5613,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "7caf919c8229f641"
+    "criteria_fingerprint": "17b41a1688d472cd",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -5647,7 +5718,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "2b9084136b120822"
+    "criteria_fingerprint": "98502759cfa639ee",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -5777,7 +5849,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "19e560d6dc17ef03"
+    "criteria_fingerprint": "5df12af2d183b555",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -5896,7 +5969,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "6dac9a416fee3e20"
+    "criteria_fingerprint": "d312ef9f19da83b4",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -5949,7 +6023,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "9e289945cd7ab5c4"
+    "criteria_fingerprint": "6f8b99193d51958e",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -6055,7 +6130,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "1cf1834b83495aa6"
+    "criteria_fingerprint": "97a52e4fde8c6d58",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -6154,7 +6230,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "00385f107e745501"
+    "criteria_fingerprint": "6fb77e0c9d68b917",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -6232,7 +6309,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "0ffe11d6b8f551ed"
+    "criteria_fingerprint": "0ffd683c53f0c969",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -6350,7 +6428,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "a1a9ff81535ad4f2"
+    "criteria_fingerprint": "418b052db54cd17c",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -6452,7 +6531,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "4ee9d9753123fef6"
+    "criteria_fingerprint": "615925914f260f44",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -6572,7 +6652,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "e494f51b24d74c30"
+    "criteria_fingerprint": "72af445f6275ee26",
+    "criteria_freeze_origin": "migration"
    }
   },
   {
@@ -6646,7 +6727,8 @@
      }
     ],
     "criteria_contract_version": "criteria-v1",
-    "criteria_fingerprint": "11d7643c803c4525"
+    "criteria_fingerprint": "8d0b4526763a0749",
+    "criteria_freeze_origin": "migration"
    }
   }
  ]

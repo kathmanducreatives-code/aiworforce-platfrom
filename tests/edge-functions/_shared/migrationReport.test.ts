@@ -58,3 +58,15 @@ Deno.test("report: with the live release equal to this code, no stored mission c
   const reports = await buildReport(await persistedMissions(), derive);
   assertEquals(reports.filter((r) => r.overall !== "unchanged").map((r) => r.key), []);
 });
+
+Deno.test("negative: freezing a stored mission as if NEW would change ORION's search (Z08) — the migration marks its origin", async () => {
+  const { buildQualificationContext } = await import("../../../supabase/functions/_shared/missionQualificationContext.ts");
+  const { jsonbOrder: order } = await import("../../../scripts/dev/migration-report.ts");
+  const [, raw] = (await persistedMissions()).find(([k]) => k.includes("cases.Z08"))!;
+  const m = order(raw);
+  const crit = deriveMissionCriteria(m as never);
+  const vocab = (x: unknown) => JSON.stringify(buildQualificationContext(x as never, { criteriaAuthority: true }).role_vocabulary);
+  assert(vocab(freezeCriteria({ ...m, criteria: crit })) !== vocab(m), "a compile-origin freeze would narrow Z08's search to its stored criteria");
+  assertEquals(vocab(freezeCriteria({ ...m, criteria: crit }, "migration")), vocab(m), "a migration freeze keeps it");
+  assertEquals(criteriaFreezeState(freezeCriteria({ ...m, criteria: crit }, "migration")), "frozen");
+});

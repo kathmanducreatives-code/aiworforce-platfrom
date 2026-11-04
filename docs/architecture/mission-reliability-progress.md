@@ -249,8 +249,8 @@ With `--missions <export>` (an owner-run, read-only production export), the tool
 | Stored approval-card copies that differ from what production executes today | 46 |
 | Stored candidates whose check results change | 7, with **0** eligibility changes |
 
-**Recommendation: Option A.** Freeze each stored mission at the meaning production runs **today**, so deploying this code changes **none** of them.
-- **Verified offline:** the plan has 82 missions and 0 failures. Each reads back as frozen, executes the release's exact criteria, and keeps its `missionHash` (approvals and signed plan tokens unchanged).
+**Recommendation: Option A.** Freeze each stored mission at the meaning production runs **today**, so deploying this code changes **none** of them. The migration marks the freeze `criteria_freeze_origin: "migration"`, and the fingerprint covers that mark. Readers that changed for *new* missions, such as ORION's criteria-sourced search vocabulary, keep the legacy behaviour for migrated missions. Without the mark, freezing would have changed 5 legacy searches, including narrowing Z08; a negative test pins this.
+- **Verified offline:** the plan has 82 missions and 0 failures. Each reads back as frozen, executes the release's exact criteria, keeps ORION's search vocabulary, and keeps its `missionHash` (approvals and signed plan tokens unchanged).
 - **Verified on Postgres:** the generated SQL round trip. The freeze applies; the stored mission reads back frozen with production's exact criteria and **IDs**; rollback restores it byte for byte.
 
 **Found while building it:** criterion IDs depend on JSON key order, and Postgres `jsonb` reorders keys. The tool therefore derives in `jsonb` order, so frozen IDs equal what production computes, and checkpoints and verdicts keep resolving. The order-dependence of IDs itself is a latent fragility, listed under limitations.
