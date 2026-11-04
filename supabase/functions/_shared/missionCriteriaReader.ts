@@ -29,7 +29,7 @@ import { excludedByRole, namedTitles, type RoleFamily, roleMatchesFamily, titleS
 /** The version stamped on a mission whose criteria are frozen at compile time (S3). */
 export const CRITERIA_CONTRACT_VERSION = "criteria-v1" as const;
 
-type MissionShape = { criteria?: unknown; criteria_contract_version?: unknown; criteria_fingerprint?: unknown };
+type MissionShape = { criteria?: unknown; criteria_contract_version?: unknown; criteria_fingerprint?: unknown; criteria_freeze_origin?: unknown };
 
 /**
  * The mission fields its criteria are derived FROM (what `deriveMissionCriteria` and its
@@ -59,7 +59,8 @@ const stable = (v: unknown): string => JSON.stringify(v, (_k, val) =>
 export function criteriaSourceFingerprint(mission: Record<string, unknown>): string {
   const src: Record<string, unknown> = {};
   for (const f of CRITERIA_SOURCE_FIELDS) if (mission[f] !== undefined) src[f] = mission[f];
-  const json = stable({ src, criteria: mission.criteria ?? null });
+  const json = stable({ src, criteria: mission.criteria ?? null,
+    ...(mission.criteria_freeze_origin !== undefined ? { origin: mission.criteria_freeze_origin } : {}) });
   return `${fnv(json, 0x811c9dc5)}${fnv(json, 0x01000193 ^ 0x5bd1e995)}`;
 }
 
@@ -68,12 +69,22 @@ export function criteriaSourceFingerprint(mission: Record<string, unknown>): str
  * fingerprint. Call ONLY where the criteria were just derived from this very mission (the
  * compiler's last step, and pilot-chat after the Company Brain merge — the approval card).
  */
-export function freezeCriteria<T extends object>(mission: T): T & { criteria_contract_version: string; criteria_fingerprint: string } {
+export function freezeCriteria<T extends object>(mission: T, origin: "compile" | "migration" = "compile"):
+  T & { criteria_contract_version: string; criteria_fingerprint: string } {
   const m = mission as unknown as Record<string, unknown>;
   if (!Array.isArray(m.criteria) || !m.criteria.length) {
     throw new Error("freezeCriteria: the mission carries no criteria to freeze");
   }
-  return { ...mission, criteria_contract_version: CRITERIA_CONTRACT_VERSION, criteria_fingerprint: criteriaSourceFingerprint(m) };
+  // A MIGRATION freeze (S5 option A) preserves a stored mission's production behaviour
+  // exactly, including what ORION searches; it is marked so readers that changed for NEW
+  // missions keep the legacy behaviour for it. Covered by the fingerprint.
+  const marked = origin === "migration" ? { ...m, criteria_freeze_origin: "migration" } : m;
+  return { ...marked, criteria_contract_version: CRITERIA_CONTRACT_VERSION, criteria_fingerprint: criteriaSourceFingerprint(marked) } as never;
+}
+
+/** Was this mission frozen at compile (its criteria ARE its approved meaning) — not by a migration? */
+export function criteriaFrozenAtCompile(mission: MissionShape | null | undefined): boolean {
+  return criteriaFrozen(mission) && (mission as { criteria_freeze_origin?: unknown }).criteria_freeze_origin !== "migration";
 }
 
 /** frozen: honoured · legacy: never frozen · void: frozen, then edited without re-freezing. */

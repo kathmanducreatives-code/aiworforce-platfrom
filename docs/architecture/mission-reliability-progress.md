@@ -226,3 +226,33 @@ Every item quotes the user's words (`span`).
 ```
 deno run --allow-read --allow-write --allow-env --allow-net=api.openai.com scripts/dev/live-paraphrase-study.ts --repeats 3
 ```
+
+## S5: historical compatibility and migration (prepared; applying it is the owner's decision)
+
+`scripts/dev/migration-report.ts` → `docs/architecture/mission-migration/`:
+
+| File | Contents |
+|---|---|
+| `report.md` | Every stored mission whose meaning would change, with each difference classified narrows / broadens / neutral, the stored-candidate verdict impact, and the owner's options |
+| `report.json` | Per mission: the **original** criteria (what the live release `e4da19e8` executes), the **proposed** criteria (what this code would execute without migration), and the approval-card copy |
+| `freeze-plan.json` / `rollback-plan.json` | Option A, verified |
+
+With `--missions <export>` (an owner-run, read-only production export), the tool also writes `freeze.sql` and `rollback.sql`. Each is one transaction, and each statement applies only if the stored mission still equals the export.
+
+**Findings (83 stored missions):**
+
+| | Count |
+|---|---|
+| Missions whose meaning changes if deployed **without** migration | **49** (34 narrow, 14 broaden, 1 neutral) |
+| — of which: unscoped US/state geography becomes headquarters-only | 33 + 2 (narrows) |
+| — "startup" becomes a preference instead of a hard requirement | 18 (broadens) |
+| Stored approval-card copies that differ from what production executes today | 46 |
+| Stored candidates whose check results change | 7, with **0** eligibility changes |
+
+**Recommendation: Option A.** Freeze each stored mission at the meaning production runs **today**, so deploying this code changes **none** of them. The migration marks the freeze `criteria_freeze_origin: "migration"`, and the fingerprint covers that mark. Readers that changed for *new* missions, such as ORION's criteria-sourced search vocabulary, keep the legacy behaviour for migrated missions. Without the mark, freezing would have changed 5 legacy searches, including narrowing Z08; a negative test pins this.
+- **Verified offline:** the plan has 82 missions and 0 failures. Each reads back as frozen, executes the release's exact criteria, keeps ORION's search vocabulary, and keeps its `missionHash` (approvals and signed plan tokens unchanged).
+- **Verified on Postgres:** the generated SQL round trip. The freeze applies; the stored mission reads back frozen with production's exact criteria and **IDs**; rollback restores it byte for byte.
+
+**Found while building it:** criterion IDs depend on JSON key order, and Postgres `jsonb` reorders keys. The tool therefore derives in `jsonb` order, so frozen IDs equal what production computes, and checkpoints and verdicts keep resolving. The order-dependence of IDs itself is a latent fragility, listed under limitations.
+
+**Z08 (D4)** remains a separate owner decision. Option A preserves its narrowed stored meaning (`aes`). Recompiling it from the user's words would broaden it back to all four roles.
