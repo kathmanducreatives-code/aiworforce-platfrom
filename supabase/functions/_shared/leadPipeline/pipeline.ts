@@ -89,7 +89,11 @@ export interface PipelineLead {
   /** Report-safe: no number in any form (contactValues carries it, separately). */
   phone: PhoneRecord | null;
   outreachBlockers: string[];
-  provenance: { walkId: string; planHash: string; runAt: string; providers: string[] };
+  provenance: {
+    walkId: string; planHash: string; runAt: string; providers: string[];
+    /** Fields where providers DISAGREE about this company (normalize.ts): kept for verification, never resolved by a claim. */
+    conflicts?: { field: string; values: { provider: string; value: unknown }[] }[];
+  };
 }
 
 /**

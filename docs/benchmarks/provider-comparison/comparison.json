@@ -1,0 +1,830 @@
+{
+ "mission": "Find US B2B companies actively hiring Account Executives, excluding SDRs.",
+ "truthQualified": [
+  "northwind.example",
+  "quartzlabs.example"
+ ],
+ "v3": [
+  {
+   "mode": "Apify only",
+   "strategy": "apify_only",
+   "contract": "v3",
+   "planStatus": "ready",
+   "planBlockedReason": null,
+   "hardRequirements": [
+    "geography:United States",
+    "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"Account Executive\"],\"role_families\":[\"gtm_sales\"],\"excluded_role_terms\":[\"Sales Development Representative\"]}}"
+   ],
+   "searchedTitles": [
+    "Account Executive"
+   ],
+   "rawRecords": {
+    "apifyJobRows": 10,
+    "apifyCompanyRecords": 3,
+    "leadoceanRecords": 0
+   },
+   "uniqueCompanies": 4,
+   "qualified": 2,
+   "pending": 1,
+   "rejected": 1,
+   "verifiedEvidenceCoverage": 1,
+   "duplicateRate": 0.6,
+   "companies": [
+    {
+     "domain": "northwind.example",
+     "verdict": "qualified",
+     "sources": [
+      "apify"
+     ],
+     "gaps": []
+    },
+    {
+     "domain": "quartzlabs.example",
+     "verdict": "qualified",
+     "sources": [
+      "apify"
+     ],
+     "gaps": []
+    },
+    {
+     "domain": "harbor.example",
+     "verdict": "review",
+     "sources": [
+      "apify"
+     ],
+     "gaps": [
+      "geography"
+     ]
+    },
+    {
+     "domain": "mapleledger.example",
+     "verdict": "rejected",
+     "sources": [
+      "apify"
+     ],
+     "gaps": []
+    }
+   ],
+   "falseQualified": [],
+   "missedQualified": [],
+   "apiFailures": [],
+   "costApifyUsd": 0.02305,
+   "leadoceanRecords": 0,
+   "costPerQualifiedUsd": 0.011525,
+   "conflicts": [],
+   "summary": {
+    "version": "provider-run-summary-v1",
+    "strategy": "apify_only",
+    "totals": {
+     "companies": 4,
+     "qualified": 2,
+     "pending": 1,
+     "rejected": 1,
+     "foundByMultiple": 0,
+     "costPerQualifiedUsd": 0.011525
+    },
+    "providers": [
+     {
+      "provider": "apify",
+      "discovered": 4,
+      "unique": 4,
+      "qualified": 2,
+      "pending": 1,
+      "rejected": 1,
+      "steps": [
+       {
+        "capability": "apify.linkedin_job_search",
+        "status": "completed",
+        "reason": "dropped postings: staffing_agency 1, role_or_window_mismatch 4"
+       },
+       {
+        "capability": "apify.linkedin_company_record",
+        "status": "completed",
+        "reason": null
+       }
+      ],
+      "failed": false,
+      "spend": {
+       "leadoceanRecords": 0,
+       "apifyUsd": 0.02305
+      }
+     }
+    ],
+    "evidenceSources": {
+     "apify_discovery": 4,
+     "apify_linkedin_job_search": 4,
+     "apify_linkedin_company_details": 3
+    },
+    "evidenceRefused": 0,
+    "conflicts": {}
+   }
+  },
+  {
+   "mode": "LeadOcean only",
+   "strategy": "leadocean_only",
+   "contract": "v3",
+   "planStatus": "ready",
+   "planBlockedReason": null,
+   "hardRequirements": [
+    "geography:United States",
+    "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"Account Executive\"],\"role_families\":[\"gtm_sales\"],\"excluded_role_terms\":[\"Sales Development Representative\"]}}"
+   ],
+   "searchedTitles": [],
+   "rawRecords": {
+    "apifyJobRows": 0,
+    "apifyCompanyRecords": 0,
+    "leadoceanRecords": 5
+   },
+   "uniqueCompanies": 4,
+   "qualified": 0,
+   "pending": 4,
+   "rejected": 0,
+   "verifiedEvidenceCoverage": 0,
+   "duplicateRate": 0.2,
+   "companies": [
+    {
+     "domain": "northwind.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "geography",
+      "hiring"
+     ]
+    },
+    {
+     "domain": "pinecrest.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "geography",
+      "hiring"
+     ]
+    },
+    {
+     "domain": "quartzlabs.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "geography",
+      "hiring"
+     ]
+    },
+    {
+     "domain": "cobaltdesk.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "geography",
+      "hiring"
+     ]
+    }
+   ],
+   "falseQualified": [],
+   "missedQualified": [
+    "northwind.example",
+    "quartzlabs.example"
+   ],
+   "apiFailures": [],
+   "costApifyUsd": 0,
+   "leadoceanRecords": 5,
+   "costPerQualifiedUsd": null,
+   "conflicts": [],
+   "summary": {
+    "version": "provider-run-summary-v1",
+    "strategy": "leadocean_only",
+    "totals": {
+     "companies": 4,
+     "qualified": 0,
+     "pending": 4,
+     "rejected": 0,
+     "foundByMultiple": 0,
+     "costPerQualifiedUsd": null
+    },
+    "providers": [
+     {
+      "provider": "leadocean",
+      "discovered": 4,
+      "unique": 4,
+      "qualified": 0,
+      "pending": 4,
+      "rejected": 0,
+      "steps": [
+       {
+        "capability": "leadocean.people_search",
+        "status": "completed",
+        "reason": null
+       }
+      ],
+      "failed": false,
+      "spend": {
+       "leadoceanRecords": 5,
+       "apifyUsd": 0
+      }
+     }
+    ],
+    "evidenceSources": {
+     "leadocean_discovery": 4
+    },
+    "evidenceRefused": 0,
+    "conflicts": {}
+   }
+  },
+  {
+   "mode": "Concurrent",
+   "strategy": "apify_leadocean_concurrent",
+   "contract": "v3",
+   "planStatus": "ready",
+   "planBlockedReason": null,
+   "hardRequirements": [
+    "geography:United States",
+    "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"Account Executive\"],\"role_families\":[\"gtm_sales\"],\"excluded_role_terms\":[\"Sales Development Representative\"]}}"
+   ],
+   "searchedTitles": [
+    "Account Executive"
+   ],
+   "rawRecords": {
+    "apifyJobRows": 10,
+    "apifyCompanyRecords": 5,
+    "leadoceanRecords": 5
+   },
+   "uniqueCompanies": 6,
+   "qualified": 2,
+   "pending": 3,
+   "rejected": 1,
+   "verifiedEvidenceCoverage": 1,
+   "duplicateRate": 0.6,
+   "companies": [
+    {
+     "domain": "northwind.example",
+     "verdict": "qualified",
+     "sources": [
+      "apify",
+      "leadocean"
+     ],
+     "gaps": []
+    },
+    {
+     "domain": "quartzlabs.example",
+     "verdict": "qualified",
+     "sources": [
+      "apify",
+      "leadocean"
+     ],
+     "gaps": []
+    },
+    {
+     "domain": "pinecrest.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "hiring"
+     ]
+    },
+    {
+     "domain": "cobaltdesk.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "hiring"
+     ]
+    },
+    {
+     "domain": "harbor.example",
+     "verdict": "review",
+     "sources": [
+      "apify"
+     ],
+     "gaps": [
+      "geography"
+     ]
+    },
+    {
+     "domain": "mapleledger.example",
+     "verdict": "rejected",
+     "sources": [
+      "apify"
+     ],
+     "gaps": []
+    }
+   ],
+   "falseQualified": [],
+   "missedQualified": [],
+   "apiFailures": [],
+   "costApifyUsd": 0.03105,
+   "leadoceanRecords": 5,
+   "costPerQualifiedUsd": 0.015525,
+   "conflicts": [],
+   "summary": {
+    "version": "provider-run-summary-v1",
+    "strategy": "apify_leadocean_concurrent",
+    "totals": {
+     "companies": 6,
+     "qualified": 2,
+     "pending": 3,
+     "rejected": 1,
+     "foundByMultiple": 2,
+     "costPerQualifiedUsd": 0.015525
+    },
+    "providers": [
+     {
+      "provider": "apify",
+      "discovered": 4,
+      "unique": 2,
+      "qualified": 2,
+      "pending": 1,
+      "rejected": 1,
+      "steps": [
+       {
+        "capability": "apify.linkedin_job_search",
+        "status": "completed",
+        "reason": "dropped postings: staffing_agency 1, role_or_window_mismatch 4"
+       },
+       {
+        "capability": "apify.linkedin_company_record",
+        "status": "completed",
+        "reason": null
+       }
+      ],
+      "failed": false,
+      "spend": {
+       "leadoceanRecords": 0,
+       "apifyUsd": 0.03105
+      }
+     },
+     {
+      "provider": "leadocean",
+      "discovered": 4,
+      "unique": 2,
+      "qualified": 2,
+      "pending": 2,
+      "rejected": 0,
+      "steps": [
+       {
+        "capability": "leadocean.people_search",
+        "status": "completed",
+        "reason": null
+       }
+      ],
+      "failed": false,
+      "spend": {
+       "leadoceanRecords": 5,
+       "apifyUsd": 0
+      }
+     }
+    ],
+    "evidenceSources": {
+     "apify_discovery": 4,
+     "leadocean_discovery": 4,
+     "apify_linkedin_job_search": 4,
+     "apify_linkedin_company_details": 5
+    },
+    "evidenceRefused": 0,
+    "conflicts": {
+     "industry": 1
+    }
+   }
+  }
+ ],
+ "v1": [
+  {
+   "mode": "Apify only",
+   "strategy": "apify_only",
+   "contract": "v1",
+   "planStatus": "ready",
+   "planBlockedReason": null,
+   "hardRequirements": [
+    "geography:United States",
+    "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"],\"excluded_role_terms\":[\"sdrs\"]}}"
+   ],
+   "searchedTitles": [
+    "account executives"
+   ],
+   "rawRecords": {
+    "apifyJobRows": 10,
+    "apifyCompanyRecords": 3,
+    "leadoceanRecords": 0
+   },
+   "uniqueCompanies": 4,
+   "qualified": 2,
+   "pending": 1,
+   "rejected": 1,
+   "verifiedEvidenceCoverage": 1,
+   "duplicateRate": 0.6,
+   "companies": [
+    {
+     "domain": "northwind.example",
+     "verdict": "qualified",
+     "sources": [
+      "apify"
+     ],
+     "gaps": []
+    },
+    {
+     "domain": "quartzlabs.example",
+     "verdict": "qualified",
+     "sources": [
+      "apify"
+     ],
+     "gaps": []
+    },
+    {
+     "domain": "harbor.example",
+     "verdict": "review",
+     "sources": [
+      "apify"
+     ],
+     "gaps": [
+      "geography"
+     ]
+    },
+    {
+     "domain": "mapleledger.example",
+     "verdict": "rejected",
+     "sources": [
+      "apify"
+     ],
+     "gaps": []
+    }
+   ],
+   "falseQualified": [],
+   "missedQualified": [],
+   "apiFailures": [],
+   "costApifyUsd": 0.02305,
+   "leadoceanRecords": 0,
+   "costPerQualifiedUsd": 0.011525,
+   "conflicts": [],
+   "summary": {
+    "version": "provider-run-summary-v1",
+    "strategy": "apify_only",
+    "totals": {
+     "companies": 4,
+     "qualified": 2,
+     "pending": 1,
+     "rejected": 1,
+     "foundByMultiple": 0,
+     "costPerQualifiedUsd": 0.011525
+    },
+    "providers": [
+     {
+      "provider": "apify",
+      "discovered": 4,
+      "unique": 4,
+      "qualified": 2,
+      "pending": 1,
+      "rejected": 1,
+      "steps": [
+       {
+        "capability": "apify.linkedin_job_search",
+        "status": "completed",
+        "reason": "dropped postings: staffing_agency 1, role_or_window_mismatch 4"
+       },
+       {
+        "capability": "apify.linkedin_company_record",
+        "status": "completed",
+        "reason": null
+       }
+      ],
+      "failed": false,
+      "spend": {
+       "leadoceanRecords": 0,
+       "apifyUsd": 0.02305
+      }
+     }
+    ],
+    "evidenceSources": {
+     "apify_discovery": 4,
+     "apify_linkedin_job_search": 4,
+     "apify_linkedin_company_details": 3
+    },
+    "evidenceRefused": 0,
+    "conflicts": {}
+   }
+  },
+  {
+   "mode": "LeadOcean only",
+   "strategy": "leadocean_only",
+   "contract": "v1",
+   "planStatus": "ready",
+   "planBlockedReason": null,
+   "hardRequirements": [
+    "geography:United States",
+    "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"],\"excluded_role_terms\":[\"sdrs\"]}}"
+   ],
+   "searchedTitles": [],
+   "rawRecords": {
+    "apifyJobRows": 0,
+    "apifyCompanyRecords": 0,
+    "leadoceanRecords": 5
+   },
+   "uniqueCompanies": 4,
+   "qualified": 0,
+   "pending": 4,
+   "rejected": 0,
+   "verifiedEvidenceCoverage": 0,
+   "duplicateRate": 0.2,
+   "companies": [
+    {
+     "domain": "northwind.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "geography",
+      "hiring"
+     ]
+    },
+    {
+     "domain": "pinecrest.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "geography",
+      "hiring"
+     ]
+    },
+    {
+     "domain": "quartzlabs.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "geography",
+      "hiring"
+     ]
+    },
+    {
+     "domain": "cobaltdesk.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "geography",
+      "hiring"
+     ]
+    }
+   ],
+   "falseQualified": [],
+   "missedQualified": [
+    "northwind.example",
+    "quartzlabs.example"
+   ],
+   "apiFailures": [],
+   "costApifyUsd": 0,
+   "leadoceanRecords": 5,
+   "costPerQualifiedUsd": null,
+   "conflicts": [],
+   "summary": {
+    "version": "provider-run-summary-v1",
+    "strategy": "leadocean_only",
+    "totals": {
+     "companies": 4,
+     "qualified": 0,
+     "pending": 4,
+     "rejected": 0,
+     "foundByMultiple": 0,
+     "costPerQualifiedUsd": null
+    },
+    "providers": [
+     {
+      "provider": "leadocean",
+      "discovered": 4,
+      "unique": 4,
+      "qualified": 0,
+      "pending": 4,
+      "rejected": 0,
+      "steps": [
+       {
+        "capability": "leadocean.people_search",
+        "status": "completed",
+        "reason": null
+       }
+      ],
+      "failed": false,
+      "spend": {
+       "leadoceanRecords": 5,
+       "apifyUsd": 0
+      }
+     }
+    ],
+    "evidenceSources": {
+     "leadocean_discovery": 4
+    },
+    "evidenceRefused": 0,
+    "conflicts": {}
+   }
+  },
+  {
+   "mode": "Concurrent",
+   "strategy": "apify_leadocean_concurrent",
+   "contract": "v1",
+   "planStatus": "ready",
+   "planBlockedReason": null,
+   "hardRequirements": [
+    "geography:United States",
+    "hiring:{\"event\":\"hiring\",\"subject\":\"company\",\"qualifier\":{\"role_terms\":[\"account executives\"],\"role_families\":[\"gtm_sales\"],\"excluded_role_terms\":[\"sdrs\"]}}"
+   ],
+   "searchedTitles": [
+    "account executives"
+   ],
+   "rawRecords": {
+    "apifyJobRows": 10,
+    "apifyCompanyRecords": 5,
+    "leadoceanRecords": 5
+   },
+   "uniqueCompanies": 6,
+   "qualified": 2,
+   "pending": 3,
+   "rejected": 1,
+   "verifiedEvidenceCoverage": 1,
+   "duplicateRate": 0.6,
+   "companies": [
+    {
+     "domain": "northwind.example",
+     "verdict": "qualified",
+     "sources": [
+      "apify",
+      "leadocean"
+     ],
+     "gaps": []
+    },
+    {
+     "domain": "quartzlabs.example",
+     "verdict": "qualified",
+     "sources": [
+      "apify",
+      "leadocean"
+     ],
+     "gaps": []
+    },
+    {
+     "domain": "pinecrest.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "hiring"
+     ]
+    },
+    {
+     "domain": "cobaltdesk.example",
+     "verdict": "review",
+     "sources": [
+      "leadocean"
+     ],
+     "gaps": [
+      "hiring"
+     ]
+    },
+    {
+     "domain": "harbor.example",
+     "verdict": "review",
+     "sources": [
+      "apify"
+     ],
+     "gaps": [
+      "geography"
+     ]
+    },
+    {
+     "domain": "mapleledger.example",
+     "verdict": "rejected",
+     "sources": [
+      "apify"
+     ],
+     "gaps": []
+    }
+   ],
+   "falseQualified": [],
+   "missedQualified": [],
+   "apiFailures": [],
+   "costApifyUsd": 0.03105,
+   "leadoceanRecords": 5,
+   "costPerQualifiedUsd": 0.015525,
+   "conflicts": [],
+   "summary": {
+    "version": "provider-run-summary-v1",
+    "strategy": "apify_leadocean_concurrent",
+    "totals": {
+     "companies": 6,
+     "qualified": 2,
+     "pending": 3,
+     "rejected": 1,
+     "foundByMultiple": 2,
+     "costPerQualifiedUsd": 0.015525
+    },
+    "providers": [
+     {
+      "provider": "apify",
+      "discovered": 4,
+      "unique": 2,
+      "qualified": 2,
+      "pending": 1,
+      "rejected": 1,
+      "steps": [
+       {
+        "capability": "apify.linkedin_job_search",
+        "status": "completed",
+        "reason": "dropped postings: staffing_agency 1, role_or_window_mismatch 4"
+       },
+       {
+        "capability": "apify.linkedin_company_record",
+        "status": "completed",
+        "reason": null
+       }
+      ],
+      "failed": false,
+      "spend": {
+       "leadoceanRecords": 0,
+       "apifyUsd": 0.03105
+      }
+     },
+     {
+      "provider": "leadocean",
+      "discovered": 4,
+      "unique": 2,
+      "qualified": 2,
+      "pending": 2,
+      "rejected": 0,
+      "steps": [
+       {
+        "capability": "leadocean.people_search",
+        "status": "completed",
+        "reason": null
+       }
+      ],
+      "failed": false,
+      "spend": {
+       "leadoceanRecords": 5,
+       "apifyUsd": 0
+      }
+     }
+    ],
+    "evidenceSources": {
+     "apify_discovery": 4,
+     "leadocean_discovery": 4,
+     "apify_linkedin_job_search": 4,
+     "apify_linkedin_company_details": 5
+    },
+    "evidenceRefused": 0,
+    "conflicts": {
+     "industry": 1
+    }
+   }
+  }
+ ],
+ "overlap": {
+  "apifyOnly": [
+   "harbor.example",
+   "mapleledger.example"
+  ],
+  "leadoceanOnly": [
+   "cobaltdesk.example",
+   "pinecrest.example"
+  ],
+  "both": [
+   "northwind.example",
+   "quartzlabs.example"
+  ],
+  "totalUnique": 6,
+  "standalone": {
+   "apify": [
+    "harbor.example",
+    "mapleledger.example",
+    "northwind.example",
+    "quartzlabs.example"
+   ],
+   "leadocean": [
+    "cobaltdesk.example",
+    "northwind.example",
+    "pinecrest.example",
+    "quartzlabs.example"
+   ]
+  },
+  "additionalQualified": {
+   "byApify": [
+    "northwind.example",
+    "quartzlabs.example"
+   ],
+   "byLeadOcean": []
+  }
+ },
+ "contractsAgree": true
+}

@@ -183,6 +183,11 @@ export interface Scenario {
   unsupported?: string;
   /** The planner is expected to refuse it: the refusal itself is the evidence (UNSUPPORTED, not PASS). */
   plannerRefusalExpected?: boolean;
+  /** Interpretation contract for the compile (default v1); `understanding` is the v3 reading. */
+  contract?: "v1" | "v3";
+  /** Plan ceilings (default: $0.05 Apify, 20 LeadOcean records). */
+  budget?: { maxLeadoceanRecords: number; maxApifyUsd: number };
+  understanding?: unknown;
   /** Ground truth over the synthetic data: the companies that SHOULD qualify (precision / recall). */
   truthQualified?: string[];
   check: (r: RunRecord) => { pass: boolean; detail: string };
@@ -389,13 +394,15 @@ export interface RunRecord {
 
 export async function runScenario(s: Scenario, o: { fault?: Fault; ledger?: UsageLedger & { entries: Map<string, { state: string }> }; walkId?: string; twice?: boolean } = {}): Promise<RunRecord> {
   const fault = o.fault ?? "none";
-  const mission = compileLeadMission({ originalUserQuery: s.request, proposal: { ...BLANK, ...s.proposal } as never, requestedCount: s.count }).final_mission as unknown as Record<string, unknown>;
+  const mission = compileLeadMission({ originalUserQuery: s.request, requestedCount: s.count,
+    proposal: { ...BLANK, ...s.proposal, ...(s.contract === "v3" && s.understanding ? { understanding: s.understanding } : {}) } as never,
+    ...(s.contract ? { contract: s.contract } : {}) }).final_mission as unknown as Record<string, unknown>;
   const criteria = (mission.criteria ?? []) as Record<string, unknown>[];
   const semantics = missionSemantics(mission as never, criteria as never);
   const spec = specFromMission(mission as never, { defaultCount: s.count });
   const ctx: StrategyContext = {
     providers: { leadocean: { enabled: true, connected: true, authorized: true, remaining: 955 }, apify: { enabled: true, connected: true, authorized: true }, apollo: { enabled: false, connected: false, authorized: false } },
-    budget: { maxLeadoceanRecords: 20, maxApifyUsd: 0.05 },
+    budget: s.budget ?? { maxLeadoceanRecords: 20, maxApifyUsd: 0.05 },
     user: { strategy: s.strategy, ...(s.allowReviewOnly ? { allowReviewOnly: true } : {}) },
     binding: { workspaceId: WS, contractVersion: "benchmark" },
   };
