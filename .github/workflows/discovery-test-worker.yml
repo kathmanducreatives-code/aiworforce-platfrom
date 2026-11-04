@@ -73,7 +73,7 @@ on:
         required: true
         type: string
       canary_stage:
-        description: "none = the worker as always. Canary: verify (read-only) | migrate | prepare (paid compile) | launch (kickoff + paid run) | reconcile (read-only) | session (one approved contract, end to end) | evidence (read-only: proposes NO_RUN reconciliations, writes nothing)"
+        description: "none = the worker as always. Canary: verify (read-only) | migrate | prepare (paid compile) | launch (kickoff + paid run) | reconcile (read-only) | session (one approved contract, end to end) | evidence (read-only: proposes NO_RUN reconciliations, writes nothing) | study (live paraphrase study: model calls only, <= 165 calls, <= $2)"
         required: true
         default: none
         type: choice
@@ -86,6 +86,7 @@ on:
           - reconcile
           - session
           - evidence
+          - study
       canary_approval:
         description: "Canary stages that write or spend: the exact approval phrase the stage names (see the runbook)"
         required: false
@@ -124,7 +125,7 @@ jobs:
   worker:
     # The worker, as always — and the canary's launch, whose kickoff must run
     # seconds before the worker step (the authorization's window is 300 s).
-    if: ${{ !contains(fromJSON('["verify","migrate","prepare","reconcile","evidence"]'), inputs.canary_stage) }}
+    if: ${{ !contains(fromJSON('["verify","migrate","prepare","reconcile","evidence"]'), inputs.canary_stage) && inputs.canary_stage != 'study' }}
     runs-on: ubuntu-latest
     # actions: read lets launch download the prepare run's kickoff artifact.
     permissions:
@@ -472,3 +473,73 @@ jobs:
           path: ${{ runner.temp }}/canary-audit
           if-no-files-found: ignore
           retention-days: 30
+
+  # ── LIVE PARAPHRASE STUDY (mission reliability S4; owner-authorised: <= 180 calls, <= $2) ──
+  #
+  # The real model's reading of the interpretation corpus under contract v3. Model calls
+  # ONLY: the one network permission is api.openai.com, no lead provider or database is
+  # reached, and the budget is enforced at the transport (every HTTP request — retries
+  # included — reserves its worst-case cost and is refused before sending past the cap;
+  # tests/edge-functions/_shared/liveStudyBudget.test.ts runs first). 3 repeats x 55
+  # phrasings = 165 calls, $2 cap; neither is an input. The report is an artifact.
+  study:
+    if: ${{ inputs.canary_stage == 'study' }}
+    runs-on: ubuntu-latest
+    environment: discovery-test
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      CONFIRM_REF: ${{ inputs.confirm_project_ref }}
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      TEST_PROJECT_REF: ${{ vars.TEST_PROJECT_REF }}
+      CANARY_APPROVAL: ${{ inputs.canary_approval }}
+    steps:
+      - name: Refuse anything but the TEST project, the approved commit and the approval phrase
+        run: |
+          set -euo pipefail
+          case "$CONFIRM_REF" in
+            ""|ohsdatpvfdjdemstoiuj|wqnigjhcwjxtmordrwno)
+              echo "refusing: '$CONFIRM_REF' is not a non-production project" >&2; exit 1 ;;
+          esac
+          [ "$CONFIRM_REF" = "tlvnfrxzjhsjgdofwehb" ] && [ "$CONFIRM_REF" = "$TEST_PROJECT_REF" ] \
+            || { echo "refusing: the study runs with the TEST project's key only" >&2; exit 1; }
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$EXPECTED_SHA" = "$GITHUB_SHA" ] \
+            || { echo "refusing: this run's commit $GITHUB_SHA is not the approved expected_sha" >&2; exit 1; }
+          [ "$CANARY_APPROVAL" = "run the live paraphrase study within 2 USD" ] \
+            || { echo "refusing: canary_approval must be exactly: run the live paraphrase study within 2 USD" >&2; exit 1; }
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed   # v2.0.5
+        with:
+          deno-version: v2.8.2
+
+      - name: Cache Deno dependencies for this commit
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830   # v4.3.0
+        with:
+          path: ~/.cache/deno
+          key: deno-v2.8.2-${{ runner.os }}-${{ github.sha }}
+
+      - name: Budget guard tests first (the study does not start if they fail)
+        run: deno test --allow-read --allow-env --no-check tests/edge-functions/_shared/liveStudyBudget.test.ts
+
+      - name: Dry run (the real pipeline, a stub transport, $0)
+        run: deno run --allow-read --allow-write --allow-env scripts/dev/live-paraphrase-study.ts --dry-run --repeats 3 --out study-out
+
+      - name: Live study (api.openai.com only; at most 180 calls and 2 USD, enforced per request)
+        env:
+          OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY }}
+        run: |
+          deno run --allow-read --allow-write --allow-env --allow-net=api.openai.com \
+            scripts/dev/live-paraphrase-study.ts --repeats 3 --budget-usd 2 --max-calls 180 --out study-out
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
+        if: always()
+        with:
+          name: live-paraphrase-study-${{ github.sha }}
+          path: study-out/
+          retention-days: 30
+          if-no-files-found: warn
