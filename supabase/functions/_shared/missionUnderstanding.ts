@@ -145,7 +145,17 @@ export const UNDERSTANDING_INSTRUCTION = [
   "Quote in every 'span' the user's own words exactly as written. Never invent a requirement the words do not support,",
   "never drop one they state, and never broaden or narrow it: a named title stays that title; a broad word is its family.",
   "'Headquartered / based / from / US companies' is headquarters; 'operate in / office in / do business in' is presence.",
-  "If a difference that changes which companies qualify cannot be settled from the words, list it in 'ambiguities'.",
+  // DEFAULT READINGS, NEVER QUESTIONS (live paraphrase study 2026-11-05: 24 of 165 live
+  // readings asked one of these instead of reading it; the TEST smoke failed twice on
+  // "what recency window?"). Each is a reading the product already applies or the owner ruled.
+  "These are settled readings, never ambiguities:",
+  "a time window the user did not state ('recently', 'lately', 'currently', 'actively') — Agentory applies and discloses its default window;",
+  "a bare 'in the US / in the States / US companies' with nothing about offices or operations — headquarters;",
+  "a broad role word ('salespeople', 'sellers', 'sales reps', 'sales guys') — that role family, not a question about titles;",
+  "'not X / no X / but not X' about a role — X is an excluded role, whatever the company's other openings;",
+  "'growing the team / getting bigger / expanding headcount' — headcount_growth, not hiring;",
+  "'hiring / recruiting / taking on staff / needing <role>' — hiring.",
+  "If a difference that changes which companies qualify still cannot be settled from the words, list it in 'ambiguities'.",
 ].join(" ");
 
 // ── TYPO-TOLERANT SPAN CHECK (an edit distance, not a word list) ─────────────
