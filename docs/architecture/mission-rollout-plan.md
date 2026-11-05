@@ -45,8 +45,12 @@ Every step that changes production or historical missions requires the owner's e
 - `missionHash` covers query, type, entity, output, count, company profile, signals, decision-makers and capabilities. It does **not** cover criteria or the freeze fields.
 - Freezing therefore changes no approval or signed plan token. This is pinned by `migrationReport.test.ts` and `missionCriteriaReader.test.ts`.
 
-**Rollback.** `rollback.sql` restores `criteria`, `criteria_contract_version`, `criteria_fingerprint` and `criteria_freeze_origin` exactly. Re-derivation resumes.
-- **Verified on Postgres:** freeze, then read back as frozen with production's criteria and IDs, then roll back to a byte-identical original.
+**Rollback.** `rollback.sql` writes back each exported mission exactly (guarded on the frozen state), so `criteria`, `criteria_contract_version`, `criteria_fingerprint` and `criteria_freeze_origin` return to their exported values. Re-derivation resumes.
+- **Re-verified on Postgres 2026-11-05 (and fixed).** The rehearsal used a throwaway local Postgres 16, the 83 persisted missions as an export, and release `e4da19e8`.
+  - The earlier `rollback.sql` was **not** exact. It dropped every null-valued key of the mission, including the mission's own fields such as `requested_count: null`, which `missionHash` covers. Only 29 of 83 rows round-tripped.
+  - `migrationSql` now restores the export itself. Results: freeze changes 82 of 83 rows (1 has no criteria); rollback restores **83 of 83 byte-identical**; both scripts are idempotent.
+  - Pinned by `migrationReport.test.ts`, which fails on the old behaviour.
+- Any `rollback.sql` generated before this fix must be regenerated.
 
 ## 2. TEST: enable contract v3
 

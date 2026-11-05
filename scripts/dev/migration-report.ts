@@ -182,6 +182,38 @@ function md(reports: MissionReport[], plan: Awaited<ReturnType<typeof freezePlan
 
 function arg(name: string): string | undefined { const i = Deno.args.indexOf(name); return i >= 0 ? Deno.args[i + 1] : undefined; }
 
+export type ExportRow = { location?: { table?: string; id?: string; step?: number }; mission: Record<string, unknown> };
+
+/**
+ * Reviewable SQL for option A and its rollback, for an owner export. One transaction each;
+ * every statement applies only if the stored mission is exactly the one expected (the
+ * export for the freeze, the frozen mission for the rollback), so a mission changed since
+ * is left alone.
+ *
+ * THE ROLLBACK WRITES BACK THE EXPORTED MISSION ITSELF, byte for byte. It used to merge the
+ * restore fields and then drop EVERY null-valued key, which also deleted the mission's own
+ * null fields (e.g. `requested_count: null`, covered by missionHash): 54 of 83 rehearsal
+ * missions did not round-trip (Postgres rehearsal, 2026-11-05).
+ */
+export function migrationSql(rows: ExportRow[], plan: { plan: { key: string; set: Record<string, unknown> }[] }): { freeze: string; rollback: string } {
+  const lit = (v: unknown) => `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
+  const path = (step: number) => `'{${step},metadata,tool_input,lead_mission}'`;
+  const stmts = (which: "set" | "restore") => rows.flatMap((r, i) => {
+    const loc = r.location;
+    if (loc?.table !== "task_plans" || !loc.id || typeof loc.step !== "number") return [`-- skipped row ${i}: no task_plans location`];
+    const key = `stored:${JSON.stringify(loc)}`;
+    const set = plan.plan.find((p) => p.key === key)?.set;
+    if (!set) return [`-- ${key}: nothing to change`];
+    const frozen = { ...r.mission, ...set };
+    const [target, expected] = which === "set" ? [frozen, r.mission] : [r.mission, frozen];
+    return [`update public.task_plans set steps = jsonb_set(steps, ${path(loc.step)}, ${lit(target)}) where id = '${loc.id}' and steps #> ${path(loc.step)} = ${lit(expected)};`];
+  });
+  return {
+    freeze: ["-- OPTION A: freeze stored missions at today's production meaning. Review, then run in ONE transaction.", "begin;", ...stmts("set"), "commit;", ""].join("\n"),
+    rollback: ["-- Rollback of option A: writes back each exported mission exactly. Run in ONE transaction.", "begin;", ...stmts("restore"), "commit;", ""].join("\n"),
+  };
+}
+
 if (import.meta.main) {
   const dir = arg("--release-dir");
   if (!dir) { console.error("--release-dir <checkout of the live release> is required"); Deno.exit(2); }
@@ -204,25 +236,11 @@ if (import.meta.main) {
   await Deno.writeTextFile(`${out}/report.json`, JSON.stringify(reports, null, 1) + "\n");
   await Deno.writeTextFile(`${out}/freeze-plan.json`, JSON.stringify({ option: "A", verified: plan.failures.length === 0, failures: plan.failures, plan: plan.plan }, null, 1) + "\n");
   await Deno.writeTextFile(`${out}/rollback-plan.json`, JSON.stringify({ option: "A", rollback: plan.rollback }, null, 1) + "\n");
-  // For an owner export: reviewable SQL for option A and its rollback. One transaction;
-  // each statement applies only if the stored mission is still the one exported (its JSON
-  // equals the export), so a mission changed since the export is left alone and reported.
+  // For an owner export: reviewable SQL for option A and its rollback (migrationSql).
   if (exported) {
-    const rows = JSON.parse(await Deno.readTextFile(exported)) as { location?: { table?: string; id?: string; step?: number }; mission: Record<string, unknown> }[];
-    const lit = (v: unknown) => `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
-    const path = (step: number) => `'{${step},metadata,tool_input,lead_mission}'`;
-    const stmts = (which: "set" | "restore") => rows.flatMap((r, i) => {
-      const loc = r.location;
-      if (loc?.table !== "task_plans" || !loc.id || typeof loc.step !== "number") return [`-- skipped row ${i}: no task_plans location`];
-      const key = `stored:${JSON.stringify(loc)}`;
-      const entry = which === "set" ? plan.plan.find((p) => p.key === key)?.set : plan.rollback.find((p) => p.key === key)?.restore;
-      if (!entry) return [`-- ${key}: nothing to change`];
-      const target = which === "set" ? { ...r.mission, ...entry } : Object.fromEntries(Object.entries({ ...r.mission, ...entry }).filter(([, v]) => v !== null));
-      const expected = which === "set" ? r.mission : { ...r.mission, ...(plan.plan.find((p) => p.key === key)?.set ?? {}) };
-      return [`update public.task_plans set steps = jsonb_set(steps, ${path(loc.step)}, ${lit(target)}) where id = '${loc.id}' and steps #> ${path(loc.step)} = ${lit(expected)};`];
-    });
-    await Deno.writeTextFile(`${out}/freeze.sql`, ["-- OPTION A: freeze stored missions at today's production meaning. Review, then run in ONE transaction.", "begin;", ...stmts("set"), "commit;", ""].join("\n"));
-    await Deno.writeTextFile(`${out}/rollback.sql`, ["-- Rollback of option A: restores every touched field.", "begin;", ...stmts("restore"), "commit;", ""].join("\n"));
+    const sql = migrationSql(JSON.parse(await Deno.readTextFile(exported)) as ExportRow[], plan);
+    await Deno.writeTextFile(`${out}/freeze.sql`, sql.freeze);
+    await Deno.writeTextFile(`${out}/rollback.sql`, sql.rollback);
   }
   const changed = reports.filter((r) => r.overall !== "unchanged");
   console.log(JSON.stringify({ missions: reports.length, changedWithoutMigration: changed.length,
