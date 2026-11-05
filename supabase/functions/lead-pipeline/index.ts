@@ -19,6 +19,7 @@ import { supabaseConnectionStore, supabaseLedger } from "../_shared/discoveryPro
 import { leadOceanAdapter } from "../_shared/discoveryProviders/adapters/leadocean.ts";
 import { handleLeadPipeline, handleStrategyRequest, parsePipelineRequest, parseStrategyRequest, readPipelineFlags } from "../_shared/leadPipeline/service.ts";
 import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
+import { MissionNeedsClarificationError } from "../_shared/leadMissionCompiler.ts";
 import { createStrategyAdvisorGenerateJson } from "../_shared/leadPipeline/strategyAdvisorModel.ts";
 import { compileWithBrain, loadBrainPlanningContext } from "../_shared/leadPipeline/brainContext.ts";
 import { planSigner } from "../_shared/leadPipeline/planToken.ts";
@@ -101,7 +102,16 @@ Deno.serve(withBuildStamp(async (req) => {
           const binding = buildMissionCompilerBinding({ workspaceId: ws });
           const proposal = await binding.proposeMission!({ originalUserQuery: query, requestedCount, companyBrain: brain.context });
           if (!proposal) return { error: binding.lastModelFailure()?.code ?? "the model returned no usable interpretation" };
-          const c = compileWithBrain({ query, proposal, requestedCount, brain });
+          let c: ReturnType<typeof compileWithBrain>;
+          try {
+            c = compileWithBrain({ query, proposal, requestedCount, brain });
+          } catch (e) {
+            // A genuine ambiguity is a question for the user (422), never a server failure.
+            if (e instanceof MissionNeedsClarificationError) {
+              return { error: "needs_clarification", clarification: { questions: e.questions, message: (e as { userMessage?: string }).userMessage ?? e.message } };
+            }
+            throw e;
+          }
           return {
             mission: c.mission, brain: { status: brain.status, fields: brain.fields, applied: c.brainApplied, rejected: c.brainRejected },
             // Signed into the approval token: a run rebuilds exactly this, with no model call.

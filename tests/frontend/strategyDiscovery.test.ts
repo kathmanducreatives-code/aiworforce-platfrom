@@ -144,3 +144,10 @@ Deno.test("links: only http(s) provider URLs are rendered", () => {
       signals: [{ type: "hiring", provider: "apify", sourceUrl: "javascript:2" }] }] })!;
   assertEquals([v.companies[0].website, v.companies[0].linkedinUrl, v.companies[0].signals[0].sourceUrl], [null, null, null]);
 });
+
+Deno.test("plan: a clarification (422) shows the model's question to the user, not a generic error", async () => {
+  const body = { status: "needs_clarification", questions: ["Does 'in the US' mean headquartered?"], error: "Before I start, I need to check one thing — • Does 'in the US' mean headquartered?" };
+  const invoke: Invoke = async () => ({ data: null, error: Object.assign(new Error("422"), { context: new Response(JSON.stringify(body), { status: 422 }) }) });
+  const r = await planStrategy(invoke, { workspaceId: "ws", messageId: "m", query: "Find US companies hiring salespeople", choice: "auto" });
+  assertEquals(r, { ok: false, error: body.error });
+});

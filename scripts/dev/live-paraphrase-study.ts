@@ -30,7 +30,7 @@ import { gptStructured } from "../../supabase/functions/_shared/gptProvider.ts";
 import { gptMissionSchemaFor } from "../../supabase/functions/_shared/gptMissionSchema.ts";
 import { routeModel } from "../../supabase/functions/_shared/gptModelRouter.ts";
 import { canonicalModelId, MODEL_PRICES, priceModelCall, readModelUsage } from "../../supabase/functions/_shared/modelCostModel.ts";
-import { compare, type Case, fullProposal, loadCases, loadContrasts, summarise, type Summary } from "./interpretation-corpus.ts";
+import { compare, type Case, compilePhrasing, fullProposal, loadCases, loadContrasts, summarise, type Summary } from "./interpretation-corpus.ts";
 
 const ROOT = new URL("../../", import.meta.url);
 const MAX_OUTPUT_TOKENS = 4000;
@@ -81,7 +81,42 @@ export function budgetGuard(o: { budgetUsd: number; maxCalls: number; model: str
   };
 }
 
-export interface StudyRow { case: string; label: string; repeat: number; ok: boolean; mismatches: string[]; summary: Summary | null; error: string | null; understanding: unknown }
+export interface StudyRow {
+  case: string; label: string; repeat: number; ok: boolean; mismatches: string[]; summary: Summary | null; error: string | null; understanding: unknown;
+  /** The model's whole structured answer (model output only; no key or request secret). Needed to reproduce a failure offline. */
+  proposal?: unknown;
+  /** Hard criteria the compiled mission carries that no evidence dimension answers, exactly as compiled. */
+  extraHard?: { dimension: string; field: string | null; value: unknown; label: string | null }[];
+  /** Why a failed row failed (classifyFailure); absent on a correct row. */
+  failure?: FailureClass;
+}
+
+/**
+ * THE ROLLOUT GATE'S QUESTION for a failed reading (mission-rollout-plan.md §3): was the
+ * model's understanding wrong, or was a correct understanding executed wrongly?
+ *   transport             no structured answer (e.g. incomplete_response: the output ran out)
+ *   model_clarification   the understanding listed an ambiguity; the compiler asked instead
+ *   model_understanding   the understanding itself reads the request wrongly
+ *   compiled_wrongly      the SAME understanding, with the corpus's recorded legacy fields,
+ *                         compiles correctly: the failure came from the answer's other fields
+ *                         as the compiler executed them (a compiler-side failure)
+ */
+export type FailureClass = "transport" | "model_clarification" | "model_understanding" | "compiled_wrongly";
+
+export function classifyFailure(c: Case, p: Case["phrasings"][number], r: Pick<StudyRow, "error" | "understanding">): FailureClass {
+  if (!r.understanding) return r.error?.includes("needs_clarification") ? "model_clarification" : "transport";
+  try {
+    const m = compilePhrasing({ ...p, understanding: r.understanding } as never, "v3");
+    return compare(c.expect, summarise(m)).length ? "model_understanding" : "compiled_wrongly";
+  } catch (e) {
+    return /needs_clarification/.test((e as Error).message) ? "model_clarification" : "model_understanding";
+  }
+}
+
+const extraHardOf = (m: Record<string, unknown>) =>
+  ((m.criteria ?? []) as { kind: string; dimension: string; value?: { field?: string; value?: unknown }; label?: string }[])
+    .filter((x) => x.kind === "hard" && (x.dimension === "constraint" || x.dimension === "exclusion"))
+    .map((x) => ({ dimension: x.dimension, field: x.value?.field ?? null, value: x.value?.value ?? null, label: x.label ?? null }));
 
 export async function runStudy(o: { repeats: number; budgetUsd: number; maxCalls: number; dryRun: boolean; cases?: Case[]; readEnv?: (k: string) => string | undefined }) {
   const cases = o.cases ?? loadCases();
@@ -112,7 +147,7 @@ export async function runStudy(o: { repeats: number; budgetUsd: number; maxCalls
         routing_reason: route.reason, temperature: 0, maxTokens: MAX_OUTPUT_TOKENS,
       }, { fetch: guard.fetch, readEnv: o.dryRun ? (k) => (k === "OPENAI_API_KEY" ? "dry-run" : readEnv(k)) : readEnv, sleep: () => Promise.resolve() });
       if (!res.ok) {
-        rows.push({ case: c.id, label: p.label, repeat: r, ok: false, mismatches: [], summary: null, error: `${res.code}`, understanding: null });
+        rows.push({ case: c.id, label: p.label, repeat: r, ok: false, mismatches: [], summary: null, error: `${res.code}`, understanding: null, failure: "transport" });
         if (guard.state().refused > 0) break outer; // the budget or the cap said stop: no further call is attempted
         continue;
       }
@@ -121,9 +156,17 @@ export async function runStudy(o: { repeats: number; budgetUsd: number; maxCalls
           .final_mission as unknown as Record<string, unknown>;
         const s = summarise(m);
         const mismatches = compare(c.expect, s);
-        rows.push({ case: c.id, label: p.label, repeat: r, ok: mismatches.length === 0, mismatches, summary: s, error: null, understanding: (res.value as { understanding?: unknown }).understanding ?? null });
+        const understanding = (res.value as { understanding?: unknown }).understanding ?? null;
+        const row: StudyRow = { case: c.id, label: p.label, repeat: r, ok: mismatches.length === 0, mismatches, summary: s, error: null, understanding,
+          proposal: res.value, extraHard: extraHardOf(m) };
+        if (!row.ok) row.failure = classifyFailure(c, p, row);
+        rows.push(row);
       } catch (e) {
-        rows.push({ case: c.id, label: p.label, repeat: r, ok: false, mismatches: [], summary: null, error: `compile:${(e as Error).name}:${(e as Error).message.slice(0, 200)}`, understanding: (res.value as { understanding?: unknown }).understanding ?? null });
+        const understanding = (res.value as { understanding?: unknown }).understanding ?? null;
+        const row: StudyRow = { case: c.id, label: p.label, repeat: r, ok: false, mismatches: [], summary: null,
+          error: `compile:${(e as Error).name}:${(e as Error).message.slice(0, 200)}`, understanding, proposal: res.value };
+        row.failure = classifyFailure(c, p, row);
+        rows.push(row);
       }
     }
   }
@@ -136,6 +179,18 @@ export async function runStudy(o: { repeats: number; budgetUsd: number; maxCalls
     return a.some((s) => b.has(s));
   }).map((k) => `${k.a} vs ${k.b}`);
   const st = guard.state();
+  const failures: Record<FailureClass, number> = { transport: 0, model_clarification: 0, model_understanding: 0, compiled_wrongly: 0 };
+  for (const x of rows) if (x.failure) failures[x.failure]++;
+  const correct = rows.filter((x) => x.ok).length;
+  const allWrong = [...new Set(rows.map((x) => x.case))].filter((id) => rows.filter((x) => x.case === id).every((x) => !x.ok));
+  // mission-rollout-plan.md §3 (proposed acceptance). A compiled_wrongly failure blocks the rollout.
+  const acceptance = {
+    accuracy: { value: rows.length ? Number((correct / rows.length).toFixed(4)) : null, threshold: 0.9, pass: rows.length > 0 && correct / rows.length >= 0.9 },
+    collapsed_contrasts: { value: contrasts.length, pass: contrasts.length === 0 },
+    cases_all_wrong: { value: allWrong, pass: allWrong.length === 0 },
+    every_failure_classified: { pass: rows.every((x) => x.ok || !!x.failure) },
+    compiler_failures: { value: failures.compiled_wrongly, pass: failures.compiled_wrongly === 0 },
+  };
   return {
     model: route.model, prices: MODEL_PRICES[canonicalModelId(route.model)], dry_run: o.dryRun,
     budget_usd: o.budgetUsd, max_calls: o.maxCalls, repeats: o.repeats,
@@ -144,6 +199,7 @@ export async function runStudy(o: { repeats: number; budgetUsd: number; maxCalls
     errors: rows.filter((x) => x.error).length,
     unstable_cases: [...byCase].filter(([, s]) => s.size > 1).map(([k]) => k),
     collapsed_contrasts: contrasts,
+    failures, acceptance,
     rows, ledger: st.ledger,
   };
 }

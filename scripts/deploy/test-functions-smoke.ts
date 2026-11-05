@@ -202,6 +202,13 @@ export function understandingCheck(body: PlanBody): Check {
 
 export function planChecks(httpStatus: number, body: PlanBody): Check[] {
   const p = body.plan, i = body.interpretation;
+  // The model asked the user a question instead of reading SMOKE_QUERY (a clear request).
+  // Still a failure — the gate needs a plan — but named for what it is, not "key/quota".
+  const asked = (body as { status?: string; questions?: unknown }).status === "needs_clarification" ? (body as { questions?: unknown[] }).questions ?? [] : null;
+  if (httpStatus === 422 && asked) {
+    return [fail("P0", "strategy_plan answered", `HTTP 422 needs_clarification: ${asked.map(String).join(" | ").slice(0, 300)}`,
+      "the model asked a clarifying question on the smoke's clear request (model nondeterminism; see docs/benchmarks/live-paraphrase) — re-run the smoke once; if it repeats, the contract instructions need the default reading")];
+  }
   if (httpStatus !== 200 || !p || !i) {
     return [fail("P0", "strategy_plan answered", `HTTP ${httpStatus}: ${shown(body)}`,
       httpStatus === 401 ? "the smoke account could not authenticate" : httpStatus === 403 ? "the smoke account is not a member of the TEST workspace, or the allowlist lacks it"

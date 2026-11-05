@@ -596,6 +596,15 @@ Deno.test("service: an uninterpretable request is refused, not guessed; bad inpu
   assertEquals(parseStrategyRequest({ action: "strategy_plan", workspace_id: WS, walk_id: "w", query: "x", max_apify_usd: 50 }), null, "a client cannot raise the ceiling past $5");
 });
 
+Deno.test("service: a genuine ambiguity is a 422 question for the user, never a 500 (TEST smoke, 2026-11-05)", async () => {
+  const questions = ["Should \"in the US\" mean headquartered in the United States, or any US presence?"];
+  const { d, lo, ap } = sdeps({ interpret: () => Promise.resolve({ error: "needs_clarification", clarification: { questions, message: "Before I start, I need to check one thing" } }) });
+  const r = await handleStrategyRequest(sreq({ action: "strategy_plan" }), d);
+  assertEquals(r.status, 422);
+  assertEquals(r.body, { status: "needs_clarification", questions, error: "Before I start, I need to check one thing" });
+  assertEquals(lo.calls.length + ap.calls.length, 0, "nothing is bought while the user is asked");
+});
+
 // ── Consolidation with PR #198: one engine, its capabilities registered, allowlist unchanged ──
 
 Deno.test("consolidation: the Apify allowlist and its 100-item cap are unchanged", async () => {
