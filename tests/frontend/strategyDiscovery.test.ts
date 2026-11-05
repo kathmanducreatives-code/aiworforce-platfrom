@@ -4,7 +4,7 @@
 // merge → shared qualification, offline recorded responses), shaped exactly as
 // lead-pipeline's strategy_run response (service.ts).
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { MODES, scenario } from "../../scripts/dev/provider-comparison.ts";
+import { MODES, scenarioFor as scenario } from "../../scripts/dev/provider-comparison.ts";
 import { runScenario } from "../../scripts/dev/discovery-benchmark.ts";
 import { summarizeProviderRun } from "../../supabase/functions/_shared/leadPipeline/providerRunSummary.ts";
 import { parseStrategyRequest } from "../../supabase/functions/_shared/leadPipeline/service.ts";

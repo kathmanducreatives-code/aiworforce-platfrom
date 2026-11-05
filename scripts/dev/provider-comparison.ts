@@ -62,7 +62,7 @@ export const MODES: { mode: string; strategy: DiscoveryStrategyId; allowReviewOn
   { mode: "Concurrent", strategy: "apify_leadocean_concurrent" },
 ];
 
-export function scenario(m: typeof MODES[number], contract: "v1" | "v3"): Scenario {
+function scenario(m: typeof MODES[number], contract: "v1" | "v3"): Scenario {
   return {
     id: `PC-${m.strategy}-${contract}`, group: "X", title: m.mode, request: MISSION, count: 5, strategy: m.strategy,
     proposal: V1, people: "comparison" as never, allowReviewOnly: m.allowReviewOnly, contract, understanding: V3_UNDERSTANDING,
@@ -149,3 +149,6 @@ if (import.meta.main) {
   for (const r of v3) console.log(`${r.mode.padEnd(15)} plan=${r.planStatus} unique=${r.uniqueCompanies} qualified=${r.qualified} pending=${r.pending} rejected=${r.rejected} fq=${r.falseQualified} apify=$${r.costApifyUsd} lo=${r.leadoceanRecords} failures=${r.apiFailures.length} ${r.planBlockedReason ?? ""}`);
   console.log("contracts agree (v1 vs v3):", report.contractsAgree);
 }
+
+/** The scenario builder, for the frontend test that reads a real executor run (tests/frontend/strategyDiscovery.test.ts). */
+export const scenarioFor = scenario;
