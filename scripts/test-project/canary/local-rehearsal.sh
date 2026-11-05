@@ -117,6 +117,20 @@ expect verify "PASS  permissions"
 expect verify "this verify session is read-only"
 expect verify "INFO   account hard limit"
 
+# ── credits: the canary's rule, not A7's exact 10 (a paid session legitimately keeps its credits) ──
+bal() { psql "$url" -XAtq -c "update public.workspace_credit_balances set balance_credits = $1, reserved_credits = $2 where workspace_id = '$WS'"; }
+bal 8 0   # after a successful session: 2 starts charged (TEST, 2026-10-30)
+run verify-after-session 0 verify APIFY_USERNAME=canaryaccount
+expect verify-after-session "credits by the canary rule: balance 8 ≥ 3, none reserved"
+grep -q "^P09|.*|FAIL$" "$tmp/verify-after-session/audit/preflight.txt" || { echo "FAIL: P09 (A7's exact 10) must still be recorded as written"; exit 1; }
+bal 2 0   # fewer than one attempt's three starts
+run verify-low-credits 1 verify APIFY_USERNAME=canaryaccount
+expect verify-low-credits "C09 canary credits (balance 2 is below the 3 one attempt can reserve"
+bal 8 1   # a reserved credit is never accepted
+run verify-reserved-credit 1 verify APIFY_USERNAME=canaryaccount
+expect verify-reserved-credit "C09 canary credits (1 credit(s) reserved"
+bal 10 0
+
 # ── migrate ──
 run migrate-no-approval 1 migrate CANARY_APPROVAL="yes"
 [[ "$(cap)" == *"<= 5)"* ]] || { echo "FAIL: migrated without approval"; exit 1; }
