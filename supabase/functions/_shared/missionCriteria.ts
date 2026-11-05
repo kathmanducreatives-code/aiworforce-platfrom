@@ -1409,8 +1409,28 @@ export function deriveMissionCriteria(
         rationale: x.necessity === "required" ? `stated in the request ("${x.span}")` : `stated as a preference ("${x.span}"); can rank, never reject`,
       });
     }
-    if (field === "company_profile.verticals") profileList("industry", field, rest, label);
-    else profileList("business_model", field, rest, label);
+    // A v3 MISSION'S INDUSTRIES ARE ITS VALIDATED UNDERSTANDING'S (live study run #24): a
+    // legacy company type the understanding does not name ("businesses", "US companies")
+    // is the model's word, not the user's requirement — it ranks, it never rejects. A
+    // Company Brain value keeps its own rules.
+    // Named = its words lie within an understood industry ("saas" within "B2B SaaS", the
+    // compiler's own split of it), not only an exact match.
+    const words = (x: string) => sing(x).split(" ").filter(Boolean);
+    const withinUnderstood = (v: string) => (U4?.industries ?? []).some((x) => x.necessity !== "excluded" &&
+      words(v).length > 0 && words(v).every((w) => words(x.industry).includes(w) || words(x.span).includes(w)));
+    const unnamed = U4 && field === "company_profile.verticals"
+      ? rest.filter((v) => audienceDescriptor(v) === null && !withinUnderstood(v) &&
+        !String(sourceFromProvenance(prov[field], inQuery(v))).startsWith("company_brain"))
+      : [];
+    for (const v of unnamed) {
+      push({
+        kind: "target", dimension, value: v, label: `${label} preference: ${v}`, source: "user_inferred", user_phrase: "",
+        rationale: "a company type the model proposed outside its validated understanding; can rank, never reject",
+      });
+    }
+    const kept = rest.filter((v) => !unnamed.includes(v));
+    if (field === "company_profile.verticals") profileList("industry", field, kept, label);
+    else profileList("business_model", field, kept, label);
   }
   // ── S4: A v3 MISSION'S PLACES ARE THE MODEL'S VALIDATED READING ─────────
   //

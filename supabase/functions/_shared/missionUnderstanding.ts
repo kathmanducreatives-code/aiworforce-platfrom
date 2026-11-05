@@ -287,6 +287,73 @@ const familyOfTitle = (id: string): string | null =>
   (Object.entries(ROLE_FAMILY_ALIASES).find(([, aliases]) =>
     aliases.some((a) => a.toLowerCase() === (CANONICAL_TITLES[id]?.[0] ?? ""))) ?? [null])[0];
 
+/** hard_constraints fields missionCriteria maps itself (its `handled` set). */
+const NATIVE_FIELDS = new Set(["company_profile.locations", "stage", "geography", "location", "locations",
+  "company_type", "company_types", "industry", "industries", "vertical", "verticals"]);
+const NEGATION = new Set(["no", "not", "non", "excluding", "exclude", "except", "without", "but"]);
+/** Tokens of a phrase without a leading negation, plural s dropped ("no SDRs" → ["sdr"]). */
+const itemTokens = (s: string) => {
+  const t = tokens(s);
+  while (t.length && NEGATION.has(t[0])) t.shift();
+  return t.map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w));
+};
+/** Same item, token by token: exact up to typo, plural and a leading negation. */
+const sameItem = (a: string, b: string) => {
+  const x = itemTokens(a), y = itemTokens(b);
+  return x.length > 0 && x.length === y.length && x.every((w, i) => sameWord(w, y[i]));
+};
+
+/**
+ * Does a free-form constraint value only RESTATE the understanding, with the same polarity?
+ * Compared with each item's span (the user's words), its canonical value (title id and
+ * names, place, industry) and, for requirements, the signal kinds and spans.
+ */
+export function restatesUnderstanding(value: string, u: ProposedUnderstanding, excluding: boolean): boolean {
+  const titles = (t: string | null) => (t ? [t, ...(CANONICAL_TITLES[t] ?? [])] : []);
+  const names: string[] = excluding
+    ? [
+      ...u.roles.filter((r) => r.relation === "excluded").flatMap((r) => [r.span, ...titles(r.title)]),
+      ...u.places.filter((p) => p.necessity === "excluded").flatMap((p) => [p.span, p.place ?? "", p.other_place ?? ""]),
+      ...u.industries.filter((i) => i.necessity === "excluded").flatMap((i) => [i.span, i.industry]),
+    ]
+    : [
+      ...u.roles.filter((r) => r.relation === "required").flatMap((r) => [r.span, ...titles(r.title), r.family ?? ""]),
+      ...u.places.filter((p) => p.necessity !== "excluded").flatMap((p) => [p.span, p.place ?? "", p.other_place ?? ""]),
+      ...u.industries.filter((i) => i.necessity !== "excluded").flatMap((i) => [i.span, i.industry]),
+      ...u.signals.filter((s) => s.necessity === "required").flatMap((s) => [s.span, s.kind]),
+    ];
+  return names.some((n) => !!n && sameItem(value, n.replace(/_/g, " ")));
+}
+
+/**
+ * A size constraint that only restates the stated employee range: every number it names
+ * (`["10","100"]`, `[">=50","<=200"]`, `{min, max}`, `100`) is one of the range's own bounds.
+ */
+export function restatesSize(field: string, value: unknown, range: { min?: number | null; max?: number | null }): boolean {
+  if (!/employee|headcount|company_size|team_size|size/i.test(field)) return false;
+  const bounds = [range.min, range.max].filter((n): n is number => typeof n === "number");
+  if (!bounds.length) return false;
+  const parts = value && typeof value === "object" && !Array.isArray(value) ? Object.values(value as object) : Array.isArray(value) ? value : [value];
+  const nums: number[] = [];
+  for (const p of parts) {
+    const m = /^\s*(?:>=|<=|>|<|=)?\s*(\d+(?:\.\d+)?)\s*$/.exec(String(p ?? ""));
+    if (!m) return false;
+    nums.push(Number(m[1]));
+  }
+  return nums.length > 0 && nums.every((n) => bounds.includes(n));
+}
+
+/**
+ * A window constraint that only restates a signal's own window: a window-named field
+ * ("signal_recency_days", "hiring_window") whose number equals the timeframe a signal
+ * already carries. A different number is a requirement of its own and is kept.
+ */
+export function restatesWindow(field: string, value: unknown, signals: readonly { timeframe_days?: number | null }[]): boolean {
+  if (!/recen|window|timeframe|within|_days$/i.test(field)) return false;
+  const n = typeof value === "number" ? value : /^\s*\d{1,4}\s*$/.test(String(value ?? "")) ? Number(value) : NaN;
+  return Number.isFinite(n) && signals.some((s) => s.timeframe_days === n);
+}
+
 /**
  * Write a validated understanding into the mission's canonical carriers, exactly as the
  * model stated it, and keep it on the mission (`understanding`) for the criteria
@@ -355,6 +422,51 @@ export function applyUnderstanding(mission: Mission, u: ValidatedUnderstanding, 
     if (excludedPlaces.length) hard.excluded_geographies = { operator: "not_in", value: excludedPlaces, reason: "excluded in the request (understanding)" };
     changes.push(`understanding_places:${JSON.stringify(u.places.map((p) => `${name(p)}@${p.scope}:${p.necessity}`))}`);
   }
+  // ── RESTATEMENTS (live paraphrase studies, 2026-11-05) ──
+  // The model often ALSO files what its understanding says as a free-form hard constraint
+  // (`signal: "hiring"`, `hiring_role excludes "SDRs"`, `headquarters: "North America"`,
+  // `employee_count between ["10","100"]`). Compiled again, each became a second hard
+  // `constraint`/`exclusion` no evidence answers: 54 of 165 live readings in run #24, every
+  // one with a CORRECT understanding. A constraint is skipped ONLY when every value restates
+  // what the mission already carries with the same polarity (restatesUnderstanding,
+  // restatesSize). Anything else is kept exactly as before, so nothing the user said is
+  // dropped and a contradiction (excluding a role the understanding requires) is never hidden.
+  const range = (mission.company_profile?.employee_range ?? {}) as { min?: number | null; max?: number | null };
+  for (const [field, raw] of Object.entries(hard)) {
+    // Fields the criteria derivation already maps natively (missionCriteria `handled`) are
+    // never restatements: they are how the industry or place itself reaches the mission.
+    if (NATIVE_FIELDS.has(field) || field === "excluded_geographies") continue;
+    const c = (raw ?? {}) as { operator?: string; value?: unknown };
+    const value = c && typeof c === "object" && "value" in c ? c.value : raw;
+    const excluding = /not|exclud/i.test(String(c?.operator ?? ""));
+    const restated = restatesSize(field, value, range) || restatesWindow(field, value, signals) ||
+      (value === true && u.signals.some((s) => s.necessity === "required" && sameItem(field, s.kind))) ||
+      (() => {
+        const values = Array.isArray(value) ? value : [value];
+        return values.length > 0 && values.every((v) => typeof v === "string" && !!v.trim() && restatesUnderstanding(v, u, excluding));
+      })();
+    if (restated) {
+      delete hard[field];
+      changes.push(`understanding_restatement_skipped:${field}:${JSON.stringify(value)}`);
+    }
+  }
+
+  // ── NO ROLE NAMED: HIRING FOR ANY ROLE (M23, run #24) ──
+  // A hiring signal with no role in the understanding ("taking on more staff") is hiring
+  // for any role; the signal's own phrase is never a role term.
+  if (!u.roles.length && u.signals.some((s) => s.kind === "hiring")) {
+    signals = signals.map((s) => {
+      if (kindOf(s) !== "hiring") return s;
+      const q: Record<string, unknown> = { ...(s.qualifier ?? {}) };
+      if (!q.role_terms && !q.role_families) return s;
+      delete q.role_terms; delete q.role_families; delete q.role_match;
+      changes.push(`understanding_hiring_any_role:${JSON.stringify(s.qualifier?.role_terms ?? s.qualifier?.role_families ?? [])}`);
+      const out = { ...s, qualifier: q } as Sig;
+      delete (out as { role_families?: string[] }).role_families;
+      return out;
+    });
+  }
+
   // What the vocabulary cannot express is never dropped: it becomes an explicit
   // unrepresentable criterion (disclosed on the approval card, never silently enforced).
   const unrepresented = [...(mission.unrepresented_requirements ?? [])];
