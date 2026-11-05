@@ -82,3 +82,9 @@ export function conflictsLine(s: ProviderRunSummary): string | null {
   const e = Object.entries(s.conflicts).filter(([, n]) => n > 0);
   return e.length ? `Providers disagree on ${e.map(([f, n]) => `${f.replace(/_/g, ' ')} ×${n}`).join(', ')} (both values kept)` : null;
 }
+
+/** What the verdicts rest on ("apify.linkedin_job_search ×3"); null when nothing was cited. */
+export function evidenceSourcesLine(s: ProviderRunSummary): string | null {
+  const e = Object.entries(s.evidenceSources).filter(([, n]) => n > 0);
+  return e.length ? `Evidence from ${e.map(([k, n]) => `${k} ×${n}`).join(', ')}` : null;
+}

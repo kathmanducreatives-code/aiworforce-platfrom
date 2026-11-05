@@ -3,13 +3,14 @@
 // nothing is counted or estimated here. Renders nothing without a valid summary.
 
 import { AlertTriangle } from 'lucide-react';
-import { conflictsLine, contributionRows, readProviderRunSummary, totalsLine, usd } from '@/lib/providerRunSummary';
+import { conflictsLine, contributionRows, evidenceSourcesLine, readProviderRunSummary, totalsLine, usd } from '@/lib/providerRunSummary';
 
 export function ProviderRunSummaryCard({ response }: { response: unknown }) {
   const s = readProviderRunSummary(response);
   if (!s) return null;
   const rows = contributionRows(s);
   const conflicts = conflictsLine(s);
+  const evidence = evidenceSourcesLine(s);
   return (
     <div className="mt-2 rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[12px] text-[#A3A7AD]" data-testid="provider-run-summary">
       <div className="text-[#ECE9E4]">{totalsLine(s)}</div>
@@ -43,6 +44,7 @@ export function ProviderRunSummaryCard({ response }: { response: unknown }) {
       {s.totals.costPerQualifiedUsd !== null && (
         <div className="mt-1.5 text-[11px] text-[#6E7278]">{usd(s.totals.costPerQualifiedUsd)} Apify per qualified company</div>
       )}
+      {evidence && <div className="mt-1 text-[11px] text-[#6E7278]">{evidence}</div>}
       {conflicts && <div className="mt-1 text-[11px] text-[#8B8F96]">{conflicts}</div>}
       {s.evidenceRefused > 0 && (
         <div className="mt-1 text-[11px] text-[#8B8F96]">{s.evidenceRefused} evidence item{s.evidenceRefused === 1 ? '' : 's'} refused: it named a different company</div>

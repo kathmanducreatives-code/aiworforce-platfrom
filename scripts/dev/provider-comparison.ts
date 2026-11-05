@@ -62,7 +62,7 @@ export const MODES: { mode: string; strategy: DiscoveryStrategyId; allowReviewOn
   { mode: "Concurrent", strategy: "apify_leadocean_concurrent" },
 ];
 
-function scenario(m: typeof MODES[number], contract: "v1" | "v3"): Scenario {
+export function scenario(m: typeof MODES[number], contract: "v1" | "v3"): Scenario {
   return {
     id: `PC-${m.strategy}-${contract}`, group: "X", title: m.mode, request: MISSION, count: 5, strategy: m.strategy,
     proposal: V1, people: "comparison" as never, allowReviewOnly: m.allowReviewOnly, contract, understanding: V3_UNDERSTANDING,
