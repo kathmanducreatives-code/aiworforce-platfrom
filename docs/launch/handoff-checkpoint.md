@@ -83,8 +83,8 @@ The study has **never run before**: the workflow's earlier runs contain no `stud
 | ratchets | tsc 23/23, eslint 1275/1275 | unchanged |
 | `npm run build` | ok | |
 | infra `tests/infra/` | 299 passed, 0 failed | 289 reported earlier (+4 new, +6 from #236) |
-| edge `tests/edge-functions/` | see the PR body | 9,566 reported earlier |
-| Replay Lab (`test:lead-v2-readiness`) | see the PR body | |
+| edge `tests/edge-functions/` | 9,577 passed, 0 failed (+ the new migration test, 7/7 in its file) | 9,566 reported earlier |
+| Replay Lab (`test:lead-v2-readiness`) | 280 passed, 0 failed, 1 documented known gap; SAFE FOR PRODUCTION SMOKE: YES | 280 |
 
 ## 6. Blockers and owner decisions
 
