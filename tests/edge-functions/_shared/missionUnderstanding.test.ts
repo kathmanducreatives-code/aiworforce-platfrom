@@ -124,3 +124,16 @@ Deno.test("schema: v3 is strict — every key required, closed enums for ids, no
   const role = (UNDERSTANDING_SCHEMA.properties.roles.items.properties.title as { enum: unknown[] }).enum;
   assert(role.includes("account_executive") && role.includes(null));
 });
+
+Deno.test("instruction: default readings are settled, never questions (live study 2026-11-05; TEST smoke P0)", async () => {
+  const { UNDERSTANDING_INSTRUCTION } = await import("../../../supabase/functions/_shared/missionUnderstanding.ts");
+  for (const rule of [
+    "a time window the user did not state", "Agentory applies and discloses its default window",
+    "a bare 'in the US / in the States / US companies'", "headquarters",
+    "a broad role word ('salespeople'", "X is an excluded role",
+    "'growing the team / getting bigger / expanding headcount' — headcount_growth, not hiring",
+    "'hiring / recruiting / taking on staff / needing <role>' — hiring",
+  ]) assert(UNDERSTANDING_INSTRUCTION.includes(rule), rule);
+  // Genuine ambiguity is still asked, after the settled readings.
+  assert(UNDERSTANDING_INSTRUCTION.indexOf("still cannot be settled") > UNDERSTANDING_INSTRUCTION.indexOf("settled readings"));
+});
