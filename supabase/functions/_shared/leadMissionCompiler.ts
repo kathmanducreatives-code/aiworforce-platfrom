@@ -352,7 +352,10 @@ export function scanProposalForViolations(
     if (depth > 12 || found.length > 40) return;
     if (typeof node === "string") {
       const s = node.trim();
-      if (ACTOR_REF.test(s) && s.length <= 120) {
+      // THE USER'S OWN SLASH IS NOT AN ACTOR. "SDRs/BDRs" matches the owner/name shape;
+      // copied from the request it was refused as a forged actor reference (live study
+      // run #24, M19). Only a string the user did not type can be the model's invention.
+      if (ACTOR_REF.test(s) && s.length <= 120 && !said.includes(s.toLowerCase())) {
         found.push({ path, kind: "actor_reference", detail: s });
       } else if (VENDOR_WORDS.test(s)) {
         found.push({ path, kind: "vendor_name", detail: s.slice(0, 80) });
