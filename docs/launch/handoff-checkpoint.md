@@ -102,6 +102,26 @@ The study has **never run before**: the workflow's earlier runs contain no `stud
 5. **Production migration:** Option A, the Z08 and R2 decisions, and the deploy sequence are unchanged (`docs/architecture/mission-rollout-plan.md`). Regenerate `rollback.sql` with the fixed script.
 6. **Railway worker** `/health` returns 404. Ops health has been red since 2026-11-04.
 
+## 6a. Canary verify run 41990179846 (2026-11-05): two failures, both explained
+
+The study run 41990176436 succeeded.
+
+**1. `apify: REVIEW account identity` (an operator input, not a defect).**
+- `verify` was dispatched without `apify_username`, so `apify-account-check.ts` received no `--expect-username`.
+- It then reports REVIEW by design. `local-rehearsal.sh` pins exactly this as `verify-no-username`.
+- Fix: dispatch with `apify_username=Prasidha`. The account is confirmed by its run history (§3).
+
+**2. `preflight: P09 … exactly 10 credits (balance=8, reserved=0)`. The 2 credits were legitimately consumed.**
+- TEST `credit_transactions`, workspace `40e2512f…`:
+  - grant +10 (10-18);
+  - session 1 job search refused by Apify (`apify_unauthorized`), refunded (10-30 10:20);
+  - session 2 `apify_linkedin_job_search` charged 1 and `apify_linkedin_company_details` charged 1 (10-30 12:00, Apify runs `8PmW7c0f6oJDQdxJQ` and `UAx1AUEtj7uswX6bd`).
+  - Result: 10 − 2 = 8, 0 reserved; no open liability (P11).
+- The defect: P09 is the zero-Apify A7 judge's exact starting balance. The canary reuses that preflight, but it is paid and keeps the credits its starts reserve, so P09 could never pass again after its first successful session.
+- **Fix:** the canary judges the credit row with its own rule, **C09: none reserved, balance ≥ 3**. That is one attempt: one start each of jobs, details and Atomus (K09), 1 credit each.
+  - P09 stays in the audit as written. The A7 preflight and judge are unchanged.
+  - No credits were added.
+
 ## 7. Next executable step
 
 After the study artifact `live-paraphrase-study-5c91efd…` exists:

@@ -226,13 +226,44 @@ check_budget() {
   fi
 }
 
+# THE CANARY'S CREDIT RULE (replaces P09's "exactly 10" for the canary only).
+# P09 belongs to the zero-Apify A7 run, whose judge proves "no credit charged" by
+# comparing the end balance with a start of exactly 10. The canary is a PAID run:
+# each provider start reserves 1 workspace credit and a successful start keeps it
+# (credit_transactions: estimated_credits = 1 per provider_call), so after the
+# first successful session P09 can never pass again (2026-10-30 session 2 charged
+# 2: balance 10 -> 8, fully explained by the ledger). The canary needs no reserved
+# credit and enough for ONE attempt: exactly one start each of jobs, details and
+# Atomus (K09) = 3. Credits are never topped up to satisfy a check.
+CANARY_MIN_CREDITS=3
+
+# Judge P09's observed credit row by the canary's rule. Prints PASS/FAIL and the reason.
+# Input: P09's `actual` column ("balance=N, reserved=M" or "no balance row").
+canary_credit_rule() {
+  local actual="$1"
+  if [[ "$actual" =~ ^balance=([0-9]+),\ reserved=([0-9]+)$ ]]; then
+    local bal="${BASH_REMATCH[1]}" res="${BASH_REMATCH[2]}"
+    if [ "$res" -ne 0 ]; then echo "FAIL $res credit(s) reserved: settle them first"
+    elif [ "$bal" -lt "$CANARY_MIN_CREDITS" ]; then echo "FAIL balance $bal is below the $CANARY_MIN_CREDITS one attempt can reserve (one start each, K09)"
+    else echo "PASS balance $bal ≥ $CANARY_MIN_CREDITS, none reserved"; fi
+  else
+    echo "FAIL credit row unreadable: $actual"
+  fi
+}
+
 check_preflight() {
   # P00 re-checks the identity from psql's own connection variables.
   q -F '|' -v workspace_id="$WS" -v project_ref="$REF" -f scripts/test-project/real-gpt/preflight.sql > "$AUDIT/preflight.txt" \
     || { fail "preflight: could not run"; return; }
-  local bad
-  bad="$(awk -F'|' '$5 == "FAIL" { print $1 " " $2 " (" $4 ")" }' "$AUDIT/preflight.txt")"
-  [ -z "$bad" ] && pass "preflight: every check PASS (P00 identity included)" || fail "preflight: $(echo "$bad" | tr '\n' ';')"
+  local bad p09 credit
+  # Every check but P09 as written; P09 (A7's exact starting balance) is judged by the canary's credit rule.
+  bad="$(awk -F'|' '$5 == "FAIL" && $1 != "P09" { print $1 " " $2 " (" $4 ")" }' "$AUDIT/preflight.txt")"
+  p09="$(awk -F'|' '$1 == "P09" { print $4 }' "$AUDIT/preflight.txt")"
+  credit="$(canary_credit_rule "${p09:-missing}")"
+  echo "C09|canary credits: none reserved, at least $CANARY_MIN_CREDITS (replaces P09 for the canary)|${p09:-missing}|${credit%% *}" >> "$AUDIT/preflight.txt"
+  [ "${credit%% *}" = "PASS" ] || bad="${bad:+$bad
+}C09 canary credits (${credit#* })"
+  [ -z "$bad" ] && pass "preflight: every check PASS (P00 identity included; credits by the canary rule: ${credit#* })" || fail "preflight: $(echo "$bad" | tr '\n' ';')"
 }
 
 # The read cap the project enforces now: 5, 7, or anything else (stop).
