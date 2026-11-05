@@ -214,3 +214,12 @@ Deno.test("smoke P7: a ready plan must carry a walk-bound, expiring approval tok
   assertEquals(tokenCheck({ plan: { status: "blocked" } } as never, ws).status, "pass", "a blocked plan has no token");
   assertFalse(shown({ error: "x", approval_token: token }).includes(token.slice(0, 20)), "error output redacts the token");
 });
+
+Deno.test("P0: a model clarification on the smoke query fails P0 and is named as such (not key/quota)", () => {
+  const [c] = planChecks(422, { status: "needs_clarification", questions: ["Does 'salespeople' include any sales role?"], error: "Before I start…" } as never);
+  assertEquals([c.id, c.status], ["P0", "fail"]);
+  assert(c.detail.includes("needs_clarification") && c.detail.includes("salespeople"), c.detail);
+  assert(c.likely_cause!.includes("clarifying question") && !c.likely_cause!.includes("quota"), c.likely_cause);
+  // Other failures keep their causes.
+  assert(planChecks(500, { error: "lead pipeline failed" } as never)[0].likely_cause!.includes("function errored"));
+});

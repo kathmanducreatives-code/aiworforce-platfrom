@@ -122,6 +122,25 @@ The study run 41990176436 succeeded.
   - P09 stays in the audit as written. The A7 preflight and judge are unchanged.
   - No credits were added.
 
+## 6b. 2026-11-05 afternoon: verified findings
+
+- **#240 merged** as `dd8755f`; all CI green. Verify was re-dispatched at `dd8755f` with `apify_username=Prasidha`; it is waiting for the Environment review.
+- **Live paraphrase study** (run 41990176436): acceptance **not met**, v3 rollout blocked. See `docs/benchmarks/live-paraphrase/2026-11-05.md`.
+  - 58.2 % correct, 1 collapsed contrast, 9 cases all wrong.
+  - Failures: 36 compiler-side, 24 clarification, 6 wrong understanding, 3 incomplete responses.
+  - The harness now records whole answers, so the next run pins the compiler fields.
+- **TEST deploy @ `0f604af` failed.**
+  - Nothing was deployed. Smoke P0 got HTTP 500 because `strategy_plan` threw `MissionNeedsClarificationError`: the model asked a question about the smoke query.
+  - Fixed: a clarification is now **422 `{status: needs_clarification, questions, error}`**, and the smoke names it.
+- **Production Railway worker down since ~2026-10-13** (read-only evidence):
+  - production `lead_mission_queue` has had no claim or completion since 10-13 09:05; one `resumable` mission has waited since 10-13 09:54;
+  - every ops-health run since 10-19 fails `worker_unhealthy: HTTP 404, status error`.
+  - That JSON 404 is Railway's edge answering with no application behind the domain, not the worker's own plain-text 404.
+  - **Owner:** in Railway, check the worker service exists and has an active deployment and that the domain matches the `WORKER_HEALTH_URL` secret. Redeploy (`railway.json`, `worker/Dockerfile`) or update the secret. Then decide on the 10-13 `resumable` mission (let it resume, or cancel it).
+- **LeadOcean on TEST.**
+  - Enabling it does not trip the smoke: it is not a forbidden flag, and P4 accepts `apify_plus_leadocean`.
+  - The connect path needs the two flags, a TEST workspace owner/admin, and Settings → Integrations (shown with `VITE_PROVIDER_DISCOVERY=true`), or a `provider-connections` `connect` call.
+
 ## 7. Next executable step
 
 After the study artifact `live-paraphrase-study-5c91efd…` exists:

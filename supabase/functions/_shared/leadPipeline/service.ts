@@ -237,18 +237,26 @@ export interface Interpreted {
   replay?: Omit<PlanReplay, "advice">;
 }
 
+/**
+ * Why there is no mission. `clarification`: the model's validated understanding listed a
+ * genuine ambiguity (MissionNeedsClarificationError) — the user is ASKED, nothing is spent.
+ * That is an answer, not a server failure (it used to surface as a bare HTTP 500, which
+ * failed the TEST smoke on 2026-11-05 and would read "lead pipeline failed" in the app).
+ */
+export type InterpretFailure = { error: string; clarification?: { questions: string[]; message: string } };
+
 export interface StrategyDeps extends PipelineDeps {
   /**
    * GPT interpretation: the mission compiler's final mission, or why there is none. Never a
    * regex fallback. `brain` reports how the workspace's Company Brain informed it
    * (brainContext.ts): the user's words outrank it; it fills open fields as targets only.
    */
-  interpret(query: string, workspaceId: string, requestedCount: number | null): Promise<Interpreted | { error: string }>;
+  interpret(query: string, workspaceId: string, requestedCount: number | null): Promise<Interpreted | InterpretFailure>;
   /**
    * The SAME interpretation, rebuilt from what the plan signed: the model's proposal and
    * the Company Brain context it was compiled with. Deterministic; no model call.
    */
-  recompile?(query: string, requestedCount: number | null, replay: PlanReplay): Promise<Interpreted | { error: string }>;
+  recompile?(query: string, requestedCount: number | null, replay: PlanReplay): Promise<Interpreted | InterpretFailure>;
   /** Signs and verifies approval tokens (planToken.ts). Absent: strategy_run is refused. */
   signer?: PlanSigner | null;
   /** GPT strategy advice; null = the deterministic choice only. */
@@ -283,7 +291,12 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   const interpreted = token
     ? await d.recompile!(token.query, token.requestedCount, token.replay)
     : await d.interpret(req.query, req.workspaceId, req.requestedCount);
-  if ("error" in interpreted) return { status: 422, body: { error: `the request could not be interpreted: ${interpreted.error}` } };
+  if ("error" in interpreted) {
+    const c = interpreted.clarification;
+    return c
+      ? { status: 422, body: { status: "needs_clarification", questions: c.questions, error: c.message } }
+      : { status: 422, body: { error: `the request could not be interpreted: ${interpreted.error}` } };
+  }
   // CLOSED REQUIREMENT VOCABULARY (Option E Stage 6; requirementVocabulary.ts). It VALIDATES
   // and never renames, so an accepted request means exactly what it meant before. A proposed
   // hard constraint it cannot place, whose value is not in the user's own words, is the
