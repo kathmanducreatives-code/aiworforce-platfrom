@@ -1,7 +1,7 @@
 // S5 — the historical migration plan is verified before it can be applied, and its
 // rollback restores every touched field. Offline: the "live release" is this code.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildReport, directionOf, freezePlan, jsonbOrder } from "../../../scripts/dev/migration-report.ts";
+import { buildReport, directionOf, freezePlan, jsonbOrder, migrationSql } from "../../../scripts/dev/migration-report.ts";
 import { persistedMissions } from "../../../scripts/dev/mission-semantics.ts";
 import { deriveMissionCriteria } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import { criteriaFreezeState, criteriaOf, freezeCriteria } from "../../../supabase/functions/_shared/missionCriteriaReader.ts";
@@ -69,4 +69,28 @@ Deno.test("negative: freezing a stored mission as if NEW would change ORION's se
   assert(vocab(freezeCriteria({ ...m, criteria: crit })) !== vocab(m), "a compile-origin freeze would narrow Z08's search to its stored criteria");
   assertEquals(vocab(freezeCriteria({ ...m, criteria: crit }, "migration")), vocab(m), "a migration freeze keeps it");
   assertEquals(criteriaFreezeState(freezeCriteria({ ...m, criteria: crit }, "migration")), "frozen");
+});
+
+Deno.test("rollback SQL writes back each exported mission exactly — null fields included (Postgres rehearsal 2026-11-05)", async () => {
+  // The old rollback dropped every null-valued key of the merged mission, deleting the
+  // mission's own nulls (requested_count: null, covered by missionHash). 54 of 83 rehearsal
+  // missions failed to round-trip; the rollback now restores the export itself.
+  const missions = (await persistedMissions()).slice(0, 25);
+  const rows = missions.map(([, mission], i) => ({ location: { table: "task_plans", id: `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`, step: 0 }, mission: { ...mission, requested_count: null } }));
+  const keyed = rows.map((r) => [`stored:${JSON.stringify(r.location)}`, r.mission] as [string, Record<string, unknown>]);
+  const plan = await freezePlan(keyed, deriveMissionCriteria as never);
+  const sql = migrationSql(rows, plan);
+  const updates = (s: string) => s.split("\n").filter((l) => l.startsWith("update "));
+  assert(updates(sql.rollback).length > 0 && updates(sql.rollback).length === updates(sql.freeze).length);
+  const lits = (line: string) => [...line.matchAll(/'((?:[^']|'')*)'::jsonb/g)].map((m) => JSON.parse(m[1].replace(/''/g, "'")));
+  for (const [i, line] of updates(sql.rollback).entries()) {
+    const [target, expected] = lits(line);
+    const row = rows.find((r) => line.includes(`where id = '${r.location.id}'`))!;
+    assertEquals(target, row.mission, `rollback ${i} restores the export exactly`);
+    assert("requested_count" in target && target.requested_count === null, "the mission's own null field survives");
+    assertEquals(missionHash(target as never), missionHash(row.mission as never));
+    // The guard: only the frozen mission (the freeze's target) is rolled back.
+    const freezeLine = updates(sql.freeze).find((l) => l.includes(`where id = '${row.location.id}'`))!;
+    assertEquals(expected, lits(freezeLine)[0]);
+  }
 });

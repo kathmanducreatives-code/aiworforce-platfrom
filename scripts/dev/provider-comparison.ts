@@ -149,3 +149,6 @@ if (import.meta.main) {
   for (const r of v3) console.log(`${r.mode.padEnd(15)} plan=${r.planStatus} unique=${r.uniqueCompanies} qualified=${r.qualified} pending=${r.pending} rejected=${r.rejected} fq=${r.falseQualified} apify=$${r.costApifyUsd} lo=${r.leadoceanRecords} failures=${r.apiFailures.length} ${r.planBlockedReason ?? ""}`);
   console.log("contracts agree (v1 vs v3):", report.contractsAgree);
 }
+
+/** The scenario builder, for the frontend test that reads a real executor run (tests/frontend/strategyDiscovery.test.ts). */
+export const scenarioFor = scenario;

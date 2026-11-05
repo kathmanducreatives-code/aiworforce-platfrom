@@ -21,6 +21,7 @@ import {
   cardCriteria, criteriaSectionsOf, criterionNote, criterionPhrase, missionTitle, type CardCriterion,
 } from '@/lib/leadMission/missionView';
 import { ProviderDiscoveryPanel } from '@/components/discovery/ProviderDiscoveryPanel';
+import { StrategyDiscoveryPanel } from '@/components/discovery/StrategyDiscoveryPanel';
 
 interface WorkflowConfirmationPayload {
   workflow_id: string;
@@ -530,6 +531,8 @@ export default function WorkflowConfirmationCard({ payload, conversationId, mess
 
       {/* Optional: search the workspace's own data providers (flagged off). */}
       {mission && messageId && <ProviderDiscoveryPanel messageId={messageId} />}
+      {/* Optional: Apify / LeadOcean / concurrent strategy discovery (flagged off). */}
+      {mission && messageId && <StrategyDiscoveryPanel messageId={messageId} query={originalRequest} requestedCount={mission.requested_count ?? null} />}
 
       {/* Safety + credits — one quiet line */}
       <div className="mt-3 pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2 text-[12px] text-[#8B8F96]">
