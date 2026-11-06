@@ -1371,3 +1371,28 @@ Deno.test("v4 e2e Company Brain: a workspace size rule fills an open size as an 
   const plan = r.planned.body.plan as StrategyPlan;
   assertEquals(plan.binding.contract, `mission-contract-v1:${await contractHash(c)}`);
 });
+
+Deno.test("v4 e2e TEST smoke: the smoke query through the contract chain passes every TEST smoke plan check", async () => {
+  const { planChecks, SMOKE_QUERY } = await import("../../../../scripts/deploy/test-functions-smoke.ts");
+  // A faithful v4 answer for SMOKE_QUERY (quoted spans are the query's own words).
+  const answer = {
+    understanding: {
+      roles: [{ span: "salespeople", title: null, family: "gtm_sales", relation: "required" }], role_match: "any",
+      places: [{ span: "US", place: "united states", other_place: null, scope: "headquarters", necessity: "required" }],
+      industries: [{ span: "B2B", industry: "B2B", necessity: "required" }],
+      signals: [{ span: "actively hiring salespeople", kind: "hiring", necessity: "required" }],
+      signal_logic: "all", ambiguities: [], unsupported: [],
+    },
+    signal_windows: [], deliverable: { entity: "company", count: 5, count_span: "5", person_roles: [] },
+    company_size: { min: 20, max: 500, necessity: "preferred", span: "Prefer 20–500 employees" },
+    funding_stages: [], forbid_broadening: [],
+  };
+  const chain = contractChain(answer);
+  // TEST runs the function with the v3 interpreter configured: contract mode must report itself, not v3 (P8).
+  const m = sdeps({ userId: "u-member", interpret: chain.interpret as never, contractVersion: "v3" });
+  const r = await handleStrategyRequest(sreq({ action: "strategy_plan", query: SMOKE_QUERY, requested_count: 5, max_apify_usd: 0.25, max_leadocean_records: 50 }), m.d);
+  const failed = planChecks(r.status, r.body as never).filter((c) => c.status === "fail");
+  assertEquals(failed, [], JSON.stringify(failed));
+  assertEquals((r.body.interpretation as { understanding: { contract: string } }).understanding.contract, "mission-contract-v1");
+  assertEquals(m.lo.calls.length + m.ap.calls.length, 0, "planning buys nothing");
+});
