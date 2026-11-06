@@ -391,3 +391,57 @@ Deno.test("chat contract flags: a workspace allowlist scopes shadow and v4 (cana
   assertEquals(chatContractFlags(env, "ws-other"), { shadow: false, v4: false, enforceBinding: true });
   assertEquals(chatContractFlags(env, null), { shadow: false, v4: false, enforceBinding: true });
 });
+
+// ── Live study v4 (run 42194537607, 2026-11-06): 164/165; the one failure, pinned ──
+
+const STUDY_V4 = new URL("../../../docs/benchmarks/live-paraphrase/2026-11-06-contract-v4.json", import.meta.url);
+
+Deno.test("study v4 M07#3: a quoted excluded role the model left without an id is resolved from the user's own word, never dropped", async () => {
+  const d = JSON.parse(await Deno.readTextFile(STUDY_V4));
+  const row = d.rows.find((r: { case: string; repeat: number; label: string }) => r.case === "M07" && r.repeat === 3 && r.label.startsWith("exclusion restated"));
+  const p = loadCases().find((c) => c.id === "M07")!.phrasings.find((x) => x.label === row.label)!;
+  // The recorded answer: "SDRs" excluded, title null, family null.
+  assert(row.proposal.answer.understanding.roles.some((r: { span: string; title: unknown; family: unknown }) => r.span === "SDRs" && r.title === null && r.family === null));
+  const { contract: k } = contractFromProposal(p.query, row.proposal.answer);
+  const hiring = k.requirements.find((r) => r.dimension === "signal" && r.kind === "hiring") as Extract<Requirement, { dimension: "signal" }>;
+  assert((hiring.excludedRoleTerms ?? []).length === 1, JSON.stringify(hiring.excludedRoleTerms));
+  assertEquals(k.ambiguities, []);
+});
+
+Deno.test("v4: a role the user named that no registry can identify becomes a blocking question, never a silent omission", () => {
+  const q = "Find US companies hiring Account Executives but not growth hackers.";
+  const answer = {
+    understanding: {
+      roles: [{ span: "Account Executives", title: "account_executive", family: null, relation: "required" },
+        { span: "growth hackers", title: null, family: null, relation: "excluded" }],
+      role_match: "any", places: [{ span: "US", place: "united states", other_place: null, scope: "headquarters", necessity: "required" }],
+      industries: [], signals: [{ span: "hiring Account Executives", kind: "hiring", necessity: "required" }],
+      signal_logic: "all", ambiguities: [], unsupported: [],
+    },
+    signal_windows: [], deliverable: { entity: "company", count: 5, count_span: null, person_roles: [] },
+    company_size: null, funding_stages: [], forbid_broadening: [],
+  };
+  const { contract: k } = contractFromProposal(q, answer as never);
+  assertEquals(k.ambiguities.length, 1);
+  assert(k.ambiguities[0].question.includes("growth hackers"));
+  assert(!approvability(k).ok, "not approvable until the user answers");
+});
+
+Deno.test("study v4: every recorded live answer reads correctly through the current interpreter (165/165)", async () => {
+  const { compare, summarise } = await import("../../../scripts/dev/interpretation-corpus.ts");
+  const { v4Expect } = await import("../../../scripts/dev/contract-corpus.ts");
+  const { compileContract } = await import("../../../supabase/functions/_shared/missionContract/compile.ts");
+  const d = JSON.parse(await Deno.readTextFile(STUDY_V4));
+  assertEquals([d.contract, d.calls, d.rows.length, d.dry_run], ["v4", 165, 165, false]);
+  const cases = loadCases();
+  const wrong: string[] = [];
+  for (const r of d.rows) {
+    const c = cases.find((x) => x.id === r.case)!;
+    const p = c.phrasings.find((x) => x.label === r.label)!;
+    const { contract: k } = contractFromProposal(p.query, r.proposal.answer);
+    if (k.ambiguities.length) { wrong.push(`${r.case}#${r.repeat}: asks`); continue; }
+    const m = compare(v4Expect(c.id, c.expect), summarise(await compileContract(k) as never));
+    if (m.length) wrong.push(`${r.case}/${r.label}#${r.repeat}: ${m.join("; ")}`);
+  }
+  assertEquals(wrong, []);
+});

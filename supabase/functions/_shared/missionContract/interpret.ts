@@ -21,6 +21,7 @@
 import { AUDIENCE_REQUIRE_RE, audienceDescriptor } from "../missionCriteria.ts";
 import { DEFAULT_SIGNAL_WINDOWS, type CanonicalSignalKind } from "../signalKinds.ts";
 import { SIGNAL_WINDOWS_PROPERTY } from "../missionInterpretationContract.ts";
+import { canonicalTitleOf } from "../roleFamilies.ts";
 import {
   familyOfTitle, parseUnderstanding, spanInRequest, titleTerm, UNDERSTANDING_INSTRUCTION, UNDERSTANDING_SCHEMA,
   validateUnderstanding,
@@ -104,10 +105,16 @@ export const AUDIENCE_POLICY = "audience_descriptor_is_preference";
 
 /** The model's v4 proposal → a validated contract (deterministic; see the header). */
 export function contractFromProposal(query: string, p: ContractProposalV4, opts: { model?: string | null } = {}): InterpretationResult {
-  const parsed = parseUnderstanding(p.understanding);
-  if (!parsed) throw new Error("the model's answer carries no understanding");
+  const raw = parseUnderstanding(p.understanding);
+  if (!raw) throw new Error("the model's answer carries no understanding");
+  // A ROLE THE USER NAMED IS NEVER DROPPED (live study v4, M07 repeat 3: the model quoted
+  // "SDRs" as excluded but gave no role id; validation rejected it and the user's exclusion
+  // vanished). The registry resolves the user's own word first; a role it cannot identify
+  // becomes a question that blocks approval, never a silent omission.
+  const parsed = { ...raw, roles: raw.roles.map((r) => (!r.title && !r.family ? { ...r, title: canonicalTitleOf(r.span) } : r)) };
   const u = validateUnderstanding(query, parsed);
   const rejected = [...u.rejected];
+  const unidentifiedRoles = rejected.filter((x) => x.reason === "no_role_id").map((x) => x.item.replace(/^role:/, ""));
   const reqs: Requirement[] = [];
   const ids = new Set<string>();
   const idOf = (base: string) => { let id = base, n = 2; while (ids.has(id)) id = `${base}:${n++}`; ids.add(id); return id; };
@@ -221,7 +228,11 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     requirements: reqs,
     anyOf,
     assumptions: assumptionsOf(reqs),
-    ambiguities: u.ambiguities.map((a) => ({ span: a.span, question: a.question })),
+    ambiguities: [
+      ...u.ambiguities.map((a) => ({ span: a.span, question: a.question })),
+      ...unidentifiedRoles.map((span) => ({ span: JSON.parse(span) as string,
+        question: `Which job title do you mean by ${span}? I couldn't match it to a role I can check, and I won't run without it.` })),
+    ],
     authorizedActions: ["discover", "verify"],
     budget: null,
     completion: { targetCount: count, stopWhen: "target_reached_or_budget_exhausted" },
