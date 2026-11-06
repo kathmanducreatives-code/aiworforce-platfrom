@@ -5,6 +5,8 @@
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
 import { brainReadinessV2Enabled } from "../_shared/companyBrainGate.ts";
+import { contractMissionIntegrity } from "../_shared/missionContract/chatMission.ts";
+import { contractOf, runtimeBrainGatesFromContract } from "../_shared/missionContract/authority.ts";
 import { companyBrainReadiness } from "../_shared/companyBrainReadiness.ts";
 import { normalizeCompanyBrain } from "../_shared/normalizeCompanyBrain.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
@@ -1719,6 +1721,19 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
   // the plan-step gate above already guaranteed an instruction. Restated so it
   // narrows for the rest of the function.
   if (instruction === undefined) return json({ error: "missing_required_fields" }, 400);
+
+  // ── A v4 MISSION RUNS ONLY AS APPROVED (ADR-001 I1/I3) ─────────────────────
+  // Before any read, model call or provider spend: a mission carrying a Mission
+  // Contract must still be exactly that contract, under the hash it was approved
+  // with. A v1 mission (no contract) is not affected.
+  {
+    const persisted = readPersistedLeadMission(tool_input_body, (body as Record<string, unknown>).lead_mission);
+    const integrity = await contractMissionIntegrity(persisted);
+    if (integrity.status === "invalid") {
+      console.error("[run-agent][mission-contract-invalid]", { workspace_id, detail: integrity.detail });
+      return json({ error: "mission_contract_invalid", problems: integrity.detail }, 409);
+    }
+  }
 
   // Load company_brain. `onboarding_completed` gates whether the ACTIVE brain
   // is injected into the agent prompt (see renderBrainForAgent).
@@ -3585,7 +3600,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 onModelCall: modelCalls.sink,
                 log: (m, meta) => console.log(`[gpt-discovery] ${m}`, meta ?? ""),
               }, {
-                brain: {
+                brain: contractOf(persistedMission)
+                  ? (({ disqualifier_keywords, hard_constraints: _h, ...g }) => ({ ...g, disqualifiers: disqualifier_keywords, business_models: brainIcpCtx.icp.business_models ?? [] }))(
+                    runtimeBrainGatesFromContract(contractOf(persistedMission)!))
+                  : {
                   positive_industries: brainIcpCtx.icp.industries ?? [],
                   excluded_industries:
                     effectivePolicy.constraints.negative_industries ?? [],
@@ -3631,7 +3649,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 onModelCall: modelCalls.sink,
                 log: (m, meta) => console.log(`[gpt-execution-plan] ${m}`, meta ?? ""),
               }, {
-                brain: {
+                brain: contractOf(persistedMission)
+                  ? (({ disqualifier_keywords, hard_constraints: _h, ...g }) => ({ ...g, disqualifiers: disqualifier_keywords, business_models: brainIcpCtx.icp.business_models ?? [] }))(
+                    runtimeBrainGatesFromContract(contractOf(persistedMission)!))
+                  : {
                   positive_industries: brainIcpCtx.icp.industries ?? [],
                   excluded_industries:
                     effectivePolicy.constraints.negative_industries ?? [],
@@ -4451,7 +4472,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               // them only meant the evaluator judged a company without knowing
               // who the workspace actually sells to.
               brain: {
-                ...(brainEnforced
+                // A v4 mission: the Brain's rejecting fields are exactly what the user
+                // approved in the contract (missionContract/authority.ts). Otherwise, v1.
+                ...(contractOf(persistedMission)
+                  ? runtimeBrainGatesFromContract(contractOf(persistedMission)!)
+                  : brainEnforced
                   ? {
                     employee_min: effectivePolicy.constraints.min_employees ?? null,
                     employee_max: effectivePolicy.constraints.max_employees ?? null,

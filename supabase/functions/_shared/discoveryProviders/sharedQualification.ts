@@ -66,7 +66,11 @@ export interface SharedQualification {
   gaps: EvidenceDimension[];
   held: string[];
   /** One line per hard check, for the lead drawer and the run report. */
-  checks: { criterion_id: string; dimension: string; result: string; reason: string; actor: string | null }[];
+  checks: {
+    criterion_id: string; dimension: string; result: string; reason: string; actor: string | null;
+    /** The evidence the check cites: its source, address and when it was observed (additive). */
+    evidence?: { evidence_id: string; actor: string; url: string | null; observed_at: string; occurred_at: string | null }[];
+  }[];
   /** How many items came from each source: shows at a glance what the verdict rests on. */
   evidence_sources: Record<string, number>;
   /** Canonical evidence offered for this company but refused, and why. */
@@ -216,6 +220,9 @@ export function qualifyCompany(
     checks: r.checks.filter((x) => x.kind === "hard").map((x) => ({
       criterion_id: x.criterion_id, dimension: String(x.dimension), result: x.result, reason: x.reason,
       actor: x.provenance?.actor ?? actorOf(x.evidence_ids[0]),
+      evidence: x.evidence_ids.map((id) => [...own, ...canonical].find((e) => e.evidence_id === id))
+        .filter((e): e is NonNullable<typeof e> => !!e)
+        .map((e) => ({ evidence_id: e.evidence_id, actor: e.source.actor, url: e.source.url ?? null, observed_at: e.observed_at, occurred_at: e.occurred_at ?? null })),
     })),
     evidence_sources: sources,
     canonical_refused,

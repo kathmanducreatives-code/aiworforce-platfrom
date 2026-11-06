@@ -29,6 +29,7 @@ import {
   isLeadMissionV1, parseLeadMissionDeterministic,
   effectiveRequestedCount, DEFAULT_REQUESTED_COUNT,
 } from "../_shared/leadMission.ts";
+import { contractMissionIntegrity } from "../_shared/missionContract/chatMission.ts";
 import { buildCapabilityGraph, type CapabilityPlan } from "../_shared/leadCapabilityGraph.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
 import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
@@ -712,6 +713,17 @@ async function handleOrchestrate(req: Request): Promise<Response> {
 
     let lead_mission: unknown;
     if (isLeadMissionV1(suppliedMission)) {
+      // A v4 mission must still be exactly the contract it was approved under (ADR-001
+      // I1/I3) before anything is planned; a v1 mission is not affected.
+      const integrity = await contractMissionIntegrity(suppliedMission);
+      if (integrity.status === "invalid") {
+        console.error("[orchestrate][mission-contract-invalid]", { workspace_id, detail: integrity.detail });
+        return json({
+          error: "mission_contract_invalid",
+          details: "the mission no longer matches its approved contract; nothing was planned and nothing was spent",
+          problems: integrity.detail,
+        }, 409);
+      }
       lead_mission = suppliedMission;
     } else if (isPureContentRequest) {
       // No mission, and no substitute invented for one. Nothing downstream may

@@ -1,0 +1,9 @@
+{
+  "description": "Approved differences between the corpus expectations (v1/v3 compiler) and contract v4. Each entry changes ONLY what is listed, with its reason. Reviewed with the Mission Contract PR.",
+  "overrides": {
+    "M17": {
+      "expect": { "hard": ["company_size", "funding", "industry:b2b saa"] },
+      "reason": "v1/v3 also emitted a second hard industry 'saas', added by the deterministic marker parser re-reading the raw query (leadMission.ts VERTICAL_MARKERS: /\\bsaas\\b/). 'Industry: B2B SaaS' already requires SaaS, so dropping the raw-text duplicate removes no meaning; v4 never re-reads the sentence."
+    }
+  }
+}

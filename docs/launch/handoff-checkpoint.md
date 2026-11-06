@@ -146,3 +146,32 @@ The study run 41990176436 succeeded.
 After the study artifact `live-paraphrase-study-5c91efd…` exists:
 - classify each failure as model / compiler / evidence / harness, using rollout plan §3's acceptance criteria;
 - record the result in `docs/architecture/mission-reliability-progress.md`.
+
+## 8. 2026-11-06: Mission Contract v4 migration (branch `claude/magical-dirac-c7okyr`, PR #244)
+
+**Status vocabulary:** implemented → tested → integrated → production-ready → production-enabled.
+
+| Component | Status | Where |
+|---|---|---|
+| Contract, v4 interpreter, compiler, boundary, invariants | implemented, tested, integrated (TEST `lead-pipeline` behind a flag) | `_shared/missionContract/` |
+| Company Brain → contract (precedence, conflicts visible) | implemented, tested, integrated (`lead-pipeline` contract mode; pilot-chat v4 card) | `missionContract/brain.ts` |
+| Production chat: binding stamp + observe-mode Start check | implemented, tested, integrated (always on; metadata and logs only) | pilot-chat |
+| Production chat: shadow / v4 card / enforced binding / canary scope | implemented, tested, integrated behind flags that are OFF | pilot-chat, `chatIntegration.ts` |
+| Pre-execution integrity of v4 missions | implemented, tested, integrated | orchestrate, run-agent (covers the worker) |
+| Version boundary (run-time readers use the contract for v4) | implemented, tested, integrated | `authority.ts`; run-agent, leadSearchIntent, leadIntentModel, leadDiscoveryStrategy, leadCapabilityEngine |
+| Independent live v4 study | **not run.** The `discovery-test` Environment rejects non-protected branches (run 42190289471, $0) | needs #244 merged |
+| TEST enablement (`AGENTORY_MISSION_CONTRACT_V4`) | **not done** (owner). TEST `lead-pipeline` is v25 = pre-#244 code | after merge + deploy |
+| Production | **unchanged.** Not production-ready until G2 passes and rollout stages 1–3 hold | `docs/architecture/mission-contract-rollout.md` |
+
+**Next steps, in order:**
+
+1. Owner reviews and merges #244.
+2. Dispatch `discovery-test-worker.yml` with these inputs (owner approves the Environment run):
+   - `ref`: `launch/hardening`
+   - `canary_stage`: `study_v4`
+   - `expected_sha`: the merge SHA
+   - `confirm_project_ref`: `tlvnfrxzjhsjgdofwehb`
+   - `canary_approval`: `run the live paraphrase study within 2 USD`
+3. Analyse the artifact `live-paraphrase-study-v4-<sha>`. The gate is at least 157/165.
+4. Owner sets `AGENTORY_MISSION_CONTRACT_V4=enabled` on TEST `lead-pipeline`. Then run the TEST smoke and one approved plan → run.
+5. Production rollout stages 1–5 (each owner-approved).

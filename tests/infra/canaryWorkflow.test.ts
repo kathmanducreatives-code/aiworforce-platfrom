@@ -38,7 +38,7 @@ const SHA = "0123456789abcdef0123456789abcdef01234567";
 Deno.test("canary: one workflow — `none` (the default) is the worker; the other stages are one Environment-guarded job", () => {
   const i = wf.on.workflow_dispatch.inputs;
   assertEquals(i.canary_stage.default, "none");
-  assertEquals(i.canary_stage.options, ["none", "verify", "migrate", "prepare", "launch", "reconcile", "session", "evidence", "study"]);
+  assertEquals(i.canary_stage.options, ["none", "verify", "migrate", "prepare", "launch", "reconcile", "session", "evidence", "study", "study_v4"]);
   // `study` (the live paraphrase study, model calls only) is its own job: liveStudyWorkflow.test.ts.
   assertEquals(Object.keys(wf.jobs).sort(), ["canary", "study", "worker"]);
   // `session` runs in the worker job (its kickoff must precede the worker step), never the canary job.

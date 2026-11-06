@@ -31,6 +31,11 @@ import { gptMissionSchemaFor } from "../../supabase/functions/_shared/gptMission
 import { routeModel } from "../../supabase/functions/_shared/gptModelRouter.ts";
 import { canonicalModelId, MODEL_PRICES, priceModelCall, readModelUsage } from "../../supabase/functions/_shared/modelCostModel.ts";
 import { compare, type Case, compilePhrasing, fullProposal, loadCases, loadContrasts, summarise, type Summary } from "./interpretation-corpus.ts";
+import { gptContractGenerate } from "../../supabase/functions/_shared/missionContract/gptInterpreter.ts";
+import { contractFromProposal } from "../../supabase/functions/_shared/missionContract/interpret.ts";
+import { compileContract } from "../../supabase/functions/_shared/missionContract/compile.ts";
+import { contractHash } from "../../supabase/functions/_shared/missionContract/contract.ts";
+import { v4Expect, v4From } from "./contract-corpus.ts";
 
 const ROOT = new URL("../../", import.meta.url);
 const MAX_OUTPUT_TOKENS = 4000;
@@ -101,7 +106,7 @@ export interface StudyRow {
  *                         compiles correctly: the failure came from the answer's other fields
  *                         as the compiler executed them (a compiler-side failure)
  */
-export type FailureClass = "transport" | "model_clarification" | "model_understanding" | "compiled_wrongly";
+export type FailureClass = "transport" | "model_clarification" | "model_understanding" | "compiled_wrongly" | "contract_mismatch";
 
 export function classifyFailure(c: Case, p: Case["phrasings"][number], r: Pick<StudyRow, "error" | "understanding">): FailureClass {
   if (!r.understanding) return r.error?.includes("needs_clarification") ? "model_clarification" : "transport";
@@ -118,7 +123,14 @@ const extraHardOf = (m: Record<string, unknown>) =>
     .filter((x) => x.kind === "hard" && (x.dimension === "constraint" || x.dimension === "exclusion"))
     .map((x) => ({ dimension: x.dimension, field: x.value?.field ?? null, value: x.value?.value ?? null, label: x.label ?? null }));
 
-export async function runStudy(o: { repeats: number; budgetUsd: number; maxCalls: number; dryRun: boolean; cases?: Case[]; readEnv?: (k: string) => string | undefined }) {
+/**
+ * `contract: "v4"` reads every phrasing through the Mission Contract path: ONE structured
+ * answer (missionContract/interpret.ts), deterministic validation, the contract compiler.
+ * There is no second channel, so a mismatch is the model's reading or the validator's —
+ * recorded as `contract_mismatch` with the contract itself (`proposal`, `contractHash`)
+ * for review. The budget guard is the same transport guard.
+ */
+export async function runStudy(o: { repeats: number; budgetUsd: number; maxCalls: number; dryRun: boolean; cases?: Case[]; readEnv?: (k: string) => string | undefined; contract?: "v3" | "v4" }) {
   const cases = o.cases ?? loadCases();
   const route = routeModel("mission_compilation");
   // Dry run: a stub transport that answers with the corpus's own recorded v3 reading,
@@ -128,7 +140,7 @@ export async function runStudy(o: { repeats: number; budgetUsd: number; maxCalls
     const msg = JSON.parse(String(init.body)).messages.find((m: { role: string }) => m.role === "user").content;
     const q = JSON.parse(msg).user_query as string;
     const p = recorded.get(q)!;
-    const proposal = fullProposal(p, "v3");
+    const proposal = o.contract === "v4" ? v4From(p as never) : fullProposal(p, "v3");
     return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify({
       choices: [{ message: { content: JSON.stringify(proposal) }, finish_reason: "stop" }],
       usage: { prompt_tokens: Math.ceil(String(init.body).length / 3), completion_tokens: 900 },
@@ -140,6 +152,29 @@ export async function runStudy(o: { repeats: number; budgetUsd: number; maxCalls
   const rows: StudyRow[] = [];
   outer: for (let r = 1; r <= o.repeats; r++) {
     for (const c of cases) for (const p of c.phrasings) {
+      if (o.contract === "v4") {
+        const g = await gptContractGenerate({ fetch: guard.fetch, readEnv: o.dryRun ? (k) => (k === "OPENAI_API_KEY" ? "dry-run" : readEnv(k)) : readEnv, sleep: () => Promise.resolve() })(p.query);
+        if (!g.ok) {
+          rows.push({ case: c.id, label: p.label, repeat: r, ok: false, mismatches: [], summary: null, error: g.code, understanding: null, failure: "transport" });
+          if (guard.state().refused > 0) break outer;
+          continue;
+        }
+        try {
+          const { contract, rejected } = contractFromProposal(p.query, g.value as never, { model: g.model });
+          const understanding = (g.value as { understanding?: unknown }).understanding ?? null;
+          if (contract.ambiguities.length) {
+            rows.push({ case: c.id, label: p.label, repeat: r, ok: false, mismatches: [], summary: null, error: `needs_clarification:${contract.ambiguities.map((a) => a.question).join(" | ")}`, understanding, proposal: g.value, failure: "model_clarification" });
+            continue;
+          }
+          const s = summarise(await compileContract(contract) as never);
+          const mismatches = compare(v4Expect(c.id, c.expect), s);
+          rows.push({ case: c.id, label: p.label, repeat: r, ok: !mismatches.length, mismatches, summary: s, error: null, understanding,
+            proposal: { answer: g.value, contract, contractHash: await contractHash(contract), rejected }, ...(mismatches.length ? { failure: "contract_mismatch" as const } : {}) });
+        } catch (e) {
+          rows.push({ case: c.id, label: p.label, repeat: r, ok: false, mismatches: [], summary: null, error: `contract:${(e as Error).message.slice(0, 200)}`, understanding: null, proposal: g.value, failure: "contract_mismatch" });
+        }
+        continue;
+      }
       const payload = buildMissionCompilerPayload({ originalUserQuery: p.query, contract: "v3" });
       const res = await gptStructured<Record<string, unknown>>({
         purpose: route.stage, system: MISSION_COMPILER_SYSTEM_PROMPT, user: JSON.stringify(payload),
@@ -179,7 +214,7 @@ export async function runStudy(o: { repeats: number; budgetUsd: number; maxCalls
     return a.some((s) => b.has(s));
   }).map((k) => `${k.a} vs ${k.b}`);
   const st = guard.state();
-  const failures: Record<FailureClass, number> = { transport: 0, model_clarification: 0, model_understanding: 0, compiled_wrongly: 0 };
+  const failures: Record<FailureClass, number> = { transport: 0, model_clarification: 0, model_understanding: 0, compiled_wrongly: 0, contract_mismatch: 0 };
   for (const x of rows) if (x.failure) failures[x.failure]++;
   const correct = rows.filter((x) => x.ok).length;
   const allWrong = [...new Set(rows.map((x) => x.case))].filter((id) => rows.filter((x) => x.case === id).every((x) => !x.ok));
@@ -192,7 +227,7 @@ export async function runStudy(o: { repeats: number; budgetUsd: number; maxCalls
     compiler_failures: { value: failures.compiled_wrongly, pass: failures.compiled_wrongly === 0 },
   };
   return {
-    model: route.model, prices: MODEL_PRICES[canonicalModelId(route.model)], dry_run: o.dryRun,
+    model: route.model, prices: MODEL_PRICES[canonicalModelId(route.model)], dry_run: o.dryRun, contract: o.contract ?? "v3",
     budget_usd: o.budgetUsd, max_calls: o.maxCalls, repeats: o.repeats,
     calls: st.calls, refused: st.refused, spent_usd: Number(st.spentUsd.toFixed(6)),
     phrasings_attempted: rows.length, correct: rows.filter((x) => x.ok).length,
@@ -213,9 +248,10 @@ if (import.meta.main) {
   }
   const report = await runStudy({
     repeats: Number(arg("--repeats", "3")), budgetUsd: Number(arg("--budget-usd", "2")), maxCalls: Number(arg("--max-calls", "180")), dryRun,
+    contract: arg("--contract", "v3") === "v4" ? "v4" : "v3",
   });
   const out = arg("--out", "docs/benchmarks/live-paraphrase");
-  const name = `${dryRun ? "dry-run" : new Date().toISOString().slice(0, 10)}.json`;
+  const name = `${dryRun ? "dry-run" : new Date().toISOString().slice(0, 10)}${arg("--contract", "v3") === "v4" ? "-contract-v4" : ""}.json`;
   await Deno.mkdir(new URL(`${out}/`, ROOT), { recursive: true });
   await Deno.writeTextFile(new URL(`${out}/${name}`, ROOT), JSON.stringify(report, null, 1) + "\n");
   const { rows: _r, ledger: _l, ...summary } = report;

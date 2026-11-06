@@ -20,6 +20,7 @@ import { compileCompanyBrainContext } from "../companyBrainCompiler.ts";
 import { hasUsableBrain } from "../companyBrainContext.ts";
 import { compileLeadMission } from "../leadMissionCompiler.ts";
 import type { BrainMergeInput } from "../leadMission.ts";
+import type { ContractBrainInput } from "../missionContract/brain.ts";
 
 export interface BrainPlanningContext {
   /** The compiler's view of the Brain ICP; null when there is no usable Brain. */
@@ -28,6 +29,19 @@ export interface BrainPlanningContext {
   status: "used" | "absent" | "not_onboarded" | "empty" | "unreadable";
   /** Which Brain fields were offered as context (never values beyond the ICP lists). */
   fields: string[];
+  /** Mission Contract mode only: the same context plus the workspace's industry exclusions. */
+  contractInput?: ContractBrainInput | null;
+}
+
+/** The Brain input a Mission Contract reads (missionContract/brain.ts): v1 context + exclusions. */
+export function contractBrainInput(profile: Record<string, unknown> | null): ContractBrainInput | null {
+  if (!profile || typeof profile !== "object") return null;
+  const d = compileCompanyBrainContext({ workspace_id: "", profile }).disqualifiers;
+  return {
+    ...compilerBrainContext(profile),
+    excluded_industries_explicit: [...(d.industries_explicit ?? [])],
+    excluded_industries_generic: [...(d.industries_generic ?? [])],
+  };
 }
 
 const arr = (v: unknown): string[] =>
@@ -59,7 +73,7 @@ export function brainPlanningContext(row: { profile?: unknown; onboarding_comple
     ...(context.industries?.length ? ["industries"] : []), ...(context.stages?.length ? ["stages"] : []),
     ...(context.locations?.length ? ["locations"] : []), ...(context.employee_policy ? ["size_policy"] : []),
   ];
-  return { context, status: "used", fields };
+  return { context, status: "used", fields, contractInput: contractBrainInput(profile) };
 }
 
 /** Read ONE workspace's Brain (service client, after the membership check). Never throws. */

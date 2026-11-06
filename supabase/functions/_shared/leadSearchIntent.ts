@@ -1,10 +1,11 @@
-// Structured lead-search intent parser (Part 1). Pure / import-free so it is
+// Structured lead-search intent parser (Part 1). Pure (one pure import: the contract authority boundary) so it is
 // fully unit-testable. It captures the SEARCH dimensions the existing
 // extractLeadIntent (leadIntent.ts) doesn't structure — company category,
 // GTM motion, hiring/funding triggers, funding requirement, and per-dimension
 // relaxation permission — so leadProviderQueryBuilder can produce targeted
 // provider queries instead of one mega keyword string. Never invents intent;
 // Company-Brain fields backfill what the user left implicit.
+import { executionQueryOf } from "./missionContract/authority.ts";
 
 export interface CompanySizePreference { min?: number; max?: number; strict: boolean }
 
@@ -375,7 +376,8 @@ export function leadSearchIntentFromMission(
   const noBroadening = mission.no_broadening_requested === true;
 
   return {
-    original_query: String(mission.original_user_query ?? ""),
+    // Under contract authority, the approved contract — never the sentence (authority.ts).
+    original_query: executionQueryOf(mission),
     requested_count: Math.max(1, Math.min(50, mission.requested_count ?? 5)),
     company_categories,
     must_have_categories,

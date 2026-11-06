@@ -20,6 +20,10 @@ import { leadOceanAdapter } from "../_shared/discoveryProviders/adapters/leadoce
 import { handleLeadPipeline, handleStrategyRequest, parsePipelineRequest, parseStrategyRequest, readPipelineFlags } from "../_shared/leadPipeline/service.ts";
 import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
 import { MissionNeedsClarificationError } from "../_shared/leadMissionCompiler.ts";
+import { gptContractGenerate, interpretContract } from "../_shared/missionContract/gptInterpreter.ts";
+import { applyCompanyBrain } from "../_shared/missionContract/brain.ts";
+import { compileContract } from "../_shared/missionContract/compile.ts";
+import { contractHash, type MissionContract } from "../_shared/missionContract/contract.ts";
 import { createStrategyAdvisorGenerateJson } from "../_shared/leadPipeline/strategyAdvisorModel.ts";
 import { compileWithBrain, loadBrainPlanningContext } from "../_shared/leadPipeline/brainContext.ts";
 import { planSigner } from "../_shared/leadPipeline/planToken.ts";
@@ -74,6 +78,8 @@ Deno.serve(withBuildStamp(async (req) => {
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { return json({ error: "invalid body" }, 400); }
   const strategyReq = parseStrategyRequest(body);
+  // MISSION CONTRACT v4: opt-in per deployment (TEST only until it passes its release gates).
+  const contractMode = (env("AGENTORY_MISSION_CONTRACT_V4") ?? "").trim().toLowerCase() === "enabled";
   const parsed = strategyReq ? null : parsePipelineRequest(body);
   if (!parsed && !strategyReq) return json({ error: "invalid request" }, 400);
   const workspaceId = (strategyReq ?? parsed)!.workspaceId;
@@ -95,7 +101,28 @@ Deno.serve(withBuildStamp(async (req) => {
       const r = await handleStrategyRequest(strategyReq, {
         ...deps,
         // GPT reads the request (the mission compiler); no deterministic fallback stands in for it.
-        interpret: async (query, ws, requestedCount) => {
+        interpret: contractMode ? async (query, ws) => {
+          // MISSION CONTRACT v4 (TEST, opt-in): one structured reading, validated, compiled.
+          // The workspace's Company Brain is applied to the CONTRACT before approval
+          // (missionContract/brain.ts): the user's words outrank it, its preferences only
+          // rank, its enforced size rule is a visible, attributed requirement — and all of
+          // it is inside the approved hash.
+          const r = await interpretContract(query, gptContractGenerate());
+          if (!r.ok) return { error: r.error };
+          const brain = await loadBrainPlanningContext(admin as never, ws);
+          const { contract, report } = applyCompanyBrain(r.contract, brain.contractInput ?? null);
+          if (contract.ambiguities.length) {
+            // A Brain rule that conflicts with the request is a question, never a silent winner.
+            return { error: "needs_clarification", clarification: { questions: contract.ambiguities.map((a) => a.question), message: contract.ambiguities.map((a) => a.question).join(" ") } };
+          }
+          const hash = await contractHash(contract);
+          return {
+            mission: await compileContract(contract), contract,
+            brain: { status: brain.status, fields: brain.fields, applied: report.applied, rejected: report.notApplied },
+            // The approval token replays THE CONTRACT ITSELF: a run executes exactly what was approved.
+            replay: { proposal: { contract, contractHash: hash }, brain: { status: brain.status, fields: brain.fields, context: null } },
+          };
+        } : async (query, ws, requestedCount) => {
           // The workspace's own Company Brain as context (read-only, this workspace only,
           // after the membership check in handleStrategyRequest): same path as the chat agent.
           const brain = await loadBrainPlanningContext(admin as never, ws);
@@ -119,7 +146,12 @@ Deno.serve(withBuildStamp(async (req) => {
           };
         },
         // strategy_run: the signed proposal and Brain context, compiled again (deterministic).
-        recompile: (query, requestedCount, replay) => {
+        recompile: contractMode ? async (_query, _count, replay) => {
+          const approved = (replay.proposal as { contract?: MissionContract; contractHash?: string } | null);
+          if (!approved?.contract) return { error: "the approval carries no mission contract; plan again" };
+          if (await contractHash(approved.contract) !== approved.contractHash) return { error: "the approved contract does not match its hash; plan again" };
+          return { mission: await compileContract(approved.contract), contract: approved.contract };
+        } : (query, requestedCount, replay) => {
           const brain = { status: replay.brain.status as never, fields: replay.brain.fields, context: replay.brain.context as never };
           const c = compileWithBrain({ query, proposal: replay.proposal, requestedCount, brain });
           return Promise.resolve({ mission: c.mission, brain: { status: brain.status, fields: brain.fields, applied: c.brainApplied, rejected: c.brainRejected } });

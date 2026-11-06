@@ -73,7 +73,7 @@ on:
         required: true
         type: string
       canary_stage:
-        description: "none = the worker as always. Canary: verify (read-only) | migrate | prepare (paid compile) | launch (kickoff + paid run) | reconcile (read-only) | session (one approved contract, end to end) | evidence (read-only: proposes NO_RUN reconciliations, writes nothing) | study (live paraphrase study: model calls only, <= 165 calls, <= $2)"
+        description: "none = the worker as always. Canary: verify (read-only) | migrate | prepare (paid compile) | launch (kickoff + paid run) | reconcile (read-only) | session (one approved contract, end to end) | evidence (read-only: proposes NO_RUN reconciliations, writes nothing) | study (live paraphrase study: model calls only, <= 165 calls, <= $2) | study_v4 (the same study through the Mission Contract v4 interpreter)"
         required: true
         default: none
         type: choice
@@ -87,6 +87,7 @@ on:
           - session
           - evidence
           - study
+          - study_v4
       canary_approval:
         description: "Canary stages that write or spend: the exact approval phrase the stage names (see the runbook)"
         required: false
@@ -125,7 +126,7 @@ jobs:
   worker:
     # The worker, as always — and the canary's launch, whose kickoff must run
     # seconds before the worker step (the authorization's window is 300 s).
-    if: ${{ !contains(fromJSON('["verify","migrate","prepare","reconcile","evidence"]'), inputs.canary_stage) && inputs.canary_stage != 'study' }}
+    if: ${{ !contains(fromJSON('["verify","migrate","prepare","reconcile","evidence"]'), inputs.canary_stage) && inputs.canary_stage != 'study' && inputs.canary_stage != 'study_v4' }}
     runs-on: ubuntu-latest
     # actions: read lets launch download the prepare run's kickoff artifact.
     permissions:
@@ -483,7 +484,7 @@ jobs:
   # tests/edge-functions/_shared/liveStudyBudget.test.ts runs first). 3 repeats x 55
   # phrasings = 165 calls, $2 cap; neither is an input. The report is an artifact.
   study:
-    if: ${{ inputs.canary_stage == 'study' }}
+    if: ${{ inputs.canary_stage == 'study' || inputs.canary_stage == 'study_v4' }}
     runs-on: ubuntu-latest
     environment: discovery-test
     timeout-minutes: 45
@@ -494,6 +495,8 @@ jobs:
       EXPECTED_SHA: ${{ inputs.expected_sha }}
       TEST_PROJECT_REF: ${{ vars.TEST_PROJECT_REF }}
       CANARY_APPROVAL: ${{ inputs.canary_approval }}
+      # Which interpreter the study reads through (v4 = the Mission Contract). Never the cap.
+      STUDY_CONTRACT: ${{ inputs.canary_stage == 'study_v4' && 'v4' || 'v3' }}
     steps:
       - name: Refuse anything but the TEST project, the approved commit and the approval phrase
         run: |
@@ -527,19 +530,19 @@ jobs:
         run: deno test --allow-read --allow-env --no-check tests/edge-functions/_shared/liveStudyBudget.test.ts
 
       - name: Dry run (the real pipeline, a stub transport, $0)
-        run: deno run --allow-read --allow-write --allow-env scripts/dev/live-paraphrase-study.ts --dry-run --repeats 3 --out study-out
+        run: deno run --allow-read --allow-write --allow-env scripts/dev/live-paraphrase-study.ts --dry-run --repeats 3 --contract "$STUDY_CONTRACT" --out study-out
 
       - name: Live study (api.openai.com only; at most 180 calls and 2 USD, enforced per request)
         env:
           OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY }}
         run: |
           deno run --allow-read --allow-write --allow-env --allow-net=api.openai.com \
-            scripts/dev/live-paraphrase-study.ts --repeats 3 --budget-usd 2 --max-calls 180 --out study-out
+            scripts/dev/live-paraphrase-study.ts --repeats 3 --budget-usd 2 --max-calls 180 --contract "$STUDY_CONTRACT" --out study-out
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
         if: always()
         with:
-          name: live-paraphrase-study-${{ github.sha }}
+          name: live-paraphrase-study-${{ inputs.canary_stage == 'study_v4' && 'v4-' || '' }}${{ github.sha }}
           path: study-out/
           retention-days: 30
           if-no-files-found: warn
