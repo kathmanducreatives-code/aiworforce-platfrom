@@ -30,6 +30,9 @@ import { companiesFromPostRows, companyEmployeesInput, peopleFromEmployeeRows } 
 import { checkFounders } from "../../../../supabase/functions/_shared/leadPipeline/founderCheck.ts";
 import { planChecks } from "../../../../scripts/deploy/test-functions-smoke.ts";
 import { planSigner, type PlanReplay } from "../../../../supabase/functions/_shared/leadPipeline/planToken.ts";
+import { contractFromProposal } from "../../../../supabase/functions/_shared/missionContract/interpret.ts";
+import { compileContract } from "../../../../supabase/functions/_shared/missionContract/compile.ts";
+import { contractHash, type MissionContract } from "../../../../supabase/functions/_shared/missionContract/contract.ts";
 
 /** One test signer (planToken.ts); the real function derives its key from the service-role key. */
 const SIGNER = await planSigner("offline-test-secret-0123456789abcdef");
@@ -603,6 +606,72 @@ Deno.test("service: a genuine ambiguity is a 422 question for the user, never a 
   assertEquals(r.status, 422);
   assertEquals(r.body, { status: "needs_clarification", questions, error: "Before I start, I need to check one thing" });
   assertEquals(lo.calls.length + ap.calls.length, 0, "nothing is bought while the user is asked");
+});
+
+// ── MISSION CONTRACT MODE (ADR-001): the approval binds the contract; the run replays it ──
+const CQ = "Find US companies currently hiring Account Executives.";
+const contractDeps = async () => {
+  const { contract } = contractFromProposal(CQ, {
+    understanding: { roles: [{ span: "Account Executives", title: "account_executive", family: null, relation: "required" }], role_match: "any",
+      places: [{ span: "US", place: "united states", other_place: null, scope: "headquarters", necessity: "required" }], industries: [],
+      signals: [{ span: "currently hiring Account Executives", kind: "hiring", necessity: "required" }], signal_logic: "all", ambiguities: [], unsupported: [] },
+    signal_windows: [], deliverable: { entity: "company", count: 5, count_span: null, person_roles: [] }, company_size: null, funding_stages: [], forbid_broadening: [],
+  });
+  const hash = await contractHash(contract);
+  const o = sdeps({
+    interpret: async () => ({ mission: await compileContract(contract), contract, replay: { proposal: { contract, contractHash: hash }, brain: { status: "not_applied", fields: [], context: null } } }),
+    // What the lead-pipeline does in contract mode: compile the APPROVED contract the token replays.
+    recompile: async (_q, _n, replay) => {
+      const c = (replay.proposal as { contract: MissionContract }).contract;
+      return { mission: await compileContract(c), contract: c };
+    },
+  });
+  return { o, contract, hash };
+};
+
+Deno.test("service (contract mode): the plan hash binds the contract; the run returns one evidence-backed verdict per requirement", async () => {
+  const { o, contract, hash } = await contractDeps();
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan", query: CQ }), o.d);
+  assertEquals(planned.status, 200);
+  const plan = planned.body.plan as StrategyPlan;
+  assertEquals(plan.binding.contract, `mission-contract-v1:${hash}`, "the signed plan names one exact meaning");
+  assertEquals((planned.body.interpretation as { missionContract: { hash: string } }).missionContract.hash, hash);
+  const ran = await handleStrategyRequest(sreq({ action: "strategy_run", query: CQ, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } }), o.d);
+  assertEquals(ran.status, 200, JSON.stringify(ran.body).slice(0, 300));
+  assertEquals(ran.body.missionContractHash, hash);
+  assertEquals(ran.body.invariantViolations, undefined);
+  const verdicts = ran.body.requirementVerdicts as { leadKey: string; verdicts: { requirementId: string; status: string; evidence: unknown[] }[] }[];
+  assert(verdicts.length >= 1);
+  const hard = contract.requirements.filter((r) => r.necessity === "required").map((r) => r.id).sort();
+  for (const v of verdicts) {
+    assertEquals(v.verdicts.filter((x) => hard.includes(x.requirementId)).map((x) => x.requirementId).sort(), hard);
+    for (const x of v.verdicts) if (x.status === "verified") assert(x.evidence.length > 0, "verified always cites evidence");
+  }
+  assert(verdicts.some((v) => v.verdicts.some((x) => x.status === "verified")), "the offline world proves at least one requirement");
+});
+
+Deno.test("service (contract mode): a contract changed after approval never runs (I3), and nothing is bought", async () => {
+  const { o, contract } = await contractDeps();
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan", query: CQ }), o.d);
+  const plan = planned.body.plan as StrategyPlan;
+  // A different meaning arrives at run time (a requirement dropped): refused before any provider call.
+  const tampered = { ...contract, requirements: contract.requirements.filter((r) => r.dimension !== "geography"), assumptions: contract.assumptions };
+  const o2 = sdeps({ recompile: async () => ({ mission: await compileContract(tampered), contract: tampered }) });
+  const ran = await handleStrategyRequest(sreq({ action: "strategy_run", query: CQ, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } }), o2.d);
+  assertEquals(ran.status, 409);
+  assertEquals(o2.lo.calls.length + o2.ap.calls.length, 0);
+});
+
+Deno.test("service (contract mode): an ambiguity is a question, never a run", async () => {
+  const { contract } = contractFromProposal(CQ, {
+    understanding: { roles: [], role_match: "any", places: [{ span: "US", place: "united states", other_place: null, scope: "headquarters", necessity: "required" }], industries: [],
+      signals: [{ span: "currently hiring Account Executives", kind: "hiring", necessity: "required" }], signal_logic: "all",
+      ambiguities: [{ span: "US", question: "Headquartered in the US, or any US presence?" }], unsupported: [] },
+    signal_windows: [], deliverable: { entity: "company", count: 5, count_span: null, person_roles: [] }, company_size: null, funding_stages: [], forbid_broadening: [],
+  });
+  const o = sdeps({ interpret: async () => ({ mission: await compileContract(contract), contract }) });
+  const r = await handleStrategyRequest(sreq({ action: "strategy_plan", query: CQ }), o.d);
+  assertEquals([r.status, r.body.status], [422, "needs_clarification"]);
 });
 
 // ── Consolidation with PR #198: one engine, its capabilities registered, allowlist unchanged ──

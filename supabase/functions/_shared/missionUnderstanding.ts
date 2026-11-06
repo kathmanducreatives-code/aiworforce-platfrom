@@ -283,7 +283,7 @@ type Sig = Mission["required_signals"][number] & {
   qualifier?: { role_terms?: string[]; role_families?: string[]; excluded_role_terms?: string[]; role_match?: string };
 };
 
-const familyOfTitle = (id: string): string | null =>
+export const familyOfTitle = (id: string): string | null =>
   (Object.entries(ROLE_FAMILY_ALIASES).find(([, aliases]) =>
     aliases.some((a) => a.toLowerCase() === (CANONICAL_TITLES[id]?.[0] ?? ""))) ?? [null])[0];
 

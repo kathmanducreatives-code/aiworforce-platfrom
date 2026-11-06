@@ -12,7 +12,10 @@ const wf = parse(Deno.readTextFileSync(new URL(".github/workflows/discovery-test
 const job = wf.jobs.study;
 
 Deno.test("study: its own stage only; the worker and the canary never run beside it", () => {
-  assertEquals(job.if, "${{ inputs.canary_stage == 'study' }}");
+  assertEquals(job.if, "${{ inputs.canary_stage == 'study' || inputs.canary_stage == 'study_v4' }}");
+  assert(wf.jobs.worker.if!.includes("inputs.canary_stage != 'study_v4'"));
+  // The interpreter choice comes from the stage, never from a free input, and never touches the cap.
+  assertEquals(job.env?.STUDY_CONTRACT, "${{ inputs.canary_stage == 'study_v4' && 'v4' || 'v3' }}");
   assert(wf.jobs.worker.if!.includes("inputs.canary_stage != 'study'"));
   assert(!wf.jobs.canary.if!.includes("study"));
   assertEquals(job.permissions, { contents: "read" });

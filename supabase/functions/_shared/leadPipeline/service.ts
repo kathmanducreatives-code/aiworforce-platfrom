@@ -23,6 +23,8 @@ import { activeMissionContract } from "../missionInterpretationContract.ts";
 import { understandingOf } from "../missionUnderstanding.ts";
 import { summarizeProviderRun } from "./providerRunSummary.ts";
 import { criteriaFreezeState } from "../missionCriteriaReader.ts";
+import { approvability, contractHash, disclosures, MISSION_CONTRACT_VERSION, type MissionContract } from "../missionContract/contract.ts";
+import { checkApproved, checkCompiled, checkPlanRequirements, checkVerdicts, requirementVerdicts, type InvariantViolation } from "../missionContract/invariants.ts";
 
 /** What the running service used to read this mission — for review and the TEST smoke (P8). */
 export function understandingReport(mission: unknown, contract: string) {
@@ -232,6 +234,13 @@ export function parseStrategyRequest(b: Record<string, unknown>): StrategyReques
 
 export interface Interpreted {
   mission: unknown;
+  /**
+   * MISSION CONTRACT MODE: the one authoritative statement of the request. When present,
+   * `mission` is its frozen compilation, the plan hash binds its hash, the approval token
+   * replays the contract itself, and the invariants (missionContract/invariants.ts) are
+   * checked at compile, plan, approval and evaluation.
+   */
+  contract?: MissionContract;
   brain?: { status: string; fields: string[]; applied: unknown[]; rejected: unknown[] };
   /** What a strategy_run needs to rebuild this interpretation without the model. */
   replay?: Omit<PlanReplay, "advice">;
@@ -297,13 +306,27 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       ? { status: 422, body: { status: "needs_clarification", questions: c.questions, error: c.message } }
       : { status: 422, body: { error: `the request could not be interpreted: ${interpreted.error}` } };
   }
+  // ── MISSION CONTRACT MODE: approvable, compiled faithfully, and the one that was approved ──
+  const mc = interpreted.contract ?? null;
+  const mcHash = mc ? await contractHash(mc) : null;
+  if (mc) {
+    if (mc.ambiguities.length) {
+      return { status: 422, body: { status: "needs_clarification", questions: mc.ambiguities.map((a) => a.question), error: mc.ambiguities.map((a) => a.question).join(" ") } };
+    }
+    const ok = approvability(mc);
+    if (!ok.ok) return { status: 422, body: { status: "not_approvable", reasons: ok.reasons, error: ok.reasons.join("; ") } };
+    const violations: InvariantViolation[] = [...checkCompiled(mc, interpreted.mission)];
+    if (token) violations.push(...await checkApproved(mc, (token.replay.proposal as { contractHash?: string } | null)?.contractHash ?? null));
+    if (violations.length) return { status: 409, body: { error: "the mission's meaning did not survive intact; nothing ran", invariantViolations: violations } };
+  }
   // CLOSED REQUIREMENT VOCABULARY (Option E Stage 6; requirementVocabulary.ts). It VALIDATES
   // and never renames, so an accepted request means exactly what it meant before. A proposed
   // hard constraint it cannot place, whose value is not in the user's own words, is the
   // model's idea: with the flag on it is refused explicitly (422, nothing bought), never
   // dropped and never quietly satisfied. With the flag off it is only reported.
   // A run checks the proposal the plan SIGNED (the rebuilt interpretation carries no replay).
-  const proposed = ((token?.replay ?? interpreted.replay)?.proposal as { hard_constraints?: unknown } | undefined)?.hard_constraints;
+  // (Contract mode has no free-form constraint channel: nothing to classify.)
+  const proposed = mc ? [] : ((token?.replay ?? interpreted.replay)?.proposal as { hard_constraints?: unknown } | undefined)?.hard_constraints;
   const unsupported = classifyConstraints(proposed ?? [], token?.query ?? req.query)
     .filter((c) => c.kind === "other" && !c.quoted).map((c) => c.originalField);
   const contract = { version: REQUIREMENT_VOCABULARY_VERSION, enforced: !!d.flags.strictRequirements, unsupported };
@@ -311,6 +334,10 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     return { status: 422, body: { error: "the request was read with a requirement ATLAS cannot place and you did not state; rephrase the request or remove it", contract } };
   }
   const spec = specFromMission(interpreted.mission as never, { defaultCount: req.requestedCount ?? 25 });
+  if (mc) {
+    const v = checkPlanRequirements(mc, spec.requirements.criteria as unknown as { id: string; kind: string }[]);
+    if (v.length) return { status: 409, body: { error: "the plan's requirements differ from the approved contract; nothing ran", invariantViolations: v } };
+  }
 
   const rows = await d.store.list(req.workspaceId);
   const lo = rows.find((x) => x.provider === "leadocean");
@@ -324,7 +351,8 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     },
     budget: req.budget, user: req.user,
     // The plan hash binds the workspace and the interpretation contract it was read under.
-    binding: { workspaceId: req.workspaceId, contractVersion: d.contractVersion ?? activeMissionContract() },
+    // Contract mode: the plan hash binds the contract's own hash, so an approval names one exact meaning.
+    binding: { workspaceId: req.workspaceId, contractVersion: mc ? `${MISSION_CONTRACT_VERSION}:${mcHash}` : d.contractVersion ?? activeMissionContract() },
   };
   const base = planStrategy(spec, ctx);
   // A run reuses the advisor pick the plan signed; a plan asks the advisor (unless the user chose).
@@ -345,6 +373,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     // contract in effect, whether the model's v3 understanding was validated and applied,
     // and whether the mission's meaning is frozen. Metadata only — not in the plan hash.
     understanding: understandingReport(interpreted.mission, d.contractVersion ?? activeMissionContract()),
+    ...(mc ? { missionContract: { version: MISSION_CONTRACT_VERSION, hash: mcHash, contract: mc, assumptions: mc.assumptions, disclosures: disclosures(mc).map((r) => r.display.label) } } : {}),
   };
   if (req.action === "strategy_plan" || plan.status === "blocked") {
     // The approval token: what an owner/admin approves, and all a run may execute.
@@ -379,6 +408,15 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       evidenceRefused: run.evidenceRefused, queue: run.queue, review: run.review, excludedCount: run.excluded.length, written: projected.length,
       // Per provider and combined: discovered, unique, qualified, pending, rejected, spend, errors.
       providerSummary: summarizeProviderRun(run),
+      // Contract mode: one verdict per contract requirement for every returned company,
+      // with the evidence it rests on (I4: an unknown is never reported as verified).
+      ...(mc ? (() => {
+        const verdicts = [...run.queue, ...run.review].map((l) => ({
+          leadKey: l.leadKey, verdicts: requirementVerdicts(mc, (l.qualification?.checks ?? []) as never),
+        }));
+        const violations = verdicts.flatMap((v) => checkVerdicts(mc, v.verdicts));
+        return { missionContractHash: mcHash, requirementVerdicts: verdicts, ...(violations.length ? { invariantViolations: violations } : {}) };
+      })() : {}),
     },
   };
 }
