@@ -159,8 +159,8 @@ After the study artifact `live-paraphrase-study-5c91efd…` exists:
 | Production chat: shadow / v4 card / enforced binding / canary scope | implemented, tested, integrated behind flags that are OFF | pilot-chat, `chatIntegration.ts` |
 | Pre-execution integrity of v4 missions | implemented, tested, integrated | orchestrate, run-agent (covers the worker) |
 | Version boundary (run-time readers use the contract for v4) | implemented, tested, integrated | `authority.ts`; run-agent, leadSearchIntent, leadIntentModel, leadDiscoveryStrategy, leadCapabilityEngine |
-| Independent live v4 study | **not run.** The `discovery-test` Environment rejects non-protected branches (run 42190289471, $0) | needs #244 merged |
-| TEST enablement (`AGENTORY_MISSION_CONTRACT_V4`) | **not done** (owner). TEST `lead-pipeline` is v25 = pre-#244 code | after merge + deploy |
+| Independent live v4 study | **PASSED**, 164/165 (run 42194537607, $0.047, 165 calls). The one failure is fixed (165/165 on the recorded answers) | `docs/benchmarks/live-paraphrase/2026-11-06-contract-v4.md` |
+| TEST enablement (`AGENTORY_MISSION_CONTRACT_V4`) | **not done.** TEST `lead-pipeline` v26 = `07add82c` (#244), smoke green on v3. Needs #245 (P8 report + M07 fix) merged and deployed first | owner sets the secret |
 | Production | **unchanged.** Not production-ready until G2 passes and rollout stages 1–3 hold | `docs/architecture/mission-contract-rollout.md` |
 
 **Next steps, in order:**
