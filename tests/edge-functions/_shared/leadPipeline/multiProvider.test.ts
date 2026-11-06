@@ -1189,7 +1189,10 @@ import { applyCompanyBrain, type ContractBrainInput } from "../../../../supabase
 const E2E_Q = "Find 5 US software companies with 20-500 employees hiring Account Executives, not in Canada, ideally Series A.";
 const u0 = {
   roles: [{ span: "Account Executives", title: "account_executive", family: null, relation: "required" }], role_match: "any",
-  places: [{ span: "US", place: "united states", other_place: null, scope: "headquarters", necessity: "required" }],
+  // The stated exclusion is part of the reading: an answer that drops "not in Canada" now asks
+  // (missionContract/coverage.ts), so the stub carries the whole sentence.
+  places: [{ span: "US", place: "united states", other_place: null, scope: "headquarters", necessity: "required" },
+    { span: "not in Canada", place: "canada", other_place: null, scope: null, necessity: "excluded" }],
   industries: [], signals: [{ span: "hiring Account Executives", kind: "hiring", necessity: "required" }],
   signal_logic: "all", ambiguities: [], unsupported: [],
 };
@@ -1271,7 +1274,7 @@ Deno.test("v4 e2e 5 funding: a required funding signal no approved provider can 
 });
 
 Deno.test("v4 e2e 6 explicit exclusion: 'not in Canada' is an exclusion requirement, never a Canada requirement", async () => {
-  const c = assertContractRun(await e2e(p0({}, { places: [...u0.places, { span: "not in Canada", place: "canada", other_place: null, scope: null, necessity: "excluded" }] })));
+  const c = assertContractRun(await e2e(p0()));
   assert(c.requirements.some((r) => r.dimension === "exclusion" && JSON.stringify(r.values).includes("Canada")));
   assert(!c.requirements.some((r) => r.dimension === "geography" && r.place.toLowerCase() === "canada"));
 });
@@ -1285,6 +1288,13 @@ Deno.test("v4 e2e 7 preference vs hard: 'ideally Series A' ranks only — never 
     const x = v.verdicts.find((y) => y.requirementId === st.id);
     if (x) assertEquals(x.decision, "ranks_only");
   }
+});
+
+Deno.test("v4 e2e 6b dropped exclusion: a reading that loses 'not in Canada' is a question, nothing bought", async () => {
+  const r = await e2e(p0({}, { places: [u0.places[0]] }));
+  assertEquals([r.planned.status, r.planned.body.status], [422, "needs_clarification"]);
+  assertStringIncludes(JSON.stringify(r.planned.body), "not in Canada");
+  assertEquals(r.m.lo.calls.length + r.m.ap.calls.length, 0);
 });
 
 Deno.test("v4 e2e 8 ambiguous: a question, nothing bought", async () => {

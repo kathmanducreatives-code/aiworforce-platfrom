@@ -217,6 +217,11 @@ const AUDIENCE_PERMIT_RE = /\b(?:include|including|also|open\s+to|welcome|fine|o
 
 export type AudienceIntent = "exclude" | "require" | "prefer" | "permit" | "describe" | "absent";
 
+/** Does this text name the audience at all ("B2B SaaS" names b2b; "D2C brands" names consumer)? */
+export function namesAudience(text: unknown, audience: "b2b" | "consumer"): boolean {
+  return (audience === "b2b" ? B2B_WORDS_RE : CONSUMER_WORDS_RE).test(String(text ?? ""));
+}
+
 /** The audience a value names when it is ONLY an audience descriptor ("B2B", "B2C companies"), else null. */
 export function audienceDescriptor(value: unknown): "b2b" | "consumer" | null {
   const text = String(value ?? "");
