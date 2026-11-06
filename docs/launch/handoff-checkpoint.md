@@ -160,7 +160,7 @@ After the study artifact `live-paraphrase-study-5c91efd…` exists:
 | Pre-execution integrity of v4 missions | implemented, tested, integrated | orchestrate, run-agent (covers the worker) |
 | Version boundary (run-time readers use the contract for v4) | implemented, tested, integrated | `authority.ts`; run-agent, leadSearchIntent, leadIntentModel, leadDiscoveryStrategy, leadCapabilityEngine |
 | Independent live v4 study | **PASSED**, 164/165 (run 42194537607, $0.047, 165 calls). The one failure is fixed (165/165 on the recorded answers) | `docs/benchmarks/live-paraphrase/2026-11-06-contract-v4.md` |
-| TEST enablement (`AGENTORY_MISSION_CONTRACT_V4`) | **not done.** TEST `lead-pipeline` v26 = `07add82c` (#244), smoke green on v3. Needs #245 (P8 report + M07 fix) merged and deployed first | owner sets the secret |
+| TEST enablement (`AGENTORY_MISSION_CONTRACT_V4`) | **ENABLED on TEST** (owner set it 2026-11-06). Smoke run 42240945436 at `14cbfb36`: every check passes, P8 `contract mission-contract-v1`, plan bound to `mission-contract-v1:176daa34…`, ledger unchanged, production untouched | `docs/launch/test-reports/2026-11-06-v4-enabled-smoke.md` |
 | Production | **unchanged.** Not production-ready until G2 passes and rollout stages 1–3 hold | `docs/architecture/mission-contract-rollout.md` |
 
 **Next steps, in order:**
@@ -175,3 +175,16 @@ After the study artifact `live-paraphrase-study-5c91efd…` exists:
 3. Analyse the artifact `live-paraphrase-study-v4-<sha>`. The gate is at least 157/165.
 4. Owner sets `AGENTORY_MISSION_CONTRACT_V4=enabled` on TEST `lead-pipeline`. Then run the TEST smoke and one approved plan → run.
 5. Production rollout stages 1–5 (each owner-approved).
+
+**Live v4 reading on TEST (smoke query, one planning call, $0 provider spend):**
+
+| Requirement | Necessity | Note |
+|---|---|---|
+| United States headquarters | required | |
+| actively hiring salespeople | required | 30-day window |
+| B2B | preferred | disclosed as an assumption (the audience policy) |
+| 20–500 employees | preferred | |
+
+The plan is `apify_only`, with a worst case of $0.061. Rollback: remove the secret, or set it to anything but `enabled` (no redeploy needed).
+
+**Still open:** one approved `strategy_run` on TEST, to see per-requirement verdicts on real evidence. It spends Apify money (smoke worst case $0.061, ceiling $0.25), so it needs the owner's explicit authorization.

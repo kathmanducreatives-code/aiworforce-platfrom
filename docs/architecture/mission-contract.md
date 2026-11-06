@@ -66,7 +66,7 @@ Production runs v1 and no flag is set anywhere. Rollout: [`mission-contract-roll
 ## Not done yet (continuation)
 
 1. **Independent live v4 study (release gate G2): PASSED**, 164/165 (99.4%) in run 42194537607 at `07add82c`, spending $0.047 over 165 calls. The single failure (a quoted role with no id was dropped) is fixed and pinned. The current interpreter reads all 165 recorded answers correctly. Report: `docs/benchmarks/live-paraphrase/2026-11-06-contract-v4.md`.
-2. **Enable on TEST:** set `AGENTORY_MISSION_CONTRACT_V4=enabled` on TEST `lead-pipeline` (owner), then run the TEST smoke and one approved plan / run.
+2. **Enabled on TEST** (2026-11-06): the smoke passes with v4 live (`docs/launch/test-reports/2026-11-06-v4-enabled-smoke.md`). Still needed: one owner-approved `strategy_run` (Apify, ≤ $0.25) to observe verdicts on real evidence.
 3. **Production rollout stages 1–5** (owner-approved, see the rollout doc).
 4. **Lead routing still starts with Chat Brain RequestV1** (two model calls per v4 card). Fold routing into the contract interpreter.
 5. **Retire** the legacy interpreters once v4 is authoritative everywhere (inventory §B).
