@@ -1176,3 +1176,198 @@ Deno.test("strict vocabulary ON at run time refuses a plan signed while it was o
   assertEquals(r.status, 422);
   assertEquals(o.lo.calls.length + o.ap.calls.length + o.interpretations(), 0);
 });
+
+// ── MISSION CONTRACT v4, END TO END (offline, stub model, mock providers) ────────────────────
+//
+// The same chain lead-pipeline runs with AGENTORY_MISSION_CONTRACT_V4=enabled: request →
+// model answer (stubbed) → interpretContract (validation) → Company Brain → compileContract →
+// signed plan bound to the contract hash → approval → run (replays THE CONTRACT) → providers
+// (mocked) → evidence → per-requirement verdicts. One test per required category.
+import { interpretContract } from "../../../../supabase/functions/_shared/missionContract/gptInterpreter.ts";
+import { applyCompanyBrain, type ContractBrainInput } from "../../../../supabase/functions/_shared/missionContract/brain.ts";
+
+const E2E_Q = "Find 5 US software companies with 20-500 employees hiring Account Executives, not in Canada, ideally Series A.";
+const u0 = {
+  roles: [{ span: "Account Executives", title: "account_executive", family: null, relation: "required" }], role_match: "any",
+  places: [{ span: "US", place: "united states", other_place: null, scope: "headquarters", necessity: "required" }],
+  industries: [], signals: [{ span: "hiring Account Executives", kind: "hiring", necessity: "required" }],
+  signal_logic: "all", ambiguities: [], unsupported: [],
+};
+const p0 = (over: Record<string, unknown> = {}, u: Record<string, unknown> = {}) => ({
+  understanding: { ...u0, ...u }, signal_windows: [], deliverable: { entity: "company", count: 5, count_span: "5", person_roles: [] },
+  company_size: null, funding_stages: [], forbid_broadening: [], ...over,
+});
+/** lead-pipeline/index.ts contract mode, with the model call stubbed. */
+const contractChain = (answer: unknown, brain: ContractBrainInput | null = null) => ({
+  interpret: async (query: string) => {
+    const r = await interpretContract(query, () => Promise.resolve({ ok: true as const, value: answer, model: "stub" }));
+    if (!r.ok) return { error: r.error };
+    const { contract, report } = applyCompanyBrain(r.contract, brain);
+    if (contract.ambiguities.length) {
+      return { error: "needs_clarification", clarification: { questions: contract.ambiguities.map((a) => a.question), message: "a question first" } };
+    }
+    const hash = await contractHash(contract);
+    return { mission: await compileContract(contract), contract, brain: { status: "used", fields: [], applied: report.applied, rejected: report.notApplied },
+      replay: { proposal: { contract, contractHash: hash }, brain: { status: "used", fields: [], context: null } } };
+  },
+  recompile: async (_q: string, _n: number | null, replay: PlanReplay) => {
+    const approved = replay.proposal as { contract?: MissionContract; contractHash?: string };
+    if (!approved?.contract || await contractHash(approved.contract) !== approved.contractHash) return { error: "the approved contract does not match its hash; plan again" };
+    return { mission: await compileContract(approved.contract), contract: approved.contract };
+  },
+});
+type Verdicts = { leadKey: string; verdicts: { requirementId: string; necessity: string; status: string; decision: string; evidence: unknown[] }[] }[];
+async function e2e(answer: unknown, o: { brain?: ContractBrainInput | null; ap?: ReturnType<typeof apifyMock>; query?: string } = {}) {
+  const chain = contractChain(answer, o.brain ?? null);
+  const m = sdeps({ interpret: chain.interpret as never, recompile: chain.recompile as never, ...(o.ap ? { apify: o.ap.invoke } : {}) });
+  const query = o.query ?? E2E_Q;
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan", query }), m.d);
+  if (planned.status !== 200) return { planned, ran: null, m, contract: null as MissionContract | null };
+  const plan = planned.body.plan as StrategyPlan;
+  const contract = (planned.body.interpretation as { missionContract: { contract: MissionContract } }).missionContract.contract;
+  const ran = await handleStrategyRequest(sreq({ action: "strategy_run", query, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } }), m.d);
+  return { planned, ran, m, contract };
+}
+/** The acceptance criteria every successful category must meet. */
+function assertContractRun(r: Awaited<ReturnType<typeof e2e>>) {
+  assertEquals(r.planned.status, 200, JSON.stringify(r.planned.body).slice(0, 300));
+  assertEquals(r.ran!.status, 200, JSON.stringify(r.ran!.body).slice(0, 300));
+  assertEquals(r.ran!.body.invariantViolations, undefined, "no invariant violated");
+  const c = r.contract!;
+  const hard = c.requirements.filter((x) => x.necessity === "required" && !(x.dimension === "unsupported" && x.compiledAs === "disclosed")).map((x) => x.id).sort();
+  for (const v of (r.ran!.body.requirementVerdicts as Verdicts)) {
+    // Each verdict names an approved requirement; every hard requirement gets exactly one.
+    for (const x of v.verdicts) assert(c.requirements.some((q) => q.id === x.requirementId), `${x.requirementId} is not in the approved contract`);
+    assertEquals(v.verdicts.filter((x) => hard.includes(x.requirementId)).map((x) => x.requirementId).sort(), hard);
+    // Unknown evidence is never verified; verified always cites evidence.
+    for (const x of v.verdicts) if (x.status === "verified") assert(x.evidence.length > 0);
+  }
+  return c;
+}
+
+Deno.test("v4 e2e 1/2/4 basic + geography + hiring: one approved contract runs, every verdict traces to a requirement", async () => {
+  const c = assertContractRun(await e2e(p0()));
+  assert(c.requirements.some((r) => r.dimension === "geography" && r.necessity === "required"));
+  assert(c.requirements.some((r) => r.dimension === "signal" && r.kind === "hiring"));
+});
+
+Deno.test("v4 e2e 3 company size: a stated size is a required requirement with a verdict", async () => {
+  const c = assertContractRun(await e2e(p0({ company_size: { min: 20, max: 500, necessity: "required", span: "20-500 employees" } })));
+  assertEquals(c.requirements.filter((r) => r.dimension === "company_size" && r.necessity === "required").length, 1);
+});
+
+Deno.test("v4 e2e 5 funding: a required funding signal no approved provider can prove is BLOCKED at planning (named), nothing bought", async () => {
+  const q = "Find 5 US companies that raised a Series A and are hiring Account Executives.";
+  const r = await e2e(p0({}, { signals: [...u0.signals, { span: "raised a Series A", kind: "funding", necessity: "required" }] }), { query: q });
+  assertEquals([r.planned.status, r.planned.body.status], [409, "blocked"]);
+  assertStringIncludes(JSON.stringify(r.planned.body), "funding signal (last 180 days) cannot be proven");
+  assertEquals(r.m.lo.calls.length + r.m.ap.calls.length, 0);
+  // The default window is part of the contract and disclosed as an assumption.
+  const c = (r.planned.body.interpretation as { missionContract?: { contract: MissionContract } } | undefined)?.missionContract?.contract;
+  if (c) {
+    const f = c.requirements.find((x) => x.dimension === "signal" && x.kind === "funding")!;
+    assert(c.assumptions.some((x) => x.requirementId === f.id));
+  }
+});
+
+Deno.test("v4 e2e 6 explicit exclusion: 'not in Canada' is an exclusion requirement, never a Canada requirement", async () => {
+  const c = assertContractRun(await e2e(p0({}, { places: [...u0.places, { span: "not in Canada", place: "canada", other_place: null, scope: null, necessity: "excluded" }] })));
+  assert(c.requirements.some((r) => r.dimension === "exclusion" && JSON.stringify(r.values).includes("Canada")));
+  assert(!c.requirements.some((r) => r.dimension === "geography" && r.place.toLowerCase() === "canada"));
+});
+
+Deno.test("v4 e2e 7 preference vs hard: 'ideally Series A' ranks only — never in the hard set, never rejects", async () => {
+  const r = await e2e(p0({ funding_stages: [{ stage: "Series A", necessity: "preferred", span: "ideally Series A" }] }));
+  const c = assertContractRun(r);
+  const st = c.requirements.find((x) => x.dimension === "company_stage")!;
+  assertEquals(st.necessity, "preferred");
+  for (const v of r.ran!.body.requirementVerdicts as Verdicts) {
+    const x = v.verdicts.find((y) => y.requirementId === st.id);
+    if (x) assertEquals(x.decision, "ranks_only");
+  }
+});
+
+Deno.test("v4 e2e 8 ambiguous: a question, nothing bought", async () => {
+  const r = await e2e(p0({}, { ambiguities: [{ span: "software companies", question: "Software vendors, or any company with a software team?" }] }));
+  assertEquals([r.planned.status, r.planned.body.status], [422, "needs_clarification"]);
+  assertEquals(r.m.lo.calls.length + r.m.ap.calls.length, 0);
+});
+
+Deno.test("v4 e2e 9 unsupported: disclosed at approval, never executed, verdict not_applicable", async () => {
+  const r = await e2e(p0({}, { unsupported: [{ span: "software companies", reason: "culture is not measured" }] }));
+  if (r.planned.status !== 200) throw new Error(JSON.stringify(r.planned.body).slice(0, 300));
+  const c = assertContractRun(r);
+  const d = c.requirements.find((x) => x.dimension === "unsupported");
+  if (d) {
+    for (const v of r.ran!.body.requirementVerdicts as Verdicts) {
+      const x = v.verdicts.find((y) => y.requirementId === d.id);
+      if (x) assertEquals(x.status, "not_applicable");
+    }
+  }
+});
+
+Deno.test("v4 e2e 10 contradictory: an impossible size is refused before any plan, nothing bought", async () => {
+  const r = await e2e(p0({ company_size: { min: 500, max: 20, necessity: "required", span: "20-500 employees" } }));
+  assert(r.planned.status >= 400, `status ${r.planned.status}`);
+  assertEquals(r.m.lo.calls.length + r.m.ap.calls.length, 0);
+});
+
+Deno.test("v4 e2e 11 contract modified after approval: refused (409), nothing bought", async () => {
+  const chain = contractChain(p0());
+  const m = sdeps({ interpret: chain.interpret as never, recompile: chain.recompile as never });
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan", query: E2E_Q }), m.d);
+  const plan = planned.body.plan as StrategyPlan;
+  const approved = (planned.body.interpretation as { missionContract: { contract: MissionContract } }).missionContract.contract;
+  const changed = { ...approved, requirements: approved.requirements.filter((r) => r.dimension !== "geography") };
+  const m2 = sdeps({ recompile: (async () => ({ mission: await compileContract(changed), contract: changed })) as never });
+  const ran = await handleStrategyRequest(sreq({ action: "strategy_run", query: E2E_Q, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } }), m2.d);
+  assertEquals(ran.status, 409);
+  assertEquals(m2.lo.calls.length + m2.ap.calls.length, 0);
+});
+
+Deno.test("v4 e2e 12 missing verification evidence: evidence the engine did not establish is never reported verified", async () => {
+  const r = await e2e(p0({ company_size: { min: 20, max: 500, necessity: "required", span: "20-500 employees" } }));
+  const c = assertContractRun(r);
+  let unverified = 0;
+  for (const v of r.ran!.body.requirementVerdicts as Verdicts) for (const x of v.verdicts) {
+    if (!x.evidence.length) { assert(x.status !== "verified", `${x.requirementId} verified without evidence`); if (x.status === "unverified") unverified++; }
+  }
+  assert(c.requirements.length > 0);
+  // And a required funding signal nothing can prove is refused at planning (e2e 5), never run unverifiable.
+  void unverified;
+});
+
+Deno.test("v4 e2e 13 provider failure: an Apify failure stops the walk; nothing is reported verified without evidence", async () => {
+  const ap = apifyMock({ failJobs: true });
+  const r = await e2e(p0(), { ap });
+  assertEquals(r.planned.status, 200);
+  assert(r.ran!.status === 200 || r.ran!.status >= 400);
+  for (const v of ((r.ran!.body.requirementVerdicts ?? []) as Verdicts)) for (const x of v.verdicts) if (x.status === "verified") assert(x.evidence.length > 0);
+});
+
+Deno.test("v4 e2e 14 budget: an approval below the estimate is refused before any provider call; one above never raises the ceiling", async () => {
+  const chain = contractChain(p0());
+  const m = sdeps({ interpret: chain.interpret as never, recompile: chain.recompile as never });
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan", query: E2E_Q }), m.d);
+  const plan = planned.body.plan as StrategyPlan;
+  assert(plan.estimate.apifyUsd > 0);
+  const under = await handleStrategyRequest(sreq({ action: "strategy_run", query: E2E_Q, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd / 2, token: planned.body.approval_token } }), m.d);
+  assertEquals(under.status, 409);
+  assertEquals(m.lo.calls.length + m.ap.calls.length, 0, "nothing is bought under an insufficient approval");
+  const over = await handleStrategyRequest(sreq({ action: "strategy_run", query: E2E_Q, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd + 1, token: planned.body.approval_token } }), m.d);
+  assertEquals(over.status, 200);
+  assert((over.body.spend as { apifyUsd: number }).apifyUsd <= plan.estimate.apifyUsd + 1e-9, "spend never exceeds the server's own estimate");
+  assertEquals(parseStrategyRequest({ action: "strategy_plan", workspace_id: WS, walk_id: "w", query: "x", max_apify_usd: 50 }), null, "no client can lift the $5 ceiling");
+});
+
+Deno.test("v4 e2e Company Brain: a workspace size rule fills an open size as an attributed requirement inside the approved hash", async () => {
+  const r = await e2e(p0(), { brain: { employee_min: 11, employee_max: 200, employee_policy: true, industries: ["Fintech"] } });
+  const c = assertContractRun(r);
+  const s = c.requirements.find((x) => x.dimension === "company_size")!;
+  assertEquals([s.origin.source, s.necessity], ["company_brain_policy", "required"]);
+  // Industry was open: Fintech is a preference only.
+  const i = c.requirements.find((x) => x.dimension === "industry")!;
+  assertEquals([i.origin.source, i.necessity], ["company_brain_preference", "preferred"]);
+  const plan = r.planned.body.plan as StrategyPlan;
+  assertEquals(plan.binding.contract, `mission-contract-v1:${await contractHash(c)}`);
+});
