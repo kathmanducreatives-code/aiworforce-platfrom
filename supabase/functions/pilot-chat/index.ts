@@ -150,6 +150,12 @@ import {
 import {
   buildPaidExecutionPreflight, preflightDryRun,
 } from "../_shared/leadPaidExecutionPreflight.ts";
+// MISSION CONTRACT v4 (ADR-001) in production chat. Every switch is OFF unless set:
+// production keeps v1; the card only gains its contract binding (metadata, no model call).
+import { BINDING_REFUSAL_REPLY, chatContractFlags } from "../_shared/missionContract/chatMission.ts";
+import { checkStart, contractForCard } from "../_shared/missionContract/chatIntegration.ts";
+import { gptContractGenerate } from "../_shared/missionContract/gptInterpreter.ts";
+import { contractBrainInput } from "../_shared/leadPipeline/brainContext.ts";
 
 
 const cors = {
@@ -2067,6 +2073,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // The card sends the id of the message that rendered it. That is a claim, so
   // it becomes an idempotency key only once the card it names is found in THIS
   // conversation. A Start without one (an older client) runs exactly as before.
+  const contractFlags = chatContractFlags((k) => Deno.env.get(k), workspaceId);
+  let confirmationCardMetadata: unknown = null;
   const startKey: string | null = await (async () => {
     if (!isPreConfirmed) return null;
     const claimed = actionMetadata?.confirmation_message_id;
@@ -2078,6 +2086,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       .eq("id", candidate.slice("start:".length))
       .maybeSingle();
     const key = verifiedStartKey(claimed, conversationId, (row ?? null) as ConfirmationRow | null);
+    // The card's OWN stored metadata (server-side), for the contract binding check —
+    // only once the card is verified to be this conversation's.
+    if (key) confirmationCardMetadata = (row as { metadata?: unknown } | null)?.metadata ?? null;
     if (!key) {
       console.warn("[pilot-chat][start-idempotency] confirmation id not verified; Start runs unkeyed",
         { conversation_id: conversationId });
@@ -2097,6 +2108,24 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         contract: approvedOnStart.lead_intelligence_contract_version ?? null,
         understanding_consulted: false,
       });
+      // ── APPROVAL BINDS THE CONTRACT (ADR-001, I3) ──────────────────────
+      // The mission this Start carries must reproduce the contract hash stored on
+      // the card it confirms. Logged always; refused only under
+      // AGENTORY_CHAT_CONTRACT_BINDING=enforce. Cards from before binding run as before.
+      const startCheck = await checkStart({ started: approvedOnStart, cardMetadata: confirmationCardMetadata, flags: contractFlags });
+      console.log("[pilot-chat][contract-binding]", {
+        conversation_id: conversationId, status: startCheck.verdict.status, decision: startCheck.decision,
+        enforced: contractFlags.enforceBinding,
+      });
+      if (startCheck.decision === "refuse") {
+        return await replyAndReturn(BINDING_REFUSAL_REPLY, {
+          outcome: {
+            version: OUTCOME_CONTRACT_VERSION, state: "REQUIRES_UNLOCK",
+            category: "requires_approval", gaps: [], reason: "contract_binding_mismatch",
+          },
+          mission_contract_binding_verdict: startCheck.verdict,
+        });
+      }
       return await delegateToOrchestrate({
         admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
         conversationId, workspaceId,
@@ -3209,7 +3238,46 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // three card-only fields `buildMissionForPrompt` adds; the compiler's
         // `final_mission` never carries them, so there is nothing to strip and
         // routing it through that helper would only invite one to be added.
-        const mission = compiled.result.final_mission;
+        // ── THE MISSION CONTRACT (ADR-001) ─────────────────────────────────
+        // Flags off (production): the v1 mission, unchanged, plus its contract binding.
+        // Shadow: v4 read beside it and compared, never executed. v4: the card IS the
+        // approved contract (Brain applied before approval); no v1 fallback reading.
+        const card = await contractForCard({
+          message, v1Mission: compiled.result.final_mission, flags: contractFlags,
+          generate: contractFlags.v4 || contractFlags.shadow ? gptContractGenerate() : null,
+          brain: contractBrainInput(brainProfileForMission),
+        });
+        if (card.kind === "ask") {
+          return await replyAndReturn(clarificationMessage(card.questions), {
+            ...pendingClarification("objective_route", "mission_contract_ambiguity"),
+            chat_brain: { route: "lead_mission", compiled: false, reason: "mission_contract_ambiguity" },
+          });
+        }
+        if (card.kind === "refuse") {
+          console.warn("[pilot-chat][mission-contract] refused", { reason: card.reason, detail: card.detail });
+          return await replyAndReturn(
+            card.reason === "interpretation_failed"
+              ? "I couldn't read that request reliably just now, so I haven't planned or run anything. Please try again."
+              : `I understood that, but I can't run it as asked: ${card.detail.join("; ")}.`,
+            {
+              outcome: {
+                version: OUTCOME_CONTRACT_VERSION, state: "UNSUPPORTED",
+                category: "not_feasible", gaps: [], reason: `mission_contract_${card.reason}`,
+              },
+              ...card.metadata,
+              chat_brain: { route: "lead_mission", previewed: false },
+            },
+          );
+        }
+        if (card.metadata.mission_contract_shadow) {
+          const sh = card.metadata.mission_contract_shadow as Record<string, unknown>;
+          console.log("[pilot-chat][mission-contract-shadow]", {
+            workspace_id: workspaceId, source: card.source, identical: sh.identical_meaning ?? null, error: sh.error ?? null,
+            added: (sh.added as unknown[] | undefined)?.length ?? null, removed: (sh.removed as unknown[] | undefined)?.length ?? null,
+            strengthened: (sh.strengthened as unknown[] | undefined)?.length ?? null, weakened: (sh.weakened as unknown[] | undefined)?.length ?? null,
+          });
+        }
+        const mission = card.mission as typeof compiled.result.final_mission;
         console.log("[pilot-chat][mission] compiled from RequestV1", {
           workspace_id: workspaceId,
           objective: understood.request.objective,
@@ -3368,6 +3436,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             // The mission the Start will execute, so confirming runs exactly
             // what was previewed rather than re-reading the sentence.
             lead_mission: mission,
+            // Its contract identity: what a Start must reproduce (ADR-001, I3).
+            ...card.metadata,
             ...(pausedRun ? { paused_run: pausedRun } : {}),
             chat_brain: { route: "lead_mission", previewed: true,
               paused_run_disclosed: pausedRun !== null },

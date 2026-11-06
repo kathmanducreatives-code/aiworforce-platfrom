@@ -21,6 +21,7 @@ import { handleLeadPipeline, handleStrategyRequest, parsePipelineRequest, parseS
 import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
 import { MissionNeedsClarificationError } from "../_shared/leadMissionCompiler.ts";
 import { gptContractGenerate, interpretContract } from "../_shared/missionContract/gptInterpreter.ts";
+import { applyCompanyBrain } from "../_shared/missionContract/brain.ts";
 import { compileContract } from "../_shared/missionContract/compile.ts";
 import { contractHash, type MissionContract } from "../_shared/missionContract/contract.ts";
 import { createStrategyAdvisorGenerateJson } from "../_shared/leadPipeline/strategyAdvisorModel.ts";
@@ -100,15 +101,26 @@ Deno.serve(withBuildStamp(async (req) => {
       const r = await handleStrategyRequest(strategyReq, {
         ...deps,
         // GPT reads the request (the mission compiler); no deterministic fallback stands in for it.
-        interpret: contractMode ? async (query) => {
+        interpret: contractMode ? async (query, ws) => {
           // MISSION CONTRACT v4 (TEST, opt-in): one structured reading, validated, compiled.
-          // Company Brain context is not applied in this mode yet (TEST holds no Brain).
+          // The workspace's Company Brain is applied to the CONTRACT before approval
+          // (missionContract/brain.ts): the user's words outrank it, its preferences only
+          // rank, its enforced size rule is a visible, attributed requirement — and all of
+          // it is inside the approved hash.
           const r = await interpretContract(query, gptContractGenerate());
           if (!r.ok) return { error: r.error };
+          const brain = await loadBrainPlanningContext(admin as never, ws);
+          const { contract, report } = applyCompanyBrain(r.contract, brain.contractInput ?? null);
+          if (contract.ambiguities.length) {
+            // A Brain rule that conflicts with the request is a question, never a silent winner.
+            return { error: "needs_clarification", clarification: { questions: contract.ambiguities.map((a) => a.question), message: contract.ambiguities.map((a) => a.question).join(" ") } };
+          }
+          const hash = await contractHash(contract);
           return {
-            mission: r.mission, contract: r.contract,
+            mission: await compileContract(contract), contract,
+            brain: { status: brain.status, fields: brain.fields, applied: report.applied, rejected: report.notApplied },
             // The approval token replays THE CONTRACT ITSELF: a run executes exactly what was approved.
-            replay: { proposal: { contract: r.contract, contractHash: r.hash }, brain: { status: "not_applied", fields: [], context: null } },
+            replay: { proposal: { contract, contractHash: hash }, brain: { status: brain.status, fields: brain.fields, context: null } },
           };
         } : async (query, ws, requestedCount) => {
           // The workspace's own Company Brain as context (read-only, this workspace only,
