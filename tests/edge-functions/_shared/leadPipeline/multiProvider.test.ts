@@ -1396,3 +1396,36 @@ Deno.test("v4 e2e TEST smoke: the smoke query through the contract chain passes 
   assertEquals((r.body.interpretation as { understanding: { contract: string } }).understanding.contract, "mission-contract-v1");
   assertEquals(m.lo.calls.length + m.ap.calls.length, 0, "planning buys nothing");
 });
+
+Deno.test("v4 TEST run script: plans, runs once within the cap, and verifies the contract end to end (offline service)", async () => {
+  const { runContractV4, MISSION, CAP_USD } = await import("../../../../scripts/test-project/contract-v4-run.ts");
+  const answer = {
+    understanding: {
+      roles: [{ span: "Account Executives", title: "account_executive", family: null, relation: "required" },
+        { span: "SDRs", title: "sales_development_representative", family: null, relation: "excluded" }],
+      role_match: "any", places: [{ span: "US", place: "united states", other_place: null, scope: "headquarters", necessity: "required" }],
+      industries: [{ span: "B2B", industry: "B2B", necessity: "required" }],
+      signals: [{ span: "actively hiring Account Executives", kind: "hiring", necessity: "required" }],
+      signal_logic: "all", ambiguities: [], unsupported: [],
+    },
+    signal_windows: [], deliverable: { entity: "company", count: 5, count_span: "5", person_roles: [] },
+    company_size: null, funding_stages: [], forbid_broadening: [],
+  };
+  const chain = contractChain(answer);
+  const m = sdeps({ interpret: chain.interpret as never, recompile: chain.recompile as never });
+  const call = async (_fn: string, body: Record<string, unknown>) => {
+    const req = parseStrategyRequest(body);
+    if (!req) return { status: 400, body: { error: "unparseable" } };
+    const r = await handleStrategyRequest(req, m.d);
+    return { status: r.status, body: r.body as Record<string, unknown> };
+  };
+  const dry = await runContractV4(call, WS, { dryRun: true });
+  assert(dry.ok, JSON.stringify(dry.checks));
+  assertEquals(m.ap.calls.length + m.lo.calls.length, 0, "a dry run buys nothing");
+  const live = await runContractV4(call, WS, { dryRun: false });
+  assert(live.ok, JSON.stringify(live.checks));
+  assertEquals(live.plan.requirements.length > 0, true);
+  assert((live.run!.spendUsd ?? 1) <= CAP_USD);
+  assertEquals(m.lo.calls.length, 0, "no LeadOcean record is bought");
+  assertStringIncludes(MISSION, "excluding SDRs");
+});
