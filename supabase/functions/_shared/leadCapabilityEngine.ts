@@ -11,6 +11,7 @@
 // Nothing here re-implements a provider normalizer, an Actor input compiler, an
 // identity resolver or the Company Brain gate. Those are correct, tested, and
 // the source of the evidence discipline this engine depends on. The engine
+import { executionQueryOf } from "./missionContract/authority.ts";
 import { criteriaOf } from "./missionCriteriaReader.ts";
 import { sizeBandLabel } from "./companySize.ts";
 import { YC_MEMO23_MAX_SIZES } from "./hiringActorCatalog.ts";
@@ -9188,7 +9189,8 @@ export async function runCapabilityPlan(
         // the mission, then only the workspace categories that actually relate to
         // it. "Recruiting Agencies" must not broaden a SaaS mission.
         const appliedPolicy = applyMissionPrecedence({
-          original_user_query: opts.mission.original_user_query,
+          // Under contract authority, the approved contract's text — never the sentence.
+          original_user_query: executionQueryOf(opts.mission),
           mission_verticals: opts.mission.company_profile?.verticals ?? [],
           mission_geography: opts.brain?.required_geography ?? null,
           workspace_industries: opts.brain?.positive_industries ?? [],

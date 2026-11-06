@@ -22,6 +22,7 @@
 // deterministic path before orchestrate derives one. It is never a fallback for
 // a FAILED compilation: that case refuses (pilot-chat) or 422s (orchestrate).
 
+import { executionQueryOf } from "./missionContract/authority.ts";
 import { requestedRoleFamily, classifyRoleFamily, type RoleFamily } from "./roleFamilyMatcher.ts";
 import { effectiveRequestedCount } from "./leadMission.ts";
 
@@ -193,7 +194,8 @@ export function separatedIntentFromMission(
   const noBroadening = mission.no_broadening_requested === true;
 
   return {
-    original_query: String(mission.original_user_query ?? ""),
+    // Under contract authority, the approved contract — never the sentence (authority.ts).
+    original_query: executionQueryOf(mission),
     target_personas,
     target_company_profile: {
       categories: verticals.length ? verticals : (brain?.industries ?? []),
