@@ -374,7 +374,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     // and whether the mission's meaning is frozen. Metadata only — not in the plan hash.
     // In contract mode the mission was read by the Mission Contract (v4), whatever v1/v3 setting the function has.
     understanding: understandingReport(interpreted.mission, mc ? MISSION_CONTRACT_VERSION : d.contractVersion ?? activeMissionContract()),
-    ...(mc ? { missionContract: { version: MISSION_CONTRACT_VERSION, hash: mcHash, contract: mc, assumptions: mc.assumptions, disclosures: disclosures(mc).map((r) => r.display.label) } } : {}),
+    ...(mc ? { missionContract: { version: MISSION_CONTRACT_VERSION, hash: mcHash, contract: mc, assumptions: mc.assumptions, disclosures: disclosures(mc).map((r) => r.display.label), mergedDuplicates: mc.mergedDuplicates ?? [] } } : {}),
   };
   if (req.action === "strategy_plan" || plan.status === "blocked") {
     // The approval token: what an owner/admin approves, and all a run may execute.

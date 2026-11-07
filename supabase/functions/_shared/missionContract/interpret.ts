@@ -23,7 +23,7 @@
 // never adds a requirement: an uncovered restriction is asked, never guessed.
 
 import { AUDIENCE_REQUIRE_RE, audienceDescriptor, audienceIntent } from "../missionCriteria.ts";
-import { coverageQuestions } from "./coverage.ts";
+import { coverageQuestions, redundantUnsupported } from "./coverage.ts";
 
 const AUDIENCE_NEGATION_RE = /\b(?:exclude[sd]?|excluding|no|not|non|without|except|avoid|never|other\s+than)\b/i;
 import { DEFAULT_SIGNAL_WINDOWS, type CanonicalSignalKind } from "../signalKinds.ts";
@@ -34,7 +34,7 @@ import {
   validateUnderstanding,
 } from "../missionUnderstanding.ts";
 import {
-  assumptionsOf, type MissionContract, MISSION_CONTRACT_VERSION, type Necessity, type Origin, type Requirement, type SignalWindow,
+  assumptionsOf, type MergedDuplicate, type MissionContract, MISSION_CONTRACT_VERSION, type Necessity, type Origin, type Requirement, type SignalWindow,
 } from "./contract.ts";
 
 export const CONTRACT_INTERPRETER_VERSION = "gpt-contract-v4" as const;
@@ -245,7 +245,14 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
   }
 
   // ── What the vocabulary cannot express: disclosed at approval, never dropped, never executed ──
+  // Except an exact duplicate of a requirement already enforced (TEST live attempt
+  // 2026-11-07: the SDR/BDR exclusion was both enforced AND filed as unsupported, and the
+  // "Not checked" copy blocked a correct plan). It is merged into what enforces it and
+  // recorded in `mergedDuplicates`; anything short of the same restriction stays below.
+  const mergedDuplicates: MergedDuplicate[] = [];
   for (const x of u.unsupported) {
+    const dup = redundantUnsupported(x.span, reqs);
+    if (dup) { mergedDuplicates.push({ span: x.span, ...dup }); continue; }
     reqs.push({ ...base(`unsupported:${slug(x.span)}`, "required", userOrigin(x.span), `Not checked: ${x.span}`, x.why || "not expressible in the mission vocabulary"),
       evaluability: "unrepresentable", dimension: "unsupported", polarity: "include", compiledAs: "disclosed", value: x.span });
   }
@@ -268,6 +275,7 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     budget: null,
     completion: { targetCount: count, stopWhen: "target_reached_or_budget_exhausted" },
     provenance: { interpreter: "gpt_contract_v4", model: opts.model ?? null, from: null },
+    ...(mergedDuplicates.length ? { mergedDuplicates } : {}),
   };
   // NOTHING THE USER STATED EXPLICITLY MAY VANISH (coverage.ts): an audience word or a
   // negative constraint the contract does not represent — omitted by the model, rejected

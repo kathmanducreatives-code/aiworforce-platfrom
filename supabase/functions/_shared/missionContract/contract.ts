@@ -109,6 +109,16 @@ export type Requirement =
     value: unknown;
   });
 
+/** An unsupported item removed as an exact duplicate of an enforced requirement (audit). */
+export interface MergedDuplicate {
+  /** The user's words the duplicate quoted. */
+  span: string;
+  /** The executable REQUIRED requirement(s) that enforce exactly those words. */
+  coveredBy: string[];
+  /** Why they are the same restriction, in plain words. */
+  reason: string;
+}
+
 export type Dimension = Requirement["dimension"];
 export type AuthorizedAction = "discover" | "verify" | "enrich" | "contact";
 
@@ -130,6 +140,13 @@ export interface MissionContract {
   assumptions: { requirementId: string; policy: string; text: string }[];
   /** Questions whose answer changes who qualifies. Non-empty ⇒ not approvable. */
   ambiguities: { span: string; question: string }[];
+  /**
+   * Audit: an `unsupported` item the reading ALSO produced for words an executable
+   * requirement already enforces exactly (same restriction, scope and polarity) — merged
+   * into that requirement instead of shown as "Not checked" (coverage.ts
+   * `redundantUnsupported`). Hashed: it is part of what is approved. Absent when none.
+   */
+  mergedDuplicates?: MergedDuplicate[];
   authorizedActions: AuthorizedAction[];
   /** Spending ceilings, set when a plan is approved (null = not yet bounded). */
   budget: { maxApifyUsd: number; maxLeadoceanRecords: number } | null;
@@ -191,6 +208,14 @@ export function contractProblems(c: MissionContract): ContractProblem[] {
       (r.polarity === "include" ? inc : exc).add(lower(r.dimension === "geography" ? r.place : r.value));
     }
     for (const v of exc) if (inc.has(v)) p("contradiction", null, `${dim} "${v}" is both required and excluded`);
+  }
+  // A merged duplicate must name the enforced requirement that answers it: never a silent drop.
+  for (const m of c.mergedDuplicates ?? []) {
+    if (!m.span?.trim() || !m.coveredBy?.length) p("merged_duplicate", null, "a merged duplicate must quote the request and name what enforces it");
+    for (const id of m.coveredBy ?? []) {
+      const r = c.requirements.find((x) => x.id === id);
+      if (!r || !isExecutable(r) || r.necessity !== "required") p("merged_duplicate", id, `merged duplicate "${m.span}" names no enforced required requirement`);
+    }
   }
   for (const g of c.anyOf) {
     if (g.length < 2) p("any_of", null, "an any-of group needs at least two requirements");

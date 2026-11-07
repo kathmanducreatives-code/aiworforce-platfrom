@@ -144,6 +144,84 @@ export function cueCovered(cue: ExplicitCue, c: MissionContract): boolean {
   return toks.some((t) => mentions(excludedText, t));
 }
 
+// ── An unsupported item that only repeats an enforced requirement ───────────
+//
+// TEST live attempt 2026-11-07: the reading excluded SDR and BDR from the AE hiring signal
+// (enforced) AND filed the same words, "exclude companies whose hiring evidence is only for
+// SDR/BDR roles", as `unsupported`. Shown as "Not checked", that duplicate blocked an
+// otherwise correct plan. An unsupported item is merged ONLY when it is the very same
+// restriction an executable requirement enforces — every word accounted for, same scope,
+// same polarity. Anything else (a partial match, another exclusion, a hedge, an inclusion)
+// stays "Not checked" and keeps blocking.
+
+/** Words that carry no restriction of their own in an exclusion's wording. */
+const STRUCTURAL = new Set([
+  "whose", "which", "that", "where", "who", "with", "only", "solely", "exclusively", "purely", "just",
+  "hiring", "hire", "hires", "recruiting", "evidence", "signal", "signals", "posting", "postings", "listing", "listings",
+  "ad", "ads", "vacancies", "vacancy", "open", "is", "are", "was", "were", "has", "have", "for", "or", "and",
+]);
+/** Wording that leaves the restriction's meaning open: never merged. */
+const HEDGE_RE = /\b(?:maybe|perhaps|possibly|probably|ideally|preferably|prefer\w*|mostly|mainly|largely|primarily|usually|generally|partly|partially|some|unless|depending|roughly|sort\s+of|kind\s+of|if\s+possible|or\s+so|-?ish)\b/i;
+const INNER_NEGATION_RE = /\b(?:exclud\w*|except|not|no|without|never|avoid\w*|minus|nor)\b/i;
+const COMPANY_RE = /\b(?:compan(?:y|ies)|firms?|businesses|business|orgs?|organi[sz]ations?|employers?|startups?)\b/i;
+const SCOPE_WORDS = new Set(["headquartered", "hq", "hqd", "headquarters", "based", "located", "offices", "office", "presence", "operating", "operations", "registered", "incorporated"]);
+const EVIDENCE_ONLY_RE =/\b(?:only|solely|exclusively|purely|just)\b/i;
+
+/**
+ * Is this unsupported item an exact duplicate of an enforced requirement? Returns the
+ * requirement that enforces it, or null (kept as "Not checked"). Conservative: see above.
+ */
+export function redundantUnsupported(span: string, requirements: readonly Requirement[]): { coveredBy: string[]; reason: string } | null {
+  const s = String(span ?? "").trim();
+  if (!s || HEDGE_RE.test(s)) return null;
+  const cues = explicitCues(s);
+  // Exactly one negative restriction, and nothing negated inside it ("not excluding SDRs").
+  if (cues.length !== 1 || cues[0].kind !== "exclusion" || cues[0].polarity !== "exclude") return null;
+  const negations = [...s.matchAll(NEGATION_RE)];
+  if (negations.length !== 1 || INNER_NEGATION_RE.test(negations[0][2])) return null;
+  const negWords = new Set(tokens(negations[0][1]));
+  const words = s.split(/[\s/,&+]+/).filter(Boolean);
+  const own = requirements.filter((r) => isExecutable(r) && r.necessity === "required" && (r.origin.source === "user_explicit" || r.origin.source === "user_inferred"));
+
+  // Every word must be the negation, structure, or the covered restriction itself.
+  const residual = (consumed: Set<number>) => words.flatMap((w, i) => (consumed.has(i) ? [] : tokens(w)))
+    .filter((t) => !STOP.has(t) && !STRUCTURAL.has(t) && !negWords.has(t));
+
+  const titles = titlesIn(cues[0].object);
+  if (titles.size) {
+    // ROLES: answered by ONE required hiring signal that excludes every named title. The
+    // signal's excluded roles never count as evidence, so a company qualifies only through a
+    // non-excluded posting — the meaning of "exclude companies whose hiring is ONLY X". A
+    // company-scoped exclusion WITHOUT "only" ("exclude companies hiring SDRs") would reject
+    // a company that also hires AEs: a different restriction, never merged.
+    if (COMPANY_RE.test(s) && !EVIDENCE_ONLY_RE.test(s)) return null;
+    const signal = own.find((r) => r.dimension === "signal" && r.kind === "hiring" &&
+      [...titles].every((t) => (r.excludedRoleTerms ?? []).some((x) => canonicalTitleOf(x) === t)) &&
+      ![...titles].some((t) => (r.roleTerms ?? []).some((x) => canonicalTitleOf(x) === t)));
+    if (!signal) return null;
+    const consumed = new Set<number>();
+    for (let n = 1; n <= Math.min(4, words.length); n++) for (let i = 0; i + n <= words.length; i++) {
+      const t = canonicalTitleOf(words.slice(i, i + n).join(" "));
+      if (t && titles.has(t)) for (let k = i; k < i + n; k++) consumed.add(k);
+    }
+    if (residual(consumed).length) return null;
+    return { coveredBy: [signal.id], reason: `the same roles are excluded from the hiring evidence of "${signal.origin.span}": ${[...titles].join(", ")} postings never count, so a company qualifies only through the roles it must be hiring` };
+  }
+  // COMPANIES: answered by ONE explicit exclusion whose values hold every remaining word.
+  for (const r of own) {
+    if (r.dimension !== "exclusion") continue;
+    const vals = new Set([r.values].flat().flatMap((v) => tokens(String(v))));
+    if (!vals.size) continue;
+    const consumed = new Set(words.map((w, i) => (tokens(w).length && tokens(w).every((t) => vals.has(t)) ? i : -1)).filter((i) => i >= 0));
+    if (!consumed.size || residual(consumed).length) continue;
+    // Same scope: a scope word in the duplicate ("headquartered") must be in the enforced quote.
+    const scope = tokens(s).filter((t) => SCOPE_WORDS.has(t));
+    if (scope.some((t) => !tokens(r.origin.span).includes(t))) continue;
+    return { coveredBy: [r.id], reason: `the same exclusion is enforced as "${r.display.label}"` };
+  }
+  return null;
+}
+
 /** Questions for every explicit restriction the contract does not represent (see the header). */
 export function coverageQuestions(query: string, c: MissionContract): { span: string; question: string }[] {
   return explicitCues(query).filter((cue) => !cueCovered(cue, c)).map((cue) => ({
