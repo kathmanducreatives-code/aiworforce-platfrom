@@ -35,7 +35,9 @@ type Verdict = { requirementId: string; necessity: string; status: string; decis
 
 export interface RunReport {
   mission: string; walkId: string; dryRun: boolean;
-  plan: { status: number; planStatus: string | null; binding: string | null; contractHash: string | null; estimateUsd: number | null; strategy: string | null; requirements: unknown[]; assumptions: unknown[]; blockedReason: string | null };
+  plan: { status: number; planStatus: string | null; binding: string | null; contractHash: string | null; estimateUsd: number | null; strategy: string | null; requirements: unknown[]; assumptions: unknown[]; blockedReason: string | null;
+    /** The complete approved contract (no secrets: the user's request, requirements, assumptions). */
+    contract: unknown; disclosures: string[]; clarification: unknown };
   run: null | { status: number; runStatus: string | null; spendUsd: number | null; leadoceanRecords: number | null; contractHash: string | null; leads: number; verdicts: { leadKey: string; verdicts: Verdict[] }[]; invariantViolations: unknown[]; error: string | null };
   checks: { name: string; pass: boolean; detail: string }[];
   ok: boolean;
@@ -48,7 +50,7 @@ export async function runContractV4(call: Call, workspaceId: string, o: { dryRun
   const check = (name: string, pass: boolean, detail: string) => { checks.push({ name, pass, detail }); return pass; };
   const p = await call("lead-pipeline", { action: "strategy_plan", ...base });
   const plan = (p.body.plan ?? {}) as Record<string, unknown>;
-  const interp = (p.body.interpretation ?? {}) as { missionContract?: { hash?: string; contract?: { requirements?: { id: string; dimension: string; necessity: string; origin: { source: string } }[] }; assumptions?: unknown[] } };
+  const interp = (p.body.interpretation ?? {}) as { missionContract?: { hash?: string; contract?: { requirements?: { id: string; dimension: string; necessity: string; origin: { source: string; span?: string }; excludedRoleTerms?: string[] | null; roleTerms?: string[] | null }[]; ambiguities?: unknown[] }; assumptions?: unknown[]; disclosures?: string[] } };
   const binding = ((plan.binding ?? {}) as { contract?: string }).contract ?? null;
   const est = ((plan.estimate ?? {}) as { apifyUsd?: number; leadoceanRecords?: number });
   const report: RunReport = {
@@ -56,12 +58,18 @@ export async function runContractV4(call: Call, workspaceId: string, o: { dryRun
     plan: {
       status: p.status, planStatus: (plan.status as string) ?? null, binding, contractHash: interp.missionContract?.hash ?? null,
       estimateUsd: est.apifyUsd ?? null, strategy: (plan.strategy as string) ?? null,
-      requirements: (interp.missionContract?.contract?.requirements ?? []).map((r) => ({ id: r.id, dimension: r.dimension, necessity: r.necessity, source: r.origin.source })),
+      // Roles are shown in full (2026-11-06: the summary hid the SDR exclusion inside the hiring requirement).
+      requirements: (interp.missionContract?.contract?.requirements ?? []).map((r) => ({ id: r.id, dimension: r.dimension, necessity: r.necessity, source: r.origin.source, span: r.origin.span ?? "",
+        ...(r.roleTerms ? { roleTerms: r.roleTerms } : {}), ...(r.excludedRoleTerms ? { excludedRoleTerms: r.excludedRoleTerms } : {}) })),
       assumptions: interp.missionContract?.assumptions ?? [], blockedReason: (plan.blockedReason as string) ?? null,
+      contract: interp.missionContract?.contract ?? null, disclosures: interp.missionContract?.disclosures ?? [],
+      clarification: p.body.clarification ?? null,
     },
     run: null, checks, ok: false,
   };
   const ready = check("plan ready", p.status === 200 && plan.status === "ready", `HTTP ${p.status}, ${String(plan.status ?? p.body.error ?? "")}`)
+    && check("every stated requirement is checked (nothing only shown as 'Not checked', no open question)",
+      report.plan.disclosures.length === 0 && !(interp.missionContract?.contract?.ambiguities ?? []).length, report.plan.disclosures.join("; ") || "none")
     && check("plan bound to the Mission Contract", !!binding && binding === `mission-contract-v1:${report.plan.contractHash}`, String(binding))
     && check("worst case within the approved cap", typeof est.apifyUsd === "number" && est.apifyUsd <= CAP_USD + 1e-9 && (est.leadoceanRecords ?? 0) === 0,
       `$${est.apifyUsd} Apify, ${est.leadoceanRecords ?? 0} LeadOcean records (cap $${CAP_USD}, 0 records)`)

@@ -16,6 +16,7 @@
 import { compare, type Expect, loadCases, summarise } from "./interpretation-corpus.ts";
 import { contractFromProposal, type ContractProposalV4 } from "../../supabase/functions/_shared/missionContract/interpret.ts";
 import { compileContract } from "../../supabase/functions/_shared/missionContract/compile.ts";
+import { audienceDescriptor } from "../../supabase/functions/_shared/missionCriteria.ts";
 
 const WIN = /\b(?:in|within|over)?\s*the\s+(?:last|past)\s+\d+\s+(?:days?|weeks?|months?|years?)|\blast\s+\d+\s+(?:days?|months?)/i;
 const SIZE = /\d[\d,]*\s*(?:[-–]|to)\s*\d[\d,]*\s*(?:employees|people|staff|ppl)|(?:under|fewer than|less than|over|more than)\s+\d[\d,]*\s*(?:employees|people)/i;
@@ -28,8 +29,17 @@ export function v4From(p: { query: string; proposal: Record<string, unknown>; un
   const win = WIN.exec(p.query)?.[0]?.trim();
   const und = (p.understanding ?? {}) as { signals?: { kind: string }[] };
   const size = SIZE.exec(p.query)?.[0];
+  // v3 carried the AUDIENCE in `company_types` too ("B2B" in M01). v4 has one channel —
+  // understanding.industries — so a recorded v3 type the understanding lacks is carried
+  // there, quoted only when the request holds it. (Until 2026-11-06 this adapter dropped
+  // them, and the v4 corpus silently lost "B2B": the gap the coverage check now catches.)
+  const u = (p.understanding ?? {}) as { industries?: { span: string; industry: string; necessity: string }[] };
+  const have = (u.industries ?? []).map((i) => `${i.span} ${i.industry}`.toLowerCase());
+  const carried = ((pr.company_types as string[] | undefined) ?? [])
+    .filter((t) => typeof t === "string" && audienceDescriptor(t) !== null && new RegExp(`\\b${t.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(p.query) && !have.some((h) => h.includes(t.trim().toLowerCase())))
+    .map((t) => ({ span: t.trim(), industry: t.trim(), necessity: "required" }));
   return {
-    understanding: p.understanding,
+    understanding: carried.length && p.understanding ? { ...u, industries: [...(u.industries ?? []), ...carried] } : p.understanding,
     signal_windows: days && win
       ? (und.signals ?? []).filter((s) => s.kind === "hiring" || s.kind === "funding").slice(0, 1).map((s) => ({ event: s.kind, days, phrase: win, signal: null }))
       : [],

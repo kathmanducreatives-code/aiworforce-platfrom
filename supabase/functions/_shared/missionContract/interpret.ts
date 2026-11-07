@@ -16,9 +16,16 @@
 //     a required one blocks approval) — never dropped, never silently enforced;
 //   * ambiguities block approval (the user is asked).
 //
-// The original sentence is used ONLY to check quotes. It never adds a requirement.
+//   * an explicit restriction the contract does not represent (an audience word, an
+//     exclusion, a negatively written bound — coverage.ts) blocks approval as a question.
+//
+// The original sentence is used to check quotes and to find what must be covered. It
+// never adds a requirement: an uncovered restriction is asked, never guessed.
 
-import { AUDIENCE_REQUIRE_RE, audienceDescriptor } from "../missionCriteria.ts";
+import { AUDIENCE_REQUIRE_RE, audienceDescriptor, audienceIntent } from "../missionCriteria.ts";
+import { coverageQuestions } from "./coverage.ts";
+
+const AUDIENCE_NEGATION_RE = /\b(?:exclude[sd]?|excluding|no|not|non|without|except|avoid|never|other\s+than)\b/i;
 import { DEFAULT_SIGNAL_WINDOWS, type CanonicalSignalKind } from "../signalKinds.ts";
 import { SIGNAL_WINDOWS_PROPERTY } from "../missionInterpretationContract.ts";
 import { canonicalTitleOf } from "../roleFamilies.ts";
@@ -80,7 +87,12 @@ export const CONTRACT_INSTRUCTION = [
   "Answer ONLY in the schema: every requirement is expressed once, in its own field. There is no free-form constraint field —",
   "anything the vocabulary cannot express goes in understanding.unsupported with the user's words, never elsewhere.",
   "Put each stated timeframe in signal_windows; never invent one.",
-  "An audience word (B2B, B2C) describes the companies unless the user says only/must: when they do, include that word in the span.",
+  // TEST dry run 2026-11-06: "describes the companies" was read as "is not a requirement",
+  // and B2B was omitted or filed as unsupported. An audience word IS expressible.
+  "An audience word (B2B, B2C, D2C, consumer) is a business model: put it in understanding.industries with the user's words,",
+  "never in unsupported and never omitted. Include 'only'/'must' in its span when the user says so; 'no B2C' is necessity excluded.",
+  "Every exclusion the user states ('excluding X', 'but not X', 'no X', 'without X', 'except X') must appear: an excluded role in roles",
+  "(relation excluded, abbreviations like 'SDRs' resolved to their title), an excluded place or industry with necessity excluded.",
 ].join(" ");
 
 export interface ContractProposalV4 {
@@ -111,7 +123,21 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
   // "SDRs" as excluded but gave no role id; validation rejected it and the user's exclusion
   // vanished). The registry resolves the user's own word first; a role it cannot identify
   // becomes a question that blocks approval, never a silent omission.
-  const parsed = { ...raw, roles: raw.roles.map((r) => (!r.title && !r.family ? { ...r, title: canonicalTitleOf(r.span) } : r)) };
+  // AN AUDIENCE WORD IS EXPRESSIBLE (TEST dry run 2026-11-06: "B2B" filed as unsupported was
+  // shown as "Not checked" and never enforced). The model's own unsupported item whose words
+  // are only an audience descriptor is read as the business model it is — unless the
+  // request excludes that audience, where including it would invert the meaning (the
+  // coverage check below then asks instead).
+  const audienceItems = raw.unsupported.filter((x) => {
+    const a = audienceDescriptor(x.span);
+    return a !== null && !AUDIENCE_NEGATION_RE.test(x.span) && audienceIntent(query, a) !== "exclude";
+  });
+  const parsed = {
+    ...raw,
+    roles: raw.roles.map((r) => (!r.title && !r.family ? { ...r, title: canonicalTitleOf(r.span) } : r)),
+    industries: [...raw.industries, ...audienceItems.map((x) => ({ span: x.span, industry: audienceDescriptor(x.span) === "b2b" ? "B2B" : x.span.trim(), necessity: "required" as const }))],
+    unsupported: raw.unsupported.filter((x) => !audienceItems.includes(x)),
+  };
   const u = validateUnderstanding(query, parsed);
   const rejected = [...u.rejected];
   const unidentifiedRoles = rejected.filter((x) => x.reason === "no_role_id").map((x) => x.item.replace(/^role:/, ""));
@@ -238,6 +264,12 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     completion: { targetCount: count, stopWhen: "target_reached_or_budget_exhausted" },
     provenance: { interpreter: "gpt_contract_v4", model: opts.model ?? null, from: null },
   };
+  // NOTHING THE USER STATED EXPLICITLY MAY VANISH (coverage.ts): an audience word or a
+  // negative constraint the contract does not represent — omitted by the model, rejected
+  // by validation, or only disclosed — is a blocking question, never a silent omission.
+  // One question per thing: a restriction already asked about ("growth hackers") is not asked twice.
+  const asked = contract.ambiguities.map((a) => a.span.replace(/^"|"$/g, ""));
+  for (const q of coverageQuestions(query, contract)) if (!asked.some((a) => spanInRequest(q.span, a))) contract.ambiguities.push(q);
   return { contract, rejected };
 }
 
