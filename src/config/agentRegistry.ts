@@ -13,7 +13,7 @@
  *   Lyra   — AI Signal Scout          (execution: scout)
  *   Atlas  — AI Account Analyst       (execution: aria qualification + hawk research)
  *   Mira   — AI Message Strategist    (execution: penn, approval-first preserved)
- *   Orion  — AI Pipeline Operator     (execution: operational summaries)
+ *   Orion  — Executive Intelligence   (execution: daily-brief executive brief; legacy slug scribe)
  */
 
 // Canonical public identity assets. Legacy files (scout.png, aria.png,
@@ -193,22 +193,22 @@ export const PUBLIC_AGENTS: Record<PublicAgentId, PublicAgentProfile> = {
   orion: {
     id: 'orion',
     name: 'Orion',
-    title: 'AI Pipeline Operator',
+    title: 'Executive Intelligence',
     shortDescription:
-      'Organizes what should be reviewed, approved, contacted, watched, or skipped next.',
+      'Reads what the team found and briefs you on the three things that matter most.',
     description:
-      'Organizes pipeline state, surfaces approval queues, and recommends the next action so founders always know what to review, approve, contact, watch, or skip.',
+      'Executive Intelligence: combines signals, leads, content drafts, approvals and your Company Brain into one evidence-backed brief — what happened, what matters most, why, and what to do next.',
     avatar: orionImg,
     portrait: orionImg,
     accent: 'purple',
     accentHex: '#A855F7',
     department: 'operations',
     capabilities: [
+      'executive briefings',
+      'priority ranking',
+      'evidence-backed recommendations',
       'approval queues',
-      'next-action recommendations',
-      'pipeline organization',
-      'status summaries',
-      'review management',
+      'decision support',
     ],
     // Scribe's generic content-generation capability is intentionally NOT
     // migrated to Orion yet — that surface stays on legacy Scribe until a

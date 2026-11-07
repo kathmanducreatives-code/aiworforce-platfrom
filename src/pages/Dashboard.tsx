@@ -11,6 +11,7 @@ import WorkforceAgentCard from '@/components/dashboard/WorkforceAgentCard';
 import WorkforceGreeting from '@/components/dashboard/WorkforceGreeting';
 import RecentActivityPanel from '@/components/dashboard/RecentActivityPanel';
 import ReviewQueuePanel from '@/components/dashboard/ReviewQueuePanel';
+import OrionBriefPanel from '@/components/dashboard/OrionBriefPanel';
 import { useAgentVisualStates } from '@/hooks/useAgentVisualStates';
 import { visualAgentKey, type VisualAgentKey } from '@/lib/agent3d/visualState';
 import { takeNewCompletions } from '@/lib/completionPulse';
@@ -120,6 +121,8 @@ const Dashboard = () => {
             {(['scout', 'aria', 'penn', 'scribe'] as AgentId[]).map(id => <WorkforceAgentCard key={id} agent={agents[id]} visual={visualStates[visualAgentKey(id)!]} loading={loading} onProfile={() => { setSelectedId(id); setProfileId(id); }} justFinished={!!pulse && pulse.agent === visualAgentKey(id)} onChat={() => talk(id)} onAction={() => { const action = agents[id].nextAction; if (action.route) navigate(action.route); else talk(id); }} />)}
           </section>
           <LiveIntelligenceBar workspaceId={workspaceId} feed={signalFeed} watchlist={watchlist} />
+          {/* Orion's executive brief: stored briefs (saved_outputs) with evidence links. */}
+          <OrionBriefPanel workspaceId={workspaceId} />
           <div className="team-lower">
             {/* Live: activity_feed + signals + drafts + failed runs (useActivityFeed). */}
             <RecentActivityPanel workspaceId={workspaceId} pulse={!!pulse} />
