@@ -60,7 +60,9 @@ export interface RunReport {
   mission: string; walkId: string; dryRun: boolean;
   plan: { status: number; planStatus: string | null; binding: string | null; contractHash: string | null; estimateUsd: number | null; strategy: string | null; requirements: unknown[]; assumptions: unknown[]; blockedReason: string | null;
     /** The complete approved contract (no secrets: the user's request, requirements, assumptions). */
-    contract: unknown; disclosures: string[]; clarification: unknown };
+    contract: unknown; disclosures: string[]; clarification: unknown;
+    /** Unsupported items merged as exact duplicates of an enforced requirement (audit; coverage.ts). */
+    mergedDuplicates: { span: string; coveredBy: string[]; reason: string }[] };
   run: null | { status: number; runStatus: string | null; spendUsd: number | null; leadoceanRecords: number | null; contractHash: string | null; leads: number; verdicts: { leadKey: string; verdicts: Verdict[] }[]; invariantViolations: unknown[]; error: string | null };
   checks: { name: string; pass: boolean; detail: string }[];
   ok: boolean;
@@ -73,7 +75,7 @@ export async function runContractV4(call: Call, workspaceId: string, o: { dryRun
   const check = (name: string, pass: boolean, detail: string) => { checks.push({ name, pass, detail }); return pass; };
   const p = await call("lead-pipeline", { action: "strategy_plan", ...base });
   const plan = (p.body.plan ?? {}) as Record<string, unknown>;
-  const interp = (p.body.interpretation ?? {}) as { missionContract?: { hash?: string; contract?: { requirements?: { id: string; dimension: string; necessity: string; origin: { source: string; span?: string }; excludedRoleTerms?: string[] | null; roleTerms?: string[] | null }[]; ambiguities?: unknown[] }; assumptions?: unknown[]; disclosures?: string[] } };
+  const interp = (p.body.interpretation ?? {}) as { missionContract?: { hash?: string; contract?: { requirements?: { id: string; dimension: string; necessity: string; origin: { source: string; span?: string }; excludedRoleTerms?: string[] | null; roleTerms?: string[] | null }[]; ambiguities?: unknown[] }; assumptions?: unknown[]; disclosures?: string[]; mergedDuplicates?: { span: string; coveredBy: string[]; reason: string }[] } };
   const binding = ((plan.binding ?? {}) as { contract?: string }).contract ?? null;
   const est = ((plan.estimate ?? {}) as { apifyUsd?: number; leadoceanRecords?: number });
   const report: RunReport = {
@@ -86,13 +88,16 @@ export async function runContractV4(call: Call, workspaceId: string, o: { dryRun
         ...(r.roleTerms ? { roleTerms: r.roleTerms } : {}), ...(r.excludedRoleTerms ? { excludedRoleTerms: r.excludedRoleTerms } : {}) })),
       assumptions: interp.missionContract?.assumptions ?? [], blockedReason: (plan.blockedReason as string) ?? null,
       contract: interp.missionContract?.contract ?? null, disclosures: interp.missionContract?.disclosures ?? [],
-      clarification: p.body.clarification ?? null,
+      clarification: p.body.clarification ?? null, mergedDuplicates: interp.missionContract?.mergedDuplicates ?? [],
     },
     run: null, checks, ok: false,
   };
   const ready = check("plan ready", p.status === 200 && plan.status === "ready", `HTTP ${p.status}, ${String(plan.status ?? p.body.error ?? "")}`)
     && check("every stated requirement is checked (nothing only shown as 'Not checked', no open question)",
       report.plan.disclosures.length === 0 && !(interp.missionContract?.contract?.ambiguities ?? []).length, report.plan.disclosures.join("; ") || "none")
+    && check("every merged duplicate names a required requirement that enforces it",
+      report.plan.mergedDuplicates.every((m) => m.coveredBy.length > 0 && m.coveredBy.every((id) => (interp.missionContract?.contract?.requirements ?? []).some((x) => x.id === id && x.necessity === "required" && x.dimension !== "unsupported"))),
+      report.plan.mergedDuplicates.map((m) => `"${m.span}" → ${m.coveredBy.join(", ")}`).join("; ") || "none merged")
     && check("the contract reads as this mission (US HQ, B2B, AE hiring REQUIRED; SDR/BDR excluded; 5)",
       missionShapeProblems(interp.missionContract?.contract as never).length === 0, missionShapeProblems(interp.missionContract?.contract as never).join("; ") || "all present")
     && check("plan bound to the Mission Contract", !!binding && binding === `mission-contract-v1:${report.plan.contractHash}`, String(binding))

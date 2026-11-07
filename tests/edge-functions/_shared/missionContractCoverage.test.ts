@@ -6,9 +6,9 @@
 // Executives, excluding SDRs." Two live readings of that sentence: one omitted "B2B", one
 // filed it as `unsupported` (shown, never checked). Both plans were "ready".
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { approvability, disclosures, type MissionContract, type Requirement } from "../../../supabase/functions/_shared/missionContract/contract.ts";
+import { approvability, contractProblems, disclosures, type MissionContract, type Requirement } from "../../../supabase/functions/_shared/missionContract/contract.ts";
 import { contractFromProposal } from "../../../supabase/functions/_shared/missionContract/interpret.ts";
-import { coverageQuestions, explicitCues } from "../../../supabase/functions/_shared/missionContract/coverage.ts";
+import { coverageQuestions, explicitCues, redundantUnsupported } from "../../../supabase/functions/_shared/missionContract/coverage.ts";
 import { applyCompanyBrain } from "../../../supabase/functions/_shared/missionContract/brain.ts";
 
 type U = Record<string, unknown>;
@@ -165,7 +165,7 @@ Deno.test("coverage counts only the USER's requirements: a Company Brain exclusi
 
 const MUST = "Find 5 companies headquartered in the United States that must operate as B2B businesses, are actively hiring Account Executives, and exclude companies whose hiring evidence is only for SDR/BDR roles.";
 const BDR_EX = { span: "BDR", title: "business_development_representative", family: null, relation: "excluded" };
-const must = (u: U) => read(MUST, { places: [{ ...US, span: "headquartered in the United States" }], signals: [hiring("actively hiring Account Executives")], ...u });
+const must = (u: U, over: U = {}) => read(MUST, { places: [{ ...US, span: "headquartered in the United States" }], signals: [hiring("actively hiring Account Executives")], ...u }, over);
 
 Deno.test("strength: 'must operate as B2B' read with its own words is REQUIRED; with SDR and BDR excluded nothing is asked", () => {
   const c = must({ roles: [AE, { ...SDR_EX, span: "SDR" }, BDR_EX], industries: [{ span: "must operate as B2B", industry: "B2B", necessity: "required" }] });
@@ -212,4 +212,91 @@ Deno.test("windows: a 'stated' window whose words state no duration ('actively' 
   assert(c.assumptions.some((a) => a.text === "hiring: last 30 days (default)"));
   const stated = read("US companies hiring Account Executives in the last 14 days", {}, { signal_windows: [{ event: "hiring", days: 14, phrase: "in the last 14 days", signal: null }] });
   assertEquals([hiringOf(stated).window!.days, hiringOf(stated).window!.origin.source], [14, "user_explicit"]);
+});
+
+// ── An unsupported item that only REPEATS an enforced requirement (TEST live attempt 2026-11-07) ──
+// The live plan b8f307b2…: SDR and BDR excluded from the AE hiring signal (enforced) AND the
+// same clause filed as `unsupported` → "Not checked" → the run script refused a correct plan.
+
+const CLAUSE = "exclude companies whose hiring evidence is only for SDR/BDR roles";
+const LIVE = { roles: [AE, { ...SDR_EX, span: "SDR" }, BDR_EX], industries: [{ span: "B2B businesses", industry: "B2B", necessity: "required" }] };
+const enforced = () => must(LIVE).requirements;
+
+Deno.test("duplicate: the failed live plan — the SDR/BDR clause filed as unsupported is merged into the hiring signal that enforces it, with an audit record", () => {
+  const c = must({ ...LIVE, unsupported: [{ span: CLAUSE, why: "company-level exclusion based on role mix" }] });
+  assertEquals(disclosures(c), [], "nothing is left 'Not checked'");
+  assertEquals(c.ambiguities, []);
+  assert(approvability(c).ok);
+  assertEquals(contractProblems(c), []);
+  const h = hiringOf(c);
+  assertEquals(h.excludedRoleTerms, ["Sales Development Representative", "Business Development Representative"]);
+  assertEquals(c.mergedDuplicates!.map((m) => [m.span, m.coveredBy]), [[CLAUSE, [h.id]]]);
+  assert(c.mergedDuplicates![0].reason.includes("never count"));
+  // The requirements are exactly the clean reading's: nothing added, nothing weakened.
+  assertEquals(c.requirements, must(LIVE).requirements);
+  // A reading with no duplicate carries no audit field (its approval identity is unchanged).
+  assert(!("mergedDuplicates" in must(LIVE)));
+});
+
+Deno.test("duplicate: PARTIAL coverage is never merged — a role not excluded, or extra words, stay 'Not checked'", () => {
+  // Only SDR excluded: the clause also names BDR.
+  const onlySdr = must({ ...LIVE, roles: [AE, { ...SDR_EX, span: "SDR" }], unsupported: [{ span: CLAUSE, why: "x" }] });
+  assertEquals(disclosures(onlySdr).length, 1);
+  assertEquals(onlySdr.mergedDuplicates, undefined);
+  assert(!approvability(onlySdr).ok, "the uncovered BDR exclusion is also asked");
+  // Extra restriction words the enforced requirement does not carry.
+  for (const s of [`${CLAUSE} in Europe`, "excluding SDRs and agencies", "exclude companies whose hiring evidence is only for SDR/BDR roles under 50 employees"]) {
+    assertEquals(redundantUnsupported(s, enforced()), null, s);
+  }
+});
+
+Deno.test("duplicate: a DIFFERENT exclusion is never merged", () => {
+  for (const s of ["exclude companies whose hiring evidence is only for Customer Success Manager roles", "excluding Solutions Engineers", "excluding recruiters", "not in Canada"]) {
+    assertEquals(redundantUnsupported(s, enforced()), null, s);
+  }
+});
+
+Deno.test("duplicate: CONFLICTING polarity or scope is never merged", () => {
+  for (const s of [
+    "hiring SDR/BDR roles", // an inclusion, not an exclusion
+    "exclude companies hiring Account Executives", // excludes the required role
+    "exclude companies hiring SDRs", // company-scoped: rejects an AE-hiring company that also hires SDRs
+    "exclude companies with any SDR/BDR roles",
+  ]) assertEquals(redundantUnsupported(s, enforced()), null, s);
+  // Role-scoped wording is the excluded-role meaning: merged.
+  assertEquals(redundantUnsupported("excluding SDRs", enforced())?.coveredBy, [hiringOf(must(LIVE)).id]);
+  // A preferred (non-gating) signal never answers it.
+  const soft = enforced().map((r) => (r.dimension === "signal" ? { ...r, necessity: "preferred" as const } : r));
+  assertEquals(redundantUnsupported(CLAUSE, soft), null);
+});
+
+Deno.test("duplicate: AMBIGUOUS wording is never merged", () => {
+  for (const s of [
+    "exclude companies whose hiring evidence is mostly for SDR/BDR roles",
+    "maybe exclude SDR roles",
+    "ideally excluding SDRs",
+    "not excluding SDRs",
+    "exclude companies whose hiring evidence is only for SDR/BDR roles unless they also hire AEs",
+  ]) assertEquals(redundantUnsupported(s, enforced()), null, s);
+});
+
+Deno.test("duplicate: a genuinely unsupported requirement stays 'Not checked'; a company exclusion merges only at the same scope", () => {
+  const q = `${MUST} Prefer companies with a strong engineering culture.`;
+  const c = contractFromProposal(q, { understanding: { roles: LIVE.roles, role_match: "any", places: [{ ...US, span: "headquartered in the United States" }], industries: LIVE.industries,
+    signals: [hiring("actively hiring Account Executives")], signal_logic: "all", ambiguities: [], unsupported: [{ span: "a strong engineering culture", why: "x" }, { span: CLAUSE, why: "x" }] },
+    signal_windows: [], deliverable: { entity: "company", count: 5, count_span: "5", person_roles: [] }, company_size: null, funding_stages: [], forbid_broadening: [] } as never).contract;
+  assertEquals(disclosures(c).map((r) => r.origin.span), ["a strong engineering culture"]);
+  assertEquals(c.mergedDuplicates!.map((m) => m.span), [CLAUSE]);
+  // Places: "not based in Canada" enforced → its unsupported copy merges; a different scope does not.
+  const geo = "Companies hiring Account Executives, not based in Canada";
+  const g = read(geo, { places: [{ span: "not based in Canada", place: null, other_place: "Canada", scope: "headquarters", necessity: "excluded" }] }).requirements;
+  assertEquals(redundantUnsupported("not based in Canada", g)?.coveredBy, ["exclusion:geography:canada"]);
+  assertEquals(redundantUnsupported("not headquartered in Canada", g), null);
+  assertEquals(redundantUnsupported("not based in Canada or Mexico", g), null);
+});
+
+Deno.test("duplicate: an audit record that names no enforced requirement is an invalid contract", () => {
+  const c = must(LIVE);
+  assertEquals(contractProblems({ ...c, mergedDuplicates: [{ span: CLAUSE, coveredBy: ["hiring:nope"], reason: "x" }] }).map((p) => p.code), ["merged_duplicate"]);
+  assertEquals(contractProblems({ ...c, mergedDuplicates: [{ span: CLAUSE, coveredBy: [], reason: "x" }] }).map((p) => p.code), ["merged_duplicate"]);
 });

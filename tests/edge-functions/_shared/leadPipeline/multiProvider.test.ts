@@ -1453,3 +1453,41 @@ Deno.test("v4 TEST run script: a plan that weakens B2B to a preference or drops 
   const noBdr = { ...ok, requirements: ok.requirements.map((r) => r.id === "h" ? { ...r, excludedRoleTerms: ["Sales Development Representative"] } : r) };
   assertEquals(missionShapeProblems(noBdr), ["BDR postings are not excluded from the hiring evidence"]);
 });
+
+Deno.test("v4 TEST run script: the failed live reading (SDR/BDR clause ALSO filed as unsupported) merges the duplicate, is audited, and runs within the cap", async () => {
+  const { runContractV4, MISSION, CAP_USD } = await import("../../../../scripts/test-project/contract-v4-run.ts");
+  const CLAUSE = "exclude companies whose hiring evidence is only for SDR/BDR roles";
+  const answer = {
+    understanding: {
+      roles: [{ span: "Account Executives", title: "account_executive", family: null, relation: "required" },
+        { span: "SDR", title: "sales_development_representative", family: null, relation: "excluded" },
+        { span: "BDR", title: "business_development_representative", family: null, relation: "excluded" }],
+      role_match: "any", places: [{ span: "headquartered in the United States", place: "united states", other_place: null, scope: "headquarters", necessity: "required" }],
+      industries: [{ span: "B2B businesses", industry: "B2B", necessity: "required" }],
+      signals: [{ span: "actively hiring Account Executives", kind: "hiring", necessity: "required" }],
+      signal_logic: "all", ambiguities: [], unsupported: [{ span: CLAUSE, why: "company-level exclusion based on role mix" }],
+    },
+    signal_windows: [], deliverable: { entity: "company", count: 5, count_span: "5", person_roles: [] },
+    company_size: null, funding_stages: [], forbid_broadening: [],
+  };
+  assertStringIncludes(MISSION, CLAUSE);
+  const chain = contractChain(answer);
+  const m = sdeps({ interpret: chain.interpret as never, recompile: chain.recompile as never });
+  const call = async (_fn: string, body: Record<string, unknown>) => {
+    const req = parseStrategyRequest(body);
+    if (!req) return { status: 400, body: { error: "unparseable" } };
+    const r = await handleStrategyRequest(req, m.d);
+    return { status: r.status, body: r.body as Record<string, unknown> };
+  };
+  const dry = await runContractV4(call, WS, { dryRun: true });
+  assert(dry.ok, JSON.stringify(dry.checks));
+  assertEquals(dry.plan.disclosures, []);
+  assertEquals(dry.plan.mergedDuplicates.map((x) => [x.span, x.coveredBy]), [[CLAUSE, ["hiring:actively_hiring_account_executives"]]]);
+  assertEquals(m.ap.calls.length + m.lo.calls.length, 0, "a dry run buys nothing");
+  // The approved hash replays exactly on strategy_run (the merge is deterministic and hashed).
+  const live = await runContractV4(call, WS, { dryRun: false });
+  assert(live.ok, JSON.stringify(live.checks));
+  assertEquals(live.run!.contractHash, live.plan.contractHash);
+  assert((live.run!.spendUsd ?? 1) <= CAP_USD);
+  assertEquals(m.lo.calls.length, 0, "no LeadOcean record is bought");
+});
