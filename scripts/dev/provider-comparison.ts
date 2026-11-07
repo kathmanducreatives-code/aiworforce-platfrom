@@ -21,7 +21,7 @@
 // LeadOcean has no hiring data (docs/PROVIDER_CAPABILITIES.md), so on a hiring mission it can
 // contribute candidates, never qualified companies, on its own.
 
-import { LO_PEOPLE, RECORDS, runScenario, type RunRecord, type Scenario } from "./discovery-benchmark.ts";
+import { co, job, LO_PEOPLE, RECORDS, runScenario, SCOPED_JOBS, type RunRecord, type Scenario } from "./discovery-benchmark.ts";
 import { companyRecord } from "../../tests/edge-functions/_shared/leadPipeline/fixtures.ts";
 import type { DiscoveryStrategyId } from "../../supabase/functions/_shared/leadPipeline/strategy.ts";
 import { type ProviderRunSummary, summarizeProviderRun } from "../../supabase/functions/_shared/leadPipeline/providerRunSummary.ts";
@@ -43,6 +43,17 @@ const rec = (slug: string, name: string, city: string, band: [number, number]) =
   companyRecord(slug, { name, website: `https://${slug}.example`, hqCountry: "US", city, band });
 RECORDS.cobaltdesk ??= rec("cobaltdesk", "Cobalt Desk", "Portland", [51, 200]);
 RECORDS.pinecrest ??= rec("pinecrest", "Pinecrest Apps", "Raleigh", [11, 50]);
+// Postings only a job search SCOPED to named companies returns (the discovery search never
+// sees them): Cobalt Desk is hiring an AE (→ qualifies once checked); Pinecrest posts only an
+// SDR role, the excluded one (→ still pending: an absent posting proves nothing either way).
+if (!SCOPED_JOBS.some((j) => j.id === "s1")) {
+  SCOPED_JOBS.push(
+    job("s1", "Account Executive", "2026-10-27", co("cobaltdesk", "Cobalt Desk", "Software Development", "Portland, Oregon, United States", [51, 200])),
+    job("s2", "Sales Development Representative", "2026-10-26", co("pinecrest", "Pinecrest Apps", "Software Development", "Raleigh, North Carolina, United States", [11, 50])),
+  );
+}
+/** With the opt-in hiring check at LeadOcean's employers, Cobalt Desk joins the truth. */
+export const TRUTH_QUALIFIED_WITH_HIRING_CHECK = ["cobaltdesk.example", "northwind.example", "quartzlabs.example"];
 
 const US = { geographies: ["United States"], hard_constraints: [{ field: "geography", operator: "in", value: ["United States"], reason: "US" }] };
 const V1 = { ...US, company_types: ["B2B"], requested_opportunity_count: 5, preferred_signals: ["hiring Account Executives but not SDRs"], signal_recency_days: 30, strategies: ["hiring"] };
@@ -62,11 +73,16 @@ export const MODES: { mode: string; strategy: DiscoveryStrategyId; allowReviewOn
   { mode: "Concurrent", strategy: "apify_leadocean_concurrent" },
 ];
 
-function scenario(m: typeof MODES[number], contract: "v1" | "v3"): Scenario {
+/** The concurrent mode plus the opt-in job search by company (a 4th, separately reported run). */
+export const HIRING_CHECK_MODE = { mode: "Concurrent + hiring check", strategy: "apify_leadocean_concurrent" as DiscoveryStrategyId, verifyHiringByCompany: true };
+
+function scenario(m: typeof MODES[number] & { verifyHiringByCompany?: boolean }, contract: "v1" | "v3"): Scenario {
+  const truth = m.verifyHiringByCompany ? TRUTH_QUALIFIED_WITH_HIRING_CHECK : TRUTH_QUALIFIED;
   return {
+    verifyHiringByCompany: m.verifyHiringByCompany,
     id: `PC-${m.strategy}-${contract}`, group: "X", title: m.mode, request: MISSION, count: 5, strategy: m.strategy,
     proposal: V1, people: "comparison" as never, allowReviewOnly: m.allowReviewOnly, contract, understanding: V3_UNDERSTANDING,
-    truthQualified: TRUTH_QUALIFIED,
+    truthQualified: truth,
     // One ceiling for every mode, large enough that no provider's result set is cut: the
     // comparison measures the providers, not the budget (offline: nothing is spent).
     budget: { maxLeadoceanRecords: 20, maxApifyUsd: 0.25 },
@@ -90,9 +106,9 @@ export interface ModeResult {
   summary: ProviderRunSummary | null;
 }
 
-export async function compare(contract: "v1" | "v3" = "v3"): Promise<ModeResult[]> {
+export async function compare(contract: "v1" | "v3" = "v3", modes: (typeof MODES[number] & { verifyHiringByCompany?: boolean })[] = MODES): Promise<ModeResult[]> {
   const out: ModeResult[] = [];
-  for (const m of MODES) {
+  for (const m of modes) {
     const r: RunRecord = await runScenario(scenario(m, contract), { walkId: `pc-${m.strategy}-${contract}` });
     const raw = {
       apifyJobRows: r.providerCalls.filter((c) => c.capability.includes("job")).reduce((n, c) => n + c.items, 0),
@@ -140,13 +156,14 @@ if (import.meta.main) {
   const outArg = Deno.args.indexOf("--out");
   const out = outArg >= 0 ? Deno.args[outArg + 1] : "docs/benchmarks/provider-comparison";
   const v3 = await compare("v3"), v1 = await compare("v1");
-  const report = { mission: MISSION, truthQualified: TRUTH_QUALIFIED, v3, v1, overlap: overlap(v3),
+  const [hiringCheck] = await compare("v3", [HIRING_CHECK_MODE]);
+  const report = { mission: MISSION, truthQualified: TRUTH_QUALIFIED, v3, v1, overlap: overlap(v3), hiringCheck,
     contractsAgree: JSON.stringify(v3.map((x) => x.companies)) === JSON.stringify(v1.map((x) => x.companies)) };
   await Deno.mkdir(out, { recursive: true });
   const strip = (r: ModeResult[]) => r.map(({ runtimeMs: _t, ...x }) => x); // runtime varies run to run: reported, not recorded
-  await Deno.writeTextFile(`${out}/comparison.json`, JSON.stringify({ ...report, v3: strip(v3), v1: strip(v1) }, null, 1) + "\n");
+  await Deno.writeTextFile(`${out}/comparison.json`, JSON.stringify({ ...report, v3: strip(v3), v1: strip(v1), hiringCheck: strip([hiringCheck])[0] }, null, 1) + "\n");
   console.log(JSON.stringify(report.overlap));
-  for (const r of v3) console.log(`${r.mode.padEnd(15)} plan=${r.planStatus} unique=${r.uniqueCompanies} qualified=${r.qualified} pending=${r.pending} rejected=${r.rejected} fq=${r.falseQualified} apify=$${r.costApifyUsd} lo=${r.leadoceanRecords} failures=${r.apiFailures.length} ${r.planBlockedReason ?? ""}`);
+  for (const r of [...v3, hiringCheck]) console.log(`${r.mode.padEnd(15)} plan=${r.planStatus} unique=${r.uniqueCompanies} qualified=${r.qualified} pending=${r.pending} rejected=${r.rejected} fq=${r.falseQualified} apify=$${r.costApifyUsd} lo=${r.leadoceanRecords} failures=${r.apiFailures.length} ${r.planBlockedReason ?? ""}`);
   console.log("contracts agree (v1 vs v3):", report.contractsAgree);
 }
 

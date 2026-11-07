@@ -45,7 +45,7 @@ import { NON_DECISION_TITLES } from "./icp.ts";
 import { bestContact, personVerification, runLeadPipeline, PIPELINE_VERSION, type PipelineLead, type PipelineRun } from "./pipeline.ts";
 import { DEFAULT_WEIGHTS, rankLeads } from "./ranking.ts";
 import {
-  APOLLO_ACCESS_VALIDATED, DISCOVERY_CAPABILITIES, discoveryJobTitles, icpFromSpec, postTopics, sizePreferenceDistance, leadoceanDiscoveryRequirements,
+  APOLLO_ACCESS_VALIDATED, BY_COMPANY_MAX, BY_COMPANY_ROWS, DISCOVERY_CAPABILITIES, discoveryJobTitles, icpFromSpec, postTopics, sizePreferenceDistance, leadoceanDiscoveryRequirements,
   type DiscoverySpec, type DiscoveryStrategyId, type Limitation, type StrategyPlan,
 } from "./strategy.ts";
 
@@ -325,6 +325,38 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   // Disproven companies get no people bought for them.
   const firstPass = verifyLeads({ ...spec.requirements, targetEntity: "company" }, mergeRecords(found.companies, []), [], { now, canonicalEvidence });
   const disproven = new Set(firstPass.filter((l) => l.shared?.eligibility === "ineligible").flatMap((l) => l.company.domain.map((d) => d.value)));
+
+  // 3b OPT-IN (verifyHiringByCompany): hiring checked AT LeadOcean's own employers. LeadOcean
+  // has no hiring data, so a company only it proposed stays pending on hiring; one job search
+  // scoped to ≤ 10 of them (not already found by the discovery search, not disproven by their
+  // record) can supply the dated posting. Same post-filter as discovery; a row naming another
+  // employer is dropped; inside the approved ceiling, never retried. Absence of a posting proves
+  // nothing: the company stays pending, never rejected on it.
+  const hireStep = plan.steps.find((s) => s.role === "verify_hiring");
+  if (hireStep) {
+    const apifySlugs = new Set(found.companies.map((c) => slugOf(c.linkedinUrl)).filter(Boolean));
+    const loOnly = [...new Map(loEmployers.filter((c) => { const s = slugOf(c.linkedinUrl); return !!s && !apifySlugs.has(s); }).map((c) => [slugOf(c.linkedinUrl)!, c])).values()];
+    const loPass = verifyLeads({ ...spec.requirements, targetEntity: "company" }, mergeRecords(loOnly, []), [], { now, canonicalEvidence });
+    const loDisproven = new Set(loPass.filter((l) => l.shared?.eligibility === "ineligible").flatMap((l) => l.company.linkedinUrl.map((x) => slugOf(x.value))));
+    const recState = (c: ProviderCompany) => canonical.statuses.find((x) => x.companyKey === `li:${slugOf(c.linkedinUrl)}`)?.state === "read" ? 0 : 1;
+    const scope = loOnly.filter((c) => !loDisproven.has(slugOf(c.linkedinUrl))).sort((a, b) => recState(a) - recState(b) || prefOrder(a) - prefOrder(b))
+      .slice(0, BY_COMPANY_MAX).map((c) => c.linkedinUrl!);
+    const budget = Math.max(0, Math.min(hireStep.estimate.apifyUsd, cap.apifyUsd - apifySpent));
+    const items = Math.min(hireStep.maxItems, scope.length * BY_COMPANY_ROWS);
+    if (!scope.length) {
+      steps.push({ capability: hireStep.capability, provider: "apify", status: "skipped", reason: "no LeadOcean-only company to check", spend: { leadoceanRecords: 0, apifyUsd: 0 } });
+    } else {
+      const hired = await discoverHiringCompanies(spec, discoveryJobTitles(spec), apify, { maxItems: items, maxUsd: budget, now: now(), idPrefix: mission, missionId: mission, companyScope: scope });
+      apifySpent += hired.spentUsd;
+      for (const [slug, ev] of hired.evidence) { found.evidence.set(slug, ev); found.jobs.set(slug, hired.jobs.get(slug) ?? []); }
+      const dropped = Object.entries(hired.dropped).map(([k, v]) => `${k} ${v}`).join(", ");
+      steps.push({ capability: hireStep.capability, provider: "apify",
+        status: hired.stopped === "budget" ? "skipped" : hired.stopped ? "failed" : "completed",
+        reason: hired.stopped === "budget" ? "budget: the scoped search does not fit what the ceiling leaves; companies stay pending on hiring"
+          : hired.stopped ?? `${hired.evidence.size} of ${scope.length} compan${scope.length === 1 ? "y" : "ies"} showed a qualifying posting${dropped ? `; dropped: ${dropped}` : ""}`,
+        spend: { leadoceanRecords: 0, apifyUsd: r6(hired.spentUsd) } });
+    }
+  }
 
   // 4 decision-makers by exact domain
   let people: ProviderPerson[] = concurrentLO?.people ?? [];

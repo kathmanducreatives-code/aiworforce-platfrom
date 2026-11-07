@@ -71,6 +71,13 @@ export const JOBS = [
   job("j9", "Sales Representative", "2026-10-23", COMPANIES.ironworks),
   job("j10", "Outside Sales Representative", "2026-10-19", COMPANIES.plainsteel),
 ];
+/**
+ * Postings that only a job search SCOPED to named companies returns (`company[]`): the
+ * discovery search above never sees them. Empty in the baseline; a scenario world adds to it.
+ */
+export const SCOPED_JOBS: ReturnType<typeof job>[] = [];
+export { co, job, type Co };
+
 /** A company record whose HQ location carries the full place text, as LinkedIn states it ("Austin, Texas, United States"). */
 const record = (c: Co) => {
   const r = companyRecord(c.slug, {
@@ -109,7 +116,7 @@ export const LO_PEOPLE: Record<string, Synthetic[]> = {
 
 export type Fault =
   | "none" | "empty_jobs" | "incomplete_records" | "duplicate_postings" | "jobs_timeout" | "records_timeout"
-  | "lo_empty" | "lo_error";
+  | "lo_empty" | "lo_error" | "scope_leak";
 
 function apifyFor(fault: Fault) {
   const calls: { actor: string; items: number; key: string }[] = [];
@@ -118,8 +125,13 @@ function apifyFor(fault: Fault) {
     if (actor === "apify_linkedin_job_search") {
       titles.push(...((input.jobTitles as string[] | undefined) ?? []));
       if (fault === "jobs_timeout") { calls.push({ actor, items: 0, key: opts.idempotencyKey }); return Promise.reject(new Error("apify timeout (aborted)")); }
-      const base = fault === "empty_jobs" ? [] : fault === "duplicate_postings" ? [...JOBS, ...JOBS.map((j) => ({ ...j, id: `${j.id}-dup` }))] : JOBS;
-      const items = base.slice(0, opts.maxItems);
+      // Scoped to named companies: their postings only (plus, under `scope_leak`, a neighbour's
+      // row the executor must refuse). The actor's maxItems counts per title.
+      const scope = input.company as string[] | undefined;
+      const slugs = new Set((scope ?? []).map((u) => /company\/([^/]+)/.exec(u)?.[1]));
+      const base = scope ? [...JOBS, ...SCOPED_JOBS].filter((j) => slugs.has(j.company.universalName) || (fault === "scope_leak" && j.id === "j1"))
+        : fault === "empty_jobs" ? [] : fault === "duplicate_postings" ? [...JOBS, ...JOBS.map((j) => ({ ...j, id: `${j.id}-dup` }))] : JOBS;
+      const items = base.slice(0, scope ? Number(input.maxItems) * Math.max(1, ((input.jobTitles as string[]) ?? []).length) : opts.maxItems);
       calls.push({ actor, items: items.length, key: opts.idempotencyKey });
       return Promise.resolve({ items, runId: "run-jobs", chargedUsd: 0.001 + 0.001 * items.length });
     }
@@ -185,6 +197,8 @@ export interface Scenario {
   plannerRefusalExpected?: boolean;
   /** Interpretation contract for the compile (default v1); `understanding` is the v3 reading. */
   contract?: "v1" | "v3";
+  /** Opt-in: check hiring at LeadOcean's own employers (job search by company). */
+  verifyHiringByCompany?: boolean;
   /** Plan ceilings (default: $0.05 Apify, 20 LeadOcean records). */
   budget?: { maxLeadoceanRecords: number; maxApifyUsd: number };
   understanding?: unknown;
@@ -403,7 +417,7 @@ export async function runScenario(s: Scenario, o: { fault?: Fault; ledger?: Usag
   const ctx: StrategyContext = {
     providers: { leadocean: { enabled: true, connected: true, authorized: true, remaining: 955 }, apify: { enabled: true, connected: true, authorized: true }, apollo: { enabled: false, connected: false, authorized: false } },
     budget: s.budget ?? { maxLeadoceanRecords: 20, maxApifyUsd: 0.05 },
-    user: { strategy: s.strategy, ...(s.allowReviewOnly ? { allowReviewOnly: true } : {}) },
+    user: { strategy: s.strategy, ...(s.allowReviewOnly ? { allowReviewOnly: true } : {}), ...(s.verifyHiringByCompany ? { verifyHiringByCompany: true } : {}) },
     binding: { workspaceId: WS, contractVersion: "benchmark" },
   };
   const plan: StrategyPlan = planStrategy(spec, ctx);
