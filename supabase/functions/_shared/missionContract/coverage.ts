@@ -34,6 +34,8 @@ export interface ExplicitCue {
   object: string;
   audience?: "b2b" | "consumer";
   polarity: "include" | "exclude";
+  /** The user's own words make it hard ("must operate as B2B", "only B2B"): a preference does not answer it. */
+  strength?: "required";
 }
 
 const NEGATION_RE = /\b(excluding|exclude[sd]?|except(?:\s+for)?|other\s+than|apart\s+from|but\s+not|not|no|without|minus|avoid(?:ing)?|never)\s+([^.,;:!?()\n]+)/gi;
@@ -60,12 +62,19 @@ export function explicitCues(query: string): ExplicitCue[] {
     const intent = audienceIntent(q, audience);
     if (intent === "absent" || intent === "permit") continue;
     const m = (audience === "b2b" ? /\b(?:b2b|business[\s-]+to[\s-]+business)\b/i : /\b(?:b2c|d2c|dtc|direct[\s-]+to[\s-]+consumers?|business[\s-]+to[\s-]+consumers?|consumers?)\b/i).exec(q);
-    out.push({ kind: "audience", span: m?.[0] ?? audience, object: m?.[0] ?? audience, audience, polarity: intent === "exclude" ? "exclude" : "include" });
+    out.push({ kind: "audience", span: m?.[0] ?? audience, object: m?.[0] ?? audience, audience, polarity: intent === "exclude" ? "exclude" : "include",
+      ...(intent === "require" ? { strength: "required" as const } : {}) });
   }
   for (const m of q.matchAll(NEGATION_RE)) {
-    const rest = m[2].replace(CLAUSE_RE, "").trim();
+    const cut = m[2].replace(CLAUSE_RE, "").trim();
+    // When the words before the clause break say nothing ("exclude companies whose hiring
+    // evidence is only for SDR/BDR roles"), the roles named in the rest of the clause are
+    // what it restricts. Otherwise the cut stands ("no more than 200 employees hiring AEs").
+    const whole = m[2].trim();
+    const named = !contentTokens(cut).length ? titlesIn(whole) : new Set<string>();
+    const rest = named.size ? whole : cut;
     if (!rest || FILLER_RE.test(rest)) continue;
-    const object = rest.split(/\s+/).slice(0, 6).join(" ");
+    const object = named.size ? rest : rest.split(/\s+/).slice(0, 6).join(" ");
     if (!contentTokens(object).length) continue;
     const kind = BOUND_RE.test(object) ? "bound" : "exclusion";
     // An audience exclusion ("no B2C") is already an audience cue.
@@ -102,7 +111,7 @@ function answers(r: Requirement): { text: string[]; titles: Set<string>; polarit
 const mentions = (texts: string[], token: string) => texts.some((t) => !!t && spanInRequest(t, token));
 /** Titles a phrase names, through the registry ("SDRs", "account execs"), word runs of 1–4. */
 function titlesIn(object: string): Set<string> {
-  const w = object.split(/\s+/).filter(Boolean);
+  const w = object.split(/[\s/,&+]+/).filter(Boolean);
   const out = new Set<string>();
   for (let n = 1; n <= Math.min(4, w.length); n++) for (let i = 0; i + n <= w.length; i++) {
     const t = canonicalTitleOf(w.slice(i, i + n).join(" "));
@@ -115,7 +124,7 @@ function titlesIn(object: string): Set<string> {
 export function cueCovered(cue: ExplicitCue, c: MissionContract): boolean {
   const own = c.requirements.filter((r) => isExecutable(r) && (r.origin.source === "user_explicit" || r.origin.source === "user_inferred"));
   if (cue.kind === "audience") {
-    return own.some((r) => { const a = answers(r); return a.polarity === cue.polarity && a.text.some((t) => namesAudience(t, cue.audience!)); });
+    return own.some((r) => { const a = answers(r); return a.polarity === cue.polarity && (cue.strength !== "required" || r.necessity === "required") && a.text.some((t) => namesAudience(t, cue.audience!)); });
   }
   if (cue.kind === "bound") {
     const toks = contentTokens(cue.object).filter((t) => /\d/.test(t));
@@ -139,7 +148,9 @@ export function cueCovered(cue: ExplicitCue, c: MissionContract): boolean {
 export function coverageQuestions(query: string, c: MissionContract): { span: string; question: string }[] {
   return explicitCues(query).filter((cue) => !cueCovered(cue, c)).map((cue) => ({
     span: cue.span,
-    question: cue.kind === "audience"
+    question: cue.kind === "audience" && cue.strength === "required" && c.requirements.some((r) => r.dimension === "industry" && namesAudience(`${r.origin.span} ${r.value}`, cue.audience!))
+      ? `Your request says companies must be ${cue.span}, but my reading kept ${cue.span} only as a preference. Should non-${cue.span} companies be rejected?`
+      : cue.kind === "audience"
       ? `Your request says "${cue.span}", but my reading did not keep it as a requirement I can check. Should results be limited to ${cue.polarity === "exclude" ? "companies that are not" : ""} ${cue.span} companies?`.replace(/\s+/g, " ")
       : cue.kind === "bound"
         ? `Your request says "${cue.span}", but my reading did not keep that limit. What limit should I apply?`

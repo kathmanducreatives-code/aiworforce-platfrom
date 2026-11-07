@@ -172,7 +172,9 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     // AN AUDIENCE DESCRIPTOR DESCRIBES; IT GATES ONLY IN THE USER'S OWN STRONG WORDS (owner
     // rule, corpus M01): "US B2B companies" ranks by B2B, "only B2B" requires it. Decided on
     // the item's OWN quoted span, never by re-reading the sentence; recorded as an assumption.
-    const descriptive = facet === "business_model" && ind.necessity === "required" && !AUDIENCE_REQUIRE_RE.test(ind.span);
+    // The user's strong word may sit just outside the model's quote ("must operate as | B2B
+    // businesses", TEST 2026-11-07): the words touching the quoted span in the request count.
+    const descriptive = facet === "business_model" && ind.necessity === "required" && !AUDIENCE_REQUIRE_RE.test(ind.span) && !elevatedAround(query, ind.span);
     const necessity: Necessity = descriptive ? "preferred" : ind.necessity;
     const origin: Origin = descriptive ? { source: "user_explicit", span: ind.span, policy: AUDIENCE_POLICY } : userOrigin(ind.span);
     reqs.push({ ...base(`${facet}:${slug(ind.industry)}`, necessity, origin,
@@ -212,7 +214,10 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
   }
   const signalIds: string[] = [];
   for (const s of signals) {
-    const stated = p.signal_windows.find((w) => w.event === s.kind && typeof w.days === "number" && spanInRequest(query, w.phrase));
+    // A STATED window states a duration ("in the last 14 days", "past quarter"). A word like
+    // "actively" or "recently" is not one (TEST 2026-11-07: "actively" arrived as a stated
+    // 90 days, hidden from the assumptions): it gets the named default, shown as an assumption.
+    const stated = p.signal_windows.find((w) => w.event === s.kind && typeof w.days === "number" && DURATION_RE.test(w.phrase ?? "") && spanInRequest(query, w.phrase));
     const def = DEFAULT_SIGNAL_WINDOWS[s.kind as CanonicalSignalKind];
     const window: SignalWindow | null = stated
       ? { days: stated.days!, basis: def?.basis ?? "observed", origin: { source: "user_explicit", span: stated.phrase, policy: def?.rule ?? null }, enforced: null }
@@ -271,6 +276,20 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
   const asked = contract.ambiguities.map((a) => a.span.replace(/^"|"$/g, ""));
   for (const q of coverageQuestions(query, contract)) if (!asked.some((a) => spanInRequest(q.span, a))) contract.ambiguities.push(q);
   return { contract, rejected };
+}
+
+const DURATION_RE = /\d|\b(?:days?|weeks?|fortnights?|months?|quarters?|years?|yr|wk|mo)\b/i;
+
+/** Do the request's words touching this quoted span make it hard ("must be | B2B", "B2B | only")? */
+function elevatedAround(query: string, span: string): boolean {
+  const s = span.trim();
+  if (!s) return false;
+  const i = query.toLowerCase().indexOf(s.toLowerCase());
+  if (i < 0) return false;
+  const clauseStart = Math.max(query.lastIndexOf(",", i), query.lastIndexOf(";", i), query.lastIndexOf(".", i - 1)) + 1;
+  const before = query.slice(clauseStart, i).trim().split(/\s+/).slice(-4).join(" ");
+  const after = query.slice(i + s.length).split(/[,.;]/)[0].trim().split(/\s+/).slice(0, 2).join(" ");
+  return AUDIENCE_REQUIRE_RE.test(before) || /^(?:\w+\s+)?(?:only|exclusively)\b/i.test(after);
 }
 
 const placeLabel = (id: string) => (id.length <= 4 ? id.toUpperCase() : id.replace(/\b\w/g, (c) => c.toUpperCase()));

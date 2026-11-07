@@ -23,12 +23,35 @@
 // Nothing is retried. The report holds plans, spend, verdicts and step summaries — no token,
 // key, password or contact value.
 import { assertLiveTestsEnabled } from "../_liveTestGate.ts";
+import { canonicalTitleOf } from "../../supabase/functions/_shared/roleFamilies.ts";
 
 export const TEST_REF = "tlvnfrxzjhsjgdofwehb";
 export const APPROVAL_PHRASE = "approve the TEST run within 0.25 USD";
 export const CAP_USD = 0.25;
 export const WALK_ID = "contract-v4-test-run-1";
-export const MISSION = "Find 5 US B2B companies actively hiring Account Executives, excluding SDRs.";
+// Owner 2026-11-07: B2B is MANDATORY for this run, stated in the mission's own words (the
+// global M01 rule — a descriptive "US B2B companies" ranks — is unchanged).
+export const MISSION = "Find 5 companies headquartered in the United States that must operate as B2B businesses, are actively hiring Account Executives, and exclude companies whose hiring evidence is only for SDR/BDR roles.";
+
+type Req = { id: string; dimension: string; necessity: string; facet?: string; polarity?: string; place?: string; scope?: string | null; value?: string;
+  kind?: string; roleTerms?: string[] | null; excludedRoleTerms?: string[] | null };
+/**
+ * What THIS mission must read as, or nothing is bought (owner acceptance, 2026-11-07).
+ * Checked on every fresh plan, so a live re-reading that drops or weakens one stops the run.
+ */
+export function missionShapeProblems(c: { requirements?: Req[]; deliverable?: { count?: number | null } } | null): string[] {
+  const rs = c?.requirements ?? [];
+  const out: string[] = [];
+  const titles = (xs: string[] | null | undefined) => new Set((xs ?? []).map(canonicalTitleOf).filter(Boolean));
+  if (!rs.some((r) => r.dimension === "geography" && r.necessity === "required" && r.polarity === "include" && r.place === "United States" && r.scope === "headquarters")) out.push("US headquarters is not REQUIRED");
+  if (!rs.some((r) => r.dimension === "industry" && r.facet === "business_model" && r.polarity === "include" && r.value?.toUpperCase() === "B2B" && r.necessity === "required")) out.push("B2B business model is not REQUIRED");
+  const h = rs.find((r) => r.dimension === "signal" && r.kind === "hiring" && r.necessity === "required");
+  if (!h || !titles(h.roleTerms).has("account_executive")) out.push("actively hiring Account Executives is not REQUIRED");
+  const ex = titles(h?.excludedRoleTerms);
+  for (const [k, label] of [["sales_development_representative", "SDR"], ["business_development_representative", "BDR"]]) if (!ex.has(k)) out.push(`${label} postings are not excluded from the hiring evidence`);
+  if (c?.deliverable?.count !== 5) out.push(`requested count is ${c?.deliverable?.count ?? "missing"}, not 5`);
+  return out;
+}
 
 export type Call = (fn: string, body: Record<string, unknown>) => Promise<{ status: number; body: Record<string, unknown> }>;
 type Verdict = { requirementId: string; necessity: string; status: string; decision: string; evidence: unknown[] };
@@ -70,6 +93,8 @@ export async function runContractV4(call: Call, workspaceId: string, o: { dryRun
   const ready = check("plan ready", p.status === 200 && plan.status === "ready", `HTTP ${p.status}, ${String(plan.status ?? p.body.error ?? "")}`)
     && check("every stated requirement is checked (nothing only shown as 'Not checked', no open question)",
       report.plan.disclosures.length === 0 && !(interp.missionContract?.contract?.ambiguities ?? []).length, report.plan.disclosures.join("; ") || "none")
+    && check("the contract reads as this mission (US HQ, B2B, AE hiring REQUIRED; SDR/BDR excluded; 5)",
+      missionShapeProblems(interp.missionContract?.contract as never).length === 0, missionShapeProblems(interp.missionContract?.contract as never).join("; ") || "all present")
     && check("plan bound to the Mission Contract", !!binding && binding === `mission-contract-v1:${report.plan.contractHash}`, String(binding))
     && check("worst case within the approved cap", typeof est.apifyUsd === "number" && est.apifyUsd <= CAP_USD + 1e-9 && (est.leadoceanRecords ?? 0) === 0,
       `$${est.apifyUsd} Apify, ${est.leadoceanRecords ?? 0} LeadOcean records (cap $${CAP_USD}, 0 records)`)
