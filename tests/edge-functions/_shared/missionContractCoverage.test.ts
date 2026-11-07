@@ -176,7 +176,8 @@ Deno.test("strength: 'must operate as B2B' read with its own words is REQUIRED; 
 });
 
 Deno.test("strength: a 'must B2B' the reading WEAKENED to a preference is asked, never silently softened", () => {
-  const c = must({ roles: [AE, { ...SDR_EX, span: "SDR" }, BDR_EX], industries: [B2B] });
+  // The model itself marks the user's mandatory B2B as only preferred.
+  const c = must({ roles: [AE, { ...SDR_EX, span: "SDR" }, BDR_EX], industries: [{ ...B2B, necessity: "preferred" }] });
   assertEquals(c.requirements.find((r) => r.dimension === "industry")!.necessity, "preferred");
   assertEquals(asks(c), ["B2B"]);
   assert(c.ambiguities[0].question.includes("only as a preference"));
@@ -192,4 +193,23 @@ Deno.test("roles inside a longer clause: 'exclude companies whose hiring evidenc
   assertEquals(asks(must({ ...req, roles: [AE] })), [cue.span]);
   assertEquals(asks(must({ ...req, roles: [AE, { ...SDR_EX, span: "SDR" }] })), [cue.span], "BDR missing");
   assertEquals(must({ ...req, roles: [AE, { ...SDR_EX, span: "SDR" }, BDR_EX] }).ambiguities, []);
+});
+
+Deno.test("strength: the user's 'must' just outside the model's quote ('must operate as | B2B businesses') makes B2B REQUIRED", () => {
+  const c = must({ roles: [AE, { ...SDR_EX, span: "SDR" }, BDR_EX], industries: [{ span: "B2B businesses", industry: "B2B", necessity: "required" }] });
+  assertEquals(c.requirements.find((r) => r.dimension === "industry")!.necessity, "required");
+  assertEquals(c.ambiguities, []);
+  // Not across a clause: "US B2B companies, must be hiring AEs" leaves B2B descriptive.
+  const far = read("US B2B companies, must be hiring Account Executives", { industries: [B2B], signals: [hiring("hiring Account Executives")] });
+  assertEquals(far.requirements.find((r) => r.dimension === "industry")!.necessity, "preferred");
+});
+
+Deno.test("windows: a 'stated' window whose words state no duration ('actively' → 90 days) is the named DEFAULT, shown as an assumption", () => {
+  const c = must({ roles: [AE, { ...SDR_EX, span: "SDR" }, BDR_EX], industries: [{ span: "B2B businesses", industry: "B2B", necessity: "required" }] },
+    { signal_windows: [{ event: "hiring", days: 90, phrase: "actively", signal: null }] });
+  const w = hiringOf(c).window!;
+  assertEquals([w.days, w.origin.source, w.origin.policy], [30, "system_default", "currently / actively hiring"]);
+  assert(c.assumptions.some((a) => a.text === "hiring: last 30 days (default)"));
+  const stated = read("US companies hiring Account Executives in the last 14 days", {}, { signal_windows: [{ event: "hiring", days: 14, phrase: "in the last 14 days", signal: null }] });
+  assertEquals([hiringOf(stated).window!.days, hiringOf(stated).window!.origin.source], [14, "user_explicit"]);
 });
