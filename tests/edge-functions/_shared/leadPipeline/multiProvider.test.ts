@@ -1412,9 +1412,10 @@ Deno.test("v4 TEST run script: plans, runs once within the cap, and verifies the
   const answer = {
     understanding: {
       roles: [{ span: "Account Executives", title: "account_executive", family: null, relation: "required" },
-        { span: "SDRs", title: "sales_development_representative", family: null, relation: "excluded" }],
-      role_match: "any", places: [{ span: "US", place: "united states", other_place: null, scope: "headquarters", necessity: "required" }],
-      industries: [{ span: "B2B", industry: "B2B", necessity: "required" }],
+        { span: "SDR", title: "sales_development_representative", family: null, relation: "excluded" },
+        { span: "BDR", title: "business_development_representative", family: null, relation: "excluded" }],
+      role_match: "any", places: [{ span: "headquartered in the United States", place: "united states", other_place: null, scope: "headquarters", necessity: "required" }],
+      industries: [{ span: "must operate as B2B", industry: "B2B", necessity: "required" }],
       signals: [{ span: "actively hiring Account Executives", kind: "hiring", necessity: "required" }],
       signal_logic: "all", ambiguities: [], unsupported: [],
     },
@@ -1437,5 +1438,18 @@ Deno.test("v4 TEST run script: plans, runs once within the cap, and verifies the
   assertEquals(live.plan.requirements.length > 0, true);
   assert((live.run!.spendUsd ?? 1) <= CAP_USD);
   assertEquals(m.lo.calls.length, 0, "no LeadOcean record is bought");
-  assertStringIncludes(MISSION, "excluding SDRs");
+  assertStringIncludes(MISSION, "must operate as B2B");
+});
+
+Deno.test("v4 TEST run script: a plan that weakens B2B to a preference or drops BDR buys nothing", async () => {
+  const { missionShapeProblems } = await import("../../../../scripts/test-project/contract-v4-run.ts");
+  const ok = { deliverable: { count: 5 }, requirements: [
+    { id: "g", dimension: "geography", necessity: "required", polarity: "include", place: "United States", scope: "headquarters" },
+    { id: "b", dimension: "industry", facet: "business_model", necessity: "required", polarity: "include", value: "B2B" },
+    { id: "h", dimension: "signal", kind: "hiring", necessity: "required", roleTerms: ["Account Executive"], excludedRoleTerms: ["Sales Development Representative", "Business Development Representative"] }] };
+  assertEquals(missionShapeProblems(ok), []);
+  const soft = { ...ok, requirements: ok.requirements.map((r) => r.id === "b" ? { ...r, necessity: "preferred" } : r) };
+  assertEquals(missionShapeProblems(soft), ["B2B business model is not REQUIRED"]);
+  const noBdr = { ...ok, requirements: ok.requirements.map((r) => r.id === "h" ? { ...r, excludedRoleTerms: ["Sales Development Representative"] } : r) };
+  assertEquals(missionShapeProblems(noBdr), ["BDR postings are not excluded from the hiring evidence"]);
 });

@@ -160,3 +160,36 @@ Deno.test("coverage counts only the USER's requirements: a Company Brain exclusi
   const noB2b = { ...c, requirements: c.requirements.map((r) => r.dimension === "industry" ? { ...r, origin: { ...r.origin, source: "company_brain_preference" as const } } : r) };
   assertEquals(coverageQuestions(DRY, noB2b).map((q) => q.span), ["B2B"]);
 });
+
+// ── Strength and roles inside a longer clause (TEST mission, 2026-11-07) ──
+
+const MUST = "Find 5 companies headquartered in the United States that must operate as B2B businesses, are actively hiring Account Executives, and exclude companies whose hiring evidence is only for SDR/BDR roles.";
+const BDR_EX = { span: "BDR", title: "business_development_representative", family: null, relation: "excluded" };
+const must = (u: U) => read(MUST, { places: [{ ...US, span: "headquartered in the United States" }], signals: [hiring("actively hiring Account Executives")], ...u });
+
+Deno.test("strength: 'must operate as B2B' read with its own words is REQUIRED; with SDR and BDR excluded nothing is asked", () => {
+  const c = must({ roles: [AE, { ...SDR_EX, span: "SDR" }, BDR_EX], industries: [{ span: "must operate as B2B", industry: "B2B", necessity: "required" }] });
+  assertEquals(c.ambiguities, []);
+  assertEquals(c.requirements.find((r) => r.dimension === "industry")!.necessity, "required");
+  assertEquals(hiringOf(c).excludedRoleTerms, ["Sales Development Representative", "Business Development Representative"]);
+  assert(approvability(c).ok);
+});
+
+Deno.test("strength: a 'must B2B' the reading WEAKENED to a preference is asked, never silently softened", () => {
+  const c = must({ roles: [AE, { ...SDR_EX, span: "SDR" }, BDR_EX], industries: [B2B] });
+  assertEquals(c.requirements.find((r) => r.dimension === "industry")!.necessity, "preferred");
+  assertEquals(asks(c), ["B2B"]);
+  assert(c.ambiguities[0].question.includes("only as a preference"));
+  assert(!approvability(c).ok);
+  // A descriptive mention stays a preference and asks nothing (owner rule M01 unchanged).
+  assertEquals(dry({ roles: [AE, SDR_EX], industries: [B2B] }).ambiguities, []);
+});
+
+Deno.test("roles inside a longer clause: 'exclude companies whose hiring evidence is only for SDR/BDR roles' needs BOTH excluded", () => {
+  const cue = explicitCues(MUST).find((x) => x.kind === "exclusion")!;
+  assert(cue.span.includes("SDR/BDR"));
+  const req = { industries: [{ span: "must operate as B2B", industry: "B2B", necessity: "required" }] };
+  assertEquals(asks(must({ ...req, roles: [AE] })), [cue.span]);
+  assertEquals(asks(must({ ...req, roles: [AE, { ...SDR_EX, span: "SDR" }] })), [cue.span], "BDR missing");
+  assertEquals(must({ ...req, roles: [AE, { ...SDR_EX, span: "SDR" }, BDR_EX] }).ambiguities, []);
+});
