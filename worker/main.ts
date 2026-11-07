@@ -86,7 +86,14 @@ function config(): WorkerConfig {
   };
 }
 
-function sleep(ms: number) { return new Promise<void>((r) => setTimeout(r, ms)); }
+function sleep(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((r) => {
+    if (signal?.aborted) return r();
+    const t = setTimeout(() => { signal?.removeEventListener("abort", done); r(); }, ms);
+    const done = () => { clearTimeout(t); r(); };
+    signal?.addEventListener("abort", done, { once: true });
+  });
+}
 
 /**
  * THE TASK COLUMNS A TERMINAL DECISION READS — and not `result` itself.

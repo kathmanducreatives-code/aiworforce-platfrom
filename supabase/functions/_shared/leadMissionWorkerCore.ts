@@ -142,16 +142,22 @@ export function makeHeartbeatController(args: {
   leaseSeconds: number;
   intervalMs: number;
   heartbeat: (queueId: string, workerId: string, leaseSeconds: number) => Promise<HeartbeatOutcome>;
-  sleep: (ms: number) => Promise<void>;
+  /** Must settle early when `signal` aborts, so stop() leaves no timer pending. */
+  sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
   log?: (msg: string, meta?: unknown) => void;
 }): HeartbeatController {
   let running = false;
+  // stop() cancels the pending interval sleep. Without it the process could not
+  // exit for up to one full interval after the mission ended (60 s by default).
+  let wake = new AbortController();
   return {
     start(onLost) {
       running = true;
+      wake = new AbortController();
+      const signal = wake.signal;
       (async () => {
         while (running) {
-          await args.sleep(args.intervalMs);
+          await args.sleep(args.intervalMs, signal);
           if (!running) return;
           let r: HeartbeatOutcome;
           try {
@@ -168,7 +174,7 @@ export function makeHeartbeatController(args: {
         }
       })();
     },
-    stop() { running = false; },
+    stop() { running = false; wake.abort(); },
   };
 }
 
