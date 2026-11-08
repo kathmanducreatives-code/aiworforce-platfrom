@@ -1,3 +1,5 @@
+import { LeadDiscoveryPreview } from '@/components/dev/LeadDiscoveryPreview';
+import { strategyDiscoveryMockMode } from '@/lib/strategyDiscoveryMock';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -95,6 +97,7 @@ const App = () => (
                   <div className="relative min-h-screen w-full">
                     <AuthenticatedBackground />
                     {import.meta.env.DEV && <PreviewDiagnostics />}
+                    {import.meta.env.DEV && strategyDiscoveryMockMode() !== 'off' && <LeadDiscoveryPreview />}
                   <RouteErrorBoundary>
                   <Suspense fallback={<div className="min-h-screen bg-background" />}>
                   <Routes>
