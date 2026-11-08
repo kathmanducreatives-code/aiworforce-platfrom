@@ -104,14 +104,14 @@ var list_leads_default = defineTool3({
 });
 
 // src/lib/mcp/index.ts
-var projectRef = "ohsdatpvfdjdemstoiuj";
+var supabaseUrl = String(process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
 var mcp_default = defineMcp({
   name: "agentory-mcp",
   title: "Agentory",
   version: "0.1.0",
   instructions: "Agentory tools: read your workspace's Scout signals, candidate profiles, and lead search results. All tools are read-only and scoped to the signed-in user via Supabase RLS.",
   auth: auth.oauth.issuer({
-    issuer: `https://${projectRef}.supabase.co/auth/v1`,
+    issuer: `${supabaseUrl}/auth/v1`,
     acceptedAudiences: "authenticated"
   }),
   tools: [list_signals_default, list_candidates_default, list_leads_default]

@@ -6,7 +6,7 @@ import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/supabase/vite";
 import { execSync } from "node:child_process";
 import type { Plugin } from "vite";
 import {
-  PRODUCTION_SUPABASE_PUBLISHABLE_KEY, PRODUCTION_SUPABASE_URL, supabaseTargetMismatch,
+  PRODUCTION_SUPABASE_PUBLISHABLE_KEY, PRODUCTION_SUPABASE_URL, secretKeysInPublicEnv, supabaseTargetMismatch,
 } from "./src/integrations/supabase/productionTarget";
 
 // WHAT COMMIT IS THE FRONTEND? Netlify sets COMMIT_REF at build time; a local
@@ -42,6 +42,13 @@ export default defineConfig(({ mode, command }) => {
   // will use (env, else the defaults the client falls back to) must belong to the
   // same project, or the site ships a login that can never work — the pairing
   // agentory.space would have shipped with (publishing plan, 2026-09-30).
+  // NO SERVER KEY IN A PUBLIC VARIABLE, IN ANY MODE (dev server included): every
+  // VITE_ value is inlined into the browser bundle and into the generated MCP function.
+  const leaked = secretKeysInPublicEnv({ ...loadEnv(mode, process.cwd(), "VITE_"), ...process.env });
+  if (leaked.length) {
+    throw new Error(`Refusing to start: ${leaked.join(", ")} hold a server (secret / service_role) key. ` +
+      "Use the project's publishable key; server keys never belong in a VITE_ variable.");
+  }
   if (command === "build" && mode === "production") {
     const env = { ...loadEnv(mode, process.cwd(), "VITE_"), ...process.env };
     const mismatch = supabaseTargetMismatch(
