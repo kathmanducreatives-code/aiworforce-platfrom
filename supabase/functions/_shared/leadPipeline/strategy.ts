@@ -385,7 +385,12 @@ export interface StrategyContext {
   /** Company records already held (fresh), by LinkedIn slug: not bought again. */
   cachedCompanyRecords?: number;
   /** What the USER stated about providers. Honoured only when feasible; never silently switched. */
-  user?: { strategy?: DiscoveryStrategyId; excludeProviders?: ProviderId[]; allowReviewOnly?: boolean };
+  /**
+   * `acceptLikely`: the user's explicit, hash-bound permission to COUNT a company whose only
+   * open requirement is the business model and whose own pages make it LIKELY (never
+   * "verified"). Absent = only verified companies count (the default).
+   */
+  user?: { strategy?: DiscoveryStrategyId; excludeProviders?: ProviderId[]; allowReviewOnly?: boolean; acceptLikely?: boolean };
   /** People to look up per discovered company (apify_plus_leadocean). */
   peoplePerCompany?: number;
   /** The website grounding model is configured: business-model verification can run. */
@@ -785,7 +790,9 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
     limitations: (chosen?.limitations ?? []).map((l) => ({ code: l.code, detail: l.detail })), estimate: chosen?.estimate ?? null,
     routes: (chosen?.requirementRoutes ?? []).map((r) => ({ id: r.criterionId, route: r.route, by: [...r.checkedBy].sort() })),
     ceilings: { maxLeadoceanRecords: ctx.budget.maxLeadoceanRecords, maxApifyUsd: ctx.budget.maxApifyUsd },
-    user: { strategy: ctx.user?.strategy ?? null, excludeProviders: [...(ctx.user?.excludeProviders ?? [])].sort(), allowReviewOnly: ctx.user?.allowReviewOnly === true },
+    user: { strategy: ctx.user?.strategy ?? null, excludeProviders: [...(ctx.user?.excludeProviders ?? [])].sort(), allowReviewOnly: ctx.user?.allowReviewOnly === true,
+      // Only when granted, so every plan without it keeps its hash.
+      ...(ctx.user?.acceptLikely === true ? { acceptLikely: true } : {}) },
   };
   return {
     version: STRATEGY_PLANNER_VERSION,

@@ -230,7 +230,8 @@ export function parseStrategyRequest(b: Record<string, unknown>): StrategyReques
   }
   return {
     action: b.action, workspaceId: b.workspace_id, walkId: b.walk_id, query: b.query.trim(), requestedCount: count,
-    user: { ...(b.strategy ? { strategy: b.strategy as DiscoveryStrategyId } : {}), excludeProviders: exclude as ProviderId[], allowReviewOnly: b.allow_review_only === true },
+    user: { ...(b.strategy ? { strategy: b.strategy as DiscoveryStrategyId } : {}), excludeProviders: exclude as ProviderId[], allowReviewOnly: b.allow_review_only === true,
+      ...(b.accept_likely === true ? { acceptLikely: true } : {}) },
     budget: { maxLeadoceanRecords: maxLo, maxApifyUsd: maxUsd }, approval,
   };
 }
@@ -286,6 +287,9 @@ export interface StrategyDeps extends PipelineDeps {
   recordRunPlan?(p: { workspaceId: string; userId: string; query: string; planHash: string; status: "completed" | "partial" | "failed"; summary: string }): Promise<string | null>;
 }
 
+/** Words by which a request asks for VERIFIED companies (then likely matches never count). */
+const VERIFIED_WORDS = /\b(?:verified|verify|verifiably|confirmed|proven)\b/i;
+
 export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDeps): Promise<{ status: number; body: Record<string, unknown> }> {
   const now = d.now ?? (() => new Date());
   if (!d.flags.enabled) return { status: 404, body: { error: "disabled" } };
@@ -294,6 +298,11 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   const role = await d.store.memberRole(d.userId, req.workspaceId);
   if (!role) return { status: 403, body: { error: "not a member of this workspace" } };
   if (req.action === "strategy_run" && !ADMIN.has(role)) return { status: 403, body: { error: "only a workspace owner or admin can approve a paid run" } };
+  // AN EXPLICIT "VERIFIED" IS NEVER SILENTLY WEAKENED: counting likely matches is refused when
+  // the request itself asks for verified / confirmed companies.
+  if (req.user?.acceptLikely && VERIFIED_WORDS.test(req.query)) {
+    return { status: 422, body: { status: "not_approvable", error: "your request asks for verified companies, so likely matches cannot count toward it; plan without counting likely matches" } };
+  }
 
   // ── STRATEGY_RUN EXECUTES THE APPROVED PLAN, NOT A NEW READING (Stage 3) ──
   // The run never calls the model. It verifies the signed approval token from
@@ -411,6 +420,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     ledger: d.ledger, checkpoints: d.checkpoints, existing: new ExclusionIndex(await d.loadExisting(req.workspaceId), now), now,
     evidenceCache: d.evidenceCache ?? null,
     groundBusinessModel: d.groundBusinessModel ?? null,
+    acceptLikely: req.user?.acceptLikely === true,
   });
   if (run.status === "blocked") {
     // A "blocked" run that already spent is a FAILED run, not a refusal (audit S3/S4).
@@ -438,7 +448,9 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       // What the REQUEST got (outcome.ts): only qualified companies count toward the number asked for.
       outcome: missionOutcome({
         requested: spec.requestedCount, qualified: run.queue.length,
-        pending: run.review.filter((l) => l.statuses.qualification === "pending").length, rejected: run.excluded.length,
+        // A likely match the user permitted counts (labelled); it is not also "pending".
+        pending: run.review.filter((l) => l.statuses.qualification === "pending" && !l.acceptedAsLikely).length, rejected: run.excluded.length,
+        likely: run.review.filter((l) => l.acceptedAsLikely).length,
         runStatus: run.status, reason: run.reason,
         openRequirements: [...new Set(run.review.flatMap((l) => l.qualification?.gaps ?? []))].map((g) => g.replace(/_/g, " ")),
         // run-sync reports no charge: the ledger settles the worst case for the items returned.

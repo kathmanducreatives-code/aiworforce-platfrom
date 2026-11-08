@@ -81,6 +81,8 @@ export interface StrategyRunInput {
   evidenceCache?: EvidenceCache | null;
   /** The shared grounded classifier, for business-model verification (businessModelCheck.ts). */
   groundBusinessModel?: Grounder | null;
+  /** The plan's hash-bound permission to count likely business-model matches (strategy.ts `acceptLikely`). */
+  acceptLikely?: boolean;
 }
 
 export interface ProviderStepOutcome {
@@ -506,6 +508,10 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
       canonicalRecord: canonical.statuses.find((s) => s.companyKey === (slug ? `li:${slug}` : ""))?.state ?? "not_requested",
       signals: postSignals(slug), rank: r, phone: null, outreachBlockers: blockers,
       ...(businessModel.has(l.company.key) ? { businessModel: businessModel.get(l.company.key)! } : {}),
+      // LIKELY, COUNTED ONLY WITH PERMISSION: pending on the business model ALONE, nothing
+      // disproven, and the company's own pages make it likely. Never relabelled verified.
+      ...(input.acceptLikely === true && eligibilityOf(l) === "pending" && (l.shared?.gaps ?? []).length === 1 && l.shared?.gaps[0] === "business_model"
+        && !(l.shared?.disproven ?? []).length && businessModel.get(l.company.key)?.status === "likely_b2b" ? { acceptedAsLikely: true as const } : {}),
       provenance: { walkId: input.walkId, planHash: plan.planHash, runAt: at, providers: [...new Set(l.company.sources.map((s) => s.provider))],
         ...(l.company.conflicts.length ? { conflicts: l.company.conflicts.map((c) => ({ field: c.field, values: c.values.map((v) => ({ provider: v.provider, value: v.value })) })) } : {}) },
     };
