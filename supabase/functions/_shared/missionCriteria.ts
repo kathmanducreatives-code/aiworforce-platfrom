@@ -213,7 +213,7 @@ const B2B_WORDS_RE = /\b(?:b2b|business[\s-]+to[\s-]+business)\b/i;
 const CONSUMER_WORDS_RE = /\b(?:b2c|d2c|dtc|direct[\s-]+to[\s-]+consumers?|business[\s-]+to[\s-]+consumers?|consumers?)\b/i;
 const AUDIENCE_EXCLUDE_RE = /\b(?:exclude[sd]?|excluding|no|not|non|without|except|avoid|never|other\s+than)\b/i;
 export const AUDIENCE_REQUIRE_RE = /\b(?:only|must|required?|requires|requirement|exclusively|strictly|solely|mandatory)\b/i;
-const AUDIENCE_PERMIT_RE = /\b(?:include|including|also|open\s+to|welcome|fine|ok(?:ay)?|acceptable|consider|allow(?:ed)?)\b/i;
+export const AUDIENCE_PERMIT_RE = /\b(?:include|including|also|open\s+to|welcome|fine|ok(?:ay)?|acceptable|consider|allow(?:ed)?)\b/i;
 
 export type AudienceIntent = "exclude" | "require" | "prefer" | "permit" | "describe" | "absent";
 
