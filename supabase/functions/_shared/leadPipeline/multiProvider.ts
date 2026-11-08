@@ -34,6 +34,7 @@ import type { EvidenceItem } from "../candidateObservation.ts";
 import type { Eligibility } from "../candidateEligibility.ts";
 import { classifyDecisionMakerRole } from "../decisionMaker/roleFamily.ts";
 import { ledgeredInvoker } from "./apifyInvoker.ts";
+import { collapseDuplicateLeads, type MergedLead } from "./identity.ts";
 import { COMPANY_EMPLOYEES_ACTOR_KEY, companyEmployeesInput, discoverHiringCompanies, discoverPostingCompanies, peopleFromEmployeeRows, slugOf } from "./apifyDiscovery.ts";
 import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
 import type { Signal } from "./signals.ts";
@@ -97,6 +98,8 @@ export interface StrategyRun {
   queue: PipelineLead[];
   review: PipelineLead[];
   excluded: PipelineLead[];
+  /** Records of one company collapsed into one lead (identity.ts). Absent when none. */
+  mergedCompanies?: MergedLead[];
   /** Evidence a source offered for a company and the identity rule refused (it named another company). */
   evidenceRefused: { companyKey: string; source: string; reason: string }[];
   limitations: Limitation[];
@@ -144,9 +147,25 @@ export async function runDiscoveryStrategy(input: StrategyRunInput): Promise<Str
   const a = input.approval!;
   // The server's estimate is the ceiling: an approval naming more never raises it.
   const cap = { leadoceanRecords: Math.min(a.leadoceanRecords, plan.estimate.leadoceanRecords), apifyUsd: Math.min(a.apifyUsd, plan.estimate.apifyUsd) };
-  if (plan.strategy === "leadocean_only" || plan.strategy === "leadocean_plus_apify") return runLeadOceanLed(input, cap, now);
-  if (plan.strategy === "apify_only" || plan.strategy === "apify_plus_leadocean" || plan.strategy === "apify_leadocean_concurrent") return runApifyLed(input, cap, now);
-  return blocked(`strategy ${plan.strategy} has no executor`);
+  const run = plan.strategy === "leadocean_only" || plan.strategy === "leadocean_plus_apify" ? await runLeadOceanLed(input, cap, now)
+    : plan.strategy === "apify_only" || plan.strategy === "apify_plus_leadocean" || plan.strategy === "apify_leadocean_concurrent" ? await runApifyLed(input, cap, now)
+    : null;
+  if (!run) return blocked(`strategy ${plan.strategy} has no executor`);
+  return withOneLeadPerCompany(run);
+}
+
+/** One company, one lead (identity.ts): collapse across every lane, then re-file by the kept verdict. */
+function withOneLeadPerCompany(run: StrategyRun): StrategyRun {
+  const all = [...run.queue, ...run.review, ...run.excluded];
+  const { leads, merged } = collapseDuplicateLeads(all);
+  if (!merged.length) return run;
+  return {
+    ...run,
+    queue: leads.filter((l) => l.rank.lane === "queue"),
+    review: leads.filter((l) => l.rank.lane === "review"),
+    excluded: leads.filter((l) => l.rank.lane === "excluded"),
+    mergedCompanies: merged,
+  };
 }
 
 // ── LeadOcean-led: the existing pipeline on the interpreted requirements ────
@@ -296,8 +315,9 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   const unaffordable = canonical.statuses.filter((x) => x.state === "skipped_budget");
   apifySpent += canonical.spentUsd;
   steps.push({ capability: recStep.capability, provider: "apify",
-    status: canonical.stopped ? "failed" : unaffordable.length ? "partial" : "completed",
-    reason: canonical.stopped ?? ([unaffordable.length ? `budget: ${unaffordable.length} compan${unaffordable.length === 1 ? "y" : "ies"} left unverified` : null,
+    // NOTHING TO VERIFY IS NOT A COMPLETED VERIFICATION (audit S2): no company, no call.
+    status: !targets.length ? "not_run" : canonical.stopped ? "failed" : unaffordable.length ? "partial" : "completed",
+    reason: !targets.length ? "no company to verify" : canonical.stopped ?? ([unaffordable.length ? `budget: ${unaffordable.length} compan${unaffordable.length === 1 ? "y" : "ies"} left unverified` : null,
       canonical.cached ? `${canonical.cached} reused from the evidence cache` : null, ...canonical.cacheErrors].filter(Boolean).join("; ") || null),
     spend: { leadoceanRecords: 0, apifyUsd: r6(canonical.spentUsd) } });
 

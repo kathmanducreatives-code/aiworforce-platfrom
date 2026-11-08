@@ -93,6 +93,8 @@ export interface PipelineLead {
     walkId: string; planHash: string; runAt: string; providers: string[];
     /** Fields where providers DISAGREE about this company (normalize.ts): kept for verification, never resolved by a claim. */
     conflicts?: { field: string; values: { provider: string; value: unknown }[] }[];
+    /** Other records of the SAME company collapsed into this lead (identity.ts): one company, one lead. */
+    mergedFrom?: { leadKey: string; companyKey: string; linkedinUrl: string | null; qualification: string }[];
   };
 }
 
