@@ -39,6 +39,8 @@ import { configureIcp, ICP_A, NON_DECISION_TITLES, type IcpConfig } from "./icp.
 import { SIGNAL_ACTORS, worstCaseUsd } from "./signals.ts";
 import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
 
+import { resolveRequirementRoutes, uncheckedQuestion, uncheckedRequired, type ProofDimension, type RequirementRoute } from "./capabilityResolution.ts";
+
 export const STRATEGY_PLANNER_VERSION = "discovery-strategy-v2" as const;
 
 // ── Strategies ──────────────────────────────────────────────────────────────
@@ -408,6 +410,8 @@ export interface StrategyCandidate {
   estimate: { leadoceanRecords: number; apifyUsd: number };
   /** Hard requirements this strategy can PROVE (to the shared engine). */
   provable: string[];
+  /** How each compiled requirement will be checked by THIS chain (capabilityResolution.ts). */
+  requirementRoutes: RequirementRoute[];
   score: number;
   rationale: string[];
 }
@@ -432,6 +436,13 @@ export interface StrategyPlan {
   estimate: { leadoceanRecords: number; apifyUsd: number };
   candidates: StrategyCandidate[];
   modelAdvice: ModelAdvice | null;
+  /** The chosen chain's route for every requirement (empty when blocked with no chain). */
+  requirementRoutes: RequirementRoute[];
+  /**
+   * One question per REQUIRED requirement no strategy can check (the approval card asks it).
+   * Non-empty only when the plan is blocked for that reason.
+   */
+  questions: string[];
   /**
    * Binds an approval to exactly this plan's MEANING and cost: SHA-256 over the planner
    * and semantics versions, the workspace and interpretation contract, the request,
@@ -573,9 +584,19 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   if (discover.id === "apify.linkedin_job_search") limitations.push({ code: "fuzzy_source", detail: "job-search titles are fuzzy: each posting must match the requested role and window before it counts" });
 
   // A hard requirement no step proves means nothing bought can become eligible.
-  const unprovable = limitations.filter((l) => l.code === "unverifiable_requirement" && !l.detail.startsWith("industry") && !l.detail.startsWith("not modelled"));
-  if (unprovable.length && !ctx.user?.allowReviewOnly) {
-    refusals.push(`no lead could become eligible: ${unprovable.map((l) => l.detail.split(":")[0]).join("; ")} cannot be proven (set allowReviewOnly to buy candidates for manual review)`);
+  // MRLE PHASE 0 — A REQUIRED REQUIREMENT NO STEP CAN CHECK BLOCKS NORMAL EXECUTION. The
+  // decision is made over the compiled criteria the eligibility engine itself reads (never
+  // the sentence), by dimension and capability: every REQUIRED criterion needs a step that
+  // proves its dimension. Industry and business model are no longer exempt (audit RC1: a
+  // REQUIRED B2B was a "limitation" on a `ready` plan that could only end `pending`).
+  // `allowReviewOnly` is the user's explicit, hash-bound decision to buy candidates anyway;
+  // those leads stay `needs verification` on the unchecked requirement.
+  const provesBy = new Map<ProofDimension, string[]>();
+  for (const c of chain) for (const d of c.proves) provesBy.set(d as ProofDimension, [...(provesBy.get(d as ProofDimension) ?? []), c.id]);
+  const requirementRoutes = resolveRequirementRoutes(spec.requirements.criteria, provesBy);
+  const unchecked = uncheckedRequired(requirementRoutes);
+  if (unchecked.length && !ctx.user?.allowReviewOnly) {
+    refusals.push(`no lead could become qualified: ${unchecked.map((r) => `"${r.label}" (${r.explanation.replace(/^required, but /, "")})`).join("; ")} — run it as review-only, change the requirement, or cancel`);
   }
 
   // 4 forbidden broadening: a required filter the discovery step cannot apply
@@ -642,7 +663,7 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   score -= estimate.apifyUsd * 20 + estimate.leadoceanRecords * 0.05;
   score -= limitations.filter((l) => l.code === "unverifiable_requirement" || l.code === "unverified_claim").length * 3;
 
-  return { strategy, feasible: refusals.length === 0, refusals, steps, limitations, estimate, provable, score: Math.round(score * 100) / 100, rationale };
+  return { strategy, feasible: refusals.length === 0, refusals, steps, limitations, estimate, provable, requirementRoutes, score: Math.round(score * 100) / 100, rationale };
 }
 
 // ── GPT advice (optional, validated) ────────────────────────────────────────
@@ -743,6 +764,7 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
     meaning, strategy: chosen?.strategy ?? null,
     steps: (chosen?.steps ?? []).map((x) => ({ capability: x.capability, provider: x.provider, role: x.role, maxItems: x.maxItems, estimate: x.estimate })),
     limitations: (chosen?.limitations ?? []).map((l) => ({ code: l.code, detail: l.detail })), estimate: chosen?.estimate ?? null,
+    routes: (chosen?.requirementRoutes ?? []).map((r) => ({ id: r.criterionId, route: r.route, by: [...r.checkedBy].sort() })),
     ceilings: { maxLeadoceanRecords: ctx.budget.maxLeadoceanRecords, maxApifyUsd: ctx.budget.maxApifyUsd },
     user: { strategy: ctx.user?.strategy ?? null, excludeProviders: [...(ctx.user?.excludeProviders ?? [])].sort(), allowReviewOnly: ctx.user?.allowReviewOnly === true },
   };
@@ -758,9 +780,24 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
     estimate: chosen?.estimate ?? { leadoceanRecords: 0, apifyUsd: 0 },
     candidates,
     modelAdvice,
+    requirementRoutes: chosen?.requirementRoutes ?? [],
+    questions: chosen ? [] : questionsFor(candidates),
     planHash: sha256Hex(canonicalJson(body)),
     binding: { version: STRATEGY_PLANNER_VERSION, semanticsFingerprint, workspace: body.workspace, contract: body.contract, ceilings: body.ceilings },
   };
+}
+
+/**
+ * The questions a blocked plan asks: the REQUIRED requirements that NO otherwise-runnable
+ * strategy can check. A strategy refused for another reason (provider disabled, budget)
+ * does not turn into a requirement question.
+ */
+function questionsFor(candidates: readonly StrategyCandidate[]): string[] {
+  const viable = candidates.filter((c) => c.refusals.every((r) => r.startsWith("no lead could become qualified")) && c.refusals.length > 0);
+  if (!viable.length) return [];
+  const ids = new Set(uncheckedRequired(viable[0].requirementRoutes).map((r) => r.criterionId));
+  for (const c of viable.slice(1)) for (const id of [...ids]) if (!uncheckedRequired(c.requirementRoutes).some((r) => r.criterionId === id)) ids.delete(id);
+  return viable[0].requirementRoutes.filter((r) => ids.has(r.criterionId)).map(uncheckedQuestion);
 }
 
 // ── Bridges to the existing pipeline ────────────────────────────────────────

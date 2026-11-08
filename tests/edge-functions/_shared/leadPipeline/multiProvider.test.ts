@@ -240,7 +240,7 @@ Deno.test("strategy: LeadOcean-only is selectable and runs without Apify — eve
   // Without allowReviewOnly the same request refuses LeadOcean-only: nothing bought could become eligible.
   const strict = planStrategy(spec, { ...CTX, user: { strategy: "leadocean_only" } });
   assertEquals(strict.status, "blocked");
-  assertStringIncludes(strict.blockedReason!, "no lead could become eligible");
+  assertStringIncludes(strict.blockedReason!, "no lead could become qualified");
 });
 
 // ── 3 combined discovery ────────────────────────────────────────────────────
@@ -281,7 +281,13 @@ Deno.test("strategy: combined — LeadOcean discovers founders, Apify company re
 
 Deno.test("strategy: Query A as worded — the plan states that SaaS and a 10–100 size need more than a band, and the run keeps them pending", async () => {
   const spec = Q.founders(4);
-  const plan = planStrategy(spec, CTX);
+  // MRLE Phase 0: the compiler made "SaaS" a REQUIRED industry and no approved step proves an
+  // industry, so the plan is BLOCKED with a question naming it — never run as if it could qualify.
+  const strict = planStrategy(spec, CTX);
+  assertEquals(strict.status, "blocked");
+  assert(strict.questions.some((q) => q.includes("Industry: saas")), JSON.stringify(strict.questions));
+  // The user's explicit review-only decision (hash-bound) buys candidates that stay pending on it.
+  const plan = planStrategy(spec, { ...CTX, user: { allowReviewOnly: true } });
   assertEquals(plan.strategy, "leadocean_plus_apify");
   assert(plan.limitations.some((l) => l.detail.startsWith('industry "saas"')), JSON.stringify(plan.limitations));
   const invoke: ActorInvoker = (_a, input) => Promise.resolve({ items: (input.companies as string[]).map((u) => ({ ...RECORDS, ...LO_RECORDS })[/company\/([^/]+)/.exec(u)![1]]).filter(Boolean), runId: "run-c", chargedUsd: 0.01 });
@@ -312,9 +318,11 @@ Deno.test("strategy: GPT picks Apify job-search discovery for a hiring query, an
 
 Deno.test("strategy: GPT picks LeadOcean + Apify for a structured founder query; Apify-only is refused for people", async () => {
   const spec = Q.founders();
-  const base = planStrategy(spec, CTX);
+  // REQUIRED "SaaS" is not checkable (see Query A): this test is about strategy choice, under review-only.
+  const RCTX = { ...CTX, user: { allowReviewOnly: true } };
+  const base = planStrategy(spec, RCTX);
   assertEquals(base.strategy, "leadocean_plus_apify");
-  const plan = planStrategy(spec, CTX, await adviseStrategy(spec, base.candidates, recorded("leadocean_plus_apify")));
+  const plan = planStrategy(spec, RCTX, await adviseStrategy(spec, base.candidates, recorded("leadocean_plus_apify")));
   assertEquals([plan.strategy, plan.selectedBy], ["leadocean_plus_apify", "model"]);
   const apifyOnly = plan.candidates.find((c) => c.strategy === "apify_only")!;
   assertFalse(apifyOnly.feasible);
@@ -327,7 +335,7 @@ Deno.test("strategy: GPT picks LeadOcean + Apify for a structured founder query;
 // ── 6 user requirements override the default preference ────────────────────
 
 Deno.test("strategy: a stated hiring requirement moves a founder query from LeadOcean-first to Apify-first", () => {
-  assertEquals(planStrategy(Q.founders(5), CTX).strategy, "leadocean_plus_apify");
+  assertEquals(planStrategy(Q.founders(5), { ...CTX, user: { allowReviewOnly: true } }).strategy, "leadocean_plus_apify", "REQUIRED SaaS is unchecked: review-only");
   assertEquals(planStrategy(Q.foundersAtHiring(5), CTX).strategy, "apify_plus_leadocean", "the hiring signal is what defines the request");
   // The user excludes a provider: honoured when feasible…
   assertEquals(planStrategy(Q.hiringAE(), { ...CTX, user: { excludeProviders: ["leadocean"] } }).strategy, "apify_only");
@@ -360,7 +368,8 @@ Deno.test("strategy: unsupported capabilities are explicit limitations or refusa
   // E: recent funding cannot be corroborated in this pipeline — refused, with the reason and the route.
   const e = planStrategy(Q.fundedFounders(), CTX);
   assertEquals(e.status, "blocked");
-  assertStringIncludes(e.blockedReason!, "funding signal");
+  assertStringIncludes(e.blockedReason!, "funding round and date");
+  assert(e.questions.some((q) => q.includes("review-only")), "a blocked plan asks what to do about the unchecked requirement");
   assert(e.candidates.find((c) => c.strategy === "leadocean_plus_apify")!.limitations.some((l) => l.detail.includes("Contract 3")));
   // …unless the user asks for candidates for manual review: then LeadOcean + Apify, with the limitation on the plan.
   const review = planStrategy(Q.fundedFounders(), { ...CTX, user: { allowReviewOnly: true } });
@@ -996,17 +1005,30 @@ Deno.test("B2B described ('US B2B companies'): a preference — a proven company
   }
 });
 
-Deno.test("B2B required ('Only include verified B2B'): missing evidence is needs_verification — never proof, never a rejection", async () => {
-  const r = await b2bRun("Find 5 US companies currently hiring Account Executives. Only include verified B2B companies.", ["B2B"]);
-  assertEquals(r.interpretation.hard.map((h) => h.key).sort(), ["business_model", "geography_hq", "signal"]);
-  assertEquals(r.plan.status, "ready", "an unverifiable requirement is disclosed, not a blocked plan");
-  assert(r.plan.limitations.some((l) => l.detail.includes("business_model")), "disclosed at planning");
-  assertEquals(r.o.written.filter((w) => w.lead_candidate.status === "qualified").length, 0, "nothing qualifies on an unproven B2B");
-  const nw = r.o.written.find((w) => w.account.name === "Northwind Ledger")!;
+Deno.test("B2B required ('Only include verified B2B'), no business-model check available: BLOCKED with a question; review-only stays needs_verification", async () => {
+  const query = "Find 5 US companies currently hiring Account Executives. Only include verified B2B companies.";
+  // MRLE Phase 0: no step of the plan can establish a business model, so normal execution is refused.
+  const o = sdeps({ interpret: fromProposal({ ...HIRING_PROPOSAL, company_types: ["B2B"] }) });
+  const blocked = await handleStrategyRequest(sreq({ action: "strategy_plan", query }), o.d);
+  assertEquals([blocked.status, blocked.body.status], [409, "blocked"]);
+  const bp = blocked.body.plan as StrategyPlan;
+  assert(bp.questions.some((q) => /business model/i.test(q) && q.includes("review-only")), JSON.stringify(bp.questions));
+  assertEquals(o.ap.calls.length + o.lo.calls.length, 0, "nothing bought");
+  assertEquals(blocked.body.approval_token, undefined, "a blocked plan carries no approval token");
+  // The user's explicit review-only decision: candidates are bought, and none is called qualified.
+  const r = sdeps({ interpret: fromProposal({ ...HIRING_PROPOSAL, company_types: ["B2B"] }) });
+  const planned = await handleStrategyRequest(sreq({ action: "strategy_plan", query, allow_review_only: true }), r.d);
+  const plan = planned.body.plan as StrategyPlan;
+  assertEquals(plan.status, "ready");
+  assert(plan.requirementRoutes.some((x) => x.dimension === "business_model" && x.route === "not_checkable"), "the route says it stays unchecked");
+  await handleStrategyRequest(sreq({ action: "strategy_run", query, allow_review_only: true, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } }), r.d);
+  assertEquals(r.written.filter((w) => w.lead_candidate.status === "qualified").length, 0, "nothing qualifies on an unproven B2B");
+  const nw = r.written.find((w) => w.account.name === "Northwind Ledger")!;
   assert(nw, "the proven company is kept for review, not dropped");
   assertEquals(nw.lead_candidate.status, "new");
-  assertEquals(r.checks(nw).checks.find((c) => c.dimension === "business_model")!.result, "unknown");
-  assert(r.checks(nw).gaps.includes("business_model"));
+  const checks = (nw.lead_candidate.raw.agentory_pipeline as { qualification: { checks: { dimension: string; result: string }[]; gaps: string[] } }).qualification;
+  assertEquals(checks.checks.find((c) => c.dimension === "business_model")!.result, "unknown");
+  assert(checks.gaps.includes("business_model"));
 });
 
 Deno.test("the model restating the hiring signal as a hard constraint (TEST plan 6999eff6) does not block qualification", async () => {
@@ -1162,7 +1184,10 @@ Deno.test("strict vocabulary ON: an invented requirement is refused explicitly (
   assertEquals(on.lo.calls.length + on.ap.calls.length, 0);
   // The user's own words are not refused: the same field, quoted from the request, plans.
   const quoted = await handleStrategyRequest(sreq({ action: "strategy_plan", query: "Find US companies hiring Account Executives, remote-first only." }), sdeps({ userId: "u-member", interpret: fromProposal(QUOTED) }, STRICT).d);
-  assertEquals(quoted.status, 200);
+  // Not refused by the vocabulary (no 422): the user said it. But no approved step can check
+  // "remote-first", so the capability gate blocks it with a question (MRLE Phase 0).
+  assertEquals(quoted.status, 409);
+  assert(((quoted.body.plan as StrategyPlan).questions ?? []).length > 0, JSON.stringify(quoted.body).slice(0, 400));
   // Canonical requirements are unaffected.
   assertEquals((await handleStrategyRequest(sreq({ action: "strategy_plan" }), sdeps({ userId: "u-member" }, STRICT).d)).status, 200);
 });
@@ -1263,7 +1288,8 @@ Deno.test("v4 e2e 5 funding: a required funding signal no approved provider can 
   const q = "Find 5 US companies that raised a Series A and are hiring Account Executives.";
   const r = await e2e(p0({}, { signals: [...u0.signals, { span: "raised a Series A", kind: "funding", necessity: "required" }] }), { query: q });
   assertEquals([r.planned.status, r.planned.body.status], [409, "blocked"]);
-  assertStringIncludes(JSON.stringify(r.planned.body), "funding signal (last 180 days) cannot be proven");
+  assertStringIncludes(JSON.stringify(r.planned.body), "no approved tool in this plan can establish funding round and date");
+  assert(((r.planned.body.plan as StrategyPlan).questions ?? []).some((q) => q.includes("Signal: funding")), "the card asks about the named requirement");
   assertEquals(r.m.lo.calls.length + r.m.ap.calls.length, 0);
   // The default window is part of the contract and disclosed as an assumption.
   const c = (r.planned.body.interpretation as { missionContract?: { contract: MissionContract } } | undefined)?.missionContract?.contract;
@@ -1303,17 +1329,12 @@ Deno.test("v4 e2e 8 ambiguous: a question, nothing bought", async () => {
   assertEquals(r.m.lo.calls.length + r.m.ap.calls.length, 0);
 });
 
-Deno.test("v4 e2e 9 unsupported: disclosed at approval, never executed, verdict not_applicable", async () => {
+Deno.test("v4 e2e 9 unsupported: a REQUIRED requirement no tool can check is never approved silently (MRLE Phase 0)", async () => {
   const r = await e2e(p0({}, { unsupported: [{ span: "software companies", reason: "culture is not measured" }] }));
-  if (r.planned.status !== 200) throw new Error(JSON.stringify(r.planned.body).slice(0, 300));
-  const c = assertContractRun(r);
-  const d = c.requirements.find((x) => x.dimension === "unsupported");
-  if (d) {
-    for (const v of r.ran!.body.requirementVerdicts as Verdicts) {
-      const x = v.verdicts.find((y) => y.requirementId === d.id);
-      if (x) assertEquals(x.status, "not_applicable");
-    }
-  }
+  // Before Phase 0 this was disclosed as "Not checked" and the plan ran without it.
+  assertEquals([r.planned.status, r.planned.body.status], [422, "not_approvable"]);
+  assertStringIncludes(JSON.stringify(r.planned.body.reasons), "no approved tool can check: software companies");
+  assertEquals(r.m.lo.calls.length + r.m.ap.calls.length, 0, "nothing bought");
 });
 
 Deno.test("v4 e2e 10 contradictory: an impossible size is refused before any plan, nothing bought", async () => {
@@ -1430,14 +1451,16 @@ Deno.test("v4 TEST run script: plans, runs once within the cap, and verifies the
     const r = await handleStrategyRequest(req, m.d);
     return { status: r.status, body: r.body as Record<string, unknown> };
   };
+  // MRLE Phase 0: REQUIRED B2B with no business-model check in the plan is BLOCKED at
+  // planning — the script refuses before any purchase (it used to run and end all pending).
   const dry = await runContractV4(call, WS, { dryRun: true });
-  assert(dry.ok, JSON.stringify(dry.checks));
-  assertEquals(m.ap.calls.length + m.lo.calls.length, 0, "a dry run buys nothing");
+  assertFalse(dry.ok);
+  assert(dry.checks.some((c) => c.name === "plan ready" && !c.pass && c.detail.includes("409")), JSON.stringify(dry.checks));
   const live = await runContractV4(call, WS, { dryRun: false });
-  assert(live.ok, JSON.stringify(live.checks));
-  assertEquals(live.plan.requirements.length > 0, true);
-  assert((live.run!.spendUsd ?? 1) <= CAP_USD);
-  assertEquals(m.lo.calls.length, 0, "no LeadOcean record is bought");
+  assertFalse(live.ok);
+  assertEquals(live.run, null, "nothing ran");
+  assertEquals(m.ap.calls.length + m.lo.calls.length, 0, "nothing bought");
+  void CAP_USD;
   assertStringIncludes(MISSION, "must operate as B2B");
 });
 
@@ -1480,14 +1503,13 @@ Deno.test("v4 TEST run script: the failed live reading (SDR/BDR clause ALSO file
     return { status: r.status, body: r.body as Record<string, unknown> };
   };
   const dry = await runContractV4(call, WS, { dryRun: true });
-  assert(dry.ok, JSON.stringify(dry.checks));
+  // The reading itself is right: the duplicate is merged and audited, nothing is "Not checked"…
   assertEquals(dry.plan.disclosures, []);
   assertEquals(dry.plan.mergedDuplicates.map((x) => [x.span, x.coveredBy]), [[CLAUSE, ["hiring:actively_hiring_account_executives"]]]);
-  assertEquals(m.ap.calls.length + m.lo.calls.length, 0, "a dry run buys nothing");
-  // The approved hash replays exactly on strategy_run (the merge is deterministic and hashed).
+  // …but REQUIRED B2B has no business-model check in this plan: blocked before any purchase (MRLE Phase 0).
+  assert(dry.checks.some((c) => c.name === "plan ready" && !c.pass), JSON.stringify(dry.checks));
   const live = await runContractV4(call, WS, { dryRun: false });
-  assert(live.ok, JSON.stringify(live.checks));
-  assertEquals(live.run!.contractHash, live.plan.contractHash);
-  assert((live.run!.spendUsd ?? 1) <= CAP_USD);
-  assertEquals(m.lo.calls.length, 0, "no LeadOcean record is bought");
+  assertEquals(live.run, null);
+  void CAP_USD;
+  assertEquals(m.ap.calls.length + m.lo.calls.length, 0, "nothing bought");
 });

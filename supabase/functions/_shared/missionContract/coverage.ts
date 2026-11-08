@@ -235,3 +235,48 @@ export function coverageQuestions(query: string, c: MissionContract): { span: st
         : `Your request says "${cue.span}", but my reading did not keep that exclusion as something I can check. Which companies or roles should be excluded?`,
   }));
 }
+
+// ── An unsupported item whose words are all already enforced ──────────────
+//
+// MRLE Phase 0: a REQUIRED "Not checked" item now blocks approval, so an item that only
+// REPEATS words the contract already represents must not block. Recorded live answers
+// (run #24 replayed through v4) filed "Find 5", "5 us cos" and "50-200 ppl" as unsupported
+// while the same words were the count and the size requirement. Structural, not lexical:
+// every CONTENT token of the item must occur in the quoted span of an executable,
+// user-stated requirement, or in the deliverable's own count words. One token left over
+// ("sales team" when only "growing" is enforced) keeps it a question.
+
+/** The request's imperative frame ("find me 5 …", "give me …"): words that ask, never restrict. */
+const FRAME = new Set(["find", "get", "give", "show", "list", "need", "want", "looking", "me", "pls", "please", "cos", "co"]);
+
+/**
+ * What already enforces `span`, or null.
+ *
+ * The item must be COMPOSED of things the contract already enforces: every content word is
+ * either the requested count or part of a WHOLE quote of an executable, user-stated
+ * requirement that lies entirely inside the item. Overlap is not enough — "sales team" holds
+ * only part of the quote "growing their sales team" of a headcount-growth signal (which does
+ * not check "sales"), so it stays a question.
+ *
+ *   same_words  covered by those requirements (and possibly the count)
+ *   count       nothing but the request's framing and the requested count ("Find 5")
+ */
+export function spanAlreadyEnforced(
+  span: string, requirements: readonly Requirement[], countWords: string | null,
+): { kind: "same_words" | "count"; coveredBy: string[]; reason: string } | null {
+  const content = contentTokens(span).filter((t) => !FRAME.has(t));
+  if (!content.length) return null;
+  const inItem = new Set(content);
+  const count = new Set(countWords ? tokens(countWords) : []);
+  const whole = requirements.filter((r) => {
+    if (!isExecutable(r) || (r.origin.source !== "user_explicit" && r.origin.source !== "user_inferred") || !r.origin.span?.trim()) return false;
+    const q = contentTokens(r.origin.span).filter((t) => !FRAME.has(t));
+    return q.length > 0 && q.every((t) => inItem.has(t));
+  });
+  const quoted = new Set(whole.flatMap((r) => contentTokens(r.origin.span)));
+  if (!content.every((t) => count.has(t) || quoted.has(t))) return null;
+  // Only the requirements whose words the item actually uses beyond the count.
+  const used = whole.filter((r) => contentTokens(r.origin.span).some((t) => inItem.has(t) && !count.has(t)));
+  if (used.length) return { kind: "same_words", coveredBy: used.map((r) => r.id), reason: `the same words are already enforced as ${used.map((r) => `"${r.display.label}"`).join(" and ")}` };
+  return { kind: "count", coveredBy: [], reason: "only the request's own framing and the requested count" };
+}
