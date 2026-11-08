@@ -39,6 +39,7 @@ export function projectPipelineLead(l: PipelineLead, ctx: { workspaceId: string;
     outreach_blockers: l.outreachBlockers, provenance: l.provenance, company_ids: l.company.providerCompanyIds,
     // `status: qualified` below is the COMPANY's verdict; the contact's role is verified separately.
     contact_verification: l.person?.verification ?? null,
+    business_model: l.businessModel ?? null,
   };
   const loc = [l.company.hq.city, l.company.hq.region, l.company.hq.country].filter(Boolean).join(", ") || null;
   return {

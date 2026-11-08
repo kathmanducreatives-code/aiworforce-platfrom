@@ -86,6 +86,8 @@ export interface PipelineLead {
   canonicalRecord: CanonicalRun["statuses"][number]["state"] | "not_requested";
   signals: Signal[];
   rank: RankResult;
+  /** The business model read from the company's own pages, when it was checked (businessModelCheck.ts). */
+  businessModel?: { companyKey: string; status: "verified_b2b" | "likely_b2b" | "mixed" | "unknown" | "not_b2b"; quote: string | null; url: string | null; fetchedAt: string | null; reason: string };
   /** Report-safe: no number in any form (contactValues carries it, separately). */
   phone: PhoneRecord | null;
   outreachBlockers: string[];

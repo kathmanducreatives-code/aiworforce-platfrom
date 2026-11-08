@@ -33,6 +33,9 @@ import { loadExistingRecords } from "../_shared/leadPipeline/history.ts";
 import { pipelineApifyInvoker } from "../_shared/leadPipeline/apifyInvoker.ts";
 import type { PipelineRow } from "../_shared/leadPipeline/projection.ts";
 import { persistRows, supabaseLeadStore } from "../_shared/leadPipeline/persistRows.ts";
+import { modelGrounder } from "../_shared/leadPipeline/businessModelCheck.ts";
+import { createGptStrategistGenerateJson } from "../_shared/gptStrategistModel.ts";
+import { routeModel } from "../_shared/gptModelRouter.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
@@ -77,6 +80,12 @@ Deno.serve(withBuildStamp(async (req) => {
     if (strategyReq) {
       const r = await handleStrategyRequest(strategyReq, {
         ...deps,
+        // Business-model verification: the production engine's grounded classifier, routed
+        // like every other stage. Off unless LEAD_PIPELINE_BUSINESS_MODEL_CHECK=enabled.
+        groundBusinessModel: (env("LEAD_PIPELINE_BUSINESS_MODEL_CHECK") ?? "").trim().toLowerCase() === "enabled"
+          ? modelGrounder(createGptStrategistGenerateJson({}, (() => { const route = routeModel("grounded_evidence_evaluation");
+            return { model: route.model, reasoningEffort: route.reasoning_effort, tier: route.tier, purpose: route.stage, reason: route.reason }; })()), strategyReq.query)
+          : null,
         // GPT reads the request (the mission compiler); no deterministic fallback stands in for it.
         interpret: contractMode ? async (query, ws) => {
           // MISSION CONTRACT v4 (TEST, opt-in): one structured reading, validated, compiled.
