@@ -157,34 +157,44 @@ export async function collectExecutiveContext(
   const since = new Date(now - windowDays * 86_400_000).toISOString();
   const unavailable: string[] = [];
 
+  // One statement per query (the db-contract schema test parses each
+  // `.from(…)…;` statement on its own), then read concurrently.
+  const brainQ = db.from("company_brain")
+    .select("profile, onboarding_completed")
+    .eq("workspace_id", workspaceId).limit(1);
+  const signalQ = db.from("signal_events")
+    .select("id, account_id, lead_candidate_id, signal_type, signal_category, occurred_at, observed_at, confidence, freshness, verification_status, lifecycle_status, normalized_value, dedupe_key, source_url, created_at")
+    .eq("workspace_id", workspaceId).eq("lifecycle_status", "active").gte("created_at", since)
+    .order("created_at", { ascending: false }).limit(BRIEF_LIMITS.signals);
+  const leadQ = db.from("lead_candidates")
+    .select("id, account_id, signal_id, plan_id, status, fit_score, priority, reason, next_action, created_at, updated_at")
+    .eq("workspace_id", workspaceId).gte("updated_at", since)
+    .order("updated_at", { ascending: false }).limit(BRIEF_LIMITS.leads);
+  const contentQ = db.from("content_item")
+    .select("id, title, status, format, source_signal_id, created_at, updated_at")
+    .eq("workspace_id", workspaceId).in("status", ["draft", "in_review"])
+    .order("updated_at", { ascending: false }).limit(BRIEF_LIMITS.content);
+  const approvalQ = db.from("approvals")
+    .select("id, title, description, summary, status, created_at, plan_id, task_id, agent_slug, type")
+    .eq("workspace_id", workspaceId).eq("status", "pending")
+    .order("created_at", { ascending: true }).limit(BRIEF_LIMITS.approvals);
+  const planQ = db.from("task_plans")
+    .select("id, goal, plan_summary, user_instruction, status, created_at, updated_at")
+    .eq("workspace_id", workspaceId).in("status", [...IN_FLIGHT_PLAN, "failed"]).gte("created_at", since)
+    .order("created_at", { ascending: false }).limit(BRIEF_LIMITS.plans);
+  const failedTaskQ = db.from("tasks")
+    .select("id, plan_id, agent_slug, status, description, error_message, created_at, updated_at")
+    .eq("workspace_id", workspaceId).eq("status", "failed").gte("created_at", since)
+    .order("created_at", { ascending: false }).limit(BRIEF_LIMITS.failed_tasks);
+
   const [brainRows, signalRows, leadRows, contentRows, approvalRows, planRows, failedTaskRows] = await Promise.all([
-    read("company_brain", db.from("company_brain")
-      .select("profile, onboarding_completed")
-      .eq("workspace_id", workspaceId).limit(1), unavailable),
-    read("signal_events", db.from("signal_events")
-      .select("id, account_id, lead_candidate_id, signal_type, signal_category, occurred_at, observed_at, confidence, freshness, verification_status, lifecycle_status, normalized_value, dedupe_key, source_url, created_at")
-      .eq("workspace_id", workspaceId).eq("lifecycle_status", "active").gte("created_at", since)
-      .order("created_at", { ascending: false }).limit(BRIEF_LIMITS.signals), unavailable),
-    read("lead_candidates", db.from("lead_candidates")
-      .select("id, account_id, signal_id, plan_id, status, fit_score, priority, reason, next_action, created_at, updated_at")
-      .eq("workspace_id", workspaceId).gte("updated_at", since)
-      .order("updated_at", { ascending: false }).limit(BRIEF_LIMITS.leads), unavailable),
-    read("content_item", db.from("content_item")
-      .select("id, title, status, format, source_signal_id, created_at, updated_at")
-      .eq("workspace_id", workspaceId).in("status", ["draft", "in_review"])
-      .order("updated_at", { ascending: false }).limit(BRIEF_LIMITS.content), unavailable),
-    read("approvals", db.from("approvals")
-      .select("id, title, description, summary, status, created_at, plan_id, task_id, agent_slug, type")
-      .eq("workspace_id", workspaceId).eq("status", "pending")
-      .order("created_at", { ascending: true }).limit(BRIEF_LIMITS.approvals), unavailable),
-    read("task_plans", db.from("task_plans")
-      .select("id, goal, plan_summary, user_instruction, status, created_at, updated_at")
-      .eq("workspace_id", workspaceId).in("status", [...IN_FLIGHT_PLAN, "failed"]).gte("created_at", since)
-      .order("created_at", { ascending: false }).limit(BRIEF_LIMITS.plans), unavailable),
-    read("tasks", db.from("tasks")
-      .select("id, plan_id, agent_slug, status, description, error_message, created_at, updated_at")
-      .eq("workspace_id", workspaceId).eq("status", "failed").gte("created_at", since)
-      .order("created_at", { ascending: false }).limit(BRIEF_LIMITS.failed_tasks), unavailable),
+    read("company_brain", brainQ, unavailable),
+    read("signal_events", signalQ, unavailable),
+    read("lead_candidates", leadQ, unavailable),
+    read("content_item", contentQ, unavailable),
+    read("approvals", approvalQ, unavailable),
+    read("task_plans", planQ, unavailable),
+    read("tasks", failedTaskQ, unavailable),
   ]);
 
   const brainRow = brainRows[0] ?? null;
