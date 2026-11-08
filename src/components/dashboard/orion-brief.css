@@ -1,0 +1,46 @@
+/* ORION · Executive brief — dashboard panel. Uses the workforce-home tokens. */
+.orion-brief { margin-top: 14px; }
+.orion-brief .team-panel-header button:disabled { opacity: .6; cursor: progress; }
+.orion-stamp { color: #8ea699; font-size: 11px; margin-bottom: 8px; }
+.orion-stamp--historical { color: #dfc995; }
+.orion-summary { color: #e6ebf0; font-size: 14px; line-height: 1.55; margin-bottom: 12px; }
+.orion-muted { color: #8ea699; font-size: 12px; line-height: 1.55; }
+.orion-error { color: #fca5a5; font-size: 12px; margin-bottom: 8px; }
+.orion-empty { padding: 10px 0 4px; }
+.orion-empty__title { color: #e6ebf0; font-size: 13.5px; font-weight: 550; margin-bottom: 4px; }
+
+.orion-priorities { display: grid; gap: 10px; margin-bottom: 14px; }
+.orion-priority { display: flex; gap: 12px; padding: 12px; border-radius: 12px; background: #ffffff04; box-shadow: inset 0 0 0 1px #ffffff0a, inset 2px 0 0 #a855f7cc; }
+.orion-priority__rank { flex: none; width: 22px; height: 22px; border-radius: 999px; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #e9d5ff; background: #a855f726; }
+.orion-priority__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.orion-priority__title { color: #eef4f1; font-size: 13.5px; font-weight: 550; }
+.orion-priority__why { color: #c0ccc5; font-size: 12.5px; line-height: 1.5; margin-top: 4px; }
+.orion-priority__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+.orion-action { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 500; }
+
+.orion-conf { font-size: 10px; padding: 2px 7px; border-radius: 999px; letter-spacing: .02em; }
+.orion-conf--high { color: #9ee8c3; background: #10b98122; }
+.orion-conf--medium { color: #dfc995; background: #dfc99518; }
+.orion-conf--low { color: #fca5a5; background: #f8717118; }
+
+.orion-evidence { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11px; color: #74877b; }
+.orion-evidence__label { text-transform: uppercase; letter-spacing: .12em; font-size: 9.5px; }
+.orion-evidence__link { color: #a1b7aa; text-decoration: underline; text-decoration-color: #ffffff22; text-underline-offset: 2px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orion-evidence__link:hover { color: #e9d5ff; }
+
+.orion-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 12px; }
+.orion-section__title { color: #a1b7aa; font-size: 10.5px; text-transform: uppercase; letter-spacing: .14em; margin-bottom: 6px; }
+.orion-list, .orion-actions { display: grid; gap: 6px; }
+.orion-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 9px; text-align: left; background: #ffffff04; box-shadow: inset 0 0 0 1px #ffffff08; color: #c5d1cb; transition: background-color .2s ease, box-shadow .2s ease; }
+.orion-row:hover { background: #a855f70d; box-shadow: inset 0 0 0 1px #a855f733; }
+.orion-row:focus-visible, .orion-evidence__link:focus-visible { outline: 2px solid #9ee8c3; outline-offset: 2px; }
+.orion-row__title { display: block; font-size: 12.5px; color: #e6ebf0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orion-row__meta { display: block; font-size: 11px; color: #8ea699; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orion-notes { margin-top: 8px; display: grid; gap: 3px; font-size: 11px; color: #8ea699; list-style: disc; padding-left: 16px; }
+
+.orion-history { display: inline-flex; align-items: center; gap: 4px; color: #8ea699; font-size: 11px; }
+.orion-history select { background: transparent; color: #c5d1cb; font-size: 11px; border-radius: 6px; padding: 2px 4px; box-shadow: inset 0 0 0 1px #ffffff14; }
+
+@media (max-width: 900px) {
+  .orion-grid { grid-template-columns: minmax(0, 1fr); }
+}
