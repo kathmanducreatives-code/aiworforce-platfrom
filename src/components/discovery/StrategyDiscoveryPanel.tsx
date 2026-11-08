@@ -16,22 +16,29 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { invokeFunction } from '@/lib/agentoryApi';
 import { PROVIDER_LABEL, usd } from '@/lib/providerRunSummary';
 import {
-  STRATEGY_CHOICES, VERDICT_LABEL, comparisonRow, overlapView, planStrategy, runStrategy, strategyDiscoveryUiEnabled, strategyLabel, worstCaseLine,
-  type ComparisonRow, type Invoke, type StrategyChoice, type StrategyPlanView, type StrategyRunView,
+  BUSINESS_MODEL_LABEL, OUTCOME_LABEL, STRATEGY_CHOICES, VERDICT_LABEL, comparisonRow, overlapView, planStrategy, routeLine, runStrategy, spendLine,
+  strategyDiscoveryUiEnabled, strategyLabel, worstCaseLine,
+  type CompanyRow, type ComparisonRow, type Invoke, type OutcomeView, type StrategyChoice, type StrategyPlanView, type StrategyRunView,
 } from '@/lib/strategyDiscovery';
+import { simulatedInvoke, strategyDiscoveryMockMode, type Simulation } from '@/lib/strategyDiscoveryMock';
+import simulation from '@/lib/__fixtures__/strategyDiscoverySimulation.json';
 import { ProviderRunSummaryCard } from './ProviderRunSummaryCard';
 
-const invoke = invokeFunction as unknown as Invoke;
+// Development-only simulation (strategyDiscoveryMock.ts): never active in a production build.
+const MOCK = strategyDiscoveryMockMode();
+const invoke: Invoke = MOCK === 'off' ? invokeFunction as unknown as Invoke : simulatedInvoke(MOCK, simulation as unknown as Simulation);
 const nameOf = (p: string) => PROVIDER_LABEL[p] ?? p;
 const VERDICT_TONE = { qualified: 'text-emerald-300/90', pending: 'text-amber-200/80', rejected: 'text-[#8B8F96]' } as const;
 
 export function StrategyDiscoveryPanel({ messageId, query, requestedCount }: { messageId: string; query: string; requestedCount?: number | null }) {
-  if (!strategyDiscoveryUiEnabled() || !query.trim()) return null;
+  if ((!strategyDiscoveryUiEnabled() && MOCK === 'off') || !query.trim()) return null;
   return <Panel messageId={messageId} query={query} requestedCount={requestedCount ?? null} />;
 }
 
 function Panel({ messageId, query, requestedCount }: { messageId: string; query: string; requestedCount: number | null }) {
-  const { workspaceId } = useWorkspace();
+  const { workspaceId: realWorkspace } = useWorkspace();
+  // The development simulation needs no workspace: nothing reaches a server.
+  const workspaceId = realWorkspace ?? (MOCK !== 'off' ? 'simulated-workspace' : null);
   const [open, setOpen] = useState(false);
   const [choice, setChoice] = useState<StrategyChoice>('auto');
   const [plan, setPlan] = useState<StrategyPlanView | null>(null);
@@ -41,13 +48,15 @@ function Panel({ messageId, query, requestedCount }: { messageId: string; query:
   const [run, setRun] = useState<StrategyRunView | null>(null);
   // Runs made from this card in this session, for a side-by-side comparison.
   const [history, setHistory] = useState<ComparisonRow[]>([]);
+  // The user's explicit decision to run with REQUIRED requirements no tool can check (hash-bound on the server).
+  const [reviewOnly, setReviewOnly] = useState(false);
 
-  const request = (c: StrategyChoice) => ({ workspaceId: workspaceId ?? '', messageId, query, choice: c, requestedCount });
+  const request = (c: StrategyChoice, ro = reviewOnly) => ({ workspaceId: workspaceId ?? '', messageId, query, choice: c, requestedCount, reviewOnly: ro });
 
-  const makePlan = async (c: StrategyChoice) => {
+  const makePlan = async (c: StrategyChoice, ro = false) => {
     if (!workspaceId) return;
-    setChoice(c); setState('planning'); setError(null); setApproved(false); setRun(null); setPlan(null);
-    const r = await planStrategy(invoke, request(c));
+    setChoice(c); setReviewOnly(ro); setState('planning'); setError(null); setApproved(false); setRun(null); setPlan(null);
+    const r = await planStrategy(invoke, request(c, ro));
     setState('idle');
     if (r.ok) setPlan(r.value); else setError(r.error);
   };
@@ -76,6 +85,11 @@ function Panel({ messageId, query, requestedCount }: { messageId: string; query:
 
   return (
     <div className="mt-3 pt-3 border-t border-white/[0.06]" data-testid="strategy-discovery">
+      {MOCK !== 'off' && (
+        <div className="mb-2 rounded-md border border-amber-300/30 bg-amber-300/[0.06] px-2.5 py-1.5 text-[11px] text-amber-200/90" data-testid="strategy-simulated">
+          Simulated data — development only. No provider was called and these are not real companies.
+        </div>
+      )}
       <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="Discovery strategy">
         {STRATEGY_CHOICES.map((o) => (
           <button
@@ -106,8 +120,22 @@ function Panel({ messageId, query, requestedCount }: { messageId: string; query:
               ))}
             </ul>
           )}
-          {plan.status === 'blocked' && (
+          <RequirementList plan={plan} />
+          {plan.status === 'blocked' && plan.questions.length > 0 && (
+            <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.04] px-3 py-2 space-y-1.5" data-testid="strategy-questions">
+              <div className="text-[#ECE9E4] font-medium">This request can't run normally yet</div>
+              {plan.questions.map((q) => <p key={q} className="text-[#A3A7AD]">{q}</p>)}
+              <Button size="sm" variant="outline" onClick={() => void makePlan(choice, true)} className="h-7 px-3 rounded-lg text-[12px]" data-testid="strategy-review-only">
+                Run as review-only
+              </Button>
+              <p className="text-[11px] text-[#6E7278]">Review-only companies are never counted as qualified. To change the requirement instead, edit your request.</p>
+            </div>
+          )}
+          {plan.status === 'blocked' && plan.questions.length === 0 && (
             <div className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[#A3A7AD]">{plan.blockedReason ?? 'This strategy cannot run for this request.'}</div>
+          )}
+          {plan.status === 'ready' && reviewOnly && (
+            <div className="text-[11px] text-amber-200/80" data-testid="strategy-review-only-note">Review-only: requirements no tool can check stay unverified; those companies are listed as needing verification.</div>
           )}
           {plan.status === 'ready' && (
             <div className="flex items-center gap-2 pt-1">
@@ -134,6 +162,7 @@ function Panel({ messageId, query, requestedCount }: { messageId: string; query:
             <span className="font-medium">{strategyLabel(run.strategy)}</span>
             <span className="text-[#6E7278]">· {run.status}{run.written !== null ? ` · ${run.written} written to Leads` : ''}</span>
           </div>
+          {run.outcome && <OutcomeBanner outcome={run.outcome} />}
           {run.reason && <div className="mt-1 text-[11px] text-amber-300/90">{run.reason}</div>}
           {run.summary ? <ProviderRunSummaryCard response={run.response} /> : (
             <div className="mt-1 text-[11px] text-[#8B8F96]" data-testid="strategy-run-no-summary">This run returned no provider summary; no totals are shown.</div>
@@ -143,41 +172,22 @@ function Panel({ messageId, query, requestedCount }: { messageId: string; query:
               {overlap.perProvider.map((p) => `${nameOf(p.provider)} ${p.discovered} (${p.onlyHere} only there)`).join(' · ')} · {overlap.combinedUnique} unique combined · {overlap.overlap} found by both
             </div>
           )}
-          <ul className="mt-2 space-y-1.5" aria-label="Companies">
-            {run.companies.map((c) => (
-              <li key={c.key} className="rounded-md border border-white/[0.05] px-2.5 py-1.5" data-testid="strategy-company">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[#ECE9E4] font-medium truncate">{c.name}</span>
-                  {c.domain && <span className="text-[11px] text-[#6E7278] truncate">{c.domain}</span>}
-                  <span className={`ml-auto shrink-0 text-[11px] ${VERDICT_TONE[c.verdict]}`}>{VERDICT_LABEL[c.verdict]}</span>
-                </div>
-                <div className="text-[11px] text-[#6E7278]">Found by {c.providers.map(nameOf).join(' + ') || 'unknown'}{c.gaps.length ? ` · missing: ${c.gaps.join(', ').replace(/_/g, ' ')}` : ''}{c.disproven.length ? ` · disproven: ${c.disproven.join(', ')}` : ''}</div>
-                {c.checks.map((k) => (
-                  <div key={`${k.dimension}-${k.reason}`} className={`mt-0.5 text-[11px] ${k.result === 'pass' ? 'text-[#A3A7AD]' : 'text-[#6E7278]'}`} title={k.reason}>
-                    {k.result === 'pass' ? '✓' : k.result === 'fail' ? '✗' : '…'} {k.dimension.replace(/_/g, ' ')}: <span className="truncate">{k.reason}</span>
-                  </div>
-                ))}
-                {(c.website || c.linkedinUrl) && (
-                  <div className="mt-0.5 flex items-center gap-2 text-[11px]">
-                    {c.website && <a href={c.website} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 underline decoration-white/20 hover:text-[#ECE9E4]">website <ExternalLink className="h-2.5 w-2.5" /></a>}
-                    {c.linkedinUrl && <a href={c.linkedinUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 underline decoration-white/20 hover:text-[#ECE9E4]">LinkedIn <ExternalLink className="h-2.5 w-2.5" /></a>}
-                  </div>
-                )}
-                {c.signals.map((s, i) => (
-                  <div key={`${s.type}-${i}`} className="mt-0.5 flex items-center gap-1 text-[11px] text-[#A3A7AD]">
-                    <span>{s.type.replace(/_/g, ' ')}{s.eventDate ? ` · ${s.eventDate.slice(0, 10)}` : ' · undated'} · {nameOf(s.provider)}</span>
-                    {s.sourceUrl && <a href={s.sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 underline decoration-white/20 hover:text-[#ECE9E4]">source <ExternalLink className="h-2.5 w-2.5" /></a>}
-                  </div>
-                ))}
-                {c.conflicts.map((x) => (
-                  <div key={x.field} className="mt-0.5 flex items-center gap-1 text-[11px] text-amber-200/80">
-                    <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden /> {x.field.replace(/_/g, ' ')}: {x.values.map((v) => `${nameOf(v.provider)} says ${v.value}`).join(' · ')}
-                  </div>
-                ))}
-              </li>
-            ))}
-          </ul>
-          {run.companies.length === 0 && <div className="mt-1 text-[11px] text-[#8B8F96]">No companies were returned.</div>}
+          {(['qualified', 'pending'] as const).map((group) => {
+            const rows = run.companies.filter((c) => c.verdict === group);
+            if (!rows.length) return null;
+            return (
+              <section key={group} className="mt-2" aria-label={group === 'qualified' ? 'Qualified companies' : 'Companies needing verification'} data-testid={`strategy-group-${group}`}>
+                <h4 className="text-[11px] uppercase tracking-wide text-[#6E7278]">{group === 'qualified' ? `Qualified (${rows.length})` : `Needs verification (${rows.length})`}</h4>
+                <ul className="mt-1 space-y-1.5">{rows.map((c) => <CompanyCard key={c.key} c={c} />)}</ul>
+              </section>
+            );
+          })}
+          {(run.excludedCount > 0 || run.companies.some((c) => c.verdict === 'rejected')) && (
+            <div className="mt-2 text-[11px] text-[#8B8F96]" data-testid="strategy-group-rejected">
+              Rejected: {run.excludedCount + run.companies.filter((c) => c.verdict === 'rejected').length} {run.excludedCount === 1 ? 'company was' : 'companies were'} ruled out by your requirements (not written to Leads).
+            </div>
+          )}
+          {run.companies.length === 0 && run.excludedCount === 0 && <div className="mt-1 text-[11px] text-[#8B8F96]">No companies were returned.</div>}
         </div>
       )}
 
@@ -197,5 +207,100 @@ function Panel({ messageId, query, requestedCount }: { messageId: string; query:
         </table>
       )}
     </div>
+  );
+}
+
+const ROUTE_TONE = { checked: 'text-[#A3A7AD]', ranked_only: 'text-[#6E7278]', not_checkable: 'text-amber-200/80' } as const;
+
+/** What Agentory will check, requirement by requirement, before anything is bought. */
+function RequirementList({ plan }: { plan: StrategyPlanView }) {
+  if (!plan.requirements.length && !plan.interpretation.assumptions.length) return null;
+  return (
+    <div className="rounded-lg border border-white/[0.06] px-3 py-2" data-testid="strategy-requirements">
+      <div className="text-[11px] uppercase tracking-wide text-[#6E7278] mb-1">What Agentory will check</div>
+      <ul className="space-y-0.5">
+        {plan.requirements.map((r) => (
+          <li key={r.label} className="flex items-start gap-1.5" data-testid="strategy-requirement">
+            <span className={`shrink-0 text-[10px] px-1 rounded border ${r.necessity === 'required' ? 'border-white/20 text-[#ECE9E4]' : 'border-white/[0.08] text-[#8B8F96]'}`}>{r.necessity === 'required' ? 'Required' : 'Preferred'}</span>
+            <span className="text-[#ECE9E4]">{r.label}</span>
+            <span className={`ml-auto text-right text-[11px] ${ROUTE_TONE[r.route]}`} title={r.explanation}>{routeLine(r)}</span>
+          </li>
+        ))}
+      </ul>
+      {plan.interpretation.assumptions.map((a) => <div key={a} className="mt-1 text-[11px] text-[#8B8F96]">Assumption: {a}</div>)}
+      {plan.interpretation.disclosures.map((d) => <div key={d} className="mt-1 text-[11px] text-amber-200/80">Not checked: {d}</div>)}
+      {plan.interpretation.merged.map((m) => <div key={m.span} className="mt-1 text-[11px] text-[#6E7278]">“{m.span}” is already covered: {m.reason}</div>)}
+    </div>
+  );
+}
+
+const OUTCOME_TONE: Record<OutcomeView['status'], string> = {
+  completed: 'border-emerald-300/25 bg-emerald-300/[0.05] text-emerald-200/90',
+  completed_with_shortfall: 'border-amber-300/25 bg-amber-300/[0.05] text-amber-200/90',
+  needs_verification: 'border-amber-300/25 bg-amber-300/[0.05] text-amber-200/90',
+  no_results: 'border-white/10 bg-white/[0.02] text-[#A3A7AD]',
+  blocked: 'border-white/10 bg-white/[0.02] text-[#A3A7AD]',
+  failed: 'border-red-300/25 bg-red-300/[0.05] text-red-200/90',
+  cancelled: 'border-white/10 bg-white/[0.02] text-[#A3A7AD]',
+};
+
+/** The mission's outcome: only qualified companies count toward the number requested. */
+function OutcomeBanner({ outcome }: { outcome: OutcomeView }) {
+  return (
+    <div className={`mt-2 rounded-lg border px-3 py-2 ${OUTCOME_TONE[outcome.status]}`} data-testid="strategy-outcome" data-status={outcome.status}>
+      <div className="font-medium">{OUTCOME_LABEL[outcome.status]}</div>
+      <div className="text-[12px]">{outcome.summary}</div>
+      {outcome.nextStep && <div className="text-[11px] opacity-80 mt-0.5">Next: {outcome.nextStep}</div>}
+      <div className="text-[11px] opacity-80 mt-0.5" data-testid="strategy-spend">Spend: {spendLine(outcome.spend)}</div>
+    </div>
+  );
+}
+
+const BM_TONE = { verified_b2b: 'text-emerald-300/90', likely_b2b: 'text-amber-200/80', mixed: 'text-amber-200/80', unknown: 'text-[#8B8F96]', not_b2b: 'text-[#8B8F96]' } as const;
+
+function CompanyCard({ c }: { c: CompanyRow }) {
+  return (
+    <li className="rounded-md border border-white/[0.05] px-2.5 py-1.5" data-testid="strategy-company">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[#ECE9E4] font-medium truncate">{c.name}</span>
+        {c.domain && <span className="text-[11px] text-[#6E7278] truncate">{c.domain}</span>}
+        <span className={`ml-auto shrink-0 text-[11px] ${VERDICT_TONE[c.verdict]}`}>{VERDICT_LABEL[c.verdict]}</span>
+      </div>
+      <div className="text-[11px] text-[#6E7278]">
+        {c.location ?? 'Location unknown'} · {c.industry.length ? c.industry.join(', ') : 'Industry unknown'} · Found by {c.providers.map(nameOf).join(' + ') || 'unknown'}
+        {c.mergedRecords ? ` · ${c.mergedRecords + 1} records merged` : ''}
+        {c.gaps.length ? ` · missing: ${c.gaps.join(', ').replace(/_/g, ' ')}` : ''}{c.disproven.length ? ` · disproven: ${c.disproven.join(', ').replace(/_/g, ' ')}` : ''}
+      </div>
+      {c.businessModel && (
+        <div className="mt-0.5 text-[11px]" data-testid="strategy-business-model">
+          <span className={BM_TONE[c.businessModel.status]}>{BUSINESS_MODEL_LABEL[c.businessModel.status]}</span>
+          {c.businessModel.quote ? <span className="text-[#A3A7AD]"> — “{c.businessModel.quote}”</span> : <span className="text-[#6E7278]"> — {c.businessModel.reason}</span>}
+          {c.businessModel.url && <a href={c.businessModel.url} target="_blank" rel="noreferrer noopener" className="ml-1 inline-flex items-center gap-0.5 underline decoration-white/20 hover:text-[#ECE9E4]">source <ExternalLink className="h-2.5 w-2.5" aria-hidden /></a>}
+          {c.businessModel.fetchedAt && <span className="text-[#6E7278]"> · read {c.businessModel.fetchedAt.slice(0, 10)}</span>}
+        </div>
+      )}
+      {c.checks.map((k) => (
+        <div key={`${k.dimension}-${k.reason}`} className={`mt-0.5 text-[11px] ${k.result === 'pass' ? 'text-[#A3A7AD]' : 'text-[#6E7278]'}`} title={k.reason}>
+          {k.result === 'pass' ? '✓' : k.result === 'fail' ? '✗' : '…'} {k.dimension.replace(/_/g, ' ')}: <span className="truncate">{k.reason}</span>
+        </div>
+      ))}
+      {(c.website || c.linkedinUrl) && (
+        <div className="mt-0.5 flex items-center gap-2 text-[11px]">
+          {c.website && <a href={c.website} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 underline decoration-white/20 hover:text-[#ECE9E4]">website <ExternalLink className="h-2.5 w-2.5" aria-hidden /></a>}
+          {c.linkedinUrl && <a href={c.linkedinUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 underline decoration-white/20 hover:text-[#ECE9E4]">LinkedIn <ExternalLink className="h-2.5 w-2.5" aria-hidden /></a>}
+        </div>
+      )}
+      {c.signals.map((sg, i) => (
+        <div key={`${sg.type}-${i}`} className="mt-0.5 flex items-center gap-1 text-[11px] text-[#A3A7AD]">
+          <span>{sg.type.replace(/_/g, ' ')}{sg.eventDate ? ` · ${sg.eventDate.slice(0, 10)}` : ' · undated'} · {nameOf(sg.provider)}</span>
+          {sg.sourceUrl && <a href={sg.sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 underline decoration-white/20 hover:text-[#ECE9E4]">source <ExternalLink className="h-2.5 w-2.5" aria-hidden /></a>}
+        </div>
+      ))}
+      {c.conflicts.map((x) => (
+        <div key={x.field} className="mt-0.5 flex items-center gap-1 text-[11px] text-amber-200/80">
+          <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden /> {x.field.replace(/_/g, ' ')}: {x.values.map((v) => `${nameOf(v.provider)} says ${v.value}`).join(' · ')}
+        </div>
+      ))}
+    </li>
   );
 }
