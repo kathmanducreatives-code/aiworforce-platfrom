@@ -277,6 +277,13 @@ export interface StrategyDeps extends PipelineDeps {
   advisor: GenerateJsonFn | null;
   /** The mission interpretation contract in force (default: AGENTORY_MISSION_CONTRACT, v1). */
   contractVersion?: string;
+  /**
+   * WORKBENCH LINK. Records the run as ONE task_plans row in this workspace (server-side,
+   * after the membership and admin checks; the client never names a plan) and returns its
+   * id, which the saved leads carry so the Workbench Leads table shows them. Absent or
+   * failing: the leads are still saved, and the response says there is no Workbench view.
+   */
+  recordRunPlan?(p: { workspaceId: string; userId: string; query: string; planHash: string; status: "completed" | "partial" | "failed"; summary: string }): Promise<string | null>;
 }
 
 export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDeps): Promise<{ status: number; body: Record<string, unknown> }> {
@@ -412,12 +419,22 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       spend: { ...run.spend, basis: "estimate" } });
     return { status: 409, body: { error: run.reason, plan, outcome, steps: run.steps, spend: run.spend } };
   }
-  const projected = [...run.queue, ...run.review].map((l) => projectPipelineLead(l, { workspaceId: req.workspaceId, values: [] })).filter((x): x is PipelineRow => !!x);
+  // The run's own plan: what the Workbench reads (`lead_candidates.plan_id`). Recorded before
+  // the rows so every new lead carries it; a failure here never loses the leads.
+  const summary = `${run.queue.length} qualified, ${run.review.length} for review of ${spec.requestedCount ?? "?"} requested (${run.strategy ?? "no strategy"})`;
+  let runPlanId: string | null = null;
+  try {
+    runPlanId = d.recordRunPlan && d.userId ? await d.recordRunPlan({ workspaceId: req.workspaceId, userId: d.userId, query: token?.query ?? req.query,
+      planHash: plan.planHash, status: run.status === "partial" ? "partial" : "completed", summary }) : null;
+  } catch (e) { console.error("[lead-pipeline] run plan not recorded", { name: (e as Error)?.name }); runPlanId = null; }
+  const projected = [...run.queue, ...run.review].map((l) => projectPipelineLead(l, { workspaceId: req.workspaceId, values: [], planId: runPlanId })).filter((x): x is PipelineRow => !!x);
   const persisted = await d.persist(projected, 0);
   return {
     status: 200,
     body: {
       status: run.status, reason: run.reason, strategy: run.strategy, steps: run.steps, spend: run.spend, limitations: run.limitations,
+      // Where the saved leads appear: the Workbench Leads table for this plan (null = not linked).
+      workbench: runPlanId ? { planId: runPlanId } : null,
       // What the REQUEST got (outcome.ts): only qualified companies count toward the number asked for.
       outcome: missionOutcome({
         requested: spec.requestedCount, qualified: run.queue.length,

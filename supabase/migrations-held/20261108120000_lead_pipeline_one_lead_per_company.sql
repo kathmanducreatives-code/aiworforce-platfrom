@@ -99,8 +99,8 @@ begin
     returning id into v_lead;
   end if;
   if v_lead is null then
-    insert into public.lead_candidates (workspace_id, account_id, contact_id, lead_type, status, fit_score, reason, next_action, raw)
-    values (p_workspace_id, v_account, v_contact, 'lead_pipeline', coalesce(p_lead->>'status', 'new'), (p_lead->>'fit_score')::numeric,
+    insert into public.lead_candidates (workspace_id, plan_id, account_id, contact_id, lead_type, status, fit_score, reason, next_action, raw)
+    values (p_workspace_id, nullif(p_lead->>'plan_id', '')::uuid, v_account, v_contact, 'lead_pipeline', coalesce(p_lead->>'status', 'new'), (p_lead->>'fit_score')::numeric,
             p_lead->>'reason', p_lead->>'next_action', coalesce(p_lead->'raw', '{}'::jsonb))
     on conflict (workspace_id, account_id) where lead_type = 'lead_pipeline'
       do update set raw = public.lead_candidates.raw || jsonb_build_object('agentory_pipeline', excluded.raw->'agentory_pipeline'), updated_at = now()

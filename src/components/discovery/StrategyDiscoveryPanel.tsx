@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { invokeFunction } from '@/lib/agentoryApi';
+import { useOptionalChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { PROVIDER_LABEL, usd } from '@/lib/providerRunSummary';
 import {
   BUSINESS_MODEL_LABEL, OUTCOME_LABEL, STRATEGY_CHOICES, VERDICT_LABEL, comparisonRow, overlapView, planStrategy, routeLine, runStrategy, spendLine,
@@ -30,12 +31,13 @@ const invoke: Invoke = MOCK === 'off' ? invokeFunction as unknown as Invoke : si
 const nameOf = (p: string) => PROVIDER_LABEL[p] ?? p;
 const VERDICT_TONE = { qualified: 'text-emerald-300/90', pending: 'text-amber-200/80', rejected: 'text-[#8B8F96]' } as const;
 
-export function StrategyDiscoveryPanel({ messageId, query, requestedCount }: { messageId: string; query: string; requestedCount?: number | null }) {
+export function StrategyDiscoveryPanel({ messageId, query, requestedCount, conversationId }: { messageId: string; query: string; requestedCount?: number | null; conversationId?: string | null }) {
   if ((!strategyDiscoveryUiEnabled() && MOCK === 'off') || !query.trim()) return null;
-  return <Panel messageId={messageId} query={query} requestedCount={requestedCount ?? null} />;
+  return <Panel messageId={messageId} query={query} requestedCount={requestedCount ?? null} conversationId={conversationId ?? null} />;
 }
 
-function Panel({ messageId, query, requestedCount }: { messageId: string; query: string; requestedCount: number | null }) {
+function Panel({ messageId, query, requestedCount, conversationId }: { messageId: string; query: string; requestedCount: number | null; conversationId: string | null }) {
+  const openWorkbench = useOptionalChatWorkspace()?.openWorkbench ?? null;
   const { workspaceId: realWorkspace } = useWorkspace();
   // The development simulation needs no workspace: nothing reaches a server.
   const workspaceId = realWorkspace ?? (MOCK !== 'off' ? 'simulated-workspace' : null);
@@ -161,6 +163,13 @@ function Panel({ messageId, query, requestedCount }: { messageId: string; query:
           <div className="flex items-center gap-1.5 text-[#ECE9E4]">
             <span className="font-medium">{strategyLabel(run.strategy)}</span>
             <span className="text-[#6E7278]">· {run.status}{run.written !== null ? ` · ${run.written} written to Leads` : ''}</span>
+            {run.workbenchPlanId && openWorkbench && MOCK === 'off' && (
+              <button type="button" data-testid="strategy-open-workbench"
+                className="ml-auto rounded border border-white/10 px-2 py-0.5 text-[11px] text-[#C9CCD1] hover:bg-white/[0.06]"
+                onClick={() => openWorkbench({ planId: run.workbenchPlanId!, conversationId })}>
+                Open in Workbench
+              </button>
+            )}
           </div>
           {run.outcome && <OutcomeBanner outcome={run.outcome} />}
           {run.reason && <div className="mt-1 text-[11px] text-amber-300/90">{run.reason}</div>}

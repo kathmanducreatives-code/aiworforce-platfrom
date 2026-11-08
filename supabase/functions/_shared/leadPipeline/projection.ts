@@ -11,6 +11,10 @@
 //                     person-associated or verified; its class, verification,
 //                     provenance and do-not-call flag go in raw. A switchboard
 //                     goes in raw only. Nothing here sends anything.
+//   mission (plan)    a NEW lead carries `plan_id` = the run's task_plans row, which is
+//                     what the Workbench Leads table reads. An EXISTING lead keeps its
+//                     row and plan_id; the run's plan is in its attribution
+//                     (`raw.agentory_pipeline.plan_id`), which the table also matches.
 //
 // Pure: returns rows; the caller writes them.
 
@@ -23,10 +27,10 @@ export interface PipelineRow {
   existingLeadId: string | null;
   account: { workspace_id: string; name: string; domain: string | null; website_url: string | null; linkedin_url: string | null; location: string | null; industry: string | null; employee_count: string | null; source: string; raw: Record<string, unknown> };
   contact: { workspace_id: string; full_name: string | null; title: string | null; linkedin_url: string | null; company: string | null; location: string | null; email: null; phone: string | null; source: string; raw: Record<string, unknown> } | null;
-  lead_candidate: { workspace_id: string; lead_type: string; status: string; fit_score: number | null; priority: number | null; reason: string; next_action: string | null; raw: Record<string, unknown> };
+  lead_candidate: { workspace_id: string; plan_id?: string; lead_type: string; status: string; fit_score: number | null; priority: number | null; reason: string; next_action: string | null; raw: Record<string, unknown> };
 }
 
-export function projectPipelineLead(l: PipelineLead, ctx: { workspaceId: string; values: PipelineRun["contactValues"] }): PipelineRow | null {
+export function projectPipelineLead(l: PipelineLead, ctx: { workspaceId: string; values: PipelineRun["contactValues"]; planId?: string | null }): PipelineRow | null {
   // Rejected leads never reach the Leads tables; neither does a lead screened
   // out before verification (nothing was verified, nothing is for review).
   if (l.statuses.qualification === "ineligible" || l.statuses.screening === "screened_out") return null;
@@ -40,6 +44,7 @@ export function projectPipelineLead(l: PipelineLead, ctx: { workspaceId: string;
     // `status: qualified` below is the COMPANY's verdict; the contact's role is verified separately.
     contact_verification: l.person?.verification ?? null,
     business_model: l.businessModel ?? null,
+    ...(ctx.planId ? { plan_id: ctx.planId } : {}),
   };
   const loc = [l.company.hq.city, l.company.hq.region, l.company.hq.country].filter(Boolean).join(", ") || null;
   return {
@@ -56,7 +61,7 @@ export function projectPipelineLead(l: PipelineLead, ctx: { workspaceId: string;
       raw: { agentory_pipeline: { version: PIPELINE_ATTRIBUTION_VERSION, person_key: l.person.key, provider_person_id: l.person.providerPersonId, role_family: l.person.roleFamily, role_family_source: l.person.verification.role, verification: l.person.verification, phone: l.phone } },
     } : null,
     lead_candidate: {
-      workspace_id: ctx.workspaceId, lead_type: "lead_pipeline",
+      workspace_id: ctx.workspaceId, ...(ctx.planId ? { plan_id: ctx.planId } : {}), lead_type: "lead_pipeline",
       status: l.statuses.qualification === "eligible" ? "qualified" : "new",
       fit_score: l.rank.score, priority: null,
       reason: l.rank.explanation,
