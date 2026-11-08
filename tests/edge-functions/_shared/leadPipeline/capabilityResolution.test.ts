@@ -53,3 +53,21 @@ Deno.test("an any-of group is one requirement: checked when any alternative is",
   const none = resolveRequirementRoutes([crit({ dimension: "funding", any_of: ["x", "y"] }), crit({ dimension: "technology", any_of: ["x", "y"] })], APIFY);
   assertEquals(uncheckedRequired(none).length, 2);
 });
+
+// Regression (benchmark C2): "operating in the US" is a PRESENCE requirement. The LinkedIn
+// company record proves it from its structured office list (candidateObservation
+// `geography_presence`), exactly as it proves HQ. The registry once omitted `presence`, so
+// every presence request was blocked as uncheckable although the engine qualified on it.
+Deno.test("the real registry: the company record proves presence, so an Apify chain checks 'operates in the US'", async () => {
+  const { DISCOVERY_CAPABILITIES } = await import("../../../../supabase/functions/_shared/leadPipeline/strategy.ts");
+  const record = DISCOVERY_CAPABILITIES["apify.linkedin_company_record"];
+  assert((record.proves as string[]).includes("presence"));
+  const chain = [DISCOVERY_CAPABILITIES["apify.linkedin_job_search"], record];
+  const real = new Map<ProofDimension, string[]>();
+  for (const c of chain) for (const d of c.proves) real.set(d as ProofDimension, [...(real.get(d as ProofDimension) ?? []), c.id]);
+  const [r] = resolveRequirementRoutes([crit({ dimension: "geography", geography_scope: "presence" })], real);
+  assertEquals([r.route, r.checkedBy], ["checked", ["apify.linkedin_company_record"]]);
+  // No discovery row proves presence on its own: a job search alone leaves it unchecked.
+  const jobsOnly = new Map<ProofDimension, string[]>([["identity", ["jobs"]], ["hiring", ["jobs"]]]);
+  assertEquals(resolveRequirementRoutes([crit({ dimension: "geography", geography_scope: "presence" })], jobsOnly)[0].route, "not_checkable");
+});
