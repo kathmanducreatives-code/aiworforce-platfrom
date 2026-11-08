@@ -34,8 +34,10 @@ Deno.test("the hash is SHA-256, deterministic, and versioned", () => {
 
 Deno.test("C1: US headquarters and US presence no longer share a plan hash", () => {
   const offices = "Find 3 companies with offices in the United States actively hiring Account Executives.";
-  const hq = planStrategy(spec(offices, { geography_scope: "headquarters" }), CTX);
-  const presence = planStrategy(spec(offices), CTX);
+  // Presence is not proven by any approved step (MRLE Phase 0 blocks it): compare under review-only.
+  const R = { ...CTX, user: { allowReviewOnly: true } };
+  const hq = planStrategy(spec(offices, { geography_scope: "headquarters" }), R);
+  const presence = planStrategy(spec(offices), R);
   assertEquals(hq.steps.map((s) => s.capability), presence.steps.map((s) => s.capability), "same providers and steps");
   assertNotEquals(hq.planHash, presence.planHash, "a different meaning is a different plan");
   assertNotEquals(hq.binding.semanticsFingerprint, presence.binding.semanticsFingerprint);

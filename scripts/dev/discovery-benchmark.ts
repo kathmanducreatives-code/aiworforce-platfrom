@@ -228,7 +228,7 @@ export const SCENARIOS: Scenario[] = [
     },
   },
   {
-    id: "A3", group: "A", title: "Apify — US manufacturers hiring sales representatives", strategy: "apify_only", count: 5,
+    id: "A3", group: "A", title: "Apify — US manufacturers hiring sales representatives", strategy: "apify_only", count: 5, allowReviewOnly: true,
     request: "Find 5 US manufacturers hiring sales representatives.",
     proposal: { ...US, requested_opportunity_count: 5, company_types: ["manufacturing"], ...HIRING(["sales representative"]) },
     spec: { hard: ["US headquarters", "manufacturer", "hiring sales representatives (≤30 days)"], preferences: [], verification: ["HQ (company record)", "posting (job search)", "manufacturing: a taxonomy label proves no industry — it stays to be verified"],

@@ -111,6 +111,13 @@ export type Requirement =
 
 /** An unsupported item removed as an exact duplicate of an enforced requirement (audit). */
 export interface MergedDuplicate {
+  /**
+   * Absent (PR #249): the same EXCLUSION an enforced REQUIRED requirement applies.
+   * `same_words`: every content word is quoted by an executable requirement (MRLE Phase 0).
+   * `count`: nothing but the request's framing and the requested count ("Find 5").
+   * Absent on the original kind, so every existing contract hash is unchanged.
+   */
+  kind?: "same_words" | "count";
   /** The user's words the duplicate quoted. */
   span: string;
   /** The executable REQUIRED requirement(s) that enforce exactly those words. */
@@ -211,10 +218,15 @@ export function contractProblems(c: MissionContract): ContractProblem[] {
   }
   // A merged duplicate must name the enforced requirement that answers it: never a silent drop.
   for (const m of c.mergedDuplicates ?? []) {
+    if (m.kind === "count") {
+      if (!m.span?.trim() || (m.coveredBy?.length ?? 0) > 0 || c.deliverable.count === null) p("merged_duplicate", null, `merged count item "${m.span}" needs a stated count and names no requirement`);
+      continue;
+    }
     if (!m.span?.trim() || !m.coveredBy?.length) p("merged_duplicate", null, "a merged duplicate must quote the request and name what enforces it");
     for (const id of m.coveredBy ?? []) {
       const r = c.requirements.find((x) => x.id === id);
-      if (!r || !isExecutable(r) || r.necessity !== "required") p("merged_duplicate", id, `merged duplicate "${m.span}" names no enforced required requirement`);
+      // The exclusion kind (#249) must be enforced as REQUIRED; same words need only be executed.
+      if (!r || !isExecutable(r) || (m.kind !== "same_words" && r.necessity !== "required")) p("merged_duplicate", id, `merged duplicate "${m.span}" names no enforced required requirement`);
     }
   }
   for (const g of c.anyOf) {
@@ -251,6 +263,13 @@ export function approvability(c: MissionContract): { ok: true } | { ok: false; r
     ...c.ambiguities.map((a) => `ambiguity: ${a.question}`),
     ...c.requirements.filter((r) => r.dimension === "unsupported" && r.compiledAs !== "disclosed" && r.necessity === "required" && r.polarity === "include")
       .map((r) => `a required requirement no evidence can establish: ${r.display.label}`),
+    // MRLE PHASE 0 — A REQUIRED REQUIREMENT SHOWN AS "NOT CHECKED" IS NEVER APPROVED SILENTLY
+    // (audit E2: 22 REQUIRED constraints approved and never executed). It is disclosed and
+    // never executed, so a lead could be called qualified without it: the user must remove
+    // it or make it a preference first. Polarity does not matter — an exclusion nobody checks
+    // is just as unenforced.
+    ...c.requirements.filter((r): r is Extract<Requirement, { dimension: "unsupported" }> => r.dimension === "unsupported" && r.compiledAs === "disclosed" && r.necessity === "required")
+      .map((r) => `a required requirement no approved tool can check: ${String(r.value ?? r.display.label)} — remove it, make it a preference, or cancel`),
   ];
   return reasons.length ? { ok: false, reasons } : { ok: true };
 }

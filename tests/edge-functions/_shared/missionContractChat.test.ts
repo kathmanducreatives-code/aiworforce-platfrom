@@ -130,16 +130,19 @@ Deno.test("v4: an ambiguity is asked, a contradiction is refused (never guessed)
   assertEquals(r.kind, "refuse");
 });
 
-Deno.test("v4 bridge: every corpus phrasing round-trips to its exact contract hash (55/55)", async () => {
+Deno.test("v4 bridge: every approvable corpus phrasing round-trips to its exact contract hash (54/55; M20 asks)", async () => {
   let n = 0;
+  const blocked: string[] = [];
   for (const c of loadCases()) for (const p of c.phrasings) {
     const k = contractFromProposal(p.query, v4From(p as never)).contract;
-    if (!approvability(k).ok) continue;
+    if (!approvability(k).ok) { blocked.push(c.id); continue; }
     const m = await missionFromContract(k);
     assertEquals((await contractBindingOf(m)).hash, await contractHash(k), `${c.id}/${p.label}`);
     n++;
   }
-  assertEquals(n, 55);
+  // MRLE Phase 0: M20 ("growing their sales team") keeps "sales team" as a REQUIRED item no tool
+  // checks; it is now a question instead of a silently approved "Not checked" (audit E2).
+  assertEquals([n, blocked], [54, ["M20"]]);
 });
 
 Deno.test("v4 bridge: carriers never ADD a hard requirement a legacy re-derivation could gate on", async () => {
@@ -322,7 +325,16 @@ Deno.test("shadow baseline: on 55 corpus phrasings and 162 recorded live answers
     assertEquals(set.with_added, 0);
     assertEquals(set.with_strengthened, 0);
     assertEquals(set.with_weakened, 0);
-    assertEquals(set.approval_differs, 0);
+  }
+  // MRLE Phase 0: v4 now refuses to approve a REQUIRED "Not checked" item that v3 ran without.
+  // The only such row in the corpus is M20 ("growing their sales team": "sales team" unchecked).
+  for (const [set, stat] of [["corpus", s.corpus_v3], ["run24", s.run24_v3]] as const) {
+    const differs = rows.filter((r) => r.baseline === "v3" && r.set === set && r.comparison && r.comparison.approval.baseline !== r.comparison.approval.candidate);
+    assertEquals(stat.approval_differs, differs.length);
+    for (const r of differs) {
+      assertEquals(r.id, "M20", `${r.set} ${r.id}/${r.label}`);
+      assertEquals(r.comparison!.approval.candidate, false, "v4 asks; it never approves what v3 refused");
+    }
   }
   const planDiffs = rows.filter((r) => r.baseline === "v3" && r.comparison &&
     (r.comparison.plan_hard.added.length || r.comparison.plan_hard.removed.length));

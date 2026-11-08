@@ -83,10 +83,10 @@ export const AGENTS: Record<AgentId, AgentMeta> = {
   scribe: {
     id: 'scribe',
     name: 'Orion',
-    role: 'AI Pipeline Operator',
+    role: 'Executive Intelligence',
     accent: 'purple',
     initial: 'O',
-    blurb: 'Organizes what should be reviewed, approved, contacted, watched, or skipped next.',
+    blurb: 'Briefs you on what matters most across signals, leads, drafts and approvals — with the evidence.',
   },
 };
 

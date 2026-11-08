@@ -86,6 +86,8 @@ export interface PipelineLead {
   canonicalRecord: CanonicalRun["statuses"][number]["state"] | "not_requested";
   signals: Signal[];
   rank: RankResult;
+  /** The business model read from the company's own pages, when it was checked (businessModelCheck.ts). */
+  businessModel?: { companyKey: string; status: "verified_b2b" | "likely_b2b" | "mixed" | "unknown" | "not_b2b"; quote: string | null; url: string | null; fetchedAt: string | null; reason: string };
   /** Report-safe: no number in any form (contactValues carries it, separately). */
   phone: PhoneRecord | null;
   outreachBlockers: string[];
@@ -93,6 +95,8 @@ export interface PipelineLead {
     walkId: string; planHash: string; runAt: string; providers: string[];
     /** Fields where providers DISAGREE about this company (normalize.ts): kept for verification, never resolved by a claim. */
     conflicts?: { field: string; values: { provider: string; value: unknown }[] }[];
+    /** Other records of the SAME company collapsed into this lead (identity.ts): one company, one lead. */
+    mergedFrom?: { leadKey: string; companyKey: string; linkedinUrl: string | null; qualification: string }[];
   };
 }
 

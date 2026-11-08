@@ -16,11 +16,24 @@ import type { FetchLike } from "../discoveryProviders/http.ts";
 import { COMPANY_RECORD_ACTOR } from "./canonical.ts";
 import { SIGNAL_ACTORS, worstCaseUsd } from "./signals.ts";
 
-export const PIPELINE_ACTORS: Readonly<Record<string, { actorId: string; perItemUsd: number; perStartUsd: number; emptyUsd: number }>> = Object.freeze({
+/**
+ * The Website Content Crawler is billed by COMPUTE (memory × time), not per result, so
+ * `maxTotalChargeUsd` does not bound it. Its run is bounded instead by memory and timeout:
+ * worst case = memory (GB) × timeout (h) × the compute-unit price. The CU price is an
+ * ASSUMPTION (Apify publishes it per plan) — it must be checked against the account's plan,
+ * and the first approved run's billed usage, before this estimate is trusted. MRLE Phase 1.
+ */
+export const WEBSITE_PAGES_RUN = Object.freeze({ memoryMb: 1024, timeoutS: 120, assumedUsdPerComputeUnit: 0.4 });
+export const WEBSITE_PAGES_WORST_USD = Math.ceil((WEBSITE_PAGES_RUN.memoryMb / 1024) * (WEBSITE_PAGES_RUN.timeoutS / 3600) * WEBSITE_PAGES_RUN.assumedUsdPerComputeUnit * 1e5) / 1e5;
+
+export const PIPELINE_ACTORS: Readonly<Record<string, { actorId: string; perItemUsd: number; perStartUsd: number; emptyUsd: number; memoryMb?: number; timeoutS?: number }>> = Object.freeze({
   [COMPANY_RECORD_ACTOR.key]: { actorId: COMPANY_RECORD_ACTOR.actorId, perItemUsd: COMPANY_RECORD_ACTOR.perItemUsd, perStartUsd: COMPANY_RECORD_ACTOR.perStartUsd, emptyUsd: 0 },
   [SIGNAL_ACTORS.profilePosts.key]: SIGNAL_ACTORS.profilePosts,
   [SIGNAL_ACTORS.companyPosts.key]: SIGNAL_ACTORS.companyPosts,
   [SIGNAL_ACTORS.jobs.key]: SIGNAL_ACTORS.jobs,
+  // First-party pages for business-model verification (businessModelCheck.ts): compute-bounded.
+  apify_website_content: { actorId: "apify/website-content-crawler", perItemUsd: 0, perStartUsd: WEBSITE_PAGES_WORST_USD, emptyUsd: 0,
+    memoryMb: WEBSITE_PAGES_RUN.memoryMb, timeoutS: WEBSITE_PAGES_RUN.timeoutS },
 });
 
 export class ApifyRefusal extends Error { override name = "ApifyRefusal"; }
@@ -36,7 +49,10 @@ export function pipelineApifyInvoker(deps: { token: string; fetch: FetchLike; ti
     if (!Number.isInteger(opts.maxItems) || opts.maxItems < 1 || opts.maxItems > 100) throw new ApifyRefusal("maxItems must be 1–100");
     done.add(opts.idempotencyKey);
     const capUsd = worstCaseUsd({ key: actorKey, ...a }, opts.maxItems);
-    const q = new URLSearchParams({ maxItems: String(opts.maxItems), maxTotalChargeUsd: capUsd.toFixed(5), timeout: String(Math.ceil((deps.timeoutMs ?? 120_000) / 1000)) });
+    const q = new URLSearchParams({ maxItems: String(opts.maxItems), maxTotalChargeUsd: capUsd.toFixed(5),
+      timeout: String(a.timeoutS ?? Math.ceil((deps.timeoutMs ?? 120_000) / 1000)),
+      // A compute-billed actor is bounded by its memory and timeout (see WEBSITE_PAGES_RUN).
+      ...(a.memoryMb ? { memory: String(a.memoryMb) } : {}) });
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), (deps.timeoutMs ?? 120_000) + 5_000);
     let status: number | null = null;

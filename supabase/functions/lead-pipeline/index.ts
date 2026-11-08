@@ -32,40 +32,20 @@ import { supabaseCheckpointStore } from "../_shared/leadPipeline/checkpoint.ts";
 import { loadExistingRecords } from "../_shared/leadPipeline/history.ts";
 import { pipelineApifyInvoker } from "../_shared/leadPipeline/apifyInvoker.ts";
 import type { PipelineRow } from "../_shared/leadPipeline/projection.ts";
+import { persistRows, supabaseLeadStore } from "../_shared/leadPipeline/persistRows.ts";
+import { modelGrounder } from "../_shared/leadPipeline/businessModelCheck.ts";
+import { createGptStrategistGenerateJson } from "../_shared/gptStrategistModel.ts";
+import { routeModel } from "../_shared/gptModelRouter.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
-async function persist(admin: SupabaseClient, rows: PipelineRow[]) {
-  const now = new Date().toISOString();
-  for (const r of rows) {
-    if (r.existingLeadId) {
-      // An existing Lead keeps its id, status and stage: only the attribution is added.
-      const { data } = await admin.from("lead_candidates").select("id, raw").eq("id", r.existingLeadId).eq("workspace_id", r.lead_candidate.workspace_id).maybeSingle();
-      if (data) { await admin.from("lead_candidates").update({ raw: { ...(data.raw ?? {}), agentory_pipeline: r.lead_candidate.raw.agentory_pipeline }, updated_at: now }).eq("id", data.id); continue; }
-    }
-    let accountId: string | null = null;
-    if (r.account.domain) {
-      const { data } = await admin.from("accounts").select("id, raw").eq("workspace_id", r.account.workspace_id).eq("domain", r.account.domain).limit(1).maybeSingle();
-      if (data) { accountId = data.id; await admin.from("accounts").update({ raw: { ...(data.raw ?? {}), agentory_pipeline: r.account.raw.agentory_pipeline }, updated_at: now }).eq("id", data.id); }
-    }
-    if (!accountId) {
-      const { data, error } = await admin.from("accounts").insert(r.account).select("id").single();
-      if (error) throw new Error(`accounts insert: ${error.message}`);
-      accountId = data.id;
-    }
-    let contactId: string | null = null;
-    if (r.contact) {
-      const { data, error } = await admin.from("contacts").insert({ ...r.contact, account_id: accountId }).select("id").single();
-      if (error) throw new Error(`contacts insert: ${error.message}`);
-      contactId = data.id;
-    }
-    const { error } = await admin.from("lead_candidates").insert({ ...r.lead_candidate, account_id: accountId, contact_id: contactId });
-    if (error) throw new Error(`lead_candidates insert: ${error.message}`);
-  }
+// Idempotent per company (leadPipeline/persistRows.ts). With the held migration
+// 20261108120000 applied AND LEAD_PIPELINE_PERSIST_TX=enabled, each row is one transaction.
+async function persist(admin: SupabaseClient, rows: PipelineRow[], transactional: boolean) {
+  return await persistRows(supabaseLeadStore(admin, { transactional }), rows);
 }
-
 // Every response (an unauthenticated OPTIONS too) names the build: x-agentory-build.
 Deno.serve(withBuildStamp(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -92,7 +72,7 @@ Deno.serve(withBuildStamp(async (req) => {
     loadExisting: (ws: string) => loadExistingRecords(admin, ws, new Date()),
     leadoceanFor: (apiKey: string) => { const d = { apiKey, fetch: f }; return { adapter: leadOceanAdapter(d), deps: d }; },
     apify: apifyToken ? pipelineApifyInvoker({ token: apifyToken, fetch: f }) : null,
-    persist: (rows: PipelineRow[]) => persist(admin, rows),
+    persist: (rows: PipelineRow[]) => persist(admin, rows, (env("LEAD_PIPELINE_PERSIST_TX") ?? "").trim().toLowerCase() === "enabled"),
     // Off unless DISCOVERY_EVIDENCE_CACHE_ENABLED and the held cache migration is applied.
     evidenceCache: ["1", "true", "yes", "on"].includes((env("DISCOVERY_EVIDENCE_CACHE_ENABLED") ?? "").trim().toLowerCase()) ? supabaseEvidenceCache(admin) : null,
   };
@@ -100,6 +80,12 @@ Deno.serve(withBuildStamp(async (req) => {
     if (strategyReq) {
       const r = await handleStrategyRequest(strategyReq, {
         ...deps,
+        // Business-model verification: the production engine's grounded classifier, routed
+        // like every other stage. Off unless LEAD_PIPELINE_BUSINESS_MODEL_CHECK=enabled.
+        groundBusinessModel: (env("LEAD_PIPELINE_BUSINESS_MODEL_CHECK") ?? "").trim().toLowerCase() === "enabled"
+          ? modelGrounder(createGptStrategistGenerateJson({}, (() => { const route = routeModel("grounded_evidence_evaluation");
+            return { model: route.model, reasoningEffort: route.reasoning_effort, tier: route.tier, purpose: route.stage, reason: route.reason }; })()), strategyReq.query)
+          : null,
         // GPT reads the request (the mission compiler); no deterministic fallback stands in for it.
         interpret: contractMode ? async (query, ws) => {
           // MISSION CONTRACT v4 (TEST, opt-in): one structured reading, validated, compiled.

@@ -57,7 +57,7 @@ export const DOCK_AGENTS: DockAgent[] = [
   },
     {
     ...live('orion'),
-    role: 'Your AI Pipeline Operator',
+    role: 'Your Executive Intelligence',
     currentTask: 'Organizing review queue',
     progress: 12,
     status: 'idle',

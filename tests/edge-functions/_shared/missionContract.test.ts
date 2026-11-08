@@ -105,13 +105,44 @@ Deno.test("v4: roles never invent a hiring signal (M20: 'growing the sales team'
   assertEquals(summarise(await compileContract(c) as never).hiringHard, false);
 });
 
-Deno.test("v4: an ambiguity blocks approval; a disclosed requirement does not, and is never executed", async () => {
+Deno.test("v4: an ambiguity blocks approval; so does a REQUIRED disclosed requirement (never approved silently), and it is never executed", async () => {
   const amb = contractFromProposal(Q, proposal({ understanding: { ...understanding, ambiguities: [{ span: "US", question: "HQ or presence?" }] } }) as never).contract;
   assertEquals(approvability(amb).ok, false);
-  const dis = contractFromProposal(Q, proposal({ understanding: { ...understanding, unsupported: [{ span: "B2B SaaS", why: "x" }] } }) as never).contract;
-  assertEquals(approvability(dis).ok, true);
+  const dis = contractFromProposal(Q, proposal({ understanding: { ...understanding, unsupported: [{ span: "in the last 14 days", why: "x" }] } }) as never).contract;
+  // MRLE Phase 0 (audit E2): "Not checked" + REQUIRED is a question, not an approval.
+  const a = approvability(dis);
+  assertEquals(a.ok, false);
+  assert(!a.ok && a.reasons.some((r) => r.includes("no approved tool can check: in the last 14 days")), JSON.stringify(a));
+  // It still compiles to no criterion: if it is ever accepted it is shown, never executed.
   const m = await compileContract(dis);
   assertEquals(criteriaOf(m as never).length, dis.requirements.length - 1);
+});
+
+Deno.test("v4: an unsupported item that IS an enforced requirement's own words, or only the count, is merged and audited — never a question", () => {
+  // The exact words of an executable requirement's quote ("B2B SaaS" is the industry's quote).
+  const same = contractFromProposal(Q, proposal({ understanding: { ...understanding, unsupported: [{ span: "B2B SaaS", why: "x" }] } }) as never).contract;
+  assertEquals(approvability(same).ok, true);
+  const m = (same.mergedDuplicates ?? []).find((x) => x.span === "B2B SaaS")!;
+  assertEquals(m.kind, "same_words");
+  assert(m.coveredBy.length === 1 && same.requirements.some((r) => r.id === m.coveredBy[0]));
+  // Only the framing and the count ("Find 10").
+  const count = contractFromProposal(Q, proposal({ understanding: { ...understanding, unsupported: [{ span: "Find 10", why: "x" }] } }) as never).contract;
+  assertEquals(approvability(count).ok, true);
+  assertEquals((count.mergedDuplicates ?? []).find((x) => x.span === "Find 10")?.kind, "count");
+  // Composed of whole enforced quotes plus the count ("10 US"): merged.
+  assertEquals(approvability(contractFromProposal(Q, proposal({ understanding: { ...understanding, unsupported: [{ span: "10 US", why: "x" }] } }) as never).contract).ok, true);
+  // OVERLAP IS NOT ENOUGH: part of a quote ("Account" of "hiring Account Executives") stays a question.
+  const part = contractFromProposal(Q, proposal({ understanding: { ...understanding, unsupported: [{ span: "Account Executives but not SDRs", why: "x" }] } }) as never).contract;
+  assertEquals(approvability(part).ok, false);
+});
+
+Deno.test("v4: an unsupported exclusion keeps its polarity ('not owned by private equity' is an exclusion)", () => {
+  const q = "Find 5 US companies hiring Account Executives, not owned by private equity.";
+  const ex = contractFromProposal(q, proposal({ understanding: { ...understanding, unsupported: [{ span: "not owned by private equity", why: "ownership is not measured" }] } }) as never).contract;
+  const u = ex.requirements.find((r) => r.dimension === "unsupported") as Extract<Requirement, { dimension: "unsupported" }>;
+  assertEquals(u.polarity, "exclude");
+  const inc = contractFromProposal("Find 5 family-owned US companies hiring Account Executives.", proposal({ understanding: { ...understanding, unsupported: [{ span: "family-owned", why: "ownership is not measured" }] } }) as never).contract;
+  assertEquals((inc.requirements.find((r) => r.dimension === "unsupported") as Extract<Requirement, { dimension: "unsupported" }>).polarity, "include");
 });
 
 // ── Contract invariants ─────────────────────────────────────────────────────
