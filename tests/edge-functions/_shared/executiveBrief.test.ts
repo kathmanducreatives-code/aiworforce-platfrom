@@ -124,6 +124,16 @@ Deno.test("DETERMINISTIC: the same context gives the same brief", () => {
   assertEquals(JSON.stringify(synthesizeExecutiveBrief(c)), JSON.stringify(synthesizeExecutiveBrief(c)));
 });
 
+Deno.test("WORDING: each reason list is a sentence before the next sentence starts", () => {
+  const b = synthesizeExecutiveBrief(ctx({
+    leads: [{ ...lead("l1", "a1", 80), reasons: ["3PL opening warehouses", "fit 86/100", "marked high priority"] }],
+    signals: [sig("s1", "a1", 70)],
+  }));
+  const why = b.priorities.find((p) => p.category === "opportunity")!.why;
+  assert(why.startsWith("3PL opening warehouses; fit 86/100; marked high priority. A recent signal backs it:"), why);
+  assertFalse(/[a-z] A recent/.test(why), why);
+});
+
 Deno.test("COMPANY BRAIN: used flag, company name and ICP wording reach the brief", () => {
   const b = synthesizeExecutiveBrief(ctx({ leads: [lead("l1", "a1", 80)] }));
   assert(b.brain.used);

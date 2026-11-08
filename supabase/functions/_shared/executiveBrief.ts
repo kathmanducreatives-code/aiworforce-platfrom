@@ -143,6 +143,13 @@ function refKey(r: Pick<EvidenceRef, "table" | "id">): string {
   return `${r.table}:${r.id}`;
 }
 
+/** Reasons → one sentence: capitalized, ending in a full stop. */
+function sentence(parts: string[], fallback: string): string {
+  const t = (parts.join("; ") || fallback).trim();
+  const c = t.charAt(0).toUpperCase() + t.slice(1);
+  return /[.!?]$/.test(c) ? c : `${c}.`;
+}
+
 function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
@@ -239,7 +246,7 @@ function candidates(ctx: ExecutiveContext, signals: ExecItem[], leads: ExecItem[
       score: topLead.score + (backing.length ? 8 : 0),
       title: `Act on ${label(topLead)}`,
       why: [
-        topLead.reasons.join("; ") || "It is your highest-scoring lead.",
+        sentence(topLead.reasons, "It is your highest-scoring lead."),
         backing.length ? ` A recent signal backs it: ${backing[0].title}.` : "",
         icpPhrase(ctx),
       ].join("").trim(),
@@ -256,7 +263,7 @@ function candidates(ctx: ExecutiveContext, signals: ExecItem[], leads: ExecItem[
       category: "market",
       score: s.score,
       title: `${label(s)}: ${s.title}`,
-      why: `${s.reasons.join("; ") || "A recent market change."}${icpPhrase(ctx)}`.trim(),
+      why: `${sentence(s.reasons, "A recent market change.")}${icpPhrase(ctx)}`.trim(),
       action: { label: "Open signals", route: s.route },
       confidence: itemConfidence(s),
       evidence: [ref(s)],
