@@ -27,17 +27,20 @@ const likelyModel = (calls: string[]) => {
   };
 };
 
+type RunLead = { company: { name: string }; statuses: { qualification: string }; businessModel?: { status: string }; acceptedAsLikely?: boolean };
+type RunBody = { queue: RunLead[]; review: RunLead[]; outcome: { qualified: number; likely?: number; needsVerification: number; rejected: number; shortfall: number | null; summary: string } };
+
 async function run(o: { acceptLikely: boolean; query?: string }) {
   const x = deps();
   x.d.groundBusinessModel = modelGrounder(likelyModel([]) as never, MISSION);
   const extra = { ...(o.acceptLikely ? { accept_likely: true } : {}), ...(o.query ? { query: o.query } : {}) };
   const planned = await handleStrategyRequest(req({ action: "strategy_plan", ...extra }), x.d);
   const plan = planned.body.plan as { status: string; planHash: string; estimate: { apifyUsd: number } } | undefined;
-  if (!plan || plan.status !== "ready") return { planned, plan, ran: null, body: null as Record<string, any> | null, x };
+  if (!plan || plan.status !== "ready") return { planned, plan, ran: null, body: null as RunBody | null, x };
   const ran = await handleStrategyRequest(req({ action: "strategy_run", ...extra, approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } }), x.d);
-  return { planned, plan, ran, body: ran.body as Record<string, any>, x };
+  return { planned, plan, ran, body: ran.body as unknown as RunBody, x };
 }
-const by = (body: Record<string, any>) => Object.fromEntries([...body.queue, ...body.review].map((l: any) => [l.company.name, { q: l.statuses.qualification, bm: l.businessModel?.status ?? null, likely: l.acceptedAsLikely === true }]));
+const by = (body: RunBody) => Object.fromEntries([...body.queue, ...body.review].map((l) => [l.company.name, { q: l.statuses.qualification, bm: l.businessModel?.status ?? null, likely: l.acceptedAsLikely === true }]));
 
 type Row = { lead_candidate: { status: string; raw: { agentory_pipeline: { accepted_as_likely?: boolean; business_model?: { status: string } | null } } } };
 const written = (x: { written: PipelineRow[] }, site: string) => (x.written as unknown as (Row & { account: { domain: string | null } })[]).find((r) => r.account.domain === site);
