@@ -22,7 +22,7 @@
 // The original sentence is used to check quotes and to find what must be covered. It
 // never adds a requirement: an uncovered restriction is asked, never guessed.
 
-import { AUDIENCE_REQUIRE_RE, audienceDescriptor, audienceIntent } from "../missionCriteria.ts";
+import { AUDIENCE_PERMIT_RE, AUDIENCE_REQUIRE_RE, audienceDescriptor, audienceIntent } from "../missionCriteria.ts";
 import { coverageQuestions, explicitCues, redundantUnsupported, spanAlreadyEnforced } from "./coverage.ts";
 
 const AUDIENCE_NEGATION_RE = /\b(?:exclude[sd]?|excluding|no|not|non|without|except|avoid|never|other\s+than)\b/i;
@@ -114,6 +114,8 @@ const slug = (s: string) => s.toLowerCase().normalize("NFKC").replace(/[^a-z0-9]
 const userOrigin = (span: string): Origin => ({ source: "user_explicit", span, policy: null });
 /** The named policy that makes a descriptive audience ("B2B companies") a preference. */
 export const AUDIENCE_POLICY = "audience_descriptor_is_preference";
+/** The named policy that keeps a WIDENING clause ("include strong opportunities outside that range") from becoming a requirement. */
+export const PERMISSION_POLICY = "permission_widens_search";
 
 /** The model's v4 proposal → a validated contract (deterministic; see the header). */
 export function contractFromProposal(query: string, p: ContractProposalV4, opts: { model?: string | null } = {}): InterpretationResult {
@@ -263,7 +265,13 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     // its polarity (audit E2: 10 exclusions were stored as inclusions). Read from the item's
     // OWN quoted words by the shared negation reader, never from the rest of the sentence.
     const excludes = explicitCues(x.span).some((cue) => cue.polarity === "exclude" && x.span.trim().toLowerCase().startsWith(cue.span.split(/\s+/)[0].toLowerCase()));
-    reqs.push({ ...base(`unsupported:${slug(x.span)}`, "required", userOrigin(x.span), `Not checked: ${x.span}`, x.why || "not expressible in the mission vocabulary"),
+    // A PERMISSION RESTRICTS NOTHING (TEST smoke 2026-11-08, after MRLE Phase 0 made a REQUIRED
+    // "Not checked" item block approval): "Prefer 20–500 employees, but include strong
+    // opportunities outside that range" WIDENS the search. Filed as unsupported, it blocked
+    // every plan for that request. It stays disclosed ("Not checked"), as a preference.
+    const permits = !excludes && permissionAround(query, x.span);
+    reqs.push({ ...base(`unsupported:${slug(x.span)}`, permits ? "preferred" : "required",
+      permits ? { source: "user_explicit", span: x.span, policy: PERMISSION_POLICY } : userOrigin(x.span), `Not checked: ${x.span}`, x.why || "not expressible in the mission vocabulary"),
       evaluability: "unrepresentable", dimension: "unsupported", polarity: excludes ? "exclude" : "include", compiledAs: "disclosed", value: x.span });
   }
 
@@ -299,6 +307,23 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
 const DURATION_RE = /\d|\b(?:days?|weeks?|fortnights?|months?|quarters?|years?|yr|wk|mo)\b/i;
 
 /** Do the request's words touching this quoted span make it hard ("must be | B2B", "B2B | only")? */
+/**
+ * The quoted item GRANTS rather than restricts: it, or the words just before it in its own
+ * clause, say "include / also / open to / consider / allow…", and nothing in them requires,
+ * restricts or excludes. Read from the user's words around the quote, like `elevatedAround`.
+ */
+function permissionAround(query: string, span: string): boolean {
+  const s = span.trim();
+  if (!s) return false;
+  const i = query.toLowerCase().indexOf(s.toLowerCase());
+  if (i < 0) return false;
+  const clauseStart = Math.max(query.lastIndexOf(",", i), query.lastIndexOf(";", i), query.lastIndexOf(".", i - 1)) + 1;
+  const before = query.slice(clauseStart, i).trim().split(/\s+/).slice(-4).join(" ");
+  const words = `${before} ${s}`;
+  const restricts = AUDIENCE_REQUIRE_RE.test(words) || /\b(?:exclude[sd]?|excluding|no|not|never|without|except|avoid)\b/i.test(words);
+  return !restricts && AUDIENCE_PERMIT_RE.test(words);
+}
+
 function elevatedAround(query: string, span: string): boolean {
   const s = span.trim();
   if (!s) return false;
