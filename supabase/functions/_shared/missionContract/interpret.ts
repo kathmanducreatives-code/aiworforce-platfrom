@@ -23,7 +23,7 @@
 // never adds a requirement: an uncovered restriction is asked, never guessed.
 
 import { AUDIENCE_REQUIRE_RE, audienceDescriptor, audienceIntent } from "../missionCriteria.ts";
-import { coverageQuestions, redundantUnsupported } from "./coverage.ts";
+import { coverageQuestions, explicitCues, redundantUnsupported, spanAlreadyEnforced } from "./coverage.ts";
 
 const AUDIENCE_NEGATION_RE = /\b(?:exclude[sd]?|excluding|no|not|non|without|except|avoid|never|other\s+than)\b/i;
 import { DEFAULT_SIGNAL_WINDOWS, type CanonicalSignalKind } from "../signalKinds.ts";
@@ -253,8 +253,18 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
   for (const x of u.unsupported) {
     const dup = redundantUnsupported(x.span, reqs);
     if (dup) { mergedDuplicates.push({ span: x.span, ...dup }); continue; }
+    // Words the contract already enforces (or the requested count) are not a second, unchecked
+    // requirement (coverage.ts `spanAlreadyEnforced`). Merged only when it names what enforces
+    // them; a count-only item ("Find 5") is recorded as covered by the deliverable.
+    const countWords = p.deliverable.count !== null ? [String(p.deliverable.count), p.deliverable.count_span ?? ""].join(" ") : null;
+    const enforced = spanAlreadyEnforced(x.span, reqs, countWords);
+    if (enforced) { mergedDuplicates.push({ span: x.span, ...enforced }); continue; }
+    // An unsupported item that is itself an exclusion ("not owned by private equity") keeps
+    // its polarity (audit E2: 10 exclusions were stored as inclusions). Read from the item's
+    // OWN quoted words by the shared negation reader, never from the rest of the sentence.
+    const excludes = explicitCues(x.span).some((cue) => cue.polarity === "exclude" && x.span.trim().toLowerCase().startsWith(cue.span.split(/\s+/)[0].toLowerCase()));
     reqs.push({ ...base(`unsupported:${slug(x.span)}`, "required", userOrigin(x.span), `Not checked: ${x.span}`, x.why || "not expressible in the mission vocabulary"),
-      evaluability: "unrepresentable", dimension: "unsupported", polarity: "include", compiledAs: "disclosed", value: x.span });
+      evaluability: "unrepresentable", dimension: "unsupported", polarity: excludes ? "exclude" : "include", compiledAs: "disclosed", value: x.span });
   }
 
   const count = p.deliverable.count !== null && Number.isInteger(p.deliverable.count) && p.deliverable.count > 0 ? p.deliverable.count : null;

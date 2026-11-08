@@ -34,6 +34,8 @@ import type { EvidenceItem } from "../candidateObservation.ts";
 import type { Eligibility } from "../candidateEligibility.ts";
 import { classifyDecisionMakerRole } from "../decisionMaker/roleFamily.ts";
 import { ledgeredInvoker } from "./apifyInvoker.ts";
+import { collapseDuplicateLeads, type MergedLead } from "./identity.ts";
+import { apifyPageFetcher, checkBusinessModels, type BusinessModelFinding, type Grounder } from "./businessModelCheck.ts";
 import { COMPANY_EMPLOYEES_ACTOR_KEY, companyEmployeesInput, discoverHiringCompanies, discoverPostingCompanies, peopleFromEmployeeRows, slugOf } from "./apifyDiscovery.ts";
 import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
 import type { Signal } from "./signals.ts";
@@ -77,6 +79,8 @@ export interface StrategyRunInput {
   actorTimeoutMs?: number;
   /** Per-workspace company-record cache (held migration 20261101120000); null/absent = buy every record. */
   evidenceCache?: EvidenceCache | null;
+  /** The shared grounded classifier, for business-model verification (businessModelCheck.ts). */
+  groundBusinessModel?: Grounder | null;
 }
 
 export interface ProviderStepOutcome {
@@ -97,6 +101,8 @@ export interface StrategyRun {
   queue: PipelineLead[];
   review: PipelineLead[];
   excluded: PipelineLead[];
+  /** Records of one company collapsed into one lead (identity.ts). Absent when none. */
+  mergedCompanies?: MergedLead[];
   /** Evidence a source offered for a company and the identity rule refused (it named another company). */
   evidenceRefused: { companyKey: string; source: string; reason: string }[];
   limitations: Limitation[];
@@ -144,9 +150,25 @@ export async function runDiscoveryStrategy(input: StrategyRunInput): Promise<Str
   const a = input.approval!;
   // The server's estimate is the ceiling: an approval naming more never raises it.
   const cap = { leadoceanRecords: Math.min(a.leadoceanRecords, plan.estimate.leadoceanRecords), apifyUsd: Math.min(a.apifyUsd, plan.estimate.apifyUsd) };
-  if (plan.strategy === "leadocean_only" || plan.strategy === "leadocean_plus_apify") return runLeadOceanLed(input, cap, now);
-  if (plan.strategy === "apify_only" || plan.strategy === "apify_plus_leadocean" || plan.strategy === "apify_leadocean_concurrent") return runApifyLed(input, cap, now);
-  return blocked(`strategy ${plan.strategy} has no executor`);
+  const run = plan.strategy === "leadocean_only" || plan.strategy === "leadocean_plus_apify" ? await runLeadOceanLed(input, cap, now)
+    : plan.strategy === "apify_only" || plan.strategy === "apify_plus_leadocean" || plan.strategy === "apify_leadocean_concurrent" ? await runApifyLed(input, cap, now)
+    : null;
+  if (!run) return blocked(`strategy ${plan.strategy} has no executor`);
+  return withOneLeadPerCompany(run);
+}
+
+/** One company, one lead (identity.ts): collapse across every lane, then re-file by the kept verdict. */
+function withOneLeadPerCompany(run: StrategyRun): StrategyRun {
+  const all = [...run.queue, ...run.review, ...run.excluded];
+  const { leads, merged } = collapseDuplicateLeads(all);
+  if (!merged.length) return run;
+  return {
+    ...run,
+    queue: leads.filter((l) => l.rank.lane === "queue"),
+    review: leads.filter((l) => l.rank.lane === "review"),
+    excluded: leads.filter((l) => l.rank.lane === "excluded"),
+    mergedCompanies: merged,
+  };
 }
 
 // ── LeadOcean-led: the existing pipeline on the interpreted requirements ────
@@ -296,8 +318,9 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   const unaffordable = canonical.statuses.filter((x) => x.state === "skipped_budget");
   apifySpent += canonical.spentUsd;
   steps.push({ capability: recStep.capability, provider: "apify",
-    status: canonical.stopped ? "failed" : unaffordable.length ? "partial" : "completed",
-    reason: canonical.stopped ?? ([unaffordable.length ? `budget: ${unaffordable.length} compan${unaffordable.length === 1 ? "y" : "ies"} left unverified` : null,
+    // NOTHING TO VERIFY IS NOT A COMPLETED VERIFICATION (audit S2): no company, no call.
+    status: !targets.length ? "not_run" : canonical.stopped ? "failed" : unaffordable.length ? "partial" : "completed",
+    reason: !targets.length ? "no company to verify" : canonical.stopped ?? ([unaffordable.length ? `budget: ${unaffordable.length} compan${unaffordable.length === 1 ? "y" : "ies"} left unverified` : null,
       canonical.cached ? `${canonical.cached} reused from the evidence cache` : null, ...canonical.cacheErrors].filter(Boolean).join("; ") || null),
     spend: { leadoceanRecords: 0, apifyUsd: r6(canonical.spentUsd) } });
 
@@ -319,8 +342,12 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
         }
       }
     }
+    // Business-model evidence read from THIS company's own site (added below) rides on the
+    // record's proven identity: never admitted for a company whose identity is not proven.
+    if (out.some((it) => it.dimension === "identity" && it.status === "proven")) out.push(...(siteEvidence.get(ids.key) ?? []));
     return out;
   };
+  const siteEvidence = new Map<string, EvidenceItem[]>();
 
   // Disproven companies get no people bought for them.
   const firstPass = verifyLeads({ ...spec.requirements, targetEntity: "company" }, mergeRecords(found.companies, []), [], { now, canonicalEvidence });
@@ -394,7 +421,43 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
 
   // 5 merge across providers, then the shared engine decides
   const merged = mergeRecords([...found.companies, ...loCompanies], people);
-  const leads = verifyLeads({ ...spec.requirements, targetEntity: peopleStep ? "person" : "company" }, merged, [], { now, canonicalEvidence });
+  let leads = verifyLeads({ ...spec.requirements, targetEntity: peopleStep ? "person" : "company" }, merged, [], { now, canonicalEvidence });
+
+  // 5b PROPORTIONATE BUSINESS-MODEL VERIFICATION (MRLE Phase 1, businessModelCheck.ts): only
+  // companies open on NOTHING but the business model are read, as many as the request still
+  // needs, ≤3 first-party pages each, one batched run within the step's approved worst case.
+  const bmStep = plan.steps.find((s) => s.capability === "apify.website_business_model");
+  const businessModel = new Map<string, Omit<BusinessModelFinding, "item">>();
+  if (bmStep) {
+    const required = String(spec.requirements.criteria.find((c) => c.kind === "hard" && c.dimension === "business_model")?.value ?? "B2B");
+    const eligibleNow = leads.filter((l) => l.shared?.eligibility === "eligible").length;
+    const need = Math.max(0, spec.requestedCount - eligibleNow);
+    const open = leads.filter((l) => l.shared?.eligibility === "pending" && (l.shared.gaps ?? []).length === 1 && l.shared.gaps[0] === "business_model" && !(l.shared.disproven ?? []).length && l.company.domain.length);
+    const targets = open.slice(0, Math.min(Math.ceil(need * 1.5), Math.floor(bmStep.maxItems / 3))).map((l) => ({
+      companyKey: l.company.key, name: l.company.name[0]?.value ?? null, domain: l.company.domain[0].value,
+      linkedinUrl: l.company.linkedinUrl[0]?.value ?? null,
+      description: canonical.facts.get(`li:${slugOf(l.company.linkedinUrl[0]?.value) ?? ""}`)?.description ?? null,
+    }));
+    const budget = Math.max(0, Math.min(bmStep.estimate.apifyUsd, cap.apifyUsd - apifySpent));
+    const ground = input.groundBusinessModel ?? null;
+    const res = !targets.length || !ground || budget <= 0
+      ? { findings: [], spentUsd: 0, stopped: !targets.length ? null : !ground ? "website grounding is not configured" : "budget", runId: null }
+      : await checkBusinessModels(targets, required, { fetchPages: apifyPageFetcher(apify, now), ground },
+        { maxUsd: budget, idempotencyKey: `${mission}:apify_website_content:business_model`, missionId: mission, now });
+    apifySpent += res.spentUsd;
+    for (const f of res.findings) {
+      const { item, ...shown } = f;
+      businessModel.set(f.companyKey, shown);
+      if (item) siteEvidence.set(f.companyKey, [item]);
+    }
+    steps.push({ capability: bmStep.capability, provider: "apify",
+      status: !targets.length ? "not_run" : res.stopped ? "failed" : "completed",
+      reason: !targets.length ? (need ? "no company open only on the business model" : "the requested number already qualified")
+        : res.stopped ?? `${res.findings.filter((x) => x.status === "verified_b2b").length} verified, ${res.findings.filter((x) => x.status === "likely_b2b").length} likely, ${res.findings.filter((x) => x.status === "unknown").length} unknown, ${res.findings.filter((x) => x.status === "not_b2b" || x.status === "mixed").length} not or mixed`,
+      spend: { leadoceanRecords: 0, apifyUsd: r6(res.spentUsd) } });
+    // The same engine decides again, now with the site evidence.
+    if (siteEvidence.size) leads = verifyLeads({ ...spec.requirements, targetEntity: peopleStep ? "person" : "company" }, merged, [], { now, canonicalEvidence });
+  }
   // 6 rank and project into the pipeline's lead shape (the ATLAS projection's input)
   const icp = icpFromSpec(spec);
   const eligibilityOf = (l: VerifiedLead): Eligibility => l.shared?.eligibility ?? "pending";
@@ -442,6 +505,7 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
       qualification: l.shared ? { checks: l.shared.checks, gaps: l.shared.gaps, disproven: l.shared.disproven, evidence_sources: l.shared.evidence_sources } : null,
       canonicalRecord: canonical.statuses.find((s) => s.companyKey === (slug ? `li:${slug}` : ""))?.state ?? "not_requested",
       signals: postSignals(slug), rank: r, phone: null, outreachBlockers: blockers,
+      ...(businessModel.has(l.company.key) ? { businessModel: businessModel.get(l.company.key)! } : {}),
       provenance: { walkId: input.walkId, planHash: plan.planHash, runAt: at, providers: [...new Set(l.company.sources.map((s) => s.provider))],
         ...(l.company.conflicts.length ? { conflicts: l.company.conflicts.map((c) => ({ field: c.field, values: c.values.map((v) => ({ provider: v.provider, value: v.value })) })) } : {}) },
     };

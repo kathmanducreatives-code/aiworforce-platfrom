@@ -39,6 +39,8 @@ import { configureIcp, ICP_A, NON_DECISION_TITLES, type IcpConfig } from "./icp.
 import { SIGNAL_ACTORS, worstCaseUsd } from "./signals.ts";
 import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
 
+import { resolveRequirementRoutes, uncheckedQuestion, uncheckedRequired, type ProofDimension, type RequirementRoute } from "./capabilityResolution.ts";
+
 export const STRATEGY_PLANNER_VERSION = "discovery-strategy-v2" as const;
 
 // ── Strategies ──────────────────────────────────────────────────────────────
@@ -79,7 +81,7 @@ export const isStrategy = (s: unknown): s is DiscoveryStrategyId => typeof s ===
 export type CapabilityStatus = "available" | "disabled_pending_validation" | "not_approved";
 export type CapabilityRole = "discover_people" | "discover_companies" | "people_at_companies" | "verify_company" | "verify_person";
 /** Facts a capability can PROVE to the shared engine (evidenceAuthority rules), never mere claims. */
-export type Provable = "identity" | "headquarters" | "size_band" | "hiring" | "current_employment";
+export type Provable = "identity" | "headquarters" | "presence" | "size_band" | "hiring" | "current_employment" | "business_model";
 export type SignalKind = "hiring" | "funding" | "social_activity" | "expansion" | "leadership_change" | "other";
 
 export interface DiscoveryCapability {
@@ -132,10 +134,17 @@ export const DISCOVERY_CAPABILITIES: Readonly<Record<string, DiscoveryCapability
   },
   "apify.linkedin_company_record": {
     id: "apify.linkedin_company_record", provider: "apify", role: "verify_company", status: "available",
-    filters: [], discoversBySignal: null, claims: [], proves: ["identity", "headquarters", "size_band"],
+    filters: [], discoversBySignal: null, claims: [], proves: ["identity", "headquarters", "presence", "size_band"],
     cost: { unit: "usd", perItem: COMPANY_RECORD_ACTOR.perItemUsd, perStart: COMPANY_RECORD_ACTOR.perStartUsd },
     actorKey: COMPANY_RECORD_ACTOR.key,
-    note: "the HQ-flagged location and declared size band (AUTHORITY_RULES), on a record whose identity matches",
+    note: "the HQ-flagged location, the structured office list (presence) and declared size band (AUTHORITY_RULES), on a record whose identity matches",
+  },
+  "apify.website_business_model": {
+    id: "apify.website_business_model", provider: "apify", role: "verify_company", status: actorStatus("apify_website_content"),
+    filters: [], discoversBySignal: null, claims: [], proves: ["business_model"],
+    cost: { unit: "usd", perItem: 0, perStart: PIPELINE_ACTORS.apify_website_content.perStartUsd },
+    actorKey: "apify_website_content",
+    note: "≤3 first-party pages per company (home, about, customers; no link following), one batched compute-bounded run; read by the shared grounded classifier — a clear first-party statement verifies, anything weaker stays pending",
   },
   // ── Catalogued Apify actors from PR #198, NOT on the allowlist (status derived) ──
   "apify.linkedin_post_search": {
@@ -193,13 +202,15 @@ export function chainFor(strategy: DiscoveryStrategyId, spec: DiscoverySpec): re
     : spec.wantsPeople && strategy === "apify_only" ? "apify.people_search"
     : "apify.linkedin_job_search";
   const rec = "apify.linkedin_company_record";
+  // A REQUIRED business model is checked on the company's own pages, after its record.
+  const bm = spec.requirements.criteria.some((c) => c.kind === "hard" && c.dimension === "business_model") ? ["apify.website_business_model"] : [];
   switch (strategy) {
     case "leadocean_only": return ["leadocean.people_search"];
     case "leadocean_plus_apify": return ["leadocean.people_search", rec];
     case "apollo_plus_apify": return ["apollo.people_search", rec];
-    case "apify_plus_leadocean": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, rec, "leadocean.people_by_domain"];
-    case "apify_only": return seed === "apify.people_search" ? [seed, rec] : [seed, rec, ...(spec.wantsPeople ? ["apify.company_employees"] : [])];
-    case "apify_leadocean_concurrent": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, "leadocean.people_search", rec];
+    case "apify_plus_leadocean": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, rec, ...bm, "leadocean.people_by_domain"];
+    case "apify_only": return seed === "apify.people_search" ? [seed, rec, ...bm] : [seed, rec, ...bm, ...(spec.wantsPeople ? ["apify.company_employees"] : [])];
+    case "apify_leadocean_concurrent": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, "leadocean.people_search", rec, ...bm];
   }
 }
 
@@ -377,6 +388,8 @@ export interface StrategyContext {
   user?: { strategy?: DiscoveryStrategyId; excludeProviders?: ProviderId[]; allowReviewOnly?: boolean };
   /** People to look up per discovered company (apify_plus_leadocean). */
   peoplePerCompany?: number;
+  /** The website grounding model is configured: business-model verification can run. */
+  businessModelGrounding?: boolean;
   /** Who the plan is for and under which interpretation contract: bound into the plan hash. */
   binding?: { workspaceId: string; contractVersion: string };
 }
@@ -408,6 +421,8 @@ export interface StrategyCandidate {
   estimate: { leadoceanRecords: number; apifyUsd: number };
   /** Hard requirements this strategy can PROVE (to the shared engine). */
   provable: string[];
+  /** How each compiled requirement will be checked by THIS chain (capabilityResolution.ts). */
+  requirementRoutes: RequirementRoute[];
   score: number;
   rationale: string[];
 }
@@ -432,6 +447,13 @@ export interface StrategyPlan {
   estimate: { leadoceanRecords: number; apifyUsd: number };
   candidates: StrategyCandidate[];
   modelAdvice: ModelAdvice | null;
+  /** The chosen chain's route for every requirement (empty when blocked with no chain). */
+  requirementRoutes: RequirementRoute[];
+  /**
+   * One question per REQUIRED requirement no strategy can check (the approval card asks it).
+   * Non-empty only when the plan is blocked for that reason.
+   */
+  questions: string[];
   /**
    * Binds an approval to exactly this plan's MEANING and cost: SHA-256 over the planner
    * and semantics versions, the workspace and interpretation contract, the request,
@@ -503,7 +525,10 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   const refusals: string[] = [];
   const limitations: Limitation[] = [];
   const rationale: string[] = [];
-  const chain = chainFor(strategy, spec).map((id) => DISCOVERY_CAPABILITIES[id]);
+  // Business-model verification reads pages with the shared grounded classifier: without the
+  // model the step is not in the chain, so the requirement routes to not_checkable (a question).
+  const chain = chainFor(strategy, spec).map((id) => DISCOVERY_CAPABILITIES[id])
+    .filter((c) => c.id !== "apify.website_business_model" || ctx.businessModelGrounding === true);
   const n = spec.requestedCount;
 
   // 1 every capability in the chain must be available, its provider usable here
@@ -573,9 +598,19 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   if (discover.id === "apify.linkedin_job_search") limitations.push({ code: "fuzzy_source", detail: "job-search titles are fuzzy: each posting must match the requested role and window before it counts" });
 
   // A hard requirement no step proves means nothing bought can become eligible.
-  const unprovable = limitations.filter((l) => l.code === "unverifiable_requirement" && !l.detail.startsWith("industry") && !l.detail.startsWith("not modelled"));
-  if (unprovable.length && !ctx.user?.allowReviewOnly) {
-    refusals.push(`no lead could become eligible: ${unprovable.map((l) => l.detail.split(":")[0]).join("; ")} cannot be proven (set allowReviewOnly to buy candidates for manual review)`);
+  // MRLE PHASE 0 — A REQUIRED REQUIREMENT NO STEP CAN CHECK BLOCKS NORMAL EXECUTION. The
+  // decision is made over the compiled criteria the eligibility engine itself reads (never
+  // the sentence), by dimension and capability: every REQUIRED criterion needs a step that
+  // proves its dimension. Industry and business model are no longer exempt (audit RC1: a
+  // REQUIRED B2B was a "limitation" on a `ready` plan that could only end `pending`).
+  // `allowReviewOnly` is the user's explicit, hash-bound decision to buy candidates anyway;
+  // those leads stay `needs verification` on the unchecked requirement.
+  const provesBy = new Map<ProofDimension, string[]>();
+  for (const c of chain) for (const d of c.proves) provesBy.set(d as ProofDimension, [...(provesBy.get(d as ProofDimension) ?? []), c.id]);
+  const requirementRoutes = resolveRequirementRoutes(spec.requirements.criteria, provesBy);
+  const unchecked = uncheckedRequired(requirementRoutes);
+  if (unchecked.length && !ctx.user?.allowReviewOnly) {
+    refusals.push(`no lead could become qualified: ${unchecked.map((r) => `"${r.label}" (${r.explanation.replace(/^required, but /, "")})`).join("; ")} — run it as review-only, change the requirement, or cancel`);
   }
 
   // 4 forbidden broadening: a required filter the discovery step cannot apply
@@ -611,6 +646,11 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
       } else if (c.role === "people_at_companies") {
         const max = Math.max(0, Math.min(companies * peoplePer, itemCap));
         out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: price(max), why: `${spec.roles.join(" / ") || "decision-makers"} at the discovered companies, by ${lo ? "exact domain" : "LinkedIn company page"}` });
+      } else if (c.role === "verify_company" && c.id === "apify.website_business_model") {
+        // Only companies that pass every other check are read, as many as the request still needs.
+        const max = Math.max(1, Math.min(companies, Math.ceil(n * 1.5), 33));
+        out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max * 3, estimate: { leadoceanRecords: 0, apifyUsd: usd(c, max) },
+          why: `the business model, from ≤3 of each company's own pages, for up to ${max} companies that pass every other check (one batched run)` });
       } else if (c.role === "verify_company") {
         const max = Math.max(0, Math.min(100, companies - (ctx.cachedCompanyRecords ?? 0)));
         out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: Math.max(1, max), estimate: { leadoceanRecords: 0, apifyUsd: max ? usd(c, max) : 0 }, why: "identity, HQ-flagged location and declared size band for each discovered company (one batched run)" });
@@ -642,7 +682,7 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   score -= estimate.apifyUsd * 20 + estimate.leadoceanRecords * 0.05;
   score -= limitations.filter((l) => l.code === "unverifiable_requirement" || l.code === "unverified_claim").length * 3;
 
-  return { strategy, feasible: refusals.length === 0, refusals, steps, limitations, estimate, provable, score: Math.round(score * 100) / 100, rationale };
+  return { strategy, feasible: refusals.length === 0, refusals, steps, limitations, estimate, provable, requirementRoutes, score: Math.round(score * 100) / 100, rationale };
 }
 
 // ── GPT advice (optional, validated) ────────────────────────────────────────
@@ -743,6 +783,7 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
     meaning, strategy: chosen?.strategy ?? null,
     steps: (chosen?.steps ?? []).map((x) => ({ capability: x.capability, provider: x.provider, role: x.role, maxItems: x.maxItems, estimate: x.estimate })),
     limitations: (chosen?.limitations ?? []).map((l) => ({ code: l.code, detail: l.detail })), estimate: chosen?.estimate ?? null,
+    routes: (chosen?.requirementRoutes ?? []).map((r) => ({ id: r.criterionId, route: r.route, by: [...r.checkedBy].sort() })),
     ceilings: { maxLeadoceanRecords: ctx.budget.maxLeadoceanRecords, maxApifyUsd: ctx.budget.maxApifyUsd },
     user: { strategy: ctx.user?.strategy ?? null, excludeProviders: [...(ctx.user?.excludeProviders ?? [])].sort(), allowReviewOnly: ctx.user?.allowReviewOnly === true },
   };
@@ -758,9 +799,24 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
     estimate: chosen?.estimate ?? { leadoceanRecords: 0, apifyUsd: 0 },
     candidates,
     modelAdvice,
+    requirementRoutes: chosen?.requirementRoutes ?? [],
+    questions: chosen ? [] : questionsFor(candidates),
     planHash: sha256Hex(canonicalJson(body)),
     binding: { version: STRATEGY_PLANNER_VERSION, semanticsFingerprint, workspace: body.workspace, contract: body.contract, ceilings: body.ceilings },
   };
+}
+
+/**
+ * The questions a blocked plan asks: the REQUIRED requirements that NO otherwise-runnable
+ * strategy can check. A strategy refused for another reason (provider disabled, budget)
+ * does not turn into a requirement question.
+ */
+function questionsFor(candidates: readonly StrategyCandidate[]): string[] {
+  const viable = candidates.filter((c) => c.refusals.every((r) => r.startsWith("no lead could become qualified")) && c.refusals.length > 0);
+  if (!viable.length) return [];
+  const ids = new Set(uncheckedRequired(viable[0].requirementRoutes).map((r) => r.criterionId));
+  for (const c of viable.slice(1)) for (const id of [...ids]) if (!uncheckedRequired(c.requirementRoutes).some((r) => r.criterionId === id)) ids.delete(id);
+  return viable[0].requirementRoutes.filter((r) => ids.has(r.criterionId)).map(uncheckedQuestion);
 }
 
 // ── Bridges to the existing pipeline ────────────────────────────────────────
