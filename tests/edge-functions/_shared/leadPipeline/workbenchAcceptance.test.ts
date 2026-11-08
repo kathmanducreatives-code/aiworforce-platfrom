@@ -17,6 +17,14 @@ import { contractHash } from "../../../../supabase/functions/_shared/missionCont
 import { leadPlanOrFilter } from "../../../../src/lib/leads/leadPlanFilter.ts";
 import { deps, WS } from "./mrleFixtures.ts";
 
+/** The run response fields these tests read (the service's own JSON). */
+type Check = { dimension: string; result: string; actor: string; evidence: { evidence_id: string; occurred_at: string | null }[] };
+type RunLead = { company: { name: string }; statuses: { qualification: string }; businessModel?: { status: string } };
+type RunBody = { outcome: { requested: number; qualified: number; needsVerification: number; status: string; shortfall: number | null; summary: string; spend: { basis: string } };
+  spend: { leadoceanRecords: number; apifyUsd: number }; workbench: { planId: string } | null; persistence: unknown; queue: RunLead[]; review: RunLead[] };
+type Attribution = { agentory_pipeline: { plan_id?: string; qualification: { checks: Check[] }; business_model?: { status: string } | null } };
+const attr = (l: Record<string, unknown>) => l.raw as Attribution;
+
 const REQUEST = "Find 5 US B2B companies actively hiring Account Executives.";
 const STRICT = "Find 5 US companies that must be B2B, actively hiring Account Executives.";
 const PLAN_A = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
@@ -83,7 +91,7 @@ function harness(o: { query: string; b2bSpan: string; planIds?: string[]; failPl
     const plan = planned.body.plan as { status: string; planHash: string; estimate: { apifyUsd: number; leadoceanRecords: number }; steps: { capability: string; maxItems: number }[];
       requirementRoutes: { label: string; route: string; checkedBy: string[] }[] };
     const ran = await handleStrategyRequest(req({ action: "strategy_run", approval: { plan_hash: plan.planHash, apify_usd: plan.estimate.apifyUsd, token: planned.body.approval_token } }, walk), d);
-    return { planned, plan, ran, body: ran.body as Record<string, any> };
+    return { planned, plan, ran, body: ran.body as unknown as RunBody };
   };
   return { x, mem, planCalls, planAndRun };
 }
@@ -126,14 +134,14 @@ Deno.test("acceptance: HQ and hiring are checked, the shortfall and the spend ar
   assertEquals([h.planCalls[0].workspaceId, h.planCalls[0].userId, h.planCalls[0].query, h.planCalls[0].planHash, h.planCalls[0].status], [WS, "u-owner", REQUEST, plan.planHash, "completed"]);
   assertEquals(body.workbench, { planId: PLAN_A });
   assertEquals(h.mem.leads.length, 4);
-  assert(h.mem.leads.every((l) => l.plan_id === PLAN_A && (l.raw as any).agentory_pipeline.plan_id === PLAN_A && l.status === "qualified"));
+  assert(h.mem.leads.every((l) => l.plan_id === PLAN_A && attr(l).agentory_pipeline.plan_id === PLAN_A && l.status === "qualified"));
   assertEquals(workbenchView(h.mem.leads, WS, PLAN_A).length, 4);
   assertEquals(workbenchView(h.mem.leads, "33333333-3333-4333-8333-333333333333", PLAN_A).length, 0, "another workspace never sees them");
   // What the table shows per lead: the evidence the decision rests on.
-  const q = (h.mem.leads[0].raw as any).agentory_pipeline.qualification;
-  assertEquals(q.checks.map((c: any) => [c.dimension, c.result, c.actor]), [
+  const q = attr(h.mem.leads[0]).agentory_pipeline.qualification;
+  assertEquals(q.checks.map((c) => [c.dimension, c.result, c.actor]), [
     ["geography", "pass", "apify_linkedin_company_details"], ["hiring", "pass", "apify_linkedin_job_search"]]);
-  assert(q.checks.every((c: any) => c.evidence.length >= 1 && c.evidence[0].evidence_id));
+  assert(q.checks.every((c) => c.evidence.length >= 1 && c.evidence[0].evidence_id));
   assertEquals(q.checks[1].evidence[0].occurred_at, "2026-11-02", "the posting's own date");
 });
 
@@ -156,7 +164,7 @@ Deno.test("acceptance: when B2B is REQUIRED ('must be B2B') it is verified from 
   assertEquals(plan.status, "ready");
   assert(plan.steps.some((s) => s.capability === "apify.website_business_model"));
   assert(plan.estimate.apifyUsd <= 0.25, `worst case ${plan.estimate.apifyUsd}`);
-  const by = Object.fromEntries([...body.queue, ...body.review].map((l: any) => [l.company.name, [l.statuses.qualification, l.businessModel?.status ?? null]]));
+  const by = Object.fromEntries([...body.queue, ...body.review].map((l) => [l.company.name, [l.statuses.qualification, l.businessModel?.status ?? null]]));
   assertEquals(by["Northwind Ledger"], ["eligible", "verified_b2b"]);
   assertEquals(by["Harbor Kids"], undefined, "a consumer business is excluded, never saved");
   assertEquals(by["Quartz Data"], ["pending", "unknown"]);
@@ -166,7 +174,7 @@ Deno.test("acceptance: when B2B is REQUIRED ('must be B2B') it is verified from 
   // Saved: qualified + needs verification (with the run's plan); the rejected company is not.
   assert(!h.mem.accounts.some((a) => a.name === "Harbor Kids"));
   assert(h.mem.leads.every((l) => l.plan_id === PLAN_A));
-  assertEquals(h.mem.leads.find((l) => (l.raw as any).agentory_pipeline.business_model?.status === "verified_b2b")?.status, "qualified");
+  assertEquals(h.mem.leads.find((l) => attr(l).agentory_pipeline.business_model?.status === "verified_b2b")?.status, "qualified");
 });
 
 Deno.test("acceptance: the leads are never lost when the Workbench plan cannot be recorded (and the response says so)", async () => {
