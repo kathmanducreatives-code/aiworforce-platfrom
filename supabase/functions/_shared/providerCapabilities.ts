@@ -16,7 +16,8 @@ export type CapabilityKind =
   | "company_discovery" | "people_discovery" | "hiring_signal" | "business_model_verification"
   | "website_research" | "funding_research" | "company_enrichment" | "contact_enrichment";
 
-export type ProviderName = "apify" | "leadocean" | "firecrawl" | "perplexity";
+// A retired provider has no card (see the retirement guard in tests/edge-functions/_shared).
+export type ProviderName = "apify" | "leadocean" | "firecrawl";
 export type Strength = "verified" | "claim" | "inference" | "hint";
 
 export interface CapabilityCard {
@@ -73,9 +74,6 @@ export const CAPABILITY_CARDS: readonly CapabilityCard[] = Object.freeze([
   { id: "apify.funding_corroboration", provider: "apify", kind: "funding_research", outputs: ["funding rounds with dates and source URLs (two providers)"],
     proves: [{ dimension: "funding", strength: "verified" }], filters: [],
     cost: { unit: "usd", perItem: 0.0035, perCall: null, note: "per company lookup" }, limits: ["~4 weeks stale", "production engine only; not wired into the pilot"], basis: "verified", authorization: "owner_approval", executableAs: null },
-  { id: "perplexity.search_web", provider: "perplexity", kind: "website_research", outputs: ["answers with citations"],
-    proves: [{ dimension: "any", strength: "hint" }], filters: [],
-    cost: { unit: "call", perItem: null, perCall: null, note: "per call" }, limits: ["a hint, never proof"], basis: "verified", authorization: "owner_approval", executableAs: null },
 ]);
 
 /**

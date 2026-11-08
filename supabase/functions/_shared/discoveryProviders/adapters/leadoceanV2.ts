@@ -5,7 +5,10 @@
 // authorization, one approved single-row validation call, and the commercial-terms flag.
 //
 // Source: api.leadocean.io/openapi.json, api.leadocean.io/llms.txt, leadocean.io/docs/limits,
-// /docs/filters (read 2026-11-07). The v1 adapter (adapters/leadocean.ts) calls paths LeadOcean
+// /docs/filters (read 2026-11-07); re-checked 2026-11-08 against openapi.json and
+// llms-full.txt (`leadocean.company.v1` / `leadocean.person.v1` field lists). That re-check
+// found the count body, the cursor order and most record paths wrong; they are now the
+// documented ones. What the docs still leave open is marked UNCONFIRMED below. The v1 adapter (adapters/leadocean.ts) calls paths LeadOcean
 // now lists as deprecated (POST /v1/search, /v1/search/companies, /v1/enrich); v2 uses:
 //   POST /v1/companies/count   free exact count                    0 records
 //   POST /v1/companies/search  company rows; meta.nextCursor       1 record per row returned
@@ -14,7 +17,10 @@
 //   GET  /v1/usage             records used this period            free
 // Auth: x-api-key (scopes "search", "enrich"). Paging: opaque signed cursor, never stored;
 // limit 1–100; 410 = snapshot retired (restart); meta.depthCapped = no further pages.
-// Rates: 429 + Retry-After; fair-use pacing X-Quota-State: paced (Retry-After: 60).
+// A cursor continues only a walk of the SAME order (ranked or stable): a mismatch is a 400
+// `cursor_order_mismatch`, so one walk sends one order on every page.
+// Rates: 429 + Retry-After; fair-use pacing X-Quota-State: paced (Retry-After: 60); past the
+// monthly records a paid plan answers at 1 request a minute with X-Quota-State: over-limit.
 //
 // Every row becomes CLAIMS with provenance (provider, record id, field, retrieved_at): a
 // LeadOcean HQ, size, industry or funding value never qualifies a lead on its own (Agentory's
@@ -47,6 +53,8 @@ export interface Page<T> {
   /** Filters LeadOcean says it ignored for this query (they were NOT applied). */
   unsupportedFilters: string[];
   paced: boolean;
+  /** X-Quota-State: "paced" (a fair-use window) or "over-limit" (monthly records spent; 1 request a minute). */
+  quotaState: "ok" | "paced" | "over-limit";
 }
 
 export class LeadOceanSchemaError extends Error { override name = "LeadOceanSchemaError"; }
@@ -64,6 +72,15 @@ export function companySearchBody(q: CompanyQuery, opts: { limit: number; cursor
   return { ...q, limit: opts.limit, order: opts.order ?? "ranked", ...(opts.cursor ? { cursor: opts.cursor } : {}) };
 }
 
+/**
+ * The count body: the same validated filters and NOTHING else. /v1/companies/count is
+ * `additionalProperties: false` and has no limit, order or cursor — sending them is a 400.
+ */
+export function companyCountBody(q: CompanyQuery): Record<string, unknown> {
+  const body = companySearchBody(q, { limit: 1 }); // the same validation, then only the filters
+  return Object.fromEntries(Object.entries(body).filter(([k]) => COMPANY_FILTERS.has(k)));
+}
+
 function meta(json: unknown) {
   if (!isObj(json) || !Array.isArray(json.data) || !isObj(json.meta)) throw new LeadOceanSchemaError("response is not { data: [], meta: {} }");
   const m = json.meta;
@@ -77,10 +94,17 @@ function meta(json: unknown) {
 }
 
 /**
- * FIELD PATHS: company_data.company_name, company_domain and naics_primary appear verbatim in
- * LeadOcean's docs; the other company_data paths are INFERRED from the documented naming (the
- * spec leaves company_data untyped). A path not found is simply absent (unknown), never
- * guessed — confirm them with one approved single-row call before enabling (see v1 FIELD_BASIS).
+ * FIELD PATHS — every field name below is in LeadOcean's `leadocean.company.v1` list
+ * (llms-full.txt): company_id, company_name, company_domain, company_type, naics_primary,
+ * company_industries, company_employees, company_primary_address, company_funding,
+ * company_social_links; meta.source_ids.company_id. `company_metrics` holds only
+ * completion_score / marketability_score (no headcount).
+ *
+ * UNCONFIRMED: the docs name these fields but not the shape inside company_industries,
+ * company_employees, company_primary_address and company_funding, so each is kept whole as
+ * a claim (never parsed into an HQ country, a size or a date by guessing), and the LinkedIn
+ * URL is read only from a string under company_social_links that is a linkedin.com/company
+ * URL. Confirm the shapes with one approved single-row call before anything reads inside them.
  */
 export function companyClaims(row: unknown, retrievedAt: string): CompanyClaimSet {
   const recordId = str(at(row, "meta.source_ids.company_id")) ?? str(at(row, "company_data.company_id"));
@@ -88,27 +112,45 @@ export function companyClaims(row: unknown, retrievedAt: string): CompanyClaimSe
   const claim = (field: string, value: unknown): Claim[] => (value === null || value === undefined || value === "" ? [] : [{ field, value, provider: "leadocean", recordId, retrievedAt, strength: "claim" }]);
   const d = (k: string) => at(row, `company_data.${k}`);
   return {
-    recordId, name: str(d("company_name")), domain: str(d("company_domain")), linkedinUrl: str(d("company_linkedin_url")),
+    recordId, name: str(d("company_name")), domain: str(d("company_domain")), linkedinUrl: linkedinCompanyUrl(d("company_social_links")),
     claims: [
-      ...claim("industry", d("company_industry")), ...claim("naics_primary", d("naics_primary")),
-      ...claim("hq_country", d("company_hq_country")), ...claim("hq_city", d("company_hq_city")),
-      ...claim("employee_count", at(row, "company_metrics.number_of_employees") ?? d("number_of_employees")),
-      ...claim("employee_range", d("company_employee_range")), ...claim("company_type", d("company_type")),
-      ...claim("last_funding_type", d("last_funding_type")), ...claim("last_funding_year", d("last_funding_year")),
+      ...claim("industries", d("company_industries")), ...claim("naics_primary", d("naics_primary")),
+      ...claim("primary_address", d("company_primary_address")), ...claim("employees", d("company_employees")),
+      ...claim("company_type", d("company_type")), ...claim("funding", d("company_funding")),
     ],
   };
 }
 
+/** A linkedin.com/company URL anywhere under company_social_links (its shape is undocumented). */
+function linkedinCompanyUrl(links: unknown): string | null {
+  const seen: string[] = [];
+  const walk = (v: unknown, depth: number) => {
+    if (depth > 3) return;
+    if (typeof v === "string") { if (/^https?:\/\/([a-z]+\.)?linkedin\.com\/company\//i.test(v.trim())) seen.push(v.trim()); }
+    else if (Array.isArray(v)) v.forEach((x) => walk(x, depth + 1));
+    else if (isObj(v)) Object.values(v).forEach((x) => walk(x, depth + 1));
+  };
+  walk(links, 0);
+  return seen[0] ?? null;
+}
+
+/**
+ * Person paths from `leadocean.person.v1`: profile_data.profile_full_name / profile_url /
+ * profile_address; the current role is contact_data.contact_current_experiences[0] with
+ * job_title and company_domain. A THIN row (some accounts' search view) carries only a
+ * top-level person_id: it is kept with every other field absent. UNCONFIRMED: the shape of
+ * profile_address, kept whole as a claim.
+ */
 export function personClaims(row: unknown, retrievedAt: string): PersonClaimSet {
-  const recordId = str(at(row, "meta.source_ids.person_id"));
+  const recordId = str(at(row, "meta.source_ids.person_id")) ?? str(at(row, "person_id"));
   if (!recordId) throw new LeadOceanSchemaError("person row without a record id");
   const exp = "contact_data.contact_current_experiences.0";
   const claim = (field: string, value: unknown): Claim[] => (value === null || value === undefined || value === "" ? [] : [{ field, value, provider: "leadocean", recordId, retrievedAt, strength: "claim" }]);
   return {
     recordId, personGroupId: str(at(row, "meta.source_ids.person_group_id")), name: str(at(row, "profile_data.profile_full_name")),
-    title: str(at(row, `${exp}.title`)), linkedinUrl: str(at(row, "profile_data.profile_linkedin_url")), employerDomain: str(at(row, `${exp}.company_domain`)),
+    title: str(at(row, `${exp}.job_title`)), linkedinUrl: str(at(row, "profile_data.profile_url")), employerDomain: str(at(row, `${exp}.company_domain`)),
     // A headline is not a job title; the employer is the provider's claim until verified.
-    claims: [...claim("title", at(row, `${exp}.title`)), ...claim("employer_domain", at(row, `${exp}.company_domain`)), ...claim("country", at(row, "profile_data.profile_country"))],
+    claims: [...claim("title", at(row, `${exp}.job_title`)), ...claim("employer_domain", at(row, `${exp}.company_domain`)), ...claim("address", at(row, "profile_data.profile_address"))],
   };
 }
 
@@ -120,6 +162,10 @@ export function leadOceanV2(d: LeadOceanV2Deps) {
   const now = () => (d.now ?? (() => new Date()))().toISOString();
   const post = (path: string, body: unknown, paid: boolean) =>
     callProvider(d.fetch, { provider: "leadocean", url: `${base}${path}`, method: "POST", headers, body, paid, maxRetries: 1 }, d.sleep);
+  const quota = (h: Headers): Page<unknown>["quotaState"] => {
+    const q = (h.get("x-quota-state") ?? "").toLowerCase();
+    return q === "paced" ? "paced" : q === "over-limit" ? "over-limit" : "ok";
+  };
   const page = <T>(r: Awaited<ReturnType<typeof post>>, map: (row: unknown, at: string) => T): Page<T> => {
     const m = meta(r.json);
     const retrievedAt = now();
@@ -127,19 +173,27 @@ export function leadOceanV2(d: LeadOceanV2Deps) {
     return {
       rows, nextCursor: m.depthCapped ? null : m.nextCursor, complete: !m.depthCapped, truncatedReason: m.depthCapped ? "depth_cap" : null,
       billedRecords: m.credits ?? rows.length, billedFrom: m.credits !== null ? "provider_meta" : "rows_returned",
-      unsupportedFilters: m.unsupported, paced: r.headers.get("x-quota-state") === "paced",
+      unsupportedFilters: m.unsupported, paced: quota(r.headers) === "paced", quotaState: quota(r.headers),
     };
   };
   return {
-    /** Free exact count (0 records). */
-    async countCompanies(q: CompanyQuery): Promise<{ total: number }> {
-      const r = await post("/v1/companies/count", companySearchBody(q, { limit: 1 }), false);
-      const total = at(r.json, "meta.total") ?? at(r.json, "data.total");
-      if (typeof total !== "number") throw new LeadOceanSchemaError("count response carries no total");
-      return { total };
+    /**
+     * Free count (0 records). `total` is null when LeadOcean WITHHOLDS it because a requested
+     * filter could not be applied (`totalWithheld` names it): a documented answer, not an error.
+     */
+    async countCompanies(q: CompanyQuery): Promise<{ total: number | null; exact: boolean; withheld: { reason: string; filters: string[] } | null }> {
+      const r = await post("/v1/companies/count", companyCountBody(q), false);
+      const src = isObj(at(r.json, "data")) && "total" in (at(r.json, "data") as object) ? "data" : "meta";
+      const total = at(r.json, `${src}.total`);
+      const w = at(r.json, `${src}.totalWithheld`);
+      const withheld = isObj(w) ? { reason: String(w.reason ?? "unknown"), filters: Array.isArray(w.filters) ? w.filters.map(String) : [] } : null;
+      if (typeof total === "number") return { total, exact: at(r.json, `${src}.totalIsExact`) !== false, withheld: null };
+      if (total === null && withheld) return { total: null, exact: false, withheld };
+      throw new LeadOceanSchemaError("count response carries no total");
     },
-    async searchCompanies(q: CompanyQuery, p: { limit: number; cursor?: string | null }): Promise<Page<CompanyClaimSet>> {
-      return page(await post("/v1/companies/search", companySearchBody(q, { ...p, order: p.cursor ? "stable" : "ranked" }), true), companyClaims);
+    /** One walk = one order: pass the SAME `order` with every page (default "ranked"). */
+    async searchCompanies(q: CompanyQuery, p: { limit: number; cursor?: string | null; order?: "ranked" | "stable" }): Promise<Page<CompanyClaimSet>> {
+      return page(await post("/v1/companies/search", companySearchBody(q, { ...p, order: p.order ?? "ranked" }), true), companyClaims);
     },
     /** One company; null when LeadOcean does not hold it (a 404 costs nothing). */
     async getCompany(ref: { domain?: string; linkedinUrl?: string }): Promise<CompanyClaimSet | null> {
@@ -152,15 +206,17 @@ export function leadOceanV2(d: LeadOceanV2Deps) {
         throw e;
       }
     },
-    async searchPeople(q: Record<string, unknown>, p: { limit: number; cursor?: string | null }): Promise<Page<PersonClaimSet>> {
+    /** One walk = one order: pass the SAME `order` with every page (default "ranked"). */
+    async searchPeople(q: Record<string, unknown>, p: { limit: number; cursor?: string | null; order?: "ranked" | "stable" }): Promise<Page<PersonClaimSet>> {
       if (!Number.isInteger(p.limit) || p.limit < 1 || p.limit > 100) throw new LeadOceanSchemaError("limit must be 1–100");
-      return page(await post("/v1/people/search", { ...q, limit: p.limit, ...(p.cursor ? { cursor: p.cursor, order: "stable" } : { order: "ranked" }) }, true), personClaims);
+      return page(await post("/v1/people/search", { ...q, limit: p.limit, order: p.order ?? "ranked", ...(p.cursor ? { cursor: p.cursor } : {}) }, true), personClaims);
     },
     /** Free: records used this period, for reconciling the ledger against what LeadOcean counted. */
-    async usage(): Promise<{ used: number | null; period: string | null; plan: string | null }> {
+    /** `plan` is an object (or null) in the documented response, kept as LeadOcean sent it. */
+    async usage(): Promise<{ used: number | null; period: string | null; plan: Record<string, unknown> | null }> {
       const r = await callProvider(d.fetch, { provider: "leadocean", url: `${base}/v1/usage`, method: "GET", headers, paid: false }, d.sleep);
       const j = isObj(r.json) && isObj((r.json as Record<string, unknown>).data) ? (r.json as { data: Record<string, unknown> }).data : (r.json as Record<string, unknown>) ?? {};
-      return { used: typeof j.used === "number" ? j.used : null, period: str(j.period), plan: str(j.plan) };
+      return { used: typeof j.used === "number" ? j.used : null, period: str(j.period), plan: isObj(j.plan) ? j.plan : null };
     },
   };
 }
