@@ -1,7 +1,7 @@
 {
  "version": "atlas-discovery-baseline-v1",
  "mode": "offline",
- "generatedAt": "2026-11-03",
+ "generatedAt": "2026-11-08",
  "summary": [
   {
    "id": "A1",
@@ -10,7 +10,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "74d3eee5a963181c908b1f440e7eac8087c0c708cd989099adf256e74795f85e",
+   "planHash": "46cb3caddf5631fe218b1a61f79b97294ebc53c7077312488d1563dad7a6bcaa",
    "semanticFingerprint": "c0efa9f40821ee80af2f9d096493dd1f77dfb33934c41a9f0727ebcf28c9afcb",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -37,7 +37,7 @@
    "verdict": "PASS",
    "strategy": "leadocean_only",
    "planStatus": "ready",
-   "planHash": "7fa5f84c1ef5678370f3bd92a24bac1b423c7c85025576946a9c536be294dd4c",
+   "planHash": "4cf1db6544c0004fda30a3da9006729906a9fb35a8c53fdf6e4b056b2dc2bbbf",
    "semanticFingerprint": "b8f992cacf93ad6ab17db1a4e4129f61dd213c8b315d41e58785debf8f0d3e4c",
    "hardRequirements": 4,
    "hardPreserved": true,
@@ -64,7 +64,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "5c06ee384d704a3191ece2be92ef9282ff7d7e748f2c795850ed11988125b5cd",
+   "planHash": "ea5ac803e010d5cbbe9f92503dab907d665f8a88e744e25d70c4cbf1e30e1e56",
    "semanticFingerprint": "0a29f86b9483c6a0280ca51b23ce83845b0b04bd54d9d81983ba52b32a7cea89",
    "hardRequirements": 3,
    "hardPreserved": true,
@@ -91,7 +91,7 @@
    "verdict": "FAIL",
    "strategy": "leadocean_only",
    "planStatus": "ready",
-   "planHash": "d0a85ec05fdd7769037e6b6a547da760badaf7f2fd66fad37f2886adb81c072f",
+   "planHash": "a716353ed47e8c69dac9bbb3cee5847aaf7c26756a0efb5491280ddeeed28736",
    "semanticFingerprint": "c808a9dfa6d718e9bafaa3263daacacb32277ae28ed17fe5fee9e80ad1bbba35",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -199,7 +199,7 @@
    "verdict": "FAIL",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "174bd17b248b97f4e265cabcfeae56281006754f42d486138e0b5a2ccd8876a0",
+   "planHash": "67c4ef6581dc740a46976602f12c883f6b1e32532a2257892471767afc55a95b",
    "semanticFingerprint": "9867ec64d33c0c751c8009db60c2f3483bde09c4029fc27c5e848be63b9a88ff",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -226,7 +226,7 @@
    "verdict": "PASS",
    "strategy": "apify_plus_leadocean",
    "planStatus": "ready",
-   "planHash": "447f41d85ede6637cb51842e50383cd978a9b77b0e13c9cf6f04a3ffdada0f6e",
+   "planHash": "07120027b02725d121201a66c863ed6da644b1eb36f9dea12ab419b42b73cb1a",
    "semanticFingerprint": "dfa407d579d63bed11fab9bc49c8dc2e8c00051d453d3d085c645e68667704e0",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -253,7 +253,7 @@
    "verdict": "PASS",
    "strategy": "leadocean_plus_apify",
    "planStatus": "ready",
-   "planHash": "fc5170661448d66b30bbf280fb8e83eb9c9c021fed504a07f0fcb937322d3471",
+   "planHash": "5018a0b4585da3a2d598f4eed9e0e6314434e399f73ad2f98761fb0e4c6eb737",
    "semanticFingerprint": "19c8394937c0fb22e04264bc6a6087b509fd175c2c8f4e99bd11456dc98a1172",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -280,7 +280,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "1ca17f8b5edb24d4cbf0e38d49867795e95f03dd48a5b32bbe75effe4478073a",
+   "planHash": "e681facfdbfb21f98e4a0b4a92a28206e7cbc9b80a8a0657b6b53895ad0e89c8",
    "semanticFingerprint": "03864d6aba69b43d5d851a4ca79022f9c0d7c934d6e6f537c234c237bebec6bb",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -307,7 +307,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "93bc60b7cc1b3828d2c384fe0f685fd34e63693e2ed628d703a048332b1cbac7",
+   "planHash": "425510e4ad749a2e7f8cfa6f115b67461ad8a905e4125ba612074e761116cf2b",
    "semanticFingerprint": "545e16ce3442f0469d7ef855961fc8d0b26188bd5333a55769e09c609f15acf7",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -334,7 +334,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "c3fc03ff17cdbe7764b9f70673c68eff572f9f1e55da57429a319e2735df5aef",
+   "planHash": "691754ae71a6c83e1c160785f17c06a20dd66d244db1a64c6c7326050eb20d29",
    "semanticFingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -361,7 +361,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "18d3322129c94f98a69bc03ae2a1f107d8ee1f57c036093df874defd0f72a21d",
+   "planHash": "db8780f2b34a3c53617013fe99d4d290552f4b4aa536dbc705aede3d2d25a2c6",
    "semanticFingerprint": "63f0ed922c56eb85be30f286af65df1cff70fe7b15c020ccca3e0b45740b8f28",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -388,7 +388,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "47c6df4203c052f820d73b264b7d790a1af113849df7165f6492f2adbca384ab",
+   "planHash": "90d57c9c1202ffe2a971f2fab4143e850067ed6cbf4924c5b4e8f0b64bebd8ea",
    "semanticFingerprint": "3df8ae017cfe36ac57f83f928ad973115e61b92c78f570d4fdf9674bae997e10",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -415,7 +415,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "b5501b142dd2afc9bc990b0f39d50776509e49b5f55daa8b8eaf7632b7a41242",
+   "planHash": "65cf292f8d0a13d2685ed0c07d076b2e269113e7e270c5bb89459cc6d921f580",
    "semanticFingerprint": "1f99b1ebd32558da60db9439de3e192640f29c203d3b792a2d8d1eee71197c90",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -461,14 +461,14 @@
     "scenario": "A1",
     "request": "Find 5 US companies currently hiring Account Executives.",
     "strategy": "apify_only",
-    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become qualified: \"Headquarters: United States\" (no approved tool in this plan can establish headquarters location); \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel leadocean_plus_apify: no lead could become qualified: \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: feasible, scored 53.98 vs 54.02",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
      "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
     ],
-    "planHash": "74d3eee5a963181c908b1f440e7eac8087c0c708cd989099adf256e74795f85e",
+    "planHash": "46cb3caddf5631fe218b1a61f79b97294ebc53c7077312488d1563dad7a6bcaa",
     "semanticFingerprint": "c0efa9f40821ee80af2f9d096493dd1f77dfb33934c41a9f0727ebcf28c9afcb",
     "hardRequirements": [
      "geography:United States",
@@ -606,7 +606,7 @@
     "scenario": "A2",
     "request": "Find 5 US B2B SaaS companies with 20–500 employees.",
     "strategy": "leadocean_only",
-    "strategyRationale": "the request named this strategy and it passed every check structured people search matches roles, geography and size directly apify_only: apify.linkedin_job_search finds companies by a hiring signal; the request names none leadocean_plus_apify: feasible, scored 35.7 vs -2.5 apify_plus_leadocean: apify.linkedin_job_search finds companies by a hiring signal; the request names none apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check structured people search matches roles, geography and size directly apify_only: apify.linkedin_job_search finds companies by a hiring signal; the request names none leadocean_plus_apify: feasible, scored 35.7 vs -2.5 apify_plus_leadocean: apify.linkedin_job_search finds companies by a hiring signal; the request names none apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: apify.linkedin_job_search finds companies by a hiring signal; the request names none",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
@@ -615,7 +615,7 @@
      "unverifiable_requirement: industry \"b2b saas, saas\": a taxonomy label proves no industry; it narrows discovery only and leads stay needs_verification on it",
      "unverified_claim: LeadOcean HQ, size and funding are claims; with no Apify company record every lead stays needs_verification"
     ],
-    "planHash": "7fa5f84c1ef5678370f3bd92a24bac1b423c7c85025576946a9c536be294dd4c",
+    "planHash": "4cf1db6544c0004fda30a3da9006729906a9fb35a8c53fdf6e4b056b2dc2bbbf",
     "semanticFingerprint": "b8f992cacf93ad6ab17db1a4e4129f61dd213c8b315d41e58785debf8f0d3e4c",
     "hardRequirements": [
      "industry:b2b saas",
@@ -748,7 +748,7 @@
     "scenario": "A3",
     "request": "Find 5 US manufacturers hiring sales representatives.",
     "strategy": "apify_only",
-    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 50.62 vs 51.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: feasible, scored -27.5 vs 51.02 leadocean_plus_apify: feasible, scored -2.3 vs 51.02 apify_plus_leadocean: feasible, scored 50.62 vs 51.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: feasible, scored 50.98 vs 51.02",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
@@ -756,7 +756,7 @@
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
      "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
     ],
-    "planHash": "5c06ee384d704a3191ece2be92ef9282ff7d7e748f2c795850ed11988125b5cd",
+    "planHash": "ea5ac803e010d5cbbe9f92503dab907d665f8a88e744e25d70c4cbf1e30e1e56",
     "semanticFingerprint": "0a29f86b9483c6a0280ca51b23ce83845b0b04bd54d9d81983ba52b32a7cea89",
     "hardRequirements": [
      "industry:manufacturing",
@@ -950,7 +950,7 @@
     "scenario": "A4",
     "request": "Find 5 US insurance agencies with 10–100 employees.",
     "strategy": "leadocean_only",
-    "strategyRationale": "the request named this strategy and it passed every check structured people search matches roles, geography and size directly apify_only: apify.linkedin_job_search finds companies by a hiring signal; the request names none leadocean_plus_apify: feasible, scored 38.7 vs 0.5 apify_plus_leadocean: apify.linkedin_job_search finds companies by a hiring signal; the request names none apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check structured people search matches roles, geography and size directly apify_only: apify.linkedin_job_search finds companies by a hiring signal; the request names none leadocean_plus_apify: feasible, scored 38.7 vs 0.5 apify_plus_leadocean: apify.linkedin_job_search finds companies by a hiring signal; the request names none apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: apify.linkedin_job_search finds companies by a hiring signal; the request names none",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
@@ -958,7 +958,7 @@
      "unverifiable_requirement: size 10–100 employees: no step of leadocean_only can prove it; leads stay needs_verification on it",
      "unverified_claim: LeadOcean HQ, size and funding are claims; with no Apify company record every lead stays needs_verification"
     ],
-    "planHash": "d0a85ec05fdd7769037e6b6a547da760badaf7f2fd66fad37f2886adb81c072f",
+    "planHash": "a716353ed47e8c69dac9bbb3cee5847aaf7c26756a0efb5491280ddeeed28736",
     "semanticFingerprint": "c808a9dfa6d718e9bafaa3263daacacb32277ae28ed17fe5fee9e80ad1bbba35",
     "hardRequirements": [
      "geography:United States",
@@ -1073,7 +1073,7 @@
    "title": "LeadOcean discovery → Apify hiring verification",
    "group": "B",
    "verdict": "UNSUPPORTED",
-   "detail": "the planner refuses it: the requested strategy leadocean_plus_apify cannot run: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review)",
+   "detail": "the planner refuses it: the requested strategy leadocean_plus_apify cannot run: no lead could become qualified: \"Industry: software\" (no approved tool in this plan can establish industry); \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel",
    "spec": {
     "hard": [
      "US headquarters",
@@ -1095,7 +1095,7 @@
     "strategy": null,
     "strategyRationale": "",
     "planStatus": "blocked",
-    "planBlockedReason": "the requested strategy leadocean_plus_apify cannot run: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review)",
+    "planBlockedReason": "the requested strategy leadocean_plus_apify cannot run: no lead could become qualified: \"Industry: software\" (no approved tool in this plan can establish industry); \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel",
     "planLimitations": [],
     "planHash": null,
     "semanticFingerprint": "b38e032fee64e75d8657d74cb242979310fa2a02764338adfbc1b5e2e3d6e970",
@@ -1186,14 +1186,14 @@
     "scenario": "B4",
     "request": "Find 5 US companies that are either hiring Account Executives or expanding into new offices.",
     "strategy": "apify_only",
-    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become qualified: \"Headquarters: United States\" (no approved tool in this plan can establish headquarters location); \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel leadocean_plus_apify: no lead could become qualified: \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: feasible, scored 53.98 vs 54.02",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
      "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
     ],
-    "planHash": "174bd17b248b97f4e265cabcfeae56281006754f42d486138e0b5a2ccd8876a0",
+    "planHash": "67c4ef6581dc740a46976602f12c883f6b1e32532a2257892471767afc55a95b",
     "semanticFingerprint": "9867ec64d33c0c751c8009db60c2f3483bde09c4029fc27c5e848be63b9a88ff",
     "hardRequirements": [
      "geography:United States",
@@ -1334,13 +1334,13 @@
     "scenario": "X1",
     "request": "Find the founder or CEO at 3 US companies currently hiring Account Executives.",
     "strategy": "apify_plus_leadocean",
-    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_only: apify.company_employees is not approved: harvestapi/linkedin-company-employees ($0.02/run + $0.003/short profile, $0.05 minimum): decision-makers at discovered companies by LinkedIn page; titles fuzzy (re-classified); a wrong profileScraperMode value silently bills the Full price. Not on the pipeline allowlist (PIPELINE_ACTORS) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become qualified: \"Headquarters: United States\" (no approved tool in this plan can establish headquarters location); \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel apify_only: apify.company_employees is not approved: harvestapi/linkedin-company-employees ($0.02/run + $0.003/short profile, $0.05 minimum): decision-makers at discovered companies by LinkedIn page; titles fuzzy (re-classified); a wrong profileScraperMode value silently bills the Full price. Not on the pipeline allowlist (PIPELINE_ACTORS) leadocean_plus_apify: no lead could become qualified: \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: feasible, scored 53.98 vs 53.96",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     ],
-    "planHash": "447f41d85ede6637cb51842e50383cd978a9b77b0e13c9cf6f04a3ffdada0f6e",
+    "planHash": "07120027b02725d121201a66c863ed6da644b1eb36f9dea12ab419b42b73cb1a",
     "semanticFingerprint": "dfa407d579d63bed11fab9bc49c8dc2e8c00051d453d3d085c645e68667704e0",
     "hardRequirements": [
      "geography:United States",
@@ -1499,11 +1499,11 @@
     "scenario": "X2",
     "request": "Find the founder or CEO at 3 US-headquartered companies with 20–200 employees.",
     "strategy": "leadocean_plus_apify",
-    "strategyRationale": "the request named this strategy and it passed every check structured people search matches roles, geography and size directly Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; size 20–200 employees cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_only: apify.people_search is not approved: harvestapi/linkedin-profile-search ($0.004/profile, $0.10 minimum per run): no industry or size filter and no per-company cap; ~2x company-employees for the same recall. Not on the pipeline allowlist (PIPELINE_ACTORS) apify_plus_leadocean: apify.linkedin_job_search finds companies by a hiring signal; the request names none apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check structured people search matches roles, geography and size directly Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become qualified: \"Headquarters: United States\" (no approved tool in this plan can establish headquarters location); \"Company size: 20–200 employees\" (no approved tool in this plan can establish company size) — run it as review-only, change the requirement, or cancel apify_only: apify.people_search is not approved: harvestapi/linkedin-profile-search ($0.004/profile, $0.10 minimum per run): no industry or size filter and no per-company cap; ~2x company-employees for the same recall. Not on the pipeline allowlist (PIPELINE_ACTORS) apify_plus_leadocean: apify.linkedin_job_search finds companies by a hiring signal; the request names none apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: apify.linkedin_job_search finds companies by a hiring signal; the request names none",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [],
-    "planHash": "fc5170661448d66b30bbf280fb8e83eb9c9c021fed504a07f0fcb937322d3471",
+    "planHash": "5018a0b4585da3a2d598f4eed9e0e6314434e399f73ad2f98761fb0e4c6eb737",
     "semanticFingerprint": "19c8394937c0fb22e04264bc6a6087b509fd175c2c8f4e99bd11456dc98a1172",
     "hardRequirements": [
      "geography:United States",
@@ -1647,14 +1647,14 @@
     "scenario": "F1",
     "request": "Find 5 companies headquartered in Atlantis currently hiring Account Executives.",
     "strategy": "apify_only",
-    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in Atlantis; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become qualified: \"Headquarters: Atlantis\" (no approved tool in this plan can establish headquarters location); \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel leadocean_plus_apify: no lead could become qualified: \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: feasible, scored 53.98 vs 54.02",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
      "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
     ],
-    "planHash": "1ca17f8b5edb24d4cbf0e38d49867795e95f03dd48a5b32bbe75effe4478073a",
+    "planHash": "e681facfdbfb21f98e4a0b4a92a28206e7cbc9b80a8a0657b6b53895ad0e89c8",
     "semanticFingerprint": "03864d6aba69b43d5d851a4ca79022f9c0d7c934d6e6f537c234c237bebec6bb",
     "hardRequirements": [
      "geography:Atlantis",
@@ -1797,14 +1797,14 @@
     "scenario": "F2",
     "request": "Find 5 companies headquartered in Texas currently hiring Account Executives.",
     "strategy": "apify_only",
-    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in Texas; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become qualified: \"Headquarters: Texas\" (no approved tool in this plan can establish headquarters location); \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel leadocean_plus_apify: no lead could become qualified: \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel apify_plus_leadocean: feasible, scored 53.62 vs 54.02 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: feasible, scored 53.98 vs 54.02",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
      "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
     ],
-    "planHash": "93bc60b7cc1b3828d2c384fe0f685fd34e63693e2ed628d703a048332b1cbac7",
+    "planHash": "425510e4ad749a2e7f8cfa6f115b67461ad8a905e4125ba612074e761116cf2b",
     "semanticFingerprint": "545e16ce3442f0469d7ef855961fc8d0b26188bd5333a55769e09c609f15acf7",
     "hardRequirements": [
      "geography:Texas",
@@ -1941,13 +1941,13 @@
     "scenario": "C1",
     "request": "Find 3 US-headquartered companies hiring Account Executives.",
     "strategy": "apify_only",
-    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become qualified: \"Headquarters: United States\" (no approved tool in this plan can establish headquarters location); \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel leadocean_plus_apify: no lead could become qualified: \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: feasible, scored 53.98 vs 54.26",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     ],
-    "planHash": "c3fc03ff17cdbe7764b9f70673c68eff572f9f1e55da57429a319e2735df5aef",
+    "planHash": "691754ae71a6c83e1c160785f17c06a20dd66d244db1a64c6c7326050eb20d29",
     "semanticFingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
     "hardRequirements": [
      "geography:United States",
@@ -2084,13 +2084,13 @@
     "scenario": "C2",
     "request": "Find 3 companies operating in the US that are hiring Account Executives.",
     "strategy": "apify_only",
-    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become qualified: \"Geography: United States\" (no approved tool in this plan can establish office / market presence); \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel leadocean_plus_apify: no lead could become qualified: \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: feasible, scored 53.98 vs 54.26",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     ],
-    "planHash": "18d3322129c94f98a69bc03ae2a1f107d8ee1f57c036093df874defd0f72a21d",
+    "planHash": "db8780f2b34a3c53617013fe99d4d290552f4b4aa536dbc705aede3d2d25a2c6",
     "semanticFingerprint": "63f0ed922c56eb85be30f286af65df1cff70fe7b15c020ccca3e0b45740b8f28",
     "hardRequirements": [
      "geography:United States",
@@ -2227,13 +2227,13 @@
     "scenario": "C3",
     "request": "Find 3 US companies hiring Account Executives. Prefer B2B companies, but include strong B2C opportunities.",
     "strategy": "apify_only",
-    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become qualified: \"Headquarters: United States\" (no approved tool in this plan can establish headquarters location); \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel leadocean_plus_apify: no lead could become qualified: \"Hiring: account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: feasible, scored 53.98 vs 54.26",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     ],
-    "planHash": "47c6df4203c052f820d73b264b7d790a1af113849df7165f6492f2adbca384ab",
+    "planHash": "90d57c9c1202ffe2a971f2fab4143e850067ed6cbf4924c5b4e8f0b64bebd8ea",
     "semanticFingerprint": "3df8ae017cfe36ac57f83f928ad973115e61b92c78f570d4fdf9674bae997e10",
     "hardRequirements": [
      "geography:United States",
@@ -2372,13 +2372,13 @@
     "scenario": "C4",
     "request": "Find 3 US companies hiring SDRs or Account Executives.",
     "strategy": "apify_only",
-    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become eligible: headquarters in United States; hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) leadocean_plus_apify: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review) apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated",
+    "strategyRationale": "the request named this strategy and it passed every check discovers BY the requested hiring signal (dated), so every candidate already carries it Apify company record proves identity, HQ and size for the shared engine leadocean_only: no lead could become qualified: \"Headquarters: United States\" (no approved tool in this plan can establish headquarters location); \"Hiring: sdrs, account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel leadocean_plus_apify: no lead could become qualified: \"Hiring: sdrs, account executives\" (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel apify_plus_leadocean: feasible, scored 53.96 vs 54.26 apollo_plus_apify: apollo.people_search is disabled pending validation: People API Search returned 403 on this plan (2026-10-30); disabled until access is validated apify_leadocean_concurrent: feasible, scored 53.98 vs 54.26",
     "planStatus": "ready",
     "planBlockedReason": null,
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     ],
-    "planHash": "b5501b142dd2afc9bc990b0f39d50776509e49b5f55daa8b8eaf7632b7a41242",
+    "planHash": "65cf292f8d0a13d2685ed0c07d076b2e269113e7e270c5bb89459cc6d921f580",
     "semanticFingerprint": "1f99b1ebd32558da60db9439de3e192640f29c203d3b792a2d8d1eee71197c90",
     "hardRequirements": [
      "geography:United States",

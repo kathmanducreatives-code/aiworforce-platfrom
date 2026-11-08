@@ -24,6 +24,8 @@ import { understandingOf } from "../missionUnderstanding.ts";
 import { summarizeProviderRun } from "./providerRunSummary.ts";
 import { criteriaFreezeState } from "../missionCriteriaReader.ts";
 import { approvability, contractHash, disclosures, MISSION_CONTRACT_VERSION, type MissionContract } from "../missionContract/contract.ts";
+import { missionOutcome } from "./outcome.ts";
+import type { PersistResult } from "./persistRows.ts";
 import { checkApproved, checkCompiled, checkPlanRequirements, checkVerdicts, requirementVerdicts, type InvariantViolation } from "../missionContract/invariants.ts";
 
 /** What the running service used to read this mission — for review and the TEST smoke (P8). */
@@ -108,7 +110,8 @@ export interface PipelineDeps {
   leadoceanFor(apiKey: string): { adapter: DiscoveryAdapter; deps: AdapterDeps };
   /** The Apify invoker when this deployment holds an Apify token; null = canonical and signals unavailable. */
   apify: ActorInvoker | null;
-  persist(rows: PipelineRow[], contactValuesWritten: number): Promise<void>;
+  /** Writes the rows; returns what was written (persistRows.ts) when the store reports it. */
+  persist(rows: PipelineRow[], contactValuesWritten: number): Promise<PersistResult | void>;
   /** Per-workspace company-record cache; null unless DISCOVERY_EVIDENCE_CACHE_ENABLED (needs held migration 20261101120000). */
   evidenceCache?: import("./evidenceCache.ts").EvidenceCache | null;
   now?: () => Date;
@@ -255,6 +258,8 @@ export interface Interpreted {
 export type InterpretFailure = { error: string; clarification?: { questions: string[]; message: string } };
 
 export interface StrategyDeps extends PipelineDeps {
+  /** The shared grounded classifier for business-model verification; absent = that check is unavailable. */
+  groundBusinessModel?: import("./businessModelCheck.ts").Grounder | null;
   /**
    * GPT interpretation: the mission compiler's final mission, or why there is none. Never a
    * regex fallback. `brain` reports how the workspace's Company Brain informed it
@@ -349,7 +354,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       apify: { enabled: f.enabled && f.provider.apify, connected: !!d.apify, authorized: true },
       apollo: { enabled: f.enabled && f.provider.apollo && f.commercialTerms.apollo, connected: ap?.status === "connected", authorized: true },
     },
-    budget: req.budget, user: req.user,
+    budget: req.budget, user: req.user, businessModelGrounding: !!d.groundBusinessModel,
     // The plan hash binds the workspace and the interpretation contract it was read under.
     // Contract mode: the plan hash binds the contract's own hash, so an approval names one exact meaning.
     binding: { workspaceId: req.workspaceId, contractVersion: mc ? `${MISSION_CONTRACT_VERSION}:${mcHash}` : d.contractVersion ?? activeMissionContract() },
@@ -398,15 +403,35 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     leadocean: key ? d.leadoceanFor(key).adapter : null, apify: d.apify, connections,
     ledger: d.ledger, checkpoints: d.checkpoints, existing: new ExclusionIndex(await d.loadExisting(req.workspaceId), now), now,
     evidenceCache: d.evidenceCache ?? null,
+    groundBusinessModel: d.groundBusinessModel ?? null,
   });
-  if (run.status === "blocked") return { status: 409, body: { error: run.reason, plan } };
+  if (run.status === "blocked") {
+    // A "blocked" run that already spent is a FAILED run, not a refusal (audit S3/S4).
+    const spent = run.spend.apifyUsd > 0 || run.spend.leadoceanRecords > 0;
+    const outcome = missionOutcome({ requested: spec.requestedCount, qualified: 0, pending: 0, rejected: 0, runStatus: spent ? "failed" : "blocked", reason: run.reason,
+      spend: { ...run.spend, basis: "estimate" } });
+    return { status: 409, body: { error: run.reason, plan, outcome, steps: run.steps, spend: run.spend } };
+  }
   const projected = [...run.queue, ...run.review].map((l) => projectPipelineLead(l, { workspaceId: req.workspaceId, values: [] })).filter((x): x is PipelineRow => !!x);
-  await d.persist(projected, 0);
+  const persisted = await d.persist(projected, 0);
   return {
     status: 200,
     body: {
       status: run.status, reason: run.reason, strategy: run.strategy, steps: run.steps, spend: run.spend, limitations: run.limitations,
-      evidenceRefused: run.evidenceRefused, queue: run.queue, review: run.review, excludedCount: run.excluded.length, written: projected.length,
+      // What the REQUEST got (outcome.ts): only qualified companies count toward the number asked for.
+      outcome: missionOutcome({
+        requested: spec.requestedCount, qualified: run.queue.length,
+        pending: run.review.filter((l) => l.statuses.qualification === "pending").length, rejected: run.excluded.length,
+        runStatus: run.status, reason: run.reason,
+        openRequirements: [...new Set(run.review.flatMap((l) => l.qualification?.gaps ?? []))].map((g) => g.replace(/_/g, " ")),
+        // run-sync reports no charge: the ledger settles the worst case for the items returned.
+        spend: { ...run.spend, basis: "estimate" },
+      }),
+      mergedCompanies: run.mergedCompanies ?? [],
+      evidenceRefused: run.evidenceRefused, queue: run.queue, review: run.review, excludedCount: run.excluded.length,
+      // What was actually written (inserted or updated in place), not what was projected.
+      written: persisted ? persisted.written + persisted.updated : projected.length,
+      ...(persisted ? { persistence: { inserted: persisted.written, updated: persisted.updated, failed: persisted.failed, failures: persisted.rows.filter((x) => x.action === "failed") } } : {}),
       // Per provider and combined: discovered, unique, qualified, pending, rejected, spend, errors.
       providerSummary: summarizeProviderRun(run),
       // Contract mode: one verdict per contract requirement for every returned company,

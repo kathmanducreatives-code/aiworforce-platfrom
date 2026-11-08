@@ -61,6 +61,35 @@ export interface StrategyPlanView {
   worstCase: { apifyUsd: number; leadoceanRecords: number };
   planHash: string;
   approvalToken: string | null;
+  /** How each requirement will be checked (backend capabilityResolution.ts), in plain words. */
+  requirements: RequirementView[];
+  /** One question per REQUIRED requirement no tool can check (a blocked plan asks these). */
+  questions: string[];
+  /** What the interpreter assumed, what it could not check, and what it merged — from the contract. */
+  interpretation: { assumptions: string[]; disclosures: string[]; merged: { span: string; reason: string }[] };
+}
+
+export interface RequirementView {
+  label: string; necessity: 'required' | 'preferred';
+  route: 'checked' | 'ranked_only' | 'not_checkable';
+  checkedBy: string[]; explanation: string;
+}
+
+/** Human names for the capabilities a requirement can be checked by. */
+export const CAPABILITY_LABEL: Record<string, string> = {
+  'apify.linkedin_job_search': 'dated job postings',
+  'apify.linkedin_company_record': "the company's LinkedIn record",
+  'apify.website_business_model': "the company's own website",
+  'apify.company_employees': 'company employee records',
+  'leadocean.people_search': 'LeadOcean (claims only)',
+  'leadocean.people_by_domain': 'LeadOcean people at the company',
+};
+export const capabilityLabel = (id: string) => CAPABILITY_LABEL[id] ?? id.split('.').slice(1).join(' ').replace(/_/g, ' ');
+
+export function routeLine(r: RequirementView): string {
+  if (r.route === 'ranked_only') return 'Preference — ranks results, never rejects';
+  if (r.route === 'checked') return `Checked by ${r.checkedBy.map(capabilityLabel).join(' + ')}`;
+  return 'Cannot be checked by any approved tool';
 }
 
 /** The plan as the server returned it, or null when the shape is not one we can show. */
@@ -84,10 +113,31 @@ export function readStrategyPlan(body: unknown): StrategyPlanView | null {
     rationale: Array.isArray(p.rationale) ? p.rationale.map(String) : [],
     steps, worstCase: { apifyUsd: usd, leadoceanRecords: lo }, planHash: p.planHash,
     approvalToken: str(body.approval_token),
+    requirements: Array.isArray(p.requirementRoutes) ? p.requirementRoutes.filter(isObj).map((r) => ({
+      label: String(r.label ?? ''), necessity: r.necessity === 'preferred' ? 'preferred' as const : 'required' as const,
+      route: r.route === 'checked' || r.route === 'ranked_only' ? r.route : 'not_checkable' as const,
+      checkedBy: Array.isArray(r.checkedBy) ? r.checkedBy.map(String) : [], explanation: String(r.explanation ?? ''),
+    })) : [],
+    questions: Array.isArray(p.questions) ? p.questions.map(String) : [],
+    interpretation: interpretationOf(body),
   };
 }
 
-export interface PlanRequest { workspaceId: string; messageId: string; query: string; choice: StrategyChoice; requestedCount?: number | null }
+function interpretationOf(body: Record<string, unknown>): StrategyPlanView['interpretation'] {
+  const mc = isObj(body.interpretation) && isObj(body.interpretation.missionContract) ? body.interpretation.missionContract : null;
+  const list = (v: unknown) => (Array.isArray(v) ? v : []);
+  return {
+    assumptions: list(mc?.assumptions).filter(isObj).map((a) => String(a.text ?? '')).filter(Boolean),
+    disclosures: list(mc?.disclosures).map(String),
+    merged: list(mc?.mergedDuplicates).filter(isObj).map((m) => ({ span: String(m.span ?? ''), reason: String(m.reason ?? '') })),
+  };
+}
+
+export interface PlanRequest {
+  workspaceId: string; messageId: string; query: string; choice: StrategyChoice; requestedCount?: number | null;
+  /** The user's explicit decision to buy candidates a REQUIRED requirement cannot be checked for (they stay "needs verification"). */
+  reviewOnly?: boolean;
+}
 
 function baseBody(r: PlanRequest) {
   return {
@@ -95,7 +145,7 @@ function baseBody(r: PlanRequest) {
     ...(r.requestedCount ? { requested_count: r.requestedCount } : {}),
     ...(r.choice === 'auto' ? {} : { strategy: r.choice }),
     // LeadOcean alone cannot prove a hiring signal: its companies are shown as pending review.
-    allow_review_only: r.choice === 'leadocean_only',
+    allow_review_only: r.reviewOnly === true || r.choice === 'leadocean_only',
   };
 }
 
@@ -116,7 +166,10 @@ export async function runStrategy(invoke: Invoke, r: PlanRequest, plan: Strategy
     action: 'strategy_run', ...baseBody(r),
     approval: { plan_hash: plan.planHash, apify_usd: plan.worstCase.apifyUsd, leadocean_records: plan.worstCase.leadoceanRecords, ...(plan.approvalToken ? { token: plan.approvalToken } : {}) },
   });
-  const run = readStrategyRun(res.data);
+  let body: unknown = res.data;
+  // A failed or refused run answers 409 with its outcome, steps and spend: still a result to show.
+  if (!body && res.error?.context) { try { body = await res.error.context.clone().json(); } catch { body = null; } }
+  const run = readStrategyRun(body);
   return run ? { ok: true, value: run } : { ok: false, error: await errorMessage(res.error, 'The run did not return a readable result.') };
 }
 
@@ -135,9 +188,53 @@ export interface CompanyRow {
   evidenceSources: string[];
   signals: CompanySignal[];
   conflicts: { field: string; values: { provider: string; value: string }[] }[];
+  location: string | null;
+  industry: string[];
+  /** The business model read from the company's own pages, when it was checked. */
+  businessModel: { status: BusinessModelStatus; quote: string | null; url: string | null; fetchedAt: string | null; reason: string } | null;
+  /** Other records of the same company merged into this lead (one company, one lead). */
+  mergedRecords: number;
+}
+
+export type BusinessModelStatus = 'verified_b2b' | 'likely_b2b' | 'mixed' | 'unknown' | 'not_b2b';
+export const BUSINESS_MODEL_LABEL: Record<BusinessModelStatus, string> = {
+  verified_b2b: 'Verified B2B', likely_b2b: 'Likely B2B (not verified)', mixed: 'Mixed B2B / B2C', unknown: 'Business model unknown', not_b2b: 'Not B2B',
+};
+
+export type OutcomeStatus = 'completed' | 'completed_with_shortfall' | 'needs_verification' | 'no_results' | 'blocked' | 'failed' | 'cancelled';
+export const OUTCOME_LABEL: Record<OutcomeStatus, string> = {
+  completed: 'Completed', completed_with_shortfall: 'Completed with shortfall', needs_verification: 'Needs verification',
+  no_results: 'No results', blocked: 'Blocked', failed: 'Failed', cancelled: 'Cancelled',
+};
+export interface OutcomeView {
+  status: OutcomeStatus; summary: string; nextStep: string | null;
+  requested: number | null; qualified: number; needsVerification: number; rejected: number; shortfall: number | null;
+  spend: { apifyUsd: number; leadoceanRecords: number; basis: 'estimate' | 'provider_reported' | 'none' };
+}
+
+export function readOutcome(v: unknown): OutcomeView | null {
+  if (!isObj(v) || typeof v.status !== 'string' || !(v.status in OUTCOME_LABEL) || typeof v.summary !== 'string') return null;
+  const n = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : 0);
+  const sp = isObj(v.spend) ? v.spend : {};
+  const basis = sp.basis === 'estimate' || sp.basis === 'provider_reported' ? sp.basis : 'none';
+  return {
+    status: v.status as OutcomeStatus, summary: v.summary, nextStep: str(v.nextStep),
+    requested: typeof v.requested === 'number' ? v.requested : null, qualified: n(v.qualified), needsVerification: n(v.needsVerification), rejected: n(v.rejected),
+    shortfall: typeof v.shortfall === 'number' ? v.shortfall : null,
+    spend: { apifyUsd: n(sp.apifyUsd), leadoceanRecords: n(sp.leadoceanRecords), basis },
+  };
+}
+
+/** The spend line, never presenting an estimate as a billed amount. */
+export function spendLine(s: OutcomeView['spend']): string {
+  if (s.basis === 'none') return 'No provider spend';
+  const parts = [s.apifyUsd > 0 ? `$${s.apifyUsd.toFixed(4)} Apify` : null, s.leadoceanRecords > 0 ? `${s.leadoceanRecords} LeadOcean record${s.leadoceanRecords === 1 ? '' : 's'}` : null].filter(Boolean);
+  return `${parts.join(' + ') || '$0'} ${s.basis === 'estimate' ? '(estimated from the run; not a billed amount)' : '(provider-reported)'}`;
 }
 export interface StrategyRunView {
   status: string; reason: string | null; strategy: string | null;
+  /** What the request got (backend outcome.ts). Null on an older backend: no outcome is guessed. */
+  outcome: OutcomeView | null;
   spend: { apifyUsd: number; leadoceanRecords: number };
   steps: { capability: string; provider: string; status: string; reason: string | null }[];
   companies: CompanyRow[];
@@ -181,18 +278,27 @@ function companyRow(l: unknown, inReview: boolean): CompanyRow | null {
     conflicts: Array.isArray(prov.conflicts) ? prov.conflicts.filter(isObj).map((x) => ({
       field: String(x.field ?? ''), values: Array.isArray(x.values) ? x.values.filter(isObj).map((v) => ({ provider: String(v.provider ?? ''), value: show(v.value) })) : [],
     })) : [],
+    location: isObj(c.hq) ? [str(c.hq.city), str(c.hq.country)].filter(Boolean).join(', ') || null : null,
+    industry: Array.isArray(c.industry) ? c.industry.map(String) : [],
+    businessModel: isObj(l.businessModel) && typeof l.businessModel.status === 'string' && l.businessModel.status in BUSINESS_MODEL_LABEL ? {
+      status: l.businessModel.status as BusinessModelStatus, quote: str(l.businessModel.quote), url: safeHref(str(l.businessModel.url)),
+      fetchedAt: str(l.businessModel.fetchedAt), reason: String(l.businessModel.reason ?? ''),
+    } : null,
+    mergedRecords: Array.isArray(prov.mergedFrom) ? prov.mergedFrom.length : 0,
   };
 }
 
 /** The run as the server returned it, or null when it is not a run response. */
 export function readStrategyRun(body: unknown): StrategyRunView | null {
+  // A refused / failed run (409) carries its outcome but no run status: it is shown as that outcome.
+  if (isObj(body) && typeof body.status !== 'string' && isObj(body.outcome)) body = { ...body, status: String(body.outcome.status), reason: body.error ?? null, steps: Array.isArray(body.steps) ? body.steps : [], spend: isObj(body.spend) ? body.spend : { apifyUsd: 0, leadoceanRecords: 0 } };
   if (!isObj(body) || typeof body.status !== 'string' || !Array.isArray(body.steps) || !isObj(body.spend)) return null;
   const usd = amount(body.spend.apifyUsd), lo = amount(body.spend.leadoceanRecords);
   if (usd === null || lo === null) return null;
   const queue = Array.isArray(body.queue) ? body.queue : [], review = Array.isArray(body.review) ? body.review : [];
   const companies = [...queue.map((l) => companyRow(l, false)), ...review.map((l) => companyRow(l, true))].filter((x): x is CompanyRow => !!x);
   return {
-    status: body.status, reason: str(body.reason), strategy: str(body.strategy),
+    status: body.status, reason: str(body.reason), strategy: str(body.strategy), outcome: readOutcome(body.outcome),
     spend: { apifyUsd: usd, leadoceanRecords: lo },
     steps: body.steps.filter(isObj).map((s) => ({ capability: String(s.capability ?? ''), provider: String(s.provider ?? ''), status: String(s.status ?? ''), reason: str(s.reason) })),
     companies, excludedCount: typeof body.excludedCount === 'number' ? body.excludedCount : 0,
