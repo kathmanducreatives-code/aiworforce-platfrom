@@ -81,7 +81,7 @@ export const isStrategy = (s: unknown): s is DiscoveryStrategyId => typeof s ===
 export type CapabilityStatus = "available" | "disabled_pending_validation" | "not_approved";
 export type CapabilityRole = "discover_people" | "discover_companies" | "people_at_companies" | "verify_company" | "verify_person";
 /** Facts a capability can PROVE to the shared engine (evidenceAuthority rules), never mere claims. */
-export type Provable = "identity" | "headquarters" | "presence" | "size_band" | "hiring" | "current_employment";
+export type Provable = "identity" | "headquarters" | "presence" | "size_band" | "hiring" | "current_employment" | "business_model";
 export type SignalKind = "hiring" | "funding" | "social_activity" | "expansion" | "leadership_change" | "other";
 
 export interface DiscoveryCapability {
@@ -139,6 +139,13 @@ export const DISCOVERY_CAPABILITIES: Readonly<Record<string, DiscoveryCapability
     actorKey: COMPANY_RECORD_ACTOR.key,
     note: "the HQ-flagged location, the structured office list (presence) and declared size band (AUTHORITY_RULES), on a record whose identity matches",
   },
+  "apify.website_business_model": {
+    id: "apify.website_business_model", provider: "apify", role: "verify_company", status: actorStatus("apify_website_content"),
+    filters: [], discoversBySignal: null, claims: [], proves: ["business_model"],
+    cost: { unit: "usd", perItem: 0, perStart: PIPELINE_ACTORS.apify_website_content.perStartUsd },
+    actorKey: "apify_website_content",
+    note: "≤3 first-party pages per company (home, about, customers; no link following), one batched compute-bounded run; read by the shared grounded classifier — a clear first-party statement verifies, anything weaker stays pending",
+  },
   // ── Catalogued Apify actors from PR #198, NOT on the allowlist (status derived) ──
   "apify.linkedin_post_search": {
     id: "apify.linkedin_post_search", provider: "apify", role: "discover_companies", status: actorStatus("apify_linkedin_post_search"),
@@ -195,13 +202,15 @@ export function chainFor(strategy: DiscoveryStrategyId, spec: DiscoverySpec): re
     : spec.wantsPeople && strategy === "apify_only" ? "apify.people_search"
     : "apify.linkedin_job_search";
   const rec = "apify.linkedin_company_record";
+  // A REQUIRED business model is checked on the company's own pages, after its record.
+  const bm = spec.requirements.criteria.some((c) => c.kind === "hard" && c.dimension === "business_model") ? ["apify.website_business_model"] : [];
   switch (strategy) {
     case "leadocean_only": return ["leadocean.people_search"];
     case "leadocean_plus_apify": return ["leadocean.people_search", rec];
     case "apollo_plus_apify": return ["apollo.people_search", rec];
-    case "apify_plus_leadocean": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, rec, "leadocean.people_by_domain"];
-    case "apify_only": return seed === "apify.people_search" ? [seed, rec] : [seed, rec, ...(spec.wantsPeople ? ["apify.company_employees"] : [])];
-    case "apify_leadocean_concurrent": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, "leadocean.people_search", rec];
+    case "apify_plus_leadocean": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, rec, ...bm, "leadocean.people_by_domain"];
+    case "apify_only": return seed === "apify.people_search" ? [seed, rec, ...bm] : [seed, rec, ...bm, ...(spec.wantsPeople ? ["apify.company_employees"] : [])];
+    case "apify_leadocean_concurrent": return [seed === "apify.people_search" ? "apify.linkedin_job_search" : seed, "leadocean.people_search", rec, ...bm];
   }
 }
 
@@ -379,6 +388,8 @@ export interface StrategyContext {
   user?: { strategy?: DiscoveryStrategyId; excludeProviders?: ProviderId[]; allowReviewOnly?: boolean };
   /** People to look up per discovered company (apify_plus_leadocean). */
   peoplePerCompany?: number;
+  /** The website grounding model is configured: business-model verification can run. */
+  businessModelGrounding?: boolean;
   /** Who the plan is for and under which interpretation contract: bound into the plan hash. */
   binding?: { workspaceId: string; contractVersion: string };
 }
@@ -514,7 +525,10 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   const refusals: string[] = [];
   const limitations: Limitation[] = [];
   const rationale: string[] = [];
-  const chain = chainFor(strategy, spec).map((id) => DISCOVERY_CAPABILITIES[id]);
+  // Business-model verification reads pages with the shared grounded classifier: without the
+  // model the step is not in the chain, so the requirement routes to not_checkable (a question).
+  const chain = chainFor(strategy, spec).map((id) => DISCOVERY_CAPABILITIES[id])
+    .filter((c) => c.id !== "apify.website_business_model" || ctx.businessModelGrounding === true);
   const n = spec.requestedCount;
 
   // 1 every capability in the chain must be available, its provider usable here
@@ -632,6 +646,11 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
       } else if (c.role === "people_at_companies") {
         const max = Math.max(0, Math.min(companies * peoplePer, itemCap));
         out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: price(max), why: `${spec.roles.join(" / ") || "decision-makers"} at the discovered companies, by ${lo ? "exact domain" : "LinkedIn company page"}` });
+      } else if (c.role === "verify_company" && c.id === "apify.website_business_model") {
+        // Only companies that pass every other check are read, as many as the request still needs.
+        const max = Math.max(1, Math.min(companies, Math.ceil(n * 1.5), 33));
+        out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max * 3, estimate: { leadoceanRecords: 0, apifyUsd: usd(c, max) },
+          why: `the business model, from ≤3 of each company's own pages, for up to ${max} companies that pass every other check (one batched run)` });
       } else if (c.role === "verify_company") {
         const max = Math.max(0, Math.min(100, companies - (ctx.cachedCompanyRecords ?? 0)));
         out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: Math.max(1, max), estimate: { leadoceanRecords: 0, apifyUsd: max ? usd(c, max) : 0 }, why: "identity, HQ-flagged location and declared size band for each discovered company (one batched run)" });

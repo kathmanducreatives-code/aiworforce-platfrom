@@ -310,3 +310,22 @@ Optional: needed only when `DISCOVERY_EVIDENCE_CACHE_ENABLED` is set; without it
 the pipeline buys every record. **Not approved for production.** Rollback:
 `rollback/20261101120000_discovery_evidence_cache.down.sql` (drops the table; the
 records can be bought again).
+
+## `20261108120000_lead_pipeline_one_lead_per_company.sql`
+
+MRLE Phase 0 (audit 2026-11-07 X3 / X8). The lead pipeline wrote accounts, contacts and
+`lead_candidates` as separate calls with no transaction and no uniqueness for its own leads
+(`lead_type = 'lead_pipeline'`). Adds a unique index (one pipeline lead per workspace and
+account) and `lead_pipeline_persist_lead(...)`, which writes the account (by domain, then a
+same-named account with no or the same domain), contact (by LinkedIn URL) and lead in ONE
+transaction. Service role only.
+
+**HELD — NOT APPLIED, not approved for any hosted project.** The application already writes
+idempotently without it (`leadPipeline/persistRows.ts`); the RPC path is used only with
+`LEAD_PIPELINE_PERSIST_TX=enabled` after this is applied. **It refuses to apply** (and
+changes nothing) while any workspace already holds two pipeline leads for one account: it
+never deletes or merges data. Before applying on a hosted project, run
+`scripts/test-project/lead-pipeline-one-lead-preflight.sql` (read-only); it must start with
+`OK 0 duplicate pairs`, or each listed pair needs an owner decision first. Rollback:
+`rollback/20261108120000_lead_pipeline_one_lead_per_company.down.sql`. Replayed against real
+Postgres (PGlite) in `tests/infra/leadPipelineOneLeadPerCompany.test.ts`.

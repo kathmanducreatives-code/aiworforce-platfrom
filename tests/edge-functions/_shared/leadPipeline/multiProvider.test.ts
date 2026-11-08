@@ -686,11 +686,24 @@ Deno.test("service (contract mode): an ambiguity is a question, never a run", as
 // ── Consolidation with PR #198: one engine, its capabilities registered, allowlist unchanged ──
 
 Deno.test("consolidation: the Apify allowlist and its 100-item cap are unchanged", async () => {
-  assertEquals(Object.keys(PIPELINE_ACTORS).sort(), ["apify_linkedin_company_details", "apify_linkedin_company_posts", "apify_linkedin_job_search", "apify_linkedin_profile_posts"]);
+  // MRLE Phase 1 adds ONE reviewed actor: the Website Content Crawler, for business-model pages.
+  assertEquals(Object.keys(PIPELINE_ACTORS).sort(), ["apify_linkedin_company_details", "apify_linkedin_company_posts", "apify_linkedin_job_search", "apify_linkedin_profile_posts", "apify_website_content"]);
   const inv = pipelineApifyInvoker({ token: "t", fetch: (() => Promise.resolve(new Response("[]"))) as never });
   let refused = "";
   await inv("apify_linkedin_job_search", {}, { maxItems: 101, idempotencyKey: "k" }).catch((e) => { refused = String(e.message); });
   assertStringIncludes(refused, "maxItems must be 1–100");
+});
+
+Deno.test("the website crawler is compute-billed: its run is bounded by memory and timeout, and its worst case covers that bound", async () => {
+  const urls: string[] = [];
+  const inv = pipelineApifyInvoker({ token: "t", fetch: ((u: string) => { urls.push(u); return Promise.resolve(new Response("[]")); }) as never });
+  await inv("apify_website_content", { startUrls: [] }, { maxItems: 3, idempotencyKey: "w" });
+  const q = new URL(urls[0]).searchParams;
+  assertEquals([q.get("memory"), q.get("timeout")], ["1024", "120"]);
+  assertStringIncludes(urls[0], "apify~website-content-crawler/run-sync-get-dataset-items");
+  const a = PIPELINE_ACTORS.apify_website_content;
+  // 1 GB × 120 s = 1/30 compute unit; at the assumed $0.40 per unit that is $0.01334.
+  assert(a.perStartUsd >= (1024 / 1024) * (120 / 3600) * 0.4 - 1e-9 && a.perItemUsd === 0);
 });
 
 Deno.test("consolidation: PR #198's post search, profile search, company employees and founder check are registered, priced and NOT approved", () => {
