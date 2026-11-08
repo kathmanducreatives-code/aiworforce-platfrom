@@ -107,3 +107,22 @@ Deno.test("the migration refuses — and changes nothing — when duplicates alr
   await ok.exec(DOWN);
   assertEquals((await ok.query<{ n: number }>(`select count(*)::int as n from pg_proc where proname = 'lead_pipeline_persist_lead'`)).rows[0].n, 0);
 });
+
+Deno.test("the read-only preflight names the duplicate pairs the migration would refuse on, and says OK on a clean project", async () => {
+  const PRE = read("scripts/test-project/lead-pipeline-one-lead-preflight.sql");
+  const rows = async (db: PGlite) => (await db.exec(PRE)).flatMap((r) => r.rows as Record<string, unknown>[]).map((r) => Object.values(r).join(" "));
+  const clean = new PGlite();
+  await clean.exec(PRELUDE);
+  assertEquals((await rows(clean))[0], "OK 0 duplicate pairs");
+  const dirty = new PGlite();
+  await dirty.exec(PRELUDE);
+  await dirty.exec(`insert into public.lead_candidates (workspace_id, account_id, lead_type) values
+    ('${WS}', '44444444-4444-4444-8444-444444444444', 'lead_pipeline'), ('${WS}', '44444444-4444-4444-8444-444444444444', 'lead_pipeline'),
+    ('${WS}', '55555555-5555-4555-8555-555555555555', 'lead_pipeline'), ('${WS}', '55555555-5555-4555-8555-555555555555', 'other');`);
+  const out = await rows(dirty);
+  assertEquals(out[0], "DUPLICATES 1 duplicate pairs");
+  assert(out.some((l) => l.startsWith("PAIR 2 ") && l.includes("44444444-4444-4444-8444-444444444444")));
+  // It is read-only: the data is unchanged and the migration still refuses on it.
+  assertEquals((await dirty.query<{ n: number }>(`select count(*)::int as n from public.lead_candidates`)).rows[0].n, 4);
+  await assertRejects(() => dirty.exec(UP), Error, "resolve them first");
+});
