@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { isSameOriginRelativePath } from '@/lib/routeGuard';
+import { allowDashboardWithoutBrain } from '@/lib/env/testOnboardingBypass';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +21,9 @@ async function destinationForUser(userId: string): Promise<string> {
       .select('onboarding_completed')
       .limit(1)
       .maybeSingle();
-    return data?.onboarding_completed ? '/dashboard' : '/onboarding/company-brain';
+    // TEST only: the isolated TEST project forbids a Brain (testOnboardingBypass.ts).
+    if (data?.onboarding_completed || allowDashboardWithoutBrain(import.meta.env)) return '/dashboard';
+    return '/onboarding/company-brain';
   } catch {
     return '/onboarding/company-brain';
   }
