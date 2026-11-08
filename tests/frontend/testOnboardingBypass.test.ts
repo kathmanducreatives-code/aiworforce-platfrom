@@ -36,11 +36,14 @@ Deno.test("anything else stays closed", () => {
   assert(DISCOVERY_TEST_PROJECT_REF !== CANONICAL_PROJECT_REFS.production);
 });
 
-Deno.test("the onboarding gate and the post-login destination use the rule; nothing else changed in the gate", () => {
+Deno.test("the onboarding gate, the route guard and the post-login destination use the rule; nothing else changed in the gate", () => {
   const gate = read("src/components/OnboardingGate.tsx");
   assert(gate.includes("const TEST_WITHOUT_BRAIN = allowDashboardWithoutBrain(import.meta.env);"));
   assert(gate.includes("if (!completed && !TEST_WITHOUT_BRAIN && !ALLOWED_PRE_ONBOARDING.has(location.pathname)) {"));
   assert(gate.includes("if (!user) return <Navigate to=\"/auth\" replace />;"), "signed-out users are still sent to sign in");
+  const route = read("src/components/ProtectedRoute.tsx");
+  assert(route.includes("const TEST_WITHOUT_BRAIN = allowDashboardWithoutBrain(import.meta.env);"));
+  assert(route.includes("requireOnboarding: requireOnboarding && !TEST_WITHOUT_BRAIN,"), "only the onboarding requirement is lifted");
   const auth = read("src/pages/Auth.tsx");
   assert(auth.includes("if (data?.onboarding_completed || allowDashboardWithoutBrain(import.meta.env)) return '/dashboard';"));
   assertEquals((auth.match(/allowDashboardWithoutBrain\(/g) ?? []).length, 1);
