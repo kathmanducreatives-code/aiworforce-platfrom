@@ -258,6 +258,8 @@ export interface Interpreted {
 export type InterpretFailure = { error: string; clarification?: { questions: string[]; message: string } };
 
 export interface StrategyDeps extends PipelineDeps {
+  /** The shared grounded classifier for business-model verification; absent = that check is unavailable. */
+  groundBusinessModel?: import("./businessModelCheck.ts").Grounder | null;
   /**
    * GPT interpretation: the mission compiler's final mission, or why there is none. Never a
    * regex fallback. `brain` reports how the workspace's Company Brain informed it
@@ -352,7 +354,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       apify: { enabled: f.enabled && f.provider.apify, connected: !!d.apify, authorized: true },
       apollo: { enabled: f.enabled && f.provider.apollo && f.commercialTerms.apollo, connected: ap?.status === "connected", authorized: true },
     },
-    budget: req.budget, user: req.user,
+    budget: req.budget, user: req.user, businessModelGrounding: !!d.groundBusinessModel,
     // The plan hash binds the workspace and the interpretation contract it was read under.
     // Contract mode: the plan hash binds the contract's own hash, so an approval names one exact meaning.
     binding: { workspaceId: req.workspaceId, contractVersion: mc ? `${MISSION_CONTRACT_VERSION}:${mcHash}` : d.contractVersion ?? activeMissionContract() },
@@ -401,6 +403,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     leadocean: key ? d.leadoceanFor(key).adapter : null, apify: d.apify, connections,
     ledger: d.ledger, checkpoints: d.checkpoints, existing: new ExclusionIndex(await d.loadExisting(req.workspaceId), now), now,
     evidenceCache: d.evidenceCache ?? null,
+    groundBusinessModel: d.groundBusinessModel ?? null,
   });
   if (run.status === "blocked") {
     // A "blocked" run that already spent is a FAILED run, not a refusal (audit S3/S4).
