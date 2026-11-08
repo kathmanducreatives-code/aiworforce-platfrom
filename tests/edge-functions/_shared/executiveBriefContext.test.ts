@@ -56,7 +56,7 @@ function fixture(): Record<string, Row[]> {
     signal_events: [
       { id: "sig-a1", workspace_id: A, account_id: "acc-a1", signal_type: "funding_signal", confidence: "high", lifecycle_status: "active", verification_status: "provider_verified", dedupe_key: "k1", occurred_at: day(1), created_at: day(1), normalized_value: { title: "Raised a Series B" } },
       { id: "sig-a1-dup", workspace_id: A, account_id: "acc-a1", signal_type: "funding_signal", confidence: "high", lifecycle_status: "active", dedupe_key: "k1", occurred_at: day(1), created_at: day(1.5), normalized_value: { title: "Raised a Series B" } },
-      { id: "sig-a-old", workspace_id: A, account_id: null, signal_type: "job_signal", confidence: "low", lifecycle_status: "active", dedupe_key: "k2", created_at: day(30), normalized_value: { company_name: "Old Co" } },
+      { id: "sig-a-old", workspace_id: A, account_id: null, signal_type: "sales_hiring", confidence: "low", lifecycle_status: "active", dedupe_key: "k2", created_at: day(30), normalized_value: { company_name: "Old Co" } },
       { id: "sig-a-dismissed", workspace_id: A, account_id: null, signal_type: "job_signal", confidence: "high", lifecycle_status: "dismissed", dedupe_key: "k3", created_at: day(1), normalized_value: {} },
       { id: "sig-b1", workspace_id: B, account_id: "acc-b1", signal_type: "funding_signal", confidence: "high", lifecycle_status: "active", dedupe_key: "kb", created_at: day(1), normalized_value: { title: "Tenant B news" } },
     ],
@@ -167,6 +167,17 @@ Deno.test("END TO END (fixtures): the brief for A cites only A's rows and links 
   for (const s of brief.sources) assert(ids.has(s.id), `cites ${s.table}:${s.id}`);
   const routes = brief.sources.map((s) => s.route);
   assert(routes.includes("/awaiting-you") && routes.includes("/leads?lead=acc-a1") && routes.includes("/signals"));
+});
+
+Deno.test("LABELS: real signal_type values get plain names; evidence_category is the fallback", async () => {
+  const rows = [
+    { id: "s1", workspace_id: A, account_id: "acc-a1", signal_type: "recent_funding", lifecycle_status: "active", dedupe_key: "d1", created_at: day(1), normalized_value: {} },
+    { id: "s2", workspace_id: A, account_id: "acc-a1", signal_type: "unknown_future_type", evidence_category: "job_signal", lifecycle_status: "active", dedupe_key: "d2", created_at: day(1), normalized_value: {} },
+  ];
+  const { db } = fakeDb({ signal_events: rows, accounts: fixture().accounts });
+  const ctx = await collectExecutiveContext(db, A, { now: NOW });
+  assertEquals(ctx.signals.find((x) => x.id === "s1")!.title, "Funding announced");
+  assertEquals(ctx.signals.find((x) => x.id === "s2")!.title, "Hiring activity");
 });
 
 Deno.test("refuses to run without a workspace", async () => {

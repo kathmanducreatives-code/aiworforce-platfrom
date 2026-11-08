@@ -55,7 +55,35 @@ export const DEFAULT_WINDOW_DAYS = 7;
 const CLOSED_LEAD = /reject|disqualif|archiv|dismiss|lost|won|closed|duplicate|excluded/i;
 const IN_FLIGHT_PLAN = ["running", "active", "pending", "in_progress", "awaiting_approval", "resumable"];
 
+// Plain labels for `signal_events.signal_type` (the CHECK constraint's values,
+// migration 20260824130000) and, as a fallback, `evidence_category`.
 const SIGNAL_LABEL: Record<string, string> = {
+  recent_funding: "Funding announced",
+  employee_growth: "Headcount growing",
+  market_expansion: "Entering a new market",
+  geographic_expansion: "Expanding to a new region",
+  sales_hiring: "Hiring salespeople",
+  revops_hiring: "Hiring revenue operations",
+  growth_hiring: "Hiring for growth",
+  new_revenue_leader: "New revenue leader",
+  outbound_initiative: "Starting outbound",
+  positioning_change: "Positioning changed",
+  product_launch: "Product launch",
+  major_release: "Major release",
+  new_integration: "New integration",
+  category_expansion: "Expanding into a new category",
+  founder_pipeline_post: "Founder posted about pipeline",
+  founder_outbound_post: "Founder posted about outbound",
+  founder_customer_acquisition_post: "Founder posted about customer acquisition",
+  founder_hiring_post: "Founder posted about hiring",
+  founder_problem_statement: "Founder described a problem",
+  person_left_company: "Contact left the company",
+  company_outside_icp: "Company no longer fits your ICP",
+  role_changed: "Contact changed role",
+  company_inactive: "Company looks inactive",
+  signal_became_stale: "Earlier signal went stale",
+  competitor_activity: "Competitor activity",
+  market_problem_discussion: "Market discussing a problem",
   job_signal: "Hiring activity",
   funding_signal: "Funding announced",
   launch_signal: "Product launch",
@@ -163,7 +191,7 @@ export async function collectExecutiveContext(
     .select("profile, onboarding_completed")
     .eq("workspace_id", workspaceId).limit(1);
   const signalQ = db.from("signal_events")
-    .select("id, account_id, lead_candidate_id, signal_type, signal_category, occurred_at, observed_at, confidence, freshness, verification_status, lifecycle_status, normalized_value, dedupe_key, source_url, created_at")
+    .select("id, account_id, lead_candidate_id, signal_type, signal_category, evidence_category, occurred_at, observed_at, confidence, freshness, verification_status, lifecycle_status, normalized_value, dedupe_key, source_url, created_at")
     .eq("workspace_id", workspaceId).eq("lifecycle_status", "active").gte("created_at", since)
     .order("created_at", { ascending: false }).limit(BRIEF_LIMITS.signals);
   const leadQ = db.from("lead_candidates")
@@ -225,7 +253,9 @@ export async function collectExecutiveContext(
     const accountId = s(r.account_id);
     const name = accountName(accountId, s(nv.company_name));
     const type = s(r.signal_type) ?? "signal";
-    const typeLabel = SIGNAL_LABEL[type] ?? type.replace(/_/g, " ");
+    const evidenceCategory = s(r.evidence_category);
+    const typeLabel = SIGNAL_LABEL[type] ?? (evidenceCategory ? SIGNAL_LABEL[evidenceCategory] : undefined) ??
+      type.replace(/_/g, " ");
     const title = clip(s(nv.title) ?? (typeof nv.signal === "string" ? s(nv.signal) : null) ?? typeLabel, 120)!;
     const when = s(r.occurred_at) ?? s(r.observed_at) ?? s(r.created_at);
     const age = daysBetween(when, now);
