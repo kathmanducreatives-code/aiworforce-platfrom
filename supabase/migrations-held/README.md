@@ -324,6 +324,8 @@ transaction. Service role only.
 idempotently without it (`leadPipeline/persistRows.ts`); the RPC path is used only with
 `LEAD_PIPELINE_PERSIST_TX=enabled` after this is applied. **It refuses to apply** (and
 changes nothing) while any workspace already holds two pipeline leads for one account: it
-never deletes or merges data. Rollback:
+never deletes or merges data. Before applying on a hosted project, run
+`scripts/test-project/lead-pipeline-one-lead-preflight.sql` (read-only); it must start with
+`OK 0 duplicate pairs`, or each listed pair needs an owner decision first. Rollback:
 `rollback/20261108120000_lead_pipeline_one_lead_per_company.down.sql`. Replayed against real
 Postgres (PGlite) in `tests/infra/leadPipelineOneLeadPerCompany.test.ts`.

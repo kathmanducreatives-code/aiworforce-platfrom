@@ -81,7 +81,7 @@ export const isStrategy = (s: unknown): s is DiscoveryStrategyId => typeof s ===
 export type CapabilityStatus = "available" | "disabled_pending_validation" | "not_approved";
 export type CapabilityRole = "discover_people" | "discover_companies" | "people_at_companies" | "verify_company" | "verify_person";
 /** Facts a capability can PROVE to the shared engine (evidenceAuthority rules), never mere claims. */
-export type Provable = "identity" | "headquarters" | "size_band" | "hiring" | "current_employment" | "business_model";
+export type Provable = "identity" | "headquarters" | "presence" | "size_band" | "hiring" | "current_employment" | "business_model";
 export type SignalKind = "hiring" | "funding" | "social_activity" | "expansion" | "leadership_change" | "other";
 
 export interface DiscoveryCapability {
@@ -134,10 +134,10 @@ export const DISCOVERY_CAPABILITIES: Readonly<Record<string, DiscoveryCapability
   },
   "apify.linkedin_company_record": {
     id: "apify.linkedin_company_record", provider: "apify", role: "verify_company", status: "available",
-    filters: [], discoversBySignal: null, claims: [], proves: ["identity", "headquarters", "size_band"],
+    filters: [], discoversBySignal: null, claims: [], proves: ["identity", "headquarters", "presence", "size_band"],
     cost: { unit: "usd", perItem: COMPANY_RECORD_ACTOR.perItemUsd, perStart: COMPANY_RECORD_ACTOR.perStartUsd },
     actorKey: COMPANY_RECORD_ACTOR.key,
-    note: "the HQ-flagged location and declared size band (AUTHORITY_RULES), on a record whose identity matches",
+    note: "the HQ-flagged location, the structured office list (presence) and declared size band (AUTHORITY_RULES), on a record whose identity matches",
   },
   "apify.website_business_model": {
     id: "apify.website_business_model", provider: "apify", role: "verify_company", status: actorStatus("apify_website_content"),
