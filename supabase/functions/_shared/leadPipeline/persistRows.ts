@@ -22,6 +22,7 @@
 // `lead_pipeline_persist_lead`). The store is injected, so this is testable offline.
 
 import type { PipelineRow } from "./projection.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { canonicalDomain } from "./identity.ts";
 
 export type Inserted = { id: string } | { conflict: true };
@@ -128,8 +129,7 @@ async function upsertContact(store: LeadStore, r: PipelineRow, accountId: string
 }
 
 /** The Supabase implementation of the store (service role, this workspace's rows only). */
-// deno-lint-ignore no-explicit-any
-export function supabaseLeadStore(admin: any, opts: { transactional?: boolean } = {}): LeadStore {
+export function supabaseLeadStore(admin: SupabaseClient, opts: { transactional?: boolean } = {}): LeadStore {
   const one = async (q: PromiseLike<{ data: unknown; error: { message: string } | null }>) => {
     const { data, error } = await q;
     if (error) throw new Error(error.message);

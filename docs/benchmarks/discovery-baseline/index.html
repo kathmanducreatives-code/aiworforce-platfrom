@@ -20,7 +20,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 .note{color:var(--muted);font-size:13px;margin-top:24px}
 </style></head><body><main>
 <h1>ATLAS discovery baseline</h1>
-<p class="sub">atlas-discovery-baseline-v1 · offline (synthetic providers, network blocked) · generated 2026-11-03</p>
+<p class="sub">atlas-discovery-baseline-v1 · offline (synthetic providers, network blocked) · generated 2026-11-08</p>
 <div class="tiles"><div class="tile"><b class="PASS">7</b>PASS</div><div class="tile"><b class="FAIL">2</b>FAIL</div>
 <div class="tile"><b class="BLOCKED">0</b>BLOCKED</div><div class="tile"><b class="UNSUPPORTED">3</b>UNSUPPORTED</div></div>
 <div class="table-wrap"><table><thead><tr><th>ID</th><th>Scenario</th><th>Verdict</th><th>Strategy</th><th>Unique</th><th>Qualified</th><th>Rejected</th><th>Review</th><th>Precision</th><th>Apify (≤)</th><th>LO records</th><th>$ / qualified</th></tr></thead>
@@ -84,7 +84,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>Apify job search (discovers by the hiring signal) + Apify company record (proves identity, HQ, size)</dd>
 <dt>Expected</dt><dd>Northwind and Quartz qualify; Maple (Toronto HQ) rejected; the staffing agency and the 3-month-old posting never become candidates; Harbor (no record) needs review</dd>
 <dt>PASS condition</dt><dd>Northwind and Quartz qualified; NO company qualified without an Account Executive posting (precision 1.0 vs ground truth); Maple and Apex not qualified; hard requirements preserved</dd>
-<dt>Plan</dt><dd>ready · hash <code>74d3eee5a963181c…</code> · semantics <code>c0efa9f40821ee80…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>46cb3caddf5631fe…</code> · semantics <code>c0efa9f40821ee80…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts | budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings</dd>
 <dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -101,7 +101,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>LeadOcean people search (people + employer rows, narrowing filters, claims only)</dd>
 <dt>Expected</dt><dd>companies discovered from employer rows and deduplicated; NONE qualified (nothing proves HQ or size); all honestly flagged for review</dd>
 <dt>PASS condition</dt><dd>≥2 unique companies discovered, 0 qualified, every discovered company needs review, the limitation is stated in the plan</dd>
-<dt>Plan</dt><dd>ready · hash <code>7fa5f84c1ef56783…</code> · semantics <code>b8f992cacf93ad6a…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>4cf1db6544c0004f…</code> · semantics <code>b8f992cacf93ad6a…</code></dd>
 <dt>Limitations</dt><dd>unverifiable_requirement: headquarters in United States: no step of leadocean_only can prove it; leads stay needs_verification on it | unverifiable_requirement: size 20–500 employees: no step of leadocean_only can prove it; leads stay needs_verification on it | unverifiable_requirement: industry &quot;b2b saas, saas&quot;: a taxonomy label proves no industry; it narrows discovery only and leads stay needs_verification on it | unverified_claim: LeadOcean HQ, size and funding are claims; with no Apify company record every lead stays needs_verification</dd>
 <dt>Provider calls</dt><dd>leadocean POST /v1/search (10)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -118,7 +118,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>Apify job search + company record (no industry filter on the job search)</dd>
 <dt>Expected</dt><dd>Ironworks and Plain Steel found by their sales-rep postings; the industry requirement is never dropped and never satisfied by a label</dd>
 <dt>PASS condition</dt><dd>the manufacturing requirement is preserved as hard, both manufacturers are discovered, and no company is qualified on industry without evidence</dd>
-<dt>Plan</dt><dd>ready · hash <code>5c06ee384d704a31…</code> · semantics <code>0a29f86b9483c6a0…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>ea5ac803e010d5cb…</code> · semantics <code>0a29f86b9483c6a0…</code></dd>
 <dt>Limitations</dt><dd>unverifiable_requirement: industry &quot;manufacturing&quot;: a taxonomy label proves no industry; it narrows discovery only and leads stay needs_verification on it | fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts | budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings</dd>
 <dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (6)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -135,7 +135,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>LeadOcean people search with the industry label filter</dd>
 <dt>Expected</dt><dd>both agencies discovered, none qualified, all for review</dd>
 <dt>PASS condition</dt><dd>≥2 unique companies discovered, 0 qualified, limitation stated, and the stated industry stays a HARD requirement</dd>
-<dt>Plan</dt><dd>ready · hash <code>d0a85ec05fdd7769…</code> · semantics <code>c808a9dfa6d718e9…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>a716353ed47e8c69…</code> · semantics <code>c808a9dfa6d718e9…</code></dd>
 <dt>Limitations</dt><dd>unverifiable_requirement: headquarters in United States: no step of leadocean_only can prove it; leads stay needs_verification on it | unverifiable_requirement: size 10–100 employees: no step of leadocean_only can prove it; leads stay needs_verification on it | unverified_claim: LeadOcean HQ, size and funding are claims; with no Apify company record every lead stays needs_verification</dd>
 <dt>Provider calls</dt><dd>leadocean POST /v1/search (10)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -157,7 +157,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <details id="B2"><summary><b>B2</b> LeadOcean discovery → Apify hiring verification <span class="pill UNSUPPORTED">UNSUPPORTED</span></summary>
 <p class="req">“Find 5 US software companies with 20–500 employees that are hiring Account Executives.”</p>
 <dl>
-<dt>Result</dt><dd>the planner refuses it: the requested strategy leadocean_plus_apify cannot run: no lead could become eligible: hiring signal (last 30 days) cannot be proven (set allowReviewOnly to buy candidates for manual review)</dd>
+<dt>Result</dt><dd>the planner refuses it: the requested strategy leadocean_plus_apify cannot run: no lead could become qualified: &quot;Industry: software&quot; (no approved tool in this plan can establish industry); &quot;Hiring: account executives&quot; (no approved tool in this plan can establish a dated job posting) — run it as review-only, change the requirement, or cancel</dd>
 <dt>Hard (stated)</dt><dd>US headquarters · 20–500 employees · software · hiring AEs</dd>
 <dt>Hard (compiled)</dt><dd>industry:software · geography:United States · company_size:{&quot;min&quot;:20,&quot;max&quot;:500} · hiring:{&quot;event&quot;:&quot;hiring&quot;,&quot;subject&quot;:&quot;company&quot;,&quot;qualifier&quot;:{&quot;role_terms&quot;:[&quot;account executives&quot;],&quot;role_families&quot;:[&quot;gtm_sales&quot;]}}</dd>
 <dt>Preferences</dt><dd>—</dd>
@@ -195,7 +195,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>Apify job search covers the hiring branch; no capability discovers or proves expansion</dd>
 <dt>Expected</dt><dd>hiring branch discovered and proven; expansion branch stated as a limitation, not silently dropped</dd>
 <dt>PASS condition</dt><dd>the either/or requirement is preserved (not narrowed to hiring-only), the expansion limitation is stated</dd>
-<dt>Plan</dt><dd>ready · hash <code>174bd17b248b97f4…</code> · semantics <code>9867ec64d33c0c75…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>67c4ef6581dc740a…</code> · semantics <code>9867ec64d33c0c75…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts | budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings</dd>
 <dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -212,7 +212,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>Apify job search → Apify company record → LeadOcean people by domain (only for verified companies)</dd>
 <dt>Expected</dt><dd>people bought only for companies that passed verification; one company, one lead</dd>
 <dt>PASS condition</dt><dd>Maple (disproven) never qualifies and hard requirements are preserved</dd>
-<dt>Plan</dt><dd>ready · hash <code>447f41d85ede6637…</code> · semantics <code>dfa407d579d63bed…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>07120027b02725d1…</code> · semantics <code>dfa407d579d63bed…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts</dd>
 <dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3) · leadocean POST /v1/search (6)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -229,7 +229,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>LeadOcean people search → Apify company record</dd>
 <dt>Expected</dt><dd>Maple (Canadian HQ) rejected on the record; Harbor (no record) stays for review</dd>
 <dt>PASS condition</dt><dd>Maple not qualified; at least one US company qualified on Apify evidence</dd>
-<dt>Plan</dt><dd>ready · hash <code>fc5170661448d66b…</code> · semantics <code>19c8394937c0fb22…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>5018a0b4585da3a2…</code> · semantics <code>19c8394937c0fb22…</code></dd>
 <dt>Limitations</dt><dd>—</dd>
 <dt>Provider calls</dt><dd>apify apify_linkedin_company_details (3) · leadocean POST /v1/search (6)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -246,7 +246,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>Apify</dd>
 <dt>Expected</dt><dd>nothing qualifies: no HQ is in Atlantis</dd>
 <dt>PASS condition</dt><dd>0 qualified</dd>
-<dt>Plan</dt><dd>ready · hash <code>1ca17f8b5edb24d4…</code> · semantics <code>03864d6aba69b43d…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>e681facfdbfb21f9…</code> · semantics <code>03864d6aba69b43d…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts | budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings</dd>
 <dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -263,7 +263,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>Apify</dd>
 <dt>Expected</dt><dd>only Northwind (Austin, TX) qualifies; Ohio, Colorado, Florida and Toronto HQs do not</dd>
 <dt>PASS condition</dt><dd>precision 1.0: no company outside Texas qualifies</dd>
-<dt>Plan</dt><dd>ready · hash <code>93bc60b7cc1b3828…</code> · semantics <code>545e16ce3442f046…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>425510e4ad749a2e…</code> · semantics <code>545e16ce3442f046…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts | budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings</dd>
 <dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -280,7 +280,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>Apify</dd>
 <dt>Expected</dt><dd>geography compiled with scope headquarters; Maple (CA HQ) rejected</dd>
 <dt>PASS condition</dt><dd>geography scope = headquarters and Maple not qualified</dd>
-<dt>Plan</dt><dd>ready · hash <code>c3fc03ff17cdbe77…</code> · semantics <code>0a5eb0bb807782d4…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>691754ae71a6c83e…</code> · semantics <code>0a5eb0bb807782d4…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts</dd>
 <dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -297,7 +297,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>Apify</dd>
 <dt>Expected</dt><dd>geography compiled with scope presence; a US posting location is presence evidence</dd>
 <dt>PASS condition</dt><dd>geography scope = presence (never silently headquarters)</dd>
-<dt>Plan</dt><dd>ready · hash <code>18d3322129c94f98…</code> · semantics <code>63f0ed922c56eb85…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>db8780f2b34a3c53…</code> · semantics <code>63f0ed922c56eb85…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts</dd>
 <dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -314,7 +314,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>Apify</dd>
 <dt>Expected</dt><dd>B2B is a preference; B2C companies are not rejected for being B2C</dd>
 <dt>PASS condition</dt><dd>no hard business-model requirement; B2B kept as a preference</dd>
-<dt>Plan</dt><dd>ready · hash <code>47c6df4203c052f8…</code> · semantics <code>3df8ae017cfe36ac…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>90d57c9c1202ffe2…</code> · semantics <code>3df8ae017cfe36ac…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts</dd>
 <dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (3)</dd>
 <dt>Errors</dt><dd>none</dd>
@@ -331,7 +331,7 @@ dl{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}dt{co
 <dt>Providers</dt><dd>Apify job search with both titles</dd>
 <dt>Expected</dt><dd>both roles searched; an SDR-only company (Glowcart) counts</dd>
 <dt>PASS condition</dt><dd>both role terms reach the hiring requirement and the search, and Glowcart (SDR posting) is a candidate</dd>
-<dt>Plan</dt><dd>ready · hash <code>b5501b142dd2afc9…</code> · semantics <code>1f99b1ebd32558da…</code></dd>
+<dt>Plan</dt><dd>ready · hash <code>65cf292f8d0a13d2…</code> · semantics <code>1f99b1ebd32558da…</code></dd>
 <dt>Limitations</dt><dd>fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts</dd>
 <dt>Provider calls</dt><dd>apify apify_linkedin_job_search (10) · apify apify_linkedin_company_details (4)</dd>
 <dt>Errors</dt><dd>none</dd>
