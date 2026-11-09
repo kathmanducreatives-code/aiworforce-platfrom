@@ -42,6 +42,8 @@ export interface SimCompany {
   linkedinSlug?: string;
   hq?: { text: string; country: string; countryFull: string; city?: string };
   employees?: number;
+  /** LinkedIn industry label on the job's company and the company record (default "Software Development"). */
+  industry?: string;
   job?: { title?: string; postedDate?: string; state?: string } | null;
   inRecords?: boolean;
   /** The company's homepage text; null = the site returns nothing useful. */
@@ -80,7 +82,7 @@ function jobItem(i: number, c: SimCompany) {
   return { id: `j${i}`, title: c.job?.title ?? "Account Executive", linkedinUrl: `https://www.linkedin.com/jobs/view/j${i}`, jobState: c.job?.state ?? "LISTED",
     postedDate: c.job?.postedDate ?? "2026-11-02",
     company: { id: `c-${li(c)}`, universalName: li(c), name: c.name, linkedinUrl: `https://www.linkedin.com/company/${li(c)}`, website: `https://${c.site}`,
-      employeeCount: c.employees ?? 80, employeeCountRange: band(c.employees ?? 80), industries: [{ name: "Software Development" }],
+      employeeCount: c.employees ?? 80, employeeCountRange: band(c.employees ?? 80), industries: [{ name: c.industry ?? "Software Development" }],
       locations: [{ headquarter: true, parsed: { text: h.text } }] },
     location: { linkedinText: h.text }, descriptionText: `${c.name} is hiring.` };
 }
@@ -88,7 +90,8 @@ function recordItem(c: SimCompany) {
   const h = hqOf(c);
   return { id: `li-${li(c)}`, name: c.name, linkedinUrl: `https://www.linkedin.com/company/${li(c)}`, website: `https://${c.site}`, description: null,
     employeeCount: c.employees ?? 85, employeeCountRange: band(c.employees ?? 85),
-    locations: [{ headquarter: true, city: h.city ?? null, country: h.country, parsed: { text: h.text, countryFull: h.countryFull } }], companyType: "Privately Held" };
+    locations: [{ headquarter: true, city: h.city ?? null, country: h.country, parsed: { text: h.text, countryFull: h.countryFull } }], companyType: "Privately Held",
+    ...(c.industry ? { industries: [{ name: c.industry }] } : {}) };
 }
 
 export interface ActorCall { actor: string; input: Record<string, unknown>; key: string; maxItems: number; outcome: string; items: number; chargedUsd: number | null }

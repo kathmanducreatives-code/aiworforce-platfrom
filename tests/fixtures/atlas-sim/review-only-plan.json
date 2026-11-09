@@ -1,6 +1,6 @@
 {
  "name": "review-only-plan",
- "description": "The unsupported requirement, accepted as review-only: nothing it gates is counted qualified.",
+ "description": "The unsupported requirement, accepted as review-only: nothing it gates is counted qualified. The website check still reads companies open only on business model and the never-provable industry, so a consumer company is rejected rather than saved for review (2026-11-09).",
  "covers": [
   "review-only plans"
  ],
@@ -107,15 +107,17 @@
   "outcome": "needs_verification",
   "needsVerification": [
    "Cobalt Freight",
-   "Harbor Kids",
    "Maple Goods",
    "Northwind Ledger",
    "Quartz Data"
   ],
-  "excluded": 0,
-  "leadsSaved": 5,
-  "actorCalls": 2,
+  "excluded": 1,
+  "leadsSaved": 4,
+  "actorCalls": 3,
   "persistFailed": 0,
-  "qualified": []
+  "qualified": [],
+  "rejected": [
+   "Harbor Kids"
+  ]
  }
 }

@@ -1,0 +1,211 @@
+{
+ "name": "pilot-industry-b2b",
+ "description": "Rehearsal of the first real Apify pilot (fictional companies): industry-targeted, US-HQ B2B companies discovered by an Account Executive hiring signal.",
+ "covers": [
+  "industry-scoped request (industry never provable): website check still runs",
+  "consumer-only exclusion from 'for homeowners'",
+  "wrong headquarters location",
+  "one domain read once across two LinkedIn pages",
+  "off-industry company rejected on its own evidence"
+ ],
+ "query": "Find up to 5 active B2B companies headquartered in the United States, preferably with 10–200 employees, operating in commercial contracting, industrial distribution, commercial field services or manufacturing, that are actively hiring Account Executives. Companies must be B2B. Exclude consumer-only businesses, companies headquartered outside the US and duplicates.",
+ "requestedCount": 5,
+ "interpretation": {
+  "understanding": {
+   "roles": [
+    {
+     "span": "Account Executives",
+     "title": "account_executive",
+     "family": null,
+     "relation": "required"
+    }
+   ],
+   "role_match": "any",
+   "places": [
+    {
+     "span": "headquartered in the United States",
+     "place": "united states",
+     "other_place": null,
+     "scope": "headquarters",
+     "necessity": "required"
+    }
+   ],
+   "industries": [
+    {
+     "span": "Companies must be B2B",
+     "industry": "B2B",
+     "necessity": "required"
+    },
+    {
+     "span": "commercial contracting",
+     "industry": "commercial contracting",
+     "necessity": "required"
+    },
+    {
+     "span": "industrial distribution",
+     "industry": "industrial distribution",
+     "necessity": "required"
+    },
+    {
+     "span": "commercial field services",
+     "industry": "commercial field services",
+     "necessity": "required"
+    },
+    {
+     "span": "manufacturing",
+     "industry": "manufacturing",
+     "necessity": "required"
+    },
+    {
+     "span": "Exclude consumer-only businesses",
+     "industry": "consumer",
+     "necessity": "excluded"
+    }
+   ],
+   "signals": [
+    {
+     "span": "actively hiring Account Executives",
+     "kind": "hiring",
+     "necessity": "required"
+    }
+   ],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": []
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": 5,
+   "count_span": "up to 5",
+   "person_roles": []
+  },
+  "company_size": {
+   "min": 10,
+   "max": 200,
+   "necessity": "preferred",
+   "span": "preferably with 10–200 employees"
+  },
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [
+  {
+   "slug": "ironline",
+   "name": "Ironline Builders",
+   "site": "ironline.example",
+   "industry": "Construction",
+   "employees": 120,
+   "model": "b2b_service",
+   "page": "Ironline Builders is a commercial general contractor serving developers and property management companies. We build warehouses and offices."
+  },
+  {
+   "slug": "midstate",
+   "name": "Midstate Industrial Supply",
+   "site": "midstate.example",
+   "industry": "Wholesale",
+   "employees": 85,
+   "model": "b2b_service",
+   "page": "Midstate Industrial Supply distributes bearings, power transmission and MRO supplies to manufacturers and maintenance teams."
+  },
+  {
+   "slug": "coolpro",
+   "name": "CoolPro Mechanical",
+   "site": "coolpro.example",
+   "industry": "Facilities Services",
+   "employees": 60,
+   "model": "b2b_service",
+   "page": "CoolPro Mechanical services HVAC and refrigeration systems for commercial buildings, restaurants and hospitals."
+  },
+  {
+   "slug": "vector",
+   "name": "Vector Fabrication",
+   "site": "vector.example",
+   "industry": "Machinery Manufacturing",
+   "employees": 180,
+   "model": "b2b_service",
+   "page": "Vector Fabrication manufactures custom conveyor systems for manufacturers and distributors across the Midwest."
+  },
+  {
+   "slug": "sunny",
+   "name": "Sunny Roofs",
+   "site": "sunnyroofs.example",
+   "industry": "Construction",
+   "employees": 40,
+   "model": "consumer",
+   "page": "Sunny Roofs replaces roofs for homeowners. Get a free quote for your house today."
+  },
+  {
+   "slug": "northbay",
+   "name": "Northbay Steel",
+   "site": "northbay.example",
+   "industry": "Manufacturing",
+   "employees": 150,
+   "model": "b2b_service",
+   "hq": {
+    "text": "Hamilton, Ontario, Canada",
+    "country": "CA",
+    "countryFull": "Canada",
+    "city": "Hamilton"
+   },
+   "page": "Northbay Steel supplies structural steel to contractors and fabricators."
+  },
+  {
+   "slug": "cloudly",
+   "name": "Cloudly CRM",
+   "site": "cloudly.example",
+   "industry": "Software Development",
+   "employees": 90,
+   "model": "b2b_software",
+   "page": "Cloudly CRM is sales software for B2B teams."
+  },
+  {
+   "slug": "atlasforge",
+   "name": "Atlas Forge Manufacturing",
+   "site": "atlasforge.example",
+   "industry": "Manufacturing",
+   "employees": 900,
+   "model": "b2b_service",
+   "page": "Atlas Forge produces forged components for industrial equipment makers."
+  },
+  {
+   "slug": "ironline-builders-inc",
+   "linkedinSlug": "ironline-builders-inc",
+   "name": "Ironline Builders",
+   "site": "ironline.example",
+   "industry": "Construction",
+   "employees": 120,
+   "model": "b2b_service",
+   "page": "Ironline Builders is a commercial general contractor serving developers and property management companies. We build warehouses and offices."
+  }
+ ],
+ "expect": {
+  "planStatus": 200,
+  "planState": "ready",
+  "runStatuses": [
+   200
+  ],
+  "outcome": "needs_verification",
+  "qualified": [],
+  "needsVerification": [
+   "Atlas Forge Manufacturing",
+   "CoolPro Mechanical",
+   "Ironline Builders",
+   "Midstate Industrial Supply",
+   "Vector Fabrication"
+  ],
+  "excluded": 3,
+  "leadsSaved": 5,
+  "actorCalls": 3,
+  "persistFailed": 0,
+  "rejected": [
+   "Cloudly CRM",
+   "Northbay Steel",
+   "Sunny Roofs"
+  ]
+ },
+ "providers": {
+  "duplicateDelivery": true
+ },
+ "allowReviewOnly": true
+}
