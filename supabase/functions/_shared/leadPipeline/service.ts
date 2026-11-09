@@ -48,7 +48,7 @@ import type { ProviderConnectionState } from "../discoveryProviders/routing.ts";
 import type { CheckpointStore } from "./checkpoint.ts";
 import { ExclusionIndex, type ExistingRecord } from "./exclusions.ts";
 import { configureIcp, ICPS, type IcpConfig, type IcpId } from "./icp.ts";
-import { runLeadPipeline, worstCase, type PipelineApprovals, type PipelineRun } from "./pipeline.ts";
+import { runLeadPipeline, worstCase, type PipelineApprovals, type PipelineLead, type PipelineRun } from "./pipeline.ts";
 import { projectPipelineLead, type PipelineRow } from "./projection.ts";
 import type { GenerateJsonFn } from "../intelligence/plannerWrapper.ts";
 import type { ProviderId } from "../discoveryProviders/types.ts";
@@ -115,6 +115,16 @@ export interface PipelineDeps {
   /** Per-workspace company-record cache; null unless DISCOVERY_EVIDENCE_CACHE_ENABLED (needs held migration 20261101120000). */
   evidenceCache?: import("./evidenceCache.ts").EvidenceCache | null;
   now?: () => Date;
+}
+
+/** Rejected companies, for the user: who was ruled out and why (bounded; no provider payloads). */
+export function rejectedSummary(excluded: readonly PipelineLead[], max = 50) {
+  return excluded.slice(0, max).map((l) => {
+    const checks = ((l.qualification?.checks ?? []) as { result?: string; reason?: string }[]).filter((c) => c.result === "fail").map((c) => String(c.reason ?? ""));
+    const reasons = [...checks, ...(l.screeningReasons ?? []), ...(l.rank?.explanation ? [l.rank.explanation] : [])].filter(Boolean);
+    return { leadKey: l.leadKey, name: l.company?.name ?? null, domain: l.company?.domain ?? null, linkedinUrl: l.company?.linkedinUrl ?? null,
+      reasons: [...new Set(reasons)].slice(0, 4) };
+  });
 }
 
 /**
@@ -479,6 +489,8 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       }),
       mergedCompanies: run.mergedCompanies ?? [],
       evidenceRefused: run.evidenceRefused, queue: run.queue, review: run.review, excludedCount: run.excluded.length,
+      // Who was ruled out and why — the count alone hid it from the user.
+      rejected: rejectedSummary(run.excluded),
       // What was actually written (inserted or updated in place), not what was projected.
       written: saved.written,
       ...(persisted ? { persistence: { inserted: persisted.written, updated: persisted.updated, failed: persisted.failed, failures: persisted.rows.filter((x) => x.action === "failed") } } : {}),

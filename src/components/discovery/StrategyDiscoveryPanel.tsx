@@ -204,6 +204,13 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
           {(run.excludedCount > 0 || run.companies.some((c) => c.verdict === 'rejected')) && (
             <div className="mt-2 text-[11px] text-[#8B8F96]" data-testid="strategy-group-rejected">
               Rejected: {run.excludedCount + run.companies.filter((c) => c.verdict === 'rejected').length} {run.excludedCount === 1 ? 'company was' : 'companies were'} ruled out by your requirements (not written to Leads).
+              {run.rejected.length > 0 && (
+                <ul className="mt-1 space-y-0.5" data-testid="strategy-rejected-list">
+                  {run.rejected.map((r) => (
+                    <li key={`${r.name}:${r.domain ?? ''}`}><span className="text-[#ECE9E4]/80">{r.name}</span>{r.domain ? ` (${r.domain})` : ''}{r.reasons.length ? ` — ${r.reasons.join('; ')}` : ''}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
           {run.companies.length === 0 && run.excludedCount === 0 && <div className="mt-1 text-[11px] text-[#8B8F96]">No companies were returned.</div>}

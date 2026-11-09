@@ -27,6 +27,7 @@ import { matchBusinessModel } from "../businessModelMatch.ts";
 import type { EvidenceItem } from "../candidateObservation.ts";
 import type { ActorInvoker } from "../discoveryProviders/adapters/apify.ts";
 import { canonicalDomain } from "./identity.ts";
+import { WEBSITE_PAGES_WORST_USD } from "./apifyInvoker.ts";
 
 export const WEBSITE_PAGES_ACTOR_KEY = "apify_website_content" as const;
 export const BUSINESS_MODEL_PAGES_PER_COMPANY = 3;
@@ -100,7 +101,8 @@ export async function checkBusinessModels(
   } catch (e) {
     // A failed page run cites nothing: every company stays unknown (pending), nothing is retried.
     return { findings: targets.map((t) => ({ companyKey: t.companyKey, status: "unknown", quote: null, url: null, fetchedAt: null, reason: "the website could not be read", item: null })),
-      spentUsd: 0, stopped: `website pages failed (${(e as Error)?.name ?? "error"}); not retried`, runId: null };
+      // A failed run may have billed (the invoker marks it uncertain): report its worst case, never $0.
+      spentUsd: WEBSITE_PAGES_WORST_USD, stopped: `website pages failed (${(e as Error)?.name ?? "error"}); not retried`, runId: null };
   }
   const at = opts.now().toISOString();
   const findings: BusinessModelFinding[] = [];
@@ -160,7 +162,9 @@ export function apifyPageFetcher(invoke: ActorInvoker | null, now: () => Date): 
       if (!owner) continue;
       pages.push({ companyKey: owner.companyKey, url, intent: owner.intent, text: String(r.text), fetchedAt: at });
     }
-    return { pages, runId: run.runId ?? null, spentUsd: run.chargedUsd ?? 0, stopped: null };
+    // The crawler is billed by compute; run-sync returns no charge. Report the run's worst case
+    // (what the ledger settles), never $0 — found with dev:atlas (unknown-actual-spend).
+    return { pages, runId: run.runId ?? null, spentUsd: run.chargedUsd ?? WEBSITE_PAGES_WORST_USD, stopped: null };
   };
 }
 

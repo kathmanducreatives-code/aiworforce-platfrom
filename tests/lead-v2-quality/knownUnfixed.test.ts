@@ -26,5 +26,6 @@ Deno.test("known-unfixed quality cases are exactly the documented ones", async (
     const marked = (src.match(/knownUnfixed:\s*"/g) ?? []).length;
     assertEquals(ignores, marked, `${e.name}: every skipUnfixed() test must carry a knownUnfixed note`);
   }
-  assertEquals(found.sort(), ["RC02 L03"]);
+  // RC02 L03 fixed 2026-11-09 (any-of compiled; test evidence now carries HQ authority).
+  assertEquals(found.sort(), []);
 });

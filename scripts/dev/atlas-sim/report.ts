@@ -65,6 +65,9 @@ export function renderReport(r: SimResult): string {
     if (!arr(b.queue).length) out.push("  (none)");
     out.push("NEEDS VERIFICATION:"); arr<R>(b.review).forEach((c) => out.push(...companyLine(c)));
     if (!arr(b.review).length) out.push("  (none)");
+    out.push("REJECTED (not written to Leads):");
+    arr<R>(b.rejected).forEach((x) => out.push(`  ✗ ${x.name} (${x.domain ?? x.linkedinUrl ?? x.leadKey}) — ${arr<string>(x.reasons).join("; ") || "ruled out"}`));
+    if (!arr(b.rejected).length) out.push(`  (${b.excludedCount ?? 0} excluded${b.excludedCount ? ", names not reported by this backend" : ""})`);
     out.push("requirement verdicts:", ...arr<R>(b.requirementVerdicts).map((v) => `  ${j(v, 200)}`));
     if (b.evidenceRefused) out.push(`evidence refused: ${j(b.evidenceRefused, 300)}`);
     const per = obj(b.persistence);

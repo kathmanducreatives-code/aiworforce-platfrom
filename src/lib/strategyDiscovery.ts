@@ -246,6 +246,8 @@ export interface StrategyRunView {
   steps: { capability: string; provider: string; status: string; reason: string | null }[];
   companies: CompanyRow[];
   excludedCount: number;
+  /** Who was ruled out and why (backend `rejected`); empty on an older backend, which sent only the count. */
+  rejected: { name: string; domain: string | null; reasons: string[] }[];
   written: number | null;
   /** The Workbench plan the saved leads carry (backend `workbench.planId`); null = not linked. */
   workbenchPlanId: string | null;
@@ -312,6 +314,10 @@ export function readStrategyRun(body: unknown): StrategyRunView | null {
     spend: { apifyUsd: usd, leadoceanRecords: lo },
     steps: body.steps.filter(isObj).map((s) => ({ capability: String(s.capability ?? ''), provider: String(s.provider ?? ''), status: String(s.status ?? ''), reason: str(s.reason) })),
     companies, excludedCount: typeof body.excludedCount === 'number' ? body.excludedCount : 0,
+    rejected: (Array.isArray(body.rejected) ? body.rejected : []).filter(isObj).slice(0, 50).map((r) => ({
+      name: str(r.name) ?? str(r.domain) ?? 'Unnamed company', domain: str(r.domain),
+      reasons: (Array.isArray(r.reasons) ? r.reasons : []).filter((x): x is string => typeof x === 'string').slice(0, 4),
+    })),
     written: typeof body.written === 'number' ? body.written : null,
     workbenchPlanId: isObj(body.workbench) && typeof body.workbench.planId === 'string' && body.workbench.planId ? body.workbench.planId : null,
     summary: readProviderRunSummary(body), response: body,

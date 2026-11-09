@@ -11,7 +11,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   compileChain, feasibilityOf, fromMission, funding, hiring, named, ofDim, request, textOf,
 } from "./lib/chain.ts";
-import { qcase, recordedMission, skipUnfixed } from "./lib/cases.ts";
+import { qcase, recordedMission } from "./lib/cases.ts";
 import { bandSatisfies } from "../../supabase/functions/_shared/companySize.ts";
 import { validateLeadMission } from "../../supabase/functions/_shared/leadMission.ts";
 import { isCapabilityId } from "../../supabase/functions/_shared/leadCapabilityGraph.ts";
@@ -211,25 +211,30 @@ Deno.test(qcase({
 
 // ══ RC02 — OR / ANY-OF ═════════════════════════════════════════════════════
 
-Deno.test({ ignore: skipUnfixed(), name: qcase({
+Deno.test(qcase({
   id: "L03", rc: "RC02", boundary: "reconstructed", query: "Find companies in New York or California.",
-  knownUnfixed: "sub-national any-of is not enforced yet; this guards it once it is",
-  // CORRECTED WHILE WRITING THIS TEST: the run report said a California company
-  // FAILS "New York". It does not — `geographyContradicts` compares countries
-  // only, so no sub-national value contradicts another and the AND does not bite
-  // for these two states today. The criteria are still two independent hard
-  // claims; this test guards the any-of once sub-national geography is enforced.
+  // FIXED: the two places compile as ONE any-of group (`any_of: ["New York", "California"]`),
+  // headquarters-scoped (Q3). This test's evidence used to be a bare "California" with no
+  // headquarters authority, which under Q3 cannot prove a HARD location — so it stayed red
+  // after the OR itself was fixed. It now carries the authority a flagged company record
+  // has, and asserts the authority rule and a negative control explicitly.
   current: "two independent HARD geography claims (New York AND California); masked today because geography only contradicts at country level",
   expected: "a company proven in California passes the geography requirement",
-}), fn: () => {
+}), () => {
   const c = compileChain(request("Find companies in New York or California.", {
     filters: [{ field: "geography", op: "in", value: ["New York", "California"] }],
   }));
   assert(c.ok);
-  const graph = buildCompanyEvidenceGraph("ca", [evidence("ca", "geography", "California")]);
-  const e = evaluateEligibility(c.criteria, graph);
-  assertEquals(e.hard_checks.geography, "pass", JSON.stringify(e.checks.filter((x) => x.dimension === "geography")));
-} });
+  const geo = c.criteria.filter((x) => x.dimension === "geography");
+  assertEquals(geo.map((x) => x.any_of), [["New York", "California"], ["New York", "California"]], "one any-of group, not two ANDed requirements");
+  const hq = (value: string) => ({ ...evidence("co", "geography", value),
+    authority: { version: "evidence-authority-v1", claim: "headquarters", level: "proven", rule: "li_record_flagged_headquarters", reason: "flagged" } }) as unknown as EvidenceItem;
+  const verdict = (e: EvidenceItem) => evaluateEligibility(c.criteria, buildCompanyEvidenceGraph("co", [e])).hard_checks.geography;
+  assertEquals(verdict(hq("San Francisco, California, United States")), "pass", "a California HQ satisfies New York OR California");
+  assertEquals(verdict(hq("New York, NY, United States")), "pass", "so does a New York HQ");
+  assertEquals(verdict(hq("Austin, Texas, United States")), "fail", "a Texas HQ satisfies neither");
+  assertEquals(verdict(evidence("co", "geography", "California")), "unknown", "a location without headquarters authority proves no hard place (Q3)");
+});
 
 Deno.test(qcase({
   id: "L04", rc: "RC02", boundary: "reconstructed", query: "Find AI or developer-tools companies.",
