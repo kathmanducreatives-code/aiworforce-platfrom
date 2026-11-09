@@ -43,6 +43,10 @@ import type { MonitoringSubjectInput } from "../_shared/monitoringMission.ts";
 import type { ExistingEvidence } from "../_shared/monitoringPreflight.ts";
 import { clusterSignalEvents } from "../_shared/signalCluster.ts";
 import { judgeCluster, type RelevanceContext } from "../_shared/signalRelevanceJudge.ts";
+import { loadCompanyBrainContext, type LoaderDb } from "../_shared/companyBrainContextLoader.ts";
+import { lisaView } from "../_shared/companyBrainAgentViews.ts";
+import { competitorProposalsFromMonitoring, submitProposals } from "../_shared/lisaBrainProposals.ts";
+import { canonicalSubjectKey } from "../_shared/signalSubject.ts";
 
 /**
  * THE CANDIDATE CEILING FOR ONE MONITORING PASS.
@@ -165,10 +169,17 @@ Deno.serve(async (req) => {
   // field renaming below is a translation, not a second definition: the brain
   // speaks `industries`/`maturity_stage`, the monitoring contract speaks
   // `verticals`/`stages`, and nothing here invents a value the brain lacks.
-  const { data: brainRow } = await admin
-    .from("company_brain").select("profile").eq("workspace_id", workspace_id).maybeSingle();
+  //
+  // Read through the SHARED loader: the profile with approved memory folded in
+  // (explicit exclusions, approved competitors, newer ICP preferences). This
+  // endpoint has already authorized the caller (membership, or the scheduler).
+  const loaded = await loadCompanyBrainContext(admin as unknown as LoaderDb, workspace_id, { skipMembershipCheck: true });
+  const shared = loaded.ok ? loaded.context : null;
+  const lisa = shared
+    ? lisaView(shared, (subjectRows ?? []).map((r) => String(r.identifier ?? "")).filter(Boolean))
+    : null;
   // deno-lint-ignore no-explicit-any
-  const profile = (brainRow?.profile as any) ?? {};
+  const profile = (shared?.effective_profile as any) ?? {};
   const brain = compileCompanyBrainContext({
     workspace_id, profile, signal_preferences: profile?.signal_preferences,
   });
@@ -395,7 +406,13 @@ Deno.serve(async (req) => {
         icp_business_models: brain.icp.business_models ?? [],
         icp_locations: brain.icp.locations ?? [],
         buyer_roles: brain.buyer_personas?.titles ?? [],
-        disqualifiers: brain.disqualifiers?.keywords ?? [],
+        disqualifiers: [...new Set([
+          ...(brain.disqualifiers?.keywords ?? []),
+          ...(lisa?.exclusions.industries ?? []), ...(lisa?.exclusions.companies ?? []),
+          ...(lisa?.exclusions.geographies ?? []), ...(lisa?.exclusions.keywords ?? []),
+        ])],
+        priorities: lisa?.priorities ?? [],
+        competitors: (lisa?.competitors ?? []).map((c) => c.domain ? `${c.name} (${c.domain})` : c.name),
       };
 
       for (const c of touched) {
@@ -498,8 +515,45 @@ Deno.serve(async (req) => {
       .eq("workspace_id", workspace_id).eq("enabled", true);
   }
 
+  // ── LISA → COMPANY BRAIN: PROPOSE, NEVER WRITE ───────────────────────────
+  //
+  // A competitor the team monitors but the Brain does not list becomes a
+  // PENDING proposal with this pass's evidence. A person decides; nothing here
+  // changes what any agent treats as fact. Best-effort: a project without the
+  // memory tables (held migration) just reports the refusal.
+  let brain_proposals: Array<{ fact_key: string; outcome: string }> = [];
+  if (outcome.ok && shared) {
+    try {
+      const { data: compRows } = await admin
+        .from("signal_events")
+        .select("id, subject_key, source_url, observed_at")
+        .eq("workspace_id", workspace_id)
+        .eq("subject_type", "competitor")
+        .order("observed_at", { ascending: false })
+        .limit(200);
+      const bySubject = new Map<string, { event_ids: string[]; source_urls: string[]; observed_at: string }>();
+      for (const r of compRows ?? []) {
+        const k = String(r.subject_key ?? "");
+        const e = bySubject.get(k) ?? { event_ids: [], source_urls: [], observed_at: String(r.observed_at ?? "") };
+        e.event_ids.push(String(r.id));
+        if (typeof r.source_url === "string") e.source_urls.push(r.source_url);
+        bySubject.set(k, e);
+      }
+      const proposals = competitorProposalsFromMonitoring(
+        subjects.map((x) => ({ kind: x.kind, identifier: x.identifier ?? null, label: x.label ?? null })),
+        shared.competitors,
+        (identifier) => bySubject.get(canonicalSubjectKey(identifier) ?? "") ?? null,
+      );
+      brain_proposals = await submitProposals(admin, workspace_id, "lisa", proposals);
+    } catch (e) {
+      console.error("[monitoring][brain-proposals]", e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return json({
     ...outcome,
+    brain_proposals,
+    brain_memory: shared ? { status: shared.status, warnings: shared.warnings } : { status: "unavailable", warnings: [] },
     signals_v2_enabled: v2Enabled,
     workspace_id,
     invoked_by: scheduled ? "scheduler" : "user",

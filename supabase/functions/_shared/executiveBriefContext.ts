@@ -26,7 +26,10 @@ import {
   brainCompanyName, brainCompetitors, brainDescription, brainICP, brainMissingFields, hasUsableBrain,
 } from "./companyBrainContext.ts";
 import { normalizeCompanyBrain } from "./normalizeCompanyBrain.ts";
-import type { BrainSnapshot, ExecItem, ExecutiveContext } from "./executiveBrief.ts";
+import type { BrainSnapshot, ExecItem, ExecutiveContext, MemoryInfluence } from "./executiveBrief.ts";
+import { loadCompanyBrainContext, type LoaderDb, type SharedBrainContext } from "./companyBrainContextLoader.ts";
+import { orionView, type OrionBrainView } from "./companyBrainAgentViews.ts";
+import { canonicalDomain, matchExclusion } from "./brainMemoryModel.ts";
 
 /** The slice of supabase-js this module uses. A fake implements it in tests. */
 export interface BriefQuery extends PromiseLike<{ data: unknown; error: unknown }> {
@@ -47,6 +50,10 @@ export const BRIEF_LIMITS = {
   plans: 10,
   failed_tasks: 15,
   accounts: 60,
+  /** Company Brain memory items (preferences, exclusions, decisions, facts). */
+  memory: 200,
+  revisions: 20,
+  proposals: 50,
 } as const;
 
 export const DEFAULT_WINDOW_DAYS = 7;
@@ -133,7 +140,7 @@ async function read(
   }
 }
 
-export function brainSnapshot(profile: Row | null, onboardingCompleted: boolean): BrainSnapshot {
+export function brainSnapshot(profile: Row | null, onboardingCompleted: boolean, shared: SharedBrainContext | null = null): BrainSnapshot {
   const p = profile ?? {};
   const structured = normalizeCompanyBrain(p);
   const goals = obj(p.goals);
@@ -146,9 +153,16 @@ export function brainSnapshot(profile: Row | null, onboardingCompleted: boolean)
     description: clip(brainDescription(p), 240),
     icp: clip(brainICP(p), 240),
     industries: structured.target_customer.industries.slice(0, 6),
-    competitors: brainCompetitors(p).slice(0, 8),
+    competitors: (shared
+      ? [...new Map([...shared.competitors.map((c) => c.name), ...brainCompetitors(p)]
+        .filter((c) => !shared.retracted_competitors.includes(c.trim().toLowerCase()))
+        .map((c) => [c.trim().toLowerCase(), c])).values()]
+      : brainCompetitors(p)).slice(0, 8),
     goal: clip(goal, 160),
     missing: brainMissingFields(p),
+    goals: (shared?.goals ?? []).map((g) => clip(g.text, 160)!).slice(0, 6),
+    competitor_domains: (shared?.competitors ?? []).map((c) => c.domain).filter((d): d is string => !!d),
+    memory_status: shared ? (shared.warnings.includes("memory_unavailable") ? "unavailable" : "used") : "unavailable",
   };
 }
 
@@ -161,10 +175,35 @@ function industryMatch(industry: string | null, brain: BrainSnapshot): boolean {
   });
 }
 
-function competitorMatch(name: string | null, brain: BrainSnapshot): boolean {
+/** "Rivalco Inc." and "rivalco" are one company; legal suffixes and punctuation are not identity. */
+function companyKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\b(inc|incorporated|ltd|limited|llc|plc|gmbh|ab|as|oy|bv|sa|corp|corporation|co|company)\b/g, " ")
+    .replace(/\s+/g, " ").trim();
+}
+
+function competitorMatch(name: string | null, brain: BrainSnapshot, domains: string[] = []): boolean {
+  if (domains.length && brain.competitor_domains?.length) {
+    if (domains.some((d) => brain.competitor_domains!.includes(d))) return true;
+  }
   if (!name || !brain.competitors.length) return false;
-  const lower = name.toLowerCase();
-  return brain.competitors.some((c) => c.toLowerCase() === lower);
+  const k = companyKey(name);
+  return !!k && brain.competitors.some((c) => companyKey(c) === k);
+}
+
+// Words that carry no intent: a goal and a signal sharing "the" are not related.
+const GOAL_STOP = new Set(["with", "this", "that", "from", "into", "more", "less", "than", "have", "will", "your",
+  "their", "about", "over", "under", "each", "quarter", "month", "year", "week", "customers", "customer", "companies",
+  "company", "clients", "client", "leads", "lead", "win", "land", "grow", "new", "get", "our", "the", "and", "for"]);
+function goalTokens(text: string): string[] {
+  return [...new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !GOAL_STOP.has(w)))];
+}
+/** The first goal an item's text shares a meaningful word with, or null. Deterministic. */
+function goalMatch(text: string, goals: Array<{ text: string; tokens: string[] }>): string | null {
+  if (!goals.length) return null;
+  const words = new Set(text.toLowerCase().split(/[^a-z0-9]+/));
+  for (const g of goals) if (g.tokens.some((t) => words.has(t) || words.has(t.replace(/s$/, "")))) return g.text;
+  return null;
 }
 
 export interface CollectOptions {
@@ -187,9 +226,13 @@ export async function collectExecutiveContext(
 
   // One statement per query (the db-contract schema test parses each
   // `.from(…)…;` statement on its own), then read concurrently.
-  const brainQ = db.from("company_brain")
-    .select("profile, onboarding_completed")
-    .eq("workspace_id", workspaceId).limit(1);
+  // THE COMPANY BRAIN, THROUGH THE SHARED LOADER (profile + approved memory).
+  // The caller (daily-brief) has already checked membership.
+  const brainLoad = loadCompanyBrainContext(db as unknown as LoaderDb, workspaceId, {
+    skipMembershipCheck: true, now: nowDate,
+    limits: { memory: BRIEF_LIMITS.memory, revisions: BRIEF_LIMITS.revisions, proposals: BRIEF_LIMITS.proposals },
+  })
+    .catch(() => null);
   const signalQ = db.from("signal_events")
     .select("id, account_id, lead_candidate_id, signal_type, signal_category, evidence_category, occurred_at, observed_at, confidence, freshness, verification_status, lifecycle_status, normalized_value, dedupe_key, source_url, created_at")
     .eq("workspace_id", workspaceId).eq("lifecycle_status", "active").gte("created_at", since)
@@ -215,8 +258,8 @@ export async function collectExecutiveContext(
     .eq("workspace_id", workspaceId).eq("status", "failed").gte("created_at", since)
     .order("created_at", { ascending: false }).limit(BRIEF_LIMITS.failed_tasks);
 
-  const [brainRows, signalRows, leadRows, contentRows, approvalRows, planRows, failedTaskRows] = await Promise.all([
-    read("company_brain", brainQ, unavailable),
+  const [loaded, signalRows, leadRows, contentRows, approvalRows, planRows, failedTaskRows] = await Promise.all([
+    brainLoad,
     read("signal_events", signalQ, unavailable),
     read("lead_candidates", leadQ, unavailable),
     read("content_item", contentQ, unavailable),
@@ -225,8 +268,20 @@ export async function collectExecutiveContext(
     read("tasks", failedTaskQ, unavailable),
   ]);
 
-  const brainRow = brainRows[0] ?? null;
-  const brain = brainSnapshot(brainRow ? obj(brainRow.profile) : null, brainRow?.onboarding_completed === true);
+  const shared: SharedBrainContext | null = loaded && loaded.ok ? loaded.context : null;
+  if (!shared || shared.warnings.includes("brain_unavailable")) unavailable.push("company_brain");
+  const memory: OrionBrainView | null = shared ? orionView(shared, nowDate) : null;
+  const brain = brainSnapshot(shared && shared.status !== "missing" ? shared.effective_profile : null,
+    shared?.onboarding_completed === true, shared);
+  const goals = (memory?.goals ?? []).map((g) => ({ text: g.text, tokens: goalTokens(g.text) })).filter((g) => g.tokens.length);
+  // What the Brain's memory did to this brief, so ORION can explain it.
+  const influences = new Map<string, MemoryInfluence>();
+  const influence = (fact: string, source: string, effect: string, ref: string) => {
+    const k = `${fact}|${effect}`;
+    const cur = influences.get(k) ?? { fact, source, effect, items: [] };
+    if (!cur.items.includes(ref) && cur.items.length < 10) cur.items.push(ref);
+    influences.set(k, cur);
+  };
 
   // Account names and industries, same workspace only.
   const accountIds = [...new Set([
@@ -247,6 +302,10 @@ export async function collectExecutiveContext(
   for (const r of signalRows) {
     const id = s(r.id);
     if (!id) continue;
+    if (memory?.dismissed_signal_refs.has(id)) {
+      influence("You dismissed this signal", "decision", "left out of the brief", `signal_events:${id}`);
+      continue;
+    }
     const dk = s(r.dedupe_key);
     if (dk) { if (seenDedupe.has(dk)) continue; seenDedupe.add(dk); }
     const nv = obj(r.normalized_value);
@@ -268,8 +327,24 @@ export async function collectExecutiveContext(
     if (r.verification_status === "provider_verified") { score += 10; reasons.push("verified by the data provider"); }
     if (r.freshness === "stale") { score -= 15; reasons.push("source marks it stale"); }
     if (industryMatch(accountIndustry(accountId), brain)) { score += 15; reasons.push("in an industry you target"); }
-    if (competitorMatch(name, brain)) { score += 12; reasons.push("a competitor you track"); }
+    const domains = [
+      canonicalDomain(s(accounts.get(accountId ?? "")?.domain)), canonicalDomain(s(nv.subject_identifier)),
+      canonicalDomain(s(nv.company_domain)), canonicalDomain(s(r.subject_key)?.replace(/-(?=[a-z]+$)/, ".") ?? null),
+    ].filter((x): x is string => !!x);
+    if (competitorMatch(name, brain, domains)) { score += 12; reasons.push("a competitor you track"); }
     if (s(r.lead_candidate_id)) { score += 5; reasons.push("linked to a lead"); }
+    const excluded = memory ? matchExclusion(memory.exclusions, {
+      name, domain: domains[0] ?? null, industry: accountIndustry(accountId), location: s(nv.company_location),
+    }) : null;
+    if (excluded) {
+      score -= 30; reasons.push(`matches an exclusion you set (${excluded})`);
+      influence(`Exclusion: ${excluded}`, "your preference", "ranked lower", `signal_events:${id}`);
+    }
+    const goal = goalMatch(`${title} ${s(nv.description) ?? ""} ${name ?? ""} ${typeLabel}`, goals);
+    if (goal && !excluded) {
+      score += 8; reasons.push(`supports your goal: ${clip(goal, 60)}`);
+      influence(`Goal: ${clip(goal, 80)}`, "Company Brain goals", "ranked higher", `signal_events:${id}`);
+    }
     signals.push({
       kind: "signal", table: "signal_events", id, title,
       occurred_at: when, route: "/signals",
@@ -286,6 +361,10 @@ export async function collectExecutiveContext(
     if (!id) continue;
     if (CLOSED_LEAD.test(String(r.status ?? ""))) continue;
     const accountId = s(r.account_id);
+    if (memory && (memory.rejected_lead_refs.has(id) || (accountId && memory.rejected_lead_refs.has(accountId)))) {
+      influence("You rejected this lead", "decision", "left out of the brief", `lead_candidates:${id}`);
+      continue;
+    }
     let fit = n(r.fit_score);
     if (fit !== null && fit <= 1) fit = fit * 100;
     const pr = String(r.priority ?? "").toLowerCase();
@@ -298,6 +377,19 @@ export async function collectExecutiveContext(
     const age = daysBetween(s(r.updated_at) ?? s(r.created_at), now);
     if (age !== null && age <= 2) score += 10;
     if (industryMatch(accountIndustry(accountId), brain)) { score += 10; reasons.push("in an industry you target"); }
+    const leadAccount = accountId ? accounts.get(accountId) : undefined;
+    const leadExcluded = memory ? matchExclusion(memory.exclusions, {
+      name: s(leadAccount?.name), domain: canonicalDomain(s(leadAccount?.domain)), industry: accountIndustry(accountId),
+    }) : null;
+    if (leadExcluded) {
+      score -= 30; reasons.push(`matches an exclusion you set (${leadExcluded})`);
+      influence(`Exclusion: ${leadExcluded}`, "your preference", "ranked lower", `lead_candidates:${id}`);
+    }
+    const leadGoal = goalMatch(`${s(r.reason) ?? ""} ${s(leadAccount?.name) ?? ""} ${accountIndustry(accountId) ?? ""}`, goals);
+    if (leadGoal && !leadExcluded) {
+      score += 8; reasons.push(`supports your goal: ${clip(leadGoal, 60)}`);
+      influence(`Goal: ${clip(leadGoal, 80)}`, "Company Brain goals", "ranked higher", `lead_candidates:${id}`);
+    }
     const reasonText = clip(s(r.reason), 140);
     if (reasonText) reasons.unshift(reasonText);
     const name = accountName(accountId);
@@ -395,5 +487,7 @@ export async function collectExecutiveContext(
     plans_in_flight,
     failed_work: [...failedByPlan.values()],
     unavailable_sources: unavailable,
+    memory_influences: [...influences.values()],
+    shared_brain: shared,
   };
 }

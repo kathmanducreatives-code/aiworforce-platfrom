@@ -87,3 +87,15 @@ for f in "${held_execution[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done
+
+# The held Company Brain V1 memory schema: profile revisions, memory items,
+# history, agent proposals and the idempotency ledger, written only through
+# SECURITY DEFINER functions (docs/plans/company-brain/V1_TEST_DEPLOYMENT.md).
+# Depends on 20261024120000_company_brain_authorized_writer (in migrations/).
+held_memory=(
+  20261110120000_company_brain_memory.sql
+)
+for f in "${held_memory[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done

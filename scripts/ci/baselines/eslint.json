@@ -231,7 +231,6 @@
  "supabase/functions/_shared/structuredCompanyEnrichment.ts|no-control-regex": 1,
  "supabase/functions/_shared/taskResultMerge.ts|@typescript-eslint/no-explicit-any": 1,
  "supabase/functions/_shared/toolRegistry.ts|@typescript-eslint/no-explicit-any": 22,
- "supabase/functions/daily-brief/index.ts|@typescript-eslint/no-explicit-any": 10,
  "supabase/functions/google-calendar-events/index.ts|@typescript-eslint/no-explicit-any": 1,
  "supabase/functions/mcp/index.ts|no-var": 5,
  "supabase/functions/orchestrate/index.ts|@typescript-eslint/no-explicit-any": 3,

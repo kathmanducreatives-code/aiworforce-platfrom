@@ -34,6 +34,7 @@ import {
   renderExecutiveBriefMarkdown, synthesizeExecutiveBrief, type ExecutiveBrief,
 } from "../_shared/executiveBrief.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
+import { renderBrainMemoryBlock } from "../_shared/companyBrainAgentViews.ts";
 
 /**
  * Skips the AI wording without pretending the provider failed.
@@ -150,10 +151,12 @@ Deno.serve(async (req) => {
   try {
     if (!spend.allowed) throw new SkipPolish();
     if (!worthWording) throw new SkipPolish();
-    const brainRow = await admin.from("company_brain")
-      .select("profile, onboarding_completed").eq("workspace_id", workspaceId).maybeSingle();
-    const profile = (brainRow.data?.profile ?? {}) as Record<string, unknown>;
-    const brainBlock = renderCompanyBrainBlock(profile, !!brainRow.data?.onboarding_completed);
+    // The SAME shared context ORION ranked with (profile + approved memory) —
+    // no second read, so the wording cannot see a different Brain than the ranking.
+    const shared = ctx.shared_brain ?? null;
+    const profile = (shared?.effective_profile ?? {}) as Record<string, unknown>;
+    const brainBlock = renderCompanyBrainBlock(profile, !!shared?.onboarding_completed) +
+      (shared ? "\n\n" + renderBrainMemoryBlock(shared, "orion") : "");
     const facts = modelFacts(deterministic, brainBlock);
     const ai = await generateText({
       taskType: "helper",

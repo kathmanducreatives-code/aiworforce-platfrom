@@ -25,7 +25,14 @@ import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const FUNCTIONS_DIR = "supabase/functions";
-const TEST_REF = "ohsdatpvfdjdemstoiuj";
+// The ISOLATED TEST project. This used to be the production ref under the name
+// TEST_REF, so a run without --dry-run deployed straight to production.
+const TEST_REF = "tlvnfrxzjhsjgdofwehb";
+const PROD_REF = "ohsdatpvfdjdemstoiuj";
+if (TEST_REF === PROD_REF) {
+  console.error("[deploy-lead-intelligence] refusing: TEST_REF is the production project.");
+  process.exit(1);
+}
 
 /** Shared modules that constitute the lead-intelligence architecture. */
 const LEAD_INTELLIGENCE_MODULES = [

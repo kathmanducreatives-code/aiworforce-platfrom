@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- test fakes stand in for supabase-js builders */
 // Audit probes — fictional data, zero network, zero DB, zero provider spend.
 // Each test asserts the CURRENT behaviour the audit claims; a failure here
 // means the audit claim is wrong.
@@ -79,21 +80,27 @@ Deno.test("B: ORION ranks the competitor funding event and names it a tracked co
   console.log("  brief keys:", Object.keys(brief));
 });
 
-Deno.test("B': a competitor stored with a different spelling is NOT recognised (exact-name match only)", async () => {
+// Audit finding B' (exact-name competitor matching) was FIXED by Company Brain V1:
+// ORION now compares names without legal suffixes/punctuation, and by domain.
+Deno.test("B': a competitor stored as 'Rivalco Inc.' IS recognised (fixed in Company Brain V1)", async () => {
   const row = monitorFundingRow(A, "sig-2");
   (row.normalized_value as Row).company_name = "Rivalco Inc.";
   const { db } = fakeDb({ company_brain: [brain(A)], signal_events: [row] });
   const ctx = await collectExecutiveContext(db as any, A, { now: NOW });
   const sig = ctx.signals.find((s: any) => s.id === "sig-2");
-  assert(!sig.reasons.includes("a competitor you track"));
+  assert(sig.reasons.includes("a competitor you track"));
 });
 
-Deno.test("ORION: business goals are read but never influence signal ranking", async () => {
-  const withGoal = fakeDb({ company_brain: [brain(A)], signal_events: [monitorFundingRow(A, "s")] });
-  const noGoal = fakeDb({ company_brain: [brain(A, { goals: {} })], signal_events: [monitorFundingRow(A, "s")] });
+// Audit finding "goals never influence ranking" was FIXED by Company Brain V1.
+Deno.test("ORION: a stated goal now raises a related item, with the reason shown", async () => {
+  const related = monitorFundingRow(A, "s");
+  (related.normalized_value as Row).description = "Rivalco expands into logistics automation";
+  const withGoal = fakeDb({ company_brain: [brain(A)], signal_events: [related] });
+  const noGoal = fakeDb({ company_brain: [brain(A, { goals: {} })], signal_events: [related] });
   const a = await collectExecutiveContext(withGoal.db as any, A, { now: NOW });
   const b = await collectExecutiveContext(noGoal.db as any, A, { now: NOW });
-  assertEquals(a.signals[0].score, b.signals[0].score);
+  assert(a.signals[0].score > b.signals[0].score);
+  assert(a.signals[0].reasons.some((r: string) => r.startsWith("supports your goal")));
 });
 
 Deno.test("A: ORION context never includes another workspace's rows", async () => {

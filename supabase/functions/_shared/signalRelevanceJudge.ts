@@ -42,6 +42,10 @@ export interface RelevanceContext {
   icp_locations?: readonly string[];
   buyer_roles?: readonly string[];
   disqualifiers?: readonly string[];
+  /** Approved business goals and priorities (Company Brain). Emitted only when present. */
+  priorities?: readonly string[];
+  /** Tracked competitors (Company Brain, approved). Emitted only when present. */
+  competitors?: readonly string[];
 }
 
 const RESPONSE_SCHEMA = {
@@ -120,6 +124,10 @@ export function buildRelevancePrompt(
       icp_locations: [...(ctx.icp_locations ?? [])],
       buyer_roles: [...(ctx.buyer_roles ?? [])],
       disqualifiers: [...(ctx.disqualifiers ?? [])],
+      // Additive and only when known, so a workspace without them sees the
+      // exact prompt it saw before Company Brain V1.
+      ...(ctx.priorities?.length ? { priorities: [...ctx.priorities] } : {}),
+      ...(ctx.competitors?.length ? { competitors: [...ctx.competitors] } : {}),
     },
     situation: {
       subject_type: cluster.subject_type,

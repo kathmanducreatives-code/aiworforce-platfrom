@@ -25,6 +25,7 @@ import { saveCompanyBrainPatch } from '@/lib/companyBrainSave';
 import { describeUnsaved, keepUnsaved, type UnsavedEdit } from '@/lib/companyBrainUnsaved';
 import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { BrainEditableContext } from '@/components/company-brain/brainEditable';
+import { BrainMemoryPanel } from '@/components/company-brain/memory/BrainMemoryPanel';
 
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
@@ -258,6 +259,10 @@ export default function CompanyBrainDashboard() {
         {(!error || data) && <BrainEditableContext.Provider value={canEditBrain}><BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} syncing={isRefreshing} onEdit={setOpenSection} onRestart={scope.kind === 'agency' ? () => setRestartOpen(true) : undefined} onStartSetup={scope.kind === 'agency' ? () => navigate('/onboarding/company-brain') : undefined} onSaveFields={saveFields}
           clientName={brainScope.currentClient?.name ?? null}
           scopeSwitcher={brainScope.available ? <BrainScopeSwitcher scope={scope} clients={brainScope.clients} onSelect={brainScope.select} disabled={openSection !== null} /> : undefined} /></BrainEditableContext.Provider>}
+        {/* Company memory: decisions, preferences, approved facts, agent
+            suggestions and history. The agency Brain only — client Brains are
+            a separate, held feature with their own store. */}
+        {scope.kind === 'agency' && workspaceId && <BrainMemoryPanel workspaceId={workspaceId} canEdit={canEditBrain} />}
       </div>
 
       <CompanyBrainEditDrawer

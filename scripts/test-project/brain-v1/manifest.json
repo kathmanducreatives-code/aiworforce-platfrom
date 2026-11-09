@@ -1,0 +1,38 @@
+{
+  "name": "Company Brain V1 — TEST deployment manifest",
+  "status": "PREPARED, NOT EXECUTED. Every step needs explicit owner approval.",
+  "target": {
+    "ref": "tlvnfrxzjhsjgdofwehb",
+    "refused_refs": ["ohsdatpvfdjdemstoiuj", "wqnigjhcwjxtmordrwno", "zbwsbnqqpkvdhqwavjke"],
+    "blocker": "This project carries the always-enabled discovery_test_no_company_brain trigger (scripts/test-project/sql/20261017120000_discovery_test_no_company_brain.sql), so every Company Brain write is refused here by design. Either approve a separate Brain TEST project (recommended), or approve a reviewed removal of that guard on this project. Until then preflight check P1 fails and the plan stops."
+  },
+  "preflight": "scripts/test-project/brain-v1/preflight.sql",
+  "migrations": [
+    { "order": 1, "file": "supabase/migrations/20261023120000_company_brain_server_writes_only.sql", "kind": "shipped", "verify_absent": "policy company_brain_member_insert exists" },
+    { "order": 2, "file": "supabase/migrations/20261024120000_company_brain_authorized_writer.sql", "kind": "shipped", "requires": [1], "verify_absent": "function company_brain_authorized_write missing" },
+    { "order": 3, "file": "supabase/migrations-held/20261110120000_company_brain_memory.sql", "kind": "held", "requires": [2] }
+  ],
+  "excluded_migrations": [
+    { "file": "supabase/migrations/20260825140000_monitoring_cron.sql", "reason": "schedules net.http_post to the literal PRODUCTION URL; never apply to TEST as-is (build-test-schema.sh detaches it)" },
+    { "file": "supabase/migrations/20260826170000_resume_stalled_leads_cron.sql", "reason": "cron with a hosted URL; not needed for Brain V1" }
+  ],
+  "functions": [
+    { "name": "company-brain-memory", "why": "new: the only browser write path for memory" },
+    { "name": "generate-company-brain-draft", "why": "Brain profile writer (role-checked, authorized RPC)" },
+    { "name": "setup-company-brain", "why": "Brain provisioning writer" },
+    { "name": "daily-brief", "why": "ORION reads through the shared loader (redeploy)" },
+    { "name": "run-monitoring-scan", "why": "LISA reads through the loader and proposes competitors; deploying does not invoke it" },
+    { "name": "run-radar-scan", "why": "LISA radar reads through the loader; deploying does not invoke it (an invocation makes paid Firecrawl calls)" },
+    { "name": "run-agent", "why": "LYRA content path; shared with ATLAS — deploy only after the ATLAS track agrees", "coordination": "atlas" }
+  ],
+  "secrets_and_flags": [
+    { "name": "SIGNALS_V2", "value": "true", "why": "only for LISA monitoring writes; not required for Brain V1" }
+  ],
+  "frontend": { "VITE_SUPABASE_URL": "https://tlvnfrxzjhsjgdofwehb.supabase.co", "note": "publishable key of the TEST project; never the production one" },
+  "rollback": [
+    "drop the objects listed in the held migration's Rollback header (memory tables, functions, trigger), in one transaction",
+    "re-apply 20261024120000_company_brain_authorized_writer.sql (removes the two set_config lines; harmless if left)",
+    "redeploy the previous builds of the functions above (supabase functions deploy at the prior commit)",
+    "the shared loader tolerates absent memory tables: functions keep working on the profile alone (warning memory_unavailable)"
+  ]
+}

@@ -40,6 +40,8 @@ import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
 import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { renderContentBrain, type RecentContent } from "../_shared/contentBrainContext.ts";
+import { loadCompanyBrainContext, type LoaderDb } from "../_shared/companyBrainContextLoader.ts";
+import { renderBrainMemoryBlock } from "../_shared/companyBrainAgentViews.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
 import { loadV2OwnedTaskIds, loadV2OwnedTaskIdsStrict } from "../_shared/leadMissionV2Request.ts";
@@ -1790,11 +1792,26 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           };
         });
     } catch { /* recent content is context, never a reason to fail the draft */ }
-    brainBlock = renderContentBrain(brainContextAllowed ? brain : null, {
+    // LYRA reads the SHARED context: the profile with approved memory folded in
+    // (content tone and restrictions, approved products/facts), plus a memory
+    // block that lists the only extra claims content may make. The workspace
+    // guard above has already authorized this request. Lead paths keep reading
+    // `brain` exactly as before — this changes the content branch only.
+    let contentProfile: CompanyBrain = brain;
+    let memoryBlock = "";
+    try {
+      const loaded = await loadCompanyBrainContext(supabase as unknown as LoaderDb, workspace_id, { skipMembershipCheck: true });
+      if (loaded.ok && loaded.context.status !== "missing") {
+        contentProfile = loaded.context.effective_profile;
+        memoryBlock = renderBrainMemoryBlock(loaded.context, "lyra");
+      }
+    } catch { /* the stored profile still drafts; memory is additive context */ }
+    const useBrain = contentLoop.use_company_brain !== false;
+    brainBlock = renderContentBrain(brainContextAllowed ? contentProfile : null, {
       onboardingCompleted: brainContextAllowed,
-      useCompanyBrain: contentLoop.use_company_brain !== false,
+      useCompanyBrain: useBrain,
       recent,
-    });
+    }) + (brainContextAllowed && useBrain && memoryBlock ? `\n\n${memoryBlock}` : "");
   }
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${getAgentorySystemPrompt({
     taskType: "agent_execution",

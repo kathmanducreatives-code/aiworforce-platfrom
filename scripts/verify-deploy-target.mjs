@@ -15,10 +15,16 @@
 //
 // Exits non-zero on any mismatch. READ-ONLY: it deploys nothing.
 
+// Two projects again: production, and the isolated TEST project. A role name
+// must resolve to ITS project — `--expect test` against production fails.
 const CANONICAL = {
   production: "ohsdatpvfdjdemstoiuj",
-  test: "ohsdatpvfdjdemstoiuj",
+  test: "tlvnfrxzjhsjgdofwehb",
 };
+if (CANONICAL.test === CANONICAL.production) {
+  console.error("[verify-deploy-target] FAIL: the TEST ref equals production; refusing every target.");
+  process.exit(1);
+}
 
 function arg(name) {
   const i = process.argv.indexOf(name);
@@ -60,18 +66,16 @@ if (environment === "unknown") {
   console.error(`[verify-deploy-target] FAIL: unknown project ref ${projectRef ?? "(none)"} — not a canonical environment.`);
   process.exit(1);
 }
-// The old check refused a ref whose environment did not match `--expect`. That
-// guarded against deploying test code to production while both existed. With one
-// project it would reject every `--expect test` invocation for no benefit, so
-// what is enforced instead is the property that still protects a deploy: the
-// target must BE the canonical project. The two retired refs — and anything
-// else — fall through to `unknown` above and exit non-zero.
+// The target must BE the project the caller named. With an isolated TEST
+// project this is the check that stops "deploy to test" reaching production.
+// The two retired refs — and anything else — already fell through to `unknown`.
 if (!isCanonical) {
-  console.error(`[verify-deploy-target] FAIL: ${projectRef} is not the canonical project.`);
+  console.error(`[verify-deploy-target] FAIL: ${projectRef} is not a canonical project.`);
+  process.exit(1);
+}
+if (environment !== expected) {
+  console.error(`[verify-deploy-target] FAIL: ${projectRef} is ${environment}, but ${expected} was expected.`);
   process.exit(1);
 }
 
-console.log(
-  `[verify-deploy-target] OK: target is the canonical project ${projectRef}` +
-  ` (requested as ${expected}; one project serves both roles).`,
-);
+console.log(`[verify-deploy-target] OK: target ${projectRef} is the ${expected} project.`);
