@@ -34,7 +34,7 @@ import type { EvidenceItem } from "../candidateObservation.ts";
 import type { Eligibility } from "../candidateEligibility.ts";
 import { classifyDecisionMakerRole } from "../decisionMaker/roleFamily.ts";
 import { ledgeredInvoker } from "./apifyInvoker.ts";
-import { collapseDuplicateLeads, type MergedLead } from "./identity.ts";
+import { canonicalDomain, collapseDuplicateLeads, type MergedLead } from "./identity.ts";
 import { apifyPageFetcher, checkBusinessModels, type BusinessModelFinding, type Grounder } from "./businessModelCheck.ts";
 import { COMPANY_EMPLOYEES_ACTOR_KEY, companyEmployeesInput, discoverHiringCompanies, discoverPostingCompanies, peopleFromEmployeeRows, slugOf } from "./apifyDiscovery.ts";
 import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
@@ -434,8 +434,25 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
     const required = String(spec.requirements.criteria.find((c) => c.kind === "hard" && c.dimension === "business_model")?.value ?? "B2B");
     const eligibleNow = leads.filter((l) => l.shared?.eligibility === "eligible").length;
     const need = Math.max(0, spec.requestedCount - eligibleNow);
-    const open = leads.filter((l) => l.shared?.eligibility === "pending" && (l.shared.gaps ?? []).length === 1 && l.shared.gaps[0] === "business_model" && !(l.shared.disproven ?? []).length && l.company.domain.length);
-    const targets = open.slice(0, Math.min(Math.ceil(need * 1.5), Math.floor(bmStep.maxItems / 3))).map((l) => ({
+    // An industry gap never closes on any strategy (strategy.ts: "a taxonomy label proves no
+    // industry"), so it must not hide a company from the one check that CAN still decide it:
+    // pilot rehearsal 2026-11-09 — an industry-scoped request left every company open on
+    // [business_model, industry], the website step never ran, and a homeowner-only roofer was
+    // saved as "needs verification" instead of being rejected as consumer.
+    const closable = (g: string) => g !== "industry";
+    const open = leads.filter((l) => {
+      const gaps = (l.shared?.gaps ?? []).filter(closable);
+      return l.shared?.eligibility === "pending" && gaps.length === 1 && gaps[0] === "business_model" && !(l.shared.disproven ?? []).length && l.company.domain.length;
+    });
+    // ONE SITE, ONE READ. Two records of one company (two LinkedIn pages, one domain) are merged
+    // only after this step, so without this both were targeted: the same three pages were bought
+    // twice and credited to one record, and the record that survived the merge read "no readable
+    // first-party page" (pilot rehearsal 2026-11-09). Read each domain once; credit every record on it.
+    const domainOf = (l: VerifiedLead) => canonicalDomain(l.company.domain[0].value) ?? l.company.domain[0].value;
+    const sameSite = new Map<string, string[]>();
+    for (const l of open) sameSite.set(domainOf(l), [...(sameSite.get(domainOf(l)) ?? []), l.company.key]);
+    const onePerSite = open.filter((l) => sameSite.get(domainOf(l))![0] === l.company.key);
+    const targets = onePerSite.slice(0, Math.min(Math.ceil(need * 1.5), Math.floor(bmStep.maxItems / 3))).map((l) => ({
       companyKey: l.company.key, name: l.company.name[0]?.value ?? null, domain: l.company.domain[0].value,
       linkedinUrl: l.company.linkedinUrl[0]?.value ?? null,
       description: canonical.facts.get(`li:${slugOf(l.company.linkedinUrl[0]?.value) ?? ""}`)?.description ?? null,
@@ -447,10 +464,13 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
       : await checkBusinessModels(targets, required, { fetchPages: apifyPageFetcher(apify, now), ground },
         { maxUsd: budget, idempotencyKey: `${mission}:apify_website_content:business_model`, missionId: mission, now });
     apifySpent += res.spentUsd;
+    const siteOfKey = new Map(targets.map((t) => [t.companyKey, canonicalDomain(t.domain) ?? t.domain]));
     for (const f of res.findings) {
       const { item, ...shown } = f;
-      businessModel.set(f.companyKey, shown);
-      if (item) siteEvidence.set(f.companyKey, [item]);
+      for (const key of sameSite.get(siteOfKey.get(f.companyKey) ?? "") ?? [f.companyKey]) {
+        businessModel.set(key, { ...shown, companyKey: key });
+        if (item) siteEvidence.set(key, [item]);
+      }
     }
     steps.push({ capability: bmStep.capability, provider: "apify",
       status: !targets.length ? "not_run" : res.stopped ? "failed" : "completed",
