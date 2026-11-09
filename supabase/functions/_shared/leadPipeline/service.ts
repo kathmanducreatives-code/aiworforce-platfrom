@@ -117,6 +117,23 @@ export interface PipelineDeps {
   now?: () => Date;
 }
 
+/**
+ * What saving did to the run's status. persistRows reports per-row failures instead of
+ * throwing; ignoring them made a run that saved NOTHING report "completed". All rows
+ * failed → "failed"; some → "partial"; the response always carries the failures.
+ */
+export function saveOutcome(runStatus: string, runReason: string | null, persisted: PersistResult | void, attempted: number) {
+  const failed = persisted ? persisted.failed : 0;
+  const written = persisted ? persisted.written + persisted.updated : attempted;
+  if (!failed) return { status: runStatus, reason: runReason, written, failed: 0 };
+  const all = failed >= attempted;
+  return {
+    status: all ? "failed" : runStatus === "completed" ? "partial" : runStatus,
+    reason: all ? `none of the ${attempted} result(s) could be saved` : `${failed} of ${attempted} result(s) could not be saved${runReason ? `; ${runReason}` : ""}`,
+    written, failed,
+  };
+}
+
 const ADMIN = new Set(["owner", "admin"]);
 const SIGNAL_PLAN = { collect: { companyPosts: true, jobs: true, founderPosts: false }, maxPostsPerSubject: 5, maxJobsPerCompany: 5, windowDays: 60 };
 
@@ -165,13 +182,15 @@ export async function handleLeadPipeline(req: PipelineRequest, d: PipelineDeps):
   const run: PipelineRun = await runLeadPipeline({ ...base, approvals: { ...approvals, discovery } });
   if (run.status === "blocked") return { status: 409, body: { error: run.reason } };
   const rows = [...run.queue, ...run.review].map((l) => projectPipelineLead(l, { workspaceId: req.workspaceId, values: run.contactValues })).filter((x): x is PipelineRow => !!x);
-  await d.persist(rows, rows.filter((r) => r.contact?.phone).length);
+  const persistedRows = await d.persist(rows, rows.filter((r) => r.contact?.phone).length);
+  const saved = saveOutcome(run.status, run.reason ?? null, persistedRows, rows.length);
   return {
     status: 200,
     body: {
-      status: run.status, reason: run.reason, spend: run.spend, funnel: run.funnel, yield: run.yield, estimates: run.estimates,
+      status: saved.status, reason: saved.reason, spend: run.spend, funnel: run.funnel, yield: run.yield, estimates: run.estimates,
       discovery: run.discovery, canonical: run.canonical, signals: run.signals && { spentUsd: run.signals.spentUsd, stopped: run.signals.stopped }, phones: run.phones,
-      queue: run.queue, review: run.review, excludedCount: run.excluded.length, written: rows.length,
+      queue: run.queue, review: run.review, excludedCount: run.excluded.length, written: saved.written,
+      ...(persistedRows ? { persistence: { inserted: persistedRows.written, updated: persistedRows.updated, failed: persistedRows.failed, failures: persistedRows.rows.filter((x) => x.action === "failed") } } : {}),
     },
   };
 }
@@ -439,10 +458,11 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   } catch (e) { console.error("[lead-pipeline] run plan not recorded", { name: (e as Error)?.name }); runPlanId = null; }
   const projected = [...run.queue, ...run.review].map((l) => projectPipelineLead(l, { workspaceId: req.workspaceId, values: [], planId: runPlanId })).filter((x): x is PipelineRow => !!x);
   const persisted = await d.persist(projected, 0);
+  const saved = saveOutcome(run.status, run.reason ?? null, persisted, projected.length);
   return {
     status: 200,
     body: {
-      status: run.status, reason: run.reason, strategy: run.strategy, steps: run.steps, spend: run.spend, limitations: run.limitations,
+      status: saved.status, reason: saved.reason, strategy: run.strategy, steps: run.steps, spend: run.spend, limitations: run.limitations,
       // Where the saved leads appear: the Workbench Leads table for this plan (null = not linked).
       workbench: runPlanId ? { planId: runPlanId } : null,
       // What the REQUEST got (outcome.ts): only qualified companies count toward the number asked for.
@@ -455,11 +475,12 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
         openRequirements: [...new Set(run.review.flatMap((l) => l.qualification?.gaps ?? []))].map((g) => g.replace(/_/g, " ")),
         // run-sync reports no charge: the ledger settles the worst case for the items returned.
         spend: { ...run.spend, basis: "estimate" },
+        saved: { failed: saved.failed, attempted: projected.length },
       }),
       mergedCompanies: run.mergedCompanies ?? [],
       evidenceRefused: run.evidenceRefused, queue: run.queue, review: run.review, excludedCount: run.excluded.length,
       // What was actually written (inserted or updated in place), not what was projected.
-      written: persisted ? persisted.written + persisted.updated : projected.length,
+      written: saved.written,
       ...(persisted ? { persistence: { inserted: persisted.written, updated: persisted.updated, failed: persisted.failed, failures: persisted.rows.filter((x) => x.action === "failed") } } : {}),
       // Per provider and combined: discovered, unique, qualified, pending, rejected, spend, errors.
       providerSummary: summarizeProviderRun(run),

@@ -31,11 +31,34 @@ export interface MissionOutcome {
   nextStep: string | null;
   /** The spend the run reports, labelled by its basis (an estimate is never presented as billed). */
   spend: { apifyUsd: number; leadoceanRecords: number; basis: "estimate" | "provider_reported" | "none" };
+  /** Results that could NOT be saved to Leads (present only when there are any). */
+  notSaved?: number;
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-export function missionOutcome(i: {
+/**
+ * The outcome of the REQUEST, including whether its results were saved. A run that found
+ * companies but saved none of them did not deliver anything to the user: it is `failed`,
+ * never `completed` (found 2026-11-09 with the ATLAS simulator, `database-write-failure`).
+ * A run that saved only some says how many were lost in its summary.
+ */
+export function missionOutcome(i: Parameters<typeof decideOutcome>[0] & {
+  /** Rows that failed to save, and how many were attempted (persistRows' report). */
+  saved?: { failed: number; attempted: number };
+}): MissionOutcome {
+  const o = decideOutcome(i);
+  const failed = Math.max(0, i.saved?.failed ?? 0), attempted = Math.max(0, i.saved?.attempted ?? 0);
+  if (!failed || o.status === "blocked" || o.status === "cancelled") return o;
+  if (failed >= attempted) {
+    return { ...o, status: "failed", notSaved: failed,
+      summary: `None of the ${plural(failed, "result")} could be saved, so nothing reached your Leads (the run itself found them).`,
+      nextStep: "Nothing is retried automatically, and the provider calls are already spent. Fix the save error, then run again." };
+  }
+  return { ...o, notSaved: failed, summary: `${o.summary} ${failed} of ${attempted} results could not be saved to Leads.` };
+}
+
+function decideOutcome(i: {
   requested: number | null;
   qualified: number; pending: number; rejected: number;
   /** Likely matches the user permitted to count (acceptLikely); they are NOT in `pending`. */

@@ -68,6 +68,13 @@ export interface GoldenMission {
   maxCandidates?: number;
   /** Ceiling overrides, as the engine receives them (`resolveCeilings`). */
   ceilings?: Partial<Ceilings>;
+  /**
+   * Judge geography under TODAY's compiler (Q3: an unscoped hard geography is
+   * headquarters) instead of the recorded PRESENCE reading `asRecorded` applies to
+   * fixtures that predate it. Off by default so every existing golden replay is
+   * unchanged; a quality test of headquarters behaviour turns it on (T07).
+   */
+  strictScope?: boolean;
 }
 
 export interface GoldenSlice {
@@ -181,7 +188,7 @@ export async function runGoldenMission(g: GoldenMission): Promise<GoldenRun> {
     records = companies.map(toResumeRecord);
 
     // ── 4. canonical view ──
-    view = canonicalView({ companies }, mission, missionId, plan.entry_capability ?? "general_company_discovery");
+    view = canonicalView({ companies }, mission, missionId, plan.entry_capability ?? "general_company_discovery", g.strictScope === true);
     const p5 = decisionSummary(view.counts);
 
     // ── 5. continuation, assembled as run-agent assembles it ──

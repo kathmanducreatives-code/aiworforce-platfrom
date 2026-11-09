@@ -1,0 +1,171 @@
+{
+ "name": "result-limit",
+ "description": "Twelve companies discovered for a request of 3: the Actor's maxItems bounds delivery.",
+ "covers": [
+  "pagination and result limits"
+ ],
+ "query": "Find 3 US companies that must be B2B and are actively hiring Account Executives.",
+ "requestedCount": 3,
+ "interpretation": {
+  "understanding": {
+   "roles": [
+    {
+     "span": "Account Executives",
+     "title": "account_executive",
+     "family": null,
+     "relation": "required"
+    }
+   ],
+   "role_match": "any",
+   "places": [
+    {
+     "span": "US",
+     "place": "united states",
+     "other_place": null,
+     "scope": "headquarters",
+     "necessity": "required"
+    }
+   ],
+   "industries": [
+    {
+     "span": "must be B2B",
+     "industry": "B2B",
+     "necessity": "required"
+    }
+   ],
+   "signals": [
+    {
+     "span": "actively hiring Account Executives",
+     "kind": "hiring",
+     "necessity": "required"
+    }
+   ],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": []
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": 3,
+   "count_span": "3",
+   "person_roles": []
+  },
+  "company_size": null,
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [
+  {
+   "slug": "co0",
+   "name": "Example Co 0",
+   "site": "co0.example",
+   "page": "Example Co 0 sells software to businesses.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "co1",
+   "name": "Example Co 1",
+   "site": "co1.example",
+   "page": "Example Co 1 sells software to businesses.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "co2",
+   "name": "Example Co 2",
+   "site": "co2.example",
+   "page": "Example Co 2 sells software to businesses.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "co3",
+   "name": "Example Co 3",
+   "site": "co3.example",
+   "page": "Example Co 3 sells software to businesses.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "co4",
+   "name": "Example Co 4",
+   "site": "co4.example",
+   "page": "Example Co 4 sells software to businesses.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "co5",
+   "name": "Example Co 5",
+   "site": "co5.example",
+   "page": "Example Co 5 sells software to businesses.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "co6",
+   "name": "Example Co 6",
+   "site": "co6.example",
+   "page": "Example Co 6 sells software to businesses.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "co7",
+   "name": "Example Co 7",
+   "site": "co7.example",
+   "page": "Example Co 7 sells software to businesses.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "co8",
+   "name": "Example Co 8",
+   "site": "co8.example",
+   "page": "Example Co 8 sells software to businesses.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "co9",
+   "name": "Example Co 9",
+   "site": "co9.example",
+   "page": "Example Co 9 sells software to businesses.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "co10",
+   "name": "Example Co 10",
+   "site": "co10.example",
+   "page": "Example Co 10 sells software to businesses.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "co11",
+   "name": "Example Co 11",
+   "site": "co11.example",
+   "page": "Example Co 11 sells software to businesses.",
+   "model": "b2b_software"
+  }
+ ],
+ "expect": {
+  "planStatus": 200,
+  "planState": "ready",
+  "runStatuses": [
+   200
+  ],
+  "outcome": "needs_verification",
+  "needsVerification": [
+   "Example Co 0",
+   "Example Co 1",
+   "Example Co 10",
+   "Example Co 11",
+   "Example Co 2",
+   "Example Co 3",
+   "Example Co 4",
+   "Example Co 5",
+   "Example Co 6",
+   "Example Co 7",
+   "Example Co 8",
+   "Example Co 9"
+  ],
+  "excluded": 0,
+  "leadsSaved": 12,
+  "actorCalls": 3,
+  "persistFailed": 0,
+  "qualified": []
+ }
+}

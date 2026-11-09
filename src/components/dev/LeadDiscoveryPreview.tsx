@@ -6,20 +6,23 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { StrategyDiscoveryPanel } from '@/components/discovery/StrategyDiscoveryPanel';
+import { localSimulation } from '@/components/discovery/devSimulation';
 
 const QUERY = 'Find 5 US B2B companies actively hiring Account Executives.';
 
 export function LeadDiscoveryPreview() {
   const [open, setOpen] = useState(true);
+  const query = localSimulation?.query ?? QUERY;
   if (!open) return null;
   return (
     <div className="fixed bottom-14 left-3 z-[60] w-[460px] max-h-[80vh] overflow-auto rounded-xl border border-white/10 bg-[#0E1012]/95 p-3 text-[12px] shadow-2xl" data-testid="lead-discovery-preview">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-amber-200/80">Dev preview · simulated</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-200" data-testid="simulated-banner">Simulated data — no external providers called</span>
         <button type="button" onClick={() => setOpen(false)} className="ml-auto text-[#8B8F96] hover:text-[#ECE9E4]" aria-label="Close preview"><X className="h-3.5 w-3.5" /></button>
       </div>
-      <div className="mt-1 text-[#ECE9E4]">{QUERY}</div>
-      <StrategyDiscoveryPanel messageId="dev-preview" query={QUERY} requestedCount={5} />
+      <div className="mt-0.5 text-[10.5px] text-amber-200/70">{localSimulation?.scenario ? `Scenario: ${localSimulation.scenario} (npm run dev:atlas)` : 'Committed simulation (scripts/dev/mrle-simulation.ts)'}</div>
+      <div className="mt-1 text-[#ECE9E4]">{query}</div>
+      <StrategyDiscoveryPanel messageId="dev-preview" query={query} requestedCount={5} />
     </div>
   );
 }

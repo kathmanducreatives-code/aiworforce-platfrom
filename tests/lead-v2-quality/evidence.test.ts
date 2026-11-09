@@ -6,7 +6,8 @@
 // calls, zero credits, zero production writes.
 //
 // Moved from the quality run's scratchpad probes (2026-10-06). Every test asserts
-// the EXPECTED behaviour; T02 and T07 fail on code with the root cause, the rest
+// the EXPECTED behaviour; T02 and T07 failed on code with the root cause (both fixed
+// since: T07 by Q3, observed with strictScope below), the rest
 // passed in the run and are kept as guards.
 //
 // Not encoded: T08 (size from `employeeCount` alone stays unknown) — the run
@@ -62,11 +63,21 @@ Deno.test(qcase({
   current: "geography PASS → qualified, quota_met → completed: a Canadian-headquartered company satisfied a hard US requirement",
   expected: "hard geography reads the headquarters: geography is not pass and the company is not qualified",
 }), async () => {
+  // Judged under TODAY's compiler (strictScope): Q3 compiles "hard US" as headquarters.
+  // The golden replay's default reading is the recorded PRESENCE of pre-Q3 fixtures
+  // (asRecorded), which is what kept this case red after production was fixed.
+  const strict = (g: ReturnType<typeof variant>) => { g.strictScope = true; return g; };
   const loc = [{ parsed: { text: "Toronto, ON, Canada", countryFull: "Canada" }, country: "CA", headquarter: true },
     { parsed: { text: "Austin, TX, United States", countryFull: "United States" }, country: "US", headquarter: false }];
-  const o = await observe(variant("non-hq-us", (rs) => profileRows(rs, (x) => ({ ...x, locations: loc }))));
+  const o = await observe(strict(variant("non-hq-us", (rs) => profileRows(rs, (x) => ({ ...x, locations: loc })))));
   assert(o.hard?.geography !== "pass", `geography ${o.hard?.geography}`);
   assert(!o.qualified.includes(ACME), `qualified: ${o.qualified}`);
+  // CONTROL: the same company with its US headquarters flagged still passes, so the
+  // case above fails on the headquarters, not because geography became unprovable.
+  const usHq = [{ parsed: { text: "Austin, TX, United States", countryFull: "United States" }, country: "US", headquarter: true },
+    { parsed: { text: "Toronto, ON, Canada", countryFull: "Canada" }, country: "CA", headquarter: false }];
+  const control = await observe(strict(variant("us-hq", (rs) => profileRows(rs, (x) => ({ ...x, locations: usHq })))));
+  assertEquals(control.hard?.geography, "pass", "a US-headquartered company passes hard US geography");
 });
 
 Deno.test(qcase({

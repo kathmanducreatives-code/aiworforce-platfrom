@@ -44,3 +44,6 @@ artifacts/lead-quality-benchmark/
 AgriDrone-Guardian/
 .test-e.lock
 .phone-test-p1.lock
+
+# Local ATLAS simulator output (npm run dev:atlas); never committed
+dev-sim/
