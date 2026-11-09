@@ -974,7 +974,7 @@
      "capability": "apify.website_business_model",
      "provider": "apify",
      "status": "completed",
-     "reason": "1 verified, 1 likely, 1 unknown, 1 not or mixed",
+     "reason": "1 verified, 0 likely, 1 unknown, 2 not or mixed",
      "spend": {
       "leadoceanRecords": 0,
       "apifyUsd": 0.01
@@ -995,6 +995,7 @@
      "detail": "job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     }
    ],
+   "workbench": null,
    "outcome": {
     "requested": 5,
     "qualified": 1,
@@ -1302,11 +1303,11 @@
      "outreachBlockers": [],
      "businessModel": {
       "companyKey": "domain:maple.example",
-      "status": "likely_b2b",
+      "status": "mixed",
       "quote": "Maple Goods sells kitchenware to consumers in our online shop and supplies restaurants and other businesses wholesale.",
       "url": "https://maple.example/",
       "fetchedAt": "2026-11-07T12:00:00.000Z",
-      "reason": "the pages suggest business customers, but the statement was not strong enough to verify"
+      "reason": "the company's own pages name both business and consumer customers"
      },
      "provenance": {
       "walkId": "bm-walk",
@@ -1496,7 +1497,7 @@
        {
         "capability": "apify.website_business_model",
         "status": "completed",
-        "reason": "1 verified, 1 likely, 1 unknown, 1 not or mixed"
+        "reason": "1 verified, 0 likely, 1 unknown, 2 not or mixed"
        }
       ],
       "failed": false,

@@ -64,7 +64,12 @@ export function businessModelStatus(required: string, item: EvidenceItem | null)
   const facets = ((item.assessment as { business_model_facets?: string[] } | undefined)?.business_model_facets ?? []).map(String);
   const match = matchBusinessModel(required, item.value);
   const consumerToo = facets.some((f) => /consumer|b2c|d2c/i.test(f)) && facets.some((f) => /business|b2b|enterprise|team/i.test(f));
-  if (accepted && consumerToo) return "mixed";
+  // CONTRADICTED IS NEVER "LIKELY": the company's own words name consumers and businesses, or
+  // its quote argues against the reading (`self_description_*`, groundedClaims
+  // excerptInconsistency) — mixed, accepted or not. Only an UNcontradicted, unconfirmed reading
+  // (e.g. low confidence, a quote that does not state the audience) can be likely.
+  const reasons = ((item.assessment as { business_model_reasons?: string[] } | undefined)?.business_model_reasons ?? []).map(String);
+  if (consumerToo || reasons.some((r) => r.startsWith("self_description_"))) return "mixed";
   if (accepted && match === "pass") return "verified_b2b";
   if (accepted && match === "fail") return "not_b2b";
   if (!accepted && match === "pass") return "likely_b2b";

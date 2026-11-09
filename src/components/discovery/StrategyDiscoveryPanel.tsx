@@ -52,13 +52,15 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
   const [history, setHistory] = useState<ComparisonRow[]>([]);
   // The user's explicit decision to run with REQUIRED requirements no tool can check (hash-bound on the server).
   const [reviewOnly, setReviewOnly] = useState(false);
+  // The user's permission to count LIKELY B2B matches (labelled, never verified; hash-bound on the server).
+  const [acceptLikely, setAcceptLikely] = useState(false);
 
-  const request = (c: StrategyChoice, ro = reviewOnly) => ({ workspaceId: workspaceId ?? '', messageId, query, choice: c, requestedCount, reviewOnly: ro });
+  const request = (c: StrategyChoice, ro = reviewOnly, al = acceptLikely) => ({ workspaceId: workspaceId ?? '', messageId, query, choice: c, requestedCount, reviewOnly: ro, acceptLikely: al });
 
-  const makePlan = async (c: StrategyChoice, ro = false) => {
+  const makePlan = async (c: StrategyChoice, ro = false, al = acceptLikely) => {
     if (!workspaceId) return;
-    setChoice(c); setReviewOnly(ro); setState('planning'); setError(null); setApproved(false); setRun(null); setPlan(null);
-    const r = await planStrategy(invoke, request(c, ro));
+    setChoice(c); setReviewOnly(ro); setAcceptLikely(al); setState('planning'); setError(null); setApproved(false); setRun(null); setPlan(null);
+    const r = await planStrategy(invoke, request(c, ro, al));
     setState('idle');
     if (r.ok) setPlan(r.value); else setError(r.error);
   };
@@ -135,6 +137,12 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
           )}
           {plan.status === 'blocked' && plan.questions.length === 0 && (
             <div className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[#A3A7AD]">{plan.blockedReason ?? 'This strategy cannot run for this request.'}</div>
+          )}
+          {plan.status === 'ready' && plan.steps.some((s) => s.capability === 'apify.website_business_model') && (
+            <label className="flex items-center gap-1.5 text-[11px] text-[#A3A7AD] cursor-pointer" data-testid="strategy-accept-likely">
+              <Checkbox checked={acceptLikely} onCheckedChange={(v) => void makePlan(choice, reviewOnly, v === true)} aria-label="Count likely B2B matches" />
+              Count likely B2B matches toward the request (labelled “Likely B2B”, never verified)
+            </label>
           )}
           {plan.status === 'ready' && reviewOnly && (
             <div className="text-[11px] text-amber-200/80" data-testid="strategy-review-only-note">Review-only: requirements no tool can check stay unverified; those companies are listed as needing verification.</div>
@@ -283,6 +291,7 @@ function CompanyCard({ c }: { c: CompanyRow }) {
       {c.businessModel && (
         <div className="mt-0.5 text-[11px]" data-testid="strategy-business-model">
           <span className={BM_TONE[c.businessModel.status]}>{BUSINESS_MODEL_LABEL[c.businessModel.status]}</span>
+          {c.countedAsLikely && <span className="ml-1 text-amber-200/80" data-testid="strategy-counted-likely">· counted as a likely match</span>}
           {c.businessModel.quote ? <span className="text-[#A3A7AD]"> — “{c.businessModel.quote}”</span> : <span className="text-[#6E7278]"> — {c.businessModel.reason}</span>}
           {c.businessModel.url && <a href={c.businessModel.url} target="_blank" rel="noreferrer noopener" className="ml-1 inline-flex items-center gap-0.5 underline decoration-white/20 hover:text-[#ECE9E4]">source <ExternalLink className="h-2.5 w-2.5" aria-hidden /></a>}
           {c.businessModel.fetchedAt && <span className="text-[#6E7278]"> · read {c.businessModel.fetchedAt.slice(0, 10)}</span>}

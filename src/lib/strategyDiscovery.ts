@@ -137,6 +137,8 @@ export interface PlanRequest {
   workspaceId: string; messageId: string; query: string; choice: StrategyChoice; requestedCount?: number | null;
   /** The user's explicit decision to buy candidates a REQUIRED requirement cannot be checked for (they stay "needs verification"). */
   reviewOnly?: boolean;
+  /** The user's explicit permission to count LIKELY business-model matches (labelled, never verified; hash-bound on the server). */
+  acceptLikely?: boolean;
 }
 
 function baseBody(r: PlanRequest) {
@@ -146,6 +148,7 @@ function baseBody(r: PlanRequest) {
     ...(r.choice === 'auto' ? {} : { strategy: r.choice }),
     // LeadOcean alone cannot prove a hiring signal: its companies are shown as pending review.
     allow_review_only: r.reviewOnly === true || r.choice === 'leadocean_only',
+    ...(r.acceptLikely === true ? { accept_likely: true } : {}),
   };
 }
 
@@ -192,6 +195,8 @@ export interface CompanyRow {
   industry: string[];
   /** The business model read from the company's own pages, when it was checked. */
   businessModel: { status: BusinessModelStatus; quote: string | null; url: string | null; fetchedAt: string | null; reason: string } | null;
+  /** Counted toward the request as a LIKELY match, with the user's permission (still not verified). */
+  countedAsLikely: boolean;
   /** Other records of the same company merged into this lead (one company, one lead). */
   mergedRecords: number;
 }
@@ -209,6 +214,8 @@ export const OUTCOME_LABEL: Record<OutcomeStatus, string> = {
 export interface OutcomeView {
   status: OutcomeStatus; summary: string; nextStep: string | null;
   requested: number | null; qualified: number; needsVerification: number; rejected: number; shortfall: number | null;
+  /** Likely matches counted with the user's permission (never part of `qualified`). */
+  likely: number;
   spend: { apifyUsd: number; leadoceanRecords: number; basis: 'estimate' | 'provider_reported' | 'none' };
 }
 
@@ -220,7 +227,7 @@ export function readOutcome(v: unknown): OutcomeView | null {
   return {
     status: v.status as OutcomeStatus, summary: v.summary, nextStep: str(v.nextStep),
     requested: typeof v.requested === 'number' ? v.requested : null, qualified: n(v.qualified), needsVerification: n(v.needsVerification), rejected: n(v.rejected),
-    shortfall: typeof v.shortfall === 'number' ? v.shortfall : null,
+    shortfall: typeof v.shortfall === 'number' ? v.shortfall : null, likely: n(v.likely),
     spend: { apifyUsd: n(sp.apifyUsd), leadoceanRecords: n(sp.leadoceanRecords), basis },
   };
 }
@@ -282,6 +289,7 @@ function companyRow(l: unknown, inReview: boolean): CompanyRow | null {
     })) : [],
     location: isObj(c.hq) ? [str(c.hq.city), str(c.hq.country)].filter(Boolean).join(', ') || null : null,
     industry: Array.isArray(c.industry) ? c.industry.map(String) : [],
+    countedAsLikely: l.acceptedAsLikely === true && isObj(l.businessModel) && l.businessModel.status === 'likely_b2b',
     businessModel: isObj(l.businessModel) && typeof l.businessModel.status === 'string' && l.businessModel.status in BUSINESS_MODEL_LABEL ? {
       status: l.businessModel.status as BusinessModelStatus, quote: str(l.businessModel.quote), url: safeHref(str(l.businessModel.url)),
       fetchedAt: str(l.businessModel.fetchedAt), reason: String(l.businessModel.reason ?? ''),

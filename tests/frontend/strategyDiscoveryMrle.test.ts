@@ -74,3 +74,23 @@ Deno.test("Workbench link: the run's plan id is read from the backend; absent, m
   assertEquals(readStrategyRun({ ...base, workbench: { planId: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa" } })!.workbenchPlanId, "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa");
   for (const w of [undefined, null, {}, { planId: "" }, { planId: 7 }, "x"]) assertEquals(readStrategyRun({ ...base, workbench: w })!.workbenchPlanId, null, JSON.stringify(w));
 });
+
+Deno.test("likely matches: the permission is sent only when given; a counted likely row and the outcome's likely count are read", async () => {
+  const { planStrategy } = await import("../../src/lib/strategyDiscovery.ts");
+  const bodies: Record<string, unknown>[] = [];
+  const invoke = ((_n: string, b: Record<string, unknown>) => { bodies.push(b); return Promise.resolve({ data: sim.plan.body, error: null }); }) as unknown as Invoke;
+  const base = { workspaceId: "w", messageId: "m", query: "q", choice: "auto" as const };
+  await planStrategy(invoke, base);
+  await planStrategy(invoke, { ...base, acceptLikely: true });
+  assertEquals(["accept_likely" in bodies[0], bodies[1].accept_likely], [false, true]);
+  const body = structuredClone(sim.run.body);
+  const lead = [...body.queue, ...body.review].find((l: { businessModel?: { status: string } }) => l.businessModel);
+  lead.businessModel.status = "likely_b2b"; lead.acceptedAsLikely = true;
+  body.outcome = { ...body.outcome, likely: 1 };
+  const run = readStrategyRun(body)!;
+  assertEquals(run.outcome!.likely, 1);
+  assertEquals(run.companies.filter((c) => c.countedAsLikely).length, 1);
+  // Not counted unless BOTH the backend says so and the label is likely.
+  lead.businessModel.status = "mixed";
+  assertEquals(readStrategyRun(body)!.companies.filter((c) => c.countedAsLikely).length, 0);
+});

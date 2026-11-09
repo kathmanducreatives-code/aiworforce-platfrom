@@ -44,6 +44,7 @@ export function projectPipelineLead(l: PipelineLead, ctx: { workspaceId: string;
     // `status: qualified` below is the COMPANY's verdict; the contact's role is verified separately.
     contact_verification: l.person?.verification ?? null,
     business_model: l.businessModel ?? null,
+    ...(l.acceptedAsLikely ? { accepted_as_likely: true } : {}),
     ...(ctx.planId ? { plan_id: ctx.planId } : {}),
   };
   const loc = [l.company.hq.city, l.company.hq.region, l.company.hq.country].filter(Boolean).join(", ") || null;
