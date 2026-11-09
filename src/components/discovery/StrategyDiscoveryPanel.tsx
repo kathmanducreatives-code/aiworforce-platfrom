@@ -23,11 +23,13 @@ import {
 } from '@/lib/strategyDiscovery';
 import { simulatedInvoke, strategyDiscoveryMockMode, type Simulation } from '@/lib/strategyDiscoveryMock';
 import simulation from '@/lib/__fixtures__/strategyDiscoverySimulation.json';
+import { localSimulation } from './devSimulation';
 import { ProviderRunSummaryCard } from './ProviderRunSummaryCard';
 
 // Development-only simulation (strategyDiscoveryMock.ts): never active in a production build.
 const MOCK = strategyDiscoveryMockMode();
-const invoke: Invoke = MOCK === 'off' ? invokeFunction as unknown as Invoke : simulatedInvoke(MOCK, simulation as unknown as Simulation);
+// A scenario from `npm run dev:atlas -- <scenario> --preview` replaces the committed simulation.
+const invoke: Invoke = MOCK === 'off' ? invokeFunction as unknown as Invoke : simulatedInvoke(MOCK, (localSimulation ?? simulation) as unknown as Simulation);
 const nameOf = (p: string) => PROVIDER_LABEL[p] ?? p;
 const VERDICT_TONE = { qualified: 'text-emerald-300/90', pending: 'text-amber-200/80', rejected: 'text-[#8B8F96]' } as const;
 
