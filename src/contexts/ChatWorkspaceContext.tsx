@@ -244,3 +244,8 @@ export function useChatWorkspace() {
   if (!ctx) throw new Error('useChatWorkspace must be used inside ChatWorkspaceProvider');
   return ctx;
 }
+
+/** The same context, or null outside a ChatWorkspaceProvider (e.g. a dev preview). */
+export function useOptionalChatWorkspace() {
+  return useContext(ChatWorkspaceContext);
+}

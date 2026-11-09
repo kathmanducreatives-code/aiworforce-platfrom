@@ -1,3 +1,4 @@
+import { leadPlanOrFilter } from '@/lib/leads/leadPlanFilter';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { workbenchQueryKey, type WorkbenchOwnership } from '@/lib/workbench/workbenchSession';
@@ -170,13 +171,15 @@ export function useLeadResults(ownership: WorkbenchOwnership) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: err } = await supabase
+      const base = supabase
         .from('lead_candidates' as any)
         .select(
           'id, plan_id, lead_type, status, fit_score, priority, reason, raw, account_id, contact_id, ' +
           'accounts(id,name,domain,industry,stage), contacts(id,full_name,title,linkedin_url,email)',
-        )
-        .eq('plan_id', planId)
+        );
+      // The plan's own leads, plus pipeline leads it found again (leadPlanFilter.ts).
+      const planFilter = leadPlanOrFilter(planId);
+      const { data, error: err } = await (planFilter ? base.or(planFilter) : base.eq('plan_id', planId))
         .order('priority', { ascending: false });
       if (err) throw err;
       const rows = (data ?? []) as any[];

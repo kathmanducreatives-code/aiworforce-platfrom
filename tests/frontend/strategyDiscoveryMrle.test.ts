@@ -68,3 +68,9 @@ Deno.test("the simulation is development-only: off in production builds and unle
   const ro = await inv<Record<string, unknown>>("lead-pipeline", { action: "strategy_plan", allow_review_only: true });
   assertEquals((ro.data as { status: string }).status, "ready");
 });
+
+Deno.test("Workbench link: the run's plan id is read from the backend; absent, malformed or empty means no Workbench button", () => {
+  const base = sim.run.body;
+  assertEquals(readStrategyRun({ ...base, workbench: { planId: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa" } })!.workbenchPlanId, "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa");
+  for (const w of [undefined, null, {}, { planId: "" }, { planId: 7 }, "x"]) assertEquals(readStrategyRun({ ...base, workbench: w })!.workbenchPlanId, null, JSON.stringify(w));
+});

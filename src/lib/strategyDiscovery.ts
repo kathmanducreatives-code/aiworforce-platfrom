@@ -240,6 +240,8 @@ export interface StrategyRunView {
   companies: CompanyRow[];
   excludedCount: number;
   written: number | null;
+  /** The Workbench plan the saved leads carry (backend `workbench.planId`); null = not linked. */
+  workbenchPlanId: string | null;
   summary: ProviderRunSummary | null;
   /** The raw response, for ProviderRunSummaryCard (which reads `providerSummary` itself). */
   response: Record<string, unknown>;
@@ -303,6 +305,7 @@ export function readStrategyRun(body: unknown): StrategyRunView | null {
     steps: body.steps.filter(isObj).map((s) => ({ capability: String(s.capability ?? ''), provider: String(s.provider ?? ''), status: String(s.status ?? ''), reason: str(s.reason) })),
     companies, excludedCount: typeof body.excludedCount === 'number' ? body.excludedCount : 0,
     written: typeof body.written === 'number' ? body.written : null,
+    workbenchPlanId: isObj(body.workbench) && typeof body.workbench.planId === 'string' && body.workbench.planId ? body.workbench.planId : null,
     summary: readProviderRunSummary(body), response: body,
   };
 }

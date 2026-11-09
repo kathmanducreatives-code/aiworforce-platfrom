@@ -145,6 +145,18 @@ Deno.serve(withBuildStamp(async (req) => {
         // Approval tokens are MAC'd with a key derived from the service-role key (no new secret).
         signer: await planSigner(env("SUPABASE_SERVICE_ROLE_KEY") ?? ""),
         advisor: createStrategyAdvisorGenerateJson(),
+        // The run's Workbench plan: one task_plans row in THIS workspace (the same shape
+        // continue-workflow writes). Its id is what the saved leads carry.
+        recordRunPlan: async (p) => {
+          const { data, error } = await admin.from("task_plans").insert({
+            workspace_id: p.workspaceId, user_id: p.userId, created_by: p.userId,
+            user_instruction: p.query, goal: p.query, plan_summary: `Lead discovery: ${p.summary}`,
+            status: p.status, current_step: 0, steps: [],
+            plan: { lead_pipeline: { plan_hash: p.planHash } }, completed_at: new Date().toISOString(),
+          }).select("id").single();
+          if (error) throw new Error(`task_plans insert: ${error.message}`);
+          return (data as { id: string }).id;
+        },
       });
       return json(r.body, r.status);
     }
