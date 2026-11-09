@@ -130,6 +130,12 @@ jobs:
       - name: Edge function tests
         run: deno test --allow-read --allow-env --no-check tests/edge-functions/
 
+      - name: Lead V2 quality regressions
+        # The 2026-10-06 quality run's cases (tests/lead-v2-quality/). Every case whose
+        # root cause is fixed is a gate; a case still marked `knownUnfixed` is skipped,
+        # named "[KNOWN UNFIXED]", and pinned by knownUnfixed.test.ts so the list cannot grow quietly.
+        run: npm run -s test:lead-v2-quality
+
       - name: Deploy-safety tests
         run: deno test --allow-read --allow-env --allow-run tests/infra/
 
