@@ -189,4 +189,4 @@ To give another agent a `dev:<agent>` simulator: reuse `scripts/dev/atlas-sim/` 
 ## Known local-only differences
 
 - **`tests/infra/testWorkerZeroApify.test.ts`:** 3 cases fail on macOS + Deno 2.8.2 on a clean `launch/hardening` too, but pass in CI (Linux). They compare Deno permission states of a spawned worker.
-- **`tests/lead-v2-quality`** (now in CI): T07 was a harness mismatch, not a production bug. Production compiles a hard "US" as headquarters (Q3), but the golden replay judged it under the recorded pre-Q3 *presence* reading. It now runs with `strictScope` and a US-headquartered control. The one remaining open case, RC02 L03, is marked `knownUnfixed`: skipped by name, pinned by `knownUnfixed.test.ts`.
+- **`tests/lead-v2-quality`** (now in CI): T07 was a harness mismatch, not a production bug. Production compiles a hard "US" as headquarters (Q3), but the golden replay judged it under the recorded pre-Q3 *presence* reading. It now runs with `strictScope` and a US-headquartered control. RC02 L03 (New York **or** California) is fixed too: it compiles as one any-of group. No case is marked `knownUnfixed` today; `knownUnfixed.test.ts` pins that.

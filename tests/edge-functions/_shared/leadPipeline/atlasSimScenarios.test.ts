@@ -12,7 +12,7 @@ import { loadScenarios, runScenario } from "../../../../scripts/dev/atlas-sim/ha
 const DIR = new URL("../../../fixtures/atlas-sim/", import.meta.url);
 type Obj = Record<string, unknown>;
 type Company = { company: { name: string } };
-type RunBody = { outcome?: { status?: string; spend?: { basis?: string } }; queue?: Company[]; review?: Company[]; excludedCount?: number;
+type RunBody = { outcome?: { status?: string; spend?: { basis?: string } }; queue?: Company[]; review?: Company[]; excludedCount?: number; rejected?: { name: string }[];
   persistence?: { failed?: number }; spend?: { apifyUsd: number } };
 const planOf = (b: Obj) => (b.plan ?? {}) as { status?: string; planHash?: string; estimate?: { apifyUsd: number } };
 const scenarios = await loadScenarios(DIR);
@@ -45,10 +45,12 @@ for (const s of scenarios) {
       qualified: (b.queue ?? []).map((c) => c.company.name).sort(),
       needsVerification: (b.review ?? []).map((c) => c.company.name).sort(),
       excluded: b.excludedCount ?? null, leadsSaved: r.db.leads.length, actorCalls: r.actorCalls.length, persistFailed: b.persistence?.failed ?? null,
+      rejected: (b.rejected ?? []).map((x) => x.name).sort(),
     };
     for (const [k, v] of Object.entries(s.expect ?? {})) assertEquals(got[k], v, `${s.name}: ${k}`);
 
     // INVARIANTS (every scenario)
+    if (b.excludedCount !== undefined) assertEquals((b.rejected ?? []).length, Math.min(50, b.excludedCount), `${s.name}: every excluded company is named`);
     const planHash = planOf(r.plan.body).planHash;
     for (const c of r.actorCalls) {
       assert(planHash && c.key.includes(planHash.slice(0, 16)) || r.runs.length > 1, `${s.name}: Actor key not bound to the plan (${c.key})`);
