@@ -8,7 +8,7 @@ import {
   effectiveStatus, isServable, needsReview, provenanceLabel, valueMatchesType,
   type EffectiveStatus, type MemoryItem,
 } from '../../../supabase/functions/_shared/brainMemoryModel.ts';
-import type { MemoryHistoryRow, MemoryProposal, MemorySnapshot, RevisionRow } from './memoryApi';
+import type { MemoryHistoryRow, MemoryProposal, MemorySnapshot, RevisionRow } from './memoryTypes';
 
 export type MemoryTab = 'review' | 'preferences' | 'decisions' | 'facts' | 'history' | 'agents';
 

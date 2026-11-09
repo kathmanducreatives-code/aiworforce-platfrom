@@ -4,7 +4,7 @@ import {
   buildAddPayload, buildEditPayload, buildSections, buildTimeline, formatValue, proposalSummary, toCard,
 } from "../../src/lib/companyBrain/memoryView.ts";
 import type { MemoryItem } from "../../supabase/functions/_shared/brainMemoryModel.ts";
-import type { MemorySnapshot } from "../../src/lib/companyBrain/memoryApi.ts";
+import type { MemorySnapshot } from "../../src/lib/companyBrain/memoryTypes.ts";
 
 const NOW = new Date("2026-11-10T12:00:00Z");
 const ago = (d: number) => new Date(NOW.getTime() - d * 86_400_000).toISOString();

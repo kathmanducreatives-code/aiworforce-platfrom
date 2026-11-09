@@ -12,57 +12,9 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   MEMORY_COLUMNS, type MemoryItem,
 } from '../../../supabase/functions/_shared/brainMemoryModel.ts';
+import type { MemoryProposal, MemoryHistoryRow, MemorySnapshot, RevisionRow } from './memoryTypes';
 
-export interface MemoryProposal {
-  id: string;
-  proposed_by_agent: string;
-  kind: 'fact' | 'preference';
-  category: string;
-  fact_key: string;
-  value_type: string;
-  value: unknown;
-  rationale: string;
-  evidence: Array<{ source_url?: string; source_ref?: string; observed_at?: string; excerpt?: string }>;
-  source_type: string;
-  confidence: 'high' | 'medium' | 'low';
-  status: string;
-  contradicts_memory_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface MemoryHistoryRow {
-  id: string;
-  memory_id: string | null;
-  proposal_id: string | null;
-  change_kind: string;
-  from_version: number | null;
-  to_version: number | null;
-  previous: Record<string, unknown> | null;
-  current: Record<string, unknown> | null;
-  actor_kind: string;
-  actor_id: string | null;
-  actor_agent: string | null;
-  reason: string | null;
-  created_at: string;
-}
-
-export interface RevisionRow {
-  id: string;
-  revision: number;
-  changed_sections: string[];
-  actor_kind: string;
-  actor_id: string | null;
-  written_at: string;
-  redacted_at: string | null;
-}
-
-export interface MemorySnapshot {
-  items: MemoryItem[];
-  proposals: MemoryProposal[];
-  history: MemoryHistoryRow[];
-  revisions: RevisionRow[];
-}
+export type { MemoryProposal, MemoryHistoryRow, RevisionRow, MemorySnapshot } from './memoryTypes';
 
 /** Thrown when this environment has no memory tables (the migration is not applied there). */
 export class MemoryUnavailableError extends Error {
@@ -197,4 +149,15 @@ export async function recordSignalDecision(workspaceId: string, signalId: string
       value: { outcome: dismissed ? 'dismissed' : 'restored', subject: { type: 'signal', ref: signalId } },
     });
   } catch { /* advisory: the review itself already saved */ }
+}
+
+/**
+ * After content is approved: ask the server to turn its angle into a LYRA
+ * proposal (pending review). Best-effort; a viewer or an environment without
+ * memory simply gets nothing.
+ */
+export async function proposeFromApprovedContent(workspaceId: string, contentItemId: string): Promise<void> {
+  try {
+    await invokeMemory({ action: 'content_approved', workspace_id: workspaceId, content_item_id: contentItemId });
+  } catch { /* advisory */ }
 }

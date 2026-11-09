@@ -228,3 +228,30 @@ Deno.test("G — two workspaces with conflicting preferences: each agent gets on
   assertEquals(bb.brain.influences, []);
 });
 
+
+// ── H ─────────────────────────────────────────────────────────────────────────
+Deno.test("H — staleness and expiry, read from the real rows: an old fact needs review and reaches no agent; an expired temporary preference stops applying", opts, async () => {
+  const t = await team(NORTHWIND);
+  const old = await memoryWrite(t.ws, t.owner, "set", { kind: "fact", category: "competitors", fact_key: "competitor:oldrival.io",
+    value_type: "object", value: { name: "OldRival", domain: "oldrival.io" } });
+  const temp = await memoryWrite(t.ws, t.owner, "set", { kind: "preference", category: "exclusions", fact_key: "exclusion.geography:germany",
+    value_type: "object", value: { type: "geography", value: "Germany" }, persistence: "temporary", expires_at: "2099-01-01T00:00:00Z" });
+  let c = await load(t.ws);
+  assert(c.competitors.some((x) => x.name === "OldRival")); assertEquals(atlasView(c).exclusions.geographies, ["Germany"]);
+  // Time passes (the rows say so; staleness and expiry are computed when read — no cron).
+  await sql`update public.company_brain_memory set observed_at = now() - interval '400 days' where id = ${old.memory_id as string}`;
+  await sql`update public.company_brain_memory set expires_at = now() - interval '1 minute' where id = ${temp.memory_id as string}`;
+  c = await load(t.ws);
+  assertFalse(c.competitors.some((x) => x.name === "OldRival"), "a stale fact is not served");
+  assertEquals(c.needs_review.map((m) => m.fact_key), ["competitor:oldrival.io"], "…and is flagged for a person");
+  assertEquals(atlasView(c).exclusions.geographies, [], "an expired temporary exclusion no longer applies");
+  for (const agent of ["orion", "atlas", "lyra", "lisa"] as const) assertFalse(renderBrainMemoryBlock(c, agent).includes("OldRival"));
+  // A person confirms it is still true ("Still true" in the UI = reactivate): a new, versioned observation.
+  const re = await memoryWrite(t.ws, t.owner, "reactivate", { memory_id: old.memory_id, expected_version: 1, reason: "still competing" });
+  assertEquals(re.outcome, "ok"); assertEquals(re.version, 2);
+  c = await load(t.ws);
+  assert(c.competitors.some((x) => x.name === "OldRival"), "served again after a person re-confirmed it");
+  assertEquals(c.needs_review, []);
+  const h = await sql`select change_kind, reason from public.company_brain_memory_history where memory_id = ${old.memory_id as string} order by created_at`;
+  assertEquals(h.map((x) => x.change_kind), ["created", "reactivated"]);
+});

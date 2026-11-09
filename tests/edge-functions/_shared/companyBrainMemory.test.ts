@@ -28,13 +28,15 @@ function item(over: Partial<MemoryItem> = {}): MemoryItem {
 }
 
 type Row = Record<string, unknown>;
-function fakeDb(tables: Record<string, Row[]>, failing: string[] = []): LoaderDb & { calls: string[] } {
+// A table may hold loose rows or MemoryItems (an interface has no index signature).
+type Table = Array<Row | MemoryItem>;
+function fakeDb(tables: Record<string, Table>, failing: string[] = []): LoaderDb & { calls: string[] } {
   const calls: string[] = [];
   return {
     calls,
     from(table: string) {
       calls.push(table);
-      let rows = [...(tables[table] ?? [])];
+      let rows = [...(tables[table] ?? [])] as Row[];
       // deno-lint-ignore no-explicit-any
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const q: any = {
@@ -198,7 +200,7 @@ Deno.test("fold: exclusions are unioned into disqualifiers and content restricti
 });
 
 // ── the loader ───────────────────────────────────────────────────────────────
-function world(): Record<string, Row[]> {
+function world(): Record<string, Table> {
   return {
     workspace_members: [{ workspace_id: A, user_id: USER }],
     company_brain: [brainRow(A, PROFILE), brainRow(B, { schema_version: 2, company: { name: "Tenant B" }, target_customer: { industries: ["Gambling"] } })],

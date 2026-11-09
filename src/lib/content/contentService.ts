@@ -33,6 +33,7 @@ import { generateContentDraft } from '@/lib/content/generateContentDraft';
 import { functionErrorDetail } from '@/lib/content/functionError';
 import { revisionInstruction, formatChangeRevision } from '@/lib/content/contentStudioModel';
 import { isContentFormatKind, type ContentFormatKind } from '../../../supabase/functions/_shared/contentFormats';
+import { proposeFromApprovedContent } from '@/lib/companyBrain/memoryApi';
 
 /** What a caller asks for, wherever it is calling from. */
 export interface ContentGenerationRequest {
@@ -346,6 +347,10 @@ export async function saveContentEdit(
 export async function approveContent(itemId: string): Promise<ContentResult> {
   const { item, error } = await updateContentItem(itemId, { status: 'approved' });
   if (error || !item) return { ok: false, error: error ?? 'approve_failed' };
+  // LYRA: offer the approved angle back to the Company Brain as a PENDING
+  // suggestion. The server derives it from the stored, approved row; it never
+  // becomes knowledge without a person. Best-effort — never blocks the approval.
+  void proposeFromApprovedContent(item.workspace_id, item.id);
   return { ok: true, item };
 }
 

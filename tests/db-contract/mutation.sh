@@ -83,6 +83,10 @@ clock_ts="$root/supabase/functions/_shared/missionWallClock.ts"
 plan_ts="$root/supabase/functions/_shared/smokeAdmissionRefusal.ts"
 planner_ts="$root/supabase/functions/_shared/gptExecutionPlanner.ts"
 brain_writer_sql="$root/supabase/migrations/20261024120000_company_brain_authorized_writer.sql"
+# The held Company Brain V1 memory migration re-creates company_brain_authorized_write
+# (adding only the actor settings for the revision trigger). Applied after the
+# shipped one, it is the writer the lane runs, so writer mutants go to BOTH.
+mem_sql="$root/supabase/migrations-held/20261110120000_company_brain_memory.sql"
 client_sql="$root/supabase/migrations-held/20261024160000_client_company_brain.sql"
 autosave_ts="$root/src/lib/onboardingAutosave.ts"
 brain_draft_ts="$root/supabase/functions/generate-company-brain-draft/index.ts"
@@ -90,7 +94,7 @@ client_save_ts="$root/supabase/functions/_shared/clientBrainSave.ts"
 brain_scope_ts="$root/src/lib/brainScope.ts"
 client_api_ts="$root/src/lib/clientBrainApi.ts"
 restore_list=()
-for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts" "$brain_scope_ts" "$client_api_ts"; do
+for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$mem_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts" "$brain_scope_ts" "$client_api_ts"; do
   cp "$f" "$f.mutation-backup"; restore_list+=("$f")
 done
 trap 'cp "$backup" "$real"; for f in "${restore_list[@]}"; do mv -f "$f.mutation-backup" "$f"; done; rm -f "$backup" "$out"' EXIT
@@ -114,6 +118,31 @@ prove_killed() {
   local status=$?
   set -e
   cp "$file.mutation-backup" "$file"
+  if [ $status -eq 0 ]; then echo "MUTANT SURVIVED ($label)" >&2; exit 1; fi
+  if ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "$name ... FAILED" >/dev/null; then
+    echo "the mutant ($label) failed, but not on '$name':" >&2; tail -30 "$out" >&2; exit 1
+  fi
+  echo "mutant killed: $label"
+  ran=$((ran + 1))
+}
+# prove_killed_in <label> "<file> <file>…" <find> <replace> <tests> <name>: the same
+# mutant in EVERY listed file (each must contain the guarded text), for a function
+# that more than one migration defines.
+prove_killed_in() {
+  local label="$1" files="$2" find="$3" repl="$4" tests="$5" name="$6" f
+  take || return 0
+  for f in $files; do
+    cp "$f.mutation-backup" "$f"
+    FIND="$find" REPL="$repl" perl -0pi -e 's/\Q$ENV{FIND}\E/$ENV{REPL}/' "$f"
+    if cmp -s "$f" "$f.mutation-backup"; then
+      echo "MUTANT DID NOT APPLY ($label) in ${f#$root/}: the guarded text changed; update this proof" >&2; exit 1
+    fi
+  done
+  set +e
+  "$root/tests/db-contract/run.sh" "$tests" >"$out" 2>&1
+  local status=$?
+  set -e
+  for f in $files; do cp "$f.mutation-backup" "$f"; done
   if [ $status -eq 0 ]; then echo "MUTANT SURVIVED ($label)" >&2; exit 1; fi
   if ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "$name ... FAILED" >/dev/null; then
     echo "the mutant ($label) failed, but not on '$name':" >&2; tail -30 "$out" >&2; exit 1
@@ -509,11 +538,11 @@ fi
 # named race or refusal test must then fail. The function is applied by the
 # bootstrap as a normal migration, so the mutant is what the database runs.
 brain_writer_tests="$root/tests/db-contract/companyBrainAuthorizedWrite.contract.test.ts"
-prove_killed "Brain writer: no lock on the session (a logout overtakes the write)" "$brain_writer_sql" \
+prove_killed_in "Brain writer: no lock on the session (a logout overtakes the write)" "$brain_writer_sql $mem_sql" \
   "     and (s.not_after is null or s.not_after > v_now)
    for share;" "     and (s.not_after is null or s.not_after > v_now);" \
   "$brain_writer_tests" "race: logged out in flight → the write waits, then is refused"
-prove_killed "Brain writer: no lock on the membership (a demotion overtakes the write)" "$brain_writer_sql" \
+prove_killed_in "Brain writer: no lock on the membership (a demotion overtakes the write)" "$brain_writer_sql $mem_sql" \
   "   where m.workspace_id = p_workspace_id and m.user_id = p_actor_id
    for share;" "   where m.workspace_id = p_workspace_id and m.user_id = p_actor_id;" \
   "$brain_writer_tests" "race: demoted to viewer in flight → the write waits, then is refused"
@@ -716,6 +745,23 @@ prove_killed "membership surface: TRUNCATE is not guarded" "$ms_sql" \
   before truncate on public.workspace_members
   for each statement execute function public.workspace_members_app_surface();" "" \
   "$ms_tests" "surface: TRUNCATE is refused for application roles, by grant and by trigger"
+
+# ── COMPANY BRAIN V1 MEMORY (held 20261110120000) ──────────────────────────
+# Each removes one guard from the memory writers and requires the named test
+# to FAIL on that behaviour, not on a build error.
+mem_tests="$root/tests/db-contract/companyBrainMemory.contract.test.ts"
+prove_killed "brain memory: the in-transaction authorization always says ok" "$mem_sql" \
+  "  return public.company_brain_write_authorization(p_workspace_id, p_actor_id, p_session_id, p_permission);
+end;" "  return 'ok';
+end;" "$mem_tests" "viewers, outsiders and bad sessions are refused before anything is written"
+prove_killed "brain memory: a model inference may be labelled verified" "$mem_sql" \
+  "  constraint cbm_inference_never_verified check (
+    source_type not in ('model_inference', 'agent_suggestion')" "  constraint cbm_inference_never_verified check (true or
+    source_type not in ('model_inference', 'agent_suggestion')" \
+  "$mem_tests" "the schema refuses a model inference labelled as verified, and an agent item with no approver"
+prove_killed "brain memory: a single-record decision may become a workspace-wide rule" "$mem_sql" \
+  "    if v_scope = 'workspace' and not v_decision_workspace_ok then" "    if false then" \
+  "$mem_tests" "a lead rejection cannot be recorded as a workspace-wide rule, and never creates an exclusion"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"

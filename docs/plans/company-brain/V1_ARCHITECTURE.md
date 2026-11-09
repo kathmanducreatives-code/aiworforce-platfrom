@@ -30,7 +30,7 @@ The lock order is session → membership → memory row, the same as the existin
 - There is at most one active item per (workspace, kind, key, scope, scope_ref).
 - A decision stays scoped. Rejecting a lead is recorded as scope `lead` plus that lead's id. Only `icp_changed`, `strategy_selected`, `brand_preference`, `exclusion_added` and `correction` may be workspace-wide. Exclusions exist only as explicit `preference` items in category `exclusions`.
 
-**What agents may use.** Staleness and expiry are computed when memory is read, so no cron job is needed. An agent may use an item only if it is active, unexpired, not redacted, and either entered by a person or approved by one. Stale and disputed items appear in the UI under "Needs review" and are never served to agents.
+**What agents may use.** Staleness and expiry are computed when memory is read, so no cron job is needed. A person clears "needs review" with **Still true** (`reactivate`): a versioned re-observation that refreshes `observed_at`. An agent may use an item only if it is active, unexpired, not redacted, and either entered by a person or approved by one. Stale and disputed items appear in the UI under "Needs review" and are never served to agents.
 
 ## One read path: `companyBrainContextLoader.ts`
 
@@ -63,7 +63,8 @@ The loader gives each agent its own view (`companyBrainAgentViews.ts`), plus a s
 Two places record decisions into memory:
 
 - **Dismissing a signal** in the app records a `signal_dismissed` decision scoped to that signal. This happens only for editors and above, and is best-effort; viewers' dismissals stay personal.
-- **Approving content** can create a low-confidence LYRA proposal (the approved angle) through `content_approved`. The server derives it from the stored, approved row.
+- **Approving content** in Content Studio creates a low-confidence LYRA proposal (the approved angle) through `content_approved`. The server derives it from the stored, approved row; the call is best-effort and never blocks the approval.
+- **Lead rejection** has no browser action today (leads are read-only in the app; rejection lives in ATLAS-owned pipeline code). The decision API supports it (`decide` with category `lead_rejected`, scope `lead`) for when ATLAS adds one.
 
 ## Writes from the browser
 

@@ -12,10 +12,7 @@ The isolated TEST project `tlvnfrxzjhsjgdofwehb` (agentory-discovery-test) has t
 
 That trigger refuses every `company_brain` insert or update, on purpose. The project is the isolated Discovery smoke environment, and that environment must never contain a Brain (`scripts/test-project/sql/20261017120000_discovery_test_no_company_brain.sql`). This is also why TEST has 0 Brain rows. Preflight check **P1** fails on this project, and the plan stops there.
 
-You have two options:
-
-1. **Recommended:** create a separate Brain TEST project (e.g. `agentory-brain-test`), build it with `scripts/test-project/build-test-schema.sh` *without* `--with-test-no-brain-guard`, and set its ref as `target.ref`. The Discovery smoke environment stays exactly as it is.
-2. Approve a reviewed removal of the guard on `tlvnfrxzjhsjgdofwehb`. This breaks the Discovery smoke admission contract, which assumes no Brain exists on that project.
+**Decision (2026-11-09):** the no-Brain guard stays, and no new hosted project will be created. Brain V1 is therefore verified in a **disposable, loopback-only stack** instead of a hosted TEST project. That stack is Docker Postgres 17.6 + pinned GoTrue + pinned PostgREST, and it runs the real handlers and the real page. See "Verify without a hosted project" below. Hosted verification stays blocked until a future, separate decision.
 
 The TEST project also lacks the Brain write-hardening migrations. Browser insert and update policies on `company_brain` still exist there, and `company_brain_authorized_write` is missing. Steps 1–2 fix that.
 
@@ -48,3 +45,30 @@ The memory functions and loader need no new secrets. `SIGNALS_V2=true` only matt
 - **Database:** run the rollback block in the held migration's header in one transaction. The shared loader tolerates the tables being absent, so functions fall back to the profile alone.
 - **Functions:** redeploy the previous commit's build.
 - **Data:** memory rows can be redacted by an owner or admin (`company_brain_memory_redact`). Dropping the tables removes everything.
+
+## Verify without a hosted project (what was actually run)
+
+All of this runs in the cloud development container. Nothing leaves loopback.
+
+```bash
+dockerd >/tmp/dockerd.log 2>&1 &   # if the daemon is not already running
+export POSTGREST_BIN=/path/to/postgrest-v12.2.3 CHROME_BIN=/opt/pw-browsers/chromium-1243/chrome-linux64/chrome
+```
+
+Real GoTrue, real handlers, mid-request revocation, and ORION's real `daily-brief`:
+
+```bash
+tests/db-contract/run-with-gotrue.sh tests/db-contract/companyBrainMemoryEndToEnd.contract.test.ts
+```
+
+The real Company Brain page, signed in, in headless Chrome:
+
+```bash
+BRAIN_E2E_DENO_FLAGS="--allow-run --allow-write" tests/db-contract/run-with-gotrue.sh tests/browser/brainMemory.browser.test.ts
+```
+
+Memory contract and acceptance scenarios A–H (plain lane, local Postgres 17):
+
+```bash
+PG_ADMIN_URL=postgres://…@127.0.0.1:5433/postgres tests/db-contract/run.sh tests/db-contract/companyBrainMemory.contract.test.ts tests/db-contract/companyBrainAcceptance.contract.test.ts
+```

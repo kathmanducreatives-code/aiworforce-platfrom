@@ -539,6 +539,8 @@ revoke all on function public.company_brain_memory_authorize(uuid, uuid, uuid, t
 -- Returns {outcome, memory_id?, version?, reason?, replayed?}. Outcomes:
 --   ok | unchanged | already_recorded | stale | not_found | invalid |
 --   idempotency_conflict | session_invalid | not_member | forbidden_role
+-- 'reactivate' on an ACTIVE item re-confirms it (fresh observed_at): that is how a
+-- person answers "needs review" for an item that went stale by age.
 create or replace function public.company_brain_memory_write(
   p_workspace_id uuid,
   p_actor_id uuid,
@@ -618,10 +620,27 @@ begin
                             when 'mark_stale' then 'marked_stale' else 'reactivated' end;
       if v_expected is null or v_expected <> v_cur.version then
         v_result := jsonb_build_object('outcome', 'stale', 'memory_id', v_cur.id, 'version', v_cur.version);
+      elsif p_op = 'reactivate' and v_cur.lifecycle_status = 'active' then
+        -- RE-CONFIRMATION. Staleness is computed when read (observed_at / review_at),
+        -- so an item that "needs review" is still stored as active. A person saying
+        -- "still true" is a new observation: it is versioned and recorded like any change.
+        update public.company_brain_memory m
+           set observed_at = v_now, review_at = null, version = m.version + 1,
+               updated_by = p_actor_id, updated_at = v_now,
+               reason = coalesce(nullif(btrim(p_payload->>'reason'), ''), m.reason)
+         where m.id = v_cur.id
+        returning * into v_new;
+        insert into public.company_brain_memory_history
+          (workspace_id, memory_id, change_kind, from_version, to_version, previous, current,
+           actor_kind, actor_id, reason, idempotency_key)
+        values (p_workspace_id, v_cur.id, 'reactivated', v_cur.version, v_new.version,
+                public.company_brain_memory_snapshot(v_cur), public.company_brain_memory_snapshot(v_new),
+                'user', p_actor_id, nullif(btrim(p_payload->>'reason'), ''), p_idempotency_key);
+        v_result := jsonb_build_object('outcome', 'ok', 'memory_id', v_new.id, 'version', v_new.version);
       elsif v_cur.lifecycle_status = v_target_status then
         v_result := jsonb_build_object('outcome', 'unchanged', 'memory_id', v_cur.id, 'version', v_cur.version);
       elsif p_op = 'reactivate' and v_cur.lifecycle_status not in ('stale', 'disputed') then
-        v_result := jsonb_build_object('outcome', 'invalid', 'reason', 'only a stale or disputed item can be reactivated');
+        v_result := jsonb_build_object('outcome', 'invalid', 'reason', 'only an active, stale or disputed item can be confirmed');
       elsif p_op <> 'reactivate' and v_cur.lifecycle_status not in ('active', 'stale', 'disputed') then
         v_result := jsonb_build_object('outcome', 'invalid', 'reason', 'item is ' || v_cur.lifecycle_status);
       else

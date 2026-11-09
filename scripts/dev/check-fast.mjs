@@ -37,7 +37,14 @@ function step(name, cmd, args, opts = {}) {
 
 console.log(`check:fast — ${changed.length} changed file(s) vs ${base}`);
 const denoFiles = changed.filter((f) => /\.ts$/.test(f) && !f.startsWith("src/") && !f.endsWith("/mcp/index.ts") && !f.startsWith("tests/fixtures/"));
-if (denoFiles.length) step(`deno check (${denoFiles.length})`, "deno", ["check", ...denoFiles]);
+// The database-contract and mounted-browser tests import `npm:` packages that
+// CI resolves with `--node-modules-dir=none` (tests/db-contract/run.sh); checked
+// against the repo's node_modules they fail before type-checking anything.
+const isContract = (f) => f.startsWith("tests/db-contract/") || f.startsWith("tests/browser/");
+const appDeno = denoFiles.filter((f) => !isContract(f));
+const contractDeno = denoFiles.filter(isContract);
+if (appDeno.length) step(`deno check (${appDeno.length})`, "deno", ["check", ...appDeno]);
+if (contractDeno.length) step(`deno check, contract lane (${contractDeno.length})`, "deno", ["check", "--node-modules-dir=none", ...contractDeno]);
 const srcChanged = changed.filter((f) => /^src\/.*\.(ts|tsx)$/.test(f));
 if (srcChanged.length) {
   // Whole-project tsc (the frontend has one program); report only errors in the files you changed.

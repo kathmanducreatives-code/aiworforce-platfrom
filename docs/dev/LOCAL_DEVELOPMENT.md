@@ -190,3 +190,20 @@ To give another agent a `dev:<agent>` simulator: reuse `scripts/dev/atlas-sim/` 
 
 - **`tests/infra/testWorkerZeroApify.test.ts`:** 3 cases fail on macOS + Deno 2.8.2 on a clean `launch/hardening` too, but pass in CI (Linux). They compare Deno permission states of a spawned worker.
 - **`tests/lead-v2-quality`** (now in CI): T07 was a harness mismatch, not a production bug. Production compiles a hard "US" as headquarters (Q3), but the golden replay judged it under the recorded pre-Q3 *presence* reading. It now runs with `strictScope` and a US-headquartered control. RC02 L03 (New York **or** California) is fixed too: it compiles as one any-of group. No case is marked `knownUnfixed` today; `knownUnfixed.test.ts` pins that.
+
+## Company Brain V1 (memory): cloud container
+
+The Claude Code cloud container has Docker, Postgres 17 and Chromium. The "CI-only" rows above can run there, so the full Brain stack is testable without a hosted project.
+
+| Level | Command | What is real |
+|---|---|---|
+| 1 | `deno test --allow-read --allow-env --no-check tests/edge-functions/_shared/companyBrainMemory*.test.ts tests/frontend/companyBrainMemoryView.test.ts` | Pure model, loader fold, agent views, request parsing |
+| 2 | `tests/db-contract/run.sh tests/db-contract/companyBrainMemory.contract.test.ts tests/db-contract/companyBrainAcceptance.contract.test.ts` | Postgres 17 + PostgREST: RLS, the SECURITY DEFINER writers, races, idempotency, and scenarios A–H through the real loader, ORION and LISA modules |
+| 2 | `tests/db-contract/run-with-gotrue.sh tests/db-contract/companyBrainMemoryEndToEnd.contract.test.ts` | Real GoTrue sessions and logout, through the real `company-brain-memory` and `daily-brief` handlers |
+| 2 | `BRAIN_E2E_DENO_FLAGS="--allow-run --allow-write" tests/db-contract/run-with-gotrue.sh tests/browser/brainMemory.browser.test.ts` | The real Company Brain page, signed in, in headless Chrome |
+
+Before the GoTrue lanes, start the daemon if needed: `dockerd >/tmp/dockerd.log 2>&1 &`.
+
+Set `POSTGREST_BIN` to the pinned v12.2.3 binary (checksum in `ci.yml`). Set `CHROME_BIN` to `/opt/pw-browsers/chromium-*/chrome-linux64/chrome`.
+
+`check:fast` type-checks changed `tests/db-contract/` and `tests/browser/` files with `--node-modules-dir=none`, as CI's contract lane does.
