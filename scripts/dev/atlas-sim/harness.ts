@@ -61,7 +61,7 @@ export interface Scenario {
   allowReviewOnly?: boolean;
   runs?: number;
   workspace?: "member" | "not_member";
-  persistence?: { fail?: boolean; planRecordFails?: boolean; existingAccounts?: { name: string; domain: string }[]; existingRecords?: ExistingRecord[] };
+  persistence?: { fail?: boolean; failNames?: string[]; planRecordFails?: boolean; existingAccounts?: { name: string; domain: string }[]; existingRecords?: ExistingRecord[] };
   expect?: Record<string, unknown>;
 }
 
@@ -145,7 +145,7 @@ function simModel(s: Scenario, log: { host: string; value: string }[]) {
 }
 
 /** The real persistRows against an in-memory store with the real unique keys. */
-function memoryStore(failWrites: boolean) {
+function memoryStore(failWrites: boolean, failNames: string[] = []) {
   type Row = Record<string, unknown> & { id: string; workspace_id: string };
   const accounts: Row[] = [], contacts: Row[] = [], leads: Row[] = [];
   let n = 0;
@@ -157,7 +157,8 @@ function memoryStore(failWrites: boolean) {
   const store: LeadStore = {
     findAccountByDomain: (ws, d) => Promise.resolve((accounts.find((a) => a.workspace_id === ws && a.domain === d) ?? null) as never),
     findAccountByName: (ws, nm) => Promise.resolve((accounts.find((a) => a.workspace_id === ws && a.name === nm) ?? null) as never),
-    insertAccount: (r) => accounts.some((a) => a.workspace_id === r.workspace_id && a.name === r.name) ? Promise.resolve({ conflict: true as const }) : ins(accounts, r),
+    insertAccount: (r) => failNames.includes(String(r.name)) ? Promise.reject(new Error(`simulated write failure for ${r.name}`))
+      : accounts.some((a) => a.workspace_id === r.workspace_id && a.name === r.name) ? Promise.resolve({ conflict: true as const }) : ins(accounts, r),
     updateAccount: (i, p) => { Object.assign(accounts.find((a) => a.id === i)!, p); return Promise.resolve(); },
     findContactByLinkedin: (ws, u) => Promise.resolve((contacts.find((c) => c.workspace_id === ws && c.linkedin_url === u) ?? null) as never),
     insertContact: (r) => ins(contacts, r),
@@ -190,7 +191,7 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
   const env: Record<string, string> = { LEAD_PIPELINE_ENABLED: "true", LEAD_PIPELINE_WORKSPACES: SIM_WS, PROVIDER_DISCOVERY_ENABLED: "true", PROVIDER_APIFY_DISCOVERY_ENABLED: "true" };
   const ap = simApify(s);
   const grounding: { host: string; value: string }[] = [];
-  const mem = memoryStore(s.persistence?.fail === true);
+  const mem = memoryStore(s.persistence?.fail === true, s.persistence?.failNames ?? []);
   for (const a of s.persistence?.existingAccounts ?? []) {
     mem.accounts.push({ id: `pre-${a.domain}`, workspace_id: SIM_WS, name: a.name, domain: a.domain, raw: {} });
   }

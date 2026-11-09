@@ -1,6 +1,6 @@
 {
  "name": "database-write-failure",
- "description": "Every database insert fails.",
+ "description": "Every database insert fails: the run found companies but saved none, so it is FAILED, never completed.",
  "covers": [
   "database write failure"
  ],
@@ -101,7 +101,7 @@
   "runStatuses": [
    200
   ],
-  "outcome": "completed_with_shortfall",
+  "outcome": "failed",
   "qualified": [
    "Northwind Ledger"
   ],

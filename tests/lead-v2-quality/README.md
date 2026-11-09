@@ -9,13 +9,18 @@ code does today.
 npm run test:lead-v2-quality
 ```
 
-## These tests are expected to fail until Fix Wave 1 lands
+## In CI since 2026-11-09
 
-A test here fails while its root cause is unfixed and passes once it is fixed. The suite is
-deliberately **not** run by CI and is **not** part of `npm run test:lead-v2-readiness` (which runs
-`tests/replay/` only), so a red result here does not block a merge. It tells Account B which
-fixes are done. When a root cause is fixed, its tests turn green; at that point consider promoting
-them into the readiness gate.
+The suite runs in CI (`ci.yml`, backend job, "Lead V2 quality regressions"). Every case whose root
+cause is fixed is a **gate**. A case whose root cause is still open is marked `knownUnfixed` in its
+`qcase({...})`: it is skipped in CI, named `[KNOWN UNFIXED]` in the output, counted as ignored, and
+runs with `LEAD_V2_QUALITY_ALL=1 npm run test:lead-v2-quality`. `knownUnfixed.test.ts` pins the
+list (today: **RC02 L03**), so a case cannot be quietly added to it. When a root cause is fixed,
+remove its `knownUnfixed` and its entry in that list.
+
+T07 (hard US geography reads the headquarters) was fixed by Q3 in `missionCriteria.ts`; the golden
+replay judged it under the recorded pre-Q3 *presence* reading (`asRecorded`), so it is now observed
+with `strictScope` (today's compiler) and a US-headquartered control.
 
 Each test name reads `[quality <root cause> <query ID>] <expected>  (was: <current wrong result>) — <boundary>`,
 and every case is registered in `lib/cases.ts` with the quality query ID, the original query, the

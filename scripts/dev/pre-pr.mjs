@@ -16,6 +16,7 @@ const sh = (cmd) => ["bash", ["-c", cmd]];
 const STEPS = [
   ["deno check (edge functions + worker)", ...sh("{ ls supabase/functions/*/index.ts | grep -v '/mcp/index.ts'; echo worker/main.ts; } | xargs deno check")],
   ["edge-function tests", "deno", ["test", "--allow-read", "--allow-env", "--no-check", "--reporter=dot", "tests/edge-functions/"]],
+  ["Lead V2 quality regressions", "npm", ["run", "-s", "test:lead-v2-quality"]],
   ["deploy-safety tests (tests/infra)", "deno", ["test", "--allow-read", "--allow-env", "--allow-run", "--reporter=dot", "tests/infra/"]],
   ["QA harness tests", ...sh("deno test --allow-read --allow-env --reporter=dot scripts/lead-quality-benchmark/ && deno test --allow-read --allow-env --reporter=dot scripts/model-routing-eval/")],
   ["Replay Lab (Lead V2 readiness)", ...sh("deno check tests/replay/lib/*.ts && npm run -s test:lead-v2-readiness")],

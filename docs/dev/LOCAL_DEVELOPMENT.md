@@ -12,7 +12,7 @@ Nothing here calls a paid provider, writes to a shared database or touches produ
 | `npm run dev:fast` | 1 | Vite with hot reload. Refuses a production `.env.local` and server keys in `VITE_` variables. ATLAS providers are **simulated** by default | Vite ready in **0.44 s** |
 | `npm run check:fast` | 1 | Only what you changed: `deno check` of changed Deno files, frontend `tsc` when `src/` changed, ESLint on changed files, and the tests that **explicitly** reach your change (`--near`) | **~25 s** for this whole branch (tsc ≈ 9.6 s of it); one fixture edit ≈ **13 s** |
 | `npm run test:changed` | 2 | Every test the CI planner's conservative scanner says may be affected, including the ~200 tests that read paths it cannot name | **~2 min** for a one-file change |
-| `npm run test:pre-pr` | 2 | The CI jobs `backend`, `replay` and `frontend`, run locally in CI's order with timings. Lists the CI-only jobs | see *Benchmark* |
+| `npm run test:pre-pr` | 2 | The CI jobs `backend` (incl. Lead V2 quality regressions), `replay` and `frontend`, run locally in CI's order with timings. Lists the CI-only jobs | see *Benchmark* |
 | `npm run test:pre-pr -- --quick` | 2 | The same, without the production build | — |
 
 Useful flags for `test:changed` (also available directly as `node scripts/dev/affected-tests.mjs`):
@@ -189,4 +189,4 @@ To give another agent a `dev:<agent>` simulator: reuse `scripts/dev/atlas-sim/` 
 ## Known local-only differences
 
 - **`tests/infra/testWorkerZeroApify.test.ts`:** 3 cases fail on macOS + Deno 2.8.2 on a clean `launch/hardening` too, but pass in CI (Linux). They compare Deno permission states of a spawned worker.
-- **`tests/lead-v2-quality/evidence.test.ts` (T07):** fails on a clean `launch/hardening` too, and **is not run by CI**. It's a Lead V2 quality check where a Canadian-headquartered company passes a hard US requirement. Tracked as a finding; the lead-pipeline path rejects it (`wrong-headquarters`).
+- **`tests/lead-v2-quality`** (now in CI): T07 was a harness mismatch, not a production bug. Production compiles a hard "US" as headquarters (Q3), but the golden replay judged it under the recorded pre-Q3 *presence* reading. It now runs with `strictScope` and a US-headquartered control. The one remaining open case, RC02 L03, is marked `knownUnfixed`: skipped by name, pinned by `knownUnfixed.test.ts`.

@@ -29,6 +29,11 @@ export interface QualityCase {
   current: string;
   expected: string;
   boundary: Boundary;
+  /**
+   * The root cause is NOT fixed yet: the test is skipped in CI (named, counted, never
+   * silent) and runs with LEAD_V2_QUALITY_ALL=1. Every other case is a CI gate.
+   */
+  knownUnfixed?: string;
 }
 
 const RUN = JSON.parse(Deno.readTextFileSync(new URL("../fixtures/quality-run-2026-10-06.json", import.meta.url))) as {
@@ -61,7 +66,10 @@ export function qcase(c: QualityCase): string {
     if (r) assert(r.query === c.query, `${c.id}: query differs from the recorded run`);
   }
   REGISTRY.set(key, c);
-  return `[quality ${c.rc} ${c.id}] ${c.expected}  (was: ${c.current}) — ${c.boundary}`;
+  return `${c.knownUnfixed ? "[KNOWN UNFIXED] " : ""}[quality ${c.rc} ${c.id}] ${c.expected}  (was: ${c.current}) — ${c.boundary}`;
 }
+
+/** Skip a known-unfixed case unless LEAD_V2_QUALITY_ALL=1 (see `knownUnfixed`). */
+export const skipUnfixed = (): boolean => (Deno.env.get("LEAD_V2_QUALITY_ALL") ?? "") !== "1";
 
 export const registeredCases = () => [...REGISTRY.values()];

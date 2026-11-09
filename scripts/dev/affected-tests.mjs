@@ -55,7 +55,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const only = onlyAt >= 0 ? (argv[onlyAt + 1] ?? "").split(",").filter(Boolean) : null;
   const filesAt = argv.indexOf("--files");
   const files = filesAt >= 0 ? (argv[filesAt + 1] ?? "").split(",").filter(Boolean) : null;
-  const base = argv.find((a, i) => !a.startsWith("--") && i !== onlyAt + 1 && i !== filesAt + 1) ?? "origin/launch/hardening";
+  // The base is the first bare argument that is not the VALUE of --only/--files (when given).
+  const base = argv.find((a, i) => !a.startsWith("--") && !(onlyAt >= 0 && i === onlyAt + 1) && !(filesAt >= 0 && i === filesAt + 1)) ?? "origin/launch/hardening";
   const changed = files ?? [...new Set([...git("diff", "--name-only", `${base}...HEAD`), ...git("diff", "--name-only", "HEAD"), ...git("ls-files", "--others", "--exclude-standard")])];
   const tracked = git("ls-files", ...SUITES.map((s) => `${s.prefix}**/*.test.ts`), ...SUITES.map((s) => `${s.prefix}*.test.ts`), `${NODE_SUITE.prefix}*${NODE_SUITE.suffix}`);
   const tests = tracked.concat(git("ls-files", "--others", "--exclude-standard").filter((f) => /\.test\.(ts|cjs)$/.test(f)))
