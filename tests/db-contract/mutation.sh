@@ -96,8 +96,10 @@ client_api_ts="$root/src/lib/clientBrainApi.ts"
 lisa_sql="$root/supabase/migrations-held/20261111120000_lisa_signal_engine.sql"
 lisa_pipeline_ts="$root/supabase/functions/_shared/lisa/pipeline.ts"
 lisa_verify_ts="$root/supabase/functions/_shared/lisa/verify.ts"
+collab_sql="$root/supabase/migrations-held/20261112120000_agent_collaboration.sql"
+collab_handler_ts="$root/supabase/functions/agent-collaboration/handler.ts"
 restore_list=()
-for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$mem_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts" "$brain_scope_ts" "$client_api_ts" "$lisa_sql" "$lisa_pipeline_ts" "$lisa_verify_ts"; do
+for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$mem_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts" "$brain_scope_ts" "$client_api_ts" "$lisa_sql" "$lisa_pipeline_ts" "$lisa_verify_ts" "$collab_sql" "$collab_handler_ts"; do
   cp "$f" "$f.mutation-backup"; restore_list+=("$f")
 done
 trap 'cp "$backup" "$real"; for f in "${restore_list[@]}"; do mv -f "$f.mutation-backup" "$f"; done; rm -f "$backup" "$out"' EXIT
@@ -788,6 +790,45 @@ prove_killed "lisa: a pass whose every write failed is not reported failed" "$li
 prove_killed "lisa: the funding round is not part of the event identity (the Series B defect)" "$lisa_verify_ts" \
   "      if (a.round) return String(a.round);" '      if (a.round) return "round";' \
   "$lisa_tests" "04 second round: Series B and Series C are two stored events"
+
+# ── PHASE 5 AGENT COLLABORATION (held 20261112120000) ──────────────────────
+collab_tests="$root/tests/db-contract/agentCollaboration.contract.test.ts"
+prove_killed "collab: approval skips the in-transaction role check" "$collab_sql" \
+  "  v_auth := public.company_brain_write_authorization(p_workspace_id, p_actor_id, p_session_id, 'edit');
+  if v_auth <> 'ok' then" "  v_auth := 'ok';
+  if v_auth <> 'ok' then" \
+  "$collab_tests" "S07 a viewer cannot propose or approve — refused by the endpoint AND in the transaction"
+prove_killed "collab: a single-source signal may back research" "$collab_sql" \
+  "                and coalesce(e.normalized_value->'lisa'->'verification'->>'level', '') not in ('corroborated', 'self_reported')
+             then 'signal_unverified'" "                and false
+             then 'signal_unverified'" \
+  "$collab_tests" "S02 unsupported (single-source) signal is not trusted; neither ORION nor the database lets it back research"
+prove_killed "collab: approval does not re-check the cited signals" "$collab_sql" \
+  "  if v_to = 'approved' then
+    v_problem := public.agent_handoff_signal_problem(p_workspace_id, v_row.kind, v_row.signal_ids);" "  if false then
+    v_problem := public.agent_handoff_signal_problem(p_workspace_id, v_row.kind, v_row.signal_ids);" \
+  "$collab_tests" "S04 a retracted signal is excluded — and one retracted while awaiting review blocks approval"
+prove_killed "collab: completion without a persisted result" "$collab_sql" \
+  "    if not coalesce((p_result->>'persisted')::boolean, false) then
+      return jsonb_build_object('outcome', 'not_persisted', 'status', v_row.status);" "    if false then
+      return jsonb_build_object('outcome', 'not_persisted', 'status', v_row.status);" \
+  "$collab_tests" "S13 a failed persistence never produces a completed status (endpoint and database)"
+prove_killed "collab: a cancelled/rejected handoff can still be queued (no CAS, open transitions)" "$collab_sql" \
+  "  if v_row.status is distinct from p_expected then
+    return jsonb_build_object('outcome', 'conflict', 'status', v_row.status);
+  end if;
+  v_ok := case v_row.status
+    when 'approved' then p_to in ('queued', 'blocked')" "  v_ok := case v_row.status
+    when 'rejected' then true
+    when 'cancelled' then true
+    when 'approved' then p_to in ('queued', 'blocked')" \
+  "$collab_tests" "S08 a rejected proposal cannot execute; a cancelled one cannot run later"
+prove_killed "collab: the ATLAS result hook accepts a user token" "$collab_handler_ts" \
+  '    if (!service || token !== service) return json({ error: "forbidden", reason: "service_key_required" }, 403);' "" \
+  "$collab_tests" "S07b ATLAS results are accepted only from the service key, never from a user (even an owner)"
+prove_killed "collab: approval ignores a changed Company Brain" "$collab_handler_ts" \
+  '      if (!still && h.brain_fingerprint !== (brain?.fingerprint ?? null)) {' '      if (false) {' \
+  "$collab_tests" "S19 a Company Brain change invalidates stale context: approval re-checks against the CURRENT Brain"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"

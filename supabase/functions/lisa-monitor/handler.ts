@@ -19,7 +19,6 @@
 
 import { canBrain, normalizeWorkspaceRole, type BrainPermission } from "../_shared/brainRole.ts";
 import { sessionIdFromBearer } from "../_shared/brainWriter.ts";
-import { loadCompanyBrainContext, type LoaderDb, type SharedBrainContext } from "../_shared/companyBrainContextLoader.ts";
 import { competitorProposalsFromMonitoring, submitProposals } from "../_shared/lisaBrainProposals.ts";
 import { resolveCreditEnforcement, type CreditDb } from "../_shared/creditAuthorization.ts";
 import { priceFor } from "../_shared/creditPricing.ts";
@@ -28,7 +27,8 @@ import {
 } from "../_shared/lisa/orchestrator.ts";
 import { rpcSignalStore } from "../_shared/lisa/persistence.ts";
 import { firecrawlSource, ledgerBudget } from "../_shared/lisa/providers.ts";
-import { toAgentSignal, weeklyDigest, WEEKLY_WINDOW_DAYS, type StoredSignalRow } from "../_shared/lisa/weekly.ts";
+import { toAgentSignal, weeklyDigest } from "../_shared/lisa/weekly.ts";
+import { loadBrain, storedLisaRows } from "../_shared/lisa/reads.ts";
 import type { SearchSource } from "../_shared/lisa/types.ts";
 
 export const MAX_ON_DEMAND_WATCHES = 3;
@@ -90,40 +90,11 @@ const cors = {
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-async function loadBrain(admin: AdminClient, ws: string, now: Date): Promise<SharedBrainContext | null> {
-  try {
-    const r = await loadCompanyBrainContext(admin as unknown as LoaderDb, ws, { skipMembershipCheck: true, now });
-    return r.ok ? r.context : null;
-  } catch { return null; }
-}
-
 async function monitoringRows(admin: AdminClient, ws: string): Promise<MonitoringSubjectRow[]> {
   const { data } = await admin.from("monitoring_subjects")
     .select("subject_kind, identifier, label, signals, enabled, cadence_minutes")
     .eq("workspace_id", ws).eq("enabled", true).limit(50);
   return (data ?? []) as MonitoringSubjectRow[];
-}
-
-async function storedLisaRows(admin: AdminClient, ws: string, now: Date): Promise<{ rows: StoredSignalRow[]; evidence: Map<string, Array<{ url: string; domain: string }>> }> {
-  const since = new Date(now.getTime() - WEEKLY_WINDOW_DAYS * 86_400_000).toISOString();
-  const { data } = await admin.from("signal_events")
-    .select("id, workspace_id, signal_type, lifecycle_status, verification_status, confidence, occurred_at, observed_at, source_url, subject_type, subject_key, normalized_value")
-    .eq("workspace_id", ws).eq("actor_key", "lisa_v2").gte("observed_at", since)
-    .order("observed_at", { ascending: false }).limit(200);
-  const rows = (data ?? []) as StoredSignalRow[];
-  const evidence = new Map<string, Array<{ url: string; domain: string }>>();
-  if (rows.length) {
-    const { data: ev } = await admin.from("signal_event_evidence")
-      .select("signal_event_id, source_url, normalized_value")
-      .eq("workspace_id", ws).in("signal_event_id", rows.map((r) => r.id)).limit(1000);
-    for (const e of (ev ?? []) as Array<{ signal_event_id: string; source_url: string | null; normalized_value: { domain?: string } | null }>) {
-      if (!e.source_url) continue;
-      const list = evidence.get(e.signal_event_id) ?? [];
-      list.push({ url: e.source_url, domain: e.normalized_value?.domain ?? "" });
-      evidence.set(e.signal_event_id, list);
-    }
-  }
-  return { rows, evidence };
 }
 
 async function remainingMonitoringCredits(admin: AdminClient, ws: string): Promise<number> {

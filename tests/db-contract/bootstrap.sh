@@ -106,6 +106,8 @@ done
 # Additive; depends on the signal_events tables and company_brain_write_authorization.
 held_lisa=(
   20261111120000_lisa_signal_engine.sql
+  # Phase 5 agent collaboration ledger (depends on the LISA engine above).
+  20261112120000_agent_collaboration.sql
 )
 for f in "${held_lisa[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
