@@ -13,7 +13,7 @@ gsap.registerPlugin(ScrollTrigger);
 // Agentory actually does, which needs no attribution to be true.
 const useCases = [
     { body: "Research markets, find companies, check the signals you asked for, and return qualified opportunities with the evidence attached.", name: "Research & Leads", who: ["lyra", "atlas"] as EmployeeId[] },
-    { body: "Turn your company context and research into posts, messages and outreach written in your voice — every draft ready for your review.", name: "Content & Outreach", who: ["mira"] as EmployeeId[] },
+    { body: "Turn your company context and research into posts, messages and outreach written in your voice — every draft ready for your review.", name: "Content & Outreach", who: ["lyra"] as EmployeeId[] },
     { body: "Monitor what is changing in your market, research candidates for a role, and bring the decisions that need you back in one place.", name: "Intelligence & Recruiting", who: ["lyra", "atlas", "orion"] as EmployeeId[] },
 ];
 

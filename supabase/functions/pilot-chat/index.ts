@@ -116,6 +116,21 @@ import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.t
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, resolveCompanyContactTarget, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
 import { loadChatBrain } from "../_shared/chatBrainContext.ts";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+// THE MODEL THAT ACTUALLY ANSWERED THIS TURN — read from the request's model
+// call collector (the same one that feeds the cost ledger). "deterministic"
+// when no model produced the reply. Replaces a hard-coded
+// "google/gemini-3-flash-preview" label that no chat path has used since the
+// gateway was removed (audit 2026-11, P4).
+// Scoped per REQUEST (AsyncLocalStorage), so concurrent turns in one isolate
+// never read each other's collector.
+const turnCollector = new AsyncLocalStorage<{ lastModel(): string | null }>();
+function actualModelUsed(): string {
+  return turnCollector.getStore()?.lastModel() ?? "deterministic";
+}
+import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute } from "../_shared/departmentRouting.ts";
+import type { PresentedReferentSet } from "../_shared/referentPersistence.ts";
 import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { leadIntentFromMission, planJobsActorInput, type LeadIntent, type BrainLite } from "../_shared/leadIntent.ts";
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
@@ -1118,7 +1133,7 @@ async function showWorkflowConfirmation(
       role: "assistant",
       content: confirmContent,
       agent_slug: "pilot",
-      model_used: "google/gemini-3-flash-preview",
+      model_used: actualModelUsed(),
       metadata: {
         ...baseMeta,
         type: "workflow_confirmation",
@@ -1504,6 +1519,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // someone chooses a limit.
   const chatModelCalls = new ModelCallCollector(resolveRunBudget());
   fail.modelCalls = chatModelCalls;
+  turnCollector.enterWith(chatModelCalls);
 
   // ── WHERE MODEL SPEND GETS RECORDED ─────────────────────────────────────
   //
@@ -1709,7 +1725,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             role: "assistant",
             content: fallbackMsg,
             agent_slug: "pilot",
-            model_used: "google/gemini-3-flash-preview",
+            model_used: actualModelUsed(),
             metadata: {
               ...meta,
               ...pendingClarification("lead_source_selector", "people_unavailable"),
@@ -1745,7 +1761,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
               role: "assistant",
               content: agencyMsg,
               agent_slug: "pilot",
-              model_used: "google/gemini-3-flash-preview",
+              model_used: actualModelUsed(),
               metadata: {
                 ...meta,
                 ...pendingClarification("lead_source_selector", "agency_unavailable"),
@@ -1766,8 +1782,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           workspaceId,
           instruction: originalInstruction,
           toolInput: resolved.action,
-          modelUsed: "google/gemini-3-flash-preview",
-          providerUsed: "lovable-ai",
+          modelUsed: actualModelUsed(),
+          providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
         });
       }
 
@@ -1784,7 +1800,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             role: "assistant",
             content: reAsk,
             agent_slug: "pilot",
-            model_used: "google/gemini-3-flash-preview",
+            model_used: actualModelUsed(),
             metadata: {
               ...meta,
               ...pendingClarification("lead_source_selector", "reask_people_or_companies"),
@@ -1849,7 +1865,30 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // these answers cannot spend and cannot produce a Start card.
   //
   // Typed messages only: a card action carries its own structured intent.
-  const workspaceQuestion = !actionSource && !isPreConfirmed ? classifyWorkspaceQuestion(message) : null;
+  let workspaceQuestion = !actionSource && !isPreConfirmed ? classifyWorkspaceQuestion(message) : null;
+  // ── "WHY WAS THIS LEAD REJECTED?" — RESOLVE THE PRONOUN, NEVER GUESS ────
+  // The recogniser hands back the words ("this lead"); the companies the last
+  // answer SHOWED decide which company that is.
+  if (workspaceQuestion?.kind === "why_company" && isPronounReference(workspaceQuestion.company)) {
+    const { data: recent } = await admin.from("messages").select("metadata")
+      .eq("conversation_id", conversationId).eq("role", "assistant")
+      .order("created_at", { ascending: false }).limit(6);
+    const resolved = resolvePronounCompany(((recent ?? []) as Array<{ metadata?: Record<string, unknown> | null }>)
+      .map((m) => (m.metadata?.[PRESENTED_REFERENTS_KEY] ?? null) as PresentedReferentSet | null));
+    if (resolved.kind === "one") {
+      workspaceQuestion = { ...workspaceQuestion, company: resolved.name };
+    } else {
+      const ask = resolved.kind === "many"
+        ? `Which company do you mean — ${resolved.names.join(", ")}? Tell me the name and I'll explain the recorded decision.`
+        : "Which company do you mean? Tell me its name and I'll explain the recorded decision.";
+      const { data: saved } = await admin.from("messages").insert({
+        conversation_id: conversationId, role: "assistant", content: ask, agent_slug: "pilot",
+        metadata: { classifier_source: "workspace_question", clarification: true, department: "atlas",
+          brain_fingerprint: chatBrain.fingerprint, pronoun_resolution: resolved.kind },
+      }).select("*").single();
+      return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+    }
+  }
   if (workspaceQuestion) {
     // "TODAY" IS THE USER'S DAY when the client says which zone it is in; the
     // answer names UTC when it does not.
@@ -2015,6 +2054,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
     // Which Company Brain version this answer was given (shared loader fingerprint).
     brain_fingerprint: chatBrain.fingerprint,
+    // Which department answered (ORION / ATLAS / LISA / LYRA).
+    department: departmentForRoute(brainRoute?.kind ?? null, null),
   });
 
   async function replyAndReturn(
@@ -2027,7 +2068,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         role: "assistant",
         content,
         agent_slug: "pilot",
-        model_used: "google/gemini-3-flash-preview",
+        model_used: actualModelUsed(),
         metadata: { ...replyMeta(), ...extraMeta },
       })
       .select("*")
@@ -2332,7 +2373,14 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         }
         : understood.request;
 
-      brainRoute = routeRequest(requestForRouting, {
+      // PRIORITY QUESTIONS ARE ORION'S BRIEF (see departmentRouting.ts).
+      const executive = promoteExecutiveQuestion(requestForRouting, message);
+      if (executive.promoted) {
+        console.log("[pilot-chat][routing] priority question → ORION brief");
+        // Every later reader (the read planner included) must see the promoted reading.
+        understood.request = executive.request;
+      }
+      brainRoute = routeRequest(executive.request, {
         // WORKSPACE POLICY, NOT THE MODEL'S OPINION. A paid run still needs the
         // user's explicit Start; this only says spending is possible at all.
         spendAllowed: true,
@@ -3719,7 +3767,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         lead_candidate_ids: top.map((l) => l.id), needs_enrichment: true, needs_outreach: true,
         execution_mode: "outreach", confidence: 0.9, missing_fields: [], reason: "follow-up: enrich + draft from memory",
       } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+      modelUsed: actualModelUsed(), providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
     });
   }
 
@@ -3829,8 +3877,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           missing_fields: [],
           reason: "follow-up: draft outreach to top N from memory",
         } as unknown as ToolInput,
-        modelUsed: "google/gemini-3-flash-preview",
-        providerUsed: "lovable-ai",
+        modelUsed: actualModelUsed(),
+        providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
       });
     }
 
@@ -3889,8 +3937,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           missing_fields: [],
           reason: "follow-up: enrich top N from memory",
         } as ToolInput,
-        modelUsed: "google/gemini-3-flash-preview",
-        providerUsed: "lovable-ai",
+        modelUsed: actualModelUsed(),
+        providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
       });
     }
   }
@@ -3995,7 +4043,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           ? { companies: linkedinUrls, jobTitles: persona.personas }
           : { keywords: queries },
       } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+      modelUsed: actualModelUsed(), providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
     });
   }
 
@@ -4128,7 +4176,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       leadBindings: resolvedBindings,
     missionOrigin: "brief_rewrite",
       toolInput: { ...ti, confidence: 0.95, missing_fields: [] } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+      modelUsed: actualModelUsed(), providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
     });
   }
 
@@ -4207,8 +4255,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         toolInput: {
           ...ti, confidence: 0.9, missing_fields: [],
         } as unknown as ToolInput,
-        modelUsed: "google/gemini-3-flash-preview",
-        providerUsed: "lovable-ai",
+        modelUsed: actualModelUsed(),
+        providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
       });
     }
     // Vague / incomplete → Lead Source Selector (7 engines, brain-prefilled,
@@ -4310,13 +4358,17 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
 
 
-  // 6. Load last 20 messages for context
-  const { data: history } = await admin
+  // 6. Load the LAST 20 messages for context. This used to order ascending
+  // with limit 20 — the conversation's FIRST twenty, so a long thread never
+  // showed the model its recent turns (audit 2026-11, C3). Newest twenty,
+  // then put back in chronological order.
+  const { data: historyNewestFirst } = await admin
     .from("messages")
     .select("role, content")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(20);
+  const history = [...(historyNewestFirst ?? [])].reverse();
 
   const msgs: Msg[] = (history ?? [])
     .filter((m: any) => m.role === "user" || m.role === "assistant")
@@ -4375,8 +4427,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
   });
 
-  const providerUsed = ai.provider !== "none" ? ai.provider : "lovable-ai";
-  const modelUsed = ai.model || "google/gemini-3-flash-preview";
+  const providerUsed = ai.provider !== "none" ? ai.provider : "none";
+  const modelUsed = ai.model || actualModelUsed();
 
   // 7b. Total provider failure — return a safe message but 200 so chat keeps working.
   if (!ai.ok || (!ai.content && !ai.json)) {

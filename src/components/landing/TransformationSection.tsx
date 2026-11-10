@@ -43,7 +43,7 @@ interface Seat {
 
 const SEATS: Seat[] = WORKFORCE.map((employee) => {
   const byId: Record<string, Omit<Seat, 'employee'>> = {
-    mira: {
+    lisa: {
       need: 'Someone watching the market properly',
       owns: 'Pricing · hiring · competitor moves',
       status: 'Monitoring',

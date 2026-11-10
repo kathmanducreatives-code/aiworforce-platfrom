@@ -18,8 +18,8 @@ Deno.test("one word per live state, shared by cards and department pages", () =>
 Deno.test("each department reads its agent through the same identity map as task rows", () => {
   assertEquals(visualAgentKey("lyra"), "lyra");
   assertEquals(visualAgentKey("atlas"), "atlas");
-  // Content drafts run as backend `scribe`; that is the key their live state lives under.
-  assertEquals(visualAgentKey("scribe"), "orion");
+  // Content drafts run as backend `scribe`, which is Lyra's (Workforce V2).
+  assertEquals(visualAgentKey("scribe"), "lyra");
 });
 
 Deno.test("no department surface hardcodes a status; all use useDepartmentAgentStatus", async () => {

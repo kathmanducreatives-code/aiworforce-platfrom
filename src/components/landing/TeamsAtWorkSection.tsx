@@ -34,7 +34,7 @@ const DEPARTMENTS: DeptCard[] = [
     ],
   },
   {
-    emoji: "📣", name: "Leads & Outreach", room: "growth", owners: ["lyra", "atlas", "mira"],
+    emoji: "📣", name: "Leads & Outreach", room: "growth", owners: ["lisa", "atlas", "lyra"],
     tools: [
       { Logo: ClaudeLogo, name: "Claude" }, { Logo: FirecrawlLogo, name: "Firecrawl" },
       { Logo: InstantlyLogo, name: "Instantly" }, { Logo: ApifyLogo, name: "Apify" },
@@ -49,7 +49,7 @@ const DEPARTMENTS: DeptCard[] = [
     ],
   },
   {
-    emoji: "🎨", name: "Content", room: "content", owners: ["mira"],
+    emoji: "🎨", name: "Content", room: "content", owners: ["lyra"],
     tools: [
       { Logo: ClaudeLogo, name: "Claude" }, { Logo: ReplicateLogo, name: "Replicate" },
       { Logo: ElevenLabsLogo, name: "ElevenLabs" },

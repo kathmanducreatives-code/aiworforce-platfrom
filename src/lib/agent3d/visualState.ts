@@ -24,8 +24,8 @@
 // ── identities ─────────────────────────────────────────────────────────────
 
 /** Public identities, the only ones a visual is keyed by. */
-export type VisualAgentKey = 'pilot' | 'lyra' | 'atlas' | 'mira' | 'orion';
-export const VISUAL_AGENT_KEYS: readonly VisualAgentKey[] = ['pilot', 'lyra', 'atlas', 'mira', 'orion'];
+export type VisualAgentKey = 'pilot' | 'lyra' | 'atlas' | 'mira' | 'orion' | 'lisa';
+export const VISUAL_AGENT_KEYS: readonly VisualAgentKey[] = ['pilot', 'lyra', 'atlas', 'mira', 'orion', 'lisa'];
 
 /**
  * Backend slug → public identity. MIRRORS `LEGACY_TO_PUBLIC` in
@@ -33,12 +33,12 @@ export const VISUAL_AGENT_KEYS: readonly VisualAgentKey[] = ['pilot', 'lyra', 'a
  * in image assets; a test reads that file and fails if the two drift.
  */
 export const LEGACY_SLUG_TO_VISUAL: Readonly<Record<string, VisualAgentKey>> = {
-  pilot: 'pilot',
-  scout: 'lyra',
+  pilot: 'orion',
+  scout: 'atlas',
   aria: 'atlas',
   hawk: 'atlas',
-  penn: 'mira',
-  scribe: 'orion',
+  penn: 'lyra',
+  scribe: 'lyra',
 };
 
 /** Unknown slugs resolve to null — work is never attributed by guesswork. */

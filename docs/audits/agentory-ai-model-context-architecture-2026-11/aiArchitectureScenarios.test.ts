@@ -160,38 +160,38 @@ Deno.test("R1 routing is by OBJECTIVE, not by agent; Chat Brain is GPT-5.6 Luna;
   assertEquals(r.model, "gpt-5.6-luna");
   assertEquals(r.route, "lead_mission");
   assertEquals(r.binding.kind, "lead_route");
-  for (const name of ["ORION", "ATLAS", "LYRA", "LISA", "Orion", "Atlas", "Lyra", "Lisa"]) assertFalse(r.systemPrompt.includes(name), name);
+  // Workforce V2: the prompt now explains what each department NAME means (it still never chooses an agent).
+  for (const name of ["ORION", "ATLAS", "LYRA", "LISA"]) assertStringIncludes(r.systemPrompt, name);
 });
 
-Deno.test("P1 the master system prompt names Pilot/Scout/Aria/Penn/Hawk/Scribe — not ORION/ATLAS/LYRA/LISA — and promises a silent Gemini fallback that no longer exists", () => {
+Deno.test("P1 [FIXED in Workforce V2] the master prompt names the four departments and no silent Gemini fallback", () => {
   const p = getAgentorySystemPrompt({ taskType: "agent_execution" });
-  for (const n of ["Pilot", "Scout", "Aria", "Penn", "Hawk", "Scribe"]) assertStringIncludes(p, n);
-  for (const n of ["Orion", "Atlas", "Lyra", "Lisa"]) assertFalse(p.includes(n), n);
-  assertStringIncludes(p, "fall back to\n                  Gemini/Lovable silently");
+  for (const n of ["ORION", "ATLAS", "LISA", "LYRA"]) assertStringIncludes(p, n);
+  for (const n of ["Scout ", "Aria ", "Penn ", "Hawk ", "Scribe "]) assertFalse(p.includes(`- ${n}`), n);
+  assertFalse(/Gemini\/Lovable silently/.test(p));
   assertFalse(Object.values(TASK_MODELS).some((t) => /gemini/i.test(t.model) || /gemini/i.test(t.fallback?.model ?? "")), "no Gemini route exists");
 });
 
-Deno.test("P2 ORION's wording call carries two identities: <current_role>scribe</current_role> and 'You are Orion'", () => {
+Deno.test("P2 [FIXED in Workforce V2] ORION's wording call carries one identity", () => {
   const daily = src("supabase/functions/daily-brief/index.ts");
-  assertStringIncludes(daily, 'currentAgent: "scribe"');
-  const sys = getAgentorySystemPrompt({ taskType: "reporting", currentAgent: "scribe", companyBrain: {} }) + "\n\n" + MODEL_INSTRUCTIONS;
-  assertStringIncludes(sys, "<current_role>scribe</current_role>");
-  assertStringIncludes(sys, "You are Orion");
+  assertStringIncludes(daily, 'currentAgent: "orion"');
+  const sys = getAgentorySystemPrompt({ taskType: "reporting", currentAgent: "orion", companyBrain: {} }) + "\n\n" + MODEL_INSTRUCTIONS;
+  assertStringIncludes(sys, "<current_role>ORION</current_role>");
+  assertFalse(sys.includes("<current_role>scribe</current_role>"));
 });
 
-Deno.test("P3 public naming in code differs from the intended product naming (display map, no LISA)", () => {
+Deno.test("P3 [FIXED in Workforce V2] public naming matches the product: Orion, Atlas, Lisa, Lyra", () => {
   const reg = src("src/config/agentRegistry.ts");
-  assertStringIncludes(reg, "Lyra   — AI Signal Scout          (execution: scout)");
-  assertStringIncludes(reg, "Orion  — Executive Intelligence   (execution: daily-brief executive brief; legacy slug scribe)");
-  assertStringIncludes(reg, "Mira   — AI Message Strategist");
-  assertFalse(/id: 'lisa'/.test(reg), "LISA is not an in-app agent identity");
+  assertStringIncludes(reg, "export const PUBLIC_AGENT_ORDER: readonly PublicAgentId[] = [\n  'orion',\n  'atlas',\n  'lisa',\n  'lyra',\n];");
+  assert(/id: 'lisa'/.test(reg), "LISA is an in-app identity");
+  assertStringIncludes(reg, "scribe: 'lyra',");
+  assertStringIncludes(reg, "scout: 'atlas',");
 });
 
-Deno.test("P4 transcript model attribution is hard-coded to a model chat no longer uses", () => {
+Deno.test("P4 [FIXED in Workforce V2] transcripts record the model that actually answered", () => {
   const chat = src("supabase/functions/pilot-chat/index.ts");
-  const labels = chat.match(/model_used: "google\/gemini-3-flash-preview"/g) ?? [];
-  assert(labels.length >= 5, `found ${labels.length}`);
-  assertStringIncludes(chat, 'const modelUsed = ai.model || "google/gemini-3-flash-preview";');
+  assertEquals((chat.match(/model_used: "google\/gemini-3-flash-preview"/g) ?? []).length, 0);
+  assertStringIncludes(chat, "const modelUsed = ai.model || actualModelUsed();");
 });
 
 // ═══════════════════ PART 4 — CONTEXT AND MEMORY ════════════════════════════
@@ -214,21 +214,23 @@ Deno.test("C2 [FIXED in Workforce V2] ATLAS's planner passes the authenticated u
   assert((await loadMissionContextWithMemory(db(tables()) as never, WS, { userId: USER })).ok);
 });
 
-Deno.test("C3 conversation memory: Chat Brain sees the last 8 turns in order; the legacy fallback query reads the FIRST 20", () => {
+Deno.test("C3 [FIXED in Workforce V2] Chat Brain sees the last 8 turns in order; the fallback now reads the LAST 20", () => {
   const rowsNewestFirst = [{ role: "assistant", content: "3" }, { role: "user", content: "2" }, { role: "assistant", content: "1" }];
   assertEquals(toBrainTurns(rowsNewestFirst).map((t) => t.content), ["1", "2", "3"]);
   const chat = src("supabase/functions/pilot-chat/index.ts");
-  const i = chat.indexOf("// 6. Load last 20 messages for context");
-  const block = chat.slice(i, i + 400);
-  assertStringIncludes(block, '.order("created_at", { ascending: true })');
-  assertStringIncludes(block, ".limit(20)");
+  const i = chat.indexOf("// 6. Load the LAST 20 messages for context.");
+  assert(i > 0);
+  const block = chat.slice(i, i + 700);
+  assertStringIncludes(block, '.order("created_at", { ascending: false })');
+  assertStringIncludes(block, ".reverse()");
 });
 
 // ═══════════════════ PART 8 — THE TEN SCENARIOS ═════════════════════════════
 Deno.test("S1 ORION 'What should I prioritize this week?' — not a recognised workspace question; Chat Brain decides; a converse reading never reaches ORION's brief", async () => {
   assertEquals(classifyWorkspaceQuestion("What should I prioritize this week?"), null);
-  const asConverse = await route("What should I prioritize this week?", part("converse", "company"));
-  assertEquals(asConverse.binding.kind, "category"); // Pilot's grounded conversational reply (Haiku)
+  // [FIXED in Workforce V2] pilot-chat promotes a priority question to ORION's brief before routing
+  // (departmentRouting.promoteExecutiveQuestion; tests/edge-functions/_shared/workforce/routing.test.ts).
+  assertStringIncludes(src("supabase/functions/pilot-chat/index.ts"), "promoteExecutiveQuestion(requestForRouting, message)");
   const asBrief = await route("What should I prioritize this week?", part("read", "conversation"));
   assertEquals(asBrief.binding.kind, "read"); // → readSurface target "brief" → daily-brief (deterministic + optional Haiku wording)
 });
@@ -267,8 +269,9 @@ Deno.test("S5 ORION 'Why did you recommend this company?' → not recognised; Ch
   assertEquals((await route("Why did you recommend this company?", part("converse", "company"))).binding.kind, "category");
 });
 
-Deno.test("S6 ATLAS 'Why was this lead rejected?' → the deterministic recogniser treats 'this lead' as a company NAME", () => {
+Deno.test("S6 [FIXED in Workforce V2] 'Why was this lead rejected?' — 'this lead' is resolved against what was shown", () => {
   assertEquals(classifyWorkspaceQuestion("Why was this lead rejected?"), { kind: "why_company", company: "this lead", asked: "rejected" });
+  assertStringIncludes(src("supabase/functions/pilot-chat/index.ts"), "isPronounReference(workspaceQuestion.company)");
   // With a named company it is answered from stored evidence, no model.
   assertEquals(classifyWorkspaceQuestion("Why was Northstar Manufacturing rejected?")?.kind, "why_company");
   // The ATLAS result contract (Phase 5) explains a rejection honestly.
@@ -283,16 +286,16 @@ Deno.test("S7 LYRA 'Rewrite this in our brand voice' — the content path (run-a
   assertFalse(src("supabase/functions/pilot-chat/index.ts").includes("renderBrainMemoryBlock"));
 });
 
-Deno.test("S8 LISA 'Is this funding announcement verified?' — LISA V2 counts sources, but chat's read surface never selects verification", () => {
+Deno.test("S8 [FIXED in Workforce V2] LISA counts sources and chat's read surface now states verification", () => {
   const one = { source_domain: "a.example", source_type: "news" as const, negation: null, attributes: {}, category: "funding" as const };
   assertEquals(verify([one]).level, "single_source");
   assertEquals(verify([one, { ...one, source_domain: "b.example" }]).level, "corroborated");
   const read = src("supabase/functions/_shared/readSurface.ts");
-  assertFalse(/verification_status|normalized_value/.test(read.slice(read.indexOf('db.from("signal_events")'), read.indexOf('db.from("signal_events")') + 300)));
+  assert(/verification_status, lifecycle_status, normalized_value/.test(read.slice(read.indexOf('db.from("signal_events")'), read.indexOf('db.from("signal_events")') + 300)));
 });
 
-Deno.test("S9 cross-agent 'What did LISA discover, and what should ATLAS do?' — the recogniser only knows ATLAS; LISA is not in its vocabulary", () => {
-  assertEquals(classifyWorkspaceQuestion("What did LISA discover, and what should ATLAS do?"), { kind: "agent_activity_today", agent: "atlas" });
+Deno.test("S9 [FIXED in Workforce V2] a cross-department question goes to Chat Brain, part by part", () => {
+  assertEquals(classifyWorkspaceQuestion("What did LISA discover, and what should ATLAS do?"), null);
 });
 
 Deno.test("S10 missing Brain — prompts tell the model not to invent company facts; ATLAS-style loaders report 'missing'", async () => {

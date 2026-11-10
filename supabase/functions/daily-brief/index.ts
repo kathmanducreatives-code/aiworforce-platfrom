@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
       systemPrompt:
         getAgentorySystemPrompt({
           taskType: "reporting",
-          currentAgent: "scribe",
+          currentAgent: "orion",
           companyBrain: profile,
         }) + "\n\n" + MODEL_INSTRUCTIONS,
       messages: [{ role: "user", content: "FACTS:\n" + facts }],
