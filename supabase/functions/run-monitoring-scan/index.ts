@@ -509,7 +509,10 @@ Deno.serve(async (req) => {
   }
 
   // Stamp the run so a subject's cadence has a last-run to measure from.
-  if (outcome.ok) {
+  // `events_not_persisted` is stamped too: the provider spend happened, and an
+  // unstamped subject would be re-bought on every scheduler tick. The pass
+  // still answers 409 with the refusal, so the failure is visible, not silent.
+  if (outcome.ok || outcome.refusal === "events_not_persisted") {
     await admin.from("monitoring_subjects")
       .update({ last_run_at: new Date().toISOString() })
       .eq("workspace_id", workspace_id).eq("enabled", true);

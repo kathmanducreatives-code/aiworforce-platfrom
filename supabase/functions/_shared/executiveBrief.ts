@@ -40,6 +40,8 @@ export interface EvidenceRef {
   occurred_at: string | null;
   /** In-app route that shows the underlying record (or its list). */
   route: string;
+  /** The public source the row cites (LISA V2 signals). Copied from the row, never invented. Additive. */
+  source_url?: string | null;
 }
 
 /** One normalized source row, scored. */
@@ -55,6 +57,16 @@ export interface ExecItem extends EvidenceRef {
   source_confidence: "high" | "medium" | "low" | null;
   /** Category used for grouping (signal type, lead priority, draft status…). */
   category: string | null;
+  /**
+   * LISA V2 provenance, when the row carries it. Additive. ORION reads it to
+   * state verification, lifecycle, Brain influence and the next step; it never
+   * elevates an item whose `elevatable` is false.
+   */
+  lisa?: {
+    verification: string; independent_sources: number; lifecycle: string; elevatable: boolean;
+    why_now: string | null; why_it_matters: string | null; suggested_action: string | null;
+    relevance_score: number | null; brain_influence: string[];
+  };
 }
 
 export interface BrainSnapshot {
@@ -166,7 +178,9 @@ export interface ExecutiveBrief {
 // ── helpers ─────────────────────────────────────────────────────────────────
 
 function ref(i: EvidenceRef): EvidenceRef {
-  return { kind: i.kind, table: i.table, id: i.id, title: i.title, occurred_at: i.occurred_at, route: i.route };
+  const r: EvidenceRef = { kind: i.kind, table: i.table, id: i.id, title: i.title, occurred_at: i.occurred_at, route: i.route };
+  if (typeof i.source_url === "string" && /^https?:\/\//.test(i.source_url)) r.source_url = i.source_url;
+  return r;
 }
 
 function refKey(r: Pick<EvidenceRef, "table" | "id">): string {
@@ -288,12 +302,14 @@ function candidates(ctx: ExecutiveContext, signals: ExecItem[], leads: ExecItem[
   }
 
   // MARKET: the strongest change not already covered by the opportunity.
-  for (const s of signals.slice(0, 3)) {
+  // A LISA claim that is single-source, contradicted, stale or unsourced is
+  // never raised to a recommendation (it stays visible on the Signals page).
+  for (const s of signals.filter((x) => !x.lisa || x.lisa.elevatable).slice(0, 3)) {
     out.push({
       category: "market",
       score: s.score,
       title: `${label(s)}: ${s.title}`,
-      why: `${sentence(s.reasons, "A recent market change.")}${icpPhrase(ctx)}`.trim(),
+      why: `${sentence(s.reasons, "A recent market change.")}${s.lisa?.why_now ? ` ${s.lisa.why_now}` : ""}${icpPhrase(ctx)}`.trim(),
       action: { label: "Open signals", route: s.route },
       confidence: itemConfidence(s),
       evidence: [ref(s)],

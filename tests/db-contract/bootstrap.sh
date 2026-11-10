@@ -99,3 +99,15 @@ for f in "${held_memory[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done
+
+# The held LISA V2 signal engine: atomic event + evidence recording with a
+# server-side verification recount, the human lifecycle transition (in-
+# transaction authorization), scan-run leases and per-subject watch state.
+# Additive; depends on the signal_events tables and company_brain_write_authorization.
+held_lisa=(
+  20261111120000_lisa_signal_engine.sql
+)
+for f in "${held_lisa[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done

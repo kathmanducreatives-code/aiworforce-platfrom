@@ -40,7 +40,7 @@ const denoFiles = changed.filter((f) => /\.ts$/.test(f) && !f.startsWith("src/")
 // The database-contract and mounted-browser tests import `npm:` packages that
 // CI resolves with `--node-modules-dir=none` (tests/db-contract/run.sh); checked
 // against the repo's node_modules they fail before type-checking anything.
-const isContract = (f) => f.startsWith("tests/db-contract/") || f.startsWith("tests/browser/");
+const isContract = (f) => f.startsWith("tests/db-contract/") || f.startsWith("tests/browser/") || /\.contract\.test\.ts$/.test(f);
 const appDeno = denoFiles.filter((f) => !isContract(f));
 const contractDeno = denoFiles.filter(isContract);
 if (appDeno.length) step(`deno check (${appDeno.length})`, "deno", ["check", ...appDeno]);

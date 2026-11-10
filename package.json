@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:fast": "node scripts/dev/dev-fast.mjs",
     "dev:atlas": "deno run --allow-read --allow-write=dev-sim --no-check scripts/dev/atlas-sim.ts",
+    "dev:lisa": "deno run --allow-read --no-check scripts/dev/lisa-sim.ts",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",

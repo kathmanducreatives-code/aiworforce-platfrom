@@ -1,0 +1,44 @@
+{
+  "name": "launch",
+  "fictional": true,
+  "note": "A real launch announcement is kept; a generic product page is dropped.",
+  "now": "2026-11-10T12:00:00Z",
+  "subject": {
+    "kind": "competitor",
+    "domain": "corvane.example",
+    "name": "Corvane Systems",
+    "origin": "brain_competitor",
+    "categories": [
+      "funding",
+      "hiring",
+      "expansion",
+      "product_launch"
+    ],
+    "cadence_minutes": 10080
+  },
+  "responses": {
+    "product_launch": {
+      "hits": [
+        {
+          "url": "https://northwire-news.example/corvane-sense",
+          "title": "Corvane Systems launches \"Corvane Sense\" for plant-floor monitoring",
+          "description": "Corvane Systems launches \"Corvane Sense\", a predictive-maintenance platform for plant floors.",
+          "published_at": "2026-11-07"
+        },
+        {
+          "url": "https://corvane.example/products",
+          "title": "Products",
+          "description": "Corvane Systems product platform features."
+        }
+      ],
+      "error": null,
+      "credits": 1
+    }
+  },
+  "expect": {
+    "events": 1,
+    "dropped": {
+      "generic_page": 1
+    }
+  }
+}

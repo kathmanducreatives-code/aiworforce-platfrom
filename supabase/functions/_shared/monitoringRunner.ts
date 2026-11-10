@@ -125,7 +125,15 @@ export type MonitoringRefusal =
    * with a reason can back off; a scheduler reading a 500 cannot tell an
    * out-of-credit account from a bug.
    */
-  | "execution_failed";
+  | "execution_failed"
+  /**
+   * EVERY EVENT WRITE WAS REFUSED. The pass collected and projected events,
+   * and not one reached the database (e.g. SIGNALS_V2 off → `flag_disabled`,
+   * or the database rejected them). Reporting that as `ok: true` is how a
+   * workspace can be "monitored" for weeks with zero stored events and no
+   * error anywhere. Partial failures stay `ok: true` with `events.failed` set.
+   */
+  | "events_not_persisted";
 
 export interface MonitoringRunOutcome {
   ok: boolean;
@@ -385,6 +393,20 @@ export async function runMonitoring(
         log("monitoring_event_write_failed", { company: c.key, error: String(e) });
       }
     }
+  }
+
+  if (events.attempted > 0 && events.written === 0 && events.deduplicated === 0) {
+    log("monitoring_events_not_persisted", { attempted: events.attempted, failed: events.failed });
+    return {
+      ok: false, refusal: "events_not_persisted",
+      reason: `all ${events.attempted} event write(s) were refused; nothing was stored`,
+      accepted_subjects: compiled.accepted.length,
+      dropped_subjects: compiled.dropped,
+      completed_capabilities: run.state.completed_capabilities,
+      preflight: pre,
+      events,
+      boundaries: { lead_steps_scheduled: [], authority: MONITORING_AUTHORITY },
+    };
   }
 
   return {

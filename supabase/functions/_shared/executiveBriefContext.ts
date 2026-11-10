@@ -22,6 +22,7 @@
 //   A FAILED READ IS REPORTED, NOT HIDDEN. It lands in `unavailable_sources`
 //   and the section is empty, so the brief can say what it could not see.
 
+import { isStale } from "./lisa/verify.ts";
 import {
   brainCompanyName, brainCompetitors, brainDescription, brainICP, brainMissingFields, hasUsableBrain,
 } from "./companyBrainContext.ts";
@@ -324,7 +325,25 @@ export async function collectExecutiveContext(
     if (age !== null && age <= 2) { score += 25; reasons.push("happened in the last 2 days"); }
     else if (age !== null && age <= 7) { score += 15; reasons.push("happened this week"); }
     else score += 5;
-    if (r.verification_status === "provider_verified") { score += 10; reasons.push("verified by the data provider"); }
+    // LISA V2 rows carry a COUNTED verification level; trust that over the
+    // column (whose `provider_verified` is a compatibility projection there).
+    const lisa = obj(nv.lisa);
+    const lisaVer = obj(lisa.verification);
+    const lisaLevel = s(lisaVer.level);
+    let lisaElevatable = true;
+    if (lisaLevel) {
+      const indep = n(lisaVer.independent_sources) ?? 0;
+      const cat = s(lisa.category);
+      const ev = s(lisa.event_date);
+      const stale = !!(cat && ev && ["funding", "hiring", "expansion", "product_launch"].includes(cat) &&
+        isStale(cat as "funding", ev, new Date(now)));
+      if (lisaLevel === "corroborated") { score += 10; reasons.push(`corroborated by ${indep} independent sources`); }
+      else if (lisaLevel === "self_reported") { score += 5; reasons.push("announced by the company itself"); }
+      else if (lisaLevel === "single_source") { score -= 10; reasons.push("only one source so far (unverified)"); lisaElevatable = false; }
+      else { score -= 40; reasons.push("sources contradict each other"); lisaElevatable = false; }
+      if (stale) { score -= 15; reasons.push("the event is past its freshness window"); lisaElevatable = false; }
+      if (!/^https?:\/\//.test(s(r.source_url) ?? "")) lisaElevatable = false;
+    } else if (r.verification_status === "provider_verified") { score += 10; reasons.push("verified by the data provider"); }
     if (r.freshness === "stale") { score -= 15; reasons.push("source marks it stale"); }
     if (industryMatch(accountIndustry(accountId), brain)) { score += 15; reasons.push("in an industry you target"); }
     const domains = [
@@ -345,12 +364,25 @@ export async function collectExecutiveContext(
       score += 8; reasons.push(`supports your goal: ${clip(goal, 60)}`);
       influence(`Goal: ${clip(goal, 80)}`, "Company Brain goals", "ranked higher", `signal_events:${id}`);
     }
+    const rel = obj(lisa.relevance);
     signals.push({
       kind: "signal", table: "signal_events", id, title,
       occurred_at: when, route: "/signals",
-      detail: clip(s(nv.description), 160) ?? typeLabel,
+      detail: clip(s(nv.description) ?? s(lisa.description), 160) ?? typeLabel,
       account_id: accountId, account_name: name, score: clamp(score), reasons,
-      source_confidence: conf, category: type,
+      // An unsupported LISA claim can never read as high-confidence.
+      source_confidence: lisaLevel && !lisaElevatable ? "low" : conf, category: type,
+      ...(lisaLevel ? {
+        source_url: /^https?:\/\//.test(s(r.source_url) ?? "") ? s(r.source_url) : null,
+        lisa: {
+          verification: lisaLevel, independent_sources: n(lisaVer.independent_sources) ?? 0,
+          lifecycle: s(r.lifecycle_status) ?? "active", elevatable: lisaElevatable,
+          why_now: s(rel.why_now), why_it_matters: s(rel.why_it_matters), suggested_action: s(rel.suggested_action),
+          relevance_score: n(rel.score),
+          brain_influence: (Array.isArray(rel.reasons) ? rel.reasons : []).filter((x): x is string =>
+            typeof x === "string" && /Company Brain|target industry|target geography|your goal|competitor in your/i.test(x)),
+        },
+      } : {}),
     });
   }
 

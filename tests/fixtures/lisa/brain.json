@@ -1,0 +1,30 @@
+{
+  "fictional": true,
+  "status": "ready",
+  "fingerprint": "fp-brain-v1",
+  "industries": [
+    "Manufacturing"
+  ],
+  "geography": [
+    "United States",
+    "Nordics"
+  ],
+  "goals": [
+    "Win plant-floor maintenance accounts in the Midwest"
+  ],
+  "competitors": [
+    {
+      "name": "Corvane Systems",
+      "domain": "corvane.example",
+      "source": "profile"
+    }
+  ],
+  "exclusions": {
+    "companies": [
+      "Ostrava Metals"
+    ],
+    "industries": [],
+    "geographies": [],
+    "keywords": []
+  }
+}

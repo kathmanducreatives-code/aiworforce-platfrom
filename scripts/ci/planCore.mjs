@@ -64,6 +64,8 @@ export const EXTRA_DEPS = {
   "tests/db-contract/schemaCompat.contract.test.ts": [
     "supabase/functions/run-agent/index.ts", "supabase/functions/_shared/", "worker/",
   ],
+  // Replays tests/fixtures/lisa/<name>.json by fixture name (LISA V2 contract + unit tests).
+  "tests/edge-functions/_shared/lisa/lisaFixtures.ts": ["tests/fixtures/lisa/"],
 };
 
 const CODE = /\.(m?[jt]sx?|json)$/;

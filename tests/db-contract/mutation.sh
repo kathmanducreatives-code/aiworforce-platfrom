@@ -93,8 +93,11 @@ brain_draft_ts="$root/supabase/functions/generate-company-brain-draft/index.ts"
 client_save_ts="$root/supabase/functions/_shared/clientBrainSave.ts"
 brain_scope_ts="$root/src/lib/brainScope.ts"
 client_api_ts="$root/src/lib/clientBrainApi.ts"
+lisa_sql="$root/supabase/migrations-held/20261111120000_lisa_signal_engine.sql"
+lisa_pipeline_ts="$root/supabase/functions/_shared/lisa/pipeline.ts"
+lisa_verify_ts="$root/supabase/functions/_shared/lisa/verify.ts"
 restore_list=()
-for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$mem_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts" "$brain_scope_ts" "$client_api_ts"; do
+for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$mem_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts" "$brain_scope_ts" "$client_api_ts" "$lisa_sql" "$lisa_pipeline_ts" "$lisa_verify_ts"; do
   cp "$f" "$f.mutation-backup"; restore_list+=("$f")
 done
 trap 'cp "$backup" "$real"; for f in "${restore_list[@]}"; do mv -f "$f.mutation-backup" "$f"; done; rm -f "$backup" "$out"' EXIT
@@ -762,6 +765,29 @@ prove_killed "brain memory: a model inference may be labelled verified" "$mem_sq
 prove_killed "brain memory: a single-record decision may become a workspace-wide rule" "$mem_sql" \
   "    if v_scope = 'workspace' and not v_decision_workspace_ok then" "    if false then" \
   "$mem_tests" "a lead rejection cannot be recorded as a workspace-wide rule, and never creates an exclusion"
+
+# ── LISA V2 SIGNAL ENGINE (held 20261111120000) ────────────────────────────
+# Each removes one guard and requires the named real-database scenario to FAIL.
+lisa_tests="$root/tests/db-contract/lisaSignalEngine.contract.test.ts"
+prove_killed "lisa: the lifecycle transition skips the in-transaction role check" "$lisa_sql" \
+  "  if v_auth <> 'ok' then" "  if false then" \
+  "$lisa_tests" "lifecycle: editor dismisses and restores with an audit trail; viewer and stranger are refused in the transaction"
+prove_killed "lisa: one independent source is projected as verified" "$lisa_sql" \
+  "when v_independent >= 2 then 'provider_verified'" "when v_independent >= 1 then 'provider_verified'" \
+  "$lisa_tests" "04 second round: Series B and Series C are two stored events"
+prove_killed "lisa: 'restore' can revive a retracted event" "$lisa_sql" \
+  "when 'restore' then case when v_from = 'dismissed' then 'active' end" "when 'restore' then 'active'" \
+  "$lisa_tests" "18 retracted: stored retracted; a human 'restore' cannot revive it; never in the digest"
+prove_killed "lisa: a live lease does not block a second scheduler" "$lisa_sql" \
+  "  if v_run.status = 'running' and v_run.lease_until > v_now then" "  if false then" \
+  "$lisa_tests" "19 concurrent jobs: two schedulers in one slot → one claim; two writers of one event → one row, evidence merged"
+prove_killed "lisa: a pass whose every write failed is not reported failed" "$lisa_pipeline_ts" \
+  '    : counts.persist_failed && stored.length === 0 && counts.events > 0 ? "failed"
+' "" \
+  "$lisa_tests" "20 persistence failure: a database refusal is a failed pass, never ok, and nothing half-written"
+prove_killed "lisa: the funding round is not part of the event identity (the Series B defect)" "$lisa_verify_ts" \
+  "      if (a.round) return String(a.round);" '      if (a.round) return "round";' \
+  "$lisa_tests" "04 second round: Series B and Series C are two stored events"
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
