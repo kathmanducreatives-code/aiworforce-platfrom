@@ -17,6 +17,7 @@ import {
   planQualifiedLeadBeforePersistence, buildOrchestrateResponsePlan,
 } from "../_shared/intelligence/leads/leadPlanOrchestration.ts";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
+import { createTerraRunLimiter } from "../_shared/terraPolicy.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
@@ -1464,6 +1465,8 @@ Return ONLY valid JSON, no prose, no markdown:
       workspaceId: workspace_id,
       onModelCall: modelCalls.sink,
       budget: modelCalls,
+      workforceTask: "multi_agent_planning",
+      terraLimiter: createTerraRunLimiter(),
     });
 
     // ── AND INTO THE LEDGER ────────────────────────────────────────────────

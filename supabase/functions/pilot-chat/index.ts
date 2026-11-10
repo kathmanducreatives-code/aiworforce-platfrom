@@ -31,6 +31,7 @@ type UntypedClient = SupabaseClient<any, any, any>;
 import {
   generateJson, generateText, logProviderCall, type GenerateOpts,
 } from "../_shared/aiProvider.ts";
+import { createTerraRunLimiter } from "../_shared/terraPolicy.ts";
 import type { ToolInput } from "../_shared/toolInputPlanner.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
@@ -2841,6 +2842,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           maxTokens: 420,
           functionName: "pilot-chat-converse",
           workspaceId,
+          // ORION's company Q&A may opt into Terra; off unless configured.
+          workforceTask: "complex_company_qa",
+          terraLimiter: createTerraRunLimiter(),
         });
         return await replyAndReturn(
           ai.ok && ai.content?.trim() ? ai.content.trim() : CONVERSE_UNAVAILABLE,

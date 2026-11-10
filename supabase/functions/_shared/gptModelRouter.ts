@@ -68,6 +68,7 @@
 
 import type { GptTier } from "./gptProvider.ts";
 import { minimumReasoningEffort, type ReasoningEffort } from "./modelRequestBody.ts";
+import { terraRouteFor, type EnvReader, type WorkforceTask } from "./terraPolicy.ts";
 
 export const GPT_MODEL_ROUTER_VERSION = "gpt-model-router-v2" as const;
 
@@ -262,7 +263,22 @@ export interface ModelRoute {
   signals: RoutingSignals;
   /** Present only when a non-default family is configured (AGENTORY_GPT_MODEL_FAMILY). */
   model_family?: ModelFamilyId;
+  /** Present only when GPT-6.1 Terra took this stage (terraPolicy, all flags on). */
+  terra?: { task: WorkforceTask; replaced: string };
 }
+
+/**
+ * GPT-6.1 TERRA OPT-IN, ADDITIVE. The stages the Workforce V2 plan names for a
+ * benchmark-first Terra trial. Nothing changes unless `terraRouteFor` allows
+ * the task — every flag on, the model verified and priced, the task opted in.
+ * Priced from configuration, so the dollar ceiling counts every call.
+ */
+export const TERRA_STAGE_TASKS: Readonly<Partial<Record<string, WorkforceTask>>> = Object.freeze({
+  company_qualification: "atlas_qualification",
+  mission_evaluation: "atlas_qualification",
+  pool_evaluation: "atlas_qualification",
+  signal_relevance: "lisa_interpretation",
+});
 
 interface StagePolicy {
   /**
@@ -491,10 +507,26 @@ export function isDeterministicStage(stage: GptStage): boolean {
  */
 export function routeModel(
   stage: GptStage, signals: RoutingSignals = {}, family: ModelFamilyId = activeModelFamily(),
+  read?: EnvReader,
 ): ModelRoute {
   const policy = POLICY[stage];
   if (policy.primary === null) throw new DeterministicStageError(stage, policy.reason);
-  const model = inFamily(policy.primary, family);
+  const familyModel = inFamily(policy.primary, family);
+  const task = TERRA_STAGE_TASKS[stage];
+  const terra = task ? (read ? terraRouteFor(task, read) : terraRouteFor(task)) : null;
+  if (task && terra?.use) {
+    return {
+      version: GPT_MODEL_ROUTER_VERSION, stage, model: terra.model,
+      // Terra's effort contract is unverified; "low" is accepted by every GPT-5/6
+      // reasoning model this repo has priced, "none" is not by all of them.
+      reasoning_effort: "low", slot: "primary",
+      reason: `${policy.reason} — routed to ${terra.model}: ${terra.reason}`,
+      escalation_reason: null, tier: "reasoning", signals,
+      terra: { task, replaced: familyModel },
+      ...(family !== DEFAULT_MODEL_FAMILY ? { model_family: family } : {}),
+    };
+  }
+  const model = familyModel;
   const e = effortFor(model, policy.effort);
   return {
     version: GPT_MODEL_ROUTER_VERSION,

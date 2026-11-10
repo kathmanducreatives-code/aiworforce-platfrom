@@ -21,6 +21,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateText } from "../_shared/aiProvider.ts";
+import { createTerraRunLimiter } from "../_shared/terraPolicy.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt } from "../_shared/agentorySystemPrompt.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
@@ -173,6 +174,8 @@ Deno.serve(async (req) => {
       functionName: "daily-brief",
       workspaceId,
       onModelCall: modelCalls.sink,
+      workforceTask: "orion_reasoning",
+      terraLimiter: createTerraRunLimiter(),
       budget: modelCalls,
     });
     if (ai.ok && ai.content) {

@@ -35,6 +35,7 @@
 // PURE. No network, no database, no clock.
 
 import type { ExecutionCost } from "./executionLedger.ts";
+import { runtimeModelPrice } from "./terraPolicy.ts";
 
 export const MODEL_COST_MODEL_VERSION = "model-cost-model-v1" as const;
 
@@ -377,7 +378,9 @@ export function priceModelCall(i: {
   usage: ModelUsage;
 }): ExecutionCost & { model_id: string } {
   const model_id = canonicalModelId(i.model);
-  const price = MODEL_PRICES[model_id];
+  // A feature-flagged model (GPT-6.1 Terra) is priced from operator config so
+  // the spend ceiling counts it; unconfigured, it stays `unknown`, never $0.
+  const price: ModelPrice | null = MODEL_PRICES[model_id] ?? runtimeModelPrice(model_id);
   if (!price) {
     return { actual_usd: null, estimated_usd: null, source: "unknown", model_id };
   }

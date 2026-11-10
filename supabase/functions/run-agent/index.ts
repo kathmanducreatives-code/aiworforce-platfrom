@@ -34,6 +34,8 @@ import {
   writeTaskResult, type TaskResultDb,
 } from "../_shared/taskResultMerge.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
+import { createTerraRunLimiter } from "../_shared/terraPolicy.ts";
+import { departmentOf } from "../_shared/departments.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
@@ -8679,6 +8681,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     agentSlug: agent_slug ?? undefined,
     workspaceId: workspace_id,
     onModelCall: genericModelCalls.sink,
+    // LYRA drafts may opt into Terra (benchmark first; off by default).
+    ...(departmentOf(agent_slug) === "lyra"
+      ? { workforceTask: "lyra_content" as const, terraLimiter: createTerraRunLimiter() }
+      : {}),
     // LAYER 2, for models with no price. `check()` counts only unpriced calls —
     // priced spend is money and belongs to the ceiling above — so this is what
     // bounds a gateway model that cannot be costed. Checked before EVERY attempt

@@ -70,6 +70,15 @@ export interface GenerateOpts {
    * existing caller behaves exactly as before.
    */
   budget?: { check(): { allowed: boolean; exceeded: string | null } };
+  /**
+   * GPT-6.1 TERRA OPT-IN. Names the workforce task this call serves. Terra is
+   * tried first ONLY when `terraRouteFor` allows it (flag on, model verified,
+   * price configured, task opted in), an OpenAI key exists, `terraLimiter`
+   * has calls left and `onModelCall` collects the spend. Otherwise ignored.
+   * A failed Terra call falls back to the task's declared model, recorded.
+   */
+  workforceTask?: WorkforceTask;
+  terraLimiter?: TerraRunLimiter;
 }
 
 export interface GenerateResult {
@@ -86,12 +95,16 @@ export interface GenerateResult {
   degraded?: boolean;
   /** The model the task intended, whatever actually ran. */
   intendedModel?: string;
+  /** Why Terra was or was not used, when the caller named a workforce task. */
+  terraDecision?: string;
 }
 
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 import {
   readModelUsage, buildModelTelemetry, type ModelCallTelemetry,
 } from "./modelCostModel.ts";
+import { usesGpt5RequestShape } from "./modelRequestBody.ts";
+import { terraRouteFor, type WorkforceTask, type TerraRunLimiter, type EnvReader } from "./terraPolicy.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
@@ -207,6 +220,43 @@ export function extractJson(raw: string): unknown {
  * OpenAI's chat-completions API. This function used to point at the Lovable
  * gateway, which speaks the same shape; the gateway is gone, the shape stayed.
  */
+export function openAIChatBody(
+  model: string, messages: ChatMessage[], opts: Pick<GenerateOpts, "temperature" | "maxTokens" | "jsonMode">,
+): Record<string, unknown> {
+  const format = opts.jsonMode ? { response_format: { type: "json_object" } } : {};
+  // GPT-5/6 reject `temperature` and `max_tokens`; they take
+  // `max_completion_tokens` and `reasoning_effort`. Reasoning tokens count
+  // against the cap, so it is raised to leave room for the visible answer.
+  if (usesGpt5RequestShape(model)) {
+    return {
+      model, messages, reasoning_effort: "low",
+      max_completion_tokens: Math.max(opts.maxTokens ?? 2048, 1024) * 2,
+      ...format,
+    };
+  }
+  return {
+    model, messages,
+    temperature: opts.temperature ?? 0.7,
+    max_tokens: opts.maxTokens ?? 2048,
+    ...format,
+  };
+}
+
+/** Decide the Terra attempt for this call. Pure given the env reader. */
+export function terraAttemptFor(
+  opts: Pick<GenerateOpts, "workforceTask" | "terraLimiter" | "onModelCall">,
+  hasOpenAIKey: boolean, read?: EnvReader,
+): { model: string; decision: string } | { model: null; decision: string } {
+  if (!opts.workforceTask) return { model: null, decision: "no_task" };
+  const route = read ? terraRouteFor(opts.workforceTask, read) : terraRouteFor(opts.workforceTask);
+  if (!route.use) return { model: null, decision: route.reason };
+  if (!hasOpenAIKey) return { model: null, decision: "no_openai_key" };
+  if (!opts.onModelCall) return { model: null, decision: "no_spend_collector" };
+  if (!opts.terraLimiter) return { model: null, decision: "no_run_limiter" };
+  if (!opts.terraLimiter.take()) return { model: null, decision: "run_call_limit_reached" };
+  return { model: route.model, decision: "terra" };
+}
+
 async function callOpenAICompat(
   model: string,
   opts: GenerateOpts,
@@ -226,13 +276,7 @@ async function callOpenAICompat(
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: opts.temperature ?? 0.7,
-        max_tokens: opts.maxTokens ?? 2048,
-        ...(opts.jsonMode ? { response_format: { type: "json_object" } } : {}),
-      }),
+      body: JSON.stringify(openAIChatBody(model, messages, opts)),
     });
     clearTimeout(timer);
     const text = await res.text();
@@ -329,6 +373,13 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
           run: () => callOpenAICompat(a.model, opts, openaiKey!) }
   );
 
+  const terra = terraAttemptFor(opts, !!openaiKey);
+  if (terra.model) {
+    const terraModel = terra.model;
+    attempts.unshift({ provider: "openai", model: terraModel, intended: true,
+      run: () => callOpenAICompat(terraModel, opts, openaiKey!) });
+  }
+
   if (attempts.length === 0) {
     // NO SILENT DEMOTION. The task named a model; its vendor has no credential
     // and its policy allows no substitute, so the call fails and says which
@@ -413,6 +464,7 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
         usage: r.usage, latencyMs,
         degraded: !att.intended,
         intendedModel: policy.model,
+        ...(opts.workforceTask ? { terraDecision: att.model === terra.model ? "terra" : terra.model ? "terra_failed_fell_back" : terra.decision } : {}),
       };
     }
     // A FAILED ATTEMPT IS STILL A CALL. It may have been billed, and during an
