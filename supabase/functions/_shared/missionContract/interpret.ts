@@ -176,7 +176,14 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     // the item's OWN quoted span, never by re-reading the sentence; recorded as an assumption.
     // The user's strong word may sit just outside the model's quote ("must operate as | B2B
     // businesses", TEST 2026-11-07): the words touching the quoted span in the request count.
-    const descriptive = facet === "business_model" && ind.necessity === "required" && !AUDIENCE_REQUIRE_RE.test(ind.span) && !elevatedAround(query, ind.span);
+    // And a request may say it twice: "Find 5 active B2B companies … Companies must be B2B."
+    // (live TEST plan 2026-11-09). The model quoted the first, descriptive mention; the
+    // user's strong words are the second. The same deterministic reader the coverage guard
+    // uses (audienceIntent) decides: if the user's own words REQUIRE this audience anywhere,
+    // the item is not downgraded — otherwise every such request stopped for clarification.
+    const audience = facet === "business_model" ? audienceDescriptor(ind.industry) : null;
+    const requiredElsewhere = audience !== null && audienceIntent(query, audience) === "require";
+    const descriptive = facet === "business_model" && ind.necessity === "required" && !AUDIENCE_REQUIRE_RE.test(ind.span) && !elevatedAround(query, ind.span) && !requiredElsewhere;
     const necessity: Necessity = descriptive ? "preferred" : ind.necessity;
     const origin: Origin = descriptive ? { source: "user_explicit", span: ind.span, policy: AUDIENCE_POLICY } : userOrigin(ind.span);
     reqs.push({ ...base(`${facet}:${slug(ind.industry)}`, necessity, origin,
