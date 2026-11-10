@@ -313,7 +313,7 @@ function ownOfferingText(text: string): string {
 }
 
 const CONSUMER_CUSTOMER_RE =
-  /\b(?:for|serving|serves|helps?|used\s+by|built\s+for|designed\s+for)\b(?:\s+[\w&',-]+){0,4}?\s+(?:individuals|families|parents|shoppers|consumers|everyday\s+people|households)\b/;
+  /\b(?:for|serving|serves|helps?|used\s+by|built\s+for|designed\s+for)\b(?:\s+[\w&',-]+){0,4}?\s+(?:individuals|families|parents|shoppers|consumers|everyday\s+people|households|home\s?owners|home\s?buyers|renters)\b/;
 const SOFTWARE_WORDS = new Set([
   "software", "saas", "app", "apps", "application", "applications", "api", "apis", "sdk", "sdks",
   "erp", "crm", "ehr", "emr", "plugin", "plugins", "dashboard", "dashboards",
