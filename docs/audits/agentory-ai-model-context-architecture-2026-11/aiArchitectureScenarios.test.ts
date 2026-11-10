@@ -195,25 +195,22 @@ Deno.test("P4 transcript model attribution is hard-coded to a model chat no long
 });
 
 // ═══════════════════ PART 4 — CONTEXT AND MEMORY ════════════════════════════
-Deno.test("C1 chat reads the RAW Company Brain profile; approved memory (here: a newer tone) never reaches it", async () => {
+Deno.test("C1 [FIXED in Workforce V2] chat reads the Brain through the shared loader; an approved tone reaches it", async () => {
   const chat = src("supabase/functions/pilot-chat/index.ts");
-  assertFalse(chat.includes("loadCompanyBrainContext"), "pilot-chat does not use the V1 shared loader");
+  assertStringIncludes(chat, "const chatBrain = await loadChatBrain(admin, workspaceId, userId);");
+  assertFalse(/\.from\("company_brain"\)\s*\n?\s*\.select\("profile, onboarding_completed"\)/.test(chat), "no raw profile read left in the handler");
   const withTone = tables({ company_brain_memory: [memoryItem({ kind: "preference", category: "content", fact_key: "content.tone", value_type: "text", value: "Warm and plain" })] });
-  const loaded = await loadCompanyBrainContext(db(withTone) as never, WS, { userId: USER });
-  assert(loaded.ok);
-  const effectiveTone = JSON.stringify(loaded.context.effective_profile);
-  assertStringIncludes(effectiveTone, "Warm and plain", "the shared loader folds the approved tone in");
-  const chatBlock = buildCompanyBrainContext(EVEREST_PROFILE as never) ?? "";
-  assertFalse(chatBlock.includes("Warm and plain"), "chat's Brain block cannot see it");
+  const { loadChatBrain } = await import("../../../supabase/functions/_shared/chatBrainContext.ts");
+  const c = await loadChatBrain(db(withTone), WS, USER);
+  assertStringIncludes(JSON.stringify(c.row?.profile), "Warm and plain");
+  void buildCompanyBrainContext; void loadCompanyBrainContext;
 });
 
-Deno.test("C2 ATLAS's planner call passes no user and no skip flag, so the Brain loader refuses and the planner gets no ICP", async () => {
+Deno.test("C2 [FIXED in Workforce V2] ATLAS's planner passes the authenticated user to the memory-aware loader", async () => {
   const orch = src("supabase/functions/_shared/intelligence/leads/leadPlanOrchestration.ts");
-  assertStringIncludes(orch, "await loadMissionContext(input.admin, input.workspaceId);");
-  const asCalled = await loadMissionContext(db(tables()) as never, WS);
-  assertEquals(asCalled.ok, false);
-  assertEquals(asCalled.error, "forbidden");
-  // The opt-in memory path exists and works with a user id (not wired).
+  assertStringIncludes(orch, "loadMissionContextWithMemory(input.admin as unknown as LoaderDb, input.workspaceId, { userId })");
+  assertStringIncludes(src("supabase/functions/orchestrate/index.ts"), "workspaceId: workspace_id, userId, userInstruction");
+  assertEquals((await loadMissionContext(db(tables()) as never, WS)).error, "forbidden", "the loader still refuses without a user");
   assert((await loadMissionContextWithMemory(db(tables()) as never, WS, { userId: USER })).ok);
 });
 

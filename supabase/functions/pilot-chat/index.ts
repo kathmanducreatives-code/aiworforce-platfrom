@@ -115,6 +115,7 @@ import { getSourceCapability } from "../_shared/sourceCapabilities.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, resolveCompanyContactTarget, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
+import { loadChatBrain } from "../_shared/chatBrainContext.ts";
 import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { leadIntentFromMission, planJobsActorInput, type LeadIntent, type BrainLite } from "../_shared/leadIntent.ts";
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
@@ -1526,6 +1527,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     .maybeSingle();
   if (!member) return json({ error: "Forbidden — not a member of this workspace" }, 403);
 
+  // ONE Company Brain read for the whole turn, through the shared loader: the
+  // effective profile (approved memory folded in) plus ORION's memory view.
+  const chatBrain = await loadChatBrain(admin, workspaceId, userId);
+
   // ── THE MODEL SPEND CEILING ─────────────────────────────────────────────
   //
   // Checked ONCE, here, at request admission — after membership is proven and
@@ -1927,9 +1932,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   let brainConfidence: number | null = null;
   const workspaceContextBlock: string | null = await (async () => {
     try {
-      const { data } = await admin.from("company_brain")
-        .select("profile, onboarding_completed")
-        .eq("workspace_id", workspaceId).maybeSingle();
+      const data = chatBrain.row;
       const profile = (data?.profile ?? null) as Record<string, unknown> | null;
       brainProfileForMission = profile;
       brainOnboardedForGate = data?.onboarding_completed === true;
@@ -1940,7 +1943,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       if (!profile || !hasUsableBrain(profile, contextAllowed)) {
         return null;
       }
-      return buildCompanyBrainContext(profile, { integrationStatus: buildIntegrationStatus() }) || null;
+      const base = buildCompanyBrainContext(profile, { integrationStatus: buildIntegrationStatus() }) || null;
+      return base && chatBrain.memoryBlock ? `${base}\n\n${chatBrain.memoryBlock}` : base;
     } catch { return null; }
   })();
   const readEnvSafe = (k: string): string | undefined => {
@@ -2009,6 +2013,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     route: brainRoute?.kind ?? null,
     confidence: brainConfidence,
     prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+    // Which Company Brain version this answer was given (shared loader fingerprint).
+    brain_fingerprint: chatBrain.fingerprint,
   });
 
   async function replyAndReturn(
@@ -3601,11 +3607,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // Company Brain context — load once, reuse for all brain-aware direct replies.
   // (Content/outreach DRAFTING already gets the brain downstream in run-agent;
   // this covers the chat-reply layer that never reaches an agent.)
-  const { data: cbRow } = await admin
-    .from("company_brain")
-    .select("profile, onboarding_completed")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
+  const cbRow = chatBrain.row;
   const brainProfile = (cbRow?.profile ?? null) as Record<string, unknown> | null;
   // Same rule as the context block above: under BRAIN_READINESS_V2 a usable Brain counts.
   const brainContextAllowed = readinessV2
@@ -4321,11 +4323,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     .map((m: any) => ({ role: m.role, content: m.content }));
 
   // 6b. Load company brain for context
-  const { data: brainRow } = await admin
-    .from("company_brain")
-    .select("profile, onboarding_completed")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
+  const brainRow = chatBrain.row;
   const brain = (brainRow?.profile ?? {}) as Record<string, unknown>;
   const pilotSystem = getAgentorySystemPrompt({
     taskType: "pilot_router",

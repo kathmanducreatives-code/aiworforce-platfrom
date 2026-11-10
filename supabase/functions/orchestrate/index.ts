@@ -1589,7 +1589,7 @@ Return ONLY valid JSON, no prose, no markdown:
     const qlPlan = plannerSource === "capability_graph" ? null : await planQualifiedLeadBeforePersistence({
       // The Supabase client's generic type is deeper than the brain loader's
       // structural contract; the loader only ever reads one table.
-      admin: admin as never, workspaceId: workspace_id, userInstruction: user_instruction ?? "",
+      admin: admin as never, workspaceId: workspace_id, userId, userInstruction: user_instruction ?? "",
       toolInput: (tool_input as Record<string, unknown> | null) ?? null,
       fallbackSteps: parsed!.steps as unknown as Array<Record<string, unknown>>,
       fallbackSummary: parsed!.plan_summary,

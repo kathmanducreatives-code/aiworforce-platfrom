@@ -38,7 +38,7 @@ export interface LyraContentBrief {
   competitor_subject: boolean;
 }
 
-export function buildLyraBrief(s: AgentSignal, opp: OrionOpportunity, lyra: LyraBrainView | null): LyraContentBrief {
+export function buildLyraBrief(s: AgentSignal, opp: OrionOpportunity, lyra: LyraBrainView | null, exclusions: string[] = []): LyraContentBrief {
   const urls = s.evidence.filter((e) => /^https?:\/\//.test(e.url)).map((e) => ({ url: e.url, domain: e.domain }));
   if (!urls.length && s.source_url) urls.push({ url: s.source_url, domain: new URL(s.source_url).hostname.replace(/^www\./, "") });
   const verified = s.verification === "corroborated" || s.verification === "self_reported";
@@ -52,6 +52,7 @@ export function buildLyraBrief(s: AgentSignal, opp: OrionOpportunity, lyra: Lyra
     "Cite the sources listed.",
     ...(lyra?.content_preferences ?? []).filter((p) => /restrict|avoid/i.test(p.text)).map((p) => p.text),
     ...(lyra?.brand_voice.avoid ?? []).map((a) => `Avoid: ${a}`),
+    ...(exclusions ?? []).map((x) => `Do not target or court ${x} — excluded by your Company Brain.`),
   ];
   return {
     brief_version: LYRA_BRIEF_VERSION,
@@ -112,12 +113,12 @@ export function draftFromBrief(b: LyraContentBrief): LyraDraft {
   };
 }
 
-export function buildLyraHandoff(workspace_id: string, s: AgentSignal, opp: OrionOpportunity, lyra: LyraBrainView | null): Handoff<{ brief: LyraContentBrief }> {
+export function buildLyraHandoff(workspace_id: string, s: AgentSignal, opp: OrionOpportunity, lyra: LyraBrainView | null, exclusions: string[] = []): Handoff<{ brief: LyraContentBrief }> {
   const rec = opp.recommended.find((r) => r.kind === "lyra_content")!;
   return {
     contract_version: COLLAB_CONTRACT_VERSION, workspace_id, source_agent: "orion", target_agent: "lyra", kind: "lyra_content",
     company: opp.company, signal_ids: [s.id], lead_ids: [], brain_fingerprint: opp.brain_fingerprint,
     reason: rec.action, evidence: opp.evidence, verification: opp.verification, requires_approval: true,
-    idempotency_key: idempotencyKeyFor("lyra_content", opp.company, [s.id]), payload: { brief: buildLyraBrief(s, opp, lyra) },
+    idempotency_key: idempotencyKeyFor("lyra_content", opp.company, [s.id]), payload: { brief: buildLyraBrief(s, opp, lyra, exclusions) },
   };
 }

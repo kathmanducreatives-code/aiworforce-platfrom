@@ -124,7 +124,9 @@ export function assessForOrion(s: AgentSignal, brain: SharedBrainContext | null,
   }
   // 2. The Company Brain: exclusions and a person's decisions.
   if (brain) {
-    const ex = matchExclusion(brain.exclusions, { name: s.company.name, domain });
+    // Industry and keyword exclusions are checked against what the sources SAY
+    // about the company (title + summary), not only its name and domain.
+    const ex = matchExclusion(brain.exclusions, { name: s.company.name, domain, industry: `${s.what_happened} ${s.why_it_matters}` });
     if (ex) return block("excluded_by_brain", `Your Company Brain excludes ${ex}.`);
     const view = orionView(brain, now);
     if (view.dismissed_signal_refs.has(s.id)) return block("dismissed_by_you", "You dismissed this signal.");

@@ -198,7 +198,8 @@ export async function handleCollab(req: Request, deps: CollabDeps): Promise<Resp
           if (!pre.ok) { results.push({ kind, outcome: pre.reason, id: null, status: null, detail: pre.detail }); continue; }
           results.push({ kind, ...(await proposeHandoff(admin, buildAtlasResearchHandoff(r.workspace_id, opp, contract!))) });
         } else {
-          results.push({ kind, ...(await proposeHandoff(admin, buildLyraHandoff(r.workspace_id, s, opp, brain ? lyraView(brain) : null))) });
+          results.push({ kind, ...(await proposeHandoff(admin, buildLyraHandoff(r.workspace_id, s, opp, brain ? lyraView(brain) : null,
+            brain ? [...brain.exclusions.industries, ...brain.exclusions.companies, ...brain.exclusions.geographies] : []))) });
         }
       }
       return json({ ok: results.some((x) => x.outcome === "created" || x.outcome === "duplicate"), opportunity: opp, results });
