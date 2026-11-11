@@ -47,9 +47,11 @@ async function ask(base: string, anon: string, jwt: string, workspaceId: string,
       client_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
   });
   const latency_ms = Date.now() - t0;
-  const body = await res.json().catch(() => null) as { conversation_id?: string; message?: { content?: string; metadata?: Record<string, unknown> } } | null;
+  const body = await res.json().catch(() => null) as { conversation_id?: string; error?: string; message?: { content?: string; metadata?: Record<string, unknown> } } | null;
   return { http: res.status, latency_ms, conversation_id: body?.conversation_id ?? conversationId,
-    answer: String(body?.message?.content ?? ""), metadata: body?.message?.metadata ?? null };
+    answer: String(body?.message?.content ?? ""), metadata: body?.message?.metadata ?? null,
+    // The server-side spend ceiling (MODEL_SPEND_CEILING_USD, enforce) refused the turn.
+    ceiling: res.status === 429 && body?.error === "model_spend_ceiling_reached" };
 }
 
 if (import.meta.main) {
@@ -71,18 +73,24 @@ if (import.meta.main) {
   if (!anon || !owner || !outsider) { console.error("refused: ORION_PILOT_ANON_KEY, ORION_PILOT_OWNER_JWT and ORION_PILOT_OUTSIDER_JWT are required"); Deno.exit(3); }
 
   const turns: Array<Turn & { http: number; role: string }> = [];
+  // THE SPEND CAP IS ENFORCED SERVER-SIDE (MODEL_SPEND_CEILING_USD per workspace,
+  // checked before every turn). At the first refusal the run STOPS: the
+  // remaining questions are recorded as not run, never answered by anything else.
+  let stopped: string | null = null;
   for (const thread of plannedThreads()) {
+    if (stopped) break;
     let conv: string | null = null;
     for (const id of thread) {
       const q = PILOT_QUESTIONS.find((x) => x.id === id)!;
       const r = await ask(base, anon, owner, PILOT_WS, q.question, conv);
+      if (r.ceiling) { stopped = `spend ceiling reached before ${id}`; console.log(stopped); break; }
       conv = r.conversation_id ?? conv;
       turns.push({ question_id: id, role: "owner", answer: r.answer, metadata: r.metadata, latency_ms: r.latency_ms, http: r.http });
       console.log(`${id} owner HTTP ${r.http} ${r.latency_ms} ms`);
     }
   }
   for (const [role, jwt] of [["editor", env("ORION_PILOT_EDITOR_JWT")], ["viewer", env("ORION_PILOT_VIEWER_JWT")]] as const) {
-    if (!jwt) continue;
+    if (!jwt || stopped) continue;
     for (const id of ["Q01", "Q07", "Q11"]) {
       const q = PILOT_QUESTIONS.find((x) => x.id === id)!;
       const r = await ask(base, anon, jwt, PILOT_WS, q.question, null);
@@ -99,7 +107,8 @@ if (import.meta.main) {
   };
   Deno.writeTextFileSync(`transcript-${label}.json`, JSON.stringify(turns.filter((t) => t.role === "owner"), null, 2));
   Deno.writeTextFileSync(`transcript-${label}-roles.json`, JSON.stringify(turns.filter((t) => t.role !== "owner"), null, 2));
-  Deno.writeTextFileSync(`probes-${label}.json`, JSON.stringify(probes, null, 2));
+  Deno.writeTextFileSync(`probes-${label}.json`, JSON.stringify({ ...probes, stopped,
+    not_run: PILOT_QUESTIONS.map((q) => q.id).filter((id) => !turns.some((t) => t.question_id === id)) }, null, 2));
   console.log(`wrote transcript-${label}.json, transcript-${label}-roles.json, probes-${label}.json`);
   console.log(`isolation: outsider own-workspace mentions pilot facts = ${probes.outsider_own_workspace.mentions_kestrel_facts}; cross-workspace HTTP ${cross.http}`);
 }
