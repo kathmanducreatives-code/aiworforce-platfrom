@@ -130,7 +130,7 @@ const turnCollector = new AsyncLocalStorage<{ lastModel(): string | null }>();
 function actualModelUsed(): string {
   return turnCollector.getStore()?.lastModel() ?? "deterministic";
 }
-import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute } from "../_shared/departmentRouting.ts";
+import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
 import { retrieveEvidence, type EvidenceDb as StoredEvidenceDb } from "../_shared/evidence/retrieve.ts";
 import { composeStructuredAnswer, evidenceQuestionKind, evidenceSubjectFromMessage, renderStructuredAnswer } from "../_shared/evidence/answer.ts";
 import type { PresentedReferentSet } from "../_shared/referentPersistence.ts";
@@ -2896,13 +2896,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           maxTokens: 420,
           functionName: "pilot-chat-converse",
           workspaceId,
-          // ORION's company Q&A may opt into Terra; off unless configured.
-          workforceTask: "complex_company_qa",
+          // HYBRID ROUTING: the task is classified deterministically, so small
+          // talk stays on the cheap model and only a business question may use a
+          // routed model (Terra). Off unless AGENTORY_ROUTE_* / AGENTORY_TERRA_* say so.
+          workforceTask: orionConverseTask(message),
           terraLimiter: createTerraRunLimiter(),
         });
         return await replyAndReturn(
           ai.ok && ai.content?.trim() ? ai.content.trim() : CONVERSE_UNAVAILABLE,
           {
+            ...(ai.routeDecision ? { model_route: ai.routeDecision } : {}),
             chat_brain: { route: "converse", grounded: !!workspaceContextBlock,
               answered: ai.ok },
           },

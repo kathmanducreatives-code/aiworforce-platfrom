@@ -39,16 +39,15 @@ Deno.test("terra: model id override accepts only a terra-shaped GPT-6 id", () =>
   assertEquals(terraModelId(reader({ AGENTORY_TERRA_MODEL_ID: "gpt-4o" })), TERRA_DEFAULT_MODEL);
 });
 
-Deno.test("terra: priced from config so the spend ceiling sees it; unpriced stays unknown, never $0", () => {
-  const usage = { input_tokens: 1_000_000, cached_input_tokens: 0, output_tokens: 100_000 } as never;
-  const before = priceModelCall({ model: "gpt-6.1-terra", usage });
-  assertEquals(before.source, "unknown");
+Deno.test("terra: priced from the verified static table; an env price cannot override it", () => {
+  const usage = { input_tokens: 200_000, cached_input_tokens: 0, output_tokens: 100_000 } as never;
+  const p = priceModelCall({ model: "gpt-6.1-terra", usage });
+  assertEquals(p.source, "event_priced");
+  assertEquals(p.estimated_usd, 0.7); // 200K × $1 + 100K × $5
   assertEquals(runtimeModelPrice("gpt-6.1-terra", reader(ON))?.output_per_1m, 15);
   Deno.env.set("AGENTORY_TERRA_PRICE_USD_PER_1M", "3,0.3,15");
   try {
-    const after = priceModelCall({ model: "gpt-6.1-terra", usage });
-    assertEquals(after.source, "event_priced");
-    assertEquals(Math.round((after.estimated_usd ?? after.actual_usd ?? 0) * 100) / 100, 4.5);
+    assertEquals(priceModelCall({ model: "gpt-6.1-terra", usage }).estimated_usd, 0.7, "the published price wins");
   } finally { Deno.env.delete("AGENTORY_TERRA_PRICE_USD_PER_1M"); }
 });
 
@@ -136,7 +135,7 @@ Deno.test("terra: router opt-in is additive — default routes unchanged; opted-
   assertEquals(off.terra, undefined);
   const on = routeModel("company_qualification", {}, "gpt-5.6", reader(ON));
   assertEquals(on.model, "gpt-6.1-terra");
-  assertEquals(on.reasoning_effort, "low");
+  assertEquals(on.reasoning_effort, "none", "the stage keeps its own effort: Terra accepts none");
   assertEquals(on.terra, { task: "atlas_qualification", replaced: "gpt-5.6-luna" });
   // LISA not opted in under ON.
   assertEquals(routeModel("signal_relevance", {}, "gpt-5.6", reader(ON)).terra, undefined);
@@ -147,8 +146,8 @@ Deno.test("bench: dry run prices known models, refuses unpriced Terra, and live 
   for (const c of BENCH_CANDIDATES) assert(Number.isFinite(maxPassCost(c)), `${c.id} is priced`);
   assert(maxRunCost() < 2, "the full matrix stays under the $2 stage-1 cap");
   assertEquals(liveApproval(2, reader({})).ok, false);
-  assertEquals(liveApproval(2, reader({ AGENTORY_MODEL_BENCH_APPROVED: "I approve paid model benchmark spend up to $2.00" })).ok, true);
-  assertEquals(liveApproval(2, reader({ AGENTORY_MODEL_BENCH_APPROVED: "I approve paid model benchmark spend up to $5.00" })).ok, false);
+  assertEquals(liveApproval(2, reader({ AGENTORY_MODEL_BENCH_APPROVED: "I approve paid model benchmark spend up to $2.00 for stage 1" })).ok, true);
+  assertEquals(liveApproval(2, reader({ AGENTORY_MODEL_BENCH_APPROVED: "I approve paid model benchmark spend up to $5.00 for stage 1" })).ok, false);
 });
 
 Deno.test("bench: scorers catch ICP violations, fabricated citations, invalid JSON", () => {

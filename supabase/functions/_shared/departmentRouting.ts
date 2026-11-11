@@ -75,3 +75,25 @@ export function departmentForRoute(routeKind: string | null | undefined, request
     default: return "orion";
   }
 }
+
+const SMALL_TALK_RE = /^(?:hi|hello|hey|yo|thanks|thank you|thx|ok|okay|cool|great|nice|perfect|got it|sounds good|good (?:morning|afternoon|evening)|bye|see you)\b/i;
+const QUESTION_RE = /\?|\b(?:what|which|why|how|should|could|would|who|when|where|compare|explain|evaluate|recommend|is|are|does|do)\b/i;
+
+/**
+ * WHICH WORKFORCE TASK AN ORION CONVERSATIONAL REPLY IS — deterministic, no model.
+ *
+ *   strategic_prioritization  "what should we prioritize / focus on"
+ *   simple_chat               greetings, thanks, acknowledgements, very short turns
+ *   complex_company_qa        a real business question
+ *
+ * The hybrid router uses this so small talk never buys a premium model while a
+ * business question can (when, and only when, AGENTORY_ROUTE_* says so).
+ */
+export function orionConverseTask(message: string): "strategic_prioritization" | "simple_chat" | "complex_company_qa" {
+  const m = String(message ?? "").trim();
+  if (PRIORITY_QUESTION_RE.test(m)) return "strategic_prioritization";
+  const words = m.split(/\s+/).filter(Boolean).length;
+  if (SMALL_TALK_RE.test(m) && words <= 6) return "simple_chat";
+  if (words <= 3 && !m.includes("?")) return "simple_chat";
+  return QUESTION_RE.test(m) || words >= 8 ? "complex_company_qa" : "simple_chat";
+}

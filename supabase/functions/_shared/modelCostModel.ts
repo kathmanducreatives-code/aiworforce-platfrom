@@ -67,6 +67,19 @@ export interface ModelPrice {
   price_source?: string;
   /** When it was last confirmed. A price with no date is a rumour. */
   effective?: string;
+  /**
+   * A PROMOTIONAL PRICE ENDS. After this date (inclusive of the next day) the
+   * entry no longer prices calls: they read `unknown`, which the run budget
+   * bounds, instead of being billed at a rate the vendor stopped charging.
+   */
+  valid_until?: string;
+  /**
+   * LONG-PROMPT SURCHARGE. When a request's input exceeds `above_input_tokens`,
+   * the WHOLE request bills input-side rates (input, cached, cache write) times
+   * `input_mult` and output times `output_mult` (OpenAI GPT-6.1: >272K → 2x / 1.5x;
+   * Claude Haiku 5.5: >100K → 5x / 5x).
+   */
+  long_context?: { above_input_tokens: number; input_mult: number; output_mult: number };
 }
 
 /**
@@ -119,12 +132,26 @@ export const UNPRICED_MODELS: Readonly<Record<string, string>> = Object.freeze({
  * makes measurable and does not answer.
  */
 export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = Object.freeze({
+  // Cache-write rates for the GPT-5.6 family added 2026-11-11 from the same
+  // page (1.25x input, 30-minute writes). Without them a reported write was
+  // billed as ordinary input — 20% low.
   "gpt-5.6-luna": {
-    input_per_1m: 0.20, cached_input_per_1m: 0.02, output_per_1m: 1.20,
-    billed_by: "openai", price_source: "published list price", effective: "2026-08-21",
+    input_per_1m: 0.20, cached_input_per_1m: 0.02, output_per_1m: 1.20, cache_write_per_1m: 0.25,
+    billed_by: "openai", price_source: "OpenAI pricing page, developers.openai.com/api/docs/pricing", effective: "2026-11-11",
   },
-  "gpt-5.6-terra": { input_per_1m: 2.00, cached_input_per_1m: 0.20, output_per_1m: 12.00 },
-  "gpt-5.6-sol": { input_per_1m: 5.00, cached_input_per_1m: 0.50, output_per_1m: 30.00 },
+  "gpt-5.6-terra": {
+    input_per_1m: 2.00, cached_input_per_1m: 0.20, output_per_1m: 12.00, cache_write_per_1m: 2.50,
+    billed_by: "openai", price_source: "OpenAI pricing page, developers.openai.com/api/docs/pricing", effective: "2026-11-11",
+  },
+  // CORRECTED 2026-11-11: this entry read $5 / $0.50 / $30. The published price
+  // is $4 / $0.40 / $20 — a PROMOTIONAL rate "available until November 30,
+  // 2026", with no post-promotion price published. So the entry expires: after
+  // that date Sol calls price as `unknown` (bounded by the run budget) until a
+  // human records the new rate. Sol is not routed today.
+  "gpt-5.6-sol": {
+    input_per_1m: 4.00, cached_input_per_1m: 0.40, output_per_1m: 20.00, cache_write_per_1m: 5.00,
+    billed_by: "openai", price_source: "OpenAI pricing page (promotional)", effective: "2026-11-11", valid_until: "2026-11-30",
+  },
   // ── THE GPT-6 FAMILY (`AGENTORY_GPT_MODEL_FAMILY=gpt-6`) ────────────────
   //
   // Priced BEFORE it can be routed to: an unpriced model counts $0 against the
@@ -138,7 +165,17 @@ export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = Object.freeze(
   },
   "gpt-6.1-sol": {
     input_per_1m: 2.00, cached_input_per_1m: 0.10, output_per_1m: 10.00, cache_write_per_1m: 2.50,
-    billed_by: "openai", price_source: "published list price", effective: "2026-10-28",
+    billed_by: "openai", price_source: "published list price", effective: "2026-11-11",
+    long_context: { above_input_tokens: 272_000, input_mult: 2, output_mult: 1.5 },
+  },
+  // GPT-6.1 TERRA, verified 2026-11-11 on developers.openai.com/api/docs/models/gpt-6.1-terra
+  // and /pricing. Priced here so a routed Terra call is `event_priced` and the
+  // spend ceiling counts it. Pricing a model does NOT route to it: routing is
+  // gated separately (modelRoutePolicy / terraPolicy), and is off by default.
+  "gpt-6.1-terra": {
+    input_per_1m: 1.00, cached_input_per_1m: 0.05, output_per_1m: 5.00, cache_write_per_1m: 1.25,
+    billed_by: "openai", price_source: "OpenAI model page + pricing page", effective: "2026-11-11",
+    long_context: { above_input_tokens: 272_000, input_mult: 2, output_mult: 1.5 },
   },
   "gpt-4.1": { input_per_1m: 2.00, cached_input_per_1m: 0.50, output_per_1m: 8.00 },
   "gpt-4.1-mini": { input_per_1m: 0.40, cached_input_per_1m: 0.10, output_per_1m: 1.60 },
@@ -166,11 +203,21 @@ export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = Object.freeze(
   // would bill it silently at this one. An unrecognised snapshot prices as
   // `unknown` instead, which is visible in `unpriced_calls`.
   "claude-haiku-4-5-20251001": {
-    input_per_1m: 1.00, cached_input_per_1m: 0.10, output_per_1m: 5.00,
+    // cache_write: Anthropic's 5-minute cache-write rate (1.25x), re-verified 2026-11-11.
+    input_per_1m: 1.00, cached_input_per_1m: 0.10, output_per_1m: 5.00, cache_write_per_1m: 1.25,
     billed_by: "anthropic",
     price_source: "Anthropic published API pricing, platform.claude.com/docs/en/about-claude/pricing " +
       "(Claude Haiku 4.5: $1/MTok base input, $0.10/MTok cache hits, $5/MTok output)",
     effective: "2026-09-10",
+  },
+  // CLAUDE HAIKU 5.5 — directly billed by Anthropic, verified 2026-11-11 on
+  // platform.claude.com/docs/en/about-claude/pricing and models/overview (API id
+  // `claude-haiku-5-5`, a pinned snapshot). Priced for the benchmark and for
+  // accounting; not routed by any task today.
+  "claude-haiku-5-5": {
+    input_per_1m: 0.10, cached_input_per_1m: 0.01, output_per_1m: 0.50, cache_write_per_1m: 0.125,
+    billed_by: "anthropic", price_source: "Anthropic published API pricing", effective: "2026-11-11",
+    long_context: { above_input_tokens: 100_000, input_mult: 5, output_mult: 5 },
   },
 });
 
@@ -324,6 +371,12 @@ export interface ModelUsage {
   cache_write_input_tokens?: number;
   /** Of those, written with 12-hour retention (2x the 30-minute write rate). */
   cache_write_12h_tokens?: number;
+  /**
+   * The SUBSET of `output_tokens` spent on hidden reasoning, when reported
+   * (`completion_tokens_details.reasoning_tokens`). Already billed inside output;
+   * carried so a router change that adds reasoning is visible in telemetry.
+   */
+  reasoning_tokens?: number;
 }
 
 const nonNeg = (v: unknown): number | null => {
@@ -352,16 +405,47 @@ export function readModelUsage(raw: unknown): ModelUsage {
   const writes = nonNeg(details?.cache_write_tokens);
   const writeDetails = details?.cache_write_tokens_details as Record<string, unknown> | undefined;
   const writes12h = nonNeg(writeDetails?.ttl_12h_tokens);
+  const outDetails = (u.completion_tokens_details ?? u.output_tokens_details) as Record<string, unknown> | undefined;
+  const reasoning = nonNeg(outDetails?.reasoning_tokens);
+  // ANTHROPIC'S SHAPE IS DIFFERENT: `input_tokens` EXCLUDES cache reads and
+  // cache writes, which arrive as separate ADDITIONAL counts. Folded into the
+  // OpenAI convention here (cached and written are subsets of input), or a
+  // cached Claude call would be billed as if those tokens were never sent.
+  if ("cache_read_input_tokens" in u || "cache_creation_input_tokens" in u) {
+    const base = nonNeg(u.input_tokens);
+    const read = nonNeg(u.cache_read_input_tokens) ?? 0;
+    const created = nonNeg(u.cache_creation_input_tokens) ?? 0;
+    return {
+      input_tokens: base == null && !read && !created ? null : (base ?? 0) + read + created,
+      cached_input_tokens: read,
+      output_tokens: nonNeg(u.output_tokens),
+      ...(created ? { cache_write_input_tokens: created } : {}),
+    };
+  }
   return {
     input_tokens: nonNeg(u.prompt_tokens) ?? nonNeg(u.input_tokens),
     cached_input_tokens: nonNeg(details?.cached_tokens) ?? 0,
     output_tokens: nonNeg(u.completion_tokens) ?? nonNeg(u.output_tokens),
     ...(writes ? { cache_write_input_tokens: writes } : {}),
     ...(writes && writes12h ? { cache_write_12h_tokens: Math.min(writes12h, writes) } : {}),
+    ...(reasoning ? { reasoning_tokens: reasoning } : {}),
   };
 }
 
 const round6 = (n: number) => Number(n.toFixed(6));
+
+/** True once a promotional entry's `valid_until` day has passed (UTC). */
+export function priceExpired(price: ModelPrice, now: Date): boolean {
+  if (!price.valid_until) return false;
+  const end = Date.parse(`${price.valid_until}T23:59:59.999Z`);
+  return Number.isFinite(end) && now.getTime() > end;
+}
+
+/** Is this model priced (and not expired) in the static table? Routing refuses unpriced models. */
+export function isModelPriced(model: string, now: Date = new Date()): boolean {
+  const p = MODEL_PRICES[canonicalModelId(model)];
+  return !!p && !priceExpired(p, now);
+}
 
 /**
  * What this model call cost.
@@ -376,12 +460,14 @@ const round6 = (n: number) => Number(n.toFixed(6));
 export function priceModelCall(i: {
   model: string;
   usage: ModelUsage;
+  /** For promotional-price expiry; defaults to the current time. */
+  now?: Date;
 }): ExecutionCost & { model_id: string } {
   const model_id = canonicalModelId(i.model);
   // A feature-flagged model (GPT-6.1 Terra) is priced from operator config so
   // the spend ceiling counts it; unconfigured, it stays `unknown`, never $0.
   const price: ModelPrice | null = MODEL_PRICES[model_id] ?? runtimeModelPrice(model_id);
-  if (!price) {
+  if (!price || priceExpired(price, i.now ?? new Date())) {
     return { actual_usd: null, estimated_usd: null, source: "unknown", model_id };
   }
   // NO USAGE REPORTED IS NOT A FREE CALL.
@@ -405,14 +491,17 @@ export function priceModelCall(i: {
   const writes12h = Math.min(i.usage.cache_write_12h_tokens ?? 0, writes);
   const uncached = Math.max(0, input - cached - writes);
   const output = i.usage.output_tokens ?? 0;
+  // The long-prompt surcharge applies to the WHOLE request once input crosses it.
+  const lc = price.long_context && input > price.long_context.above_input_tokens ? price.long_context : null;
+  const im = lc?.input_mult ?? 1, om = lc?.output_mult ?? 1;
 
   const usd =
-    (uncached / 1_000_000) * price.input_per_1m +
-    (cached / 1_000_000) * price.cached_input_per_1m +
-    (writes / 1_000_000) * (price.cache_write_per_1m ?? price.input_per_1m) +
+    (uncached / 1_000_000) * price.input_per_1m * im +
+    (cached / 1_000_000) * price.cached_input_per_1m * im +
+    (writes / 1_000_000) * (price.cache_write_per_1m ?? price.input_per_1m) * im +
     // A 12-hour write is billed at twice the 30-minute write rate.
-    (writes12h / 1_000_000) * (price.cache_write_per_1m ?? 0) +
-    (output / 1_000_000) * price.output_per_1m;
+    (writes12h / 1_000_000) * (price.cache_write_per_1m ?? 0) * im +
+    (output / 1_000_000) * price.output_per_1m * om;
 
   // NEVER `provider_reported`: OpenAI returns counts, not a charge. The counts
   // are theirs, the prices are ours, and `event_priced` says exactly that.
@@ -445,6 +534,8 @@ export interface ModelCallTelemetry {
   latency_ms: number;
   /** Why a cheaper or primary choice was not used. Null on the ordinary path. */
   fallback_reason: string | null;
+  /** Reasoning subset of output, when reported. Logged; not a ledger column. */
+  reasoning_tokens?: number;
 }
 
 export function buildModelTelemetry(i: {
@@ -472,6 +563,7 @@ export function buildModelTelemetry(i: {
     cost_source: cost.source,
     latency_ms: i.latency_ms,
     fallback_reason: i.fallback_reason ?? null,
+    ...(i.usage.reasoning_tokens ? { reasoning_tokens: i.usage.reasoning_tokens } : {}),
   };
 }
 
