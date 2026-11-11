@@ -11,6 +11,8 @@
 //   atlas_plan   member (read)        the PREFILLED ATLAS mission for an approved research handoff
 //   lyra_draft   editor/admin/owner   approved content handoff → one unpublished content_item draft (atomic)
 //   atlas_report service key only     ATLAS reports progress / its result (the ATLAS track's completion hook)
+//   atlas_launch editor/admin/owner   approved research → the message sent through ORION's Leads flow (its own approval + credits)
+//   atlas_sync   editor/admin/owner   reads ATLAS's SAVED lead row for the company and records the result (no caller-supplied verdict)
 //
 // Approving re-assesses the signal against the CURRENT Company Brain: if the
 // Brain changed and would no longer recommend the work, approval is refused.

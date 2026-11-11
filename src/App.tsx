@@ -38,6 +38,9 @@ const Signals = lazy(() => import("./pages/Signals"));
 const AwaitingYou = lazy(() => import("./pages/AwaitingYou"));
 // DEV ONLY: the fictional multi-agent collaboration journey (npm run dev:collab). Never routed in production.
 const CollaborationPreview = import.meta.env.DEV ? lazy(() => import("./pages/dev/CollaborationPreview")) : null;
+// Workforce V2 live dashboard — routed only when VITE_WORKFORCE_DASHBOARD_ENABLED=true.
+const WORKFORCE_DASHBOARD_ENABLED = import.meta.env.VITE_WORKFORCE_DASHBOARD_ENABLED === "true";
+const WorkforceDashboard = WORKFORCE_DASHBOARD_ENABLED ? lazy(() => import("./pages/WorkforceDashboard")) : null;
 const Features = lazy(() => import("./pages/Features"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -118,6 +121,15 @@ const App = () => (
                     <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
 
                     {/* Protected Routes with MainLayout */}
+                    {WorkforceDashboard && (
+                      <Route path="/workforce" element={
+                        <ProtectedRoute>
+                          <MainLayout>
+                            <WorkforceDashboard />
+                          </MainLayout>
+                        </ProtectedRoute>
+                      } />
+                    )}
                     <Route path="/dashboard" element={
                       <ProtectedRoute>
                         <MainLayout>
