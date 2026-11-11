@@ -1,4 +1,4 @@
-// THE 15 ORION PILOT QUESTIONS — asked in the "ORION Pilot (fictional)" workspace
+// THE 15 ORION PILOT QUESTIONS (aligned with the owner's list: priorities, ICP + missing info, rejections, last 7 days, verified / stale / contradicted signals, ATLAS next, LYRA content, follow-up, avoid, next best action, sources, isolation) — asked in the "ORION Pilot (fictional)" workspace
 // seeded by scripts/test-project/orion-pilot-seed.sql. Every expectation below
 // follows from that seed; nothing refers to real companies.
 //
@@ -51,17 +51,19 @@ export const PILOT_QUESTIONS: readonly Expectation[] = [
     deterministic: { executive_promotion: true, converse_task: "strategic_prioritization" },
     must_mention: [["Kestrel"], ["verified", "second plant", "Dayton"]], must_not_mention: CANARY,
     must_not_recommend: ["Cloudnova", "Summit Robotics"], expects_action: true },
-  { id: "Q02", category: "leads", question: "Which opportunities best match our ICP right now?",
+  { id: "Q02", category: "leads", question: "Which opportunities match our ICP, and what information is missing?",
     deterministic: { converse_task: "complex_company_qa" },
-    must_mention: [["Kestrel"], ["Company Brain", "ICP is not", "not set up", "no ICP", "onboarding"]], must_not_mention: CANARY,
+    // "What is missing" on TEST is, first of all, the Company Brain itself (no-Brain guard).
+    must_mention: [["Kestrel"], ["Company Brain", "ICP is not", "not set up", "no ICP", "onboarding", "missing"]], must_not_mention: CANARY,
     must_not_recommend: ["Cloudnova", "Summit Robotics"], expects_action: true },
   { id: "Q03", category: "signals", question: "What are the most important recent signals in our workspace?",
     deterministic: { converse_task: "complex_company_qa" },
     must_mention: [["Kestrel"], ["single source", "single-source", "unverified", "one source"]], must_not_mention: CANARY,
     must_not_recommend: [], expects_action: true },
-  { id: "Q04", category: "signals", question: "Is the Kestrel Fabrication expansion verified?",
+  { id: "Q04", category: "signals", question: "Which of our signals are verified, and which are not?",
     deterministic: { converse_task: "complex_company_qa" },
-    must_mention: [["verified", "corroborated", "two sources", "2 sources"]], must_not_mention: CANARY,
+    must_mention: [["Kestrel"], ["verified", "corroborated"], ["single source", "single-source", "unverified", "stale", "contradicted"]],
+    must_not_mention: CANARY,
     must_not_recommend: [], expects_action: false },
   { id: "Q05", category: "signals", question: "Is Ridgeway Castings expanding?",
     deterministic: { converse_task: "complex_company_qa" },
@@ -75,18 +77,20 @@ export const PILOT_QUESTIONS: readonly Expectation[] = [
     deterministic: { workspace_question: "why_company" },
     must_mention: [["software"], ["ICP", "outside", "manufacturing"]], must_not_mention: CANARY,
     must_not_recommend: ["Cloudnova"], expects_action: false },
-  { id: "Q08", category: "rejections", question: "Why was Summit Robotics rejected?",
-    deterministic: { workspace_question: "why_company" },
-    must_mention: [["400"], ["size", "employees", "band", "above"]], must_not_mention: CANARY,
-    must_not_recommend: ["Summit Robotics"], expects_action: false },
+  { id: "Q08", category: "rejections", question: "Which companies should we avoid, and why?",
+    deterministic: { converse_task: "complex_company_qa" },
+    // Both rejected companies with their recorded reasons; Ridgeway / Pinecrest may be flagged as unreliable.
+    must_mention: [["Cloudnova"], ["Summit"], ["software", "outside", "400", "size"]], must_not_mention: CANARY,
+    must_not_recommend: [], expects_action: false },
   { id: "Q09", category: "follow_up", after: ["Q01"], question: "Why did we reject the second one?",
     deterministic: { workspace_question: "why_company" },
     // The second company ORION named (normally Harbor Valve Works) was QUALIFIED, not rejected — or ORION asks which one.
     must_mention: [["qualified", "not rejected", "wasn't rejected", "was not rejected", "which company", "which one"]],
     must_not_mention: CANARY, must_not_recommend: [], expects_action: false },
-  { id: "Q10", category: "follow_up", after: ["Q03"], question: "Is that Harbor Valve hiring signal confirmed by more than one source?",
+  { id: "Q10", category: "follow_up", after: ["Q03"], question: "Where did that information come from?",
     deterministic: { converse_task: "complex_company_qa" },
-    must_mention: [["single source", "single-source", "one source", "not confirmed", "unverified", "not verified"]],
+    // Explains its sources: cites the evidence, names a source host, or the stored-record origin.
+    must_mention: [["[E", "source", "plant-news", "jobs.example", "news.example", "record"]],
     must_not_mention: CANARY, must_not_recommend: [], expects_action: false },
   { id: "Q11", category: "recommendations", question: "Compare Kestrel Fabrication and Harbor Valve Works — which should ATLAS research first?",
     deterministic: { converse_task: "complex_company_qa" },

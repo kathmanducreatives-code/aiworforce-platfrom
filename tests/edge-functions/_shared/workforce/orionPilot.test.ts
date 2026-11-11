@@ -101,15 +101,15 @@ Deno.test("pilot evidence: every converse question gets pilot-only, dated, label
 
 const GOOD: Record<string, string> = {
   Q01: "Focus on Kestrel Fabrication [E1]: its second plant in Dayton is verified. Recommended: ATLAS researches it (needs your approval).",
-  Q02: "Your Company Brain is not set up, so I can't judge ICP fit. From recorded lead reasons, Kestrel Fabrication [E1] fits best. Next step: complete onboarding, then ATLAS can qualify.",
+  Q02: "Your Company Brain is not set up, so the ICP itself is missing. From recorded lead reasons, Kestrel Fabrication [E1] fits best. Next step: complete onboarding, then ATLAS can qualify.",
   Q03: "Kestrel Fabrication's second plant [E1] is verified. Harbor Valve Works hiring [E2] is single source. Recommended: LISA keeps watching Harbor.",
-  Q04: "Yes — verified by two sources [E1], 6 days ago.",
+  Q04: "Verified: Kestrel Fabrication's second plant [E1]. Not verified: Harbor's hiring (single source) [E2], Pinecrest (stale) [E3], Ridgeway (contradicted) [E4].",
   Q05: "No: the reported expansion is contradicted — the company denied it [E4].",
   Q06: "That comes from a forum post 130 days old — stale and single source [E3]. Treat it as unconfirmed.",
   Q07: "Cloudnova Software was rejected: it is a software company, outside the manufacturing ICP.",
-  Q08: "Summit Robotics was rejected: 400 employees is above the 20–200 size band.",
+  Q08: "Avoid Cloudnova Software (software, outside the manufacturing ICP) and Summit Robotics (400 employees, above the size band).",
   Q09: "Harbor Valve Works was not rejected — it is qualified (fit 71).",
-  Q10: "No — it is single source [E2], so it's not confirmed yet.",
+  Q10: "From stored workspace records: [E1] plant-news.example for Kestrel and [E2] jobs.example for Harbor (single source).",
   Q11: "Kestrel first: verified expansion [E1] and higher fit; Harbor [E2] is single source. Recommended: ATLAS researches Kestrel (approval needed).",
   Q12: "LYRA could draft a post on Kestrel's verified Dayton second plant [E1] — draft only, sent after your approval.",
   Q13: "I don't have anything on Zephyr Industries in this workspace.",
@@ -153,4 +153,17 @@ Deno.test("bench preflight: committed manifest matches the code; keys reported a
   assertEquals(both.ready, true);
   assertEquals(both.candidates_skipped, []);
   assertFalse(JSON.stringify(both).includes("sk-dummy"), "key values are never echoed");
+});
+
+import { APPROVAL, plannedThreads, targetCheck, TEST_REF } from "../../../../scripts/orion-pilot/run-pilot.ts";
+Deno.test("pilot runner: TEST-only target, exact approval, follow-ups threaded after their question", () => {
+  assertEquals(targetCheck(`https://${TEST_REF}.supabase.co`).ok, true);
+  assertEquals(targetCheck("https://ohsdatpvfdjdemstoiuj.supabase.co").ok, false);
+  assertEquals(targetCheck("https://example.supabase.co").ok, false);
+  assertEquals(targetCheck(undefined).ok, false);
+  assertEquals(APPROVAL, `I approve the ORION TEST pilot run on ${TEST_REF}`);
+  const threads = plannedThreads();
+  assertEquals(threads.flat().length, 15);
+  assert(threads.some((t) => t[0] === "Q01" && t[1] === "Q09"));
+  assert(threads.some((t) => t[0] === "Q03" && t[1] === "Q10"));
 });

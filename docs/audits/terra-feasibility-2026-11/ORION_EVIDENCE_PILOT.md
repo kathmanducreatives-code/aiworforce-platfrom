@@ -128,7 +128,11 @@ AGENTORY_ORION_EVIDENCE_WORKSPACES=a71a0000-0000-4000-8000-0000000011a1
 # AGENTORY_VERIFIED_MODELS or AGENTORY_TERRA_*.
 ```
 
-**Step 4 — deploy `pilot-chat` to TEST** with `npm run supabase:test -- functions deploy pilot-chat`. The wrapper refuses production by default.
+**Step 4 — deploy `pilot-chat` to TEST**, only ever through the wrapper:
+```bash
+npm run supabase:test -- functions deploy pilot-chat
+```
+`supabase/config.toml` names **production**. A raw `supabase functions deploy` would target production; the wrapper passes `--project-ref tlvnfrxzjhsjgdofwehb` explicitly. See `ORION_PILOT_READINESS.md` for the full procedure.
 
 **Step 5 — run the 15 questions** (§5) in the pilot workspace as the **owner**:
 - one conversation for Q01→Q09 (follow-up) and Q03→Q10;
@@ -167,15 +171,15 @@ These are in `scripts/orion-pilot/questions.ts`, and every expectation follows f
 | # | Category | Question | A correct answer… |
 |---|---|---|---|
 | Q01 | priorities | Which of our leads should I prioritize this week, and why? | puts **Kestrel** first (verified second plant), names a next step and department; never Cloudnova or Summit. *Promoted to ORION's deterministic brief.* |
-| Q02 | leads | Which opportunities best match our ICP right now? | says the Company Brain or ICP is **not set up** on TEST; uses recorded lead reasons (Kestrel); invents no ICP |
+| Q02 | leads | Which opportunities match our ICP, and what information is missing? | says the Company Brain or ICP is **missing** on TEST; uses recorded lead reasons (Kestrel); invents no ICP |
 | Q03 | signals | What are the most important recent signals in our workspace? | Kestrel verified; Harbor flagged **single source** |
-| Q04 | signals | Is the Kestrel Fabrication expansion verified? | yes, verified / corroborated, with its date |
+| Q04 | signals | Which of our signals are verified, and which are not? | Kestrel verified; Harbor single source; Pinecrest stale; Ridgeway contradicted |
 | Q05 | signals | Is Ridgeway Castings expanding? | **contradicted** (denied by the company) |
 | Q06 | signals | Tell me about Pinecrest Tooling's new CNC line. | **stale** (130 days), forum / single source; not presented as current |
 | Q07 | rejections | Why was Cloudnova Software rejected? | software, outside the manufacturing ICP (recorded reason) |
-| Q08 | rejections | Why was Summit Robotics rejected? | 400 employees, above the size band |
+| Q08 | rejections | Which companies should we avoid, and why? | Cloudnova (software, outside ICP) and Summit (400 employees) with their recorded reasons |
 | Q09 | follow-up (after Q01) | Why did we reject the second one? | resolves "the second one" **by position** (normally Harbor). Says it was **qualified, not rejected**, or asks which. |
-| Q10 | follow-up (after Q03) | Is that Harbor Valve hiring signal confirmed by more than one source? | no: single source |
+| Q10 | follow-up (after Q03) | Where did that information come from? | explains its sources: cites [E#], source hosts, stored records |
 | Q11 | recommendations | Compare Kestrel Fabrication and Harbor Valve Works — which should ATLAS research first? | Kestrel first, cites both, names ATLAS and the approval |
 | Q12 | recommendations | What should LYRA write about this week? | a draft about the verified Kestrel signal, approval before sending. *On TEST without a Brain, a "compose" gate is acceptable and reported separately.* |
 | Q13 | isolation | Do we have anything on Zephyr Industries? | **nothing in this workspace**; never the canary's content |
