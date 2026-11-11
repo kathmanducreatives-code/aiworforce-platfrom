@@ -22,11 +22,14 @@ export interface BenchTask {
   jsonKeys: string[] | null;
   maxOutputTokens: number;
   /** Benchmark category from the Terra audit (§5). */
-  category?: "executive" | "icp_qa" | "lead_research" | "market_signal" | "planning" | "content" | "factual_reliability" | "memory";
+  category?: "executive" | "executive_brief" | "icp_qa" | "lead_research" | "market_signal" | "planning" | "content"
+    | "structured_output" | "factual_reliability" | "memory";
   /** Phrases a correct answer must contain (case-insensitive; any one of each inner list). */
   mustMention?: string[][];
   /** Entities a correct answer must NOT recommend pursuing. */
   mustNotRecommend?: string[];
+  /** Instruction-following: a hard word limit the prompt states. */
+  maxWords?: number;
 }
 
 const BRAIN = `COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.
@@ -128,7 +131,7 @@ GOALS (approved): win 3 Midwest manufacturing customers this quarter.`,
     system: `You are LYRA. Write in a plain, warm founder voice: short sentences, no hype words ("revolutionary", "game-changing"), no emojis. Use only verified facts. ${BRAIN}`,
     user: `${EVIDENCE}\n\nWrite a personalized LinkedIn message (under 90 words) to Kestrel Fabrication's operations lead using the verified signal [E1].`,
     allowedEntities: ENTITIES, excludedEntities: ["Cloudnova Software"], evidenceIds: ["E1"],
-    jsonKeys: null, maxOutputTokens: 250, mustMention: [["Dayton", "second plant", "new plant"]],
+    jsonKeys: null, maxOutputTokens: 250, mustMention: [["Dayton", "second plant", "new plant"]], maxWords: 90,
   },
   {
     id: "brain-memory-1", category: "memory", task: "complex_company_qa",
@@ -138,5 +141,21 @@ PENDING PROPOSAL (NOT approved — ignore): "Exclude manufacturing companies."`,
     allowedEntities: ENTITIES, excludedEntities: ["Cloudnova Software"], evidenceIds: ["E1", "E3"],
     jsonKeys: null, maxOutputTokens: 300,
     mustMention: [["Kestrel"], ["exclu"]], mustNotRecommend: ["Cloudnova Software"],
+  },
+  {
+    id: "orion-brief-1", category: "executive_brief", task: "orion_reasoning",
+    system: `You are ORION writing the daily executive brief. Use ONLY the facts. Never invent activity. ${BRAIN}`,
+    user: `FACTS:\n- 2 approvals waiting (send outreach to Kestrel Fabrication; publish LinkedIn draft).\n- LISA: 1 verified signal [E1], 1 contradicted [E5/E6].\n- ATLAS: mission "Midwest manufacturers" finished, 3 qualified, 1 failed (provider timeout).\n${EVIDENCE_HARD}\n\nWrite today's brief. JSON {"headline","top_actions":[],"risks":[],"evidence":[ids]}.`,
+    allowedEntities: ENTITIES, excludedEntities: ["Cloudnova Software"], evidenceIds: ["E1", "E4", "E5", "E6", "E7"],
+    jsonKeys: ["headline", "top_actions", "risks", "evidence"], maxOutputTokens: 600,
+    mustMention: [["approval"], ["Kestrel"], ["contradict", "conflict", "denied", "Ridgeway"]],
+  },
+  {
+    id: "structured-1", category: "structured_output", task: "routine_extraction",
+    system: `Extract structured data exactly. Output JSON only, with exactly these keys and types: {"company": string, "employees": number, "state": string, "event": string, "date": "YYYY-MM-DD", "verified": boolean}.`,
+    user: `${EVIDENCE_HARD}\n\nExtract the record for Kestrel Fabrication from [E1].`,
+    allowedEntities: ENTITIES, excludedEntities: [], evidenceIds: ["E1", "E4", "E5", "E6", "E7"],
+    jsonKeys: ["company", "employees", "state", "event", "date", "verified"], maxOutputTokens: 200,
+    mustMention: [["140"], ["2026-10-30"], ["true"]],
   },
 ]);

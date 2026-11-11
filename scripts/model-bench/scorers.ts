@@ -21,6 +21,15 @@ export interface BenchScore {
   required_points: { met: number; of: number } | null;
   /** Entities the answer recommends although it must not. */
   forbidden_recommendations: string[];
+  /** Instruction following: within the stated word limit (null when none stated). */
+  within_word_limit: boolean | null;
+  /**
+   * SUCCESS — every deterministic check passes: valid JSON (when required), no
+   * ICP violation, no forbidden recommendation, no fabricated citation, every
+   * required point present, word limit respected. Correctness beyond these
+   * still needs the blind human grade.
+   */
+  success: boolean;
 }
 
 const COMPANY_SHAPE = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Inc|LLC|Corp|Software|Fabrication|Works|Tooling|Manufacturing|Industries|Systems|Labs))\b/g;
@@ -53,7 +62,12 @@ export function scoreOutput(t: BenchTask, output: string): BenchScore {
   const forbidden = (t.mustNotRecommend ?? []).filter((e) =>
     sentences.some((s) => s.includes(e) && /\b(pursue|prioriti|recommend|contact|target|focus on|qualify)\b/i.test(s) && !/\b(exclud|not\b|don't|do not|skip|avoid|outside|deprioriti)/i.test(s))
   );
+  const words = output.trim().split(/\s+/).filter(Boolean).length;
+  const withinWords = t.maxWords ? words <= t.maxWords : null;
+  const success = output.trim().length > 0 && structured !== false && icp.length === 0 && forbidden.length === 0 &&
+    fabricated.length === 0 && (!req || req.met === req.of) && withinWords !== false;
   return {
+    within_word_limit: withinWords, success,
     required_points: req, forbidden_recommendations: forbidden,
     task_id: t.id, structured_valid: structured, icp_violations: icp, suspected_hallucinations: halluc,
     citations: { cited, fabricated, accuracy: cited.length ? (cited.length - fabricated.length) / cited.length : null },
