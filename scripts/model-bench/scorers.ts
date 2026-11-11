@@ -17,6 +17,10 @@ export interface BenchScore {
   icp_violations: string[];
   suspected_hallucinations: string[];
   citations: { cited: string[]; fabricated: string[]; accuracy: number | null };
+  /** Required points present (null when the task defines none). */
+  required_points: { met: number; of: number } | null;
+  /** Entities the answer recommends although it must not. */
+  forbidden_recommendations: string[];
 }
 
 const COMPANY_SHAPE = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Inc|LLC|Corp|Software|Fabrication|Works|Tooling|Manufacturing|Industries|Systems|Labs))\b/g;
@@ -44,7 +48,13 @@ export function scoreOutput(t: BenchTask, output: string): BenchScore {
   }))];
   const cited = [...new Set([...output.matchAll(/\bE(\d+)\b/g)].map((m) => `E${m[1]}`))];
   const fabricated = cited.filter((c) => !t.evidenceIds.includes(c));
+  const lower = output.toLowerCase();
+  const req = t.mustMention ? { met: t.mustMention.filter((alts) => alts.some((a) => lower.includes(a.toLowerCase()))).length, of: t.mustMention.length } : null;
+  const forbidden = (t.mustNotRecommend ?? []).filter((e) =>
+    sentences.some((s) => s.includes(e) && /\b(pursue|prioriti|recommend|contact|target|focus on|qualify)\b/i.test(s) && !/\b(exclud|not\b|don't|do not|skip|avoid|outside|deprioriti)/i.test(s))
+  );
   return {
+    required_points: req, forbidden_recommendations: forbidden,
     task_id: t.id, structured_valid: structured, icp_violations: icp, suspected_hallucinations: halluc,
     citations: { cited, fabricated, accuracy: cited.length ? (cited.length - fabricated.length) / cited.length : null },
   };

@@ -8,7 +8,9 @@ import {
 import { generateText, openAIChatBody, terraAttemptFor } from "../../../../supabase/functions/_shared/aiProvider.ts";
 import { priceModelCall } from "../../../../supabase/functions/_shared/modelCostModel.ts";
 import { routeModel, TERRA_STAGE_TASKS } from "../../../../supabase/functions/_shared/gptModelRouter.ts";
-import { estimatePass, liveApproval } from "../../../../scripts/model-bench/run.ts";
+import { BENCH_CANDIDATES, liveApproval, maxPassCost, maxRunCost, openaiBody } from "../../../../scripts/model-bench/run.ts";
+import { callCost, LIST_PRICES } from "../../../../scripts/model-bench/prices.ts";
+import { STRATEGIES, TASKS, taskCost } from "../../../../scripts/model-bench/costModel.ts";
 import { scoreOutput } from "../../../../scripts/model-bench/scorers.ts";
 import { BENCH_TASKS } from "../../../../scripts/model-bench/tasks.ts";
 
@@ -142,9 +144,8 @@ Deno.test("terra: router opt-in is additive — default routes unchanged; opted-
 });
 
 Deno.test("bench: dry run prices known models, refuses unpriced Terra, and live mode needs the exact approval", () => {
-  assert(estimatePass("gpt-5.6-luna").priced);
-  assertEquals(estimatePass("gpt-6.1-terra").priced, false);
-  assert(estimatePass("gpt-6.1-terra", BENCH_TASKS, reader(ON)).priced);
+  for (const c of BENCH_CANDIDATES) assert(Number.isFinite(maxPassCost(c)), `${c.id} is priced`);
+  assert(maxRunCost() < 2, "the full matrix stays under the $2 stage-1 cap");
   assertEquals(liveApproval(2, reader({})).ok, false);
   assertEquals(liveApproval(2, reader({ AGENTORY_MODEL_BENCH_APPROVED: "I approve paid model benchmark spend up to $2.00" })).ok, true);
   assertEquals(liveApproval(2, reader({ AGENTORY_MODEL_BENCH_APPROVED: "I approve paid model benchmark spend up to $5.00" })).ok, false);
@@ -164,4 +165,33 @@ Deno.test("bench: scorers catch ICP violations, fabricated citations, invalid JS
   assertEquals(good.structured_valid, true);
   assertEquals(good.icp_violations, []);
   assertEquals(good.citations.accuracy, 1);
+});
+
+Deno.test("audit prices: verified list prices and the GPT-6 request shape", () => {
+  assertEquals([LIST_PRICES["gpt-6.1-terra"].input, LIST_PRICES["gpt-6.1-terra"].cached_input, LIST_PRICES["gpt-6.1-terra"].output], [1, 0.05, 5]);
+  assertEquals(LIST_PRICES["gpt-6.1-terra"].cache_write, 1.25);
+  // A repair call on Terra 6.1 costs less than half of one on Terra 5.6.
+  const c = { input: 7250, output: 750, reasoning: 750 };
+  assert(callCost("gpt-6.1-terra", c) < 0.5 * callCost("gpt-5.6-terra", c));
+  const t = BENCH_TASKS[0];
+  const body = openaiBody(BENCH_CANDIDATES.find((x) => x.id === "terra-6.1-low")!, t);
+  assertEquals(body.reasoning_effort, "low");
+  assertEquals("temperature" in body, false);
+  assert((body.max_completion_tokens as number) > t.maxOutputTokens, "headroom for reasoning tokens");
+});
+
+Deno.test("cost model: every strategy prices every task; Terra-everywhere is the most expensive", () => {
+  const month = (s: string) => TASKS.reduce((a, t) => a + taskCost(t, s), 0);
+  for (const s of Object.keys(STRATEGIES)) for (const t of TASKS) assert(Number.isFinite(taskCost(t, s)) && taskCost(t, s) > 0, `${s}/${t.name}`);
+  const a = month("A · Terra everywhere");
+  for (const s of Object.keys(STRATEGIES)) assert(month(s) <= a, s);
+});
+
+Deno.test("bench scorers: required points and forbidden recommendations", () => {
+  const t = BENCH_TASKS.find((x) => x.id === "brain-memory-1")!;
+  const good = scoreOutput(t, "Pursue Kestrel Fabrication. Cloudnova Software is excluded by your Company Brain, so do not pursue it.");
+  assertEquals(good.required_points, { met: 2, of: 2 });
+  assertEquals(good.forbidden_recommendations, []);
+  const bad = scoreOutput(t, "Pursue Cloudnova Software now. Kestrel is fine too.");
+  assertEquals(bad.forbidden_recommendations, ["Cloudnova Software"]);
 });
