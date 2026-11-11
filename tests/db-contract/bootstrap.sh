@@ -113,3 +113,13 @@ for f in "${held_lisa[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done
+
+# Workforce V2 security: signal tables and approvals become read-only for
+# browser roles (server-side writers only). Depends on the tables above.
+held_security=(
+  20261113120000_workforce_v2_security.sql
+)
+for f in "${held_security[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done

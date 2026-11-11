@@ -830,6 +830,23 @@ prove_killed "collab: approval ignores a changed Company Brain" "$collab_handler
   '      if (!still && h.brain_fingerprint !== (brain?.fingerprint ?? null)) {' '      if (false) {' \
   "$collab_tests" "S19 a Company Brain change invalidates stale context: approval re-checks against the CURRENT Brain"
 
+# ── PROOF: Workforce V2 security — browser writes to signals / approvals ───
+# Without the held migration a viewer approves through PostgREST and a member
+# forges a signal row; the named tests must fail.
+sec_tests="$root/tests/db-contract/workforceV2Security.contract.test.ts"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261113120000_workforce_v2_security.sql "$root/tests/db-contract/run.sh" "$sec_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "approvals: a viewer reads but cannot approve through PostgREST; the service role can ... FAILED" >/dev/null \
+   || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "signals: a member cannot insert, update or delete signal rows or the watchlist ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: Workforce V2 security tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the security migration a viewer approves and a member forges a signal"
+ran=$((ran + 1))
+fi
+
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
 if [ -n "${MUTATION_TALLY_FILE:-}" ]; then

@@ -30,6 +30,7 @@ import {
   MODEL_SPEND_REFUSED, type SpendDb,
 } from "../_shared/modelSpendCeiling.ts";
 import { buildVisualPrompt } from "../_shared/contentVisualBrief.ts";
+import { canRunPaidOperation, paidRoleRefusal } from "../_shared/paidOperationRole.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -74,9 +75,11 @@ Deno.serve(async (req) => {
     const userId = userData?.user?.id;
     if (!userId) return json({ error: "Unauthorized" }, 401);
     const { data: member } = await admin
-      .from("workspace_members").select("workspace_id")
+      .from("workspace_members").select("workspace_id, role")
       .eq("workspace_id", workspaceId).eq("user_id", userId).maybeSingle();
     if (!member) return json({ error: "forbidden" }, 403);
+    // A paid image needs a role that may spend (owner/admin/editor).
+    if (!canRunPaidOperation((member as { role?: unknown }).role)) return json(paidRoleRefusal((member as { role?: unknown }).role), 403);
   }
 
   // ── the draft this image is for ──────────────────────────────────────────

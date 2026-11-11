@@ -329,3 +329,19 @@ never deletes or merges data. Before applying on a hosted project, run
 `OK 0 duplicate pairs`, or each listed pair needs an owner decision first. Rollback:
 `rollback/20261108120000_lead_pipeline_one_lead_per_company.down.sql`. Replayed against real
 Postgres (PGlite) in `tests/infra/leadPipelineOneLeadPerCompany.test.ts`.
+
+## `20261113120000_workforce_v2_security.sql`
+
+Workforce V2 security. Makes `signal_events`, `signal_event_evidence`,
+`monitoring_subjects` and `approvals` read-only for browser roles: drops the
+member INSERT/UPDATE/DELETE policies (and the FOR ALL
+`approvals_workspace_member_access`), revokes those grants from `anon` and
+`authenticated`, and keeps a member SELECT policy. Every legitimate writer is
+server-side with the service role (`lisa_record_signal`, scanners,
+`approve-and-continue`, `run-agent`, `toolRegistry`); the browser only reads.
+
+**Not applied anywhere.** Proven in the DB contract lane
+(`workforceV2Security.contract.test.ts`, plus a mutation proof that omits it).
+Before applying to TEST: confirm no client build writes these tables directly
+(`grep -rn "from('approvals')\|from('signal_events')" src` showed reads only on
+2026-11-11). Rollback: `rollback/20261113120000_workforce_v2_security.down.sql`.

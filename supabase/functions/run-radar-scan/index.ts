@@ -30,6 +30,7 @@ import { enrichAndGateRows, type EnrichableRow } from "../_shared/radarIntel/rad
 import { postsAdapterStatus, commentsAdapterStatus, peopleAdapterStatus, normalizePostRow, normalizeCommentRow, runApifyActor } from "../_shared/radarIntel/radarProviderAdapters.ts";
 import { postsToSignalRows, commentsToSignalRows, type BuildResult } from "../_shared/radarIntel/linkedInSourceExecution.ts";
 import { buildSourceDiagnostics, type SourceDiagnostics } from "../_shared/radarIntel/radarDiagnostics.ts";
+import { canRunPaidOperation, paidRoleRefusal } from "../_shared/paidOperationRole.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -238,9 +239,11 @@ Deno.serve(async (req) => {
 
   // Workspace membership check
   const { data: member } = await admin
-    .from("workspace_members").select("workspace_id")
+    .from("workspace_members").select("workspace_id, role")
     .eq("workspace_id", workspace_id).eq("user_id", userId).maybeSingle();
   if (!member) return json({ error: "Forbidden" }, 403);
+  // A paid scan needs a role that may spend (owner/admin/editor).
+  if (!canRunPaidOperation((member as { role?: unknown }).role)) return json(paidRoleRefusal((member as { role?: unknown }).role), 403);
 
   // Load brain + prefs — through the SHARED loader (membership was checked above).
   // The radar's own preference reader speaks the legacy profile shape, so the
