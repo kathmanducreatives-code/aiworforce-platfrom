@@ -13,7 +13,7 @@ Branch `claude/agentory-audit-roadmap-64uq8n`. Nothing is merged, deployed, migr
 | 5 Answers | `evidence/answer` produces the six sections, deterministic and grounded. Chat serves verification and priority questions from it behind `AGENTORY_EVIDENCE_ANSWERS_ENABLED`. | 20150be3 |
 | 4 Collaboration | `atlas_launch`: an approved handoff becomes the message sent through ORION's Leads flow. `atlas_sync`: ATLAS's result is read from the saved lead row written after approval. | 20150be3 |
 | 6 Dashboard | `workforce-dashboard` endpoint (read only, members only) and the `/workforce` page behind `VITE_WORKFORCE_DASHBOARD_ENABLED`. An unreadable table shows as "unavailable". | 91fd1813 |
-| 7 Security | Held migration: signal tables and approvals become read-only for browser roles. Paid endpoints now require owner/admin/editor. | (security commit) |
+| 7 Security | Held migration: signal tables and approvals become read-only for browser roles. Paid endpoints now require owner/admin/editor. | bf5e0cd5 |
 
 ## 2. Already present (reused, not rebuilt)
 
@@ -134,7 +134,7 @@ Test kinds:
 | Workforce V2 tests (brain, routing, terra, evidence, dashboard, paidRole) | unit + mocked DB | all passed |
 | Frontend | unit | 784 passed, 0 failed |
 | `workforceV2Security.contract.test.ts` | real DB | 3/3 passed; with the migration omitted, 3/3 fail (mutation proof) |
-| Full DB contract lane | real DB | see the final run in the commit notes |
+| Full DB contract lane (all held migrations incl. the new one) | real DB | 449 passed, 0 failed |
 | tsc ratchet | static | 23 = baseline |
 | eslint ratchet | static | 1265 = baseline |
 | Vite build | build | ok |
@@ -159,7 +159,7 @@ Test kinds:
 - b434e4ce: Terra and benchmark harness.
 - 20150be3: evidence, answers, collaboration.
 - 91fd1813: dashboard.
-- Security commit: held migration, paid-role checks, contract test, mutation proof, this report.
+- bf5e0cd5: held migration, paid-role checks, contract test, mutation proof, this report.
 
 ## 13. PR / deploy readiness
 
