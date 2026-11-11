@@ -23,7 +23,7 @@ export interface BenchTask {
   maxOutputTokens: number;
   /** Benchmark category from the Terra audit (§5). */
   category?: "executive" | "executive_brief" | "icp_qa" | "lead_research" | "market_signal" | "planning" | "content"
-    | "structured_output" | "factual_reliability" | "memory";
+    | "structured_output" | "factual_reliability" | "memory" | "rejection_explanation" | "multi_turn" | "marketing_strategy";
   /** Phrases a correct answer must contain (case-insensitive; any one of each inner list). */
   mustMention?: string[][];
   /** Entities a correct answer must NOT recommend pursuing. */
@@ -157,5 +157,28 @@ PENDING PROPOSAL (NOT approved — ignore): "Exclude manufacturing companies."`,
     allowedEntities: ENTITIES, excludedEntities: [], evidenceIds: ["E1", "E4", "E5", "E6", "E7"],
     jsonKeys: ["company", "employees", "state", "event", "date", "verified"], maxOutputTokens: 200,
     mustMention: [["140"], ["2026-10-30"], ["true"]],
+  },
+  {
+    id: "orion-rejection-1", category: "rejection_explanation", task: "complex_company_qa",
+    system: `You are ORION. Explain recorded decisions using only the records given. ${BRAIN}`,
+    user: `RECORDS:\n[R1] lead_candidates: Cloudnova Software — status rejected, fit 20, reason "software company, outside manufacturing ICP", 2026-11-01.\n[R2] Company Brain exclusion (approved): industry Software.\n${EVIDENCE}\n\nWhy did we reject Cloudnova Software? Cite the records.`,
+    allowedEntities: ENTITIES, excludedEntities: [], evidenceIds: ["E1", "E2", "E3", "E4"],
+    jsonKeys: null, maxOutputTokens: 300,
+    mustMention: [["R1", "R2"], ["software", "exclu"]], mustNotRecommend: ["Cloudnova Software"],
+  },
+  {
+    id: "orion-multiturn-1", category: "multi_turn", task: "complex_company_qa",
+    system: `You are ORION. Resolve references using the conversation. Use only the evidence. ${BRAIN}`,
+    user: `CONVERSATION SO FAR:\nUser: Which manufacturers are expanding?\nORION: Two stand out: Kestrel Fabrication [E1] (verified second plant) and Harbor Valve Works [E2] (hiring 12 machinists, single source).\nUser: Is the second one verified, and should ATLAS research it?\n\n${EVIDENCE}\n\nAnswer the user's last question.`,
+    allowedEntities: ENTITIES, excludedEntities: ["Cloudnova Software"], evidenceIds: ["E1", "E2", "E3", "E4"],
+    jsonKeys: null, maxOutputTokens: 300,
+    mustMention: [["Harbor Valve"], ["single source", "single-source", "not verified", "unverified", "one source"]],
+  },
+  {
+    id: "lyra-strategy-1", category: "marketing_strategy", task: "lyra_strategy",
+    system: `You are LYRA planning content in a plain founder voice. Only verified facts may be referenced. ${BRAIN}`,
+    user: `${EVIDENCE}\n\nPlan a two-week LinkedIn content strategy for reaching Midwest manufacturers. JSON {"theme","posts":[{"day","angle","evidence"}],"exclusions_respected"}.`,
+    allowedEntities: ENTITIES, excludedEntities: ["Cloudnova Software"], evidenceIds: ["E1", "E2", "E3", "E4"],
+    jsonKeys: ["theme", "posts", "exclusions_respected"], maxOutputTokens: 600, mustNotRecommend: ["Cloudnova Software"],
   },
 ]);

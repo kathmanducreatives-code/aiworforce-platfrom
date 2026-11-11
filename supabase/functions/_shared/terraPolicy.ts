@@ -37,6 +37,7 @@ export const WORKFORCE_TASKS = [
   "atlas_qualification",      // ATLAS company qualification / evaluation
   "atlas_planning",           // ATLAS mission compilation, actor selection, execution plans
   "lyra_content",             // LYRA drafts
+  "lyra_strategy",            // LYRA content strategy / campaign planning (Terra candidate)
   "lisa_interpretation",      // LISA signal relevance
   // Routine — cheap models.
   "simple_chat",              // small talk, acknowledgements, short replies

@@ -16,6 +16,10 @@
 //   AGENTORY_ROUTE_FALLBACK=declared|none          on a failed routed call: retry once on the
 //                                                  task's declared model (default) or fail loudly
 //   AGENTORY_ROUTE_MAX_CALLS_PER_RUN=8             per-request cap on routed calls (aiProvider)
+//   AGENTORY_ROUTE_MAX_USD_PER_CALL=0.05           worst-case cost admission per routed call (aiProvider)
+//   AGENTORY_ROUTE_WORKSPACES=<uuid>,…              PILOT SCOPE: only these workspaces route; a
+//                                                  call with no workspace (pipeline stages) is
+//                                                  refused while the list is set
 //
 // A model must also be on the allow-list below and PRICED in modelCostModel —
 // an unpriced model would escape the spend ceiling. ROLLBACK: unset
@@ -63,7 +67,7 @@ export type TaskRoute =
       source: "hybrid" | "terra_legacy"; fallback: "declared" | "none" }
   | { use: false; task: WorkforceTask | null; reason:
       | "no_task" | "disabled" | "no_route" | "unsupported_model" | "unsupported_effort"
-      | "unpriced" | "not_verified" | "task_not_enabled" | "invalid_task" };
+      | "unpriced" | "not_verified" | "task_not_enabled" | "invalid_task" | "workspace_not_enabled" };
 
 const denoEnv: EnvReader = (k) => {
   try { return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get(k); } catch { return undefined; }
@@ -100,10 +104,16 @@ export function effectiveEffort(model: string, requested: RouteEffort | null): R
 
 /** Which model should this workforce task use right now? Every refusal names its reason. */
 export function resolveTaskRoute(task: WorkforceTask | string | null | undefined, read: EnvReader = denoEnv,
-  now: Date = new Date()): TaskRoute {
+  now: Date = new Date(), ctx: { workspaceId?: string | null } = {}): TaskRoute {
   if (!task) return { use: false, task: null, reason: "no_task" };
   if (!(WORKFORCE_TASKS as readonly string[]).includes(task)) return { use: false, task: null, reason: "invalid_task" };
   const t = task as WorkforceTask;
+  // PILOT SCOPE. With a workspace list set, nothing outside it routes — and a
+  // call that cannot say which workspace it serves does not route at all.
+  const scope = String(read("AGENTORY_ROUTE_WORKSPACES") ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (scope.length && (!ctx.workspaceId || !scope.includes(String(ctx.workspaceId).toLowerCase()))) {
+    return { use: false, task: t, reason: "workspace_not_enabled" };
+  }
   const fallback = String(read("AGENTORY_ROUTE_FALLBACK") ?? "").trim() === "none" ? "none" as const : "declared" as const;
 
   const hybridOn = String(read("AGENTORY_HYBRID_ROUTING_ENABLED") ?? "").trim() === "true";
@@ -138,8 +148,16 @@ export function routingSnapshot(read: EnvReader = denoEnv, now: Date = new Date(
 /** Tasks that reason by default when routed without an explicit effort. Everything else runs at `none`. */
 export const REASONING_TASKS: ReadonlySet<WorkforceTask> = new Set<WorkforceTask>([
   "orion_reasoning", "executive_planning", "multi_agent_planning", "complex_company_qa",
-  "strategic_prioritization", "evidence_interpretation", "validation_repair", "atlas_planning",
+  "strategic_prioritization", "evidence_interpretation", "validation_repair", "atlas_planning", "lyra_strategy",
 ]);
+
+export const DEFAULT_MAX_USD_PER_CALL = 0.05;
+/** The per-call worst-case admission cap for routed calls (AGENTORY_ROUTE_MAX_USD_PER_CALL). */
+export function maxUsdPerCall(read: EnvReader = denoEnv): number {
+  const raw = String(read("AGENTORY_ROUTE_MAX_USD_PER_CALL") ?? "").trim();
+  const v = raw === "" ? NaN : Number(raw);
+  return Number.isFinite(v) && v > 0 ? v : DEFAULT_MAX_USD_PER_CALL;
+}
 
 /**
  * The effort a routed call uses when its route names none: `low` for reasoning

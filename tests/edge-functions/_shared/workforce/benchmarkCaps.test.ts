@@ -2,7 +2,7 @@
 import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   anthropicBody, approvalString, BENCH_CANDIDATES, hardCallBound, hardRunBound, liveApproval, manifest, openaiBody, outputCap,
-  stageTasks, STAGE_CAPS_USD, summarize,
+  stageCandidates, stageTasks, STAGE_CAPS_USD, summarize,
 } from "../../../../scripts/model-bench/run.ts";
 import { scoreOutput } from "../../../../scripts/model-bench/scorers.ts";
 import { estimateTokens } from "../../../../scripts/model-bench/scorers.ts";
@@ -18,7 +18,7 @@ Deno.test("bench caps: stage 1 hard maximum ≤ $2, stage 2 ≤ $5, with zero re
     const m = await manifest(s);
     assertEquals(m.fits_cap, true);
     assertEquals(m.retries, 0);
-    assertEquals(m.calls, stageTasks(s).length * BENCH_CANDIDATES.length * 3);
+    assertEquals(m.calls, stageTasks(s).length * stageCandidates(s).length * 3);
   }
 });
 
@@ -59,7 +59,8 @@ Deno.test("bench: candidates are priced by the runtime table, and the audit pric
 
 Deno.test("bench: all eight audit categories are covered; stage 2 uses production-size prompts", () => {
   const cats = new Set(stageTasks(1).map((t) => t.category));
-  for (const c of ["executive", "executive_brief", "planning", "lead_research", "market_signal", "content", "structured_output", "factual_reliability"]) {
+  for (const c of ["executive", "executive_brief", "planning", "lead_research", "market_signal", "content", "structured_output",
+    "factual_reliability", "icp_qa", "memory", "rejection_explanation", "multi_turn", "marketing_strategy"]) {
     assert(cats.has(c as never), c);
   }
   const s1 = stageTasks(1), s2 = stageTasks(2);
@@ -77,4 +78,24 @@ Deno.test("bench: success scoring and cost per successful task", () => {
   assertEquals(s.a.success_rate, 0.5);
   assertEquals(s.a.cost_per_success_usd, 0.02);
   assertEquals(s.a.http_errors, 1);
+});
+
+import { blindPack, unblind } from "../../../../scripts/model-bench/blind.ts";
+Deno.test("bench: blind pack hides candidates, is reproducible, and un-blinds grades", () => {
+  const rows = ["haiku-4.5", "terra-6.1-low", "luna-6"].map((c, i) => ({ candidate: c, rep: 0, task: "t1", category: "executive", output: `answer ${i} `.repeat(i + 1) }));
+  const a = blindPack(rows, 7), b = blindPack(rows, 7);
+  assertEquals(a, b, "same seed, same pack");
+  const sheetText = JSON.stringify(a.sheet);
+  for (const c of ["haiku", "terra", "luna"]) assert(!sheetText.includes(c), "no candidate names on the grader sheet");
+  assert(a.sheet.tasks[0].answers.every((x) => typeof x.words === "number"));
+  for (const ans of a.sheet.tasks[0].answers) Object.assign(ans, { grade_correctness: 4, grade_grounding: 5, grade_usefulness: 3 });
+  const u = unblind(a.sheet, a.key);
+  assertEquals(u["terra-6.1-low"].mean, 4);
+  assertStringIncludes(a.sheet.rubric, "Do NOT reward length");
+});
+
+Deno.test("bench: stage 1 excludes the repair-rung candidate to fit the cap; stage 2 runs all eight", () => {
+  assertEquals(stageCandidates(1).length, 7);
+  assert(!stageCandidates(1).some((c) => c.id === "terra-5.6"));
+  assertEquals(stageCandidates(2).length, BENCH_CANDIDATES.length);
 });

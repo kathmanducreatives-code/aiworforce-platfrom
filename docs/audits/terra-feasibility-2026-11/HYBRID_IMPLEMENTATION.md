@@ -152,7 +152,7 @@ AGENTORY_ROUTE_MAX_CALLS_PER_RUN=8
 ## 5. Benchmark (ready, NOT run)
 
 **Matrix:**
-- 14 fictional tasks covering executive reasoning, executive brief, planning, ATLAS qualification / research, LISA interpretation, LYRA content, structured output, factual reliability (stale + contradicted), ICP Q&A, and memory / exclusions.
+- 17 fictional tasks covering rejection explanation, multi-turn follow-up, marketing strategy, executive reasoning, executive brief, planning, ATLAS qualification / research, LISA interpretation, LYRA content, structured output, factual reliability (stale + contradicted), ICP Q&A, and memory / exclusions.
 - 8 candidates: Haiku 4.5, Luna 5.6, Terra 5.6 `low`, Terra 6.1 `none` / `low` / `medium`, `gpt-6-luna`, Claude Haiku 5.5 (public id and price verified; account access unverified).
 - 3 repeats, 0 retries.
 
@@ -166,8 +166,8 @@ AGENTORY_ROUTE_MAX_CALLS_PER_RUN=8
 
 | Stage | Prompts | Calls | Hard maximum | Cap |
 |---|---|---|---|---|
-| 1 | fixtures | 336 | **$1.8215** | $2.00 |
-| 2 | the same tasks inside Agentory's real system prompts (production-size) | 336 | **$3.6111** | $5.00 (separate approval after Stage 1) |
+| 1 | fixtures, 7 candidates (gpt-5.6-terra moved to stage 2) | 357 | **$1.4314** | $2.00 |
+| 2 | the same tasks inside Agentory's real system prompts (production-size), all 8 candidates | 408 | **$4.3770** | $5.00 (separate approval after Stage 1) |
 
 Manifests (exact models, efforts, full prompts with sha256, repeats, per-call bounds, the approval string and the command): `benchmark-manifest-stage1.json` and `benchmark-manifest-stage2.json`.
 
@@ -189,3 +189,6 @@ deno run --allow-read scripts/model-bench/run.ts --summarize bench-stage1.jsonl
 3. **Unknown post-promotion Sol price:** it reads `unknown` after 2026-11-30 until recorded.
 4. **Haiku 5.5 is benchmark-only:** it needs its request shape (adaptive thinking / effort) wired before it can be routed.
 5. **No quality claim is made until the benchmark runs.**
+
+
+_Updated by the TEST-pilot pass: see `TEST_PILOT_AND_FINAL_REPORT.md` for the current matrix (17 tasks, 12 categories), the blind grading pack (`scripts/model-bench/blind.ts`), pilot scope and per-call caps._

@@ -110,7 +110,8 @@ import {
 } from "./modelCostModel.ts";
 import { usesGpt5RequestShape } from "./modelRequestBody.ts";
 import { type WorkforceTask, type TerraRunLimiter, type EnvReader } from "./terraPolicy.ts";
-import { resolveTaskRoute, defaultEffortFor, type RouteEffort, type TaskRoute } from "./modelRoutePolicy.ts";
+import { resolveTaskRoute, defaultEffortFor, maxUsdPerCall, type RouteEffort, type TaskRoute } from "./modelRoutePolicy.ts";
+import { priceModelCall } from "./modelCostModel.ts";
 import { minimumReasoningEffort } from "./modelRequestBody.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -267,12 +268,28 @@ export type RouteAttempt =
  * Decide the routed attempt for this call. Pure given the env reader.
  * `hasKey` answers per vendor; a boolean means "has an OpenAI key" (legacy callers).
  */
+/**
+ * WORST-CASE cost of one routed call, before it is sent: input bounded by one
+ * token per character (+100 for message framing), output by the hard cap the
+ * request carries (max tokens × the effort's reasoning headroom).
+ */
+export function worstCaseCallUsd(model: string, effort: RouteEffort | null,
+  opts: Partial<Pick<GenerateOpts, "systemPrompt" | "messages" | "maxTokens">>): number {
+  const chars = (opts.systemPrompt ?? "").length + (opts.messages ?? []).reduce((a, m) => a + m.content.length, 0);
+  const out = (opts.maxTokens ?? 2048) * (usesGpt5RequestShape(model) ? REASONING_HEADROOM[effort ?? "low"] : 1);
+  const p = priceModelCall({ model, usage: { input_tokens: chars + 100, cached_input_tokens: 0, output_tokens: out } });
+  return p.estimated_usd ?? Infinity;
+}
+
 export function routeAttemptFor(
-  opts: Pick<GenerateOpts, "workforceTask" | "terraLimiter" | "onModelCall" | "taskType">,
+  opts: Pick<GenerateOpts, "workforceTask" | "terraLimiter" | "onModelCall" | "taskType"> &
+    Partial<Pick<GenerateOpts, "workspaceId" | "systemPrompt" | "messages" | "maxTokens">>,
   hasKey: boolean | ((v: ModelVendor) => boolean), read?: EnvReader,
 ): RouteAttempt {
   if (!opts.workforceTask) return { model: null, decision: "no_task" };
-  const route: TaskRoute = read ? resolveTaskRoute(opts.workforceTask, read) : resolveTaskRoute(opts.workforceTask);
+  const route: TaskRoute = read
+    ? resolveTaskRoute(opts.workforceTask, read, new Date(), { workspaceId: opts.workspaceId })
+    : resolveTaskRoute(opts.workforceTask, undefined, new Date(), { workspaceId: opts.workspaceId });
   if (!route.use) return { model: null, decision: route.reason };
   const keyFor = typeof hasKey === "function" ? hasKey : (v: ModelVendor) => v === "openai" && hasKey;
   // The route names the task's own model at its default effort: nothing to change.
@@ -281,8 +298,15 @@ export function routeAttemptFor(
   if (!keyFor(route.vendor)) return { model: null, decision: `no_${route.vendor}_key` };
   if (!opts.onModelCall) return { model: null, decision: "no_spend_collector" };
   if (!opts.terraLimiter) return { model: null, decision: "no_run_limiter" };
+  const effort = route.effort ?? defaultEffortFor(route.task, route.model);
+  // PER-REQUEST SPEND ADMISSION: a routed call whose worst case exceeds the cap
+  // is not made (the declared model serves it). Checked before the limiter is
+  // consumed, so a refused call does not use up a routed slot.
+  if (worstCaseCallUsd(route.model, effort, opts) > (read ? maxUsdPerCall(read) : maxUsdPerCall())) {
+    return { model: null, decision: "over_call_cap" };
+  }
   if (!opts.terraLimiter.take()) return { model: null, decision: "run_call_limit_reached" };
-  return { model: route.model, vendor: route.vendor, effort: route.effort ?? defaultEffortFor(route.task, route.model),
+  return { model: route.model, vendor: route.vendor, effort,
     fallback: route.fallback, source: route.source,
     decision: /terra/.test(route.model) ? "terra" : "routed" };
 }

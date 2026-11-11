@@ -97,3 +97,10 @@ export function orionConverseTask(message: string): "strategic_prioritization" |
   if (words <= 3 && !m.includes("?")) return "simple_chat";
   return QUESTION_RE.test(m) || words >= 8 ? "complex_company_qa" : "simple_chat";
 }
+
+const LYRA_STRATEGY_RE = /\b(?:content strategy|strategy|strategic|campaign|content plan|editorial calendar|content calendar|positioning|messaging framework|go[- ]to[- ]market|gtm plan)\b/i;
+
+/** LYRA work type, deterministic: strategy / campaign planning vs a routine draft. */
+export function lyraTaskFor(instruction: string): "lyra_strategy" | "lyra_content" {
+  return LYRA_STRATEGY_RE.test(String(instruction ?? "")) ? "lyra_strategy" : "lyra_content";
+}

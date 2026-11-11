@@ -51,6 +51,14 @@ export const BENCH_CANDIDATES: readonly Candidate[] = [
   { id: "haiku-5.5", model: "claude-haiku-5-5", vendor: "anthropic", effort: null, role: "alternative cheap prose (adaptive thinking, default effort)" },
 ];
 export const REPEATS = 3;
+/**
+ * Candidates per stage. Stage 1 (≤ $2) leaves out gpt-5.6-terra — today's repair
+ * rung, not an ORION route, and the most expensive candidate — so the full
+ * ORION-relevant matrix fits the cap. Stage 2 (≤ $5) runs all eight.
+ */
+export function stageCandidates(stage: 1 | 2): readonly Candidate[] {
+  return stage === 1 ? BENCH_CANDIDATES.filter((c) => c.id !== "terra-5.6") : BENCH_CANDIDATES;
+}
 /** Output cap multiplier per effort — reasoning tokens count against the cap. Anthropic: 2x for adaptive thinking. */
 const OUTPUT_CAP_MULT: Record<string, number> = { none: 1, low: 2, medium: 4, anthropic: 2 };
 export const STAGE_CAPS_USD: Readonly<Record<1 | 2, number>> = { 1: 2, 2: 5 };
@@ -84,13 +92,13 @@ export function hardCallBound(c: Candidate, t: BenchTask): number {
   const p = priceModelCall({ model: c.model, usage: { input_tokens: input, cached_input_tokens: 0, output_tokens: outputCap(c, t) } });
   return p.estimated_usd ?? Infinity;
 }
-export function hardRunBound(stage: 1 | 2 = 1, cands: readonly Candidate[] = BENCH_CANDIDATES, repeats = REPEATS): number {
+export function hardRunBound(stage: 1 | 2 = 1, cands: readonly Candidate[] = stageCandidates(stage), repeats = REPEATS): number {
   const tasks = stageTasks(stage);
   return cands.reduce((s, c) => s + tasks.reduce((a, t) => a + hardCallBound(c, t), 0) * repeats, 0);
 }
 /** Legacy names (dfacbb2c). */
 export const maxPassCost = (c: Candidate) => BENCH_TASKS.reduce((a, t) => a + hardCallBound(c, t), 0);
-export const maxRunCost = (cands: readonly Candidate[] = BENCH_CANDIDATES, repeats = REPEATS) => hardRunBound(1, cands, repeats);
+export const maxRunCost = (cands: readonly Candidate[] = stageCandidates(1), repeats = REPEATS) => hardRunBound(1, cands, repeats);
 
 export const approvalString = (budget: number, stage: 1 | 2) =>
   `I approve paid model benchmark spend up to $${budget.toFixed(2)} for stage ${stage}`;
@@ -129,11 +137,11 @@ export async function manifest(stage: 1 | 2): Promise<Record<string, unknown>> {
   return {
     manifest_version: "terra-bench-manifest-v1", stage, generated_offline: true,
     cap_usd: STAGE_CAPS_USD[stage], hard_maximum_usd: Number(bound.toFixed(4)), fits_cap: bound <= STAGE_CAPS_USD[stage],
-    repeats: REPEATS, calls: tasks.length * BENCH_CANDIDATES.length * REPEATS, retries: 0,
+    repeats: REPEATS, calls: tasks.length * stageCandidates(stage).length * REPEATS, retries: 0,
     approval_env: "AGENTORY_MODEL_BENCH_APPROVED", approval_value: approvalString(STAGE_CAPS_USD[stage], stage),
     command: `AGENTORY_MODEL_BENCH_APPROVED="${approvalString(STAGE_CAPS_USD[stage], stage)}" deno run --allow-read --allow-env --allow-net=api.openai.com,api.anthropic.com scripts/model-bench/run.ts --live --stage ${stage} --budget-usd ${STAGE_CAPS_USD[stage].toFixed(2)} > bench-stage${stage}.jsonl`,
-    prices: Object.fromEntries(BENCH_CANDIDATES.map((c) => [c.model, MODEL_PRICES[c.model]])),
-    candidates: BENCH_CANDIDATES.map((c) => ({ ...c,
+    prices: Object.fromEntries(stageCandidates(stage).map((c) => [c.model, MODEL_PRICES[c.model]])),
+    candidates: stageCandidates(stage).map((c) => ({ ...c,
       hard_max_per_pass_usd: Number(tasks.reduce((a, t) => a + hardCallBound(c, t), 0).toFixed(5)) })),
     tasks: await Promise.all(tasks.map(async (t) => ({
       id: t.id, category: t.category ?? null, workforce_task: t.task, max_output_tokens: t.maxOutputTokens,
@@ -192,7 +200,7 @@ async function live(stage: 1 | 2, budget: number): Promise<void> {
   const okey = Deno.env.get("OPENAI_API_KEY"), akey = Deno.env.get("ANTHROPIC_API_KEY");
   const tasks = stageTasks(stage);
   let spent = 0;
-  for (let rep = 0; rep < REPEATS; rep++) for (const c of BENCH_CANDIDATES) for (const t of tasks) {
+  for (let rep = 0; rep < REPEATS; rep++) for (const c of stageCandidates(stage)) for (const t of tasks) {
     const key = c.vendor === "openai" ? okey : akey;
     if (!key) { console.log(JSON.stringify({ candidate: c.id, task: t.id, skipped: `no ${c.vendor} key` })); continue; }
     const bound = hardCallBound(c, t);
@@ -236,8 +244,9 @@ if (import.meta.main) {
   else if (a.includes("--live")) await live(stage, Number(at("--budget-usd")));
   else {
     const tasks = stageTasks(stage);
-    console.log(`DRY RUN — stage ${stage}: ${tasks.length} fictional tasks × ${BENCH_CANDIDATES.length} candidates × ${REPEATS} repeats = ${tasks.length * BENCH_CANDIDATES.length * REPEATS} calls, 0 retries. No network.`);
-    for (const c of BENCH_CANDIDATES) {
+    const cands = stageCandidates(stage);
+    console.log(`DRY RUN — stage ${stage}: ${tasks.length} fictional tasks × ${cands.length} candidates × ${REPEATS} repeats = ${tasks.length * cands.length * REPEATS} calls, 0 retries. No network.`);
+    for (const c of cands) {
       console.log(`  ${c.id.padEnd(18)} ${c.model.padEnd(28)} effort ${String(c.effort ?? "-").padEnd(6)} hard max/pass $${tasks.reduce((x, t) => x + hardCallBound(c, t), 0).toFixed(5)}`);
     }
     console.log(`HARD MAXIMUM stage ${stage}: $${hardRunBound(stage).toFixed(4)} (cap $${STAGE_CAPS_USD[stage]})`);

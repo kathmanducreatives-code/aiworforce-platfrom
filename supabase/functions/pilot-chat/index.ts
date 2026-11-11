@@ -132,6 +132,7 @@ function actualModelUsed(): string {
 }
 import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
 import { retrieveEvidence, type EvidenceDb as StoredEvidenceDb } from "../_shared/evidence/retrieve.ts";
+import { orionEvidenceForTurn, ORION_BUSINESS_ANSWER_SHAPE, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
 import { composeStructuredAnswer, evidenceQuestionKind, evidenceSubjectFromMessage, renderStructuredAnswer } from "../_shared/evidence/answer.ts";
 import type { PresentedReferentSet } from "../_shared/referentPersistence.ts";
 import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
@@ -2878,12 +2879,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             `Company Brain onboarding complete: ${brainOnboardedForGate ? "yes" : "no"}.`,
             "company_brain.onboarded"),
         ];
+        const converseTask = orionConverseTask(message); // ORION evidence (flag): orionEvidenceContext.ts
+        const evidenceDigest = await orionEvidenceForTurn(admin as unknown as StoredEvidenceDb, { task: converseTask, workspaceId, userId, message });
+        if (evidenceDigest) facts.push(...evidenceDigest.facts);
         const ai = await generateText({
       onModelCall: fail.modelCalls?.sink,
       budget: fail.modelCalls,
           taskType: "pilot_chat",
           systemPrompt: converseSystemPrompt({
             workspaceContext: workspaceContextBlock, facts,
+            answerShape: evidenceDigest ? ORION_BUSINESS_ANSWER_SHAPE : null,
           }),
           messages: [
             // THE SAME TURNS UNDERSTANDING SAW. A conversational answer that
@@ -2899,13 +2904,21 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           // HYBRID ROUTING: the task is classified deterministically, so small
           // talk stays on the cheap model and only a business question may use a
           // routed model (Terra). Off unless AGENTORY_ROUTE_* / AGENTORY_TERRA_* say so.
-          workforceTask: orionConverseTask(message),
+          workforceTask: converseTask,
           terraLimiter: createTerraRunLimiter(),
         });
         return await replyAndReturn(
           ai.ok && ai.content?.trim() ? ai.content.trim() : CONVERSE_UNAVAILABLE,
           {
             ...(ai.routeDecision ? { model_route: ai.routeDecision } : {}),
+            ...(evidenceDigest ? {
+              orion_evidence: { version: ORION_EVIDENCE_CONTEXT_VERSION, task: converseTask, cited_ids: evidenceDigest.cited_ids },
+              // The companies ORION cited stay pointable: "why did we reject it?",
+              // "tell me more about the second one" resolve against THIS list.
+              ...(evidenceDigest.subjects.length ? {
+                [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(evidenceDigest.subjects, "orion_evidence"),
+              } : {}),
+            } : {}),
             chat_brain: { route: "converse", grounded: !!workspaceContextBlock,
               answered: ai.ok },
           },

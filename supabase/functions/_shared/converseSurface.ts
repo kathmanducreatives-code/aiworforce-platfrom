@@ -49,6 +49,11 @@ export interface ConverseContext {
    * of the fact, so a surface cannot hand one over without it.
    */
   facts?: readonly GroundedFact[];
+  /**
+   * Extra answer-shape instructions for a business question (ORION evidence
+   * context). Absent: the conversational prompt is byte-for-byte unchanged.
+   */
+  answerShape?: string | null;
 }
 
 /**
@@ -94,6 +99,7 @@ export function converseSystemPrompt(ctx: ConverseContext): string {
   // must be told, because the alternative reading — silence means nothing is
   // there — is the exact error this block exists to prevent.
   parts.push("", renderFacts(ctx.facts ?? []));
+  if (ctx.answerShape) parts.push("", ctx.answerShape);
 
   return parts.join("\n");
 }
