@@ -134,6 +134,9 @@ export function classifyWorkspaceQuestion(message: string): WorkspaceQuestion | 
     /^why\s+(?:was|is|did|has)\s+(.+?)\s+(?:get\s+|been\s+)?(?:rejected|ruled\s+out|disqualified|not\s+qualified|excluded|fail(?:ed)?)$/,
   );
   if (rejected) return { kind: "why_company", company: rejected[1].trim(), asked: "rejected" };
+  // "why did we reject X" / "why did ATLAS rule out X" — the active phrasing.
+  const rejectedActive = q.match(/^why\s+did\s+(?:we|you|atlas|orion)\s+(?:reject|rule\s+out|disqualify|exclude|drop|pass\s+on)\s+(.+?)$/);
+  if (rejectedActive) return { kind: "why_company", company: rejectedActive[1].trim(), asked: "rejected" };
   const pending = q.match(
     /^why\s+(?:is|was|has)\s+(.+?)\s+(?:still\s+)?(?:been\s+)?(?:pending|in\s+review|on\s+hold|waiting|unresolved|undecided|not\s+(?:yet\s+)?decided)(?:\s+still)?$/,
   );

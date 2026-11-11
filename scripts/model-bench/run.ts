@@ -231,6 +231,30 @@ async function live(stage: 1 | 2, budget: number): Promise<void> {
   console.error(`done: spent $${spent.toFixed(4)} of $${budget}`);
 }
 
+/**
+ * NO-NETWORK PREFLIGHT for an approved run: the committed manifest still matches
+ * the code (same tasks, prompts, candidates, bound), which keys are present
+ * (yes/no only — values are never read out), and what the run would skip.
+ */
+export async function preflight(stage: 1 | 2, read: Read = (k) => Deno.env.get(k),
+  manifestPath: string | URL = new URL(`../../docs/audits/terra-feasibility-2026-11/benchmark-manifest-stage${stage}.json`, import.meta.url)) {
+  const current = await manifest(stage);
+  let committed: Record<string, unknown> | null = null;
+  try { committed = JSON.parse(Deno.readTextFileSync(manifestPath)); } catch { committed = null; }
+  const hashes = (m: Record<string, unknown> | null) => JSON.stringify(((m?.tasks ?? []) as Array<{ sha256: string }>).map((t) => t.sha256));
+  const keys = { OPENAI_API_KEY: !!read("OPENAI_API_KEY"), ANTHROPIC_API_KEY: !!read("ANTHROPIC_API_KEY") };
+  const runnable = stageCandidates(stage).filter((c) => keys[c.vendor === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"]);
+  const matches = !!committed && hashes(committed) === hashes(current) && committed.hard_maximum_usd === current.hard_maximum_usd;
+  return {
+    stage, cap_usd: STAGE_CAPS_USD[stage], hard_maximum_usd: current.hard_maximum_usd, manifest_matches_code: matches,
+    keys_present: keys,
+    candidates_runnable: runnable.map((c) => c.id),
+    candidates_skipped: stageCandidates(stage).filter((c) => !runnable.includes(c)).map((c) => c.id),
+    approval_value: approvalString(STAGE_CAPS_USD[stage], stage),
+    ready: matches && runnable.length > 0,
+  };
+}
+
 if (import.meta.main) {
   const a = Deno.args;
   const at = (f: string) => { const i = a.indexOf(f); return i >= 0 ? a[i + 1] : undefined; };
@@ -240,7 +264,8 @@ if (import.meta.main) {
   else if (a.includes("--summarize")) {
     const rows = Deno.readTextFileSync(at("--summarize")!).split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.candidate && !r.skipped);
     console.log(JSON.stringify(summarize(rows), null, 2));
-  } else if (a.includes("--manifest")) console.log(JSON.stringify(await manifest((at("--manifest") === "2" ? 2 : 1)), null, 2));
+  } else if (a.includes("--preflight")) console.log(JSON.stringify(await preflight(stage), null, 2));
+  else if (a.includes("--manifest")) console.log(JSON.stringify(await manifest((at("--manifest") === "2" ? 2 : 1)), null, 2));
   else if (a.includes("--live")) await live(stage, Number(at("--budget-usd")));
   else {
     const tasks = stageTasks(stage);

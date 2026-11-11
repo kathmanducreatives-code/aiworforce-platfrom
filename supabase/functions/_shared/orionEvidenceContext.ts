@@ -62,6 +62,8 @@ export interface OrionEvidenceDigest {
   cited_ids: string[];
   /** Companies the digest named, in order — persisted so "the second one" / "it" resolve. */
   subjects: Array<{ name: string; domain: string | null }>;
+  /** Wall-clock time spent retrieving and building the digest (pilot speed criterion). */
+  retrieval_ms?: number;
 }
 
 export function buildOrionEvidenceDigest(i: {
@@ -118,9 +120,11 @@ export async function loadOrionEvidenceDigest(db: EvidenceDb, i: {
 }): Promise<OrionEvidenceDigest | null> {
   try {
     const now = i.now ?? new Date();
+    const t0 = Date.now();
     const got = await retrieveEvidence(db, { workspaceId: i.workspaceId, userId: i.userId, limit: 40, now });
     if (!got.ok) return null;
-    return buildOrionEvidenceDigest({ items: selectEvidenceForQuestion(got.items, i.message), brain: got.brain, sources: got.sources, now });
+    const d = buildOrionEvidenceDigest({ items: selectEvidenceForQuestion(got.items, i.message), brain: got.brain, sources: got.sources, now });
+    return { ...d, retrieval_ms: Date.now() - t0 };
   } catch (e) {
     console.warn("[orion-evidence] unavailable", e instanceof Error ? e.message : String(e));
     return null;
@@ -128,10 +132,13 @@ export async function loadOrionEvidenceDigest(db: EvidenceDb, i: {
 }
 
 export const ORION_EVIDENCE_FLAG = "AGENTORY_ORION_EVIDENCE_CONTEXT";
+/** Optional pilot scope: when set, only these workspace ids get the evidence context. */
+export const ORION_EVIDENCE_WORKSPACES = "AGENTORY_ORION_EVIDENCE_WORKSPACES";
 
 /**
  * The turn-level entry point pilot-chat calls: only a BUSINESS question
- * (not small talk) and only with AGENTORY_ORION_EVIDENCE_CONTEXT=true.
+ * (not small talk), only with AGENTORY_ORION_EVIDENCE_CONTEXT=true, and — when
+ * AGENTORY_ORION_EVIDENCE_WORKSPACES is set — only for the listed workspaces.
  */
 export async function orionEvidenceForTurn(db: EvidenceDb, i: {
   task: string; workspaceId: string; userId: string; message: string; now?: Date;
@@ -139,5 +146,7 @@ export async function orionEvidenceForTurn(db: EvidenceDb, i: {
   try { return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get(k); } catch { return undefined; }
 }): Promise<OrionEvidenceDigest | null> {
   if (i.task === "simple_chat" || read(ORION_EVIDENCE_FLAG) !== "true") return null;
+  const scope = String(read(ORION_EVIDENCE_WORKSPACES) ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (scope.length && !scope.includes(i.workspaceId.toLowerCase())) return null;
   return await loadOrionEvidenceDigest(db, i);
 }

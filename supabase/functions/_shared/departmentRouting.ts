@@ -43,7 +43,14 @@ export function promoteExecutiveQuestion(request: RequestV1, utterance: string):
   };
 }
 
-const PRONOUN_RE = /^(?:this|that|the)\s+(?:lead|company|account|one|prospect|business)$|^(?:it|them|they|this|that|this one|that one)$/i;
+const PRONOUN_RE = /^(?:this|that|the)\s+(?:lead|company|account|one|prospect|business)$|^(?:it|them|they|this|that|this one|that one)$|^(?:the\s+)?(?:first|second|third|fourth|fifth|last)(?:\s+(?:one|lead|company|account|prospect))?$/i;
+const ORDINALS: Record<string, number> = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5 };
+/** "the second one" → 2, "the last company" → -1, otherwise null. */
+export function ordinalReference(s: string | null | undefined): number | null {
+  const m = String(s ?? "").toLowerCase().match(/\b(first|second|third|fourth|fifth|last)\s+(?:one|lead|company|account|prospect)\b|\bthe\s+(first|second|third|fourth|fifth|last)\b/);
+  const w = m?.[1] ?? m?.[2];
+  return !w ? null : w === "last" ? -1 : ORDINALS[w];
+}
 export const isPronounReference = (s: string | null | undefined): boolean => PRONOUN_RE.test(String(s ?? "").trim());
 
 export type PronounResolution =
@@ -52,9 +59,19 @@ export type PronounResolution =
   | { kind: "none" };
 
 /** Resolve "this lead" against the most recent set of companies the conversation showed (newest first). */
-export function resolvePronounCompany(setsNewestFirst: Array<PresentedReferentSet | null | undefined>): PronounResolution {
+export function resolvePronounCompany(setsNewestFirst: Array<PresentedReferentSet | null | undefined>,
+  /** The words the user used ("the second one"): an ordinal picks by DISPLAY position. */
+  phrase?: string | null): PronounResolution {
   const latest = setsNewestFirst.find((s) => s && Array.isArray(s.entities) && s.entities.length > 0);
   if (!latest) return { kind: "none" };
+  const ord = ordinalReference(phrase);
+  if (ord != null) {
+    const ordered = [...latest.entities].sort((a, b) => a.position - b.position);
+    const e = ord === -1 ? ordered[ordered.length - 1] : ordered.find((x) => x.position === ord);
+    const name = (e?.name ?? e?.label ?? "").trim();
+    // Out of range → none (a clarification), never the nearest guess.
+    return name ? { kind: "one", name, domain: e?.domain ?? null } : { kind: "none" };
+  }
   const named = latest.entities.filter((e) => (e.name ?? e.label)?.trim());
   if (named.length === 1) return { kind: "one", name: (named[0].name ?? named[0].label).trim(), domain: named[0].domain ?? null };
   if (named.length > 1) return { kind: "many", names: named.slice(0, 8).map((e) => (e.name ?? e.label).trim()) };

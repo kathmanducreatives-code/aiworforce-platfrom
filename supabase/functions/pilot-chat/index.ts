@@ -1878,7 +1878,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       .eq("conversation_id", conversationId).eq("role", "assistant")
       .order("created_at", { ascending: false }).limit(6);
     const resolved = resolvePronounCompany(((recent ?? []) as Array<{ metadata?: Record<string, unknown> | null }>)
-      .map((m) => (m.metadata?.[PRESENTED_REFERENTS_KEY] ?? null) as PresentedReferentSet | null));
+      .map((m) => (m.metadata?.[PRESENTED_REFERENTS_KEY] ?? null) as PresentedReferentSet | null), workspaceQuestion.company);
     if (resolved.kind === "one") {
       workspaceQuestion = { ...workspaceQuestion, company: resolved.name };
     } else {
@@ -1909,7 +1909,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           .eq("conversation_id", conversationId).eq("role", "assistant")
           .order("created_at", { ascending: false }).limit(6);
         const resolved = resolvePronounCompany(((recent ?? []) as Array<{ metadata?: Record<string, unknown> | null }>)
-          .map((m) => (m.metadata?.[PRESENTED_REFERENTS_KEY] ?? null) as PresentedReferentSet | null));
+          .map((m) => (m.metadata?.[PRESENTED_REFERENTS_KEY] ?? null) as PresentedReferentSet | null), message);
         if (resolved.kind === "one") subject = { name: resolved.name };
         else {
           const ask = resolved.kind === "many"
@@ -2912,7 +2912,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           {
             ...(ai.routeDecision ? { model_route: ai.routeDecision } : {}),
             ...(evidenceDigest ? {
-              orion_evidence: { version: ORION_EVIDENCE_CONTEXT_VERSION, task: converseTask, cited_ids: evidenceDigest.cited_ids },
+              orion_evidence: { version: ORION_EVIDENCE_CONTEXT_VERSION, task: converseTask, cited_ids: evidenceDigest.cited_ids,
+                retrieval_ms: evidenceDigest.retrieval_ms ?? null },
               // The companies ORION cited stay pointable: "why did we reject it?",
               // "tell me more about the second one" resolve against THIS list.
               ...(evidenceDigest.subjects.length ? {

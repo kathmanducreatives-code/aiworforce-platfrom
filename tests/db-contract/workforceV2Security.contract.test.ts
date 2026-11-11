@@ -69,3 +69,16 @@ Deno.test({ name: "catalog: no write policy remains for browser roles on the fou
     and privilege_type in ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE')`;
   assertEquals(grants.length, 0, JSON.stringify(grants));
 }});
+
+Deno.test({ name: "rollback round-trip: down restores the 10 member write policies (twice, idempotently); up removes them again", ...opts, fn: async () => {
+  const root = new URL("../../supabase/migrations-held/", import.meta.url).pathname;
+  const writes = async () => Number((await sql`select count(*)::int n from pg_policies where schemaname = 'public' and cmd <> 'SELECT'
+    and tablename in ('approvals','signal_events','signal_event_evidence','monitoring_subjects')`)[0].n);
+  assertEquals(await writes(), 0);
+  await sql.file(`${root}rollback/20261113120000_workforce_v2_security.down.sql`);
+  assertEquals(await writes(), 10);
+  await sql.file(`${root}rollback/20261113120000_workforce_v2_security.down.sql`);
+  assertEquals(await writes(), 10, "the rollback is idempotent");
+  await sql.file(`${root}20261113120000_workforce_v2_security.sql`);
+  assertEquals(await writes(), 0, "forward re-applies cleanly after a rollback");
+}});
