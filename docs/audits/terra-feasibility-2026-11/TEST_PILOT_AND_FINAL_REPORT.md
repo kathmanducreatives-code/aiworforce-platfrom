@@ -263,7 +263,7 @@ WORKFORCE_DASHBOARD_ENABLED=true            # + VITE_WORKFORCE_DASHBOARD_ENABLED
 | Frontend | unit | 784 / 0 |
 | AI architecture audit scenarios | unit | 24 / 0 |
 | Deploy-safety (`tests/infra/`) | unit | 315 / 0 |
-| DB contract lane (real Postgres 17 + PostgREST, all held migrations) | real DB | DB_LANE_RESULT |
+| DB contract lane (real Postgres 17 + PostgREST, all held migrations) | real DB | **449 passed, 0 failed** |
 | tsc / eslint ratchets | static | 23 = baseline / 1,265 = baseline |
 | Vite build | build | ok |
 
