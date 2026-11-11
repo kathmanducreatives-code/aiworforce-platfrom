@@ -131,6 +131,8 @@ function actualModelUsed(): string {
   return turnCollector.getStore()?.lastModel() ?? "deterministic";
 }
 import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute } from "../_shared/departmentRouting.ts";
+import { retrieveEvidence, type EvidenceDb as StoredEvidenceDb } from "../_shared/evidence/retrieve.ts";
+import { composeStructuredAnswer, evidenceQuestionKind, evidenceSubjectFromMessage, renderStructuredAnswer } from "../_shared/evidence/answer.ts";
 import type { PresentedReferentSet } from "../_shared/referentPersistence.ts";
 import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { leadIntentFromMission, planJobsActorInput, type LeadIntent, type BrainLite } from "../_shared/leadIntent.ts";
@@ -1889,6 +1891,58 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       }).select("*").single();
       return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
     }
+  }
+  // ══ EVIDENCE ANSWERS (Workforce V2, flag AGENTORY_EVIDENCE_ANSWERS_ENABLED) ══
+  // "Is this announcement verified?" and "What should I prioritize?" are
+  // answered from stored evidence in six sections. Reads only; $0; no model.
+  const evidenceKind = !workspaceQuestion && !actionSource && !isPreConfirmed &&
+      Deno.env.get("AGENTORY_EVIDENCE_ANSWERS_ENABLED") === "true"
+    ? evidenceQuestionKind(message) : null;
+  if (evidenceKind === "verification" || evidenceKind === "priority") {
+    let subject: { name: string } | null = null;
+    if (evidenceKind === "verification") {
+      const named = evidenceSubjectFromMessage(message);
+      if (named) subject = { name: named };
+      else {
+        const { data: recent } = await admin.from("messages").select("metadata")
+          .eq("conversation_id", conversationId).eq("role", "assistant")
+          .order("created_at", { ascending: false }).limit(6);
+        const resolved = resolvePronounCompany(((recent ?? []) as Array<{ metadata?: Record<string, unknown> | null }>)
+          .map((m) => (m.metadata?.[PRESENTED_REFERENTS_KEY] ?? null) as PresentedReferentSet | null));
+        if (resolved.kind === "one") subject = { name: resolved.name };
+        else {
+          const ask = resolved.kind === "many"
+            ? `Which one do you mean — ${resolved.names.join(", ")}? I'll check how well it is verified.`
+            : "Which company's announcement do you mean? Tell me the name and I'll check its verification.";
+          const { data: saved } = await admin.from("messages").insert({
+            conversation_id: conversationId, role: "assistant", content: ask, agent_slug: "pilot",
+            metadata: { classifier_source: "evidence_answer", clarification: true, department: "lisa",
+              brain_fingerprint: chatBrain.fingerprint },
+          }).select("*").single();
+          return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+        }
+      }
+    }
+    // Membership was checked above; the retrieval checks it again through the loader.
+    const retrieved = await retrieveEvidence(admin as unknown as StoredEvidenceDb, { workspaceId, userId, subject });
+    if (retrieved.ok) {
+      const structured = composeStructuredAnswer({ kind: evidenceKind, subject, retrieved });
+      const { data: saved } = await admin.from("messages").insert({
+        conversation_id: conversationId, role: "assistant",
+        content: renderStructuredAnswer(structured), agent_slug: "pilot",
+        metadata: {
+          classifier_source: "evidence_answer",
+          department: evidenceKind === "verification" ? "lisa" : "orion",
+          structured_answer: structured,
+          evidence_sources: retrieved.sources,
+          brain_fingerprint: chatBrain.fingerprint,
+          chat_brain: { route: "read", target: `evidence:${evidenceKind}`, served_from: "stored_evidence", spent: false },
+          outcome: satisfied(`read:evidence:${evidenceKind}`),
+        },
+      }).select("*").single();
+      return json({ type: "reply", conversation_id: conversationId, message: saved });
+    }
+    // A refusal here falls through to the ordinary path, which applies its own checks.
   }
   if (workspaceQuestion) {
     // "TODAY" IS THE USER'S DAY when the client says which zone it is in; the

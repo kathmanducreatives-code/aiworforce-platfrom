@@ -29,6 +29,7 @@ import { atlasFitProposal, submitProposals } from "../_shared/collab/brainFeedba
 import { buildCollaborationBoard, type HandoffRow } from "../_shared/collab/board.ts";
 import { advanceHandoff, decideHandoff, lyraDraft, proposeHandoff, type Rpc } from "../_shared/collab/store.ts";
 import type { HandoffStatus } from "../_shared/collab/contract.ts";
+import { launchPacketFor, resultFromSavedLead, type LinkableHandoff, type SavedLeadRow } from "../_shared/collab/atlasMissionLink.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -47,7 +48,7 @@ export type CollabRequest =
   | { action: "board"; workspace_id: string }
   | { action: "propose"; workspace_id: string; signal_id: string; kinds: Array<"atlas_research" | "lyra_content"> }
   | { action: "decide"; workspace_id: string; handoff_id: string; decision: "approve" | "reject" | "cancel"; note?: string }
-  | { action: "atlas_plan" | "lyra_draft"; workspace_id: string; handoff_id: string }
+  | { action: "atlas_plan" | "lyra_draft" | "atlas_launch" | "atlas_sync"; workspace_id: string; handoff_id: string }
   | { action: "atlas_report"; workspace_id: string; handoff_id: string; stage: "queued" | "running" | "result"; result?: Partial<AtlasResearchResult> };
 
 export function parseCollabRequest(b: unknown): { ok: true; req: CollabRequest } | { ok: false; error: string } {
@@ -70,7 +71,7 @@ export function parseCollabRequest(b: unknown): { ok: true; req: CollabRequest }
       if (d !== "approve" && d !== "reject" && d !== "cancel") return { ok: false, error: "invalid decision" };
       return { ok: true, req: { action: "decide", workspace_id: ws, handoff_id: hid, decision: d, ...(typeof o.note === "string" ? { note: o.note.slice(0, 500) } : {}) } };
     }
-    case "atlas_plan": case "lyra_draft":
+    case "atlas_plan": case "lyra_draft": case "atlas_launch": case "atlas_sync":
       if (!hid) return { ok: false, error: "handoff_id must be a uuid" };
       return { ok: true, req: { action: o.action, workspace_id: ws, handoff_id: hid } };
     case "atlas_report": {
@@ -113,6 +114,31 @@ async function signalsFor(admin: AdminClient, ws: string, brain: SharedBrainCont
   return rows.map((r) => toAgentSignal(r, brain, now, evidence.get(r.id) ?? [])).filter((x): x is AgentSignal => !!x);
 }
 
+
+/** Walk the handoff to the result's final state (each step a compare-and-set), then propose Brain feedback. */
+async function applyAtlasResult(admin: AdminClient, ws: string, h: HandoffRow, result: AtlasResearchResult, now: Date): Promise<Response> {
+  const to = handoffStatusFor(result);
+  // A result may arrive at any stage ATLAS reached (a budget refusal before it
+  // started, a crash while queued). Walk the ALLOWED path to the final state,
+  // each step a compare-and-set; never skip the ledger's rules.
+  const path = pathTo(h.status, to);
+  if (!path) return json({ ok: false, outcome: "invalid_transition", status: h.status, summary: result.summary }, 409);
+  let cur: HandoffStatus = h.status;
+  let out = { outcome: "ok", status: cur as string | null };
+  for (const step of path) {
+    const final = step === to;
+    out = await advanceHandoff(admin, { workspace_id: ws, handoff_id: h.id, agent: "atlas", expected: cur, to: step,
+      result: final ? result as unknown as Record<string, unknown> : null, error: final && to !== "completed" ? result.summary : null });
+    if (out.outcome !== "ok") break;
+    cur = step;
+  }
+  if (out.outcome !== "ok") return json({ ok: false, ...out, summary: result.summary }, 409);
+  // Feedback → Company Brain: a PENDING proposal, only for saved, decisive results.
+  const p = atlasFitProposal(result, now.toISOString());
+  const proposals = p ? await submitProposals(admin as unknown as Parameters<typeof submitProposals>[0], ws, "atlas", [p]) : [];
+  return json({ ok: true, status: to, summary: result.summary, next_step: result.next_step, proposals });
+}
+
 export async function handleCollab(req: Request, deps: CollabDeps): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -142,26 +168,7 @@ export async function handleCollab(req: Request, deps: CollabDeps): Promise<Resp
     }
     const result = normalizeAtlasResult({ ...(r.result ?? {}), handoff_id: h.id, signal_id: h.signal_ids[0] ?? null,
       company: { name: h.company?.name ?? "", domain: h.company?.domain ?? null } });
-    const to = handoffStatusFor(result);
-    // A result may arrive at any stage ATLAS reached (a budget refusal before it
-    // started, a crash while queued). Walk the ALLOWED path to the final state,
-    // each step a compare-and-set; never skip the ledger's rules.
-    const path = pathTo(h.status, to);
-    if (!path) return json({ ok: false, outcome: "invalid_transition", status: h.status, summary: result.summary }, 409);
-    let cur: HandoffStatus = h.status;
-    let out = { outcome: "ok", status: cur as string | null };
-    for (const step of path) {
-      const final = step === to;
-      out = await advanceHandoff(admin, { workspace_id: r.workspace_id, handoff_id: h.id, agent: "atlas", expected: cur, to: step,
-        result: final ? result as unknown as Record<string, unknown> : null, error: final && to !== "completed" ? result.summary : null });
-      if (out.outcome !== "ok") break;
-      cur = step;
-    }
-    if (out.outcome !== "ok") return json({ ok: false, ...out, summary: result.summary }, 409);
-    // Feedback → Company Brain: a PENDING proposal, only for saved, decisive results.
-    const p = atlasFitProposal(result, now.toISOString());
-    const proposals = p ? await submitProposals(admin as unknown as Parameters<typeof submitProposals>[0], r.workspace_id, "atlas", [p]) : [];
-    return json({ ok: true, status: to, summary: result.summary, next_step: result.next_step, proposals });
+    return await applyAtlasResult(admin, r.workspace_id, h, result, now);
   }
 
   // ── user paths: membership + role first ──
@@ -215,6 +222,25 @@ export async function handleCollab(req: Request, deps: CollabDeps): Promise<Resp
       }
       return json({ ok: true, status: h.status, plan: (h.payload as { prefilled_mission?: unknown }).prefilled_mission ?? null,
         request: h.payload, note: "Launching this mission in Leads is a separate, approved and budgeted step." });
+    }
+
+    if (r.action === "atlas_launch") {
+      // The approved handoff becomes a mission ONLY through ORION's Leads flow,
+      // whose own approval and credit reservation govern spend.
+      const out = launchPacketFor(h as unknown as LinkableHandoff);
+      if (!out.ok) return json({ ok: false, error: out.reason, status: out.status ?? h.status }, 409);
+      return json({ ok: true, launch: out.packet });
+    }
+
+    if (r.action === "atlas_sync") {
+      if (h.kind !== "atlas_research") return json({ error: "not_found" }, 404);
+      if (!["approved", "queued", "running"].includes(h.status)) return json({ ok: true, status: h.status, synced: false, reason: "already_final" });
+      const { data: leads } = await admin.from("lead_candidates")
+        .select("id, status, reason, fit_score, created_at, account_id, accounts(domain, name)")
+        .eq("workspace_id", r.workspace_id).order("created_at", { ascending: false }).limit(200);
+      const result = resultFromSavedLead(h as unknown as LinkableHandoff, (leads ?? []) as SavedLeadRow[]);
+      if (!result) return json({ ok: true, status: h.status, synced: false, reason: "no_saved_result_yet" });
+      return await applyAtlasResult(admin, r.workspace_id, h, result, now);
     }
 
     if (r.action === "lyra_draft") {
