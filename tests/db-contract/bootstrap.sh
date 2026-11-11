@@ -118,6 +118,8 @@ done
 # browser roles (server-side writers only). Depends on the tables above.
 held_security=(
   20261113120000_workforce_v2_security.sql
+  # The model-spend view stops bypassing RLS and leaves browser roles.
+  20261114120000_lead_model_calls_view_lockdown.sql
 )
 for f in "${held_security[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi

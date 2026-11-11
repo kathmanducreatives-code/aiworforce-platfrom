@@ -345,3 +345,17 @@ server-side with the service role (`lisa_record_signal`, scanners,
 Before applying to TEST: confirm no client build writes these tables directly
 (`grep -rn "from('approvals')\|from('signal_events')" src` showed reads only on
 2026-11-11). Rollback: `rollback/20261113120000_workforce_v2_security.down.sql`.
+
+## `20261114120000_lead_model_calls_view_lockdown.sql`
+
+The model-spend view `public.lead_model_calls` is owned by `postgres` without
+`security_invoker` and is granted to `anon` / `authenticated`, so it bypassed the
+base table's RLS: anyone with the publishable key could read every workspace's
+model-call rows and UPDATE / DELETE them through the auto-updatable view, which
+erases the ledger the spend ceiling sums. Found read-only on TEST 2026-11-11.
+Production carries the same migration and was **not** checked or changed. The fix
+sets `security_invoker = true` and revokes browser roles (every reader is service
+role). Applied together with `20261113120000` by
+`scripts/test-project/install-workforce-v2-security.sh`. Proven by
+`leadModelCallsView.contract.test.ts` and its mutation proof. Rollback:
+`rollback/20261114120000_lead_model_calls_view_lockdown.down.sql`.

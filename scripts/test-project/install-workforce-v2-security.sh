@@ -45,7 +45,10 @@ esac
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 fwd="$root/supabase/migrations-held/20261113120000_workforce_v2_security.sql"
 back="$root/supabase/migrations-held/rollback/20261113120000_workforce_v2_security.down.sql"
-[ -f "$fwd" ] && [ -f "$back" ] || refuse "missing the migration or its rollback"
+# Second held fix, same gate: the model-spend view stops bypassing RLS.
+fwd2="$root/supabase/migrations-held/20261114120000_lead_model_calls_view_lockdown.sql"
+back2="$root/supabase/migrations-held/rollback/20261114120000_lead_model_calls_view_lockdown.down.sql"
+[ -f "$fwd" ] && [ -f "$back" ] && [ -f "$fwd2" ] && [ -f "$back2" ] || refuse "missing a migration or its rollback"
 q() { psql "$url" -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }
 
 q "select 1" >/dev/null || refuse "cannot connect to TEST_DB_URL"
@@ -60,8 +63,11 @@ if [ "$mode" = "install" ]; then
     psql "$url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$fwd" >/dev/null || refuse "migration failed and was rolled back"
     echo "applied supabase/migrations-held/20261113120000_workforce_v2_security.sql"
   fi
+  psql "$url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$fwd2" >/dev/null || refuse "view lockdown failed and was rolled back"
+  echo "applied supabase/migrations-held/20261114120000_lead_model_calls_view_lockdown.sql (idempotent)"
   want_policies=0; want_grants=0; want_reads=4
 else
+  psql "$url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$back2" >/dev/null || refuse "view rollback failed and was rolled back"
   psql "$url" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$back" >/dev/null || refuse "rollback failed and was rolled back"
   echo "applied the ROLLBACK (member write access restored — both findings reopened)"
   # After rollback, approvals are readable through the restored FOR ALL policy
@@ -78,4 +84,11 @@ reads="$(q "select count(*) from pg_policies where schemaname='public' and cmd =
   and tablename in ('approvals','signal_events','signal_event_evidence','monitoring_subjects')")"
 echo "  after: non-SELECT policies=$policies (want $want_policies), browser write grants=$grants (want $want_grants), SELECT policies=$reads (want >= $want_reads)"
 [ "$policies" = "$want_policies" ] && [ "$grants" = "$want_grants" ] && [ "$reads" -ge "$want_reads" ] || { echo "FAILED: unexpected catalog state" >&2; exit 1; }
+view="$(q "select (coalesce(array_to_string(reloptions, ','), '') like '%security_invoker=true%')::int
+  || ' ' || (select count(*) from information_schema.role_table_grants where table_schema='public'
+     and table_name='lead_model_calls' and grantee in ('anon','authenticated'))
+  from pg_class where oid = 'public.lead_model_calls'::regclass")"
+echo "  after: lead_model_calls security_invoker / browser grants = $view"
+if [ "$mode" = "install" ]; then [ "$view" = "1 0" ] || { echo "FAILED: lead_model_calls not locked down" >&2; exit 1; }
+else [ "${view%% *}" = "0" ] || { echo "FAILED: lead_model_calls rollback incomplete" >&2; exit 1; }; fi
 echo "workforce v2 security: $mode verified on $ref"

@@ -847,6 +847,20 @@ echo "mutant killed: without the security migration a viewer approves and a memb
 ran=$((ran + 1))
 fi
 
+# ── PROOF: the model-spend view lockdown ───────────────────────────────────
+lmc_tests="$root/tests/db-contract/leadModelCallsView.contract.test.ts"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261114120000_lead_model_calls_view_lockdown.sql "$root/tests/db-contract/run.sh" "$lmc_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "lead_model_calls: anon and other members cannot read or delete spend rows; the service role still reads ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: lead_model_calls tests without the held lockdown" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the lockdown anon reads and deletes model-spend rows"
+ran=$((ran + 1))
+fi
+
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"
 if [ -n "${MUTATION_TALLY_FILE:-}" ]; then
