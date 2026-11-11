@@ -2913,7 +2913,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             ...(ai.routeDecision ? { model_route: ai.routeDecision } : {}),
             ...(evidenceDigest ? {
               orion_evidence: { version: ORION_EVIDENCE_CONTEXT_VERSION, task: converseTask, cited_ids: evidenceDigest.cited_ids,
-                retrieval_ms: evidenceDigest.retrieval_ms ?? null },
+                retrieval_ms: evidenceDigest.retrieval_ms ?? null, items: evidenceDigest.items },
               // The companies ORION cited stay pointable: "why did we reject it?",
               // "tell me more about the second one" resolve against THIS list.
               ...(evidenceDigest.subjects.length ? {

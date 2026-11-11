@@ -64,6 +64,23 @@ export interface OrionEvidenceDigest {
   subjects: Array<{ name: string; domain: string | null }>;
   /** Wall-clock time spent retrieving and building the digest (pilot speed criterion). */
   retrieval_ms?: number;
+  /** The same evidence as display rows for the chat UI's Evidence panel, [E#] order. */
+  items: OrionEvidenceDisplayItem[];
+}
+
+/** One row of the chat Evidence panel. Display only — never fed back to a model. */
+export interface OrionEvidenceDisplayItem {
+  ref: string;
+  subject: string;
+  content: string;
+  verification: string;
+  verification_label: string;
+  date: string | null;
+  age_days: number | null;
+  source_type: string;
+  source_host: string | null;
+  source_url: string | null;
+  excluded_by: string | null;
 }
 
 export function buildOrionEvidenceDigest(i: {
@@ -74,6 +91,7 @@ export function buildOrionEvidenceDigest(i: {
 }): OrionEvidenceDigest {
   const facts: GroundedFact[] = [];
   const subjects: OrionEvidenceDigest["subjects"] = [];
+  const display: OrionEvidenceDisplayItem[] = [];
   i.items.forEach((e, n) => {
     const who = e.subject.name ?? e.subject.domain ?? "workspace";
     const ex = i.brain ? matchExclusion(i.brain.exclusions, { name: e.subject.name, domain: e.subject.domain, industry: e.content }) : null;
@@ -84,6 +102,15 @@ export function buildOrionEvidenceDigest(i: {
         (ex ? `. EXCLUDED by the Company Brain (${ex}): do not recommend pursuing it.` : ""),
       `evidence.${e.id}`,
     ));
+    const when = e.published_at ?? e.retrieved_at;
+    const t = when ? Date.parse(when) : NaN;
+    display.push({
+      ref: `E${n + 1}`, subject: who, content: e.content.slice(0, 200), verification: e.verification,
+      verification_label: VERIFICATION_LABEL[e.verification], date: when ? when.slice(0, 10) : null,
+      age_days: Number.isFinite(t) ? Math.max(0, Math.floor((i.now.getTime() - t) / DAY)) : null,
+      source_type: e.source_type, source_host: host(e.source_url),
+      source_url: e.source_url && /^https?:\/\//.test(e.source_url) ? e.source_url : null, excluded_by: ex,
+    });
     if (e.subject.name && !subjects.some((s) => norm(s.name) === norm(e.subject.name))) {
       subjects.push({ name: e.subject.name, domain: e.subject.domain });
     }
@@ -96,7 +123,7 @@ export function buildOrionEvidenceDigest(i: {
       : "No stored leads, signals or research matched this question; the workspace may still hold records not retrieved here.",
     "evidence.meta",
   ));
-  return { facts, cited_ids: i.items.map((e) => e.id), subjects };
+  return { facts, cited_ids: i.items.map((e) => e.id), subjects, items: display };
 }
 
 /** The answer shape ORION uses for a business question (appended to the converse prompt). */
