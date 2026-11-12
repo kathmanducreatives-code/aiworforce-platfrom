@@ -1,6 +1,30 @@
-# Activate ORION on TEST and test it in your browser (2026-11-11)
+# Activate ORION on TEST and test it in your browser (2026-11-11, OpenAI-only since 2026-11-12)
 
 **Status: everything is prepared and verified; nothing is activated.** Each remote step below waits for your explicit approval. Production `ohsdatpvfdjdemstoiuj` is never contacted.
+
+## ORION's models: OpenAI only (2026-11-12)
+
+| Step | Model | Notes |
+|---|---|---|
+| Understanding the question, including follow-ups ("the second one") | **GPT-5.6 Luna** (`gpt-5.6-luna`, low effort, ≤1,500 output tokens) | Chat Brain (`chatBrain.ts`), unchanged |
+| Repair of a malformed understanding (rare) | **GPT-5.6 Terra** (`gpt-5.6-terra`, low effort, ≤1,500 tokens) | Only when the parser rejects the shape. This is not GPT-6.1 Terra. |
+| Business answer with evidence; any other chat reply | **GPT-5.6 Luna** (≤420 visible tokens, 840 completion cap) | Previously Claude Haiku |
+
+- **Only `OPENAI_API_KEY` is needed.** `ANTHROPIC_API_KEY` is neither required nor used by ORION chat.
+- **How it works:** a request-scoped policy (`chatVendorScope` in `aiProvider.ts`) is entered once per `pilot-chat` request, so every model call made while answering it runs on OpenAI.
+- **Other functions keep their models:** `daily-brief`, `orchestrate`, `run-agent` and Company Brain setup never enter that scope. Nothing Anthropic was removed from them.
+- **No Anthropic fallback:**
+  - an OpenAI failure on the answer shows ORION's "couldn't put an answer together" reply, with `model_error.code` recorded in the message metadata;
+  - a failure on understanding shows the "understanding layer" message;
+  - a missing `OPENAI_API_KEY` returns HTTP 503 `orion_openai_not_configured`, with a readable message, before any work. Workspace authorization (403) still comes first.
+- **Priority questions in the pilot workspace:** "Which leads should I prioritize this week?" is now answered by ORION from cited evidence, in the same request, on Luna. Before this change it was handed to the separate `daily-brief` function, which skipped the evidence and ran on that function's own models. Outside the evidence pilot workspace, priority questions still go to the brief, unchanged.
+
+**Worst-case spend per turn**, from the repo's price table and conservatively assuming 12k input tokens per call:
+- understanding (Luna): $0.004
+- one repair (GPT-5.6 Terra): $0.042
+- the answer (Luna): $0.003–0.005
+
+That is about **$0.05**, essentially the same as before. A typical turn has no repair and costs under $0.01.
 
 ## What was verified this pass (read-only on TEST, local otherwise)
 
@@ -60,14 +84,19 @@ scripts/test-project/orion-pilot-activate.sh --deploy --confirm tlvnfrxzjhsjgdof
 - Sets `AGENTORY_ORION_EVIDENCE_CONTEXT=true` and `AGENTORY_ORION_EVIDENCE_WORKSPACES=a71a0000-0000-4000-8000-0000000011a1`. Only `pilot-chat` reads them, and only for that workspace.
 - Deploys `pilot-chat` with `--use-api` (no Docker), then smoke-checks for a 401.
 - **Refuses** if:
-  - `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is missing;
-  - any `AGENTORY_TERRA_*`, `AGENTORY_HYBRID_*` or `AGENTORY_ROUTE_*` secret exists;
+  - `OPENAI_API_KEY` is missing (`ANTHROPIC_API_KEY` is **not** required; it is only reported);
+  - any `AGENTORY_TERRA_*`, `AGENTORY_HYBRID_*` or `AGENTORY_ROUTE_*` secret exists, or `AGENTORY_GPT_MODEL_FAMILY` (it would move ORION off GPT-5.6 Luna);
   - the spending limit is only partly configured.
 
 **Spending limit (`MODEL_SPEND_*`, project-wide):**
 - **All three already set:** preserved and never overwritten. `pilot-chat` uses them.
 - **None set:** `pilot-chat` would refuse every turn (it fails closed). `--deploy` refuses unless you append `--set-pilot-ceiling`, which sets enforce / $0.49 per workspace / 7 days.
 - **Effect on other TEST functions:** only `daily-brief` reads these settings. It would go from refusing model calls to allowed up to the same $0.49 per workspace per 7 days. `lead-pipeline` (ATLAS discovery) and `provider-connections` do not read them and are unaffected. *(An earlier version of this doc wrongly said `lead-pipeline`.)*
+
+**Effective worst case with the $0.49 limit:**
+- **Per turn:** the limit is checked once, when a turn starts. A turn that starts just under the limit can finish over it by up to ~$0.05, so one workspace can reach about **$0.54 per 7 days**. Turns sent at the same moment are each admitted, so manual one-at-a-time testing is the intended use.
+- **Per workspace, all functions together:** the limit counts every recorded model call in that workspace, `pilot-chat` and `daily-brief` alike.
+- **Other TEST workspaces:** once `pilot-chat` is deployed, any member of any TEST workspace can chat. TEST has 6 workspaces, so the theoretical ceiling is about **$3.25 per 7 days**. The realistic manual-pilot spend is cents.
 
 **Rollback:** `orion-pilot-deactivate.sh` unsets the evidence flags and deletes `pilot-chat`. It removes `MODEL_SPEND_*` **only if** activation set them; that is recorded in `.orion-pilot-activation.state`.
 

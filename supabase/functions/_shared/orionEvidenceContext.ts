@@ -162,6 +162,15 @@ export const ORION_EVIDENCE_FLAG = "AGENTORY_ORION_EVIDENCE_CONTEXT";
 /** Optional pilot scope: when set, only these workspace ids get the evidence context. */
 export const ORION_EVIDENCE_WORKSPACES = "AGENTORY_ORION_EVIDENCE_WORKSPACES";
 
+/** Is the evidence context on for this workspace? (flag on, and in scope when a scope is set) */
+export function orionEvidenceEnabledFor(workspaceId: string, read: (k: string) => string | undefined = (k) => {
+  try { return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get(k); } catch { return undefined; }
+}): boolean {
+  if (read(ORION_EVIDENCE_FLAG) !== "true") return false;
+  const scope = String(read(ORION_EVIDENCE_WORKSPACES) ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  return !scope.length || scope.includes(String(workspaceId).toLowerCase());
+}
+
 /**
  * The turn-level entry point pilot-chat calls: only a BUSINESS question
  * (not small talk), only with AGENTORY_ORION_EVIDENCE_CONTEXT=true, and — when
@@ -172,8 +181,6 @@ export async function orionEvidenceForTurn(db: EvidenceDb, i: {
 }, read: (k: string) => string | undefined = (k) => {
   try { return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get(k); } catch { return undefined; }
 }): Promise<OrionEvidenceDigest | null> {
-  if (i.task === "simple_chat" || read(ORION_EVIDENCE_FLAG) !== "true") return null;
-  const scope = String(read(ORION_EVIDENCE_WORKSPACES) ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
-  if (scope.length && !scope.includes(i.workspaceId.toLowerCase())) return null;
+  if (i.task === "simple_chat" || !orionEvidenceEnabledFor(i.workspaceId, read)) return null;
   return await loadOrionEvidenceDigest(db, i);
 }

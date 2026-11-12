@@ -19,8 +19,12 @@
 #     provider-connections do not), and it would go from refusing model calls to
 #     allowed up to the same $0.49 per workspace per 7 days.
 #
-# Terra / hybrid routing: never set here; --deploy refuses if any AGENTORY_TERRA_*,
-# AGENTORY_HYBRID_* or AGENTORY_ROUTE_* secret already exists on TEST.
+# MODELS: ORION chat is OpenAI-only and needs only OPENAI_API_KEY (ANTHROPIC_API_KEY
+# is neither required nor used by it). Understanding and answers: GPT-5.6 Luna; a
+# malformed understanding gets one GPT-5.6 Terra repair. No Anthropic fallback.
+# Terra-6.1 / hybrid routing: never set here; --deploy refuses if any
+# AGENTORY_TERRA_*, AGENTORY_HYBRID_*, AGENTORY_ROUTE_* or AGENTORY_GPT_MODEL_FAMILY
+# secret exists on TEST (the last would move ORION off GPT-5.6 Luna).
 # Rollback: scripts/test-project/orion-pilot-deactivate.sh (reads the state file
 # written below, so it only unsets the spending limit if THIS script set it).
 set -euo pipefail
@@ -40,12 +44,13 @@ names="$(t secrets list 2>/dev/null | awk -F'|' 'NR>2 {gsub(/ /,"",$1); if ($1!=
 has() { echo "$names" | grep -qx "$1"; }
 
 block=0
-for k in OPENAI_API_KEY ANTHROPIC_API_KEY; do
-  if has "$k"; then echo "  $k: present"; else echo "  $k: MISSING"; block=1; fi
-done
-routing="$(echo "$names" | grep -E '^AGENTORY_(TERRA|HYBRID|ROUTE)_' || true)"
-if [ -n "$routing" ]; then echo "  Terra/routing secrets present (must be absent):"; echo "$routing" | sed 's/^/    /'; block=1
-else echo "  Terra / hybrid routing secrets: none (off)"; fi
+# ORION chat is OpenAI-only: understanding, answers and repair all run on OpenAI.
+if has OPENAI_API_KEY; then echo "  OPENAI_API_KEY: present (required)"; else echo "  OPENAI_API_KEY: MISSING (required)"; block=1; fi
+has ANTHROPIC_API_KEY && echo "  ANTHROPIC_API_KEY: present (not used by ORION chat)" \
+  || echo "  ANTHROPIC_API_KEY: absent (fine: not used by ORION chat)"
+routing="$(echo "$names" | grep -E '^AGENTORY_(TERRA|HYBRID|ROUTE)_|^AGENTORY_GPT_MODEL_FAMILY$' || true)"
+if [ -n "$routing" ]; then echo "  Terra / routing / model-family secrets present (must be absent):"; echo "$routing" | sed 's/^/    /'; block=1
+else echo "  Terra / hybrid routing / model-family override: none (ORION uses GPT-5.6 Luna)"; fi
 for k in AGENTORY_ORION_EVIDENCE_CONTEXT AGENTORY_ORION_EVIDENCE_WORKSPACES; do
   has "$k" && echo "  $k: already set (will be overwritten with the pilot value)" || echo "  $k: not set"
 done
@@ -88,4 +93,4 @@ echo "== smoke"
 code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "https://$REF.supabase.co/functions/v1/pilot-chat" -H 'Content-Type: application/json' -d '{}')"
 echo "  POST without a token → HTTP $code (want 401)"
 [ "$code" = "401" ] || { echo "WARNING: unexpected status; check the function logs before testing"; exit 1; }
-echo "ORION pilot active on $REF. Evidence: pilot workspace only. Terra / hybrid routing: off."
+echo "ORION pilot active on $REF (OpenAI-only: GPT-5.6 Luna). Evidence: pilot workspace only. Terra / hybrid routing: off."

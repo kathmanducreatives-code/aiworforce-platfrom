@@ -95,7 +95,7 @@ Exit 0 / HTTP 200 means the project can see the model; 404 means it cannot. Send
 | **TEST forbids every Company Brain write** (trigger `discovery_test_no_company_brain`; decision 2026-11-09 to keep it) | A hosted pilot runs **without a Company Brain**. ICP and exclusion behaviour is verified instead in the loopback DB lane (`orionEvidence.contract.test.ts`, real Postgres + PostgREST, with Brain memory). Lifting the guard is **your separate decision**; I do not recommend it. |
 | `company_brain_memory` and `agent_handoffs` tables are absent (held migrations not applied) | Not needed for this pilot. The Brain loader and evidence retrieval degrade cleanly ("unavailable"). |
 | TEST data: 4 workspaces, 0 Brains, 4 signals, 4 leads, 0 cached pages | Too thin to judge. A fictional, fixed-id seed for one pilot workspace and one isolation workspace is prepared (§4). |
-| Chat secrets on TEST | `pilot-chat` needs `OPENAI_API_KEY` (request understanding, Luna) **and** `ANTHROPIC_API_KEY` (replies, Haiku). Without the OpenAI key, every chat turn fails safely with "couldn't read that request". Secret names can't be listed from here; check with `npm run supabase:test -- secrets list` (names only). |
+| Chat secrets on TEST | `pilot-chat` needs only `OPENAI_API_KEY`: understanding and replies both run on GPT-5.6 Luna (OpenAI-only since 2026-11-12; see `ORION_TEST_ACTIVATION.md`). Without the OpenAI key, every chat turn returns HTTP 503 `orion_openai_not_configured`. Secret names can't be listed from here; check with `npm run supabase:test -- secrets list` (names only). |
 | UI | Local `npm run dev` (no Docker) with `VITE_SUPABASE_URL` = TEST, the TEST publishable key and `VITE_TEST_DASHBOARD_WITHOUT_BRAIN=true`. This is the existing TEST-only bypass, ref-locked to TEST. |
 
 ## 4. The focused TEST pilot (one workspace; evidence on, Terra off)
@@ -216,7 +216,7 @@ These are in `scripts/orion-pilot/questions.ts`, and every expectation follows f
 3. **Apply the held security migration to TEST** with the guarded installer (§3). This is a TEST schema change.
 4. **Seed the fictional pilot data on TEST** (§4 step 2). This writes two new fictional workspaces; nothing existing is touched.
 5. **Set two TEST edge secrets**: `AGENTORY_ORION_EVIDENCE_CONTEXT`, `AGENTORY_ORION_EVIDENCE_WORKSPACES`.
-6. **Deploy `pilot-chat` to TEST** (it is not deployed there today), and confirm that TEST has `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` set.
+6. **Deploy `pilot-chat` to TEST** (it is not deployed there today), and confirm that TEST has `OPENAI_API_KEY` set (ORION no longer needs `ANTHROPIC_API_KEY`).
 7. **Decide on the Company Brain question:**
    - (a) pilot on hosted TEST **without** a Brain (recommended; keeps the 2026-11-09 decision), with Brain behaviour covered by the loopback lane; or
    - (b) a separate review to amend the no-Brain guard for one pilot workspace.

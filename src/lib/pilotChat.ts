@@ -79,8 +79,9 @@ export async function pilotChat(input: PilotChatInput): Promise<PilotChatResult>
   if (error) {
     const context = typeof error.context === 'object' && error.context !== null ? error.context as { json?: () => Promise<unknown>; text?: () => Promise<string> } : null;
     try {
-      const body = context?.json ? await context.json() as { error?: string; message?: string; details?: string } : null;
-      const message = body?.error || body?.message || body?.details;
+      const body = context?.json ? await context.json() as { error?: string; message?: string; details?: string; detail?: string } : null;
+      // A readable sentence first; the bare code only when there is nothing else.
+      const message = body?.message || body?.detail || body?.details || body?.error;
       if (message) throw new Error(message);
     } catch (parseError) {
       if (parseError instanceof Error && parseError.message !== error.message) throw parseError;

@@ -113,6 +113,8 @@ import { type WorkforceTask, type TerraRunLimiter, type EnvReader } from "./terr
 import { resolveTaskRoute, defaultEffortFor, maxUsdPerCall, type RouteEffort, type TaskRoute } from "./modelRoutePolicy.ts";
 import { priceModelCall } from "./modelCostModel.ts";
 import { minimumReasoningEffort } from "./modelRequestBody.ts";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { activeModelFamily, MODEL_FAMILIES } from "./gptModelRouter.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
@@ -190,6 +192,42 @@ export const TASK_MODELS: Record<TaskType, TaskModelPolicy> = {
 };
 
 const ANTHROPIC_MODEL = HAIKU;
+
+// ── ORION CHAT IS OPENAI-ONLY (2026-11-12) ──────────────────────────────────
+//
+// A REQUEST-SCOPED vendor policy. `pilot-chat` enters it once per request, so
+// every `generateText`/`generateJson` made while answering that request — its
+// own calls and those of shared modules it reaches — runs on OpenAI, whatever
+// the task's default above says. Functions that never enter the scope
+// (`daily-brief`, `orchestrate`, `run-agent`, Company Brain setup, …) keep
+// their declared models, Anthropic included; nothing is removed from them.
+//
+// The model is the active GPT family's PRIMARY (GPT-5.6 Luna by default), the
+// same model Chat Brain already uses to understand the request, so one turn
+// is read and answered by one vendor. `fallback: null`: if OpenAI fails or its
+// key is missing, the call fails with an explicit code — it never falls back
+// to Anthropic.
+export interface ChatVendorScope { readonly name: "orion_openai_only" }
+export const ORION_OPENAI_ONLY: ChatVendorScope = Object.freeze({ name: "orion_openai_only" });
+export const chatVendorScope = new AsyncLocalStorage<ChatVendorScope>();
+
+/** The OpenAI model ORION chat answers with: the active family's primary. */
+export function orionChatModel(read?: (k: string) => string | undefined): string {
+  return MODEL_FAMILIES[read ? activeModelFamily(read) : activeModelFamily()].primary;
+}
+
+/** The policy a task runs under right now: its declared one, or ORION's OpenAI-only override. */
+export function effectiveTaskPolicy(
+  taskType: TaskType,
+  scope: ChatVendorScope | undefined = chatVendorScope.getStore(),
+  read?: (k: string) => string | undefined,
+): TaskModelPolicy {
+  if (!scope) return TASK_MODELS[taskType];
+  return {
+    model: orionChatModel(read), vendor: "openai", fallback: null,
+    rationale: "ORION chat runs on OpenAI only; no Anthropic fallback",
+  };
+}
 
 // ----- JSON extraction (tolerant of fences / preamble / truncation) -----
 
@@ -409,8 +447,8 @@ async function callAnthropic(
  */
 export function plannedAttempts(
   taskType: TaskType, hasKey: (v: ModelVendor) => boolean,
+  policy: TaskModelPolicy = TASK_MODELS[taskType],
 ): Array<{ vendor: ModelVendor; model: string; intended: boolean }> {
-  const policy = TASK_MODELS[taskType];
   const out: Array<{ vendor: ModelVendor; model: string; intended: boolean }> = [];
   if (hasKey(policy.vendor)) out.push({ vendor: policy.vendor, model: policy.model, intended: true });
   if (policy.fallback && hasKey(policy.fallback.vendor)) {
@@ -423,7 +461,8 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   const hasKey = (v: ModelVendor) => (v === "anthropic" ? !!anthropicKey : !!openaiKey);
-  const policy = TASK_MODELS[opts.taskType];
+  const scope = chatVendorScope.getStore();
+  const policy = effectiveTaskPolicy(opts.taskType, scope);
   const started = Date.now();
 
   type Attempt = {
@@ -431,7 +470,7 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
     run: () => Promise<Awaited<ReturnType<typeof callAnthropic>>>;
     routed?: boolean; effort?: RouteEffort | null;
   };
-  const attempts: Attempt[] = plannedAttempts(opts.taskType, hasKey).map((a) =>
+  const attempts: Attempt[] = plannedAttempts(opts.taskType, hasKey, policy).map((a) =>
     a.vendor === "anthropic"
       ? { provider: "anthropic" as ProviderName, model: a.model, intended: a.intended,
           run: () => callAnthropic(opts, anthropicKey!) }
@@ -439,7 +478,10 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
           run: () => callOpenAICompat(a.model, opts, openaiKey!) }
   );
 
-  const route = routeAttemptFor(opts, hasKey);
+  const routed = routeAttemptFor(opts, hasKey);
+  // Inside ORION's OpenAI-only scope a route to another vendor is not taken.
+  const route: RouteAttempt = routed.model && scope && routed.vendor !== "openai"
+    ? { model: null, decision: "vendor_not_allowed_in_scope" } : routed;
   if (route.model) {
     const { model: rModel, effort: rEffort } = route;
     attempts.unshift(route.vendor === "anthropic"

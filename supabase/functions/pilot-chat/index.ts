@@ -30,6 +30,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 type UntypedClient = SupabaseClient<any, any, any>;
 import {
   generateJson, generateText, logProviderCall, type GenerateOpts,
+  chatVendorScope, ORION_OPENAI_ONLY, orionChatModel,
 } from "../_shared/aiProvider.ts";
 import { createTerraRunLimiter } from "../_shared/terraPolicy.ts";
 import type { ToolInput } from "../_shared/toolInputPlanner.ts";
@@ -127,12 +128,14 @@ import { AsyncLocalStorage } from "node:async_hooks";
 // Scoped per REQUEST (AsyncLocalStorage), so concurrent turns in one isolate
 // never read each other's collector.
 const turnCollector = new AsyncLocalStorage<{ lastModel(): string | null }>();
+/** Returned (503) when ORION's only provider has no key on this project. */
+export const ORION_OPENAI_NOT_CONFIGURED = "orion_openai_not_configured";
 function actualModelUsed(): string {
   return turnCollector.getStore()?.lastModel() ?? "deterministic";
 }
 import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
 import { retrieveEvidence, type EvidenceDb as StoredEvidenceDb } from "../_shared/evidence/retrieve.ts";
-import { orionEvidenceForTurn, ORION_BUSINESS_ANSWER_SHAPE, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
+import { orionEvidenceForTurn, orionEvidenceEnabledFor, ORION_BUSINESS_ANSWER_SHAPE, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
 import { composeStructuredAnswer, evidenceQuestionKind, evidenceSubjectFromMessage, renderStructuredAnswer } from "../_shared/evidence/answer.ts";
 import type { PresentedReferentSet } from "../_shared/referentPersistence.ts";
 import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
@@ -1431,6 +1434,11 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
 
 async function handlePilotChat(req: Request, fail: FailureContext): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  // ORION CHAT IS OPENAI-ONLY. Every model call made while answering this
+  // request — chat's own and those of shared modules it reaches — runs on
+  // OpenAI with no Anthropic fallback (`chatVendorScope`, aiProvider.ts).
+  // Request-scoped, the same way `turnCollector` is.
+  chatVendorScope.enterWith(ORION_OPENAI_ONLY);
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -1546,6 +1554,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (!member) return json({ error: "Forbidden — not a member of this workspace" }, 403);
+
+  // ORION RUNS ON OPENAI ONLY. Without its key nothing below can answer, and
+  // there is no Anthropic fallback — so say exactly that, before any work.
+  if (!Deno.env.get("OPENAI_API_KEY")) {
+    console.error("[pilot-chat] OPENAI_API_KEY is not set; ORION chat is OpenAI-only");
+    return json({
+      error: ORION_OPENAI_NOT_CONFIGURED,
+      message: `ORION is not configured: OPENAI_API_KEY is missing on this project (ORION chat uses OpenAI ${orionChatModel()} only). Nothing was started and nothing was charged.`,
+    }, 503);
+  }
 
   // ONE Company Brain read for the whole turn, through the shared loader: the
   // effective profile (approved memory folded in) plus ORION's memory view.
@@ -2429,8 +2447,14 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         }
         : understood.request;
 
-      // PRIORITY QUESTIONS ARE ORION'S BRIEF (see departmentRouting.ts).
-      const executive = promoteExecutiveQuestion(requestForRouting, message);
+      // PRIORITY QUESTIONS ARE ORION'S BRIEF (see departmentRouting.ts) —
+      // except where ORION's evidence context is on for this workspace: there
+      // the question stays with ORION, answered from cited workspace evidence
+      // (`strategic_prioritization`) in this request, on OpenAI, instead of
+      // being handed to the separate `daily-brief` function.
+      const executive = orionEvidenceEnabledFor(workspaceId)
+        ? { request: requestForRouting, promoted: false }
+        : promoteExecutiveQuestion(requestForRouting, message);
       if (executive.promoted) {
         console.log("[pilot-chat][routing] priority question → ORION brief");
         // Every later reader (the read planner included) must see the promoted reading.
@@ -2922,6 +2946,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             } : {}),
             chat_brain: { route: "converse", grounded: !!workspaceContextBlock,
               answered: ai.ok },
+            ...(ai.ok ? {} : { model_error: { code: ai.errorCode ?? "unknown", model: ai.model || null } }),
           },
         );
       }
