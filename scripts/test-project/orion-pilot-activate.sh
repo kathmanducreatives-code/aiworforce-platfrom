@@ -86,11 +86,6 @@ if [ "$spend" = "absent" ]; then
 fi
 printf 'ceiling_set=%s\nactivated_at=%s\n' "$ceiling_set" "$(date -u +%FT%TZ)" > "$STATE"
 
-echo "== deploy pilot-chat (bundled by the Supabase API, no Docker)"
-t functions deploy pilot-chat --use-api
-
-echo "== smoke"
-code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "https://$REF.supabase.co/functions/v1/pilot-chat" -H 'Content-Type: application/json' -d '{}')"
-echo "  POST without a token → HTTP $code (want 401)"
-[ "$code" = "401" ] || { echo "WARNING: unexpected status; check the function logs before testing"; exit 1; }
+echo "== deploy pilot-chat as one bundled file (a raw --use-api upload is HTTP 413)"
+scripts/test-project/orion-pilot-deploy.sh --confirm "$REF" --skip-preflight
 echo "ORION pilot active on $REF (OpenAI-only: GPT-5.6 Luna). Evidence: pilot workspace only. Terra / hybrid routing: off."

@@ -185,6 +185,30 @@ The security fixes are applied on TEST: `20261112072003_workforce_v2_security` a
 
 **Residual note (not exploitable):** `authenticated` still holds INSERT/UPDATE/DELETE grants on the base table `lead_execution_calls`. Row-level security is on and that table has only a SELECT policy, so such statements affect 0 rows. Revoking those grants would be extra defence in depth, but it is outside the reviewed scope and was not done.
 
+## Deploying `pilot-chat`: bundled, because a raw upload is HTTP 413 (2026-11-12)
+
+**The problem:** `functions deploy pilot-chat --use-api` uploads every local module: 284 files, about 5.7 MB of heavily commented source. The Management API rejects that with **HTTP 413**.
+
+**The fix:** `scripts/test-project/build-pilot-chat-bundle.mjs` uses the repo's own `esbuild`, which Vite already ships, to bundle the 229 reachable local modules into **one 1.36 MB file**.
+- It is not minified, so stack traces stay readable.
+- The only external imports are `https://esm.sh/@supabase/supabase-js@2` and `node:async_hooks`, the same two the source uses.
+- Nothing in the graph reads local files at runtime.
+- The bundle goes into a temporary workdir whose `config.toml` names **only TEST**.
+
+**Deploy-only command:** `scripts/test-project/orion-pilot-deploy.sh --confirm tlvnfrxzjhsjgdofwehb`
+- **Never sets or unsets secrets.** The evidence flags and spending limit stay as they are.
+- Preflight, names only: refuses without `OPENAI_API_KEY`, or with any Terra / routing / model-family secret. Reports the evidence flags and `MODEL_SPEND_*` as found.
+- Builds the bundle and refuses above 4 MB.
+- Runs `functions deploy pilot-chat --use-api --workdir <bundle>` through the TEST-pinned wrapper.
+- Smoke-checks that a request without a token gets 401.
+
+`orion-pilot-activate.sh --deploy` now uses the same deploy step.
+
+**Verified locally:**
+- The real handler tests pass when run **against the bundle itself**: 51 of 51, using `PILOT_CHAT_MODULE=<bundle>` in `tests/edge-functions/_helpers/pilotTurn.ts`. An invalid path fails, which proves the override is used.
+  - Those tests cover OpenAI-only Luna, evidence citations and badges, follow-up referents, the 503 for a missing key, 403 for a non-member, and spend metering.
+- `tests/infra/pilotChatBundle.test.ts` pins the size, the externals, the single file, and the TEST-only workdir.
+
 ## Seeded on TEST (2026-11-12)
 
 - **Seed:** `orion-pilot-seed.sql` (sha256 `20eddbe8…`, unchanged since review). The only edit was substituting the four user ids; it ran in one transaction.

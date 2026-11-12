@@ -23,8 +23,10 @@ export const SUPABASE_URL = "https://fake.supabase.test";
 export const WORKSPACE = "11111111-1111-4111-8111-111111111111";
 export const CONVERSATION = "22222222-2222-4222-8222-222222222222";
 
+// PILOT_CHAT_MODULE runs the same tests against the single-file deploy bundle
+// (scripts/test-project/build-pilot-chat-bundle.mjs) instead of the source.
 const { handlePilotChat } = await import(
-  "../../../supabase/functions/pilot-chat/index.ts");
+  Deno.env.get("PILOT_CHAT_MODULE") ?? "../../../supabase/functions/pilot-chat/index.ts");
 
 export interface TurnResult {
   status: number;
