@@ -61,6 +61,14 @@ export interface LeadDecisionState {
   priorityScore: number;
   priorityReason: string;
   whyNowSummary: string;
+  /**
+   * The account passed the canonical qualification path (accountStatus
+   * "qualified") — independent of the PREPARATION stage. A qualified account
+   * with no discovery source sits in `research_needed`, and the Qualified
+   * counter used to read only the stage, so two CONTACT leads showed
+   * "Qualified 0" (TEST, 2026-11-12). Optional so hand-built states still type.
+   */
+  accountQualified?: boolean;
 }
 
 // ---------- derivations (pure) ----------
@@ -209,6 +217,7 @@ export function deriveLeadDecisionState(row: LeadRow): LeadDecisionState {
     priorityScore,
     priorityReason: priorityReasonFor(decision, fitBand, buyerState),
     whyNowSummary,
+    accountQualified: isQualified(row),
   };
 }
 
@@ -321,7 +330,10 @@ export function countByKey(states: LeadDecisionState[], key: CounterKey): number
   switch (key) {
     case "all": return states.length;
     case "qualified":
+      // Passed qualification — whatever preparation is still to do (research,
+      // buyer, draft) — or already engaged. Never a watch/skip/poor-fit row.
       return states.filter((s) =>
+        s.accountQualified === true ||
         ["qualified", "buyer_needed", "draft_ready", "awaiting_approval", "contacted", "replied", "meeting"].includes(s.lifecycle),
       ).length;
     case "buyer_ready":

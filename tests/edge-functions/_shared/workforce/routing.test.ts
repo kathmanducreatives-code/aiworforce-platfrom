@@ -112,3 +112,21 @@ Deno.test("transcripts record the model that actually answered", () => {
   assertStringIncludes(chat, "turnCollector.enterWith(chatModelCalls);");
   assertStringIncludes(chat, '.order("created_at", { ascending: false })\n    .limit(20);\n  const history = [...(historyNewestFirst ?? [])].reverse();');
 });
+
+import { orionAnswersCompoundRead } from "../../../../supabase/functions/_shared/departmentRouting.ts";
+Deno.test("compound read → ORION evidence answer; single list read and scoped reads unchanged", () => {
+  const part = (id: string, entity: string, shape = "records", refs: unknown[] = []) => ({
+    id, objective: "read", subject: { entity, references: refs, filters: [] }, requirements: [],
+    output: { shape, count: null, completeness: "sample" }, depends_on: [] });
+  // deno-lint-ignore no-explicit-any
+  const req = (...parts: any[]) => ({ parts, ambiguity: [], confidence: 0.9 }) as any;
+  const two = orionAnswersCompoundRead(req(part("a", "company"), part("b", "signal")));
+  assert(two.rerouted);
+  assertEquals(two.request.parts.length, 1);
+  assertEquals(two.request.parts[0].objective, "converse");
+  assert(orionAnswersCompoundRead(req(part("a", "company", "answer"))).rerouted, "a prose read is a summary");
+  assertEquals(orionAnswersCompoundRead(req(part("a", "company"))).rerouted, false);
+  assertEquals(orionAnswersCompoundRead(req(part("a", "company"), part("b", "signal", "records", [{ kind: "name", value: "Kestrel" }]))).rerouted, false);
+  // deno-lint-ignore no-explicit-any
+  assertEquals(orionAnswersCompoundRead(req(part("a", "company"), { ...part("b", "company"), objective: "source" } as any)).rerouted, false);
+});

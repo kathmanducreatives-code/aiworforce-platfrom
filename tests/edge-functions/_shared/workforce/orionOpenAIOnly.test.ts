@@ -245,3 +245,65 @@ Deno.test("handler: workspace authorization still comes first (non-member → 40
     assertEquals(net.modelCalls.length, 0);
   } finally { net.restore(); }
 });
+
+// ══ 4. LIVE FINDINGS (TEST, 2026-11-12) ═══════════════════════════════════
+//
+// "What companies and signals are currently available in my workspace?
+//  Summarize them using stored evidence." was understood as TWO read parts;
+// the deterministic read surface served the first, answering "4 leads saved"
+// with names only — no signals, no evidence. And the understanding call never
+// reached the spend ledger (0 rows for the pilot workspace after the turn).
+
+const LIVE_Q = "What companies and signals are currently available in my workspace? Summarize them using stored evidence.";
+const twoReads = modelRequest([
+  { objective: "read", entity: "company", shape: "records" },
+  { objective: "read", entity: "signal", shape: "records" },
+], 0.99);
+
+async function liveTurn(say: string, brain: unknown, answer: string, envExtra: Record<string, string | null> = {}, served = false) {
+  const tables = { ...pilotTables(), lead_execution_calls: [] as Row[] };
+  const net = installFakeNetwork({ supabaseUrl: SUPABASE_URL, tables,
+    modelReplies: [brainSays(brain), { when: (_u, s) => !isBrain(s), content: answer }] });
+  try {
+    const out = await withEnv({ MODEL_SPEND_ENFORCEMENT: "observe", AGENTORY_ORION_EVIDENCE_CONTEXT: "true",
+      AGENTORY_ORION_EVIDENCE_WORKSPACES: WORKSPACE, ANTHROPIC_API_KEY: null, ...envExtra }, () => sendTurn(say, tables, undefined, { served }));
+    return { out, net, tables };
+  } finally { net.restore(); }
+}
+
+Deno.test("live: 'companies AND signals, with evidence' is answered by ORION from evidence — signals included", async () => {
+  const answer = "Leads: Kestrel [E1] … Signals: Ridgeway expansion is contradicted [E2].";
+  const { out, net } = await liveTurn(LIVE_Q, twoReads, answer);
+  assertEquals(out.content, answer);
+  const ev = out.metadata.orion_evidence as { items: Array<{ subject: string; verification: string; source_type?: string }> };
+  assert(ev && ev.items.length > 0, "evidence attached");
+  assert(ev.items.some((i) => i.subject.includes("Ridgeway")), "a signal-only company is in the evidence");
+  assert(ev.items.some((i) => i.subject.includes("Kestrel")));
+  assertEquals((out.metadata.chat_brain as { route: string }).route, "converse");
+  assert(net.modelCalls.every((c) => c.host === "api.openai.com"));
+});
+
+Deno.test("live: a single list read keeps the deterministic read surface (no model answer)", async () => {
+  const { out, net } = await liveTurn("Show my leads", modelRequest([{ objective: "read", entity: "company", shape: "records" }], 0.99), "unused");
+  assertEquals((out.metadata.chat_brain as { route: string }).route, "read");
+  assertEquals(net.modelCalls.filter((c) => !isBrain(c.system)).length, 0);
+});
+
+Deno.test("live: outside the evidence workspace a compound read is unchanged (deterministic read)", async () => {
+  const { out } = await liveTurn(LIVE_Q, twoReads, "unused", { AGENTORY_ORION_EVIDENCE_WORKSPACES: "a71a0000-0000-4000-8000-0000000011a1" });
+  assertEquals((out.metadata.chat_brain as { route: string }).route, "read");
+});
+
+Deno.test("live: the understanding call is recorded in the spend ledger with the answer", async () => {
+  const { tables, net } = await liveTurn(LIVE_Q, twoReads, "An answer [E1].", {}, true);
+  const rows = (tables.lead_execution_calls ?? []) as Row[];
+  assertEquals(rows.length, net.modelCalls.length, "every model call this turn is a ledger row");
+  assert(rows.length >= 2, "understanding + answer");
+  assert(rows.every((r) => r.workspace_id === WORKSPACE));
+});
+
+Deno.test("live: a deterministic read still records its understanding call (the case that showed 0 rows on TEST)", async () => {
+  const { tables, net } = await liveTurn("Show my leads", modelRequest([{ objective: "read", entity: "company", shape: "records" }], 0.99), "unused", {}, true);
+  assertEquals(net.modelCalls.length, 1, "understanding only");
+  assertEquals(((tables.lead_execution_calls ?? []) as Row[]).length, 1);
+});

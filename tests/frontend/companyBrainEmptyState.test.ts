@@ -30,5 +30,6 @@ Deno.test("E-2 the page: setup prompt, direct setup action, no identity warning,
   assert(/\{c\.name\.trim\(\) \? monogram\(c\.name\) : <Building2 size=\{18\} \/>\}/.test(overview));
   const page = read("src/pages/CompanyBrainDashboard.tsx");
   assert(/\{identityBanner && !brainEmpty && \(/.test(page));
-  assert(/onStartSetup=\{scope\.kind === 'agency' \? \(\) => navigate\('\/onboarding\/company-brain'\) : undefined\}/.test(page));
+  // No guided setup where the environment refuses Brain writes (isolated TEST).
+  assert(/onStartSetup=\{scope\.kind === 'agency' && !brainWritesBlocked \? \(\) => navigate\('\/onboarding\/company-brain'\) : undefined\}/.test(page));
 });

@@ -25,7 +25,7 @@ export const CONVERSATION = "22222222-2222-4222-8222-222222222222";
 
 // PILOT_CHAT_MODULE runs the same tests against the single-file deploy bundle
 // (scripts/test-project/build-pilot-chat-bundle.mjs) instead of the source.
-const { handlePilotChat } = await import(
+const { handlePilotChat, servePilotChat } = await import(
   Deno.env.get("PILOT_CHAT_MODULE") ?? "../../../supabase/functions/pilot-chat/index.ts");
 
 export interface TurnResult {
@@ -44,9 +44,17 @@ export async function sendTurn(
    * plus the mission the card carried. Omitted for an ordinary typed message.
    */
   action?: { action_source: string; metadata: Record<string, unknown> },
+  /**
+   * Through `servePilotChat`, the real entry point: its `finally` writes the
+   * turn's model calls to the spend ledger. `handlePilotChat` alone does not.
+   */
+  opts: { served?: boolean } = {},
 ): Promise<TurnResult> {
   const before = (tables.messages ?? []).length;
-  const res = await handlePilotChat(
+  const entry = opts.served
+    ? (req: Request, _fail: unknown) => servePilotChat(req)
+    : handlePilotChat;
+  const res = await entry(
     new Request(`${SUPABASE_URL}/functions/v1/pilot-chat`, {
       method: "POST",
       headers: { Authorization: "Bearer test-jwt", "content-type": "application/json" },

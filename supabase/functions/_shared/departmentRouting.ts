@@ -25,6 +25,37 @@ import type { PresentedReferentSet } from "./referentPersistence.ts";
 export const PRIORITY_QUESTION_RE =
   /\b(?:prioriti[sz]e|priorities|top priority|focus on (?:this|next)|what should (?:i|we) (?:focus on|work on|do (?:first|next|this week|today))|what matters most|what needs my attention|brief me|executive (?:brief|summary)|where should (?:i|we) (?:focus|start))\b/i;
 
+/**
+ * 3. A COMPOUND READ IS ORION'S EVIDENCE ANSWER (where the evidence context is on).
+ *
+ * "What companies and signals do we have? Summarize them using stored evidence"
+ * is understood as TWO read parts. The deterministic read surface serves one
+ * part (`planRead` takes the first), so the answer listed four company names
+ * and silently dropped the signals and the evidence. Where ORION's evidence
+ * context is enabled, a request made ONLY of unscoped reads that either has
+ * several parts or asks for prose (`shape: "answer"`) becomes one `converse`
+ * part, answered from the cited evidence digest (leads AND signals, with
+ * verification, dates and exclusions). A single list read ("show my leads")
+ * and anything referencing a specific company keep the deterministic surface.
+ * Nothing that could spend is touched: only reads are rewritten, to converse.
+ */
+export function orionAnswersCompoundRead(request: RequestV1): { request: RequestV1; rerouted: boolean } {
+  const parts = request.parts;
+  if (!parts.length || !parts.every((p) => p.objective === "read")) return { request, rerouted: false };
+  if (parts.some((p) => (p.subject.references ?? []).length > 0)) return { request, rerouted: false };
+  if (!(parts.length >= 2 || parts.some((p) => p.output.shape === "answer"))) return { request, rerouted: false };
+  const first = parts[0];
+  return {
+    rerouted: true,
+    request: {
+      ...request,
+      parts: [{ ...first, objective: "converse", requirements: [],
+        subject: { ...first.subject, entity: "conversation", references: [], filters: [] },
+        output: { ...first.output, shape: "answer" }, depends_on: [] }],
+    },
+  };
+}
+
 /** Promote a priority question to ORION's brief. Returns the request unchanged otherwise. */
 export function promoteExecutiveQuestion(request: RequestV1, utterance: string): { request: RequestV1; promoted: boolean } {
   if (!PRIORITY_QUESTION_RE.test(utterance)) return { request, promoted: false };

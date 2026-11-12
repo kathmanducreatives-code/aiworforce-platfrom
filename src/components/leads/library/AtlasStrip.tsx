@@ -8,10 +8,12 @@ interface Props {
   rows: LeadRow[];
   /** Atlas's live status word (useDepartmentAgentStatus), or null while unknown. */
   status?: string | null;
+  /** Why Atlas is blocked ("Needs your Company Brain"), shown beside the badge. */
+  blockReason?: string | null;
   className?: string;
 }
 
-export function AtlasStrip({ rows, status = null, className }: Props) {
+export function AtlasStrip({ rows, status = null, blockReason = null, className }: Props) {
   const atlas = PUBLIC_AGENTS.atlas;
   const indexed = rows.length;
   const draftsReady = rows.filter(
@@ -32,6 +34,12 @@ export function AtlasStrip({ rows, status = null, className }: Props) {
             <span className="text-foreground/90 font-medium">{indexed}</span> accounts indexed
             <span className="mx-1.5 text-white/15">·</span>
             <span className="text-foreground/90 font-medium">{draftsReady}</span> drafts ready
+            {blockReason && (
+              <>
+                <span className="mx-1.5 text-white/15">·</span>
+                <span data-testid="atlas-block-reason" className="text-amber-400/90">{blockReason}</span>
+              </>
+            )}
           </>
         }
       />

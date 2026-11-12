@@ -133,7 +133,7 @@ export const ORION_OPENAI_NOT_CONFIGURED = "orion_openai_not_configured";
 function actualModelUsed(): string {
   return turnCollector.getStore()?.lastModel() ?? "deterministic";
 }
-import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
+import { isPronounReference, promoteExecutiveQuestion, orionAnswersCompoundRead, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
 import { retrieveEvidence, type EvidenceDb as StoredEvidenceDb } from "../_shared/evidence/retrieve.ts";
 import { orionEvidenceForTurn, orionEvidenceEnabledFor, ORION_BUSINESS_ANSWER_SHAPE, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
 import { composeStructuredAnswer, evidenceQuestionKind, evidenceSubjectFromMessage, renderStructuredAnswer } from "../_shared/evidence/answer.ts";
@@ -2293,7 +2293,13 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       workspaceContext: workspaceContextBlock,
       conversation: priorTurns,
       log: (m, meta) => console.log(`[pilot-chat][chat-brain] ${m}`, meta ?? ""),
-    }, { readEnv: readEnvSafe });
+    }, {
+      readEnv: readEnvSafe,
+      // UNDERSTANDING IS SPEND TOO. Without this the Luna read (and the rarer,
+      // pricier Terra repair) never reached the ledger, so the model-spend
+      // ceiling could not see chat's largest per-turn cost.
+      onModelCall: fail.modelCalls?.sink,
+    });
 
     if (understood.ok) {
       // ══ A SIGNAL THE USER IS LOOKING AT ══════════════════════════════════
@@ -2452,8 +2458,18 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // the question stays with ORION, answered from cited workspace evidence
       // (`strategic_prioritization`) in this request, on OpenAI, instead of
       // being handed to the separate `daily-brief` function.
+      // A COMPOUND READ ("companies AND signals", "summarize with evidence")
+      // is answered by ORION from the evidence digest where it is enabled; the
+      // deterministic read surface serves only one part (departmentRouting.ts §3).
+      const compound = orionEvidenceEnabledFor(workspaceId)
+        ? orionAnswersCompoundRead(requestForRouting)
+        : { request: requestForRouting, rerouted: false };
+      if (compound.rerouted) {
+        console.log("[pilot-chat][routing] compound read → ORION evidence answer");
+        understood.request = compound.request;
+      }
       const executive = orionEvidenceEnabledFor(workspaceId)
-        ? { request: requestForRouting, promoted: false }
+        ? { request: compound.request, promoted: false }
         : promoteExecutiveQuestion(requestForRouting, message);
       if (executive.promoted) {
         console.log("[pilot-chat][routing] priority question → ORION brief");
