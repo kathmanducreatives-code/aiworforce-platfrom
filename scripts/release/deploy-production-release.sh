@@ -77,7 +77,7 @@ OUT="$(mktemp -d "${TMPDIR:-/tmp}/agentory-r1.XXXXXX")"
 for fn in $RELEASE_FUNCTIONS; do
   node scripts/test-project/build-pilot-chat-bundle.mjs "$OUT" "$fn" production >/dev/null
   printf "  %-30s %s bytes\n" "$fn" "$(wc -c < "$OUT/supabase/functions/$fn/index.ts" | tr -d ' ')"
-  grep -q "\"sha\":\"$SHA\"\|sha: \"$SHA\"" "$OUT/supabase/functions/$fn/index.ts" || { echo "refusing: $fn bundle is not stamped $SHA"; exit 1; }
+  grep -Eq "\"sha\": ?\"$SHA\"" "$OUT/supabase/functions/$fn/index.ts" || { echo "refusing: $fn bundle is not stamped $SHA"; exit 1; }
 done
 # one config naming production and every release function
 { echo "project_id = \"$REF\""; for fn in $RELEASE_FUNCTIONS; do printf '\n[functions.%s]\nverify_jwt = true\n' "$fn"; done; } > "$OUT/supabase/config.toml"
