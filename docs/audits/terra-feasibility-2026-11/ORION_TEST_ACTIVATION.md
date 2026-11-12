@@ -46,27 +46,30 @@ TEST_PROJECT_REF=tlvnfrxzjhsjgdofwehb TEST_DB_URL=… scripts/test-project/insta
 
 **b. Seed:** `orion-pilot-seed.sql` with the four user ids. It creates 2 fictional workspaces plus their leads, signals and accounts. No missions, scraping or outreach, and nothing existing is touched (validated locally with `validate-orion-pilot-seed.sh`).
 
-## 3. Flags and deploy (you, one command, in your shell with the Supabase CLI logged in)
+## 3. Flags and deploy (you, in your shell with the Supabase CLI logged in)
 
+**Step A, read-only and free.** It lists secret **names** only and changes nothing:
 ```bash
-scripts/test-project/orion-pilot-activate.sh --confirm tlvnfrxzjhsjgdofwehb
+scripts/test-project/orion-pilot-activate.sh --check --confirm tlvnfrxzjhsjgdofwehb
 ```
 
-It:
-1. checks that `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` exist (names only);
-2. sets `AGENTORY_ORION_EVIDENCE_CONTEXT=true` and `AGENTORY_ORION_EVIDENCE_WORKSPACES=a71a0000-0000-4000-8000-0000000011a1`;
-3. sets the pilot spend ceiling `MODEL_SPEND_ENFORCEMENT=enforce`, `MODEL_SPEND_CEILING_USD=0.49`, `MODEL_SPEND_PERIOD_DAYS=7`;
-4. deploys `pilot-chat` with `--use-api` (no Docker);
-5. smoke-checks for a 401 without a token.
+**Step B, after approval:**
+```bash
+scripts/test-project/orion-pilot-activate.sh --deploy --confirm tlvnfrxzjhsjgdofwehb
+```
+- Sets `AGENTORY_ORION_EVIDENCE_CONTEXT=true` and `AGENTORY_ORION_EVIDENCE_WORKSPACES=a71a0000-0000-4000-8000-0000000011a1`. Only `pilot-chat` reads them, and only for that workspace.
+- Deploys `pilot-chat` with `--use-api` (no Docker), then smoke-checks for a 401.
+- **Refuses** if:
+  - `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is missing;
+  - any `AGENTORY_TERRA_*`, `AGENTORY_HYBRID_*` or `AGENTORY_ROUTE_*` secret exists;
+  - the spending limit is only partly configured.
 
-**Terra and hybrid routing are not set, so they stay off.**
+**Spending limit (`MODEL_SPEND_*`, project-wide):**
+- **All three already set:** preserved and never overwritten. `pilot-chat` uses them.
+- **None set:** `pilot-chat` would refuse every turn (it fails closed). `--deploy` refuses unless you append `--set-pilot-ceiling`, which sets enforce / $0.49 per workspace / 7 days.
+- **Effect on other TEST functions:** only `daily-brief` reads these settings. It would go from refusing model calls to allowed up to the same $0.49 per workspace per 7 days. `lead-pipeline` (ATLAS discovery) and `provider-connections` do not read them and are unaffected. *(An earlier version of this doc wrongly said `lead-pipeline`.)*
 
-**Why 0.49:**
-- The ceiling is checked before every turn, per workspace.
-- One turn's worst case is about $0.05: request understanding, plus a possible repair call, plus the reply, each at its output cap.
-- So pilot plus isolation spend stays under **$0.60**. The ceiling is enforced on the server; this is not an estimate.
-
-These are project-wide TEST secrets, so `lead-pipeline` on TEST shares the ceiling until deactivation.
+**Rollback:** `orion-pilot-deactivate.sh` unsets the evidence flags and deletes `pilot-chat`. It removes `MODEL_SPEND_*` **only if** activation set them; that is recorded in `.orion-pilot-activation.state`.
 
 ## 4. Open ORION in your browser
 
@@ -152,3 +155,13 @@ The security fixes are applied on TEST: `20261112072003_workforce_v2_security` a
 - row counts equal the baseline: approvals 1, signal_events 4, signal_event_evidence 0, monitoring_subjects 0, lead_execution_calls 41, workspaces 4, members 5.
 
 **Residual note (not exploitable):** `authenticated` still holds INSERT/UPDATE/DELETE grants on the base table `lead_execution_calls`. Row-level security is on and that table has only a SELECT policy, so such statements affect 0 rows. Revoking those grants would be extra defence in depth, but it is outside the reviewed scope and was not done.
+
+## Seeded on TEST (2026-11-12)
+
+- **Seed:** `orion-pilot-seed.sql` (sha256 `20eddbe8…`, unchanged since review). The only edit was substituting the four user ids; it ran in one transaction.
+- **Accounts:** all four confirmed, never signed in, with no prior memberships:
+  - `orion-owner`, `orion-editor` and `orion-viewer` → ORION Pilot (fictional), as owner / editor / viewer;
+  - `orion-outsider` → ORION Isolation (fictional), as owner.
+- **Added:** 2 workspaces, 4 memberships, 5 accounts, 5 leads and 5 signals.
+- **Outside the pilot, unchanged:** 4 workspaces, 5 members, 4 accounts, 4 leads, 4 signals.
+- **Created by the seed (none):** tasks 10 → 10, approvals 1 → 1, model calls 41 → 41, conversations 1 → 1, Company Brain rows 0. The no-Brain guard is still enabled.

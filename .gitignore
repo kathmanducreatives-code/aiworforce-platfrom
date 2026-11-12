@@ -47,3 +47,4 @@ AgriDrone-Guardian/
 
 # Local ATLAS simulator output (npm run dev:atlas); never committed
 dev-sim/
+.orion-pilot-activation.state
