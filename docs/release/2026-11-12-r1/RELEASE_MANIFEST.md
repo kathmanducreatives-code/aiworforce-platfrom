@@ -1,6 +1,6 @@
 # Release R1 manifest: ORION (OpenAI-only) + Company Brain + security
 
-- **Release candidate:** the commit on `claude/agentory-audit-roadmap-64uq8n` that adds this file. Its SHA is quoted in the approval message and is what `--sha` must equal.
+- **Release candidate:** the head of `claude/agentory-audit-roadmap-64uq8n` quoted in the approval message. That SHA is what `--sha` must equal.
 - **Base:** `launch/hardening@770383ea` (the RC is 0 behind and contains it entirely).
 - **Target:** production backend `ohsdatpvfdjdemstoiuj`, then the frontend at `agentory.space`.
 

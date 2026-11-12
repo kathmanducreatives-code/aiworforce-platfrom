@@ -12,7 +12,7 @@
 
 | | Commit |
 |---|---|
-| Source (RC) | The commit adding this file, on `claude/agentory-audit-roadmap-64uq8n`; it contains all of `launch/hardening@770383ea` |
+| Source (RC) | The head of `claude/agentory-audit-roadmap-64uq8n` quoted in the approval message (it contains all of `launch/hardening@770383ea`). `deploy-production-release.sh` refuses any other commit. |
 | Production backend now | `pilot-chat` `86ac1b92`; `run-agent` `e4da19e8`; `orchestrate` and the queue functions `b51ad3dd`; Brain and brief functions unstamped (Sep–Oct) |
 | Production frontend now | UNKNOWN commit, July–August-era code (see the baseline) |
 
@@ -58,17 +58,18 @@
 
 | Suite | Result |
 |---|---|
-| Edge functions (all) | **10,014 / 10,014** |
+| Edge functions (all, including the build-stamp change) | **10,014 / 10,014** |
 | Frontend (Deno) | 789 / 789; Node 13 / 13 |
 | vitest `src/**` (previously in no runner) | **371 / 371**, after fixing 13 stale expectations and 1 real counter bug |
 | Deno-style `src/**` (35 files, in no runner) | 332 pass / **6 fail**, identical on `launch/hardening` (pre-existing: Workbench insights, credits dispatch, Brain-onboarding copy). Not in R1's path. |
 | Deploy safety | 314 pass / **3 fail**, pre-existing `testWorkerZeroApify` (identical on the base; ATLAS worker infra) |
-| DB contract lane (full held chain) | see the release message (running at writing time) |
+| DB contract lane (baseline + all migrations + full held chain, real Postgres 17 + PostgREST) | **455 / 455** |
 | Production-shaped clone: security D1 + D2 | vulnerability reproduced before; closed after; rollback and re-apply clean; Postgres 16 and 17 |
 | Production-shaped clone: Brain D3–D5 | existing row unchanged; owner `ok`, stale `stale`, viewer `forbidden_role`, outsider `not_member`; memory isolated |
 | `tsc` | 23 errors, all pre-existing in `src/lib/scrapers/**`; none in release files |
 | Production `vite build` | ok; references only `ohsdat…` |
-| Bundles (5 functions) | build, parse, stamped; 68 KB – 1.36 MB |
+| Bundles (5 functions) | build, parse, stamped (every R1 function now answers `x-agentory-build`); 68 KB – 1.36 MB |
+| Release script | `--check` run against the live production build headers (read-only): OK. `--deploy` rehearsed with stubs: backups → flags → deploys (pilot-chat last) → verify; each refusal path exercised |
 | **Live verification** | **not yet: nothing is deployed** |
 
 ## 8. Rollback
