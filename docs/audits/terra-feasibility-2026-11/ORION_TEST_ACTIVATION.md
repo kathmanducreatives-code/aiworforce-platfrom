@@ -128,3 +128,27 @@ I read the actual spend afterwards with a read-only query of the pilot workspace
 | G5 | your shell | `--check-model gpt-6.1-terra` (free) | none | — |
 | G6 | your shell | Stage 1 benchmark (≤ $1.43, cap $2) | paid | — |
 | G7 | production (separate decision) | the `lead_model_calls` view flaw likely exists there too | — | — |
+
+## Applied on TEST (2026-11-12)
+
+The security fixes are applied on TEST: `20261112072003_workforce_v2_security` and `20261112072104_lead_model_calls_view_lockdown`. Preflight matched the reviewed scope.
+
+**How it was verified:**
+- one DO block ending in `RAISE EXCEPTION`, so everything rolled back;
+- every write attempt used `WHERE false`;
+- roles tested: `anon`, `authenticated` and a real workspace member (via JWT claims);
+- the server role was tested separately.
+
+| Check | anon | authenticated | member | service_role |
+|---|---|---|---|---|
+| insert / update / delete `signal_events`, `signal_event_evidence`, `monitoring_subjects` | denied | denied | denied | allowed |
+| insert / update / delete `approvals` | denied | denied | denied | allowed |
+| read / delete through `lead_model_calls` | denied | denied | denied | read OK (19 rows) |
+| see another workspace's signals or approvals | — | — | 0 rows | — |
+
+**Database unchanged afterwards:**
+- 0 write policies and 4 SELECT policies on the four tables;
+- the view has `security_invoker=true`;
+- row counts equal the baseline: approvals 1, signal_events 4, signal_event_evidence 0, monitoring_subjects 0, lead_execution_calls 41, workspaces 4, members 5.
+
+**Residual note (not exploitable):** `authenticated` still holds INSERT/UPDATE/DELETE grants on the base table `lead_execution_calls`. Row-level security is on and that table has only a SELECT policy, so such statements affect 0 rows. Revoking those grants would be extra defence in depth, but it is outside the reviewed scope and was not done.
