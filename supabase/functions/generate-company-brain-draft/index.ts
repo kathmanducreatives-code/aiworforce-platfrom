@@ -44,6 +44,7 @@ import {
   resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, spendRefusalMessage,
   describeSpend, MODEL_SPEND_REFUSED, type SpendDb,
 } from "../_shared/modelSpendCeiling.ts";
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -143,7 +144,7 @@ function buildDeps(): {
   return { deps, apifyReady: !!apifyToken, firecrawlReady: !!firecrawlKey, llmReady, providerMode };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withBuildStamp(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -617,4 +618,4 @@ Deno.serve(async (req) => {
     console.error("generate-company-brain-draft error", e);
     return json({ error: "internal_error", details: e instanceof Error ? e.message : String(e) }, 500);
   }
-});
+}));

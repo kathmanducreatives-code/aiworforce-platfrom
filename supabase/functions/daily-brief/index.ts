@@ -36,6 +36,7 @@ import {
 } from "../_shared/executiveBrief.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
 import { renderBrainMemoryBlock } from "../_shared/companyBrainAgentViews.ts";
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 
 /**
  * Skips the AI wording without pretending the provider failed.
@@ -61,7 +62,7 @@ const json = (body: unknown, status = 200) =>
 /** The public identity the brief is written as (agentRegistry: `orion`). */
 const ORION_SLUG = "orion";
 
-Deno.serve(async (req) => {
+Deno.serve(withBuildStamp(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -257,4 +258,4 @@ Deno.serve(async (req) => {
     stored: !saveErr,
     connectors_missing: connectorsMissing,
   });
-});
+}));

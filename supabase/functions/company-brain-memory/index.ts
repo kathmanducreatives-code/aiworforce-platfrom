@@ -24,6 +24,7 @@ import {
 } from "../_shared/brainMemoryRequest.ts";
 import { loadCompanyBrainContext, type LoaderDb } from "../_shared/companyBrainContextLoader.ts";
 import { atlasView, renderBrainMemoryBlock } from "../_shared/companyBrainAgentViews.ts";
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -32,7 +33,7 @@ const cors = {
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-Deno.serve(async (req) => {
+Deno.serve(withBuildStamp(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
@@ -139,4 +140,4 @@ Deno.serve(async (req) => {
     console.error("[company-brain-memory] error", e instanceof Error ? e.message : String(e));
     return json({ error: "internal_error" }, 500);
   }
-});
+}));
