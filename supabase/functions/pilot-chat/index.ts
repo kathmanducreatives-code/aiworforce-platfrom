@@ -1210,7 +1210,36 @@ interface DelegateArgs {
   idempotencyKey?: string | null;
 }
 
+/**
+ * RELEASE GUARD. `AGENTORY_DELEGATION_ENABLED=false` keeps ORION from starting
+ * agent work (ATLAS sourcing, LYRA drafting, research) through `orchestrate`.
+ * Used while the agent backend in an environment is older than this chat
+ * (production, 2026-11-12: orchestrate/run-agent from 2026-10-13). Unset or any
+ * other value: unchanged behaviour. Nothing is called and nothing is charged.
+ */
+export const DELEGATION_DISABLED_REPLY =
+  "Starting agent work (ATLAS sourcing, LYRA drafts, research runs) isn't switched on in this release yet. " +
+  "I can still answer from your Company Brain, saved leads and signals. Nothing was started and nothing was charged.";
+export function delegationEnabled(read: (k: string) => string | undefined = (k) => Deno.env.get(k)): boolean {
+  return String(read("AGENTORY_DELEGATION_ENABLED") ?? "").trim().toLowerCase() !== "false";
+}
+
 async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
+  if (!delegationEnabled()) {
+    const { data: saved } = await a.admin
+      .from("messages")
+      .insert({
+        conversation_id: a.conversationId,
+        role: "assistant",
+        content: DELEGATION_DISABLED_REPLY,
+        agent_slug: "pilot",
+        model_used: a.modelUsed,
+        metadata: { type: "delegation_disabled", prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION },
+      })
+      .select("*")
+      .single();
+    return json({ type: "reply", conversation_id: a.conversationId, message: saved, delegation_disabled: true });
+  }
   const toolInput = a.toolInput;
   if (toolInput && a.workflowInputs) {
     const inputs = a.workflowInputs;

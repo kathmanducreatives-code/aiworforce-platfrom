@@ -342,8 +342,10 @@ export function countByKey(states: LeadDecisionState[], key: CounterKey): number
         ["qualified", "draft_ready", "awaiting_approval", "contacted", "replied", "meeting"].includes(s.lifecycle),
       ).length;
     case "draft_ready":
+      // A draft awaiting approval is still a ready draft: the funnel narrows
+      // (Draft ready ⊇ Awaiting approval), it never shows 0 above a 1.
       return states.filter((s) =>
-        s.outreachState === "draft_ready" &&
+        (s.outreachState === "draft_ready" || s.outreachState === "awaiting_approval") &&
         ["draft_ready", "awaiting_approval"].includes(s.lifecycle),
       ).length;
     case "awaiting_approval":
