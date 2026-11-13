@@ -1,0 +1,44 @@
+{
+  "name": "contradictory",
+  "fictional": true,
+  "note": "Two outlets disagree on the amount ($40M vs $90M) \u2192 contradicted, never verified.",
+  "now": "2026-11-10T12:00:00Z",
+  "subject": {
+    "kind": "competitor",
+    "domain": "corvane.example",
+    "name": "Corvane Systems",
+    "origin": "brain_competitor",
+    "categories": [
+      "funding",
+      "hiring",
+      "expansion",
+      "product_launch"
+    ],
+    "cadence_minutes": 10080
+  },
+  "responses": {
+    "funding": {
+      "hits": [
+        {
+          "url": "https://northwire-news.example/corvane-series-b",
+          "title": "Corvane Systems raises $40 million Series B",
+          "description": "Corvane Systems, the predictive-maintenance vendor, raised a $40 million Series B led by Halden Ventures.",
+          "published_at": "2026-11-03"
+        },
+        {
+          "url": "https://gossip-tech.example/corvane",
+          "title": "Corvane Systems raises $90 million Series B",
+          "description": "Corvane Systems raised $90 million in a Series B.",
+          "published_at": "2026-11-04"
+        }
+      ],
+      "error": null,
+      "credits": 1
+    }
+  },
+  "expect": {
+    "events": 1,
+    "verification": "contradicted",
+    "lifecycle": "contradicted"
+  }
+}

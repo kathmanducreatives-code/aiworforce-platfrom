@@ -21,6 +21,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateText } from "../_shared/aiProvider.ts";
+import { createTerraRunLimiter } from "../_shared/terraPolicy.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt } from "../_shared/agentorySystemPrompt.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
@@ -34,6 +35,8 @@ import {
   renderExecutiveBriefMarkdown, synthesizeExecutiveBrief, type ExecutiveBrief,
 } from "../_shared/executiveBrief.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
+import { renderBrainMemoryBlock } from "../_shared/companyBrainAgentViews.ts";
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 
 /**
  * Skips the AI wording without pretending the provider failed.
@@ -59,7 +62,7 @@ const json = (body: unknown, status = 200) =>
 /** The public identity the brief is written as (agentRegistry: `orion`). */
 const ORION_SLUG = "orion";
 
-Deno.serve(async (req) => {
+Deno.serve(withBuildStamp(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -150,17 +153,19 @@ Deno.serve(async (req) => {
   try {
     if (!spend.allowed) throw new SkipPolish();
     if (!worthWording) throw new SkipPolish();
-    const brainRow = await admin.from("company_brain")
-      .select("profile, onboarding_completed").eq("workspace_id", workspaceId).maybeSingle();
-    const profile = (brainRow.data?.profile ?? {}) as Record<string, unknown>;
-    const brainBlock = renderCompanyBrainBlock(profile, !!brainRow.data?.onboarding_completed);
+    // The SAME shared context ORION ranked with (profile + approved memory) —
+    // no second read, so the wording cannot see a different Brain than the ranking.
+    const shared = ctx.shared_brain ?? null;
+    const profile = (shared?.effective_profile ?? {}) as Record<string, unknown>;
+    const brainBlock = renderCompanyBrainBlock(profile, !!shared?.onboarding_completed) +
+      (shared ? "\n\n" + renderBrainMemoryBlock(shared, "orion") : "");
     const facts = modelFacts(deterministic, brainBlock);
     const ai = await generateText({
       taskType: "helper",
       systemPrompt:
         getAgentorySystemPrompt({
           taskType: "reporting",
-          currentAgent: "scribe",
+          currentAgent: "orion",
           companyBrain: profile,
         }) + "\n\n" + MODEL_INSTRUCTIONS,
       messages: [{ role: "user", content: "FACTS:\n" + facts }],
@@ -170,6 +175,8 @@ Deno.serve(async (req) => {
       functionName: "daily-brief",
       workspaceId,
       onModelCall: modelCalls.sink,
+      workforceTask: "orion_reasoning",
+      terraLimiter: createTerraRunLimiter(),
       budget: modelCalls,
     });
     if (ai.ok && ai.content) {
@@ -251,4 +258,4 @@ Deno.serve(async (req) => {
     stored: !saveErr,
     connectors_missing: connectorsMissing,
   });
-});
+}));

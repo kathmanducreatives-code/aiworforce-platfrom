@@ -1,0 +1,46 @@
+{
+  "name": "northstar_expansion",
+  "fictional": true,
+  "note": "Phase 5 workflow: the fictional Northstar Manufacturing opens a Texas plant; two outlets + its own release.",
+  "now": "2026-11-10T12:00:00Z",
+  "subject": {
+    "kind": "market",
+    "domain": null,
+    "name": "ICP: Manufacturing",
+    "origin": "icp",
+    "categories": [
+      "expansion"
+    ],
+    "cadence_minutes": 10080
+  },
+  "responses": {
+    "expansion": {
+      "hits": [
+        {
+          "url": "https://texas-industry-news.example/northstar-plant",
+          "title": "Northstar Manufacturing opens new production facility in Texas",
+          "description": "Northstar Manufacturing opens a new production facility in Texas, adding two assembly lines and 240 jobs.",
+          "published_at": "2026-11-06"
+        },
+        {
+          "url": "https://plantfloor-weekly.example/2026/11/northstar-texas",
+          "title": "Northstar Manufacturing opens production facility in Texas",
+          "description": "Northstar Manufacturing opens its new production facility in Texas this quarter.",
+          "published_at": "2026-11-06"
+        },
+        {
+          "url": "https://northstar.example/news/texas-facility",
+          "title": "Northstar Manufacturing opens new production facility in Texas",
+          "description": "Northstar Manufacturing opens a new production facility in Texas to serve customers across the Southwest.",
+          "published_at": "2026-11-05"
+        }
+      ],
+      "error": null,
+      "credits": 1
+    }
+  },
+  "expect": {
+    "events": 1,
+    "verification": "corroborated"
+  }
+}

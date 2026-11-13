@@ -1,0 +1,43 @@
+{
+  "name": "retracted",
+  "fictional": true,
+  "note": "A later report that the plan was cancelled marks the event retracted; it is never current again.",
+  "now": "2026-11-10T12:00:00Z",
+  "subject": {
+    "kind": "competitor",
+    "domain": "corvane.example",
+    "name": "Corvane Systems",
+    "origin": "brain_competitor",
+    "categories": [
+      "funding",
+      "hiring",
+      "expansion",
+      "product_launch"
+    ],
+    "cadence_minutes": 10080
+  },
+  "responses": {
+    "expansion": {
+      "hits": [
+        {
+          "url": "https://northwire-news.example/corvane-oslo",
+          "title": "Corvane Systems opens new office in Oslo, Norway",
+          "description": "Corvane Systems opens new office in Oslo, Norway.",
+          "published_at": "2026-11-01"
+        },
+        {
+          "url": "https://fabwire.example/corvane-oslo-cancelled",
+          "title": "Corvane Systems office in Oslo cancelled",
+          "description": "Corvane Systems has cancelled plans to open its new office in Oslo, Norway.",
+          "published_at": "2026-11-08"
+        }
+      ],
+      "error": null,
+      "credits": 1
+    }
+  },
+  "expect": {
+    "events": 1,
+    "lifecycle": "retracted"
+  }
+}

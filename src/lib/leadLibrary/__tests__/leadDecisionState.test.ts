@@ -188,3 +188,19 @@ describe("sorting", () => {
     expect(sorted[0].id).toBe("strong");
   });
 });
+
+describe("qualified counter vs preparation stage (TEST finding 2026-11-12)", () => {
+  it("a qualified CONTACT lead with no discovery source still counts as Qualified", () => {
+    const rows = [
+      baseRow({ id: "kestrel", accountStatus: "qualified", fitScore: 86, strongestSource: null }),
+      baseRow({ id: "harbor", accountStatus: "qualified", fitScore: 71, strongestSource: null }),
+      baseRow({ id: "summit", accountStatus: "disqualified", fitScore: 35, strongestSource: null }),
+      baseRow({ id: "cloudnova", accountStatus: "disqualified", fitScore: 18, strongestSource: null }),
+    ];
+    const states = rows.map(deriveLeadDecisionState);
+    expect(states.map((s) => s.decision)).toEqual(["contact", "contact", "skip", "skip"]);
+    expect(states[0].lifecycle).toBe("research_needed"); // the stage is unchanged
+    expect(countByKey(states, "qualified")).toBe(2);
+    expect(countByKey(states, "buyer_ready")).toBe(0); // nothing else is inflated
+  });
+});

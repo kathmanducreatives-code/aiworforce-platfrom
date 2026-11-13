@@ -329,3 +329,33 @@ never deletes or merges data. Before applying on a hosted project, run
 `OK 0 duplicate pairs`, or each listed pair needs an owner decision first. Rollback:
 `rollback/20261108120000_lead_pipeline_one_lead_per_company.down.sql`. Replayed against real
 Postgres (PGlite) in `tests/infra/leadPipelineOneLeadPerCompany.test.ts`.
+
+## `20261113120000_workforce_v2_security.sql`
+
+Workforce V2 security. Makes `signal_events`, `signal_event_evidence`,
+`monitoring_subjects` and `approvals` read-only for browser roles: drops the
+member INSERT/UPDATE/DELETE policies (and the FOR ALL
+`approvals_workspace_member_access`), revokes those grants from `anon` and
+`authenticated`, and keeps a member SELECT policy. Every legitimate writer is
+server-side with the service role (`lisa_record_signal`, scanners,
+`approve-and-continue`, `run-agent`, `toolRegistry`); the browser only reads.
+
+**Not applied anywhere.** Proven in the DB contract lane
+(`workforceV2Security.contract.test.ts`, plus a mutation proof that omits it).
+Before applying to TEST: confirm no client build writes these tables directly
+(`grep -rn "from('approvals')\|from('signal_events')" src` showed reads only on
+2026-11-11). Rollback: `rollback/20261113120000_workforce_v2_security.down.sql`.
+
+## `20261114120000_lead_model_calls_view_lockdown.sql`
+
+The model-spend view `public.lead_model_calls` is owned by `postgres` without
+`security_invoker` and is granted to `anon` / `authenticated`, so it bypassed the
+base table's RLS: anyone with the publishable key could read every workspace's
+model-call rows and UPDATE / DELETE them through the auto-updatable view, which
+erases the ledger the spend ceiling sums. Found read-only on TEST 2026-11-11.
+Production carries the same migration and was **not** checked or changed. The fix
+sets `security_invoker = true` and revokes browser roles (every reader is service
+role). Applied together with `20261113120000` by
+`scripts/test-project/install-workforce-v2-security.sh`. Proven by
+`leadModelCallsView.contract.test.ts` and its mutation proof. Rollback:
+`rollback/20261114120000_lead_model_calls_view_lockdown.down.sql`.

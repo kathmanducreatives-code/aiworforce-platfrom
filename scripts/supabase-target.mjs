@@ -34,10 +34,15 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
+// TEST is the ISOLATED project `agentory-discovery-test` (created 2026-10-18).
+// It used to name production — "TEST" was the live project — which is how a
+// "test" command could reach production. It must never equal `production`
+// again: main() refuses outright if it does (see testIsProduction).
 const CANONICAL = {
   production: "ohsdatpvfdjdemstoiuj",
-  test: "ohsdatpvfdjdemstoiuj",
+  test: "tlvnfrxzjhsjgdofwehb",
 };
+export { CANONICAL };
 
 /**
  * Commands this wrapper refuses outright, with the reason.

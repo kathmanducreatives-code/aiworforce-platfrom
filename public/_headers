@@ -1,0 +1,21 @@
+# Security headers for Cloudflare Pages / Netlify (Vercel: vercel.json).
+# connect-src names ONLY the production Supabase project (REST, Auth, Storage,
+# Edge Functions over https; Realtime over wss). Fonts: Google Fonts.
+# Inline styles are allowed (React style props, the boot fallback); inline
+# scripts are not.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://ohsdatpvfdjdemstoiuj.supabase.co wss://ohsdatpvfdjdemstoiuj.supabase.co; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/index.html
+  Cache-Control: no-cache
+
+/version.json
+  Cache-Control: no-cache

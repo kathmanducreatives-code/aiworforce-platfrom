@@ -27,7 +27,7 @@ import { dampToward, pointerToGaze, splitGaze } from "../../src/lib/agent3d/gaze
 const NOW = Date.parse("2026-09-13T12:00:00Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
 const snap = (p: Partial<LiveSnapshot> = {}): LiveSnapshot => ({ now: NOW, tasks: [], approvals: [], chat: null, plans: [], ...p });
-const task = (p: Partial<LiveTask> = {}): LiveTask => ({ id: "t1", agentSlug: "scout", status: "running", updatedAt: ago(60_000), ...p });
+const task = (p: Partial<LiveTask> = {}): LiveTask => ({ id: "t1", agentSlug: "scribe", status: "running", updatedAt: ago(60_000), ...p });
 const read = (path: string) => Deno.readTextFileSync(new URL(`../../${path}`, import.meta.url));
 
 // ── truthfulness: what counts as evidence ─────────────────────────────────
@@ -101,7 +101,9 @@ Deno.test("identity: hawk and aria are both Atlas; unknown slugs are attributed 
   assertEquals(s.atlas.base, "working");
   assertEquals(VISUAL_AGENT_KEYS.filter((k) => s[k].base === "working"), ["atlas"]);
   assertEquals(visualAgentKey("aria"), "atlas");
-  assertEquals(visualAgentKey(" Scout "), "lyra");
+  // Workforce V2: sourcing (scout) is ATLAS's; content (scribe) and outreach (penn) are LYRA's.
+  assertEquals(visualAgentKey(" Scout "), "atlas");
+  assertEquals(visualAgentKey("scribe"), "lyra");
   assertEquals(visualAgentKey("Lyra"), "lyra");
   assertEquals(visualAgentKey("mystery-bot"), null);
   assertEquals(visualAgentKey(null), null);
@@ -119,18 +121,18 @@ Deno.test("approvals are attributed by agent id, then by task — never by their
   );
   assertEquals(attributed.map((a) => a.agentSlug), ["penn", "scribe", null]);
   const s = deriveAgentVisualStates(snap({ approvals: attributed }));
-  assertEquals(s.mira.base, "awaiting");
-  assertEquals(s.orion.base, "awaiting");
-  assertEquals(s.mira.source, "approval");
-  assertEquals(s.lyra.base, "idle");
-  assertEquals(s.pilot.base, "idle");
+  // penn (outreach) and scribe (content) are both Lyra's work now.
+  assertEquals(s.lyra.base, "awaiting");
+  assertEquals(s.lyra.source, "approval");
+  assertEquals(s.orion.base, "idle");
+  assertEquals(s.atlas.base, "idle");
 });
 
 Deno.test("a reply being produced makes that chat's agent think; an unknown chat claims nothing", () => {
-  assertEquals(deriveAgentVisualStates(snap({ chat: { agentSlug: "penn", awaitingReply: true } })).mira.base, "thinking");
+  assertEquals(deriveAgentVisualStates(snap({ chat: { agentSlug: "penn", awaitingReply: true } })).lyra.base, "thinking");
   const unknown = deriveAgentVisualStates(snap({ chat: { agentSlug: null, awaitingReply: true } }));
   assertEquals(VISUAL_AGENT_KEYS.filter((k) => unknown[k].base !== "idle"), []);
-  assertEquals(deriveAgentVisualStates(snap({ chat: { agentSlug: "penn", awaitingReply: false } })).mira.base, "idle");
+  assertEquals(deriveAgentVisualStates(snap({ chat: { agentSlug: "penn", awaitingReply: false } })).lyra.base, "idle");
 });
 
 Deno.test("only a fresh plan in `planning` makes Pilot think", () => {
@@ -142,11 +144,11 @@ Deno.test("only a fresh plan in `planning` makes Pilot think", () => {
 Deno.test("priority: working > thinking > awaiting > blocked, and a running task beats a setup gate", () => {
   const all = deriveAgentVisualStates(snap({
     tasks: [task()],
-    approvals: [{ id: "a", agentSlug: "scout" }],
-    chat: { agentSlug: "scout", awaitingReply: true },
+    approvals: [{ id: "a", agentSlug: "scribe" }],
+    chat: { agentSlug: "scribe", awaitingReply: true },
   }));
   assertEquals(all.lyra.base, "working");
-  const thinkingOverAwaiting = deriveAgentVisualStates(snap({ approvals: [{ id: "a", agentSlug: "scout" }], chat: { agentSlug: "scout", awaitingReply: true } }));
+  const thinkingOverAwaiting = deriveAgentVisualStates(snap({ approvals: [{ id: "a", agentSlug: "scribe" }], chat: { agentSlug: "scribe", awaitingReply: true } }));
   assertEquals(thinkingOverAwaiting.lyra.base, "thinking");
   const gate = { atlas: "Needs your Company Brain" };
   assertEquals(deriveAgentVisualStates(snap({ setupBlocked: gate })).atlas.base, "blocked");

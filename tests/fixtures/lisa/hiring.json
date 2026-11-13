@@ -1,0 +1,45 @@
+{
+  "name": "hiring",
+  "fictional": true,
+  "note": "A hiring push at scale is kept; a single job ad is dropped as below significance.",
+  "now": "2026-11-10T12:00:00Z",
+  "subject": {
+    "kind": "competitor",
+    "domain": "corvane.example",
+    "name": "Corvane Systems",
+    "origin": "brain_competitor",
+    "categories": [
+      "funding",
+      "hiring",
+      "expansion",
+      "product_launch"
+    ],
+    "cadence_minutes": 10080
+  },
+  "responses": {
+    "hiring": {
+      "hits": [
+        {
+          "url": "https://northwire-news.example/corvane-hiring",
+          "title": "Corvane Systems is hiring 120 engineers in Austin, Texas",
+          "description": "Corvane Systems is hiring 120 engineers in Austin, Texas as it builds out its platform team.",
+          "published_at": "2026-11-02"
+        },
+        {
+          "url": "https://boards.linkedin.com/jobs/1",
+          "title": "Corvane Systems is hiring a Senior Engineer",
+          "description": "Corvane Systems is hiring a Senior Engineer.",
+          "published_at": "2026-11-05"
+        }
+      ],
+      "error": null,
+      "credits": 1
+    }
+  },
+  "expect": {
+    "events": 1,
+    "dropped": {
+      "below_significance": 1
+    }
+  }
+}

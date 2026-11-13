@@ -30,7 +30,9 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 type UntypedClient = SupabaseClient<any, any, any>;
 import {
   generateJson, generateText, logProviderCall, type GenerateOpts,
+  chatVendorScope, ORION_OPENAI_ONLY, orionChatModel,
 } from "../_shared/aiProvider.ts";
+import { createTerraRunLimiter } from "../_shared/terraPolicy.ts";
 import type { ToolInput } from "../_shared/toolInputPlanner.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
@@ -115,6 +117,27 @@ import { getSourceCapability } from "../_shared/sourceCapabilities.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, resolveCompanyContactTarget, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
+import { loadChatBrain } from "../_shared/chatBrainContext.ts";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+// THE MODEL THAT ACTUALLY ANSWERED THIS TURN — read from the request's model
+// call collector (the same one that feeds the cost ledger). "deterministic"
+// when no model produced the reply. Replaces a hard-coded
+// "google/gemini-3-flash-preview" label that no chat path has used since the
+// gateway was removed (audit 2026-11, P4).
+// Scoped per REQUEST (AsyncLocalStorage), so concurrent turns in one isolate
+// never read each other's collector.
+const turnCollector = new AsyncLocalStorage<{ lastModel(): string | null }>();
+/** Returned (503) when ORION's only provider has no key on this project. */
+export const ORION_OPENAI_NOT_CONFIGURED = "orion_openai_not_configured";
+function actualModelUsed(): string {
+  return turnCollector.getStore()?.lastModel() ?? "deterministic";
+}
+import { isPronounReference, promoteExecutiveQuestion, orionAnswersCompoundRead, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
+import { retrieveEvidence, type EvidenceDb as StoredEvidenceDb } from "../_shared/evidence/retrieve.ts";
+import { orionEvidenceForTurn, orionEvidenceEnabledFor, ORION_BUSINESS_ANSWER_SHAPE, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
+import { composeStructuredAnswer, evidenceQuestionKind, evidenceSubjectFromMessage, renderStructuredAnswer } from "../_shared/evidence/answer.ts";
+import type { PresentedReferentSet } from "../_shared/referentPersistence.ts";
 import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { leadIntentFromMission, planJobsActorInput, type LeadIntent, type BrainLite } from "../_shared/leadIntent.ts";
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
@@ -1117,7 +1140,7 @@ async function showWorkflowConfirmation(
       role: "assistant",
       content: confirmContent,
       agent_slug: "pilot",
-      model_used: "google/gemini-3-flash-preview",
+      model_used: actualModelUsed(),
       metadata: {
         ...baseMeta,
         type: "workflow_confirmation",
@@ -1187,7 +1210,36 @@ interface DelegateArgs {
   idempotencyKey?: string | null;
 }
 
+/**
+ * RELEASE GUARD. `AGENTORY_DELEGATION_ENABLED=false` keeps ORION from starting
+ * agent work (ATLAS sourcing, LYRA drafting, research) through `orchestrate`.
+ * Used while the agent backend in an environment is older than this chat
+ * (production, 2026-11-12: orchestrate/run-agent from 2026-10-13). Unset or any
+ * other value: unchanged behaviour. Nothing is called and nothing is charged.
+ */
+export const DELEGATION_DISABLED_REPLY =
+  "Starting agent work (ATLAS sourcing, LYRA drafts, research runs) isn't switched on in this release yet. " +
+  "I can still answer from your Company Brain, saved leads and signals. Nothing was started and nothing was charged.";
+export function delegationEnabled(read: (k: string) => string | undefined = (k) => Deno.env.get(k)): boolean {
+  return String(read("AGENTORY_DELEGATION_ENABLED") ?? "").trim().toLowerCase() !== "false";
+}
+
 async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
+  if (!delegationEnabled()) {
+    const { data: saved } = await a.admin
+      .from("messages")
+      .insert({
+        conversation_id: a.conversationId,
+        role: "assistant",
+        content: DELEGATION_DISABLED_REPLY,
+        agent_slug: "pilot",
+        model_used: a.modelUsed,
+        metadata: { type: "delegation_disabled", prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION },
+      })
+      .select("*")
+      .single();
+    return json({ type: "reply", conversation_id: a.conversationId, message: saved, delegation_disabled: true });
+  }
   const toolInput = a.toolInput;
   if (toolInput && a.workflowInputs) {
     const inputs = a.workflowInputs;
@@ -1411,6 +1463,11 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
 
 async function handlePilotChat(req: Request, fail: FailureContext): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  // ORION CHAT IS OPENAI-ONLY. Every model call made while answering this
+  // request — chat's own and those of shared modules it reaches — runs on
+  // OpenAI with no Anthropic fallback (`chatVendorScope`, aiProvider.ts).
+  // Request-scoped, the same way `turnCollector` is.
+  chatVendorScope.enterWith(ORION_OPENAI_ONLY);
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -1503,6 +1560,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // someone chooses a limit.
   const chatModelCalls = new ModelCallCollector(resolveRunBudget());
   fail.modelCalls = chatModelCalls;
+  turnCollector.enterWith(chatModelCalls);
 
   // ── WHERE MODEL SPEND GETS RECORDED ─────────────────────────────────────
   //
@@ -1525,6 +1583,20 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (!member) return json({ error: "Forbidden — not a member of this workspace" }, 403);
+
+  // ORION RUNS ON OPENAI ONLY. Without its key nothing below can answer, and
+  // there is no Anthropic fallback — so say exactly that, before any work.
+  if (!Deno.env.get("OPENAI_API_KEY")) {
+    console.error("[pilot-chat] OPENAI_API_KEY is not set; ORION chat is OpenAI-only");
+    return json({
+      error: ORION_OPENAI_NOT_CONFIGURED,
+      message: `ORION is not configured: OPENAI_API_KEY is missing on this project (ORION chat uses OpenAI ${orionChatModel()} only). Nothing was started and nothing was charged.`,
+    }, 503);
+  }
+
+  // ONE Company Brain read for the whole turn, through the shared loader: the
+  // effective profile (approved memory folded in) plus ORION's memory view.
+  const chatBrain = await loadChatBrain(admin, workspaceId, userId);
 
   // ── THE MODEL SPEND CEILING ─────────────────────────────────────────────
   //
@@ -1704,7 +1776,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             role: "assistant",
             content: fallbackMsg,
             agent_slug: "pilot",
-            model_used: "google/gemini-3-flash-preview",
+            model_used: actualModelUsed(),
             metadata: {
               ...meta,
               ...pendingClarification("lead_source_selector", "people_unavailable"),
@@ -1740,7 +1812,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
               role: "assistant",
               content: agencyMsg,
               agent_slug: "pilot",
-              model_used: "google/gemini-3-flash-preview",
+              model_used: actualModelUsed(),
               metadata: {
                 ...meta,
                 ...pendingClarification("lead_source_selector", "agency_unavailable"),
@@ -1761,8 +1833,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           workspaceId,
           instruction: originalInstruction,
           toolInput: resolved.action,
-          modelUsed: "google/gemini-3-flash-preview",
-          providerUsed: "lovable-ai",
+          modelUsed: actualModelUsed(),
+          providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
         });
       }
 
@@ -1779,7 +1851,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             role: "assistant",
             content: reAsk,
             agent_slug: "pilot",
-            model_used: "google/gemini-3-flash-preview",
+            model_used: actualModelUsed(),
             metadata: {
               ...meta,
               ...pendingClarification("lead_source_selector", "reask_people_or_companies"),
@@ -1844,7 +1916,82 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // these answers cannot spend and cannot produce a Start card.
   //
   // Typed messages only: a card action carries its own structured intent.
-  const workspaceQuestion = !actionSource && !isPreConfirmed ? classifyWorkspaceQuestion(message) : null;
+  let workspaceQuestion = !actionSource && !isPreConfirmed ? classifyWorkspaceQuestion(message) : null;
+  // ── "WHY WAS THIS LEAD REJECTED?" — RESOLVE THE PRONOUN, NEVER GUESS ────
+  // The recogniser hands back the words ("this lead"); the companies the last
+  // answer SHOWED decide which company that is.
+  if (workspaceQuestion?.kind === "why_company" && isPronounReference(workspaceQuestion.company)) {
+    const { data: recent } = await admin.from("messages").select("metadata")
+      .eq("conversation_id", conversationId).eq("role", "assistant")
+      .order("created_at", { ascending: false }).limit(6);
+    const resolved = resolvePronounCompany(((recent ?? []) as Array<{ metadata?: Record<string, unknown> | null }>)
+      .map((m) => (m.metadata?.[PRESENTED_REFERENTS_KEY] ?? null) as PresentedReferentSet | null), workspaceQuestion.company);
+    if (resolved.kind === "one") {
+      workspaceQuestion = { ...workspaceQuestion, company: resolved.name };
+    } else {
+      const ask = resolved.kind === "many"
+        ? `Which company do you mean — ${resolved.names.join(", ")}? Tell me the name and I'll explain the recorded decision.`
+        : "Which company do you mean? Tell me its name and I'll explain the recorded decision.";
+      const { data: saved } = await admin.from("messages").insert({
+        conversation_id: conversationId, role: "assistant", content: ask, agent_slug: "pilot",
+        metadata: { classifier_source: "workspace_question", clarification: true, department: "atlas",
+          brain_fingerprint: chatBrain.fingerprint, pronoun_resolution: resolved.kind },
+      }).select("*").single();
+      return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+    }
+  }
+  // ══ EVIDENCE ANSWERS (Workforce V2, flag AGENTORY_EVIDENCE_ANSWERS_ENABLED) ══
+  // "Is this announcement verified?" and "What should I prioritize?" are
+  // answered from stored evidence in six sections. Reads only; $0; no model.
+  const evidenceKind = !workspaceQuestion && !actionSource && !isPreConfirmed &&
+      Deno.env.get("AGENTORY_EVIDENCE_ANSWERS_ENABLED") === "true"
+    ? evidenceQuestionKind(message) : null;
+  if (evidenceKind === "verification" || evidenceKind === "priority") {
+    let subject: { name: string } | null = null;
+    if (evidenceKind === "verification") {
+      const named = evidenceSubjectFromMessage(message);
+      if (named) subject = { name: named };
+      else {
+        const { data: recent } = await admin.from("messages").select("metadata")
+          .eq("conversation_id", conversationId).eq("role", "assistant")
+          .order("created_at", { ascending: false }).limit(6);
+        const resolved = resolvePronounCompany(((recent ?? []) as Array<{ metadata?: Record<string, unknown> | null }>)
+          .map((m) => (m.metadata?.[PRESENTED_REFERENTS_KEY] ?? null) as PresentedReferentSet | null), message);
+        if (resolved.kind === "one") subject = { name: resolved.name };
+        else {
+          const ask = resolved.kind === "many"
+            ? `Which one do you mean — ${resolved.names.join(", ")}? I'll check how well it is verified.`
+            : "Which company's announcement do you mean? Tell me the name and I'll check its verification.";
+          const { data: saved } = await admin.from("messages").insert({
+            conversation_id: conversationId, role: "assistant", content: ask, agent_slug: "pilot",
+            metadata: { classifier_source: "evidence_answer", clarification: true, department: "lisa",
+              brain_fingerprint: chatBrain.fingerprint },
+          }).select("*").single();
+          return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+        }
+      }
+    }
+    // Membership was checked above; the retrieval checks it again through the loader.
+    const retrieved = await retrieveEvidence(admin as unknown as StoredEvidenceDb, { workspaceId, userId, subject });
+    if (retrieved.ok) {
+      const structured = composeStructuredAnswer({ kind: evidenceKind, subject, retrieved });
+      const { data: saved } = await admin.from("messages").insert({
+        conversation_id: conversationId, role: "assistant",
+        content: renderStructuredAnswer(structured), agent_slug: "pilot",
+        metadata: {
+          classifier_source: "evidence_answer",
+          department: evidenceKind === "verification" ? "lisa" : "orion",
+          structured_answer: structured,
+          evidence_sources: retrieved.sources,
+          brain_fingerprint: chatBrain.fingerprint,
+          chat_brain: { route: "read", target: `evidence:${evidenceKind}`, served_from: "stored_evidence", spent: false },
+          outcome: satisfied(`read:evidence:${evidenceKind}`),
+        },
+      }).select("*").single();
+      return json({ type: "reply", conversation_id: conversationId, message: saved });
+    }
+    // A refusal here falls through to the ordinary path, which applies its own checks.
+  }
   if (workspaceQuestion) {
     // "TODAY" IS THE USER'S DAY when the client says which zone it is in; the
     // answer names UTC when it does not.
@@ -1927,9 +2074,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   let brainConfidence: number | null = null;
   const workspaceContextBlock: string | null = await (async () => {
     try {
-      const { data } = await admin.from("company_brain")
-        .select("profile, onboarding_completed")
-        .eq("workspace_id", workspaceId).maybeSingle();
+      const data = chatBrain.row;
       const profile = (data?.profile ?? null) as Record<string, unknown> | null;
       brainProfileForMission = profile;
       brainOnboardedForGate = data?.onboarding_completed === true;
@@ -1940,7 +2085,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       if (!profile || !hasUsableBrain(profile, contextAllowed)) {
         return null;
       }
-      return buildCompanyBrainContext(profile, { integrationStatus: buildIntegrationStatus() }) || null;
+      const base = buildCompanyBrainContext(profile, { integrationStatus: buildIntegrationStatus() }) || null;
+      return base && chatBrain.memoryBlock ? `${base}\n\n${chatBrain.memoryBlock}` : base;
     } catch { return null; }
   })();
   const readEnvSafe = (k: string): string | undefined => {
@@ -2009,6 +2155,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     route: brainRoute?.kind ?? null,
     confidence: brainConfidence,
     prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+    // Which Company Brain version this answer was given (shared loader fingerprint).
+    brain_fingerprint: chatBrain.fingerprint,
+    // Which department answered (ORION / ATLAS / LISA / LYRA).
+    department: departmentForRoute(brainRoute?.kind ?? null, null),
   });
 
   async function replyAndReturn(
@@ -2021,7 +2171,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         role: "assistant",
         content,
         agent_slug: "pilot",
-        model_used: "google/gemini-3-flash-preview",
+        model_used: actualModelUsed(),
         metadata: { ...replyMeta(), ...extraMeta },
       })
       .select("*")
@@ -2172,7 +2322,13 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       workspaceContext: workspaceContextBlock,
       conversation: priorTurns,
       log: (m, meta) => console.log(`[pilot-chat][chat-brain] ${m}`, meta ?? ""),
-    }, { readEnv: readEnvSafe });
+    }, {
+      readEnv: readEnvSafe,
+      // UNDERSTANDING IS SPEND TOO. Without this the Luna read (and the rarer,
+      // pricier Terra repair) never reached the ledger, so the model-spend
+      // ceiling could not see chat's largest per-turn cost.
+      onModelCall: fail.modelCalls?.sink,
+    });
 
     if (understood.ok) {
       // ══ A SIGNAL THE USER IS LOOKING AT ══════════════════════════════════
@@ -2326,7 +2482,30 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         }
         : understood.request;
 
-      brainRoute = routeRequest(requestForRouting, {
+      // PRIORITY QUESTIONS ARE ORION'S BRIEF (see departmentRouting.ts) —
+      // except where ORION's evidence context is on for this workspace: there
+      // the question stays with ORION, answered from cited workspace evidence
+      // (`strategic_prioritization`) in this request, on OpenAI, instead of
+      // being handed to the separate `daily-brief` function.
+      // A COMPOUND READ ("companies AND signals", "summarize with evidence")
+      // is answered by ORION from the evidence digest where it is enabled; the
+      // deterministic read surface serves only one part (departmentRouting.ts §3).
+      const compound = orionEvidenceEnabledFor(workspaceId)
+        ? orionAnswersCompoundRead(requestForRouting)
+        : { request: requestForRouting, rerouted: false };
+      if (compound.rerouted) {
+        console.log("[pilot-chat][routing] compound read → ORION evidence answer");
+        understood.request = compound.request;
+      }
+      const executive = orionEvidenceEnabledFor(workspaceId)
+        ? { request: compound.request, promoted: false }
+        : promoteExecutiveQuestion(requestForRouting, message);
+      if (executive.promoted) {
+        console.log("[pilot-chat][routing] priority question → ORION brief");
+        // Every later reader (the read planner included) must see the promoted reading.
+        understood.request = executive.request;
+      }
+      brainRoute = routeRequest(executive.request, {
         // WORKSPACE POLICY, NOT THE MODEL'S OPINION. A paid run still needs the
         // user's explicit Start; this only says spending is possible at all.
         spendAllowed: true,
@@ -2769,12 +2948,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             `Company Brain onboarding complete: ${brainOnboardedForGate ? "yes" : "no"}.`,
             "company_brain.onboarded"),
         ];
+        const converseTask = orionConverseTask(message); // ORION evidence (flag): orionEvidenceContext.ts
+        const evidenceDigest = await orionEvidenceForTurn(admin as unknown as StoredEvidenceDb, { task: converseTask, workspaceId, userId, message });
+        if (evidenceDigest) facts.push(...evidenceDigest.facts);
         const ai = await generateText({
       onModelCall: fail.modelCalls?.sink,
       budget: fail.modelCalls,
           taskType: "pilot_chat",
           systemPrompt: converseSystemPrompt({
             workspaceContext: workspaceContextBlock, facts,
+            answerShape: evidenceDigest ? ORION_BUSINESS_ANSWER_SHAPE : null,
           }),
           messages: [
             // THE SAME TURNS UNDERSTANDING SAW. A conversational answer that
@@ -2787,12 +2970,28 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           maxTokens: 420,
           functionName: "pilot-chat-converse",
           workspaceId,
+          // HYBRID ROUTING: the task is classified deterministically, so small
+          // talk stays on the cheap model and only a business question may use a
+          // routed model (Terra). Off unless AGENTORY_ROUTE_* / AGENTORY_TERRA_* say so.
+          workforceTask: converseTask,
+          terraLimiter: createTerraRunLimiter(),
         });
         return await replyAndReturn(
           ai.ok && ai.content?.trim() ? ai.content.trim() : CONVERSE_UNAVAILABLE,
           {
+            ...(ai.routeDecision ? { model_route: ai.routeDecision } : {}),
+            ...(evidenceDigest ? {
+              orion_evidence: { version: ORION_EVIDENCE_CONTEXT_VERSION, task: converseTask, cited_ids: evidenceDigest.cited_ids,
+                retrieval_ms: evidenceDigest.retrieval_ms ?? null, items: evidenceDigest.items },
+              // The companies ORION cited stay pointable: "why did we reject it?",
+              // "tell me more about the second one" resolve against THIS list.
+              ...(evidenceDigest.subjects.length ? {
+                [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(evidenceDigest.subjects, "orion_evidence"),
+              } : {}),
+            } : {}),
             chat_brain: { route: "converse", grounded: !!workspaceContextBlock,
               answered: ai.ok },
+            ...(ai.ok ? {} : { model_error: { code: ai.errorCode ?? "unknown", model: ai.model || null } }),
           },
         );
       }
@@ -3601,11 +3800,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // Company Brain context — load once, reuse for all brain-aware direct replies.
   // (Content/outreach DRAFTING already gets the brain downstream in run-agent;
   // this covers the chat-reply layer that never reaches an agent.)
-  const { data: cbRow } = await admin
-    .from("company_brain")
-    .select("profile, onboarding_completed")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
+  const cbRow = chatBrain.row;
   const brainProfile = (cbRow?.profile ?? null) as Record<string, unknown> | null;
   // Same rule as the context block above: under BRAIN_READINESS_V2 a usable Brain counts.
   const brainContextAllowed = readinessV2
@@ -3717,7 +3912,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         lead_candidate_ids: top.map((l) => l.id), needs_enrichment: true, needs_outreach: true,
         execution_mode: "outreach", confidence: 0.9, missing_fields: [], reason: "follow-up: enrich + draft from memory",
       } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+      modelUsed: actualModelUsed(), providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
     });
   }
 
@@ -3827,8 +4022,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           missing_fields: [],
           reason: "follow-up: draft outreach to top N from memory",
         } as unknown as ToolInput,
-        modelUsed: "google/gemini-3-flash-preview",
-        providerUsed: "lovable-ai",
+        modelUsed: actualModelUsed(),
+        providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
       });
     }
 
@@ -3887,8 +4082,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           missing_fields: [],
           reason: "follow-up: enrich top N from memory",
         } as ToolInput,
-        modelUsed: "google/gemini-3-flash-preview",
-        providerUsed: "lovable-ai",
+        modelUsed: actualModelUsed(),
+        providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
       });
     }
   }
@@ -3993,7 +4188,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           ? { companies: linkedinUrls, jobTitles: persona.personas }
           : { keywords: queries },
       } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+      modelUsed: actualModelUsed(), providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
     });
   }
 
@@ -4126,7 +4321,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       leadBindings: resolvedBindings,
     missionOrigin: "brief_rewrite",
       toolInput: { ...ti, confidence: 0.95, missing_fields: [] } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+      modelUsed: actualModelUsed(), providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
     });
   }
 
@@ -4205,8 +4400,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         toolInput: {
           ...ti, confidence: 0.9, missing_fields: [],
         } as unknown as ToolInput,
-        modelUsed: "google/gemini-3-flash-preview",
-        providerUsed: "lovable-ai",
+        modelUsed: actualModelUsed(),
+        providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
       });
     }
     // Vague / incomplete → Lead Source Selector (7 engines, brain-prefilled,
@@ -4308,24 +4503,24 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
 
 
-  // 6. Load last 20 messages for context
-  const { data: history } = await admin
+  // 6. Load the LAST 20 messages for context. This used to order ascending
+  // with limit 20 — the conversation's FIRST twenty, so a long thread never
+  // showed the model its recent turns (audit 2026-11, C3). Newest twenty,
+  // then put back in chronological order.
+  const { data: historyNewestFirst } = await admin
     .from("messages")
     .select("role, content")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(20);
+  const history = [...(historyNewestFirst ?? [])].reverse();
 
   const msgs: Msg[] = (history ?? [])
     .filter((m: any) => m.role === "user" || m.role === "assistant")
     .map((m: any) => ({ role: m.role, content: m.content }));
 
   // 6b. Load company brain for context
-  const { data: brainRow } = await admin
-    .from("company_brain")
-    .select("profile, onboarding_completed")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
+  const brainRow = chatBrain.row;
   const brain = (brainRow?.profile ?? {}) as Record<string, unknown>;
   const pilotSystem = getAgentorySystemPrompt({
     taskType: "pilot_router",
@@ -4377,8 +4572,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
   });
 
-  const providerUsed = ai.provider !== "none" ? ai.provider : "lovable-ai";
-  const modelUsed = ai.model || "google/gemini-3-flash-preview";
+  const providerUsed = ai.provider !== "none" ? ai.provider : "none";
+  const modelUsed = ai.model || actualModelUsed();
 
   // 7b. Total provider failure — return a safe message but 200 so chat keeps working.
   if (!ai.ok || (!ai.content && !ai.json)) {

@@ -1,0 +1,220 @@
+# Activate ORION on TEST and test it in your browser (2026-11-11, OpenAI-only since 2026-11-12)
+
+**Status: everything is prepared and verified; nothing is activated.** Each remote step below waits for your explicit approval. Production `ohsdatpvfdjdemstoiuj` is never contacted.
+
+## ORION's models: OpenAI only (2026-11-12)
+
+| Step | Model | Notes |
+|---|---|---|
+| Understanding the question, including follow-ups ("the second one") | **GPT-5.6 Luna** (`gpt-5.6-luna`, low effort, ≤1,500 output tokens) | Chat Brain (`chatBrain.ts`), unchanged |
+| Repair of a malformed understanding (rare) | **GPT-5.6 Terra** (`gpt-5.6-terra`, low effort, ≤1,500 tokens) | Only when the parser rejects the shape. This is not GPT-6.1 Terra. |
+| Business answer with evidence; any other chat reply | **GPT-5.6 Luna** (≤420 visible tokens, 840 completion cap) | Previously Claude Haiku |
+
+- **Only `OPENAI_API_KEY` is needed.** `ANTHROPIC_API_KEY` is neither required nor used by ORION chat.
+- **How it works:** a request-scoped policy (`chatVendorScope` in `aiProvider.ts`) is entered once per `pilot-chat` request, so every model call made while answering it runs on OpenAI.
+- **Other functions keep their models:** `daily-brief`, `orchestrate`, `run-agent` and Company Brain setup never enter that scope. Nothing Anthropic was removed from them.
+- **No Anthropic fallback:**
+  - an OpenAI failure on the answer shows ORION's "couldn't put an answer together" reply, with `model_error.code` recorded in the message metadata;
+  - a failure on understanding shows the "understanding layer" message;
+  - a missing `OPENAI_API_KEY` returns HTTP 503 `orion_openai_not_configured`, with a readable message, before any work. Workspace authorization (403) still comes first.
+- **Priority questions in the pilot workspace:** "Which leads should I prioritize this week?" is now answered by ORION from cited evidence, in the same request, on Luna. Before this change it was handed to the separate `daily-brief` function, which skipped the evidence and ran on that function's own models. Outside the evidence pilot workspace, priority questions still go to the brief, unchanged.
+
+**Worst-case spend per turn**, from the repo's price table and conservatively assuming 12k input tokens per call:
+- understanding (Luna): $0.004
+- one repair (GPT-5.6 Terra): $0.042
+- the answer (Luna): $0.003–0.005
+
+That is about **$0.05**, essentially the same as before. A typical turn has no repair and costs under $0.01.
+
+## What was verified this pass (read-only on TEST, local otherwise)
+
+| Check | Result |
+|---|---|
+| Repository | `claude/agentory-audit-roadmap-64uq8n`, up to date with remote |
+| TEST identity | `tlvnfrxzjhsjgdofwehb`. `npm run supabase:test --` always passes `--project-ref tlvnfrxzjhsjgdofwehb`. **`supabase/config.toml` names production, so never run a raw `supabase …` deploy.** |
+| `pilot-chat` on TEST | **not deployed** (TEST runs `provider-connections`, `lead-pipeline`, `daily-brief`) |
+| Deploy channel | The TEST GitHub workflow deploys only `lead-pipeline` and `provider-connections` from `launch/hardening`. This session has **no Supabase access token**, so the deploy is **one command in your shell** (§3). |
+| AI keys on TEST | not listable from here. `orion-pilot-activate.sh` checks the names and refuses if one is missing. |
+| Company Brain writes on TEST | blocked (guard trigger `A`, 0 rows), unchanged |
+| Security on TEST today | 10 browser write policies live (signals and approvals). **NEW finding:** the `lead_model_calls` spend view bypasses RLS (owner-rights view granted to `anon`), so anyone with the public key can read and delete model-spend rows. A held fix exists; production likely has the same flaw (not checked). |
+| App against TEST | Boots in headless Chromium with the TEST publishable key: shows the "NON-PRODUCTION — TLVNFRXZJHSJGDOFWEHB" banner and redirects to sign-in; no errors |
+| ORION Evidence panel | New. Renders under ORION answers. Browser-checked: badges, dates and ages, safe links, malformed data ignored. |
+
+## 1. Accounts (you, in the TEST Supabase dashboard)
+
+Create **four** new users in Authentication → Users → *Add user* (auto-confirm). Use fresh accounts so each belongs **only** to its pilot workspace. The app opens the user's first membership and has no workspace switcher, so an existing account that already belongs to another TEST workspace could land in the wrong one.
+
+| Account | Role | Workspace |
+|---|---|---|
+| `orion-owner@…` | owner | ORION Pilot (fictional) |
+| `orion-editor@…` | editor | ORION Pilot (fictional) |
+| `orion-viewer@…` | viewer | ORION Pilot (fictional) |
+| `orion-outsider@…` | owner | ORION Isolation (fictional) |
+
+Send me the four **emails** (not passwords). I'll look up their user ids on TEST read-only for the seed.
+
+**Do not open the app with these accounts before step 2.** With no membership, the app would auto-create a separate workspace for them.
+
+## 2. Database (I run these after your approval, through the TEST-pinned Supabase connection)
+
+**a. Security fixes**, both held migrations in one transaction each:
+- `20261113120000_workforce_v2_security.sql`: browsers can't write signals or approvals.
+- `20261114120000_lead_model_calls_view_lockdown.sql`: the spend view stops bypassing RLS and leaves browser roles.
+
+Then I re-run the catalog checks: 0 browser write policies, view `security_invoker=true`, 0 browser grants.
+
+You can run the same thing yourself instead:
+```bash
+TEST_PROJECT_REF=tlvnfrxzjhsjgdofwehb TEST_DB_URL=… scripts/test-project/install-workforce-v2-security.sh --confirm tlvnfrxzjhsjgdofwehb
+```
+
+**b. Seed:** `orion-pilot-seed.sql` with the four user ids. It creates 2 fictional workspaces plus their leads, signals and accounts. No missions, scraping or outreach, and nothing existing is touched (validated locally with `validate-orion-pilot-seed.sh`).
+
+## 3. Flags and deploy (you, in your shell with the Supabase CLI logged in)
+
+**Step A, read-only and free.** It lists secret **names** only and changes nothing:
+```bash
+scripts/test-project/orion-pilot-activate.sh --check --confirm tlvnfrxzjhsjgdofwehb
+```
+
+**Step B, after approval:**
+```bash
+scripts/test-project/orion-pilot-activate.sh --deploy --confirm tlvnfrxzjhsjgdofwehb
+```
+- Sets `AGENTORY_ORION_EVIDENCE_CONTEXT=true` and `AGENTORY_ORION_EVIDENCE_WORKSPACES=a71a0000-0000-4000-8000-0000000011a1`. Only `pilot-chat` reads them, and only for that workspace.
+- Deploys `pilot-chat` with `--use-api` (no Docker), then smoke-checks for a 401.
+- **Refuses** if:
+  - `OPENAI_API_KEY` is missing (`ANTHROPIC_API_KEY` is **not** required; it is only reported);
+  - any `AGENTORY_TERRA_*`, `AGENTORY_HYBRID_*` or `AGENTORY_ROUTE_*` secret exists, or `AGENTORY_GPT_MODEL_FAMILY` (it would move ORION off GPT-5.6 Luna);
+  - the spending limit is only partly configured.
+
+**Spending limit (`MODEL_SPEND_*`, project-wide):**
+- **All three already set:** preserved and never overwritten. `pilot-chat` uses them.
+- **None set:** `pilot-chat` would refuse every turn (it fails closed). `--deploy` refuses unless you append `--set-pilot-ceiling`, which sets enforce / $0.49 per workspace / 7 days.
+- **Effect on other TEST functions:** only `daily-brief` reads these settings. It would go from refusing model calls to allowed up to the same $0.49 per workspace per 7 days. `lead-pipeline` (ATLAS discovery) and `provider-connections` do not read them and are unaffected. *(An earlier version of this doc wrongly said `lead-pipeline`.)*
+
+**Effective worst case with the $0.49 limit:**
+- **Per turn:** the limit is checked once, when a turn starts. A turn that starts just under the limit can finish over it by up to ~$0.05, so one workspace can reach about **$0.54 per 7 days**. Turns sent at the same moment are each admitted, so manual one-at-a-time testing is the intended use.
+- **Per workspace, all functions together:** the limit counts every recorded model call in that workspace, `pilot-chat` and `daily-brief` alike.
+- **Other TEST workspaces:** once `pilot-chat` is deployed, any member of any TEST workspace can chat. TEST has 6 workspaces, so the theoretical ceiling is about **$3.25 per 7 days**. The realistic manual-pilot spend is cents.
+
+**Rollback:** `orion-pilot-deactivate.sh` unsets the evidence flags and deletes `pilot-chat`. It removes `MODEL_SPEND_*` **only if** activation set them; that is recorded in `.orion-pilot-activation.state`.
+
+## 4. Open ORION in your browser
+
+1. On your machine, in the repository root, create `.env.local`. The values are public; never a secret key:
+   ```bash
+   VITE_SUPABASE_URL=https://tlvnfrxzjhsjgdofwehb.supabase.co
+   VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xJyW_B57hr6_SMFQbf2KPg_7-Fdyrjp
+   VITE_TEST_DASHBOARD_WITHOUT_BRAIN=true
+   ```
+   The last line is the existing TEST-only bypass. It is ref-locked to TEST, does nothing on production, and creates no Brain.
+2. Start the app (no Docker):
+   ```bash
+   npm install && npm run dev
+   ```
+3. Open **http://localhost:8080** and sign in as **orion-owner@…**. You land on the Dashboard of "ORION Pilot (fictional)", the only workspace this account belongs to.
+4. Open ORION by typing in **"Ask your workforce anything…"** at the bottom, or by pressing **Ctrl/⌘ + K** for the full chat. **Ctrl/⌘ + \\** expands the conversation.
+5. Ask the questions in `ORION_MANUAL_TEST_GUIDE.md`. Under each business answer, click **Evidence · N records** to see the leads and signals behind every [E#], with dates and verified / single-source / stale / contradicted badges.
+
+**Limitations without a Company Brain** (TEST blocks it by design):
+- ORION does not know your ICP, voice or goals, and should say so.
+- "Source / research / draft" requests return the onboarding prompt.
+- Only stored records are used; there is no live web search.
+- LISA is not collecting new signals.
+
+## 5. Automated acceptance run (after approval; needs the owner and outsider sign-in tokens)
+
+Run `scripts/orion-pilot/run-pilot.ts` (see `ORION_PILOT_READINESS.md` §6). It:
+- calls the real TEST endpoint for the 15 questions, plus role repeats and isolation probes;
+- **stops at the first server-side spend refusal** and records the rest as not run.
+
+To get the evidence-off comparison:
+1. Unset the evidence flag.
+2. Run again with `--label baseline`.
+3. Re-set the flag.
+
+Then score:
+```bash
+deno run --allow-read scripts/orion-pilot/score.ts transcript-evidence-on.json transcript-baseline.json
+```
+
+I read the actual spend afterwards with a read-only query of the pilot workspaces' `lead_model_calls` rows.
+
+## 6. Rollback
+
+| What | How |
+|---|---|
+| Flags, ceiling, function | `scripts/test-project/orion-pilot-deactivate.sh --confirm tlvnfrxzjhsjgdofwehb`. If `MODEL_SPEND_*` existed before the pilot, re-set the recorded values. |
+| Pilot data | `scripts/test-project/orion-pilot-cleanup.sql`: only the two fixed workspaces and their conversations and messages |
+| Security fixes | `install-workforce-v2-security.sh --confirm tlvnfrxzjhsjgdofwehb --rollback` (reopens the findings; only if needed) |
+
+## 7. Approvals needed (exact)
+
+| # | Environment | Operation | Impact | Rollback |
+|---|---|---|---|---|
+| G1 | TEST DB | apply `20261113120000` + `20261114120000` | closes browser writes to signals and approvals, and the spend-view leak; no data change | installer `--rollback` |
+| G2 | TEST DB | run the seed with your 4 TEST users' ids | 2 new fictional workspaces and rows | cleanup SQL |
+| G3 | TEST secrets + functions | you run `orion-pilot-activate.sh` | `pilot-chat` live on TEST; evidence on for the pilot workspace; ceiling $0.49 per workspace for 7 days | `orion-pilot-deactivate.sh` |
+| G4 | TEST endpoint | automated run (evidence on + baseline) | ≤ $0.60 total, enforced server-side | — |
+| G5 | your shell | `--check-model gpt-6.1-terra` (free) | none | — |
+| G6 | your shell | Stage 1 benchmark (≤ $1.43, cap $2) | paid | — |
+| G7 | production (separate decision) | the `lead_model_calls` view flaw likely exists there too | — | — |
+
+## Applied on TEST (2026-11-12)
+
+The security fixes are applied on TEST: `20261112072003_workforce_v2_security` and `20261112072104_lead_model_calls_view_lockdown`. Preflight matched the reviewed scope.
+
+**How it was verified:**
+- one DO block ending in `RAISE EXCEPTION`, so everything rolled back;
+- every write attempt used `WHERE false`;
+- roles tested: `anon`, `authenticated` and a real workspace member (via JWT claims);
+- the server role was tested separately.
+
+| Check | anon | authenticated | member | service_role |
+|---|---|---|---|---|
+| insert / update / delete `signal_events`, `signal_event_evidence`, `monitoring_subjects` | denied | denied | denied | allowed |
+| insert / update / delete `approvals` | denied | denied | denied | allowed |
+| read / delete through `lead_model_calls` | denied | denied | denied | read OK (19 rows) |
+| see another workspace's signals or approvals | — | — | 0 rows | — |
+
+**Database unchanged afterwards:**
+- 0 write policies and 4 SELECT policies on the four tables;
+- the view has `security_invoker=true`;
+- row counts equal the baseline: approvals 1, signal_events 4, signal_event_evidence 0, monitoring_subjects 0, lead_execution_calls 41, workspaces 4, members 5.
+
+**Residual note (not exploitable):** `authenticated` still holds INSERT/UPDATE/DELETE grants on the base table `lead_execution_calls`. Row-level security is on and that table has only a SELECT policy, so such statements affect 0 rows. Revoking those grants would be extra defence in depth, but it is outside the reviewed scope and was not done.
+
+## Deploying `pilot-chat`: bundled, because a raw upload is HTTP 413 (2026-11-12)
+
+**The problem:** `functions deploy pilot-chat --use-api` uploads every local module: 284 files, about 5.7 MB of heavily commented source. The Management API rejects that with **HTTP 413**.
+
+**The fix:** `scripts/test-project/build-pilot-chat-bundle.mjs` uses the repo's own `esbuild`, which Vite already ships, to bundle the 229 reachable local modules into **one 1.36 MB file**.
+- It is not minified, so stack traces stay readable.
+- The only external imports are `https://esm.sh/@supabase/supabase-js@2` and `node:async_hooks`, the same two the source uses.
+- Nothing in the graph reads local files at runtime.
+- The bundle goes into a temporary workdir whose `config.toml` names **only TEST**.
+
+**Deploy-only command:** `scripts/test-project/orion-pilot-deploy.sh --confirm tlvnfrxzjhsjgdofwehb`
+- **Never sets or unsets secrets.** The evidence flags and spending limit stay as they are.
+- Preflight, names only: refuses without `OPENAI_API_KEY`, or with any Terra / routing / model-family secret. Reports the evidence flags and `MODEL_SPEND_*` as found.
+- Builds the bundle and refuses above 4 MB.
+- Runs `functions deploy pilot-chat --use-api --workdir <bundle>` through the TEST-pinned wrapper.
+- Smoke-checks that a request without a token gets 401.
+
+`orion-pilot-activate.sh --deploy` now uses the same deploy step.
+
+**Verified locally:**
+- The real handler tests pass when run **against the bundle itself**: 51 of 51, using `PILOT_CHAT_MODULE=<bundle>` in `tests/edge-functions/_helpers/pilotTurn.ts`. An invalid path fails, which proves the override is used.
+  - Those tests cover OpenAI-only Luna, evidence citations and badges, follow-up referents, the 503 for a missing key, 403 for a non-member, and spend metering.
+- `tests/infra/pilotChatBundle.test.ts` pins the size, the externals, the single file, and the TEST-only workdir.
+
+## Seeded on TEST (2026-11-12)
+
+- **Seed:** `orion-pilot-seed.sql` (sha256 `20eddbe8…`, unchanged since review). The only edit was substituting the four user ids; it ran in one transaction.
+- **Accounts:** all four confirmed, never signed in, with no prior memberships:
+  - `orion-owner`, `orion-editor` and `orion-viewer` → ORION Pilot (fictional), as owner / editor / viewer;
+  - `orion-outsider` → ORION Isolation (fictional), as owner.
+- **Added:** 2 workspaces, 4 memberships, 5 accounts, 5 leads and 5 signals.
+- **Outside the pilot, unchanged:** 4 workspaces, 5 members, 4 accounts, 4 leads, 4 signals.
+- **Created by the seed (none):** tasks 10 → 10, approvals 1 → 1, model calls 41 → 41, conversations 1 → 1, Company Brain rows 0. The no-Brain guard is still enabled.

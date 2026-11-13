@@ -9,8 +9,8 @@ function test(name: string, fn: () => void) {
   catch (e) { fail++; console.log(`  FAIL ${name}\n       ${(e as Error).message}`); }
 }
 
-test("version bumped to v2", () => {
-  assert.ok(AGENTORY_SYSTEM_PROMPT_VERSION.includes("v2"), AGENTORY_SYSTEM_PROMPT_VERSION);
+test("version bumped to v3 (Workforce V2 department names)", () => {
+  assert.ok(AGENTORY_SYSTEM_PROMPT_VERSION.endsWith("-v3"), AGENTORY_SYSTEM_PROMPT_VERSION);
 });
 
 test("identity: AI workforce OS + Slack-style + founders/small teams (all task types)", () => {
@@ -22,24 +22,25 @@ test("identity: AI workforce OS + Slack-style + founders/small teams (all task t
 
 test("product pillars present", () => {
   const p = getAgentorySystemPrompt({});
-  for (const pillar of ["AI workforce OS", "Slack-style command center", "Pilot orchestrates", "Workbench displays outputs", "Company Brain personalizes"]) {
+  for (const pillar of ["AI workforce OS", "Slack-style command center", "ORION coordinates", "Workbench displays outputs", "Company Brain personalizes"]) {
     assert.ok(p.includes(pillar), `missing pillar: ${pillar}`);
   }
 });
 
-test("all five agents named", () => {
+test("all four departments named", () => {
   const p = getAgentorySystemPrompt({});
-  for (const a of ["Scout", "Aria", "Penn", "Hawk", "Scribe"]) assert.ok(p.includes(a), `missing agent: ${a}`);
+  for (const a of ["ORION", "ATLAS", "LISA", "LYRA"]) assert.ok(p.includes(a), `missing department: ${a}`);
 });
 
-test("Claude/Anthropic premium-writing line present", () => {
+test("no silent model substitution is promised", () => {
   const p = getAgentorySystemPrompt({});
-  assert.match(p, /Claude\/Anthropic.*premium writing/is);
+  assert.ok(!/fall back to Gemini|Lovable silently/i.test(p));
+  assert.match(p, /never substitutes for a failed provider silently/i);
 });
 
 test("content execution mode present", () => {
   const p = getAgentorySystemPrompt({});
-  assert.match(p, /content\s+→\s+Scribe writes/i);
+  assert.match(p, /content\s+→\s+LYRA writes/i);
 });
 
 test("pilot_router gets the full workflow manual", () => {

@@ -1,0 +1,50 @@
+{
+  "name": "expansion",
+  "fictional": true,
+  "note": "Market (ICP) watch: a manufacturer opens a plant in a target geography, three sources.",
+  "now": "2026-11-10T12:00:00Z",
+  "subject": {
+    "kind": "market",
+    "domain": null,
+    "name": "ICP: Manufacturing",
+    "origin": "icp",
+    "categories": [
+      "expansion",
+      "funding",
+      "hiring"
+    ],
+    "cadence_minutes": 10080
+  },
+  "responses": {
+    "expansion": {
+      "hits": [
+        {
+          "url": "https://ohio-business-journal.example/brightforge-columbus",
+          "title": "Brightforge Robotics opens new manufacturing plant in Columbus, Ohio",
+          "description": "Brightforge Robotics opens new manufacturing plant in Columbus, Ohio, a $60 million investment creating 300 jobs.",
+          "published_at": "2026-11-06"
+        },
+        {
+          "url": "https://fabwire.example/brightforge-plant",
+          "title": "Brightforge Robotics opens manufacturing plant in Columbus",
+          "description": "Brightforge Robotics opens a new manufacturing plant in Columbus, Ohio.",
+          "published_at": "2026-11-06"
+        },
+        {
+          "url": "https://brightforge.example/press/columbus",
+          "title": "Brightforge Robotics opens new manufacturing plant in Columbus, Ohio",
+          "description": "Brightforge Robotics opens its new manufacturing plant in Columbus, Ohio.",
+          "published_at": "2026-11-05"
+        }
+      ],
+      "error": null,
+      "credits": 1
+    }
+  },
+  "expect": {
+    "events": 1,
+    "verification": "corroborated",
+    "signal_type": "geographic_expansion",
+    "company": "Brightforge Robotics"
+  }
+}

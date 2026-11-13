@@ -23,7 +23,14 @@ describe('projectEnvironment', () => {
   });
 
   it('classifies an unknown ref as unknown', () => {
-    expect(classifyEnvironment('ohsdatpvfdjdemstoiuj')).toBe('unknown');
+    expect(classifyEnvironment('abcdefghijklmnopqrst')).toBe('unknown');
+  });
+
+  it('classifies the isolated TEST project as test, and it is not production', () => {
+    expect(CANONICAL_PROJECT_REFS.test).toBe('tlvnfrxzjhsjgdofwehb');
+    expect(CANONICAL_PROJECT_REFS.test).not.toBe(CANONICAL_PROJECT_REFS.production);
+    expect(classifyEnvironment('tlvnfrxzjhsjgdofwehb')).toBe('test');
+    expect(classifyEnvironment('ohsdatpvfdjdemstoiuj')).toBe('production');
   });
 
   it('projectRefFromUrl extracts the ref', () => {

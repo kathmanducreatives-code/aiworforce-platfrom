@@ -12,7 +12,7 @@ gsap.registerPlugin(ScrollTrigger);
 const steps: { num: number; who?: EmployeeId; title: string; desc: string }[] = [
     { num: 1, who: 'lyra', title: 'finds the signal', desc: 'Acme Corp raised a Series A — flagged as worth a look' },
     { num: 2, who: 'atlas', title: 'checks it is real', desc: 'Confirmed against the company, and dated this month' },
-    { num: 3, who: 'mira', title: 'drafts the outreach', desc: 'Written in your voice, referencing the exact trigger' },
+    { num: 3, who: 'lyra', title: 'drafts the outreach', desc: 'Written in your voice, referencing the exact trigger' },
     { num: 4, title: 'You approve and send', desc: 'No automated sends — every email is yours to ship' },
 ];
 

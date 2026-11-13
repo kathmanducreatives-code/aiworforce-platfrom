@@ -34,12 +34,17 @@ import {
   writeTaskResult, type TaskResultDb,
 } from "../_shared/taskResultMerge.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
+import { createTerraRunLimiter } from "../_shared/terraPolicy.ts";
+import { departmentOf } from "../_shared/departments.ts";
+import { lyraTaskFor } from "../_shared/departmentRouting.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
 import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { renderContentBrain, type RecentContent } from "../_shared/contentBrainContext.ts";
+import { loadCompanyBrainContext, type LoaderDb } from "../_shared/companyBrainContextLoader.ts";
+import { renderBrainMemoryBlock } from "../_shared/companyBrainAgentViews.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
 import { loadV2OwnedTaskIds, loadV2OwnedTaskIdsStrict } from "../_shared/leadMissionV2Request.ts";
@@ -1790,11 +1795,26 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           };
         });
     } catch { /* recent content is context, never a reason to fail the draft */ }
-    brainBlock = renderContentBrain(brainContextAllowed ? brain : null, {
+    // LYRA reads the SHARED context: the profile with approved memory folded in
+    // (content tone and restrictions, approved products/facts), plus a memory
+    // block that lists the only extra claims content may make. The workspace
+    // guard above has already authorized this request. Lead paths keep reading
+    // `brain` exactly as before — this changes the content branch only.
+    let contentProfile: CompanyBrain = brain;
+    let memoryBlock = "";
+    try {
+      const loaded = await loadCompanyBrainContext(supabase as unknown as LoaderDb, workspace_id, { skipMembershipCheck: true });
+      if (loaded.ok && loaded.context.status !== "missing") {
+        contentProfile = loaded.context.effective_profile;
+        memoryBlock = renderBrainMemoryBlock(loaded.context, "lyra");
+      }
+    } catch { /* the stored profile still drafts; memory is additive context */ }
+    const useBrain = contentLoop.use_company_brain !== false;
+    brainBlock = renderContentBrain(brainContextAllowed ? contentProfile : null, {
       onboardingCompleted: brainContextAllowed,
-      useCompanyBrain: contentLoop.use_company_brain !== false,
+      useCompanyBrain: useBrain,
       recent,
-    });
+    }) + (brainContextAllowed && useBrain && memoryBlock ? `\n\n${memoryBlock}` : "");
   }
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${getAgentorySystemPrompt({
     taskType: "agent_execution",
@@ -8662,6 +8682,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     agentSlug: agent_slug ?? undefined,
     workspaceId: workspace_id,
     onModelCall: genericModelCalls.sink,
+    // LYRA drafts may opt into Terra (benchmark first; off by default).
+    // LYRA: content STRATEGY may route to a Terra-class model; routine drafts stay cheap.
+    ...(departmentOf(agent_slug) === "lyra"
+      ? { workforceTask: lyraTaskFor(userMessage), terraLimiter: createTerraRunLimiter() }
+      : {}),
     // LAYER 2, for models with no price. `check()` counts only unpriced calls —
     // priced spend is money and belongs to the ceiling above — so this is what
     // bounds a gateway model that cannot be costed. Checked before EVERY attempt

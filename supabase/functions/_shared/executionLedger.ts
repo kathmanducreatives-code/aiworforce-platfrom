@@ -1151,6 +1151,18 @@ export class ModelCallCollector {
     this.calls.push({ telemetry, ok });
   };
 
+  /**
+   * The model the most recent SUCCESSFUL call ran on, or null when no model
+   * answered. What a transcript should record as "model used" — never a
+   * hard-coded label.
+   */
+  lastModel(): string | null {
+    for (let i = this.calls.length - 1; i >= 0; i--) {
+      if (this.calls[i].ok) return this.calls[i].telemetry.model ?? null;
+    }
+    return null;
+  }
+
   get length(): number {
     return this.calls.length;
   }

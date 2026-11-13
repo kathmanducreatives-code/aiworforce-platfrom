@@ -63,20 +63,24 @@ export type WorkspaceQuestionKind = WorkspaceQuestion["kind"];
 
 /** The public agents and the backend slugs that resolve to each (src/config/agentRegistry.ts). */
 export const PUBLIC_AGENT_SLUGS = {
+  orion: ["pilot"],
+  atlas: ["scout", "aria", "hawk"],
+  lisa: [],
+  lyra: ["scribe", "penn"],
   pilot: ["pilot"],
-  lyra: ["scout"],
-  atlas: ["aria", "hawk"],
   mira: ["penn"],
-  orion: ["scribe"],
 } as const;
 export type PublicAgent = keyof typeof PUBLIC_AGENT_SLUGS;
 const AGENT_NAME: Record<PublicAgent, string> = {
-  pilot: "Pilot", lyra: "Lyra", atlas: "Atlas", mira: "Mira", orion: "Orion",
+  orion: "Orion", atlas: "Atlas", lisa: "Lisa", lyra: "Lyra", pilot: "Orion", mira: "Lyra",
 };
 /** A backend slug or a public name, as the public agent. */
 export function publicAgentOf(slugOrName: string | null | undefined): PublicAgent | null {
   const s = String(slugOrName ?? "").trim().toLowerCase();
   if (!s) return null;
+  // Hidden compatibility ids display as their department (mirrors PUBLIC_ALIASES).
+  if (s === "pilot") return "orion";
+  if (s === "mira") return "lyra";
   if (s in PUBLIC_AGENT_SLUGS) return s as PublicAgent;
   for (const [id, slugs] of Object.entries(PUBLIC_AGENT_SLUGS)) {
     if ((slugs as readonly string[]).includes(s)) return id as PublicAgent;
@@ -130,6 +134,9 @@ export function classifyWorkspaceQuestion(message: string): WorkspaceQuestion | 
     /^why\s+(?:was|is|did|has)\s+(.+?)\s+(?:get\s+|been\s+)?(?:rejected|ruled\s+out|disqualified|not\s+qualified|excluded|fail(?:ed)?)$/,
   );
   if (rejected) return { kind: "why_company", company: rejected[1].trim(), asked: "rejected" };
+  // "why did we reject X" / "why did ATLAS rule out X" — the active phrasing.
+  const rejectedActive = q.match(/^why\s+did\s+(?:we|you|atlas|orion)\s+(?:reject|rule\s+out|disqualify|exclude|drop|pass\s+on)\s+(.+?)$/);
+  if (rejectedActive) return { kind: "why_company", company: rejectedActive[1].trim(), asked: "rejected" };
   const pending = q.match(
     /^why\s+(?:is|was|has)\s+(.+?)\s+(?:still\s+)?(?:been\s+)?(?:pending|in\s+review|on\s+hold|waiting|unresolved|undecided|not\s+(?:yet\s+)?decided)(?:\s+still)?$/,
   );
@@ -143,7 +150,11 @@ export function classifyWorkspaceQuestion(message: string): WorkspaceQuestion | 
   }
 
   // ── what an agent / the workforce did ─────────────────────────────────────
-  const agent = q.match(/\b(pilot|lyra|atlas|mira|orion|scout|scribe|penn|aria|hawk)\b/);
+  // A question naming LISA (signals live in signal_events, not task rows) or
+  // naming SEVERAL departments ("what did LISA find and what should ATLAS do?")
+  // is not a one-agent activity question: Chat Brain reads it part by part.
+  const named = [...new Set(q.match(/\b(orion|atlas|lisa|lyra|pilot|mira|scout|scribe|penn|aria|hawk)\b/g) ?? [])];
+  const agent = named.length === 1 && named[0] !== "lisa" ? [named[0], named[0]] as const : null;
   if (agent && /\b(?:what|anything)\b/.test(q) &&
       /\b(?:working\s+on|doing|done|did|been\s+up\s+to|worked\s+on)\b/.test(q)) {
     const id = publicAgentOf(agent[1]);

@@ -40,7 +40,7 @@ import {
 
 gsap.registerPlugin(ScrollTrigger);
 
-const LISA = EMPLOYEE_BY_ID.mira;
+const LISA = EMPLOYEE_BY_ID.lisa;
 const ATLAS = EMPLOYEE_BY_ID.atlas;
 const LYRA = EMPLOYEE_BY_ID.lyra;
 

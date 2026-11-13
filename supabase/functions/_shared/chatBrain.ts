@@ -82,6 +82,8 @@ If answering only requires ranking, filtering, selecting or summarising things t
 
 EVERY PART IS JUDGED ON ITS OWN. In a message with several asks, decide each part's objective independently, by what THAT ask needs. Do not let a later expensive ask pull an earlier cheap one up to match it: "look at what I have, then go find more" is read followed by source, not source twice.
 
+DEPARTMENT NAMES the user may use: ORION is you, the executive coordinator (a question to ORION about priorities or the workspace is read); ATLAS works on companies and leads; LISA on signals, competitors and market news; LYRA on content and outreach drafts. A department name says WHOSE work is meant — decide the objective from what is asked about it.
+
 ENTITY: ${REQUEST_ENTITIES.join(", ")}.
 "competitor" means a rival of the USER'S OWN business - "who are my competitors", "what are my competitors posting". A named company the user is researching for its own sake is "company", not "competitor".
 "market" means a category, topic or problem space rather than a specific organisation - an industry, a trend, "what's happening in AI recruiting". A question about a NAMED company is research on a company, not on a market.

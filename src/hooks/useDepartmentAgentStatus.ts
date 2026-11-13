@@ -14,3 +14,15 @@ export function useDepartmentAgentStatus(workspaceId: string | null, slug: strin
   const key = visualAgentKey(slug);
   return ready && key ? statusWordOf(states[key]) : null;
 }
+
+/**
+ * WHY an agent is blocked, in plain language ("Needs your Company Brain"), or
+ * null when it is not blocked. A bare "Blocked" badge next to leads that exist
+ * read as a fault (TEST, 2026-11-12); the reason makes the gate legible.
+ */
+export function useDepartmentAgentBlockReason(workspaceId: string | null, slug: string): string | null {
+  const { states, ready } = useAgentVisualStates(workspaceId);
+  const key = visualAgentKey(slug);
+  const st = ready && key ? states[key] : null;
+  return st && st.base === 'blocked' ? st.reason : null;
+}

@@ -40,7 +40,8 @@ import {
 } from "../../qualifiedLeadRouting.ts";
 import { compileLeadEntityIntent } from "../../leadEntityIntent.ts";
 import { extractRequiredSignalTerms, type CompiledJobSearchSpec } from "../../jobSearchSpec.ts";
-import { loadMissionContext } from "../missionContext.ts";
+import { loadMissionContext, loadMissionContextWithMemory } from "../missionContext.ts";
+import type { LoaderDb } from "../../companyBrainContextLoader.ts";
 import {
   effectiveRequestedCount, DEFAULT_REQUESTED_COUNT, type LeadMissionV1,
 } from "../../leadMission.ts";
@@ -87,6 +88,15 @@ export interface QualifiedLeadPlanOutcome {
 export interface PlanQualifiedLeadInput {
   admin: BrainDbClient;
   workspaceId: string;
+  /**
+   * The AUTHENTICATED caller (orchestrate verified the JWT and the membership).
+   *
+   * Passed to the Brain loader, which re-checks membership itself. Before this
+   * the planner called the loader with neither a user nor a skip flag, so the
+   * loader answered `forbidden` on every call and every qualified-lead plan was
+   * made with NO Company Brain context at all (audit 2026-11, finding C2).
+   */
+  userId?: string | null;
   userInstruction: string;
   toolInput?: Record<string, unknown> | null;
   /** The generic plan orchestrate already built. Used only for provenance. */
@@ -261,12 +271,35 @@ export async function planQualifiedLeadBeforePersistence(
 
   // The Company Brain the planner is allowed to see. A failure here is not fatal:
   // the planner simply plans without ICP context, which is what it did before.
+  //
+  // MEMORY-AWARE (Company Brain V1): the EFFECTIVE profile — approved ICP
+  // preferences, explicit exclusions, approved competitors — through the shared
+  // loader, with the same membership rule. A workspace without memory gets a
+  // context deep-equal to the legacy loader's (pinned by test). If the memory
+  // read fails, the legacy loader answers, so a missing table never costs the
+  // planner its ICP.
   let context = null;
+  let brainFingerprint: string | null = null;
+  const userId = input.userId ?? undefined;
   try {
-    const loaded = await loadMissionContext(input.admin, input.workspaceId);
-    context = loaded.ok ? loaded.context : null;
+    const loaded = await loadMissionContextWithMemory(input.admin as unknown as LoaderDb, input.workspaceId, { userId });
+    if (loaded.ok) {
+      context = loaded.context;
+      brainFingerprint = loaded.brain_contract?.fingerprint ?? null;
+    } else {
+      const legacy = await loadMissionContext(input.admin, input.workspaceId, { userId });
+      context = legacy.ok ? legacy.context : null;
+    }
   } catch {
-    context = null;
+    try {
+      const legacy = await loadMissionContext(input.admin, input.workspaceId, { userId });
+      context = legacy.ok ? legacy.context : null;
+    } catch { context = null; }
+  }
+  if (!context) {
+    console.warn("[lead-plan][brain] planning without Company Brain context", {
+      workspace_id: input.workspaceId, has_user: !!userId,
+    });
   }
 
   // ── EXACTLY ONE ADAPTER IS AWAITED ──────────────────────────────────────
@@ -395,6 +428,10 @@ export async function planQualifiedLeadBeforePersistence(
       : (artifact.fallback_reason ?? "adapter_fell_back_without_stating_a_reason"),
   });
   artifact.planner_provenance = provenance;
+  // WHICH BRAIN VERSION THIS PLAN WAS MADE UNDER — so a later Brain change can
+  // be detected and the plan revalidated rather than trusted forever.
+  (artifact as { brain_fingerprint?: string | null }).brain_fingerprint = brainFingerprint;
+  (artifact as { brain_context_loaded?: boolean }).brain_context_loaded = !!context;
   console.log("[lead-plan][provenance]", {
     workspace_id: input.workspaceId,
     plan_source: artifact.plan_source,

@@ -373,7 +373,7 @@ export async function executeRead(
       let events: Array<Record<string, unknown>> = [];
       if (subj.subject_keys.length > 0) {
         let q = db.from("signal_events")
-          .select("signal_type, subject_key, occurred_at, confidence, freshness, origin, source_url")
+          .select("signal_type, subject_key, occurred_at, confidence, freshness, origin, source_url, verification_status, lifecycle_status, normalized_value")
           .eq("workspace_id", workspaceId)
           .in("subject_key", subj.subject_keys)
           .order("occurred_at", { ascending: false })
@@ -419,7 +419,7 @@ export async function executeRead(
 
     if (plan.target === "signals") {
       let q = db.from("signal_events")
-        .select("signal_type, subject_key, occurred_at, confidence, freshness, origin, source_url",
+        .select("signal_type, subject_key, occurred_at, confidence, freshness, origin, source_url, verification_status, lifecycle_status, normalized_value",
           { count: "exact" })
         .eq("workspace_id", workspaceId)
         .order("occurred_at", { ascending: false })
@@ -906,8 +906,10 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
       .sort((a, b) => b[1] - a[1])
       .map(([k, n]) => `${n} ${k.replace(/_/g, " ")}`).join(", ");
     const listed = result.items.slice(0, 5);
+    // EVERY LINE SAYS HOW WELL IT IS SUPPORTED, WHEN, AND WHERE FROM — never
+    // a bare claim (Workforce V2: "is this announcement verified?").
     const recent = listed
-      .map((r) => `• ${String(r.subject_key ?? "unknown")} — ${String(r.signal_type ?? "signal").replace(/_/g, " ")}`)
+      .map((r) => `• ${signalSubjectName(r)} — ${String(r.signal_type ?? "signal").replace(/_/g, " ")}${signalEvidenceSuffix(r)}`)
       .join("\n");
     // THE BREAKDOWN DESCRIBES THE PAGE, NOT THE TOTAL, and the list is a
     // sample. Saying "(6 market problem discussion, …)" beside a counted total
@@ -1009,4 +1011,34 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
     })
     .join("\n");
   return `${total} run${total === 1 ? "" : "s"}${window}.\n\n${rows}`;
+}
+
+// ── SIGNAL VERIFICATION, AS CHAT STATES IT ──────────────────────────────────
+// LISA V2 rows carry a COUNTED level (normalized_value.lisa.verification);
+// older rows only the column. A provider label is never called "verified".
+export function signalVerificationLabel(r: Record<string, unknown>): string {
+  const lisa = ((r.normalized_value as Record<string, unknown> | null)?.lisa ?? null) as Record<string, unknown> | null;
+  const v = (lisa?.verification ?? null) as { level?: string; independent_sources?: number } | null;
+  const life = String(r.lifecycle_status ?? "active");
+  if (life === "retracted") return "retracted — not current";
+  if (life === "contradicted") return "disputed — sources disagree";
+  if (life === "dismissed") return "dismissed by you";
+  if (life === "stale" || life === "expired") return "out of date";
+  switch (v?.level) {
+    case "corroborated": return `verified by ${v.independent_sources ?? 2} independent sources`;
+    case "self_reported": return "announced by the company itself";
+    case "single_source": return "single source — not yet confirmed";
+    case "contradicted": return "disputed — sources disagree";
+  }
+  return r.verification_status === "self_reported" ? "announced by the company itself" : "unverified";
+}
+function signalSubjectName(r: Record<string, unknown>): string {
+  const lisa = ((r.normalized_value as Record<string, unknown> | null)?.lisa ?? null) as Record<string, unknown> | null;
+  const name = (lisa?.company as { name?: string } | undefined)?.name ?? (r.normalized_value as { company_name?: string } | null)?.company_name;
+  return String(name ?? r.subject_key ?? "unknown");
+}
+function signalEvidenceSuffix(r: Record<string, unknown>): string {
+  const date = typeof r.occurred_at === "string" ? ` · ${r.occurred_at.slice(0, 10)}` : " · date not stated";
+  const src = typeof r.source_url === "string" && /^https?:\/\//.test(r.source_url) ? ` · ${r.source_url}` : " · no source link";
+  return ` · ${signalVerificationLabel(r)}${date}${src}`;
 }
