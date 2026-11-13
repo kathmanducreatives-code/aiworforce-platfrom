@@ -29,7 +29,8 @@
     "qa:model-routing": "deno run --allow-read --allow-env scripts/model-routing-eval/run.ts",
     "test:changed": "node scripts/dev/affected-tests.mjs --run",
     "check:fast": "node scripts/dev/check-fast.mjs",
-    "test:pre-pr": "node scripts/dev/pre-pr.mjs"
+    "test:pre-pr": "node scripts/dev/pre-pr.mjs",
+    "verify:frontend-build": "node scripts/release/verify-frontend-build.mjs dist"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
