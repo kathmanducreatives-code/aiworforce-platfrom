@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# STUB curl for release-script dry runs: build headers and a 401, nothing real.
+#   STUB_APP_SHA  the build a deployed release function reports
+#   STUB_STATE    dir with deployed-<fn> markers (from the supabase stub)
+args="$*"; fn="$(echo "$args" | grep -oE 'functions/v1/[a-z-]+' | sed 's#functions/v1/##')"
+if echo "$args" | grep -q OPTIONS; then
+  case "$fn" in
+    run-agent) b=e4da19e8828898f05414da953a13acb74c74e6a4 ;;
+    orchestrate|enqueue-lead-mission|continue-workflow|resume-stalled-leads) b=b51ad3dddf2604f9d218d7c495e17e22d20932db ;;
+    *) if [ -f "${STUB_STATE:-/nonexistent}/deployed-$fn" ]; then b="$STUB_APP_SHA"
+       elif [ "$fn" = pilot-chat ]; then b=86ac1b922f8519f75760642bb09cceef096168eb; else b=""; fi ;;
+  esac
+  printf 'HTTP/2 200\r\n'; [ -n "$b" ] && printf 'x-agentory-build: %s@2026-11-13T00:00:00Z\r\n' "$b"; exit 0
+fi
+echo 401

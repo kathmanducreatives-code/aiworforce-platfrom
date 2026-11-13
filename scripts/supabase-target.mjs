@@ -33,6 +33,15 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// THE REPOSITORY ROOT, from this file's own location — never the caller's cwd.
+// The R1 release script ran this wrapper from inside release-backups/<dir>, and
+// the relative `scripts/verify-deploy-target.mjs` then resolved to a file that
+// does not exist there, so every backup refused (2026-11-13). Paths this wrapper
+// needs are anchored here; the SUPABASE CLI still runs in the caller's cwd.
+export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 // TEST is the ISOLATED project `agentory-discovery-test` (created 2026-10-18).
 // It used to name production — "TEST" was the live project — which is how a
@@ -67,7 +76,7 @@ function fail(msg) {
 }
 
 /** The project ref currently checked into config.toml. */
-export function configuredRef(path = "supabase/config.toml") {
+export function configuredRef(path = join(REPO_ROOT, "supabase/config.toml")) {
   const m = /^\s*project_id\s*=\s*"([a-z0-9]+)"/m.exec(readFileSync(path, "utf8"));
   return m ? m[1] : null;
 }
@@ -165,7 +174,7 @@ function main() {
   }
 
   // The canonical check, delegated — one definition of which ref is which env.
-  execFileSync("node", ["scripts/verify-deploy-target.mjs", "--expect", resolved.target], {
+  execFileSync("node", [join(REPO_ROOT, "scripts/verify-deploy-target.mjs"), "--expect", resolved.target], {
     stdio: "inherit",
     env: { ...process.env, DEPLOY_SUPABASE_PROJECT_REF: resolved.ref },
   });
@@ -182,7 +191,14 @@ function main() {
   }
 
   console.log(`[supabase-target] running: supabase ${args.join(" ")} --project-ref ${resolved.ref}`);
-  execFileSync("supabase", [...args, "--project-ref", resolved.ref], { stdio: "inherit" });
+  try {
+    execFileSync("supabase", [...args, "--project-ref", resolved.ref], { stdio: "inherit" });
+  } catch (err) {
+    // The CLI already printed its own error; exit with its status rather than
+    // a Node stack trace that would bury that message in callers' logs.
+    console.error(`[supabase-target] supabase exited with status ${err.status ?? "unknown"}`);
+    process.exit(typeof err.status === "number" && err.status > 0 ? err.status : 1);
+  }
 }
 
 // Only run when invoked directly, so the helpers above stay importable by tests.
