@@ -114,19 +114,25 @@ Deno.test("transcripts record the model that actually answered", () => {
 });
 
 import { orionAnswersCompoundRead } from "../../../../supabase/functions/_shared/departmentRouting.ts";
+import {
+  REQUEST_V1_VERSION, type RequestEntity, type RequestOutput, type RequestPart, type RequestReference, type RequestV1,
+} from "../../../../supabase/functions/_shared/requestV1.ts";
 Deno.test("compound read → ORION evidence answer; single list read and scoped reads unchanged", () => {
-  const part = (id: string, entity: string, shape = "records", refs: unknown[] = []) => ({
+  const part = (id: string, entity: RequestEntity, shape: RequestOutput["shape"] = "records",
+    refs: RequestReference[] = []): RequestPart => ({
     id, objective: "read", subject: { entity, references: refs, filters: [] }, requirements: [],
     output: { shape, count: null, completeness: "sample" }, depends_on: [] });
-  // deno-lint-ignore no-explicit-any
-  const req = (...parts: any[]) => ({ parts, ambiguity: [], confidence: 0.9 }) as any;
+  const req = (...parts: RequestPart[]): RequestV1 => ({
+    version: REQUEST_V1_VERSION, utterance: "", objective: parts[0]?.objective ?? "read", parts,
+    ambiguity: [], authority: { may_spend: false, max_cost_units: null, requires_confirmation: true },
+    provenance: {}, confidence: 0.9,
+  });
   const two = orionAnswersCompoundRead(req(part("a", "company"), part("b", "signal")));
   assert(two.rerouted);
   assertEquals(two.request.parts.length, 1);
   assertEquals(two.request.parts[0].objective, "converse");
   assert(orionAnswersCompoundRead(req(part("a", "company", "answer"))).rerouted, "a prose read is a summary");
   assertEquals(orionAnswersCompoundRead(req(part("a", "company"))).rerouted, false);
-  assertEquals(orionAnswersCompoundRead(req(part("a", "company"), part("b", "signal", "records", [{ kind: "name", value: "Kestrel" }]))).rerouted, false);
-  // deno-lint-ignore no-explicit-any
-  assertEquals(orionAnswersCompoundRead(req(part("a", "company"), { ...part("b", "company"), objective: "source" } as any)).rerouted, false);
+  assertEquals(orionAnswersCompoundRead(req(part("a", "company"), part("b", "signal", "records", [{ kind: "named", value: "Kestrel" }]))).rerouted, false);
+  assertEquals(orionAnswersCompoundRead(req(part("a", "company"), { ...part("b", "company"), objective: "source" })).rerouted, false);
 });
