@@ -60,7 +60,9 @@ sanitize() { sed -E \
   -e 's/sb_(secret|publishable)_[A-Za-z0-9_-]{10,}/sb_\1_<redacted>/g' \
   -e 's/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/<jwt-redacted>/g' \
   -e 's/([Bb]earer|[Aa]uthorization:?|apikey:?) +[^ ]+/\1 <redacted>/g' \
-  -e 's/(password|passwd|token|secret)=[^ &]+/\1=<redacted>/Ig'; }
+  -e 's/([Pp][Aa][Ss][Ss][Ww][Oo]?[Rr]?[Dd]|[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt])=[^ &]+/\1=<redacted>/g'; }
+# Portable SHA-256 (Linux coreutils or macOS shasum); same output format.
+sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
 
 echo "== 1. checkout (tool $TOOL_SHA → app $APP_SHA)"
 [ "$(git rev-parse HEAD)" = "$TOOL_SHA" ] || { echo "refusing: HEAD is $(git rev-parse HEAD), not the deployment-tool commit $TOOL_SHA"; exit 1; }
@@ -138,7 +140,7 @@ for fn in $REPLACED_FUNCTIONS; do
   echo "  backed up $fn → ${dir#$ROOT/} ($(echo "$files" | wc -l | tr -d ' ') files, $bytes bytes)"
 done
 [ "$(repo_fn_state)" = "$before_state" ] || { echo "refusing: the download changed the repository's supabase/functions/; nothing was changed in production"; exit 1; }
-( cd "$BK" && find supabase/functions -type f -exec sha256sum {} + | sort -k2 ) > "$BK/MANIFEST.sha256"
+( cd "$BK" && find supabase/functions -type f | sort | while IFS= read -r f; do sha256 "$f"; done ) > "$BK/MANIFEST.sha256"
 printf 'app_release=%s\ndeployment_tool=%s\nlive_pilot_chat_before=%s\nspend_set_by_release=%s\n' \
   "$APP_SHA" "$TOOL_SHA" "$pc" "$([ "$spend" = absent ] && echo 1 || echo 0)" > "$BK/STATE"
 echo "  all $(echo $REPLACED_FUNCTIONS | wc -w | tr -d ' ') backups validated; manifest: ${BK#$ROOT/}/MANIFEST.sha256"
