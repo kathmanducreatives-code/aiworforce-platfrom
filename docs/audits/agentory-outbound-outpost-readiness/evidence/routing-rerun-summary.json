@@ -1,0 +1,801 @@
+{
+  "source_harness_commit": "aca94e6b739e5f5c129ae0e11b56676e9da09c80",
+  "characterization": "85 passed / 0 failed",
+  "results": [
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "L01",
+      "original_request": "Find founders commenting on LinkedIn about problems with outbound sales in the last 30 days.",
+      "expected": {
+        "qualified": null,
+        "intent": "Find founders commenting on LinkedIn about problems with outbound sales in the last 30 days."
+      },
+      "actual": {
+        "reason": "real feasibility refusal; provider invocation not reached",
+        "refusals": [
+          {
+            "code": "no_requirement_provable",
+            "requirement": "founders commenting about outbound sales problems",
+            "message": "This plan cannot establish the requirement the request depends on: Nothing scheduled can establish \"comment\". No capability in this plan has a provider producing comment/leadership evidence.",
+            "detail": {
+              "requirements": [
+                {
+                  "r": "founders commenting about outbound sales problems",
+                  "s": "unsupported"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": "NOT SUPPORTED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "L02",
+      "original_request": "Find founders explicitly searching for a CRM in LinkedIn comments within the last 30 days.",
+      "expected": {
+        "qualified": null,
+        "intent": "Find founders explicitly searching for a CRM in LinkedIn comments within the last 30 days."
+      },
+      "actual": {
+        "reason": "real feasibility refusal; provider invocation not reached",
+        "refusals": [
+          {
+            "code": "no_requirement_provable",
+            "requirement": "founders commenting about searching for a CRM",
+            "message": "This plan cannot establish the requirement the request depends on: Nothing scheduled can establish \"comment\". No capability in this plan has a provider producing comment/leadership evidence.",
+            "detail": {
+              "requirements": [
+                {
+                  "r": "founders commenting about searching for a CRM",
+                  "s": "unsupported"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": "NOT SUPPORTED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "L03",
+      "original_request": "Find founders discussing hiring agencies in LinkedIn comments within the last 30 days.",
+      "expected": {
+        "qualified": null,
+        "intent": "Find founders discussing hiring agencies in LinkedIn comments within the last 30 days."
+      },
+      "actual": {
+        "reason": "real feasibility refusal; provider invocation not reached",
+        "refusals": [
+          {
+            "code": "no_requirement_provable",
+            "requirement": "founder comments about hiring agencies",
+            "message": "This plan cannot establish the requirement the request depends on: Nothing scheduled can establish \"comment\". No capability in this plan has a provider producing comment/leadership evidence.",
+            "detail": {
+              "requirements": [
+                {
+                  "r": "founder comments about hiring agencies",
+                  "s": "unsupported"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": "NOT SUPPORTED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "L04",
+      "original_request": "Find founders who must be looking for new sales tools in their LinkedIn comments.",
+      "expected": {
+        "qualified": null,
+        "intent": "Find founders who must be looking for new sales tools in their LinkedIn comments."
+      },
+      "actual": {
+        "reason": "real feasibility refusal; provider invocation not reached",
+        "refusals": [
+          {
+            "code": "no_requirement_provable",
+            "requirement": "founder comments about sales tools",
+            "message": "This plan cannot establish the requirement the request depends on: Nothing scheduled can establish \"comment\". No capability in this plan has a provider producing comment/leadership evidence.",
+            "detail": {
+              "requirements": [
+                {
+                  "r": "founder comments about sales tools",
+                  "s": "unsupported"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": "NOT SUPPORTED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "L05",
+      "original_request": "Find companies whose founders must be asking for a CRM in LinkedIn comments.",
+      "expected": {
+        "qualified": null,
+        "intent": "Find companies whose founders must be asking for a CRM in LinkedIn comments."
+      },
+      "actual": {
+        "reason": "real feasibility refusal; provider invocation not reached",
+        "refusals": [
+          {
+            "code": "no_requirement_provable",
+            "requirement": "founder comments asking for CRM, founder comments asking for CRM",
+            "message": "This plan cannot establish any requirement the request depends on: Nothing scheduled can establish \"comment\". No capability in this plan has a provider producing comment/leadership evidence. \"founder comments asking for CRM\" was stated as a required signal term but is not attached to any signal this plan verifies, so no capability will establish it.",
+            "detail": {
+              "requirements": [
+                {
+                  "r": "founder comments asking for CRM",
+                  "s": "unsupported"
+                },
+                {
+                  "r": "founder comments asking for CRM",
+                  "s": "unsupported"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": "NOT SUPPORTED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "L06",
+      "original_request": "Find founders who commented about outbound problems within the last 7 days.",
+      "expected": {
+        "qualified": null,
+        "intent": "Find founders who commented about outbound problems within the last 7 days."
+      },
+      "actual": {
+        "reason": "real feasibility refusal; provider invocation not reached",
+        "refusals": [
+          {
+            "code": "no_requirement_provable",
+            "requirement": "founder comments about outbound problems",
+            "message": "This plan cannot establish the requirement the request depends on: Nothing scheduled can establish \"comment\". No capability in this plan has a provider producing comment/leadership evidence.",
+            "detail": {
+              "requirements": [
+                {
+                  "r": "founder comments about outbound problems",
+                  "s": "unsupported"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": "NOT SUPPORTED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "L07",
+      "original_request": "Find founders commenting about outbound sales problems on LinkedIn.",
+      "expected": {
+        "qualified": null,
+        "intent": "Find founders commenting about outbound sales problems on LinkedIn."
+      },
+      "actual": {
+        "reason": "real feasibility refusal; provider invocation not reached",
+        "refusals": [
+          {
+            "code": "no_requirement_provable",
+            "requirement": "founder comments on outbound sales, founder comments on outbound sales",
+            "message": "This plan cannot establish any requirement the request depends on: Nothing scheduled can establish \"comment\". No capability in this plan has a provider producing comment/leadership evidence. \"founder comments on outbound sales\" was stated as a required signal term but is not attached to any signal this plan verifies, so no capability will establish it.",
+            "detail": {
+              "requirements": [
+                {
+                  "r": "founder comments on outbound sales",
+                  "s": "unsupported"
+                },
+                {
+                  "r": "founder comments on outbound sales",
+                  "s": "unsupported"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": "NOT SUPPORTED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "L08",
+      "original_request": "Find 1 B2B software company whose founder must have commented about outbound problems, and which must be hiring Account Executives.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company whose founder must have commented about outbound problems, and which must be hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "L09",
+      "original_request": "Find 1 B2B software company whose founder must be posting about CRM buying on LinkedIn.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company whose founder must be posting about CRM buying on LinkedIn."
+      },
+      "actual": {
+        "reason": "real feasibility refusal; provider invocation not reached",
+        "refusals": [
+          {
+            "code": "no_requirement_provable",
+            "requirement": "founder posts about CRM buying",
+            "message": "This plan cannot establish the requirement the request depends on: Nothing scheduled can establish \"post\". No capability in this plan has a provider producing post/leadership evidence.",
+            "detail": {
+              "requirements": [
+                {
+                  "r": "founder posts about CRM buying",
+                  "s": "unsupported"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": "NOT SUPPORTED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "H01",
+      "original_request": "Find 1 B2B software company hiring Account Executives within the last 30 days.",
+      "expected": {
+        "qualified": 1,
+        "intent": "Find 1 B2B software company hiring Account Executives within the last 30 days."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "H02",
+      "original_request": "Find 1 B2B software company that must be hiring its first sales representative within the last 30 days.",
+      "expected": {
+        "qualified": 1,
+        "intent": "Find 1 B2B software company that must be hiring its first sales representative within the last 30 days."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "H03",
+      "original_request": "Find 1 B2B software company that must be hiring its first sales representative within the last 30 days.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company that must be hiring its first sales representative within the last 30 days."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "H04",
+      "original_request": "Find 1 B2B software company that must be rapidly expanding its sales team within the last 30 days.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company that must be rapidly expanding its sales team within the last 30 days."
+      },
+      "actual": {
+        "reason": "real feasibility refusal; provider invocation not reached",
+        "refusals": [
+          {
+            "code": "no_requirement_provable",
+            "requirement": "rapidly expanding sales team, rapidly expanding sales team",
+            "message": "This plan cannot establish any requirement the request depends on: \"expansion\" would be established by expansion_signal_verification, which may not run yet (CARDED_BUT_NOT_LIVE: no actor for it is proven live). Nothing executable in this plan proves it. \"rapidly expanding sales team\" was stated as a required signal term but is not attached to any signal this plan verifies, so no capability will establish it.",
+            "detail": {
+              "requirements": [
+                {
+                  "r": "rapidly expanding sales team",
+                  "s": "unsupported"
+                },
+                {
+                  "r": "rapidly expanding sales team",
+                  "s": "unsupported"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": "NOT SUPPORTED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "H05",
+      "original_request": "Find 1 recruiting agency hiring its own Account Executives within the last 30 days.",
+      "expected": {
+        "qualified": 1,
+        "intent": "Find 1 recruiting agency hiring its own Account Executives within the last 30 days."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 0
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "H06",
+      "original_request": "Find 1 recruiting agency hiring its own Account Executives within the last 30 days.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 recruiting agency hiring its own Account Executives within the last 30 days."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "H07",
+      "original_request": "Find 1 B2B software company hiring Account Executives within the last 30 days.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives within the last 30 days."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "H08",
+      "original_request": "Find 1 B2B software company hiring Account Executives within the last 30 days.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives within the last 30 days."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "H09",
+      "original_request": "Find 1 B2B software company hiring Account Executives within the last 30 days.",
+      "expected": {
+        "qualified": 1,
+        "intent": "Find 1 B2B software company hiring Account Executives within the last 30 days."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "H10",
+      "original_request": "Find 1 B2B software company hiring only Account Executives within the last 30 days. Do not broaden the role.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring only Account Executives within the last 30 days. Do not broaden the role."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "C01",
+      "original_request": "Find 1 B2B software company that must be hiring Account Executives AND whose founder must have discussed outbound problems on LinkedIn.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company that must be hiring Account Executives AND whose founder must have discussed outbound problems on LinkedIn."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "C02",
+      "original_request": "Find 1 B2B software company hiring Account Executives OR having raised funding in the last 90 days.",
+      "expected": {
+        "qualified": 1,
+        "intent": "Find 1 B2B software company hiring Account Executives OR having raised funding in the last 90 days."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 1
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "C03",
+      "original_request": "Find 1 B2B software company that must have opened a new office AND recently adopted Salesforce.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company that must have opened a new office AND recently adopted Salesforce."
+      },
+      "actual": {
+        "reason": "real feasibility refusal; provider invocation not reached",
+        "refusals": [
+          {
+            "code": "no_requirement_provable",
+            "requirement": "opened a new office, recently adopted Salesforce, opened a new office, recently adopted Salesforce",
+            "message": "This plan cannot establish any requirement the request depends on: Nothing scheduled can establish \"opened a new office\". No capability in this plan has a provider producing opened a new office/company evidence. \"technology\" would be established by technology_verification, which the engine cannot execute yet (needs_engine_work). Nothing executable in this plan proves it. \"opened a new office\" was stated as a required signal term but is not attached to any signal this plan verifies, so no capability will establish it. \"recently adopted Salesforce\" was stated as a required signal term but is not attached to any signal this plan verifies, so no capability will establish it.",
+            "detail": {
+              "requirements": [
+                {
+                  "r": "opened a new office",
+                  "s": "unsupported"
+                },
+                {
+                  "r": "recently adopted Salesforce",
+                  "s": "needs_engine_work"
+                },
+                {
+                  "r": "opened a new office",
+                  "s": "unsupported"
+                },
+                {
+                  "r": "recently adopted Salesforce",
+                  "s": "unsupported"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": "NOT SUPPORTED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "C04",
+      "original_request": "Find 1 B2B software company hiring Account Executives in the last 7 days AND whose founder must have commented on outbound in the last 30 days.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives in the last 7 days AND whose founder must have commented on outbound in the last 30 days."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "C05",
+      "original_request": "Find 1 US-headquartered B2B software company hiring Account Executives in the last 30 days.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 US-headquartered B2B software company hiring Account Executives in the last 30 days."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "C06",
+      "original_request": "Find 1 B2B software company that must be hiring Account Executives within the last 30 days.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company that must be hiring Account Executives within the last 30 days."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "C07",
+      "original_request": "Find 1 B2B software company hiring Account Executives in the last 7 days AND having raised venture funding in the last 90 days.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives in the last 7 days AND having raised venture funding in the last 90 days."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R01",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 0,
+        "reason": "execution validator refused the proposed plan; no substitute provider ran"
+      },
+      "status": "BLOCKED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R02",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 0,
+        "reason": "execution validator refused the proposed plan; no substitute provider ran"
+      },
+      "status": "BLOCKED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R03",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R04",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R05",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R06",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R07",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "reason": "real feasibility refusal; provider invocation not reached",
+        "refusals": [
+          {
+            "code": "no_requirement_provable",
+            "requirement": "hiring Account Executives",
+            "message": "This plan cannot establish the requirement the request depends on: \"hiring\" would be established by hiring_verification, which may not run yet (UNAVAILABLE: no actor for it is proven live). Nothing executable in this plan proves it.",
+            "detail": {
+              "requirements": [
+                {
+                  "r": "hiring Account Executives",
+                  "s": "unsupported"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": "BLOCKED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R08",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R09",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R11",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "FAIL"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R12",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": 1,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "F01",
+      "original_request": "Find 1 B2B software company with a recent funding announcement within the last 90 days.",
+      "expected": {
+        "qualified": 0,
+        "intent": "Find 1 B2B software company with a recent funding announcement within the last 90 days."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "F02",
+      "original_request": "Find 1 B2B software company with a recent funding announcement within the last 90 days.",
+      "expected": {
+        "qualified": null,
+        "intent": "Find 1 B2B software company with a recent funding announcement within the last 90 days."
+      },
+      "actual": {
+        "qualified": 0,
+        "keys": [],
+        "company_count": 1
+      },
+      "status": "NOT TESTED"
+    },
+    {
+      "tested_commit": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+      "id": "R10",
+      "original_request": "Find 1 B2B software company hiring Account Executives.",
+      "expected": {
+        "qualified": null,
+        "intent": "Find 1 B2B software company hiring Account Executives."
+      },
+      "actual": {
+        "qualified": 1,
+        "keys": [
+          "https://www.linkedin.com/company/routing-example"
+        ],
+        "company_count": 1
+      },
+      "status": "NOT TESTED"
+    }
+  ]
+}
