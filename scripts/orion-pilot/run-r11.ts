@@ -7,7 +7,7 @@
 //   ORION_R11_APPROVED="I approve the ORION R1.1 TEST run on tlvnfrxzjhsjgdofwehb" \
 //   ORION_PILOT_SUPABASE_URL=https://tlvnfrxzjhsjgdofwehb.supabase.co \
 //   ORION_PILOT_ANON_KEY=<TEST publishable key> \
-//   ORION_PILOT_OWNER_JWT=<owner access token> ORION_PILOT_OUTSIDER_JWT=<outsider access token> \
+//   ORION_PILOT_OWNER_JWT=… ORION_PILOT_OUTSIDER_JWT=…   (or ORION_PILOT_{OWNER,OUTSIDER}_{EMAIL,PASSWORD}) \
 //   deno run --allow-env --allow-net --allow-read --allow-write=. scripts/orion-pilot/run-r11.ts
 //
 // Writes r11-transcript.json. REFUSES any URL but the TEST project. Never prints tokens.
@@ -61,8 +61,23 @@ if (import.meta.main) {
   const base = Deno.env.get("ORION_PILOT_SUPABASE_URL");
   const target = targetCheck(base);
   if (!target.ok) { console.error(target.reason); Deno.exit(2); }
-  const anon = Deno.env.get("ORION_PILOT_ANON_KEY") ?? "", owner = Deno.env.get("ORION_PILOT_OWNER_JWT") ?? "", outsider = Deno.env.get("ORION_PILOT_OUTSIDER_JWT") ?? "";
-  if (!anon || !owner || !outsider) { console.error("refusing: anon key, owner JWT and outsider JWT are required"); Deno.exit(2); }
+  const anon = Deno.env.get("ORION_PILOT_ANON_KEY") ?? "";
+  // A token from the environment, or a TEST sign-in with email + password from the
+  // environment (your shell only; never printed, never written).
+  async function token(who: "OWNER" | "OUTSIDER"): Promise<string> {
+    const jwt = Deno.env.get(`ORION_PILOT_${who}_JWT`);
+    if (jwt) return jwt;
+    const email = Deno.env.get(`ORION_PILOT_${who}_EMAIL`), password = Deno.env.get(`ORION_PILOT_${who}_PASSWORD`);
+    if (!email || !password) return "";
+    const res = await fetch(`${base!.replace(/\/$/, "")}/auth/v1/token?grant_type=password`, {
+      method: "POST", headers: { "Content-Type": "application/json", apikey: anon },
+      body: JSON.stringify({ email, password }) });
+    const body = await res.json().catch(() => null) as { access_token?: string } | null;
+    if (!res.ok || !body?.access_token) { console.error(`refusing: TEST sign-in failed for the ${who.toLowerCase()} account (HTTP ${res.status})`); Deno.exit(2); }
+    return body.access_token;
+  }
+  const owner = anon ? await token("OWNER") : "", outsider = anon ? await token("OUTSIDER") : "";
+  if (!anon || !owner || !outsider) { console.error("refusing: the TEST anon key and owner + outsider credentials (JWT, or EMAIL + PASSWORD) are required"); Deno.exit(2); }
 
   const out: unknown[] = [];
   let conversation: string | null = null, failures = 0;

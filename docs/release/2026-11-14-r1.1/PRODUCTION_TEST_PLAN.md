@@ -2,6 +2,14 @@
 
 ## TEST (`tlvnfrxzjhsjgdofwehb`): in your shell, before approving production
 
+**One command does every step below,** including the "nothing created" check, the spend total and the cleanup:
+
+```bash
+TEST_DB_URL='<TEST database URL>' ORION_PILOT_OWNER_EMAIL='<owner>' ORION_PILOT_OWNER_PASSWORD='<pw>' ORION_PILOT_OUTSIDER_EMAIL='<outsider>' ORION_PILOT_OUTSIDER_PASSWORD='<pw>' scripts/test-project/r11-test-run.sh --confirm tlvnfrxzjhsjgdofwehb
+```
+
+The individual steps, for reference:
+
 1. **Seed the fictional production-shaped records** into "ORION Pilot (fictional)". This adds 11 accounts that are not leads (including Laminar, Epsilon3 and Civilgrid), 6 old hiring signals with no event date, and 1 disabled monitoring subject.
    ```bash
    psql "$TEST_DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f scripts/test-project/orion-r11-seed.sql
