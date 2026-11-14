@@ -1,0 +1,82 @@
+# Intelligence gaps and hardcoding audit
+
+Classification is about responsibility, not whether a function contains regexes.
+An Actor allowlist is a necessary execution boundary. A title or industry list
+that decides what an unfamiliar customer sentence means is a semantic
+bottleneck. See [pinned code](source-index.md) and
+[measured scenarios](scenarios.md).
+
+| Subsystem                                       | Classification                                                        | What exists / insufficiency                                                                                                                                                                                        | Correct boundary and priority                                                                                                                                                                                                                              |
+| ----------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Request interpretation                          | IMPROVE EXISTING GPT                                                  | RequestV1 already distinguishes read/source/research and references. Multiple legacy classifiers and follow-up regexes can still reinterpret a request                                                             | Carry one resolved request into compilation and selection; measure reference and operation fidelity. High customer value; no extra normal-path call                                                                                                        |
+| Mandatory clauses / preferences / exclusions    | USE HYBRID                                                            | Compiler LLM proposes intent, but `missionCriteria` derives necessity and windows from cue tables. C01/L08 demote required founder activity; I05/I08 retain target-level technology/expansion despite “must”       | Q3 fixes the contract first. Later improve the existing compiler prompt/output with original clause spans and unresolved ambiguity; code verifies complete coverage and supported expression structure                                                     |
+| AND/OR semantics                                | USE HYBRID                                                            | C02 has hard hiring and funding without one cross-dimension alternative group; funding also suppresses hiring-led discovery                                                                                        | Preserve one expression tree through compile, graph and canonical decision. GPT parses meaning; code evaluates the tree. Existing schema/graph work belongs to Claude Q3                                                                                   |
+| Time windows                                    | KEEP DETERMINISTIC after semantic binding                             | C04 attaches social's requested 30 days as 90. Q2 validates event dates but cannot recover a lost customer window                                                                                                  | Model associates each phrase/window with a clause once; code freezes it and verifies event timestamps. Never ask GPT whether an unverified date is fresh                                                                                                   |
+| Business meaning / unusual ICP                  | IMPROVE EXISTING GPT                                                  | Industry/business-model clauses may be interpreted contextually, but controlled vocabulary and deterministic reads can narrow atypical wording. “Struggling” is not measurable merely because a company is growing | Ask for observable proxies and confidence limits in the existing compilation/clarification turn. Unsupported mandatory concepts stay unresolved, never silently broadened                                                                                  |
+| Department growth / first hire                  | USE HYBRID                                                            | H04 department modifier leads to physical expansion; Q2 now blocks first-hire claims supported only by an ordinary opening                                                                                         | Typed growth subject and qualifier, attributed evidence and event context; positive/negative controls across departments. No closed industry/title exception list                                                                                          |
+| Recruiting employer identity                    | KEEP DETERMINISTIC + semantic inputs                                  | H05 drops an agency's own hiring through an unconditional agency filter. Client ads must still be excluded                                                                                                         | Q3 employer-ICP routing fix; normalized employer ownership remains authoritative. GPT may interpret “hiring on behalf of” but cannot override conflicting strong employer IDs                                                                              |
+| Capability choice and availability              | USE HYBRID                                                            | Existing planners reason about source strategy. Public capabilities, internal graph and Actor readiness are distinct; an offer is not retrieval                                                                    | Improve cards with actual unsupported reason and evidence coverage. Model chooses only offered IDs; code alone derives executable providers. Do not add AI to capability permission checks                                                                 |
+| Research order and stop decisions               | IMPROVE EXISTING GPT                                                  | Discovery/chain planner, evidence-page planner and route controller already exist. Multiple plans may repeat intent and consume calls; low-yield evidence gaps can be more useful than raw volume                  | Improve existing payloads with per-criterion gaps, source coverage and measured yield. Reuse data before buying more. Stopping on blocked conflict or exhausted budget is deterministic                                                                    |
+| Hiring/funding factual verification             | NO ADDITIONAL AI NEEDED for mechanical facts                          | Normalized jobs, posting dates/status/dedupe and two-provider funding-stage/completeness logic exist                                                                                                               | Keep provider identity, current employer, verified date and funding-history completeness in code. GPT adds value for responsibilities and first-hire wording, not arithmetic or date comparison                                                            |
+| Evidence meaning / negation / quotation / plans | IMPROVE EXISTING GPT                                                  | Extraction and mission evaluation already read text. E01 accepts a genuine negative excerpt incorrectly labelled positive; a substring check cannot establish entailment                                           | Improve existing reader/evaluator contrastive examples and claim contract. Distinguish quoted speaker, company/subject, event status, polarity and supported/contradicted/unknown. Code still validates source ID, ownership, exact excerpt and event time |
+| Evidence conflicts                              | USE HYBRID                                                            | Q2 blocks material equally authoritative HQ/size conflicts. Funding has specialized corroboration/completeness rules. Neither means all text contradictions are solved                                             | GPT may propose conflicting claim pairs, explaining whether statements address the same entity/event/scope. Code checks IDs, temporal scope and authority; unresolved conflict holds the canonical decision                                                |
+| Canonical qualification and projections         | KEEP DETERMINISTIC                                                    | #113/Q1/Q2 repair receipt loss, holds, ownership, windows and first hire; Q3 gaps remain                                                                                                                           | Preserve one `candidateDecision`. Model judgments are bounded inputs. No second scoring agent, confidence-based PASS, independent caller-brief qualification or projection fallback                                                                        |
+| Agent collaboration                             | NO ADDITIONAL AI NEEDED for task coordination                         | Named agents mostly share functions and structured task dependencies; public persona/model labels overstate independent agency                                                                                     | Exchange validated task-result contracts with evidence and blocked reasons. Add a targeted reasoning task only when it answers a new question. Scheduling, dependency and replay stay deterministic                                                        |
+| Company Brain retrieval                         | USE HYBRID                                                            | Canonical structured Brain, hard/preference separation and bounded prompt assembly exist. Every consumer does not share an immutable version/context snapshot                                                      | Authorized task-scoped projection first. Select relevant sections deterministically; optional retrieval/reranking only if scale justifies it. Model proposes a context gap, never changes authoritative Brain without approval                             |
+| Memory / feedback                               | KEEP DETERMINISTIC for scope and durability; USE HYBRID for relevance | Workspace-wide recent drafts can enter conversation context; generated outputs are stored, not automatically validated learning. No universal outcome-to-approved-memory loop                                      | P2 association fix and P1 native acceptance precede richer retrieval. Version, source, expiry and scope every memory; propose reviewed updates from outcomes. Relevance cannot bypass client permission                                                    |
+| Caller briefs and writing                       | IMPROVE EXISTING GPT                                                  | Short opener, generic agent writing, Brain context and source-backed summaries are reusable; full existing-Apollo-lead call briefs/dispositions/reporting are disconnected                                         | One structured writer using approved existing records, cited facts, unknowns and approved seller voice. Validate each factual assertion and keep human review/export. Follow-up from real call outcomes waits for verified input integration               |
+| Model selection                                 | KEEP DETERMINISTIC                                                    | Stage router is deterministic; `agents.model` and UI provider choices are not enforced by shared execution                                                                                                         | Task/client policy must bind requested/actual provider/model/schema and forbid silent substitution. Gemini disabled until adapter acceptance. More GPT will not fix a disconnected selector                                                                |
+| Transport and parser safety                     | KEEP DETERMINISTIC                                                    | T01: `gptProvider` ignores completion finish reason when JSON parses. Generic `extractJson` is intentionally tolerant. Generic GPT transport lacks its own abort deadline; smoke admission supplies one            | Normalize refusal/incomplete/timeout states; no optimistic partial success or automatic extra attempt. This is engineering, not an intelligence deficiency                                                                                                 |
+| Budget, permission, persistence, scheduling     | KEEP DETERMINISTIC                                                    | Admission, spend ceilings, call/token ledgers, checkpoints and continuation are implemented with separate scopes                                                                                                   | Never delegate admission, tenant identity, idempotency, concurrency, counters, terminal state or credits to a model. No new AI needed                                                                                                                      |
+
+## Hardcoding that harms meaning versus necessary fixed contracts
+
+1. `leadMission.ts` has deterministic vocabulary for stages/locations/types;
+   `leadMissionCompiler` passes its reading into proposal conversion/validation.
+   The compiler is not simply “GPT-only” or “regex-only.” The phantom startup
+   from stage wording and missing exact employee count are already Claude Q3
+   findings.
+2. `missionCriteria.ts` has `SIGNAL_CUE`, necessity/elevation, hedging and
+   window binding; `signalKinds.ts`/`missionSignalDescriptor.ts` and
+   `roleFamilies.ts` interpret related wording elsewhere. Duplicated semantic
+   interpretation can disagree even when every module individually passes its
+   existing fixtures.
+3. `leadCapabilityGraph.hiringLedMission` contains fixed routing preferences
+   tied to signal presence. Those preferences become inappropriate when a
+   customer asks for alternatives rather than all signals.
+4. The employer-agency filter confuses a common anti-noise heuristic with a
+   universal ICP exclusion. Preserve attribution rules; make intent-dependent
+   filtering obey the compiled customer target.
+5. Defaults such as a recent-hiring window are legitimate only when clearly
+   marked defaults. They must not overwrite an explicit per-signal window or be
+   presented as customer instructions.
+6. Fixed stage/model policies, JSON schemas, enum capability IDs, exact-role
+   constraints and approved Actor lists are not defects merely because they are
+   fixed. The model needs freedom to interpret a new goal, not freedom to create
+   an endpoint, change a budget or ignore an exclusion.
+
+## Verified risks versus new defects
+
+**T01 — incomplete output accepted (P2 contract defect, integration and Q2).**
+The real transport accepts `{"partial":true}` when the provider marks completion
+`length`, exactly as it accepts `stop`. Reproduce with `probe.ts` and opt-in
+strict assertion. Root: response parsing reads message content/refusal but
+ignores finish reason. Downstream parsers can reject an incomplete contract, so
+this is not a demonstrated qualified-company bypass. Smallest future correction:
+normalize an incomplete result before returning success, retain usage/spend, and
+do not add a retry. No implementation here; coordinate this shared transport
+area first.
+
+**E01 — quotation presence does not imply entailment (reasoning limitation).**
+An actual “not looking” statement survives extraction when an overconfident mock
+labels it supports. This is expected from the parser's narrow responsibilities;
+it disproves the strong comment that every ignored instruction necessarily fails
+validation. Improve semantic evaluation and tests, without pretending a second
+LLM guarantees truth. The fabricated-excerpt negative control is correctly
+rejected.
+
+**Inherited client/dispatch risks remain independent gates.** Outpost OO-01
+through OO-03 concern delivery/idempotency/approval outcomes; OO-04 concerns
+memory association. They are not solved by a smarter writer. #124 is a disabled
+additive scope foundation, not global isolation or permission for live client
+operations.
