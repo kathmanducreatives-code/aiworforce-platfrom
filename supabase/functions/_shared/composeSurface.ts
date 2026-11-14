@@ -192,5 +192,9 @@ export function planCompose(request: RequestV1): ComposePlan | null {
  * ONE COPY, reached from the route and from the legacy follow-up handler, so a
  * user cannot get two different explanations of the same empty memory.
  */
+// R1.1: the old copy ("I don't have any leads saved in this conversation to
+// write to yet. Source some first…") was read as "the workspace has no leads"
+// — live, in a workspace holding 61. This conversation's memory is not the
+// workspace: say which one is empty, and point at the leads that do exist.
 export const OUTREACH_WITHOUT_LEADS =
-  "I don't have any leads saved in this conversation to write to yet. Source some first — for example \"find 10 companies hiring GTM roles in the US\" — and I'll keep the results so you can draft outreach against them next. Nothing is ever sent without your approval.";
+  "This conversation hasn't listed any leads for me to write to yet — that's this chat, not your workspace. Name a company from your Lead Library (for example \"draft a first LinkedIn message to the founder of <company>\"), or ask me to list your saved leads first, and I'll draft against those. Nothing is ever sent without your approval.";

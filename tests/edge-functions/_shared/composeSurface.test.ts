@@ -143,7 +143,10 @@ Deno.test("7. writing is never a provider purchase from this router", () => {
 });
 
 Deno.test("8. outreach with nobody to write to asks who, and says nothing is sent", () => {
-  assert(/don't have any leads saved/i.test(OUTREACH_WITHOUT_LEADS));
+  // R1.1: it says THIS CONVERSATION is empty — never that the workspace has no leads.
+  assert(/this chat, not your workspace/i.test(OUTREACH_WITHOUT_LEADS));
+  assert(!/don't have any leads saved/i.test(OUTREACH_WITHOUT_LEADS), "the R1 copy read as 'the workspace has no leads'");
+  assert(/Lead Library/.test(OUTREACH_WITHOUT_LEADS));
   assert(/without your approval/i.test(OUTREACH_WITHOUT_LEADS),
     "the safety promise belongs in the refusal too");
 });

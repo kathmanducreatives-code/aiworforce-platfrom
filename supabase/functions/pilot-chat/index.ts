@@ -133,9 +133,11 @@ export const ORION_OPENAI_NOT_CONFIGURED = "orion_openai_not_configured";
 function actualModelUsed(): string {
   return turnCollector.getStore()?.lastModel() ?? "deterministic";
 }
-import { isPronounReference, promoteExecutiveQuestion, orionAnswersCompoundRead, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
+import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
+import { orionRoute, subQuestions, ORION_INTELLIGENCE_VERSION, type OrionRouting } from "../_shared/orionIntelligence.ts";
+import { orionDraftSystemPrompt, draftMaxTokens, withDraftNotice, ORION_DRAFT_VERSION } from "../_shared/orionDraft.ts";
 import { retrieveEvidence, type EvidenceDb as StoredEvidenceDb } from "../_shared/evidence/retrieve.ts";
-import { orionEvidenceForTurn, orionEvidenceEnabledFor, ORION_BUSINESS_ANSWER_SHAPE, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
+import { orionEvidenceForTurn, orionEvidenceEnabledFor, orionAnswerShapeFor, digestFacts, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
 import { composeStructuredAnswer, evidenceQuestionKind, evidenceSubjectFromMessage, renderStructuredAnswer } from "../_shared/evidence/answer.ts";
 import type { PresentedReferentSet } from "../_shared/referentPersistence.ts";
 import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
@@ -1218,8 +1220,9 @@ interface DelegateArgs {
  * other value: unchanged behaviour. Nothing is called and nothing is charged.
  */
 export const DELEGATION_DISABLED_REPLY =
-  "Starting agent work (ATLAS sourcing, LYRA drafts, research runs) isn't switched on in this release yet. " +
-  "I can still answer from your Company Brain, saved leads and signals. Nothing was started and nothing was charged.";
+  "Starting agent work (ATLAS sourcing, research runs, monitoring, LYRA agent runs, sending) isn't switched on in this release yet. " +
+  "I can still answer from your Company Brain, saved leads and signals, and write drafts right here in the chat — ask me to draft it. " +
+  "Nothing was started and nothing was charged.";
 export function delegationEnabled(read: (k: string) => string | undefined = (k) => Deno.env.get(k)): boolean {
   return String(read("AGENTORY_DELEGATION_ENABLED") ?? "").trim().toLowerCase() !== "false";
 }
@@ -2110,6 +2113,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
   let brainRoute: Route | null = null;
   let brainBinding: BindingOutcome | null = null;
+  /** R1.1: ORION's routing decision for this turn (orionIntelligence.ts). */
+  let orion: OrionRouting | null = null;
   /**
    * THE SIGNAL A CARD HANDED US, VERIFIED — or `none`. Set once, before routing,
    * from `body.metadata.signal_id` and the workspace; never from the model.
@@ -2490,15 +2495,20 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // A COMPOUND READ ("companies AND signals", "summarize with evidence")
       // is answered by ORION from the evidence digest where it is enabled; the
       // deterministic read surface serves only one part (departmentRouting.ts §3).
-      const compound = orionEvidenceEnabledFor(workspaceId)
-        ? orionAnswersCompoundRead(requestForRouting)
-        : { request: requestForRouting, rerouted: false };
-      if (compound.rerouted) {
-        console.log("[pilot-chat][routing] compound read → ORION evidence answer");
-        understood.request = compound.request;
+      // R1.1 (orionIntelligence.ts): ONE routing step for ORION. A read that
+      // needs reasoning (comparison, explanation, filter, named fields, several
+      // parts or sources) is answered by ORION from evidence and authoritative
+      // totals instead of the list template; a paid objective under an explicit
+      // "do not execute" is answered, never started; and while delegation is
+      // off, a drafting request is written by ORION as text (`orion.draft`).
+      const evidenceOn = orionEvidenceEnabledFor(workspaceId);
+      orion = orionRoute(requestForRouting, message, { evidenceEnabled: evidenceOn, delegationEnabled: delegationEnabled() });
+      if (orion.reroute) {
+        console.log(`[pilot-chat][routing] ${orion.reroute} → ORION evidence answer`, orion.reasons);
+        understood.request = orion.request;
       }
-      const executive = orionEvidenceEnabledFor(workspaceId)
-        ? { request: compound.request, promoted: false }
+      const executive = evidenceOn
+        ? { request: orion.request, promoted: false }
         : promoteExecutiveQuestion(requestForRouting, message);
       if (executive.promoted) {
         console.log("[pilot-chat][routing] priority question → ORION brief");
@@ -2541,6 +2551,68 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           unsafe: true,
           chat_brain: { route: brainRoute.kind, refused: "unsafe_request" },
         });
+      }
+
+      // ══ R1.1 · ORION WRITES THE DRAFT — TEXT ONLY ══════════════════════════
+      //
+      // Only while delegation is off (orionRoute never sets `draft` otherwise).
+      // BEFORE the blocked-ambiguity reply, the content route and every
+      // delegation: this branch creates no content_item row, starts no mission,
+      // writes no approval, sends nothing and publishes nothing. One model call
+      // (OpenAI, under the model-spend ceiling), one assistant message.
+      if (orion?.draft) {
+        // The same Company Brain readiness rule compose has always had.
+        if (readinessV2) {
+          const readinessNow = (brainReadiness as BrainReadiness | null) ?? companyBrainReadiness(normalizeCompanyBrain({}), false);
+          const gate = readinessGate("compose", "content", readinessNow);
+          if (gate.gated) {
+            return await replyAndReturn(gate.reply, {
+              gated: "brain_not_ready", clarification: true,
+              chat_brain: { route: "orion_draft", capability: gate.capability, readiness: readinessNow.state },
+            });
+          }
+        } else if (shouldGateObjective("compose", { onboarding_completed: brainOnboardedForGate })) {
+          return await replyAndReturn(ONBOARDING_GATE_REPLY, {
+            gated: "missing_brain", clarification: true, chat_brain: { route: "orion_draft" },
+          });
+        }
+        const draftEvidence = await orionEvidenceForTurn(admin as unknown as StoredEvidenceDb,
+          { task: "complex_company_qa", workspaceId, userId, message });
+        const ai = await generateText({
+          onModelCall: fail.modelCalls?.sink,
+          budget: fail.modelCalls,
+          taskType: "pilot_chat",
+          systemPrompt: orionDraftSystemPrompt({
+            workspaceContext: workspaceContextBlock,
+            facts: draftEvidence ? digestFacts(draftEvidence) : [],
+            kinds: orion.draft.kinds,
+          }),
+          messages: [...priorTurns, { role: "user", content: message }],
+          temperature: 0.6,
+          maxTokens: draftMaxTokens(orion.draft.kinds),
+          functionName: "pilot-chat-orion-draft",
+          workspaceId,
+          workforceTask: "complex_company_qa",
+          terraLimiter: createTerraRunLimiter(),
+        });
+        return await replyAndReturn(
+          ai.ok && ai.content?.trim() ? withDraftNotice(ai.content) : CONVERSE_UNAVAILABLE,
+          {
+            ...(ai.routeDecision ? { model_route: ai.routeDecision } : {}),
+            orion_draft: {
+              version: ORION_DRAFT_VERSION, kinds: orion.draft.kinds,
+              text_only: true, delegated: false, persisted: false, sent: false, published: false,
+              execution_enabled: false,
+            },
+            ...(draftEvidence ? {
+              orion_evidence: { version: ORION_EVIDENCE_CONTEXT_VERSION, task: "orion_draft", cited_ids: draftEvidence.cited_ids,
+                retrieval_ms: draftEvidence.retrieval_ms ?? null, items: draftEvidence.items },
+            } : {}),
+            chat_brain: { route: "orion_draft", answered: ai.ok, grounded: !!workspaceContextBlock,
+              routing: ORION_INTELLIGENCE_VERSION },
+            ...(ai.ok ? {} : { model_error: { code: ai.errorCode ?? "unknown", model: ai.model || null } }),
+          },
+        );
       }
 
       // ══ A DRILL-DOWN INTO SOMETHING WE SHOWED IS A READ ════════════════
@@ -2948,26 +3020,28 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             `Company Brain onboarding complete: ${brainOnboardedForGate ? "yes" : "no"}.`,
             "company_brain.onboarded"),
         ];
-        const converseTask = orionConverseTask(message); // ORION evidence (flag): orionEvidenceContext.ts
+        const converseTask = orion?.reroute ? "complex_company_qa" : orionConverseTask(message); // rerouted reads are business questions
         const evidenceDigest = await orionEvidenceForTurn(admin as unknown as StoredEvidenceDb, { task: converseTask, workspaceId, userId, message });
-        if (evidenceDigest) facts.push(...evidenceDigest.facts);
+        if (evidenceDigest) facts.push(...digestFacts(evidenceDigest)); // R1.1: totals + named companies, then [E#]
+        const parts = evidenceDigest ? subQuestions(message) : [];
         const ai = await generateText({
       onModelCall: fail.modelCalls?.sink,
       budget: fail.modelCalls,
           taskType: "pilot_chat",
           systemPrompt: converseSystemPrompt({
             workspaceContext: workspaceContextBlock, facts,
-            answerShape: evidenceDigest ? ORION_BUSINESS_ANSWER_SHAPE : null,
+            answerShape: evidenceDigest ? orionAnswerShapeFor(parts) : null,
+            delegationEnabled: delegationEnabled(),
           }),
           messages: [
+            ...priorTurns,
             // THE SAME TURNS UNDERSTANDING SAW. A conversational answer that
             // cannot see the previous turn restarts the conversation on every
             // message, which is how "hello" mid-thread read as a first hello.
-            ...priorTurns,
             { role: "user", content: message },
           ],
           temperature: 0.5,
-          maxTokens: 420,
+          maxTokens: evidenceDigest ? 1100 : 420, // business answers need room; small talk stays short
           functionName: "pilot-chat-converse",
           workspaceId,
           // HYBRID ROUTING: the task is classified deterministically, so small
@@ -2990,7 +3064,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
               } : {}),
             } : {}),
             chat_brain: { route: "converse", grounded: !!workspaceContextBlock,
-              answered: ai.ok },
+              answered: ai.ok,
+              ...(orion?.reroute ? { rerouted_from: orion.reroute, reasons: orion.reasons, routing: ORION_INTELLIGENCE_VERSION } : {}),
+              ...(parts.length >= 2 ? { sub_questions: parts.length } : {}),
+              ...(evidenceDigest?.workspace ? { workspace_totals: true } : {}) },
             ...(ai.ok ? {} : { model_error: { code: ai.errorCode ?? "unknown", model: ai.model || null } }),
           },
         );
@@ -3129,6 +3206,17 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // could be reached.
       if (brainRoute.kind === "compose" && brainRoute.compose) {
         const plan = brainRoute.compose;
+
+        // R1.1 DEFENCE IN DEPTH. With delegation off, drafting is ORION's
+        // (the `orion.draft` branch above). Anything that still arrives here
+        // must not create a content_item row or a confirmation card for work
+        // that cannot run: live, two empty draft rows were left behind by
+        // exactly this path before the guard refused the delegation.
+        if (!delegationEnabled()) {
+          return await replyAndReturn(DELEGATION_DISABLED_REPLY, {
+            chat_brain: { route: "compose", kind: plan.kind, served: false, reason: "delegation_disabled" },
+          });
+        }
 
         if (plan.kind === "outreach") {
           // NOBODY TO WRITE TO IS NOT A DRAFT. It is a question about who.
