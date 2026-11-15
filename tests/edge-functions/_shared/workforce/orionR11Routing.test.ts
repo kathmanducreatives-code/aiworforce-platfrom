@@ -51,6 +51,8 @@ const READINGS: Record<number, Part[][]> = {
   14: [[part("compose", "content", { shape: "artifact" })]],
   15: [[part("compose", "person", { shape: "artifact" })]],
   16: [[part("compose", "company", { shape: "artifact", refs: SAVED })], [part("compose", "content", { shape: "artifact" })]],
+  // LIVE TEST 2026-11-14: the model read test 20 as compose (an artifact) → orion_draft. Both readings must answer.
+  20: [[part("converse", "conversation")], [part("compose", "content", { shape: "artifact" })], [part("compose", "conversation", { shape: "answer" })]],
 };
 
 for (const t of FIXTURES.tests as Array<{ n: number; prompt: string; expected_route: string; recorded_route: string }>) {
@@ -110,4 +112,26 @@ Deno.test("a paid sourcing request is never turned into a draft or a read", asyn
 Deno.test("test 19 (scrape 500, do not execute) is answered by ORION, never routed to sourcing", async () => {
   const { label } = await finalRoute(FIXTURES.tests[18].prompt, [part("source", "company", { shape: "records", count: 500 })]);
   assertEquals(label, "converse");
+});
+
+// ── TEST 20 (live TEST failure): an internal brief is an answer, an outbound text is a draft ──
+for (const [utterance, want] of [
+  ["Produce a weekly executive brief using only workspace data, with source references.", "converse"],
+  ["Write a summary of our lead funnel and the strongest signals.", "converse"],
+  ["Prepare a status update on our pipeline for this week.", "converse"],
+  ["Produce a LinkedIn post summarising our weekly highlights.", "orion_draft"],
+  ["Write a weekly report email to my investors.", "orion_draft"],
+  ["Draft a campaign plan with one LinkedIn post and one cold email.", "orion_draft"],
+  ["Create a 30-second video script reviewing our product.", "orion_draft"],
+] as const) {
+  Deno.test(`compose reading: "${utterance}" → ${want}`, async () => {
+    const { label } = await finalRoute(utterance, [part("compose", "content", { shape: "artifact" })]);
+    assertEquals(label, want);
+  });
+}
+Deno.test("without the evidence flag, an internal brief is neither drafted nor rerouted (R1 behaviour)", async () => {
+  const request = await understand(FIXTURES.tests[19].prompt, [part("compose", "content", { shape: "artifact" })]);
+  const off = orionRoute(request, FIXTURES.tests[19].prompt, { evidenceEnabled: false, delegationEnabled: false });
+  assertFalse(!!off.draft);
+  assertEquals(off.reroute, null);
 });

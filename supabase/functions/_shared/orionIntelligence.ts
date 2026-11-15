@@ -125,13 +125,32 @@ export function draftKindsFor(message: string): DraftKind[] {
   return out;
 }
 
-/** Is this turn a drafting request? (compose objective, or an explicit "draft/write a <format>") */
-export function wantsDraft(request: RequestV1, message: string): boolean {
-  if (request.parts.some((p) => p.objective === "compose")) return true;
+/** Does the message itself ask for an outbound text — "draft a 150-word LinkedIn post"? */
+function namesOutboundText(message: string): boolean {
   const m = String(message ?? "");
-  // "draft" + a format within a few words: "draft a 150-word LinkedIn post".
+  // "draft" + a format within a few words.
   const near = /\b(?:draft|write|create|compose|prepare|produce|rewrite|craft)\b(?:\W+\w+){0,8}?\W+(?:post|message|e-?mail|script|campaign|dm|inmail|follow[- ]?up|caption|newsletter|announcement)s?\b/i;
   return DRAFT_VERB_RE.test(m) && DRAFT_NOUN_RE.test(m) && near.test(m);
+}
+
+/**
+ * AN INTERNAL ANALYSIS IS NOT A DRAFT (R1.1 live TEST, test 20). "Produce a
+ * weekly executive brief using only workspace data…" was read by Chat Brain as
+ * `compose` (an artifact), and every compose request went to the text-draft
+ * path. A brief, report, summary or plan built from the workspace's records is
+ * ORION's evidence answer — totals, citations, the answer shape — not an
+ * outbound text to review before sending.
+ */
+const INTERNAL_ANALYSIS_RE = /\b(?:brief(?:ing)?|report|summary|summari[sz]e|overview|analysis|breakdown|assessment|review|status update|plan|scorecard|recap)\b/i;
+export function isInternalAnalysis(message: string): boolean {
+  return INTERNAL_ANALYSIS_RE.test(String(message ?? "")) && draftKindsFor(message).length === 0 && !namesOutboundText(message);
+}
+
+/** Is this turn a drafting request? (compose objective, or an explicit "draft/write a <format>") */
+export function wantsDraft(request: RequestV1, message: string): boolean {
+  if (isInternalAnalysis(message)) return false;
+  if (request.parts.some((p) => p.objective === "compose")) return true;
+  return namesOutboundText(message);
 }
 
 // ── "DO NOT EXECUTE" ────────────────────────────────────────────────────────
@@ -175,6 +194,12 @@ export function orionRoute(request: RequestV1, message: string, o: { evidenceEna
     // R1 behaviour without the evidence context: only the compound rule existed,
     // and it too needs the evidence context, so nothing is rerouted.
     return unchanged;
+  }
+
+  // An internal analysis read as `compose` (test 20) is ORION's evidence answer.
+  if (request.parts.some((p) => p.objective === "compose") && !request.parts.some((p) => PAID.has(p.objective)) &&
+      isInternalAnalysis(message)) {
+    return { request: asConverse(request), reroute: "analytical_read", reasons: ["internal_analysis_not_a_draft"], draft: null };
   }
 
   // 3. A paid objective with an explicit "do not execute" is a question about it.
