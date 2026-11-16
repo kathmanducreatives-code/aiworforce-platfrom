@@ -21,7 +21,8 @@ import { matchExclusion } from "./brainMemoryModel.ts";
 import { VERIFICATION_LABEL, type EvidenceItem } from "./evidence/model.ts";
 import { workspaceFact, type GroundedFact } from "./groundedFacts.ts";
 import { retrieveEvidence, type EvidenceDb } from "./evidence/retrieve.ts";
-import { brainWarningFact, HIRING_RE, loadWorkspaceFacts, type WorkspaceFacts } from "./orionWorkspaceFacts.ts";
+import { withoutNegatedClauses } from "./orionIntelligence.ts";
+import { brainWarningFact, calendarDaysBetween, HIRING_RE, loadWorkspaceFacts, type WorkspaceFacts } from "./orionWorkspaceFacts.ts";
 
 export const ORION_EVIDENCE_CONTEXT_VERSION = "orion-evidence-context-v1" as const;
 export const ORION_EVIDENCE_MAX_ITEMS = 8;
@@ -61,8 +62,11 @@ export function selectEvidenceForQuestion(items: readonly EvidenceItem[], messag
   let pool = items.filter((e) => e.source_type !== "company_brain" || !!e.subject.name);
   // WHAT THE QUESTION IS ABOUT CHOOSES THE SOURCE. "List the latest ten
   // signals" answered from eight lead records is not an answer about signals.
-  const aboutSignals = /\bsignals?\b/.test(m);
-  const aboutLeads = /\b(?:leads?|accounts?|atlas)\b/.test(m);
+  // R1.2: what the question says it does NOT want ("not just the eight ATLAS lead
+  // examples") does not choose the source.
+  const topical = ` ${norm(withoutNegatedClauses(message))} `;
+  const aboutSignals = /\bsignals?\b/.test(topical);
+  const aboutLeads = /\b(?:leads?|accounts?|atlas)\b/.test(topical);
   if (aboutSignals && !aboutLeads) {
     const sig = pool.filter((e) => e.source_type === "lisa_signal");
     if (sig.length) pool = [...sig.sort((a, b) => (itemTime(b) ?? 0) - (itemTime(a) ?? 0)), ...pool.filter((e) => e.source_type !== "lisa_signal")];
@@ -89,18 +93,30 @@ export function selectEvidenceForQuestion(items: readonly EvidenceItem[], messag
   const named = pool.filter((e) => {
     const n = norm(e.subject.name);
     const d = norm(e.subject.domain).split(" ")[0];
-    return (n.length > 2 && m.includes(` ${n} `)) || (n.split(" ")[0]?.length > 3 && m.includes(` ${n.split(" ")[0]} `)) ||
+    // First-word matching only for company-style names ("Newton" → Newton
+    // Software). R1.2: a TOPIC subject ("buyer-intent") matched "buyer roles".
+    const companyStyle = /^[A-Z0-9]/.test(e.subject.name ?? "");
+    return (n.length > 2 && m.includes(` ${n} `)) ||
+      (companyStyle && n.split(" ")[0]?.length > 3 && m.includes(` ${n.split(" ")[0]} `)) ||
       (d.length > 3 && m.includes(d));
   });
   const rest = pool.filter((e) => !named.includes(e));
+  // R1.2 · RELEVANT EVIDENCE ONLY. Live, eight ATLAS lead records were attached
+  // to a Company Brain audit and to content about Agentory itself, because the
+  // selection always filled up to `max` from the pool. Records about other
+  // companies are sent only when the question names them or is about the
+  // workspace's leads, signals, pipeline or evidence.
+  if (!named.length && !PIPELINE_RE.test(message)) return [];
   return [...named, ...rest].slice(0, max);
 }
 
+/** Words that make workspace records (leads, signals) relevant to a question. */
+export const PIPELINE_RE = /\b(?:leads?|accounts?|atlas|lisa|pipeline|funnel|prospects?|opportunit(?:y|ies)|candidates?|companies|signals?|hiring|funding|evidence|records?|priorit(?:y|ies|i[sz]e)|recommend\w*|brief(?:ing)?|report|stored|saved|workspace data|which compan(?:y|ies)|research first)\b/i;
+
 export function ageLabel(iso: string | null, now: Date): string {
   if (!iso) return "undated";
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "undated";
-  const days = Math.max(0, Math.floor((now.getTime() - t) / DAY));
+  const days = calendarDaysBetween(iso, now);   // R1.2: calendar days (UTC)
+  if (days == null) return "undated";
   return `${iso.slice(0, 10)}, ${days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`}`;
 }
 
@@ -116,6 +132,33 @@ export interface OrionEvidenceDigest {
   items: OrionEvidenceDisplayItem[];
   /** R1.1: authoritative totals and named-account lookup (rendered BEFORE the evidence). */
   workspace?: WorkspaceFacts | null;
+}
+
+/**
+ * R1.2 · WHAT A FOLLOW-UP CAN POINT AT. Live, after an answer about Hyperbound,
+ * Laminar, Epsilon3 and Civilgrid, the stored referents were the eight [E#]
+ * lead subjects — so "the second one" would have meant Newton Software. The
+ * referents are now the companies the QUESTION named (in its order), then the
+ * subjects of the [E#] items the REPLY actually cites ([E1], [E2]–[E4]).
+ */
+export function presentedSubjectsFor(d: OrionEvidenceDigest, reply: string): Array<{ name: string; domain: string | null }> {
+  const out: Array<{ name: string; domain: string | null }> = [];
+  const add = (name: string | null | undefined, domain: string | null) => {
+    if (name && !out.some((x) => norm(x.name) === norm(name))) out.push({ name, domain });
+  };
+  for (const n of d.workspace?.named ?? []) add(n.name, n.domain);
+  const cited = new Set<number>();
+  // "[E3]", "[E1–E8]" and "[E2]–[E4]" all cite.
+  for (const m of String(reply ?? "").matchAll(/\[E(\d+)(?:\]\s*[–-]\s*\[|\s*[–-]\s*)E?(\d+)\]|\[E(\d+)\]/g)) {
+    if (m[3]) { cited.add(Number(m[3])); continue; }
+    const a = Number(m[1]), b = m[2] ? Number(m[2]) : a;
+    for (let k = Math.min(a, b); k <= Math.max(a, b) && k - Math.min(a, b) < 50; k++) cited.add(k);
+  }
+  [...cited].sort((a, b) => a - b).forEach((k) => {
+    const it = d.items[k - 1];
+    if (it) add(it.subject, d.subjects.find((x) => norm(x.name) === norm(it.subject))?.domain ?? null);
+  });
+  return out;
 }
 
 /** Every fact the prompt gets, in order: totals and named companies first, then [E#] evidence. */
@@ -152,17 +195,24 @@ const EVIDENCE_CLASS: Record<string, string> = {
   unknown: "unverified (verification missing)",
 };
 function ageInDays(iso: string | null, now: Date): number | null {
-  const t = iso ? Date.parse(iso) : NaN;
-  return Number.isFinite(t) ? Math.max(0, Math.floor((now.getTime() - t) / DAY)) : null;
+  return calendarDaysBetween(iso, now);
 }
-/** The date a record carries, named for what it is: an event date, an observed date, or a record date. */
+/**
+ * The date a record carries, named for what it is (R1.2):
+ *   - a LISA signal: its EVENT date when recorded, else its OBSERVED date — and
+ *     then the event is "at least N days old", never dated by the observation;
+ *   - an ATLAS lead: the date ATLAS SAVED it. Its reason may mention hiring, but
+ *     when that hiring was observed is not recorded.
+ */
 function dateLabel(e: EvidenceItem, now: Date): string {
   if (e.source_type === "lisa_signal") {
-    return e.published_at
-      ? `event date ${ageLabel(e.published_at, now)}; observed ${e.retrieved_at.slice(0, 10)}`
-      : `observed ${ageLabel(e.retrieved_at, now)} (event date not recorded)`;
+    if (e.published_at) return `event date ${ageLabel(e.published_at, now)}; observed ${e.retrieved_at.slice(0, 10)}`;
+    const n = ageInDays(e.retrieved_at, now);
+    return `observed ${ageLabel(e.retrieved_at, now)}; event date not recorded — the event is at least ${n ?? "?"} day${n === 1 ? "" : "s"} old`;
   }
-  if (e.source_type === "lead") return `lead record created ${ageLabel(e.retrieved_at, now)}`;
+  if (e.source_type === "lead") {
+    return `ATLAS saved this lead on ${ageLabel(e.retrieved_at, now)}` + (isHiring(e) ? "; when the hiring was observed is not recorded" : "");
+  }
   return ageLabel(e.published_at ?? e.retrieved_at, now);
 }
 
@@ -186,7 +236,9 @@ export function buildOrionEvidenceDigest(i: {
     facts.push(workspaceFact(
       `[E${n + 1}] ${who} (${SOURCE_KIND[e.source_type] ?? e.source_type}): ${e.content.slice(0, 200)} — ${EVIDENCE_CLASS[e.verification]}; ` +
         `${dateLabel(e, i.now)}; source ${src}` +
-        (historical ? `. HISTORICAL hiring evidence (${ageDays} days old): not proof the role is open today; re-check before treating it as active` : "") +
+        (historical ? (e.source_type === "lead"
+          ? `. HISTORICAL: this lead was saved ${ageDays} days ago and the hiring is at least that old; not proof the role is open today`
+          : `. HISTORICAL hiring evidence (at least ${ageDays} days old): not proof the role is open today; re-check before treating it as active`) : "") +
         (ex ? `. EXCLUDED by the Company Brain (${ex}): do not recommend pursuing it.` : ""),
       `evidence.${e.id}`,
     ));
@@ -195,7 +247,7 @@ export function buildOrionEvidenceDigest(i: {
     display.push({
       ref: `E${n + 1}`, subject: who, content: e.content.slice(0, 200), verification: e.verification,
       verification_label: VERIFICATION_LABEL[e.verification], date: when ? when.slice(0, 10) : null,
-      age_days: Number.isFinite(t) ? Math.max(0, Math.floor((i.now.getTime() - t) / DAY)) : null,
+      age_days: Number.isFinite(t) ? calendarDaysBetween(when, i.now) : null,
       source_type: e.source_type, source_host: host(e.source_url),
       source_url: e.source_url && /^https?:\/\//.test(e.source_url) ? e.source_url : null, excluded_by: ex,
     });
@@ -210,7 +262,8 @@ export function buildOrionEvidenceDigest(i: {
       ? `Evidence above was read from stored workspace records at ${i.now.toISOString().slice(0, 16)}Z; no live web search was run. ` +
         `The [E#] items are ${i.items.length} records SELECTED for this question from ${pool} retrieved — a sample, not a census: ` +
         "never report their number as a total (use WORKSPACE TOTALS). They are records about OTHER companies (leads, signals), " +
-        "not facts about the user's own company — those are in the Company Brain profile. Cite an [E#] only for a claim that record itself supports." +
+        "not facts about the user's own company — those are in the Company Brain profile. Cite an [E#] only for a claim that record itself supports. " +
+        "Dates: a lead's date is when ATLAS saved it; a signal's event date and observed date are different, and you must never treat a missing event date as the observation date." +
         (gaps.length ? ` Could not read (retrieval failed, not empty): ${gaps.join(", ")}.` : "")
       : "No stored leads, signals or research matched this question; the workspace may still hold records not retrieved here." +
         (gaps.length ? ` Could not read (retrieval failed, not empty): ${gaps.join(", ")}.` : ""),
@@ -235,7 +288,9 @@ export const ORION_BUSINESS_ANSWER_SHAPE = [
   "- Keep three answers apart: a count that is 0 ('0 saved contacts'), data that is not recorded ('no fit score is stored on any lead'), and data that could not be read ('could not be read — retrieval failed'). Never turn a failed read into a zero.",
   "- A company listed under COMPANIES NAMED IN THE QUESTION exists in this workspace; report what is and is not stored about it. Never say a named company has 'no record' when it is listed there.",
   "",
-  "CITATIONS: cite an [E#] only next to a claim that record itself supports. Give a signal's date as recorded (event date, or observed date when no event date is recorded).",
+  "CITATIONS: cite an [E#] or [S#] only next to a claim that record itself supports. Give a signal's date as recorded (event date, or observed date when no event date is recorded).",
+  "DATES: a lead's date is when ATLAS saved it — not when any hiring was observed. A signal with no event date is AT LEAST as old as its observation; you can say it is older than N days, never that it is younger. Never treat a missing event date as the observation date.",
+  "ROWS: when a LISA SIGNAL TABLE is given, it lists every stored signal (or says how many are not listed). Use it for row-level questions; a field shown as 'not recorded' / 'not stored' is absent from the record, which is different from data you could not read.",
 ].join("\n");
 
 /**
@@ -264,7 +319,8 @@ export async function loadOrionEvidenceDigest(db: EvidenceDb, i: {
   try {
     const now = i.now ?? new Date();
     const t0 = Date.now();
-    const got = await retrieveEvidence(db, { workspaceId: i.workspaceId, userId: i.userId, limit: 50, now });
+    // R1.2: each source capped separately, so leads can never crowd out signals.
+    const got = await retrieveEvidence(db, { workspaceId: i.workspaceId, userId: i.userId, limit: 50, perSourceLimit: 50, now });
     // A REFUSED MEMBERSHIP READS NOTHING — not evidence, not totals.
     if (!got.ok) return null;
     // Membership verified by the retrieval above; totals are read for the same workspace only.

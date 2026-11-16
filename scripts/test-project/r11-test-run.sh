@@ -86,6 +86,12 @@ rc=0
 ORION_R11_APPROVED="I approve the ORION R1.1 TEST run on $REF" ORION_PILOT_SUPABASE_URL="https://$REF.supabase.co" \
 ORION_PILOT_ANON_KEY="${ORION_PILOT_ANON_KEY:-$ANON_DEFAULT}" \
   deno run --allow-env --allow-net --allow-read --allow-write=. scripts/orion-pilot/run-r11.ts || rc=$?
+# R1.2: the owner's manual acceptance prompts (14 turns), same conversation rules, no retries.
+if [ "${R11_SKIP_R12:-0}" != 1 ]; then
+  ORION_R11_APPROVED="I approve the ORION R1.1 TEST run on $REF" ORION_PILOT_SUPABASE_URL="https://$REF.supabase.co" \
+  ORION_PILOT_ANON_KEY="${ORION_PILOT_ANON_KEY:-$ANON_DEFAULT}" \
+    deno run --allow-env --allow-net --allow-read --allow-write=. scripts/orion-pilot/run-r11.ts --suite r12 || rc=$?
+fi
 
 echo "== 7. nothing executed, nothing created, spend"
 after="$(snap)"; echo "  before: $before"; echo "  after:  $after"
@@ -97,5 +103,5 @@ models="$(q "select coalesce(string_agg(distinct model, ', '), 'none') from publ
 echo "  model spend this run: \$$spend over $calls calls ($models); budget \$$BUDGET_USD"
 awk -v s="$spend" -v b="$BUDGET_USD" 'BEGIN{exit !(s<=b)}' || { echo "  FAIL: over budget"; rc=1; }
 echo "$models" | grep -qiE 'claude|anthropic' && { echo "  FAIL: a non-OpenAI model answered ORION"; rc=1; }
-[ "$rc" = 0 ] && echo "R1.1 TEST VALIDATION PASSED (transcript: r11-transcript.json)" || echo "R1.1 TEST VALIDATION FAILED — send me r11-transcript.json and this output"
+[ "$rc" = 0 ] && echo "TEST VALIDATION PASSED (transcripts: r11-transcript.json, r12-transcript.json)" || echo "TEST VALIDATION FAILED — send me r11-transcript.json, r12-transcript.json and this output"
 exit $rc

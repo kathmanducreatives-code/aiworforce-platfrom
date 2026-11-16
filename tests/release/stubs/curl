@@ -9,7 +9,8 @@ if echo "$args" | grep -q OPTIONS; then
     run-agent) b=e4da19e8828898f05414da953a13acb74c74e6a4 ;;
     orchestrate|enqueue-lead-mission|continue-workflow|resume-stalled-leads) b=b51ad3dddf2604f9d218d7c495e17e22d20932db ;;
     *) if [ -f "${STUB_STATE:-/nonexistent}/deployed-$fn" ]; then b="$STUB_APP_SHA"
-       elif [ "${STUB_BASELINE:-}" = r1 ]; then b=3bef8fd03998c4133b9bebaf87acdd03a3dad5f9
+       elif [ "${STUB_BASELINE:-}" = r11 ] && [ "$fn" = pilot-chat ]; then b=a1633f45dfa7f20ea5c76911d8be17968a45ad87
+       elif [ "${STUB_BASELINE:-}" = r1 ] || [ "${STUB_BASELINE:-}" = r11 ]; then b=3bef8fd03998c4133b9bebaf87acdd03a3dad5f9
        elif [ "$fn" = pilot-chat ]; then b=86ac1b922f8519f75760642bb09cceef096168eb; else b=""; fi ;;
   esac
   printf 'HTTP/2 200\r\n'; [ -n "$b" ] && printf 'x-agentory-build: %s@2026-11-13T00:00:00Z\r\n' "$b"; exit 0

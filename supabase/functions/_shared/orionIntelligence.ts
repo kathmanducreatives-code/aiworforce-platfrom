@@ -61,6 +61,9 @@ const REASONING_SIGNALS: ReadonlyArray<[string, RegExp]> = [
   ["explanation", /\b(?:explain|why|reason(?:ing)?|account(?:s)? for|interpret|assess|evaluate|recommend|implications?|what does .{1,40} mean|tell me what you cannot|what (?:is|are) missing|verification plan)\b/i],
   ["filter", /\b(?:older than|newer than|more than \d+ days|less than \d+ days|over \d+ days|within the (?:last|past)|in the (?:last|past) \d+|since \w+|before \w+ \d|after \w+ \d|stale|historical|only (?:the )?(?:hiring|funding|qualified|verified)|hiring signals?)\b/i],
   ["fields", /\b(?:including|which fields|what fields|fields? (?:are|is)|columns?|what .{0,40}\b(?:is|are) (?:actually )?(?:saved|stored)|decision[- ]makers?|recommended buyer|buyer|fit status|decision status|next action|observed date|confidence|signal type)\b/i],
+  // R1.2: judgement and verification questions ("should I contact them?", "can I safely
+  // tell a founder…?", "which claims are inference only?") need reasoning too.
+  ["judgement", /\b(?:should (?:i|we)|can (?:i|we) (?:safely|honestly|truthfully)|is it (?:safe|true|accurate|fair)|supported (?:only )?by|inference only|independently (?:verified|sourced)|which (?:claims?|facts?|records?|statements?)\b)/i],
   ["multi_part", /\b(?:then|separately|each part|every part|as well as|and also|for each)\b/i],
   ["zero_vs_missing", /\b(?:distinguish|missing (?:data|information|fields)|unknown fields?|zero (?:results)?|empty)\b/i],
 ];
@@ -116,9 +119,22 @@ const DRAFT_KIND_RES: ReadonlyArray<[DraftKind, RegExp]> = [
 const DRAFT_VERB_RE = /\b(?:draft|write|create|compose|prepare|produce|rewrite|craft|give me)\b/i;
 const DRAFT_NOUN_RE = /\b(?:post|message|e-?mail|script|campaign|dm|inmail|follow[- ]?up|outreach (?:message|copy|draft)|copy|caption|newsletter|announcement)s?\b/i;
 
-/** The formats a drafting request asks for, in a stable order. */
+/**
+ * R1.2 · WHAT THE MESSAGE DOES NOT ASK FOR IS REMOVED BEFORE READING FORMATS.
+ * Live: "This is an internal analysis report, not a LinkedIn post, email,
+ * marketing draft or campaign." was read as a request for a campaign and a
+ * LinkedIn post. A negated clause ("not …", "no …", "rather than …", "instead
+ * of …", "do not …") runs to the end of its sentence or clause and is dropped.
+ */
+export function withoutNegatedClauses(message: string): string {
+  return String(message ?? "")
+    .replace(/\b(?:not|no|never|rather than|instead of|isn't|is not|aren't|are not|without|don't|do not|doesn't|does not)\b[^.;!?\n]*/gi, " ")
+    .replace(/\s+/g, " ").trim();
+}
+
+/** The formats a drafting request asks for, in a stable order. Negated formats are not requested. */
 export function draftKindsFor(message: string): DraftKind[] {
-  const m = String(message ?? "");
+  const m = withoutNegatedClauses(message);
   const kinds = DRAFT_KIND_RES.filter(([, re]) => re.test(m)).map(([k]) => k);
   // "follow-up email" is a follow-up, not a cold email.
   const out = kinds.includes("follow_up") ? kinds.filter((k) => k !== "cold_email" || /\bcold e-?mail/i.test(m)) : kinds;
@@ -127,7 +143,7 @@ export function draftKindsFor(message: string): DraftKind[] {
 
 /** Does the message itself ask for an outbound text — "draft a 150-word LinkedIn post"? */
 function namesOutboundText(message: string): boolean {
-  const m = String(message ?? "");
+  const m = withoutNegatedClauses(message);
   // "draft" + a format within a few words.
   const near = /\b(?:draft|write|create|compose|prepare|produce|rewrite|craft)\b(?:\W+\w+){0,8}?\W+(?:post|message|e-?mail|script|campaign|dm|inmail|follow[- ]?up|caption|newsletter|announcement)s?\b/i;
   return DRAFT_VERB_RE.test(m) && DRAFT_NOUN_RE.test(m) && near.test(m);
@@ -143,12 +159,28 @@ function namesOutboundText(message: string): boolean {
  */
 const INTERNAL_ANALYSIS_RE = /\b(?:brief(?:ing)?|report|summary|summari[sz]e|overview|analysis|breakdown|assessment|review|status update|plan|scorecard|recap)\b/i;
 export function isInternalAnalysis(message: string): boolean {
-  return INTERNAL_ANALYSIS_RE.test(String(message ?? "")) && draftKindsFor(message).length === 0 && !namesOutboundText(message);
+  return INTERNAL_ANALYSIS_RE.test(withoutNegatedClauses(message)) && draftKindsFor(message).length === 0 && !namesOutboundText(message);
+}
+
+/**
+ * R1.2 · AN EXECUTION REQUEST IS NOT A DRAFT REQUEST. Live: "Find 100 new US
+ * companies using Apify, enrich their founders, save them as qualified leads
+ * and SEND each founder a LinkedIn message immediately. If disabled, explain…
+ * do not execute anything." was refused correctly but labelled as a LinkedIn
+ * message draft, because "LinkedIn message" matched a format. Acting on the
+ * outside world (send, publish, schedule, scrape, enrich, run Apify, find/source
+ * N companies, save as leads) is execution; only an explicit "draft/write a …"
+ * of a format makes it (also) a draft request.
+ */
+const EXECUTION_RE = /\b(?:send|sends|sending|deliver|publish|schedule|post (?:it|them|this|that)|message (?:every|each|all|them)|dm (?:every|each|all|them)|reach out to|email (?:every|each|all|them)|enrich(?:es|ing)?|scrape|scraping|apify|run (?:a |the )?(?:mission|search|scan|campaign)|launch (?:a |the )?campaign|(?:find|source|discover|get) \d+|save (?:them|these|those)|start (?:outreach|monitoring))\b/i;
+export function isExecutionRequest(message: string): boolean {
+  return EXECUTION_RE.test(withoutNegatedClauses(message)) && !namesOutboundText(message);
 }
 
 /** Is this turn a drafting request? (compose objective, or an explicit "draft/write a <format>") */
 export function wantsDraft(request: RequestV1, message: string): boolean {
   if (isInternalAnalysis(message)) return false;
+  if (isExecutionRequest(message)) return false;
   if (request.parts.some((p) => p.objective === "compose")) return true;
   return namesOutboundText(message);
 }
@@ -206,6 +238,11 @@ export function orionRoute(request: RequestV1, message: string, o: { evidenceEna
   if (request.parts.some((p) => PAID.has(p.objective)) && NO_EXECUTION_RE.test(message)) {
     return { request: asConverse(request), reroute: "held_records", reasons: ["no_execution_requested"], draft: null };
   }
+  // R1.2: an execution request read only as compose (no paid part) is not a
+  // draft either; while delegation is off ORION explains what is not enabled.
+  if (!o.delegationEnabled && request.parts.some((p) => p.objective === "compose") && isExecutionRequest(message)) {
+    return { request: asConverse(request), reroute: "held_records", reasons: ["execution_request_not_a_draft"], draft: null };
+  }
   // …and so is "what is saved about X" read as research while delegation is off.
   if (!o.delegationEnabled && request.parts.every((p) => p.objective === "research") &&
       !request.parts.some(hasPriorResult) && HELD_RECORDS_RE.test(message)) {
@@ -215,7 +252,17 @@ export function orionRoute(request: RequestV1, message: string, o: { evidenceEna
   // 2. Reads that need reasoning.
   const readish = request.parts.every((p) => p.objective === "read" || p.objective === "converse");
   if (!readish || !request.parts.some((p) => p.objective === "read")) return unchanged;
-  if (request.parts.some(hasPriorResult)) return unchanged;
+  // R1.2: a follow-up that points back ("these companies") AND needs reasoning
+  // ("which claims are inference only? can I tell a founder…? explain") is
+  // ORION's answer — it sees the prior turns and what was presented. Live, it
+  // went to the list template ("Those 8: …") and answered neither part. A plain
+  // drill-down ("show me the second one") keeps its scoped read.
+  if (request.parts.some(hasPriorResult)) {
+    const why = readReasoningSignals(message);
+    return why.length
+      ? { request: asConverse(request), reroute: "analytical_read", reasons: ["follow_up", ...why], draft: null }
+      : unchanged;
+  }
   const compound = orionAnswersCompoundRead(request);
   if (compound.rerouted) return { request: compound.request, reroute: "compound_read", reasons: ["compound"], draft: null };
   const reasons = readReasoningSignals(message);

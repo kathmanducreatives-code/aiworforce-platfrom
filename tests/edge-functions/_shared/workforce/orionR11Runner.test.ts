@@ -20,3 +20,15 @@ Deno.test("judge: correct R1.1 turns pass, including a draft gated by TEST's mis
   assertEquals(judge(FIX[13], { http: 200, answer: "Finish onboarding first…", metadata: route("orion_draft", { gated: "brain_not_ready" }) }), []);
   assertEquals(judge(FIX[13], { http: 200, answer: "Post…", metadata: route("orion_draft", { orion_draft: { sent: false, text_only: true } }) }), []);
 });
+
+Deno.test("R1.2 runner: the recorded R1.1 failures are flagged; correct R1.2 turns pass", async () => {
+  const { judgeR12, r12Tests } = await import("../../../../scripts/orion-pilot/run-r11.ts");
+  const t = Object.fromEntries(r12Tests().map((x) => [x.id, x]));
+  const leads = { items: Array(8).fill({ source_type: "lead" }) };
+  assertEquals(judgeR12(t["F2-apify"], { metadata: { orion_draft: { kinds: ["linkedin_message"] } } }).length, 1);
+  assertEquals(judgeR12(t["F3-signals"], { metadata: { orion_evidence: leads } }).length, 3);
+  assertEquals(judgeR12(t["F5-brain-audit"], { metadata: { orion_evidence: leads } }).length, 1);
+  assertEquals(judgeR12(t["F3-signals"], { metadata: { orion_evidence: { items: [{ source_type: "lisa_signal" }], signal_table_ids: ["s1"] } } }), []);
+  assertEquals(judgeR12(t["F5-content"], { metadata: { orion_evidence: { items: [] } } }), []);
+  assertEquals(r12Tests().length, 14);
+});

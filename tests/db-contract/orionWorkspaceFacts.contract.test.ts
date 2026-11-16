@@ -85,7 +85,7 @@ Deno.test({ name: "R1.1 digest (real DB): a member gets totals first, then dated
   const text = digestFacts(d).map((x) => x.text).join("\n");
   assert(text.indexOf("WORKSPACE TOTALS") < text.indexOf("[E1]"), "totals precede evidence");
   assertStringIncludes(text, "Hiring signals: 6");
-  assertStringIncludes(text, "(event date not recorded)");
+  assertStringIncludes(text, "event date not recorded — the event is at least");
   assertStringIncludes(text, "HISTORICAL hiring evidence");
   assertStringIncludes(text, "COMPANY BRAIN DATA CHECK");
   assertFalse(text.includes("OTHER WORKSPACE"));
@@ -94,4 +94,24 @@ Deno.test({ name: "R1.1 digest (real DB): a member gets totals first, then dated
   // A user with no membership at all.
   const stranger = await person();
   assertEquals(await loadOrionEvidenceDigest(db, { workspaceId: t.ws, userId: stranger.id, message: "how many leads?" }), null);
+} });
+
+Deno.test({ name: "R1.2 signal table (real DB): every row of THIS workspace, bounded, unavailable fields named; no other workspace", ...opts, fn: async () => {
+  const { t, other } = await seed();
+  await sql`insert into public.signal_events (workspace_id, signal_type, signal_category, occurred_at, occurred_at_basis, observed_at,
+      dedupe_key, origin, subject_type, subject_key, lifecycle_status, verification_status, confidence, source_url, normalized_value)
+    values (${other.ws}, 'sales_hiring', 'growth', null, 'unknown', now(), ${`r12:${uuid()}`}, 'manual_scan', 'company', 'other-ws',
+      'active', 'unverified', 'medium', null, ${sql.json({ company_name: "OTHER WORKSPACE SIGNAL" } as never)})`;
+  const db = await as("service_role");
+  const f = await loadWorkspaceFacts(db as never, { workspaceId: t.ws, message: "List every stored LISA signal with dates and sources." });
+  const table = f.facts.map((x) => x.text).find((x) => x.startsWith("LISA SIGNAL TABLE")) ?? "";
+  assertStringIncludes(table, "9 of 9 stored signals");
+  assertStringIncludes(table, "[S9]");
+  assertFalse(table.includes("[S10]"));
+  assertStringIncludes(table, "event date: not recorded");
+  assertFalse(table.includes("OTHER WORKSPACE"));
+  assertEquals(f.signal_table_ids?.length, 9);
+  // Not a signals question → no table.
+  const g = await loadWorkspaceFacts(db as never, { workspaceId: t.ws, message: "Audit our Company Brain goals." });
+  assertFalse(g.facts.some((x) => x.text.startsWith("LISA SIGNAL TABLE")));
 } });

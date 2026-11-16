@@ -82,10 +82,64 @@ export interface WorkspaceFacts {
   totals: WorkspaceTotals;
   named: NamedAccount[];
   facts: GroundedFact[];
+  /** R1.2: ids of the signal-table rows in [S#] order (traceability), when the table was sent. */
+  signal_table_ids?: string[];
+}
+
+// ── R1.2 · THE BOUNDED ROW-LEVEL LISA TABLE ────────────────────────────────
+//
+// Live: asked to "retrieve the 37 stored LISA signals", ORION could only say it
+// saw totals and eight lead records. When a question is about signals, every
+// stored signal of THIS workspace (up to SIGNAL_TABLE_MAX rows) is listed with
+// what each record actually holds — and a field the record does not store says
+// so ("not recorded", "not stored"), which is different from a failed read.
+export const SIGNAL_TABLE_MAX = 60;
+export const ABOUT_SIGNALS_RE = /\b(?:signals?|lisa)\b/i;
+const o2 = (v: unknown): Row => (v && typeof v === "object" && !Array.isArray(v) ? v as Row : {});
+
+export function renderSignalTable(rows: readonly Row[], total: number, now: Date): { fact: GroundedFact; ids: string[] } {
+  const sorted = [...rows].sort((a, b) => String(b.observed_at ?? "").localeCompare(String(a.observed_at ?? "")));
+  const shown = sorted.slice(0, SIGNAL_TABLE_MAX);
+  const lines = shown.map((r, n) => {
+    const nv = o2(r.normalized_value), lisa = o2(nv.lisa);
+    const company = s(o2(lisa.company).name) ?? s(nv.company_name);
+    const who = company ? `company: ${company}` : `topic (not a company): ${s(r.subject_key) ?? "not recorded"}`;
+    const obs = s(r.observed_at);
+    const obsAge = calendarDaysBetween(obs, now);
+    const ev = s(o2(lisa).event_date) ?? s(r.occurred_at);
+    const url = s(r.source_url) ?? s(lisa.source_url);
+    const level = s(o2(lisa.verification).level);
+    const title = s(lisa.title) ?? s(nv.title);
+    return `  [S${n + 1}] ${s(r.signal_type) ?? "unknown type"} · ${who}` +
+      ` · observed ${obs ? `${obs.slice(0, 10)} (${obsAge} day${obsAge === 1 ? "" : "s"} ago)` : "not recorded"}` +
+      ` · event date: ${ev ? ev.slice(0, 10) : "not recorded"}` +
+      ` · source URL: ${url ?? "not stored"}` +
+      ` · verification: ${level ?? "none recorded"} (status ${s(r.verification_status) ?? "not recorded"})` +
+      (title ? ` · title: ${title.slice(0, 90)}` : "");
+  });
+  const header = `LISA SIGNAL TABLE — ${shown.length} of ${total} stored signals for this workspace` +
+    (total > shown.length ? ` (bounded to ${SIGNAL_TABLE_MAX} rows; ${total - shown.length} not listed)` : "") +
+    ", newest observation first. Cite rows as [S#]. 'not recorded' / 'not stored' means the stored record has no such field — it is absent data, not a retrieval failure." +
+    " A missing event date is NOT the observation date: never treat a missing event date as the observation date — an undated event is at least as old as its observation, so it can be shown to be OLDER than N days but never YOUNGER.";
+  return { fact: workspaceFact([header, ...lines].join("\n"), "orion_workspace_facts.signal_table"), ids: shown.map((r) => String(r.id)) };
 }
 
 const PAGE = 5000;
 const DAY = 86_400_000;
+
+/**
+ * R1.2 · AGE IN CALENDAR DAYS (UTC dates), not elapsed 24-hour periods: a
+ * signal observed at 23:50 yesterday is "1 day ago" at 00:30 today. Null when
+ * the timestamp is missing or unreadable.
+ */
+export function calendarDaysBetween(iso: string | null | undefined, now: Date): number | null {
+  const t = iso ? Date.parse(iso) : NaN;
+  if (!Number.isFinite(t)) return null;
+  const d = new Date(t);
+  const a = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const b = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.max(0, Math.round((b - a) / DAY));
+}
 const s = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 export const HIRING_RE = /\bhir(?:e|es|ing)\b|_hiring\b|\bjob (?:post|opening)|\bopen roles?\b|\brecruit/i;
 const norm = (x: string | null | undefined) => String(x ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -157,8 +211,10 @@ export function computeTotals(i: {
       }
       if (HIRING_RE.test(type)) {
         hiring++;
-        const at = when ? Date.parse(when) : NaN;
-        if (Number.isFinite(at) && i.now.getTime() - at > 30 * DAY) oldHiring++;
+        // An undated event is at least as old as its observation, so "older than
+        // 30 days" may use the observed date; "younger than" may not.
+        const age = calendarDaysBetween(when, i.now);
+        if (age != null && age > 30) oldHiring++;
       }
     }
     out.signal_types = signal_types;
@@ -257,7 +313,7 @@ export async function loadWorkspaceFacts(db: FactsDb, i: { workspaceId: string; 
     readAll(db, "accounts", "id, workspace_id, name, domain, stage, industry, location, employee_count, created_at", ws),
     readAll(db, "lead_candidates", "id, workspace_id, account_id, contact_id, status, fit_score, next_action", ws),
     readAll(db, "contacts", "id, workspace_id, account_id", ws),
-    readAll(db, "signal_events", "id, workspace_id, signal_type, observed_at, occurred_at, subject_key", ws),
+    readAll(db, "signal_events", "id, workspace_id, signal_type, observed_at, occurred_at, subject_key, source_url, verification_status, lifecycle_status, normalized_value", ws),
     readAll(db, "monitoring_subjects", "id, workspace_id, enabled", ws),
   ]);
   const totals = computeTotals({ accounts, leads, contacts, signals, monitoring, now });
@@ -283,7 +339,19 @@ export async function loadWorkspaceFacts(db: FactsDb, i: { workspaceId: string; 
     }
   }
   const askedAboutNames = (i.message.match(PROPER_NAME_RE) ?? []).some((w) => !COMMON.has(w.split(/\s+/)[0]));
-  return { version: ORION_WORKSPACE_FACTS_VERSION, totals, named, facts: renderWorkspaceFacts(totals, named, askedAboutNames) };
+  // Named companies in the order the QUESTION names them, so "the second one" means the second one asked about.
+  const at = (n: NamedAccount) => { const k = i.message.toLowerCase().indexOf(n.name.toLowerCase()); return k < 0 ? Number.MAX_SAFE_INTEGER : k; };
+  named.sort((a, b) => at(a) - at(b));
+  const facts = renderWorkspaceFacts(totals, named, askedAboutNames);
+  let signal_table_ids: string[] | undefined;
+  if (signals.ok && ABOUT_SIGNALS_RE.test(i.message)) {
+    const t = renderSignalTable(signals.rows, signals.count, now);
+    facts.push(t.fact);
+    signal_table_ids = t.ids;
+  } else if (!signals.ok && ABOUT_SIGNALS_RE.test(i.message)) {
+    facts.push(workspaceFact("LISA SIGNAL TABLE: COULD NOT BE READ (retrieval failed — this is not zero signals).", "orion_workspace_facts.signal_table"));
+  }
+  return { version: ORION_WORKSPACE_FACTS_VERSION, totals, named, facts, ...(signal_table_ids ? { signal_table_ids } : {}) };
 }
 
 // ── COMPANY BRAIN DATA CHECKS ──────────────────────────────────────────────

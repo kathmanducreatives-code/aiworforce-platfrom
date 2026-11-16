@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PRODUCTION RELEASE R1.1 — ORION intelligence and chat routing. ONE FUNCTION: pilot-chat.
+# PRODUCTION RELEASE R1.1 / R1.2 — ORION intelligence and chat routing. ONE FUNCTION: pilot-chat.
 # Run in YOUR shell (Bash 4+; Supabase CLI logged in) from a CLEAN checkout of the tool commit.
 #
 #   scripts/release/deploy-r11-pilot-chat.sh --check    --confirm ohsdatpvfdjdemstoiuj --sha <APP_SHA> --tool-sha <TOOL_SHA>
@@ -22,6 +22,7 @@
 set -euo pipefail
 REF=ohsdatpvfdjdemstoiuj
 R1_SHA=3bef8fd03998c4133b9bebaf87acdd03a3dad5f9
+R11_SHA=a1633f45dfa7f20ea5c76911d8be17968a45ad87   # live pilot-chat since the R1.1 deploy; R1.2 replaces it
 MODE="${1:-}"; APP_SHA=""; TOOL_SHA=""; BACKUP=""
 usage() { echo "usage: $0 --check|--deploy --confirm $REF --sha <APP_SHA> --tool-sha <TOOL_SHA>" >&2
           echo "       $0 --rollback --confirm $REF --backup release-backups/r11-<UTC>" >&2; exit 2; }
@@ -95,7 +96,7 @@ echo "  tool HEAD = $TOOL_SHA (clean); app release = $APP_SHA (contains R1)"
 
 echo "== 2. live builds (read-only)"
 pc="$(build_of pilot-chat)"
-if [ "$pc" = "$R1_SHA" ] || [ "$pc" = "$APP_SHA" ]; then echo "  pilot-chat: $pc"; else echo "  pilot-chat: ${pc:-none} — expected R1 ($R1_SHA)"; echo "refusing: production moved; re-review first"; exit 1; fi
+if [ "$pc" = "$R1_SHA" ] || [ "$pc" = "$R11_SHA" ] || [ "$pc" = "$APP_SHA" ]; then echo "  pilot-chat: $pc"; else echo "  pilot-chat: ${pc:-none} — expected R1.1 ($R11_SHA) or R1 ($R1_SHA)"; echo "refusing: production moved; re-review first"; exit 1; fi
 kept_ok || { echo "refusing: a function outside this release is not where R1 left it"; exit 1; }
 
 echo "== 3. secrets (names only; NONE are changed by this script)"

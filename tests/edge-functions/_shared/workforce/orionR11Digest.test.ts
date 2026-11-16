@@ -53,7 +53,7 @@ Deno.test("signals carry their observed date, and a missing event date is named 
   const d = await digest(PROMPTS[10]);
   const t = allText(d);
   assertStringIncludes(t, "observed 2026-");
-  assertStringIncludes(t, "(event date not recorded)");
+  assertStringIncludes(t, "event date not recorded — the event is at least");
   assertFalse(t.includes("date not stated"));
   assertEquals(d!.items.length, 10, "ten were asked for");
   assert(d!.items.every((i) => i.source_type === "lisa_signal"), "a question about signals is answered from signals");

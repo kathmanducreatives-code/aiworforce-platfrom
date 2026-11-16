@@ -137,7 +137,7 @@ import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, de
 import { orionRoute, subQuestions, ORION_INTELLIGENCE_VERSION, type OrionRouting } from "../_shared/orionIntelligence.ts";
 import { orionDraftSystemPrompt, draftMaxTokens, withDraftNotice, ORION_DRAFT_VERSION } from "../_shared/orionDraft.ts";
 import { retrieveEvidence, type EvidenceDb as StoredEvidenceDb } from "../_shared/evidence/retrieve.ts";
-import { orionEvidenceForTurn, orionEvidenceEnabledFor, orionAnswerShapeFor, digestFacts, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
+import { orionEvidenceForTurn, orionEvidenceEnabledFor, orionAnswerShapeFor, digestFacts, presentedSubjectsFor, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
 import { composeStructuredAnswer, evidenceQuestionKind, evidenceSubjectFromMessage, renderStructuredAnswer } from "../_shared/evidence/answer.ts";
 import type { PresentedReferentSet } from "../_shared/referentPersistence.ts";
 import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
@@ -3050,17 +3050,21 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           workforceTask: converseTask,
           terraLimiter: createTerraRunLimiter(),
         });
+        const replyText = ai.ok && ai.content?.trim() ? ai.content.trim() : CONVERSE_UNAVAILABLE;
+        // R1.2: what a follow-up can point at = the companies the question named,
+        // then the [E#] subjects the reply actually cites — not the default list.
+        const pointable = evidenceDigest ? presentedSubjectsFor(evidenceDigest, replyText) : [];
         return await replyAndReturn(
-          ai.ok && ai.content?.trim() ? ai.content.trim() : CONVERSE_UNAVAILABLE,
+          replyText,
           {
             ...(ai.routeDecision ? { model_route: ai.routeDecision } : {}),
             ...(evidenceDigest ? {
               orion_evidence: { version: ORION_EVIDENCE_CONTEXT_VERSION, task: converseTask, cited_ids: evidenceDigest.cited_ids,
-                retrieval_ms: evidenceDigest.retrieval_ms ?? null, items: evidenceDigest.items },
-              // The companies ORION cited stay pointable: "why did we reject it?",
-              // "tell me more about the second one" resolve against THIS list.
-              ...(evidenceDigest.subjects.length ? {
-                [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(evidenceDigest.subjects, "orion_evidence"),
+                retrieval_ms: evidenceDigest.retrieval_ms ?? null, items: evidenceDigest.items,
+                // [S#] rows of the LISA signal table, in order, for traceability.
+                ...(evidenceDigest.workspace?.signal_table_ids ? { signal_table_ids: evidenceDigest.workspace.signal_table_ids } : {}) },
+              ...(pointable.length ? {
+                [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(pointable, "orion_evidence"),
               } : {}),
             } : {}),
             chat_brain: { route: "converse", grounded: !!workspaceContextBlock,

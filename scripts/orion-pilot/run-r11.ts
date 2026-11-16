@@ -19,7 +19,32 @@ import { PILOT_WS, targetCheck, TEST_REF } from "./run-pilot.ts";
 
 const APPROVAL = `I approve the ORION R1.1 TEST run on ${TEST_REF}`;
 const FIXTURES = JSON.parse(await Deno.readTextFile(new URL("../../tests/fixtures/orion-r1-capability-tests.json", import.meta.url)));
-type T = { n: number; prompt: string; expected_route: string };
+// --suite r12: the owner's R1.2 manual acceptance prompts (verbatim) + paraphrases.
+const R12 = JSON.parse(await Deno.readTextFile(new URL("../../tests/fixtures/orion-r12-acceptance.json", import.meta.url)));
+type T = { n: number; prompt: string; expected_route: string; id?: string };
+export function r12Tests(): T[] {
+  return [...R12.findings.map((f: { id: string; prompt: string; expected_route: string }, i: number) => ({ n: i + 1, id: f.id, prompt: f.prompt, expected_route: f.expected_route })),
+    ...R12.paraphrases.slice(0, 4).map((p: { prompt: string; expected_route: string }, i: number) => ({ n: R12.findings.length + i + 1, id: `para-${i + 1}`, prompt: p.prompt, expected_route: p.expected_route }))];
+}
+
+/** R1.2-specific checks on top of `judge`. Pure; exported for the unit test. */
+export function judgeR12(t: T, r: { metadata: Record<string, unknown> | null }): string[] {
+  const fail: string[] = [];
+  const ev = (r.metadata?.orion_evidence ?? null) as { items?: Array<{ source_type?: string }>; signal_table_ids?: string[] } | null;
+  const items = ev?.items ?? [];
+  if (t.id === "F2-apify" || t.id === "para-3" || t.id === "para-4") {
+    if (r.metadata?.orion_draft) fail.push("execution request carries a draft marker");
+  }
+  if (t.id === "F3-signals" || t.id === "F6-under30") {
+    if (!items.some((i) => i.source_type === "lisa_signal")) fail.push("no LISA signal in the evidence");
+    if (items.length && items.every((i) => i.source_type === "lead")) fail.push("evidence is ATLAS leads only");
+    if (!ev?.signal_table_ids?.length) fail.push("no row-level signal table sent");
+  }
+  if (t.id === "F5-brain-audit" || t.id === "F5-content") {
+    if (items.length) fail.push(`irrelevant evidence attached (${items.length} records)`);
+  }
+  return fail;
+}
 
 async function ask(base: string, anon: string, jwt: string, ws: string, message: string, conversation: string | null) {
   const t0 = Date.now();
@@ -51,7 +76,8 @@ export function judge(t: T, r: { http: number; answer: string; metadata: Record<
 }
 
 if (import.meta.main) {
-  const tests = FIXTURES.tests as T[];
+  const suite = Deno.args.includes("--suite") ? Deno.args[Deno.args.indexOf("--suite") + 1] : "r11";
+  const tests = suite === "r12" ? r12Tests() : FIXTURES.tests as T[];
   if (Deno.args.includes("--dry-run")) {
     for (const t of tests) console.log(`${String(t.n).padStart(2)}  → ${t.expected_route.padEnd(11)} ${t.prompt.slice(0, 90)}`);
     console.log(`\n${tests.length} turns in one conversation + 1 isolation probe. Not run (dry run).`);
@@ -85,7 +111,7 @@ if (import.meta.main) {
     const r = await ask(base!, anon, owner, PILOT_WS, t.prompt, conversation);
     conversation = r.conversation_id ?? conversation;
     if (r.http === 429 && r.error === "model_spend_ceiling_reached") { console.log(`${t.n}: STOPPED — TEST spend ceiling reached; the rest not run`); break; }
-    const f = judge(t, r);
+    const f = [...judge(t, r), ...(suite === "r12" ? judgeR12(t, r) : [])];
     failures += f.length ? 1 : 0;
     console.log(`${String(t.n).padStart(2)} ${f.length ? "FAIL" : "ok  "} ${String((r.metadata?.chat_brain as Record<string, unknown> | undefined)?.route ?? "-").padEnd(11)} ${r.ms}ms ${f.join("; ")}`);
     out.push({ n: t.n, prompt: t.prompt, expected_route: t.expected_route, ...r, failures: f });
@@ -95,7 +121,7 @@ if (import.meta.main) {
   const isolated = probe.http === 403 || probe.http === 404;
   console.log(`isolation probe: HTTP ${probe.http} ${isolated ? "ok (refused)" : "FAIL"}`);
   out.push({ probe: "outsider_on_pilot_workspace", http: probe.http, answer_chars: probe.answer.length });
-  await Deno.writeTextFile("r11-transcript.json", JSON.stringify(out, null, 2));
-  console.log(`\n${tests.length - failures}/${tests.length} turns passed the automatic checks; transcript: r11-transcript.json`);
+  await Deno.writeTextFile(`${suite}-transcript.json`, JSON.stringify(out, null, 2));
+  console.log(`\n${tests.length - failures}/${tests.length} turns passed the automatic checks; transcript: ${suite}-transcript.json`);
   Deno.exit(failures || !isolated ? 1 : 0);
 }
