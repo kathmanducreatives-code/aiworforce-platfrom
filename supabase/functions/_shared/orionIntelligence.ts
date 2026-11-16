@@ -48,7 +48,7 @@ export type DraftKind = "linkedin_post" | "linkedin_message" | "cold_email" | "f
 export interface OrionRouting {
   /** The request every later step must see (rewritten when rerouted). */
   request: RequestV1;
-  reroute: null | "compound_read" | "analytical_read" | "held_records";
+  reroute: null | "compound_read" | "analytical_read" | "held_records" | "reference_answer";
   /** Why a read was judged to need reasoning — persisted for audit. */
   reasons: string[];
   /** Set only while delegation is off: ORION writes the draft itself. */
@@ -192,14 +192,15 @@ const PAID = new Set(["source", "research", "monitor"]);
 
 const hasPriorResult = (p: RequestPart) => (p.subject.references ?? []).some((r) => r.kind === "prior_result");
 
-function asConverse(request: RequestV1, o: { dropAmbiguity?: boolean } = {}): RequestV1 {
+/**
+ * ORION answers this turn as a conversation. The model's ambiguities are kept
+ * here; whether they still block is the reference policy's decision
+ * (orionReferencePolicy.ts), made from the turn's consequence.
+ */
+export function asConverse(request: RequestV1): RequestV1 {
   const first = request.parts[0];
   return {
     ...request,
-    // R1.2 (live TEST 3): when ORION only EXPLAINS work it will not run, a
-    // question about that work's action or targets is moot — asking "which
-    // action?" instead of explaining was the defect. Kept for every other reroute.
-    ...(o.dropAmbiguity ? { ambiguity: [] } : {}),
     parts: [{ ...first, objective: "converse", requirements: [],
       subject: { ...first.subject, entity: "conversation", references: [], filters: [] },
       output: { ...first.output, shape: "answer" }, depends_on: [] }],
@@ -242,12 +243,12 @@ export function orionRoute(request: RequestV1, message: string, o: { evidenceEna
 
   // 3. A paid objective with an explicit "do not execute" is a question about it.
   if (request.parts.some((p) => PAID.has(p.objective)) && NO_EXECUTION_RE.test(message)) {
-    return { request: asConverse(request, { dropAmbiguity: true }), reroute: "held_records", reasons: ["no_execution_requested"], draft: null };
+    return { request: asConverse(request), reroute: "held_records", reasons: ["no_execution_requested"], draft: null };
   }
   // R1.2: an execution request read only as compose (no paid part) is not a
   // draft either; while delegation is off ORION explains what is not enabled.
   if (!o.delegationEnabled && request.parts.some((p) => p.objective === "compose") && isExecutionRequest(message)) {
-    return { request: asConverse(request, { dropAmbiguity: true }), reroute: "held_records", reasons: ["execution_request_not_a_draft"], draft: null };
+    return { request: asConverse(request), reroute: "held_records", reasons: ["execution_request_not_a_draft"], draft: null };
   }
   // …and so is "what is saved about X" read as research while delegation is off.
   if (!o.delegationEnabled && request.parts.every((p) => p.objective === "research") &&
@@ -276,36 +277,3 @@ export function orionRoute(request: RequestV1, message: string, o: { evidenceEna
   return { request: asConverse(request), reroute: "analytical_read", reasons, draft: null };
 }
 
-/**
- * R1.2 (live TEST 13) · WILL ORION ONLY EXPLAIN THIS EXECUTION REQUEST?
- * True exactly when `orionRoute` turns an execution request into an
- * explanation (an explicit "do not execute / do nothing / just explain", or an
- * execution request while delegation is off). pilot-chat then skips the
- * "which companies do you mean?" referent question: nothing will act on them.
- */
-export function explainsWithoutActing(request: RequestV1, message: string, o: { evidenceEnabled: boolean; delegationEnabled: boolean }): boolean {
-  const r = orionRoute(request, message, o);
-  return r.reroute === "held_records" &&
-    (r.reasons.includes("no_execution_requested") || r.reasons.includes("execution_request_not_a_draft"));
-}
-
-/**
- * R1.2 (live TEST 12) · MAY ORION ANSWER WITHOUT RESOLVING WHAT THE MESSAGE
- * POINTS BACK AT? pilot-chat asks "which company do you mean?" when a
- * back-reference does not resolve. That question is right when an answer or an
- * action depends on ONE entity, and wrong when:
- *   - ORION will only explain an execution request it will not run
- *     (`explainsWithoutActing`, live test 13), or
- *   - the message asks for an internal analysis of what the conversation
- *     already covered ("a founder-only summary of risks and decisions") —
- *     ORION answers from the prior turns, and nothing is bought or acted on.
- * A reference to a SINGLE entity ("that one", "that company", "the second
- * one") is still asked about, and so is anything paid or outbound.
- */
-export function answersWithoutResolvingTargets(request: RequestV1, message: string, o: { evidenceEnabled: boolean; delegationEnabled: boolean }): boolean {
-  if (explainsWithoutActing(request, message, o)) return true;
-  const singular = request.parts.some((p) => (p.subject.references ?? []).some((r) => r.kind === "prior_result" && r.cardinality === "one"));
-  if (singular) return false;
-  const r = orionRoute(request, message, o);
-  return !r.draft && r.reasons.includes("internal_analysis_not_a_draft");
-}

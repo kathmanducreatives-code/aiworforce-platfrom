@@ -1,6 +1,6 @@
 # ORION routing: root-cause investigation after three live TEST runs
 
-**Status:** investigation and proposal only. No routing behaviour was changed for this document.
+**Status:** investigation (this document) → implemented as proposed in §4, with the changes listed in `R1.2_STABILIZATION.md` §11.
 
 **Evidence:**
 - TEST `request_understanding_log` (`chat_brain_shadow`) for all three runs (2026-11-16 10:13 / 10:52 / 14:52 UTC);

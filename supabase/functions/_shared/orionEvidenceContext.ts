@@ -140,11 +140,19 @@ export interface OrionEvidenceDigest {
  * lead subjects — so "the second one" would have meant Newton Software. The
  * referents are now the companies the QUESTION named (in its order), then the
  * subjects of the [E#] items the REPLY actually cites ([E1], [E2]–[E4]).
+ *
+ * R1.2 redesign (stable referents): then every OTHER digest company the reply
+ * names in its text, in the order the reply names them — a brief that discusses
+ * "Hyperbound and Laminar" without an [E#] still SHOWED those two, so "these
+ * companies" can bind to them. Only companies actually shown: an evidence row
+ * the reply neither cites nor names is never pointable (no silent widening).
+ * Bounded at PRESENTED_SUBJECTS_MAX; ordinals keep the order above.
  */
+export const PRESENTED_SUBJECTS_MAX = 25;
 export function presentedSubjectsFor(d: OrionEvidenceDigest, reply: string): Array<{ name: string; domain: string | null }> {
   const out: Array<{ name: string; domain: string | null }> = [];
   const add = (name: string | null | undefined, domain: string | null) => {
-    if (name && !out.some((x) => norm(x.name) === norm(name))) out.push({ name, domain });
+    if (name && norm(name) && out.length < PRESENTED_SUBJECTS_MAX && !out.some((x) => norm(x.name) === norm(name))) out.push({ name, domain });
   };
   for (const n of d.workspace?.named ?? []) add(n.name, n.domain);
   const cited = new Set<number>();
@@ -158,6 +166,14 @@ export function presentedSubjectsFor(d: OrionEvidenceDigest, reply: string): Arr
     const it = d.items[k - 1];
     if (it) add(it.subject, d.subjects.find((x) => norm(x.name) === norm(it.subject))?.domain ?? null);
   });
+  // Named in the reply's text (whole-word match on the normalised name), in reply order.
+  const text = ` ${norm(reply)} `;
+  const candidates = [...d.subjects, ...d.items.map((it) => ({ name: it.subject, domain: null as string | null }))];
+  candidates
+    .filter((c) => norm(c.name).length >= 3 && text.includes(` ${norm(c.name)} `))
+    .map((c) => ({ c, at: text.indexOf(` ${norm(c.name)} `) }))
+    .sort((a, b) => a.at - b.at)
+    .forEach(({ c }) => add(c.name, c.domain ?? d.subjects.find((x) => norm(x.name) === norm(c.name))?.domain ?? null));
   return out;
 }
 

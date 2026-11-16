@@ -170,5 +170,28 @@
       }
     ],
     "source": "TEST request_understanding_log (chat_brain_shadow), 2026-11-16 10:55:55 UTC"
+  },
+  "live_test_2026_11_16_run3": {
+    "sha": "61d658c6",
+    "r11": "20/20",
+    "r12": "12/14",
+    "failures": [
+      {
+        "n": 4,
+        "id": "F4-followup",
+        "route": "referent_unresolved",
+        "route_reason": "referent:no_prior_results",
+        "root_cause": "the previous replies cited no [E#], so no company set was stored for 'these companies'"
+      },
+      {
+        "n": 12,
+        "id": "para-2",
+        "route": "referent_unresolved",
+        "route_reason": "referent:ambiguous_referent",
+        "root_cause": "content reference ('risks and decisions') read with cardinality 'one'; the referent gate ran before the consequence was known"
+      }
+    ],
+    "resolution": "consequence-gated reference policy (orionReferencePolicy.ts) replaced the per-prompt patches; see docs/release/2026-11-16-r1.2/ROUTING_ROOT_CAUSE.md",
+    "source": "TEST request_understanding_log (chat_brain_shadow), 2026-11-16 14:52 UTC"
   }
 }

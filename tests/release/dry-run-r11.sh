@@ -13,6 +13,9 @@ export STUB_DOWNLOAD="$scenario"; [ "$scenario" = rollback ] || [ "$scenario" = 
 export STUB_SECRETS="OPENAI_API_KEY ANTHROPIC_API_KEY MODEL_SPEND_ENFORCEMENT MODEL_SPEND_CEILING_USD MODEL_SPEND_PERIOD_DAYS AGENTORY_DELEGATION_ENABLED AGENTORY_ORION_EVIDENCE_CONTEXT"
 [ "$scenario" = nosecret ] && STUB_SECRETS="${STUB_SECRETS% AGENTORY_DELEGATION_ENABLED AGENTORY_ORION_EVIDENCE_CONTEXT}"
 before_repo="$(git status --porcelain -- supabase/functions)"
+# The cleanup below restores supabase/functions with checkout + clean, which would
+# also discard uncommitted work. So the dry run runs only on a clean tree.
+[ -z "$before_repo" ] || { echo "refusing: supabase/functions has uncommitted changes; commit or stash them first (the dry run's cleanup would discard them)"; rm -rf "$st"; exit 2; }
 run() { PATH="$ROOT/tests/release/stubs:$PATH" bash scripts/release/deploy-r11-pilot-chat.sh "$@"; }
 run "$mode" --confirm ohsdatpvfdjdemstoiuj --sha "$APP" --tool-sha "$TOOL"; rc=$?
 if [ "$scenario" = rollback ] && [ "$rc" = 0 ]; then

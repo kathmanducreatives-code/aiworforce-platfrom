@@ -1,7 +1,7 @@
 // R1.1 · THE pilot-chat WIRING — read from the deployed source, so a later edit
 // that lets the draft branch reach orchestrate, a content row, a send or a
 // provider fails here. No network.
-import { assert, assertFalse, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertFalse, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { converseSystemPrompt } from "../../../../supabase/functions/_shared/converseSurface.ts";
 import { orionDraftSystemPrompt, ORION_DRAFT_NOTICE, withDraftNotice } from "../../../../supabase/functions/_shared/orionDraft.ts";
 import { orionAnswerShapeFor, ORION_BUSINESS_ANSWER_SHAPE } from "../../../../supabase/functions/_shared/orionEvidenceContext.ts";
@@ -33,7 +33,9 @@ Deno.test("the draft branch is TEXT ONLY: no delegation, no content row, no fetc
 });
 
 Deno.test("drafting is ORION's only while delegation is off; the release flag is read, not hard-coded", () => {
-  assertStringIncludes(PILOT, "orionRoute(requestForRouting, message, { evidenceEnabled: evidenceOn, delegationEnabled: delegationEnabled() })");
+  // R1.2: ORION's routing (orionRoute) runs inside the reference policy, with the same two flags.
+  assertStringIncludes(PILOT, "evidenceEnabled: evidenceOn, delegationEnabled: delegationEnabled(),");
+  assertStringIncludes(PILOT, "turnRouting = planTurnRouting({");
   assertStringIncludes(PILOT, 'return String(read("AGENTORY_DELEGATION_ENABLED") ?? "").trim().toLowerCase() !== "false";');
 });
 
@@ -105,10 +107,20 @@ Deno.test("R1.2: a conversation is bound to its workspace — stamped on create,
   assertStringIncludes(block, '"Conversation not found or not yours" }, 404');
 });
 
-Deno.test("R1.2 (live test 13): the referent question is skipped only for explain-only execution requests", () => {
-  const at = PILOT.indexOf("const explainOnly = answersWithoutResolvingTargets(understood.request, message,");
-  assert(at > 0);
-  const gate = PILOT.indexOf("if (resolution.failures.length > 0 && !referentBelongsToContent && !explainOnly) {", at);
-  assert(gate > at && gate - at < 600, "the referent clarification must check explainOnly");
-  assert(at < PILOT.indexOf("orion = orionRoute(requestForRouting, message"), "decided before routing, where the question was asked");
+Deno.test("R1.2: ONE reference-policy step decides asking, before routing, and an ask returns before anything is routed or spent", () => {
+  const at = PILOT.indexOf("turnRouting = planTurnRouting({");
+  assert(at > 0, "pilot-chat must apply planTurnRouting");
+  const gate = PILOT.indexOf("if (turnRouting.ask) {", at);
+  const route = PILOT.indexOf("brainRoute = routeRequest(", at);
+  assert(gate > at && gate < route, "the policy's question is asked before the router runs");
+  const block = PILOT.slice(gate, PILOT.indexOf("resolvedBindings = turnRouting.resolution.bindings;", gate));
+  assertStringIncludes(block, "return json(");
+  const code = block.split("\n").filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
+  assertFalse(/delegateToOrchestrate|creditAuthorization|reserveCredits|generateText/.test(code), "nothing is spent before asking");
+  // The superseded per-prompt patches are gone, not layered.
+  assertFalse(/answersWithoutResolvingTargets|explainsWithoutActing|explainOnly|dropAmbiguity/.test(PILOT));
+  // Exactly one call to the router; ORION's routing comes from the policy.
+  assertEquals(PILOT.match(/brainRoute = routeRequest\(/g)?.length, 1);
+  assertFalse(/orionRoute\(/.test(PILOT), "pilot-chat routes ORION only through the policy");
+  assertStringIncludes(PILOT.slice(at, route), "orion = turnRouting.orion;");
 });

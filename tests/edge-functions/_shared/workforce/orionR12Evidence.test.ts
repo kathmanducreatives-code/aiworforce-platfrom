@@ -90,3 +90,28 @@ Deno.test("F4: [E2]–[E4] ranges in a reply make those subjects pointable", asy
   const names = presentedSubjectsFor(d!, "See [E2]–[E4].").map((x) => x.name);
   assertEquals(names, [...new Set([d!.items[1].subject, d!.items[2].subject, d!.items[3].subject])]);
 });
+
+// ── R1.2 redesign: STABLE REFERENTS — the companies a reply actually SHOWED ──
+// Live run 3, test 4: the reply before "these companies" discussed companies by
+// name without an [E#] citation, so nothing was stored and the follow-up failed
+// as no_prior_results. A company the reply names is shown; one it neither
+// names nor cites is not.
+Deno.test("stable referents: companies the reply NAMES (uncited) are pointable, in reply order, after cited ones", async () => {
+  const { presentedSubjectsFor } = await import("../../../../supabase/functions/_shared/orionEvidenceContext.ts");
+  const d = await digest("Which leads look strongest and why?");
+  const [a, b, c] = [d!.items[0].subject, d!.items[1].subject, d!.items[2].subject];
+  const names = presentedSubjectsFor(d!, `Two stand out: ${c} first, then ${a}. Nothing else is current.`).map((x) => x.name);
+  assertEquals(names, [c, a]);
+  assertFalse(names.includes(b), "an evidence row the reply neither cites nor names is never pointable");
+  // Cited first, then named.
+  assertEquals(presentedSubjectsFor(d!, `See [E2]. Also ${a}.`).map((x) => x.name), [b, a]);
+  // A reply that names nobody stores nothing — the follow-up then states the gap instead of guessing.
+  assertEquals(presentedSubjectsFor(d!, "I can't verify any of that from stored records.").length, 0);
+});
+Deno.test("stable referents are bounded", async () => {
+  const { presentedSubjectsFor, PRESENTED_SUBJECTS_MAX } = await import("../../../../supabase/functions/_shared/orionEvidenceContext.ts");
+  const d = await digest("Which leads look strongest and why?");
+  const many = { ...d!, subjects: Array.from({ length: 60 }, (_, k) => ({ name: `Company${k}x`, domain: null })) };
+  const reply = many.subjects.map((s) => s.name).join(", ");
+  assertEquals(presentedSubjectsFor(many, reply).length, PRESENTED_SUBJECTS_MAX);
+});
