@@ -1635,14 +1635,20 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     }, 429);
   }
 
-  // 4. Get or create conversation (conversations table is user-scoped; no workspace_id column)
+  // 4. Get or create conversation. Ownership is per USER (RLS: user_id = auth.uid()).
+  // R1.2: a conversation is also bound to the workspace it was started in
+  // (`conversations.workspace_id`, nullable, FK → workspaces), so one user who
+  // belongs to two workspaces cannot carry a conversation — and its earlier
+  // turns — from one workspace into another. Legacy conversations (NULL) keep
+  // working and are not rewritten.
   if (conversationId) {
     const { data: existing } = await admin
       .from("conversations")
-      .select("id, user_id")
+      .select("id, user_id, workspace_id")
       .eq("id", conversationId)
       .maybeSingle();
-    if (!existing || existing.user_id !== userId) {
+    if (!existing || existing.user_id !== userId ||
+        (existing.workspace_id && existing.workspace_id !== workspaceId)) {
       return json({ error: "Conversation not found or not yours" }, 404);
     }
   } else {
@@ -1650,6 +1656,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       .from("conversations")
       .insert({
         user_id: userId,
+        workspace_id: workspaceId,
         agent_slug: "pilot",
         channel: "dashboard",
         title: message.slice(0, 60),

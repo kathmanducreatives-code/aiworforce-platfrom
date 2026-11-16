@@ -94,3 +94,13 @@ Deno.test("read template: a signal with no event date shows its observed date (t
 Deno.test("test 16's misleading copy is gone: an empty conversation is not an empty workspace", () => {
   assertFalse(/don't have any leads saved/i.test(OUTREACH_WITHOUT_LEADS));
 });
+
+Deno.test("R1.2: a conversation is bound to its workspace — stamped on create, refused when reused in another workspace", () => {
+  const at = PILOT.indexOf("// 4. Get or create conversation.");
+  const block = PILOT.slice(at, PILOT.indexOf("conversationId = created.id;", at));
+  assertStringIncludes(block, '.select("id, user_id, workspace_id")');
+  assertStringIncludes(block, "existing.user_id !== userId");
+  assertStringIncludes(block, "(existing.workspace_id && existing.workspace_id !== workspaceId)");
+  assertStringIncludes(block, "workspace_id: workspaceId,");
+  assertStringIncludes(block, '"Conversation not found or not yours" }, 404');
+});
