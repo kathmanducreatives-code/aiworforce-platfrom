@@ -134,7 +134,7 @@ function actualModelUsed(): string {
   return turnCollector.getStore()?.lastModel() ?? "deterministic";
 }
 import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
-import { orionRoute, subQuestions, explainsWithoutActing, ORION_INTELLIGENCE_VERSION, type OrionRouting } from "../_shared/orionIntelligence.ts";
+import { orionRoute, subQuestions, answersWithoutResolvingTargets, ORION_INTELLIGENCE_VERSION, type OrionRouting } from "../_shared/orionIntelligence.ts";
 import { orionDraftSystemPrompt, draftMaxTokens, withDraftNotice, ORION_DRAFT_VERSION } from "../_shared/orionDraft.ts";
 import { retrieveEvidence, type EvidenceDb as StoredEvidenceDb } from "../_shared/evidence/retrieve.ts";
 import { orionEvidenceForTurn, orionEvidenceEnabledFor, orionAnswerShapeFor, digestFacts, presentedSubjectsFor, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
@@ -2418,10 +2418,11 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       const referentBelongsToContent = contentPlanForReferent?.kind === "content"
         && contentPlanForReferent.targets_existing_content;
 
-      // R1.2 (live TEST 13): an execution request ORION will only EXPLAIN needs
-      // no targets resolved — "which founders do you mean?" for work that will
-      // not run is not a useful question. Every other request still asks.
-      const explainOnly = explainsWithoutActing(understood.request, message,
+      // R1.2 (live TESTs 13 and 12): no "which ones do you mean?" when ORION will
+      // only EXPLAIN an execution request it will not run, or when the message
+      // asks for an internal analysis of what the conversation already covered.
+      // A single-entity reference, anything paid and any draft still ask.
+      const explainOnly = answersWithoutResolvingTargets(understood.request, message,
         { evidenceEnabled: orionEvidenceEnabledFor(workspaceId), delegationEnabled: delegationEnabled() });
       if (resolution.failures.length > 0 && !referentBelongsToContent && !explainOnly) {
         // ── ASK, NEVER GUESS ─────────────────────────────────────────────

@@ -150,5 +150,25 @@
       }
     ],
     "source": "TEST request_understanding_log (chat_brain_shadow), 2026-11-16 10:15:48 and 10:18:02 UTC"
+  },
+  "live_test_2026_11_16_run2": {
+    "sha": "3fb3a611e6d7a1bd905e23127f30d632f3b9977e",
+    "r11": "20/20",
+    "r12": "13/14",
+    "previously_failing_3_and_13": "pass",
+    "isolation_http": 403,
+    "rows_created": 0,
+    "model_spend_usd": 0.0631,
+    "failures": [
+      {
+        "n": 12,
+        "id": "para-2",
+        "route": "referent_unresolved",
+        "route_reason": "referent:ambiguous_referent",
+        "objective": "read",
+        "root_cause": "'risks and decisions' pointed back at the previous ORION analysis; the referent check (before routing) treated it as a company reference, found several companies on record and asked which one"
+      }
+    ],
+    "source": "TEST request_understanding_log (chat_brain_shadow), 2026-11-16 10:55:55 UTC"
   }
 }

@@ -232,9 +232,11 @@ export function orionRoute(request: RequestV1, message: string, o: { evidenceEna
     return unchanged;
   }
 
-  // An internal analysis read as `compose` (test 20) is ORION's evidence answer.
-  if (request.parts.some((p) => p.objective === "compose") && !request.parts.some((p) => PAID.has(p.objective)) &&
-      isInternalAnalysis(message)) {
+  // An internal analysis is ORION's evidence answer — read as `compose` (R1.1
+  // test 20) or, R1.2 live test 12, as a `read` pointing back at the previous
+  // analysis ("a founder-only summary of risks and decisions"). Never a paid part.
+  if (request.parts.some((p) => p.objective === "compose" || p.objective === "read" || p.objective === "converse") &&
+      !request.parts.some((p) => PAID.has(p.objective)) && isInternalAnalysis(message)) {
     return { request: asConverse(request), reroute: "analytical_read", reasons: ["internal_analysis_not_a_draft"], draft: null };
   }
 
@@ -285,4 +287,25 @@ export function explainsWithoutActing(request: RequestV1, message: string, o: { 
   const r = orionRoute(request, message, o);
   return r.reroute === "held_records" &&
     (r.reasons.includes("no_execution_requested") || r.reasons.includes("execution_request_not_a_draft"));
+}
+
+/**
+ * R1.2 (live TEST 12) · MAY ORION ANSWER WITHOUT RESOLVING WHAT THE MESSAGE
+ * POINTS BACK AT? pilot-chat asks "which company do you mean?" when a
+ * back-reference does not resolve. That question is right when an answer or an
+ * action depends on ONE entity, and wrong when:
+ *   - ORION will only explain an execution request it will not run
+ *     (`explainsWithoutActing`, live test 13), or
+ *   - the message asks for an internal analysis of what the conversation
+ *     already covered ("a founder-only summary of risks and decisions") —
+ *     ORION answers from the prior turns, and nothing is bought or acted on.
+ * A reference to a SINGLE entity ("that one", "that company", "the second
+ * one") is still asked about, and so is anything paid or outbound.
+ */
+export function answersWithoutResolvingTargets(request: RequestV1, message: string, o: { evidenceEnabled: boolean; delegationEnabled: boolean }): boolean {
+  if (explainsWithoutActing(request, message, o)) return true;
+  const singular = request.parts.some((p) => (p.subject.references ?? []).some((r) => r.kind === "prior_result" && r.cardinality === "one"));
+  if (singular) return false;
+  const r = orionRoute(request, message, o);
+  return !r.draft && r.reasons.includes("internal_analysis_not_a_draft");
 }

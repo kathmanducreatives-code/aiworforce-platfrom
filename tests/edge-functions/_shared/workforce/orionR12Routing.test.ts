@@ -146,3 +146,64 @@ Deno.test("guard: a read with a blocking ambiguity that is not an execution requ
   const { label } = await finalRoute("Show my leads", [part("read", "company", { shape: "records" })], false, ACTION_AMBIGUITY);
   assertEquals(label, "blocked");
 });
+
+// ── LIVE TEST 2026-11-16 (R1.2 run 2, 13/14): test 12 ────────────────────────
+// "Give me a founder-only summary of risks and decisions. Not a campaign, not
+// marketing copy." was read as `read` with a back-reference to the previous
+// analysis; the referent check (before routing) found several companies on
+// record and asked which one (referent:ambiguous_referent). The reference is
+// to the CONVERSATION's analysis, not to a company. A single-entity reference
+// ("that one", "that company") must still be asked about.
+import { answersWithoutResolvingTargets } from "../../../../supabase/functions/_shared/orionIntelligence.ts";
+const P2 = FX.paraphrases[1].prompt as string;
+async function understood(u: string, parts: Part[]) {
+  const fetch = (_u: string, _i: RequestInit) => Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify({
+    choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ parts, ambiguity: [], confidence: 0.9 }) } }],
+    usage: { prompt_tokens: 100, completion_tokens: 50 } })) });
+  const r = await understandRequest(u, { conversation: [] }, { fetch, readEnv: (k) => (k === "OPENAI_API_KEY" ? "test-placeholder" : undefined) });
+  if (!r.ok) throw new Error(`not understood: ${u}`);
+  return r.request;
+}
+const O = { evidenceEnabled: true, delegationEnabled: false };
+const MANY = (value: string) => [{ kind: "prior_result", value, cardinality: "all" }];
+const ONE = (value: string) => [{ kind: "prior_result", value, cardinality: "one" }];
+
+Deno.test("live test 12: an internal summary of the conversation's analysis is answered, not questioned", async () => {
+  for (const parts of [[part("read", "company", { shape: "answer", refs: MANY("risks and decisions") })],
+                       [part("read", "conversation", { shape: "answer", refs: MANY("the risks and decisions") })],
+                       [part("compose", "content", { shape: "artifact", refs: MANY("risks and decisions") })]]) {
+    assertEquals(answersWithoutResolvingTargets(await understood(P2, parts), P2, O), true, JSON.stringify(parts.map((p) => p.objective)));
+    const { label } = await finalRoute(P2, parts);
+    assertEquals(label, "converse");
+  }
+});
+
+for (const utterance of [
+  "Summarize the risks and open decisions from that analysis for me — internal only, not a post.",
+  "Turn those findings into a short internal brief for the founder. Not marketing.",
+  "Recap the decisions we discussed above as a one-page internal report.",
+]) {
+  Deno.test(`internal analysis of earlier turns is answered: "${utterance.slice(0, 50)}…"`, async () => {
+    const parts = [part("read", "conversation", { shape: "answer", refs: MANY("those findings") })];
+    assertEquals(answersWithoutResolvingTargets(await understood(utterance, parts), utterance, O), true);
+    assertEquals((await finalRoute(utterance, parts)).label, "converse");
+  });
+}
+
+Deno.test("guard: a single-entity back-reference is still asked about ('that one', 'that company')", async () => {
+  for (const [u, refs] of [["Why did we reject that one?", ONE("that one")],
+                           ["Summarize the risks for that company.", ONE("that company")],
+                           ["Tell me more about the second one.", ONE("the second one")]] as const) {
+    assertEquals(answersWithoutResolvingTargets(await understood(u, [part("read", "company", { shape: "answer", refs })]), u, O), false, u);
+  }
+});
+
+Deno.test("guard: a paid request pointing back is never exempted from resolving its targets", async () => {
+  const u = "Find 20 more companies like those and summarize them.";
+  assertEquals(answersWithoutResolvingTargets(await understood(u, [part("source", "company", { shape: "records", count: 20, refs: MANY("those") })]), u, O), false);
+});
+
+Deno.test("guard: an outbound draft pointing back is not an internal analysis", async () => {
+  const u = "Write a LinkedIn post summarizing those findings.";
+  assertEquals(answersWithoutResolvingTargets(await understood(u, [part("compose", "content", { shape: "artifact", refs: MANY("those findings") })]), u, O), false);
+});
