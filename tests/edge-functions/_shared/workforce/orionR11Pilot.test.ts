@@ -104,3 +104,11 @@ Deno.test("R1.2: a conversation is bound to its workspace — stamped on create,
   assertStringIncludes(block, "workspace_id: workspaceId,");
   assertStringIncludes(block, '"Conversation not found or not yours" }, 404');
 });
+
+Deno.test("R1.2 (live test 13): the referent question is skipped only for explain-only execution requests", () => {
+  const at = PILOT.indexOf("const explainOnly = explainsWithoutActing(understood.request, message,");
+  assert(at > 0);
+  const gate = PILOT.indexOf("if (resolution.failures.length > 0 && !referentBelongsToContent && !explainOnly) {", at);
+  assert(gate > at && gate - at < 600, "the referent clarification must check explainOnly");
+  assert(at < PILOT.indexOf("orion = orionRoute(requestForRouting, message"), "decided before routing, where the question was asked");
+});

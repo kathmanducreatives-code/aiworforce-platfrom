@@ -186,16 +186,20 @@ export function wantsDraft(request: RequestV1, message: string): boolean {
 }
 
 // ── "DO NOT EXECUTE" ────────────────────────────────────────────────────────
-const NO_EXECUTION_RE = /\b(?:do not|don't|dont|without) (?:execute|run|start|spend|launch|trigger|send|actually (?:run|do))\b|\b(?:planning only|plan only|before taking (?:any )?action|do not (?:take|perform) (?:any )?action|explain (?:first|before))\b/i;
+const NO_EXECUTION_RE = /\b(?:do nothing|don't do anything|do not do anything|just (?:explain|tell me)(?: why| what| the)?)\b|\b(?:do not|don't|dont|without) (?:execute|run|start|spend|launch|trigger|send|actually (?:run|do))\b|\b(?:planning only|plan only|before taking (?:any )?action|do not (?:take|perform) (?:any )?action|explain (?:first|before))\b/i;
 const HELD_RECORDS_RE = /\b(?:actually saved|already (?:saved|stored|have)|stored|saved|existing|in my (?:current )?workspace|from (?:our|my) (?:records|workspace))\b/i;
 const PAID = new Set(["source", "research", "monitor"]);
 
 const hasPriorResult = (p: RequestPart) => (p.subject.references ?? []).some((r) => r.kind === "prior_result");
 
-function asConverse(request: RequestV1): RequestV1 {
+function asConverse(request: RequestV1, o: { dropAmbiguity?: boolean } = {}): RequestV1 {
   const first = request.parts[0];
   return {
     ...request,
+    // R1.2 (live TEST 3): when ORION only EXPLAINS work it will not run, a
+    // question about that work's action or targets is moot — asking "which
+    // action?" instead of explaining was the defect. Kept for every other reroute.
+    ...(o.dropAmbiguity ? { ambiguity: [] } : {}),
     parts: [{ ...first, objective: "converse", requirements: [],
       subject: { ...first.subject, entity: "conversation", references: [], filters: [] },
       output: { ...first.output, shape: "answer" }, depends_on: [] }],
@@ -236,12 +240,12 @@ export function orionRoute(request: RequestV1, message: string, o: { evidenceEna
 
   // 3. A paid objective with an explicit "do not execute" is a question about it.
   if (request.parts.some((p) => PAID.has(p.objective)) && NO_EXECUTION_RE.test(message)) {
-    return { request: asConverse(request), reroute: "held_records", reasons: ["no_execution_requested"], draft: null };
+    return { request: asConverse(request, { dropAmbiguity: true }), reroute: "held_records", reasons: ["no_execution_requested"], draft: null };
   }
   // R1.2: an execution request read only as compose (no paid part) is not a
   // draft either; while delegation is off ORION explains what is not enabled.
   if (!o.delegationEnabled && request.parts.some((p) => p.objective === "compose") && isExecutionRequest(message)) {
-    return { request: asConverse(request), reroute: "held_records", reasons: ["execution_request_not_a_draft"], draft: null };
+    return { request: asConverse(request, { dropAmbiguity: true }), reroute: "held_records", reasons: ["execution_request_not_a_draft"], draft: null };
   }
   // …and so is "what is saved about X" read as research while delegation is off.
   if (!o.delegationEnabled && request.parts.every((p) => p.objective === "research") &&
@@ -268,4 +272,17 @@ export function orionRoute(request: RequestV1, message: string, o: { evidenceEna
   const reasons = readReasoningSignals(message);
   if (!reasons.length) return unchanged;
   return { request: asConverse(request), reroute: "analytical_read", reasons, draft: null };
+}
+
+/**
+ * R1.2 (live TEST 13) · WILL ORION ONLY EXPLAIN THIS EXECUTION REQUEST?
+ * True exactly when `orionRoute` turns an execution request into an
+ * explanation (an explicit "do not execute / do nothing / just explain", or an
+ * execution request while delegation is off). pilot-chat then skips the
+ * "which companies do you mean?" referent question: nothing will act on them.
+ */
+export function explainsWithoutActing(request: RequestV1, message: string, o: { evidenceEnabled: boolean; delegationEnabled: boolean }): boolean {
+  const r = orionRoute(request, message, o);
+  return r.reroute === "held_records" &&
+    (r.reasons.includes("no_execution_requested") || r.reasons.includes("execution_request_not_a_draft"));
 }

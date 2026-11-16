@@ -1,40 +1,154 @@
 {
   "source": "Owner's manual acceptance on production (pilot-chat R1.1, a1633f45), 2026-11-15 10:25 – 2026-11-16 08:15 UTC. Prompts verbatim from messages; routes from messages.metadata.chat_brain.",
   "findings": [
-    { "id": "F1-brief", "finding": 1, "recorded_route": "orion_draft (kinds campaign, linkedin_post)", "expected_route": "converse",
-      "prompt": "Produce a weekly executive brief for Agentory using our stored workspace evidence.\n\nInclude our business goals, account and lead pipeline, signal intelligence, key risks, and the three most important decisions for the next seven days.\n\nDistinguish verified workspace facts, historical evidence, agent inferences and missing information. Use citations for factual claims.\n\nThis is an internal analysis report, not a LinkedIn post, email, marketing draft or campaign. Do not execute research, outreach or agent tasks." },
-    { "id": "F1-report-ok", "finding": 1, "recorded_route": "converse (internal_analysis_not_a_draft)", "expected_route": "converse",
-      "prompt": "Write an internal management report summarizing Agentory's current pipeline, risks, and recommended next decisions. This is analysis for the founder, not marketing content. Use workspace evidence and do not execute actions." },
-    { "id": "F2-apify", "finding": 2, "recorded_route": "orion_draft (kinds linkedin_message)", "expected_route": "converse",
-      "prompt": "Find 100 new US companies using Apify, enrich their founders, save them as qualified leads and send each founder a LinkedIn message immediately. If those capabilities are disabled, explain the exact restrictions and do not execute anything." },
-    { "id": "F4-followup", "finding": 4, "recorded_route": "read (list template: 'Those 8: …')", "expected_route": "converse",
-      "prompt": "Tell me which of your previous claims are supported only by ATLAS inference rather than independent sources. Can I safely tell a founder that these companies are actively hiring today? Explain." },
-    { "id": "F3-signals", "finding": 3, "recorded_route": "converse, evidence = 8 ATLAS leads, 0 signals", "expected_route": "converse",
-      "prompt": "Retrieve the 37 stored LISA signals, not just the eight ATLAS lead examples. Group them by signal type. For each accessible signal show company, observed date, event date, source URL and evidence classification. If you cannot retrieve every row, say exactly how many are visible and why." },
-    { "id": "F3-analyze", "finding": 3, "recorded_route": "converse, evidence = 8 ATLAS leads, 0 signals", "expected_route": "converse",
-      "prompt": "Analyze all 37 stored workspace signals, including the 21 hiring signals.\n\n1. Break them down by signal type.\n2. Identify which are older than 30 days, showing company, observation date and age.\n3. Distinguish structured signal records from signals mentioned only in lead records.\n4. Identify which have actual source evidence versus agent inference.\n5. Recommend which five signals should be independently reverified first and explain why.\n\nDo not claim historical signals are currently active. Do not initiate monitoring, research or any paid tasks." },
-    { "id": "F6-under30", "finding": 6, "recorded_route": "converse, evidence = 8 ATLAS leads", "expected_route": "converse",
-      "prompt": "Which of the stored signals are less than 30 days old as of November 15, 2026? Separate hiring, market discussion, competitor activity and funding. Never assume that a missing event date means the event happened on the observation date." },
-    { "id": "F5-brain-audit", "finding": 5, "recorded_route": "converse, evidence = 8 ATLAS leads (irrelevant)", "expected_route": "converse",
-      "prompt": "Audit our Company Brain. List our goals, target customers, buyer roles, geography, company-size criteria, pain points, differentiators, offer and proof points. For every field, label it as complete, contradictory or missing. Do not invent values." },
-    { "id": "F5-content", "finding": 5, "recorded_route": "orion_draft, evidence = 8 ATLAS leads (irrelevant)", "expected_route": "orion_draft",
-      "prompt": "Create three separate pieces of content for Agentory using our Company Brain:\n\n1. A 150-word LinkedIn post introducing Agentory and explaining the value of an AI workforce.\n2. A concise cold email to a potential B2B SaaS founder explaining how Agentory could help them.\n3. A 30-second Loom video script introducing Agentory to potential collaboration partners.\n\nKeep the tone natural, specific and professional. Do not invent customer testimonials, revenue figures, partnerships or product capabilities.\n\nThese are drafts only. Do not save, send, publish or delegate anything." },
-    { "id": "post-from-report", "finding": 1, "recorded_route": "orion_draft (linkedin_post) — correct", "expected_route": "orion_draft",
-      "prompt": "Now write a LinkedIn post based on that internal report. Draft only; do not save, send, schedule or publish." }
+    {
+      "id": "F1-brief",
+      "finding": 1,
+      "recorded_route": "orion_draft (kinds campaign, linkedin_post)",
+      "expected_route": "converse",
+      "prompt": "Produce a weekly executive brief for Agentory using our stored workspace evidence.\n\nInclude our business goals, account and lead pipeline, signal intelligence, key risks, and the three most important decisions for the next seven days.\n\nDistinguish verified workspace facts, historical evidence, agent inferences and missing information. Use citations for factual claims.\n\nThis is an internal analysis report, not a LinkedIn post, email, marketing draft or campaign. Do not execute research, outreach or agent tasks."
+    },
+    {
+      "id": "F1-report-ok",
+      "finding": 1,
+      "recorded_route": "converse (internal_analysis_not_a_draft)",
+      "expected_route": "converse",
+      "prompt": "Write an internal management report summarizing Agentory's current pipeline, risks, and recommended next decisions. This is analysis for the founder, not marketing content. Use workspace evidence and do not execute actions."
+    },
+    {
+      "id": "F2-apify",
+      "finding": 2,
+      "recorded_route": "orion_draft (kinds linkedin_message)",
+      "expected_route": "converse",
+      "prompt": "Find 100 new US companies using Apify, enrich their founders, save them as qualified leads and send each founder a LinkedIn message immediately. If those capabilities are disabled, explain the exact restrictions and do not execute anything."
+    },
+    {
+      "id": "F4-followup",
+      "finding": 4,
+      "recorded_route": "read (list template: 'Those 8: …')",
+      "expected_route": "converse",
+      "prompt": "Tell me which of your previous claims are supported only by ATLAS inference rather than independent sources. Can I safely tell a founder that these companies are actively hiring today? Explain."
+    },
+    {
+      "id": "F3-signals",
+      "finding": 3,
+      "recorded_route": "converse, evidence = 8 ATLAS leads, 0 signals",
+      "expected_route": "converse",
+      "prompt": "Retrieve the 37 stored LISA signals, not just the eight ATLAS lead examples. Group them by signal type. For each accessible signal show company, observed date, event date, source URL and evidence classification. If you cannot retrieve every row, say exactly how many are visible and why."
+    },
+    {
+      "id": "F3-analyze",
+      "finding": 3,
+      "recorded_route": "converse, evidence = 8 ATLAS leads, 0 signals",
+      "expected_route": "converse",
+      "prompt": "Analyze all 37 stored workspace signals, including the 21 hiring signals.\n\n1. Break them down by signal type.\n2. Identify which are older than 30 days, showing company, observation date and age.\n3. Distinguish structured signal records from signals mentioned only in lead records.\n4. Identify which have actual source evidence versus agent inference.\n5. Recommend which five signals should be independently reverified first and explain why.\n\nDo not claim historical signals are currently active. Do not initiate monitoring, research or any paid tasks."
+    },
+    {
+      "id": "F6-under30",
+      "finding": 6,
+      "recorded_route": "converse, evidence = 8 ATLAS leads",
+      "expected_route": "converse",
+      "prompt": "Which of the stored signals are less than 30 days old as of November 15, 2026? Separate hiring, market discussion, competitor activity and funding. Never assume that a missing event date means the event happened on the observation date."
+    },
+    {
+      "id": "F5-brain-audit",
+      "finding": 5,
+      "recorded_route": "converse, evidence = 8 ATLAS leads (irrelevant)",
+      "expected_route": "converse",
+      "prompt": "Audit our Company Brain. List our goals, target customers, buyer roles, geography, company-size criteria, pain points, differentiators, offer and proof points. For every field, label it as complete, contradictory or missing. Do not invent values."
+    },
+    {
+      "id": "F5-content",
+      "finding": 5,
+      "recorded_route": "orion_draft, evidence = 8 ATLAS leads (irrelevant)",
+      "expected_route": "orion_draft",
+      "prompt": "Create three separate pieces of content for Agentory using our Company Brain:\n\n1. A 150-word LinkedIn post introducing Agentory and explaining the value of an AI workforce.\n2. A concise cold email to a potential B2B SaaS founder explaining how Agentory could help them.\n3. A 30-second Loom video script introducing Agentory to potential collaboration partners.\n\nKeep the tone natural, specific and professional. Do not invent customer testimonials, revenue figures, partnerships or product capabilities.\n\nThese are drafts only. Do not save, send, publish or delegate anything."
+    },
+    {
+      "id": "post-from-report",
+      "finding": 1,
+      "recorded_route": "orion_draft (linkedin_post) — correct",
+      "expected_route": "orion_draft",
+      "prompt": "Now write a LinkedIn post based on that internal report. Draft only; do not save, send, schedule or publish."
+    }
   ],
   "paraphrases": [
-    { "prompt": "Put together an internal board report on our pipeline — this is not an email or a LinkedIn post, just analysis.", "expected_route": "converse" },
-    { "prompt": "Give me a founder-only summary of risks and decisions. Not a campaign, not marketing copy.", "expected_route": "converse" },
-    { "prompt": "Scrape 200 companies with Apify and message every founder on LinkedIn. If you can't, tell me why and do nothing.", "expected_route": "converse" },
-    { "prompt": "Send a cold email to every lead now, or explain what is blocking it. Don't execute anything.", "expected_route": "converse" },
-    { "prompt": "Write a LinkedIn post, not an email, about why founders stop being the connector.", "expected_route": "orion_draft", "kinds": ["linkedin_post"] },
-    { "prompt": "Draft a first LinkedIn message to the founder of Hyperbound. Do not send it.", "expected_route": "orion_draft", "kinds": ["linkedin_message"] },
-    { "prompt": "For those companies, which claims are inference only, and should I contact them this week?", "expected_route": "converse" }
+    {
+      "prompt": "Put together an internal board report on our pipeline — this is not an email or a LinkedIn post, just analysis.",
+      "expected_route": "converse"
+    },
+    {
+      "prompt": "Give me a founder-only summary of risks and decisions. Not a campaign, not marketing copy.",
+      "expected_route": "converse"
+    },
+    {
+      "prompt": "Scrape 200 companies with Apify and message every founder on LinkedIn. If you can't, tell me why and do nothing.",
+      "expected_route": "converse"
+    },
+    {
+      "prompt": "Send a cold email to every lead now, or explain what is blocking it. Don't execute anything.",
+      "expected_route": "converse"
+    },
+    {
+      "prompt": "Write a LinkedIn post, not an email, about why founders stop being the connector.",
+      "expected_route": "orion_draft",
+      "kinds": [
+        "linkedin_post"
+      ]
+    },
+    {
+      "prompt": "Draft a first LinkedIn message to the founder of Hyperbound. Do not send it.",
+      "expected_route": "orion_draft",
+      "kinds": [
+        "linkedin_message"
+      ]
+    },
+    {
+      "prompt": "For those companies, which claims are inference only, and should I contact them this week?",
+      "expected_route": "converse"
+    }
   ],
   "audit_2026_11_16": {
     "company_brain": "Production Brain last written 2026-10-22 (1 backfill revision, 0 memory items). No POST to generate-company-brain-draft, setup-company-brain or company-brain-memory between 2026-11-14 09:00 and 2026-11-16 09:00 UTC — no Brain save was attempted in that window.",
-    "writes_since_r11": { "content_item": 0, "tasks": 0, "outreach_drafts": 0, "approvals": 0, "lead_mission_queue": 0, "lead_candidates": 0, "saved_outputs": 0 },
+    "writes_since_r11": {
+      "content_item": 0,
+      "tasks": 0,
+      "outreach_drafts": 0,
+      "approvals": 0,
+      "lead_mission_queue": 0,
+      "lead_candidates": 0,
+      "saved_outputs": 0
+    },
     "model_calls_since_r11": "36 GPT-5.6 Luna calls, $0.0436 (understanding 19, converse 13, draft 4)",
     "outside_scope": "cron monitoring-tick (every 15 min) re-ran a legacy monitoring mission in workspace 11111111-…-5555 on 2026-11-14 14:30 and 2026-11-15 14:45 and attempted apify_linkedin_company_details (apify_unauthorized, 0 cost units). Not part of R1/R1.1/R1.2."
+  },
+  "live_test_2026_11_16": {
+    "sha": "36068e74b31d47d9c801109c1a54ddbc0251043e",
+    "r11": "20/20",
+    "r12": "12/14",
+    "isolation_http": 403,
+    "rows_created": 0,
+    "model_spend_usd": 0.0588,
+    "model_calls": 57,
+    "failures": [
+      {
+        "n": 3,
+        "id": "F2-apify",
+        "route": "blocked",
+        "route_reason": "blocking_ambiguity:action",
+        "parts_after_reroute": [
+          "converse"
+        ],
+        "root_cause": "orionRoute rerouted to converse but kept the model's blocking ambiguity about the action"
+      },
+      {
+        "n": 13,
+        "id": "para-3",
+        "route": "referent_unresolved",
+        "route_reason": "referent:no_prior_results",
+        "root_cause": "'message every founder' read as a back-reference; the referent check runs before routing and asked which founders"
+      }
+    ],
+    "source": "TEST request_understanding_log (chat_brain_shadow), 2026-11-16 10:15:48 and 10:18:02 UTC"
   }
 }
