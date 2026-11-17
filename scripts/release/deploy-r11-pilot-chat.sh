@@ -123,8 +123,9 @@ bytes=$(wc -c < "$OUT/supabase/functions/pilot-chat/index.ts" | tr -d ' ')
 echo "  pilot-chat $bytes bytes"
 [ "$bytes" -le 4000000 ] || { echo "refusing: bundle larger than 4,000,000 bytes"; exit 1; }
 grep -Eq "\"sha\": ?\"$APP_SHA\"" "$OUT/supabase/functions/pilot-chat/index.ts" || { echo "refusing: bundle is not stamped $APP_SHA"; exit 1; }
-for marker in orion-intelligence-v1 orion-draft-v1 orion-workspace-facts-v1; do
-  grep -q "$marker" "$OUT/supabase/functions/pilot-chat/index.ts" || { echo "refusing: bundle lacks $marker (not an R1.1 build)"; exit 1; }
+# R1.1 markers, plus the R1.2 consequence-gated reference policy (orionReferencePolicy.ts).
+for marker in orion-intelligence-v1 orion-draft-v1 orion-workspace-facts-v1 orion-reference-policy-v1; do
+  grep -q "$marker" "$OUT/supabase/functions/pilot-chat/index.ts" || { echo "refusing: bundle lacks $marker (not an R1.2 build)"; exit 1; }
 done
 printf 'project_id = "%s"\n\n[functions.pilot-chat]\nverify_jwt = true\n' "$REF" > "$OUT/supabase/config.toml"
 

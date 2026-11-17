@@ -193,5 +193,26 @@
     ],
     "resolution": "consequence-gated reference policy (orionReferencePolicy.ts) replaced the per-prompt patches; see docs/release/2026-11-16-r1.2/ROUTING_ROOT_CAUSE.md",
     "source": "TEST request_understanding_log (chat_brain_shadow), 2026-11-16 14:52 UTC"
+  },
+  "live_test_2026_11_17_final": {
+    "sha": "2a0438bb089df9af32bf79cef91c8bbc8d11d5c4",
+    "test_build_header": "2a0438bb089df9af32bf79cef91c8bbc8d11d5c4@2026-11-17T15:08:56Z",
+    "r11": "20/20",
+    "r12": "14/14",
+    "isolation_http": 403,
+    "protected_tables": "unchanged",
+    "model_spend_usd": 0.059,
+    "model_calls": 58,
+    "models": [
+      "gpt-5.6-luna"
+    ],
+    "previously_inconsistent": {
+      "3 F2-apify": "source + unbound set reference + blocking ambiguity → answer (explain-only), converse",
+      "4 F4-followup": "read + blocking ambiguities (claims, companies) → answer with notes, converse",
+      "12 para-2": "content reference → answer with notes, converse (the reading that failed in runs 2 and 3)",
+      "13 para-3": "source + set bound (4 companies) + blocking action → answer (explain-only), converse"
+    },
+    "verified_from": "TEST request_understanding_log (34 rows 15:09:19–15:17:39 UTC, all with policy fields, 0 clarifications, may_spend false on all), lead_model_calls, and zero new rows in provider_usage_ledger / lead_mission_queue / tasks / outreach_drafts / approvals / content_item; 0 leftover conversations after cleanup",
+    "transcripts": "r11-transcript.json and r12-transcript.json are on the owner's machine (not readable from the cloud session); attach to PR #270 if they should be kept"
   }
 }

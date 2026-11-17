@@ -40,7 +40,7 @@ Deno.test("required flags are checked by NAME and never set; R1 functions must s
 
 Deno.test("the bundle must be stamped with the approved app SHA and be an R1.1 build", () => {
   assertStringIncludes(SCRIPT, 'grep -Eq "\\"sha\\": ?\\"$APP_SHA\\""');
-  for (const m of ["orion-intelligence-v1", "orion-draft-v1", "orion-workspace-facts-v1"]) assertStringIncludes(SCRIPT, m);
+  for (const m of ["orion-intelligence-v1", "orion-draft-v1", "orion-workspace-facts-v1", "orion-reference-policy-v1"]) assertStringIncludes(SCRIPT, m);
   assertStringIncludes(SCRIPT, 'git worktree add --detach "$BUILD_TREE" "$APP_SHA"');
 });
 
