@@ -211,6 +211,12 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
     now: NOW,
     interpret: async (query: string) => {
       const { contract } = contractFromProposal(query, s.interpretation as never);
+      // As lead-pipeline/index.ts does: open questions are a clarification, never compiled
+      // (compiling an ambiguous or empty contract throws ContractInvalidError).
+      if (contract.ambiguities.length) {
+        const questions = contract.ambiguities.map((a) => a.question);
+        return { error: "needs_clarification", clarification: { questions, message: questions.join(" ") } } as never;
+      }
       const hash = await contractHash(contract);
       return { mission: await compileContract(contract), contract, brain: { status: "absent", fields: [], applied: [], rejected: [] },
         replay: { proposal: { contract, contractHash: hash }, brain: { status: "absent", fields: [], context: null } } } as never;
