@@ -1,0 +1,286 @@
+{
+ "title": "Search LinkedIn Jobs",
+ "type": "object",
+ "schemaVersion": 1,
+ "properties": {
+  "jobTitles": {
+   "title": "Search queries",
+   "type": "array",
+   "editor": "stringList",
+   "description": "Queries to provide to LinkedIn job search. [It supports boolean operators](https://www.linkedin.com/help/linkedin/answer/a524335). We will run the scraper once for each query. All filters below will be applied to each query.",
+   "prefill": [
+    "software engineer"
+   ],
+   "uniqueItems": true
+  },
+  "locations": {
+   "title": "Locations Filter",
+   "type": "array",
+   "editor": "stringList",
+   "description": "Filter by these LinkedIn locations. Example: `San Francisco`. LinkedIn does not always understand your text queries. For example for \"UK\" query it will apply \"Ukraine\" location, so you should use \"United Kingdom\" in this case. Try this out first in the location filter input of LinkedIn search at `https://www.linkedin.com/search/results/people/?geoUrn=%5B%22103644278%22%5D`",
+   "prefill": [
+    "New York",
+    "California"
+   ],
+   "uniqueItems": true
+  },
+  "maxItems": {
+   "title": "Maximum number of jobs to scrape per each job title and location input",
+   "type": "integer",
+   "description": "Maximum number of jobs to scrape per each job title and location input.",
+   "prefill": 10
+  },
+  "company": {
+   "title": "Company Filter",
+   "type": "array",
+   "editor": "stringList",
+   "description": "Filter by these companies. Provide full URLs or company names to search in LinkedIn",
+   "maxItems": 10,
+   "prefill": [
+    "https://www.linkedin.com/company/google",
+    "https://www.linkedin.com/company/microsoft",
+    "Netflix",
+    "Oracle Corp"
+   ],
+   "uniqueItems": true
+  },
+  "workplaceType": {
+   "title": "Workplace Type",
+   "description": "Select one or more applicable workplace types.",
+   "type": "array",
+   "editor": "select",
+   "items": {
+    "type": "string",
+    "enum": [
+     "remote",
+     "hybrid",
+     "office"
+    ],
+    "enumTitles": [
+     "Remote",
+     "Hybrid",
+     "On-site"
+    ]
+   },
+   "uniqueItems": true
+  },
+  "employmentType": {
+   "title": "Employment Type",
+   "description": "Select one or more applicable employment types.",
+   "type": "array",
+   "editor": "select",
+   "items": {
+    "type": "string",
+    "enum": [
+     "full-time",
+     "part-time",
+     "contract",
+     "internship",
+     "temporary"
+    ]
+   },
+   "uniqueItems": true
+  },
+  "experienceLevel": {
+   "title": "Experience Level",
+   "description": "Select one or more applicable experience levels.",
+   "type": "array",
+   "editor": "select",
+   "items": {
+    "type": "string",
+    "enum": [
+     "internship",
+     "entry",
+     "associate",
+     "mid-senior",
+     "director",
+     "executive"
+    ]
+   },
+   "uniqueItems": true
+  },
+  "salary": {
+   "title": "Salary Filter",
+   "type": "array",
+   "editor": "select",
+   "description": "Filter by these salary ranges. Example: `100k+`",
+   "items": {
+    "type": "string",
+    "enum": [
+     "40k+",
+     "60k+",
+     "80k+",
+     "100k+",
+     "120k+",
+     "140k+",
+     "160k+",
+     "180k+",
+     "200k+"
+    ]
+   },
+   "uniqueItems": true
+  },
+  "under10Applicants": {
+   "title": "Under 10 Applicants",
+   "type": "boolean",
+   "description": "Filter jobs with under 10 applicants."
+  },
+  "easyApply": {
+   "title": "LinkedIn Easy Apply",
+   "type": "boolean",
+   "description": "Filter jobs with LinkedIn easy apply option."
+  },
+  "postedLimit": {
+   "title": "Posted Limit",
+   "type": "string",
+   "enum": [
+    "1h",
+    "24h",
+    "week",
+    "month"
+   ],
+   "description": "Filter jobs posted in the last hour, 24 hours, week or month."
+  },
+  "industryIds": {
+   "title": "Industry IDs Filter",
+   "type": "array",
+   "editor": "stringList",
+   "description": "Filter Profiles by these LinkedIn industry IDs. Example: `4` for 'Software Development'. Full list: `https://github.com/HarvestAPI/linkedin-industry-codes-v2/blob/main/linkedin_industry_code_v2_all_eng_with_header.csv`",
+   "maxItems": 20,
+   "prefill": [
+    "4",
+    "5",
+    "6"
+   ]
+  },
+  "functionIds": {
+   "title": "Function Filter",
+   "type": "array",
+   "editor": "select",
+   "description": "Filter jobs by these LinkedIn job functions. Example: `eng` for 'Engineering'. Full list: { \"acct\": \"Accounting / Auditing\", \"adm\": \"Administrative\", \"advr\": \"Advertising\", \"anls\": \"Analyst\", \"art\": \"Art / Creative\", \"bd\": \"Business Development\", \"cnsl\": \"Consulting\", \"cust\": \"Customer Service\", \"dsgn\": \"Design\", \"dist\": \"Distribution\", \"edu\": \"Education\", \"eng\": \"Engineering\", \"fin\": \"Finance\", \"genb\": \"General Business\", \"hcpr\": \"Healthcare Provider\", \"hr\": \"Human Resources\", \"it\": \"Information Technology\", \"lgl\": \"Legal\", \"mgmt\": \"Management\", \"mnfc\": \"Manufacturing\", \"mrkt\": \"Marketing\", \"othr\": \"Other\", \"prdm\": \"Product Management\", \"prod\": \"Production\", \"prjm\": \"Project Management\", \"pr\": \"Public Relations\", \"prch\": \"Purchasing\", \"qa\": \"Quality Assurance\", \"rsch\": \"Research\", \"sale\": \"Sales\", \"sci\": \"Science\", \"stra\": \"Strategy / Planning\", \"supl\": \"Supply Chain\", \"trng\": \"Training\", \"wrt\": \"Writing / Editing\" }",
+   "items": {
+    "type": "string",
+    "enum": [
+     "acct",
+     "adm",
+     "advr",
+     "anls",
+     "art",
+     "bd",
+     "cnsl",
+     "cust",
+     "dsgn",
+     "dist",
+     "edu",
+     "eng",
+     "fin",
+     "genb",
+     "hcpr",
+     "hr",
+     "it",
+     "lgl",
+     "mgmt",
+     "mnfc",
+     "mrkt",
+     "othr",
+     "prdm",
+     "prod",
+     "prjm",
+     "pr",
+     "prch",
+     "qa",
+     "rsch",
+     "sale",
+     "sci",
+     "stra",
+     "supl",
+     "trng",
+     "wrt"
+    ],
+    "enumTitles": [
+     "Accounting / Auditing",
+     "Administrative",
+     "Advertising",
+     "Analyst",
+     "Art / Creative",
+     "Business Development",
+     "Consulting",
+     "Customer Service",
+     "Design",
+     "Distribution",
+     "Education",
+     "Engineering",
+     "Finance",
+     "General Business",
+     "Healthcare Provider",
+     "Human Resources",
+     "Information Technology",
+     "Legal",
+     "Management",
+     "Manufacturing",
+     "Marketing",
+     "Other",
+     "Product Management",
+     "Production",
+     "Project Management",
+     "Public Relations",
+     "Purchasing",
+     "Quality Assurance",
+     "Research",
+     "Sales",
+     "Science",
+     "Strategy / Planning",
+     "Supply Chain",
+     "Training",
+     "Writing / Editing"
+    ]
+   },
+   "uniqueItems": true
+  },
+  "sortBy": {
+   "title": "Sort By",
+   "type": "string",
+   "enum": [
+    "date",
+    "relevance"
+   ],
+   "description": "Sort the results by date or relevance.",
+   "prefill": "date"
+  },
+  "geoIds": {
+   "title": "Geo IDs Filter",
+   "type": "array",
+   "editor": "stringList",
+   "description": "Filter Jobs by these LinkedIn geo IDs. Example: `103644278`.",
+   "maxItems": 10,
+   "sectionCaption": "Advanced",
+   "uniqueItems": true
+  },
+  "page": {
+   "title": "Start Page Number",
+   "type": "integer",
+   "description": "Page number to start scraping from, up to 40. Each page contains 25 jobs, and LinkedIn returns at most 1000 jobs per search.",
+   "maximum": 40
+  },
+  "cookie": {
+   "title": "LinkedIn Cookies",
+   "type": "string",
+   "description": "Your LinkedIn cookies. You can export them via the browser extension [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm/).",
+   "editor": "textfield",
+   "sectionCaption": "Custom session",
+   "sectionDescription": "Optionally, you can provide your LinkedIn cookie to use your session for scraping. This can help you get jobs in your region and those relevant to your account. Your account will only be used to scrape search pages; for job details we will use our resources."
+  },
+  "userAgent": {
+   "title": "User Agent",
+   "type": "string",
+   "description": "User agent to use for scraping. Copy your User Agent from https://www.whatismybrowser.com/detect/what-is-my-user-agent/ and paste it here.",
+   "editor": "textfield"
+  },
+  "proxy": {
+   "title": "Proxy",
+   "type": "string",
+   "description": "Proxy URL to use for scraping. If not provided, the actor will use its default proxy. For safe scraping, we recommend you to find and provide a clean residential proxy.",
+   "editor": "textfield"
+  }
+ }
+}

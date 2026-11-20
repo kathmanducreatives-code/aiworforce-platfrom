@@ -1,0 +1,64 @@
+{
+ "name": "r4-industry",
+ "description": "Architecture review 2026-11-20: request-type coverage (mocked model reading).",
+ "covers": [
+  "review"
+ ],
+ "query": "Find industrial distributors serving commercial customers.",
+ "requestedCount": 5,
+ "interpretation": {
+  "understanding": {
+   "roles": [],
+   "role_match": "any",
+   "places": [],
+   "industries": [
+    {
+     "span": "industrial distributors",
+     "industry": "industrial distribution",
+     "necessity": "required"
+    },
+    {
+     "span": "serving commercial customers",
+     "industry": "B2B",
+     "necessity": "required"
+    }
+   ],
+   "signals": [],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": []
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": null,
+   "count_span": null,
+   "person_roles": []
+  },
+  "company_size": null,
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [
+  {
+   "slug": "granite",
+   "name": "Granite Payroll",
+   "site": "granite.example",
+   "industry": "Software Development",
+   "employees": 120,
+   "model": "b2b_software",
+   "page": "Payroll software for growing companies and their HR teams. Granite Payroll runs payroll for 2,000 businesses."
+  },
+  {
+   "slug": "vector",
+   "name": "Vector Fabrication",
+   "site": "vector.example",
+   "industry": "Machinery Manufacturing",
+   "employees": 150,
+   "model": "b2b_service",
+   "page": "Vector Fabrication manufactures conveyor systems for manufacturers and distributors."
+  }
+ ],
+ "allowReviewOnly": true,
+ "expect": {}
+}
