@@ -1,0 +1,13 @@
+Check tests/edge-functions/_shared/p6FundingStageClaim.test.ts
+Check tests/edge-functions/_shared/p6FundingPairLive.test.ts
+Check tests/edge-functions/_shared/signalRelevanceJudge.test.ts
+TS2352 [ERROR]: Conversion of type '{ id: string; dimension: "company_stage"; kind: "hard"; value: string; source: "user"; label: string; }' to type 'MissionCriterion' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ id: string; dimension: "company_stage"; kind: "hard"; value: string; source: "user"; label: string; }' is missing the following properties from type 'MissionCriterion': user_phrase, rationale, status
+const criterion = (value: string): MissionCriterion => ({
+                                                        ^
+    at file:///Users/prasidha/Downloads/screeningpilot-main/gpt-intelligence-audit/tests/edge-functions/_shared/p6FundingStageClaim.test.ts:204:57
+
+error: Type checking failed.
+
+  info: The program failed type-checking, but it still might work correctly.
+  hint: Re-run with --no-check to skip type-checking.
