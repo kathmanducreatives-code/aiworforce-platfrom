@@ -1,0 +1,451 @@
+[
+  {
+    "function": "approve-and-continue",
+    "file": "supabase/functions/approve-and-continue/index.ts",
+    "direct_tables": [
+      "activity_feed",
+      "approvals",
+      "task_plans",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "APPROVE_AND_CONTINUE_IMPORT_ONLY"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "continue-workflow",
+    "file": "supabase/functions/continue-workflow/index.ts",
+    "direct_tables": [
+      "conversations",
+      "messages",
+      "task_plans",
+      "tasks",
+      "tool_calls",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "daily-brief",
+    "file": "supabase/functions/daily-brief/index.ts",
+    "direct_tables": [
+      "activity_feed",
+      "approvals",
+      "company_brain",
+      "conversations",
+      "messages",
+      "task_plans",
+      "tasks",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "LOVABLE_API_KEY",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "email-tracking",
+    "file": "supabase/functions/email-tracking/index.ts",
+    "direct_tables": [
+      "email_tracking",
+      "scheduled_emails"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "EMAIL_TRACKING_IMPORT_ONLY"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "enqueue-lead-mission",
+    "file": "supabase/functions/enqueue-lead-mission/index.ts",
+    "direct_tables": [
+      "lead_mission_queue"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "ENQUEUE_LEAD_MISSION_IMPORT_ONLY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "firecrawl-scrape",
+    "file": "supabase/functions/firecrawl-scrape/index.ts",
+    "direct_tables": [
+      "credit_transactions",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "FIRECRAWL_SCRAPE_IMPORT_ONLY"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "generate-company-brain-draft",
+    "file": "supabase/functions/generate-company-brain-draft/index.ts",
+    "direct_tables": [
+      "activity_feed",
+      "company_brain",
+      "company_brain_research_runs",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "ANTHROPIC_API_KEY",
+      "APIFY_API_TOKEN",
+      "FIRECRAWL_API_KEY",
+      "OPENAI_API_KEY",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "generate-content-image",
+    "file": "supabase/functions/generate-content-image/index.ts",
+    "direct_tables": [
+      "content_asset",
+      "content_item",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "google-calendar-auth",
+    "file": "supabase/functions/google-calendar-auth/index.ts",
+    "direct_tables": [],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "GOOGLE_CALENDAR_AUTH_IMPORT_ONLY"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "google-calendar-events",
+    "file": "supabase/functions/google-calendar-events/index.ts",
+    "direct_tables": [
+      "google_calendar_tokens"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "GOOGLE_CALENDAR_CLIENT_SECRET",
+      "GOOGLE_CALENDAR_ID",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "integration-readiness",
+    "file": "supabase/functions/integration-readiness/index.ts",
+    "direct_tables": [
+      "company_brain",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "job-feed",
+    "file": "supabase/functions/job-feed/index.ts",
+    "direct_tables": [],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "JOB_FEED_IMPORT_ONLY"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "mcp",
+    "file": "supabase/functions/mcp/index.ts",
+    "direct_tables": [
+      "candidate_profiles",
+      "lead_results",
+      "signal_feed"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "ops-health",
+    "file": "supabase/functions/ops-health/index.ts",
+    "direct_tables": [],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "OPS_HEALTH_IMPORT_ONLY"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "orchestrate",
+    "file": "supabase/functions/orchestrate/index.ts",
+    "direct_tables": [
+      "activity_feed",
+      "company_brain",
+      "task_plans",
+      "workspace_credit_balances",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "ORCHESTRATE_IMPORT_ONLY",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "pilot-chat",
+    "file": "supabase/functions/pilot-chat/index.ts",
+    "direct_tables": [
+      "company_brain",
+      "conversations",
+      "messages",
+      "tasks",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "APIFY_ACTOR_PEOPLE_SEARCH",
+      "APIFY_API_TOKEN",
+      "APIFY_ENABLE_PEOPLE_SEARCH",
+      "FIRECRAWL_API_KEY",
+      "PILOT_CHAT_IMPORT_ONLY",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "resume-stalled-leads",
+    "file": "supabase/functions/resume-stalled-leads/index.ts",
+    "direct_tables": [
+      "messages",
+      "tasks"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "run-agent",
+    "file": "supabase/functions/run-agent/index.ts",
+    "direct_tables": [
+      "activity_feed",
+      "agents",
+      "approvals",
+      "company_brain",
+      "company_headcount_snapshots",
+      "content_item",
+      "handoffs",
+      "lead_candidates",
+      "lead_execution_calls",
+      "messages",
+      "signals",
+      "task_plans",
+      "tasks",
+      "tool_calls",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "ANTHROPIC_API_KEY",
+      "EVIDENCE_ENRICHMENT",
+      "RUN_AGENT_IMPORT_ONLY",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "run-lead-action",
+    "file": "supabase/functions/run-lead-action/index.ts",
+    "direct_tables": [
+      "agents",
+      "lead_candidates",
+      "tasks",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "run-monitoring-scan",
+    "file": "supabase/functions/run-monitoring-scan/index.ts",
+    "direct_tables": [
+      "company_brain",
+      "lead_execution_calls",
+      "monitoring_runs",
+      "monitoring_subjects",
+      "signal_cluster_relevance",
+      "signal_events",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "run-monitoring-tick",
+    "file": "supabase/functions/run-monitoring-tick/index.ts",
+    "direct_tables": [
+      "monitoring_budgets",
+      "monitoring_subjects"
+    ],
+    "direct_rpcs": [
+      "monitoring_spend_in_period"
+    ],
+    "environment_variable_names": [
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "run-radar-scan",
+    "file": "supabase/functions/run-radar-scan/index.ts",
+    "direct_tables": [
+      "company_brain",
+      "signals",
+      "workspace_credit_balances",
+      "workspace_members"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "APIFY_API_TOKEN",
+      "FIRECRAWL_API_KEY",
+      "RADAR_PROVIDER_RPM",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "send-scheduled-emails",
+    "file": "supabase/functions/send-scheduled-emails/index.ts",
+    "direct_tables": [
+      "scheduled_emails"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "SEND_SCHEDULED_EMAILS_IMPORT_ONLY"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "setup-company-brain",
+    "file": "supabase/functions/setup-company-brain/index.ts",
+    "direct_tables": [
+      "activity_feed",
+      "company_brain",
+      "workspace_members",
+      "workspace_sources"
+    ],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "tool-availability",
+    "file": "supabase/functions/tool-availability/index.ts",
+    "direct_tables": [],
+    "direct_rpcs": [],
+    "environment_variable_names": [
+      "TOOL_AVAILABILITY_IMPORT_ONLY"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  },
+  {
+    "function": "unlock-founders",
+    "file": "supabase/functions/unlock-founders/index.ts",
+    "direct_tables": [
+      "task_plans",
+      "tasks",
+      "workspace_members"
+    ],
+    "direct_rpcs": [
+      "credits_finalize",
+      "credits_reserve"
+    ],
+    "environment_variable_names": [
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "live_workflow_verification": "UNVERIFIED",
+    "note": "Static direct references only; shared modules add further dependencies. Environment names are not evidence of configured credentials."
+  }
+]
