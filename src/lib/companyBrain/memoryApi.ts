@@ -37,9 +37,7 @@ export async function fetchMemorySnapshot(workspaceId: string): Promise<MemorySn
     from('company_brain_memory_history')
       .select('id, memory_id, proposal_id, change_kind, from_version, to_version, previous, current, actor_kind, actor_id, actor_agent, reason, created_at')
       .eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(200),
-    from('company_brain_revisions')
-      .select('id, revision, changed_sections, actor_kind, actor_id, written_at, redacted_at')
-      .eq('workspace_id', workspaceId).order('revision', { ascending: false }).limit(50),
+    fetchRevisions(workspaceId),
   ]);
   for (const r of [items, proposals, history, revisions]) {
     if (missing(r.error)) throw new MemoryUnavailableError();
@@ -51,6 +49,21 @@ export async function fetchMemorySnapshot(workspaceId: string): Promise<MemorySn
     history: (history.data ?? []) as MemoryHistoryRow[],
     revisions: (revisions.data ?? []) as RevisionRow[],
   };
+}
+
+const REVISION_COLUMNS = 'id, revision, changed_sections, actor_kind, actor_id, written_at, redacted_at';
+
+/**
+ * Profile revisions with their B2.2 provenance (source, reference, reason). Where
+ * the held B2.2 migration is not applied the columns do not exist: the same rows
+ * are read without them and show as "no source recorded" — never a guessed one.
+ */
+async function fetchRevisions(workspaceId: string) {
+  const q = (cols: string) => from('company_brain_revisions').select(cols)
+    .eq('workspace_id', workspaceId).order('revision', { ascending: false }).limit(50);
+  const withSource = await q(`${REVISION_COLUMNS}, source_kind, source_ref, reason`);
+  const noColumn = withSource.error && (withSource.error.code === '42703' || /column .* does not exist/i.test(withSource.error.message ?? ''));
+  return noColumn ? q(REVISION_COLUMNS) : withSource;
 }
 
 export interface MemoryWriteResult {

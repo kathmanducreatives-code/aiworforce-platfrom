@@ -124,6 +124,10 @@ const row = (title: string) => `[...document.querySelectorAll('.bcp-row')].find(
 const rowStatus = (title: string) => evaluate(`(${row(title)})?.querySelector('.bcp-row-flags .brain-status:last-child')?.textContent ?? null`);
 const card = (label: string) => `[...document.querySelectorAll('.bcp-sug')].find((a) => a.getAttribute('aria-label') === ${JSON.stringify(`Suggestion for ${label}`)})`;
 const profile = async () => (await sql`select profile, updated_at from public.company_brain where workspace_id = ${ws}`)[0] as { profile: Record<string, unknown>; updated_at: string };
+// B2.2: the newest revision that changed a profile key, with its recorded source.
+const lastRevision = async (w: string, key: string) => (await sql`select revision, actor_id, source_kind, source_ref, reason
+  from public.company_brain_revisions where workspace_id = ${w} and ${key} = any(changed_sections) order by revision desc limit 1`)[0] as
+  { revision: number; actor_id: string | null; source_kind: string; source_ref: string | null; reason: string | null } | undefined;
 /** The page applies a save optimistically; wait for the SERVER's row, which is what counts. */
 async function savedInDb(check: (p: Record<string, unknown>) => boolean, ms = 10000): Promise<Record<string, unknown>> {
   const end = Date.now() + ms;
@@ -208,6 +212,9 @@ Deno.test("B2.0 · an editor sees the truthful state, fills goals, accepts and e
   assert(await waitFor(`(${row("Business goals")})?.querySelector('.bcp-row-flags .brain-status:last-child')?.textContent === 'Complete'`), "goals now complete");
   const g = (await savedInDb((x) => (x.goals as Record<string, unknown>)?.outreach === "50 replies a month")).goals as Record<string, unknown>;
   assertEquals(g.gtm, "10 qualified meetings a month");
+  // B2.2: typed by the editor → founder, with the editor as the actor.
+  const goalsRev = await lastRevision(ws, "goals");
+  assertEquals([goalsRev?.source_kind, goalsRev?.actor_id, goalsRev?.source_ref], ["founder", EDITOR.id, null]);
 
   // Positioning: a suggestion from the STORED website research, with its pages. Accept.
   assert(await click(`(${row("Positioning & offer")}).querySelector('.bcp-row-head')`));
@@ -217,6 +224,11 @@ Deno.test("B2.0 · an editor sees the truthful state, fills goals, accepts and e
   assert(await click(button("Accept", `(${card("Core promise")})`)), "Accept");
   assert(await waitFor(`!(${card("Core promise")})`), "an accepted suggestion leaves");
   await savedInDb((x) => (x.positioning as Record<string, unknown>)?.promise === "Your AI sales team");
+  // B2.2: accepted verbatim → research, linked to THE stored run (the server's id, not the page's).
+  const [{ id: runId }] = await sql`select id from public.company_brain_research_runs where workspace_id = ${ws}`;
+  const promiseRev = await lastRevision(ws, "positioning");
+  assertEquals([promiseRev?.source_kind, promiseRev?.source_ref], ["research", runId]);
+  assert((promiseRev?.reason ?? "").includes("website research (16 Aug 2026)"), String(promiseRev?.reason));
 
   // Edit a suggestion before accepting it: the person's version is what is saved.
   assert(await click(button("Edit first", `(${card("Differentiators")})`)));
@@ -225,6 +237,25 @@ Deno.test("B2.0 · an editor sees the truthful state, fills goals, accepts and e
   assert(await waitFor(`!(${card("Differentiators")})`));
   const pos = (await savedInDb((x) => Array.isArray((x.positioning as Record<string, unknown>)?.differentiators) && ((x.positioning as Record<string, string[]>).differentiators.length > 0))).positioning as Record<string, unknown>;
   assertEquals(pos.differentiators, ["Human approval on every send", "Built for founders"]);
+  // B2.2: edited before accepting → the person's own words (founder), the suggestion named in the reason.
+  const editedRev = await lastRevision(ws, "positioning");
+  assertEquals([editedRev?.source_kind, editedRev?.source_ref], ["founder", null]);
+  assert((editedRev?.reason ?? "").startsWith("Edited from your website research"), String(editedRev?.reason));
+
+  // Evidence: accept the stored research's source pages verbatim → research.
+  assert(await click(`(${row("Evidence & sources")}).querySelector('.bcp-row-head')`));
+  assert(await waitFor(`!!(${card("Source pages")})`));
+  assert(await click(button("Accept", `(${card("Source pages")})`)));
+  await savedInDb((x) => Array.isArray((x.evidence as Record<string, unknown>)?.source_pages) && ((x.evidence as Record<string, string[]>).source_pages.length > 0));
+  assertEquals((await lastRevision(ws, "evidence"))?.source_kind, "research");
+  // …and the page says where it came from, with the page the research read.
+  const prov = (title: string) => `(${row(title)})?.querySelector('[data-provenance]')`;
+  assert(await waitFor(`(${prov("Evidence & sources")})?.innerText.includes('Accepted from website research by you')`), "research provenance shown");
+  assert(await waitFor(`(${prov("Evidence & sources")})?.querySelector('a')?.getAttribute('href') === 'https://northwind.example/'`), "linked to the page the research read");
+  // The open editor shows the accepted pages and has nothing to save: saving it could not clear them.
+  assert(await waitFor(`(${row("Evidence & sources")}).querySelector('.bcp-form').innerText.includes('northwind.example/pricing')`), "the editor follows the saved value");
+  assert(await waitFor(`!!(${button("Save evidence & sources")})?.disabled`), "nothing to save after accepting");
+  await shot("b22-1-research-provenance");
 
   // "Not now" saves nothing.
   assert(await click(`(${row("Competitors")}).querySelector('.bcp-row-head')`));
@@ -241,6 +272,13 @@ Deno.test("B2.0 · an editor sees the truthful state, fills goals, accepts and e
   assert(await waitFor(`!!document.querySelector('#brain-completion')`, 30000));
   assert(await waitFor(`(${row("Business goals")})?.querySelector('.bcp-row-flags .brain-status:last-child')?.textContent === 'Complete'`));
   assert(await waitFor(`document.body.innerText.includes('Your AI sales team')`), "the accepted promise shows on the page after reload");
+  // B2.2 after reload: provenance is read back from the revisions, not from page state.
+  assert(await click(`(${row("Positioning & offer")}).querySelector('.bcp-row-head')`));
+  const posProv = `(${row("Positioning & offer")})?.querySelector('[data-provenance]')`;
+  // 3 recorded changes: the Brain's first save (no actor: system), the accepted promise, the edited differentiators.
+  const posOk = await waitFor(`(${posProv})?.innerText.includes('Entered by you') && (${posProv})?.innerText.includes('Edited from your website research') && (${posProv})?.innerText.includes('3 recorded changes')`);
+  assert(posOk, `the latest positioning change: the editor's edit of a research suggestion, with history · ${JSON.stringify(await evaluate(`(${posProv})?.innerText ?? null`))}`);
+  await shot("b22-2-founder-provenance");
   await shot("4-after-reload");
 
   // ATLAS reads exactly what it read before (the ICP was not touched).
@@ -315,6 +353,28 @@ Deno.test("B2.1 · disagreeing ICP copies are shown with what each says, resolve
   }
   assertEquals(disq, []);
   await shot("7-after-resolve");
+  // B2.2: a one-click resolution is recorded as the person's decision, naming the conflict.
+  const resolvedRev = await lastRevision(ws2, "target_customer");
+  assertEquals(resolvedRev?.source_kind, "founder");
+  assert((resolvedRev?.reason ?? "").includes('Resolved a conflict') && (resolvedRev?.reason ?? "").includes('Keep as a target industry'), String(resolvedRev?.reason));
+
+  // B2.2: a FORGED claim from this page (a research suggestion that does not exist, with a run id
+  // the page made up) is recorded as what the server can prove: the person's own edit.
+  const forged = await evaluate(`(async () => {
+    const { supabase } = await import('/src/integrations/supabase/client.ts');
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data: row } = await supabase.from('company_brain').select('updated_at').eq('workspace_id', ${JSON.stringify(ws2)}).single();
+    const r = await fetch('/functions/v1/generate-company-brain-draft', { method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update', workspace_id: ${JSON.stringify(ws2)}, expected_updated_at: row.updated_at,
+        patch: { positioning: { promise: 'Number one in Europe' } },
+        provenance: { source: 'suggestion', suggestion_id: 'positioning.promise:website_research', research_run_id: '11111111-2222-4333-8444-555555555555' } }) });
+    return { status: r.status, body: await r.json() };
+  })()`) as { status: number; body: { provenance?: { kind: string; research_run_id: string | null; downgraded: boolean } } };
+  assertEquals(forged.status, 200);
+  assertEquals(forged.body.provenance, { kind: "founder", research_run_id: null, downgraded: true });
+  const forgedRev = await lastRevision(ws2, "positioning");
+  assertEquals([forgedRev?.source_kind, forgedRev?.source_ref, forgedRev?.reason], ["founder", null, null]);
 
   // A write that would CREATE a contradiction is refused by the server, from this page, with the reason.
   const stamp = (await profile2()).updated_at;

@@ -12,3 +12,6 @@ export {
 export {
   assessIcpConsistency, type IcpConflict, type IcpResolution,
 } from '../../../supabase/functions/_shared/companyBrainIcpConsistency.ts';
+export {
+  sectionProvenance, type ProvenanceClaim, type ProvenanceRevision, type RevisionSourceKind, type SectionProvenance,
+} from '../../../supabase/functions/_shared/companyBrainProvenance.ts';

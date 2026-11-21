@@ -142,7 +142,7 @@ Deno.test("B2.1: an AI analyze draft never overwrites a structured ICP or the co
 
 Deno.test("B2.1: setup-company-brain's analyze writes only the writable part of the draft", async () => {
   const src = await Deno.readTextFile(new URL("../../../supabase/functions/setup-company-brain/index.ts", import.meta.url));
-  assertStringIncludes(src, "saveProfileWith((current) => ({ ...current, ...writableAnalyzeDraft(current, draft), enriched: enrichments.length > 0 }))");
+  assertStringIncludes(src, "saveProfileWith((current) => ({ ...current, ...writableAnalyzeDraft(current, draft), enriched: enrichments.length > 0 }),");
   assertFalse(src.includes("saveProfile({ ...draft,"), "the old unguarded write is gone");
 });
 

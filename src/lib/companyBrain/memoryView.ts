@@ -165,6 +165,16 @@ const CHANGE_TEXT: Record<string, string> = {
   redacted: 'redacted',
 };
 
+// B2.2: how a profile revision came about, by its recorded source.
+const REVISION_VERB: Record<string, string> = {
+  founder: 'edited the profile',
+  research: 'accepted website research into the profile',
+  ai_inference: 'saved an AI draft to the profile',
+  memory: 'promoted approved memory into the profile',
+  system: 'updated the profile',
+  unrecorded: 'edited the profile',
+};
+
 export function buildTimeline(s: MemorySnapshot, currentUserId: string | null): TimelineEntry[] {
   const itemById = new Map(s.items.map((i) => [i.id, i]));
   const propById = new Map(s.proposals.map((p) => [p.id, p]));
@@ -192,8 +202,8 @@ export function buildTimeline(s: MemorySnapshot, currentUserId: string | null): 
     .map((r) => ({
       id: `r:${r.id}`, at: r.written_at,
       text: r.actor_kind === 'backfill' ? 'history starts here (existing profile saved)'
-        : `edited the profile: ${r.changed_sections.filter((c) => !c.startsWith('_')).map((c) => c.replace(/_/g, ' ')).join(', ')}`,
-      detail: r.redacted_at ? 'This version was redacted.' : null,
+        : `${REVISION_VERB[r.source_kind ?? 'unrecorded'] ?? 'edited the profile'}: ${r.changed_sections.filter((c) => !c.startsWith('_')).map((c) => c.replace(/_/g, ' ')).join(', ')}`,
+      detail: r.redacted_at ? 'This version was redacted.' : r.reason ?? null,
       who: who(r.actor_kind === 'backfill' ? 'system' : r.actor_kind, r.actor_id, null),
     }));
   return [...memory, ...profile].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));

@@ -10,8 +10,8 @@
 // shown, never saved, until the person presses Accept. Nothing here gates a
 // feature: readiness for leads, signals and content is decided elsewhere and is
 // unchanged.
-import { useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, ArrowUpRight, Check, ChevronDown, CircleDashed, CircleDot, Info, Pencil, Sparkles, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AlertTriangle, ArrowUpRight, BookMarked, Check, ChevronDown, CircleDashed, CircleDot, Info, Pencil, Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChipInput } from '@/components/onboarding/ChipInput';
@@ -19,11 +19,14 @@ import { cn } from '@/lib/utils';
 import {
   acceptSuggestionPatch, buildCompletionPatch, readProfilePath, SECTION_SPECS,
   type AssessmentField, type AssessmentSectionKey, type BrainAssessment, type CompletionSuggestion,
-  type CompletionValue, type IcpConflict, type SectionAssessment,
+  type CompletionValue, type IcpConflict, type ProvenanceClaim, type SectionAssessment,
 } from '@/lib/companyBrain/completion';
 import type { SectionKey as DrawerSection } from '@/lib/companyBrainSections';
+import type { ProvenanceLine } from '@/lib/companyBrain/provenanceView';
 
 type Raw = Record<string, unknown>;
+/** A save; the claim tells the server what the person did (B2.2). The server verifies it. */
+type SaveFn = (patch: Raw, provenance?: ProvenanceClaim) => Promise<boolean>;
 
 interface Props {
   assessment: BrainAssessment;
@@ -32,11 +35,13 @@ interface Props {
   suggestions: CompletionSuggestion[];
   canEdit: boolean;
   /** Queue one save. Resolves false when it did not save (the page reports why). */
-  onSave: (patch: Raw) => Promise<boolean>;
+  onSave: SaveFn;
   /** Open the existing section editor (drawer). */
   onOpenEditor: (section: DrawerSection) => void;
   /** B2.1 renders its conflict resolver per section here. */
   renderConflicts?: (section: AssessmentSectionKey) => ReactNode;
+  /** B2.2: where each section's knowledge came from (null when nothing is recorded). */
+  provenanceFor?: (section: AssessmentSectionKey) => ProvenanceLine | null;
 }
 
 const STAGE_COPY: Record<BrainAssessment['stage'], { title: string; text: string }> = {
@@ -68,7 +73,7 @@ const CONFLICT_COLUMNS: Record<string, [string, string]> = {
 const columns = (c: IcpConflict): [string, string] => CONFLICT_COLUMNS[c.id]
   ?? ['Your ICP', c.kind === 'radar_drift' ? 'Signal monitoring' : 'What lead search reads'];
 
-export function BrainCompletionPanel({ assessment, profile, suggestions, canEdit, onSave, onOpenEditor, renderConflicts }: Props) {
+export function BrainCompletionPanel({ assessment, profile, suggestions, canEdit, onSave, onOpenEditor, renderConflicts, provenanceFor }: Props) {
   // Open first: a section with a conflict (it changes what agents read), else the next thing to do.
   const [open, setOpen] = useState<AssessmentSectionKey | null>(
     assessment.sections.find((s) => s.issues.some((i) => i.kind === 'conflicting'))?.key ?? assessment.next);
@@ -85,6 +90,7 @@ export function BrainCompletionPanel({ assessment, profile, suggestions, canEdit
     suggestions: bySection(s.key),
     onDismiss: (id: string) => setDismissed((d) => new Set(d).add(id)),
     conflicts: renderConflicts?.(s.key) ?? null,
+    provenance: provenanceFor?.(s.key) ?? null,
   });
 
   return (
@@ -161,12 +167,13 @@ interface RowProps {
   onToggle: () => void;
   suggestions: CompletionSuggestion[];
   onDismiss: (id: string) => void;
-  onSave: (patch: Raw) => Promise<boolean>;
+  onSave: SaveFn;
   onOpenEditor: (section: DrawerSection) => void;
   conflicts: ReactNode;
+  provenance: ProvenanceLine | null;
 }
 
-function SectionRow({ section: s, profile, canEdit, open, onToggle, suggestions, onDismiss, onSave, onOpenEditor, conflicts }: RowProps) {
+function SectionRow({ section: s, profile, canEdit, open, onToggle, suggestions, onDismiss, onSave, onOpenEditor, conflicts, provenance }: RowProps) {
   const conflicting = s.issues.filter((i) => i.kind === 'conflicting');
   const unverified = s.issues.filter((i) => i.kind === 'unverified');
   const panelId = `bcp-${s.key}`;
@@ -192,12 +199,16 @@ function SectionRow({ section: s, profile, canEdit, open, onToggle, suggestions,
           {s.status === 'complete' && <p className="bcp-missing">Complete. Agents use it as written.</p>}
           {s.needs_review && <p className="bcp-missing">Filled in, but {conflicting.length === 1 ? 'one disagreement needs' : `${conflicting.length} disagreements need`} your decision. Until then agents may read different versions.</p>}
           {unverified.map((i) => <p key={i.message} className="bcp-issue"><Info size={13} aria-hidden />{i.message}</p>)}
+          {provenance && <ProvenanceBlock p={provenance} />}
           {conflicts}
           {suggestions.length > 0 && (
             <div className="bcp-suggestions">
               {suggestions.map((sug) => (
                 <SuggestionCard key={sug.id} sug={sug} canEdit={canEdit}
-                  onAccept={(value) => onSave(acceptSuggestionPatch(profile, sug, value))}
+                  onAccept={(value) => onSave(acceptSuggestionPatch(profile, sug, value), {
+                    source: 'suggestion', suggestion_id: sug.id,
+                    edited: value !== undefined && JSON.stringify(value) !== JSON.stringify(sug.value),
+                  })}
                   onDismiss={() => onDismiss(sug.id)} />
               ))}
             </div>
@@ -266,12 +277,19 @@ function SuggestionCard({ sug, canEdit, onAccept, onDismiss }: {
 
 /** The completion editor for sections the drawer does not cover (goals, GTM, evidence). Explicit Save. */
 function CompletionEditor({ sectionKey, profile, canEdit, onSave }: {
-  sectionKey: AssessmentSectionKey; profile: Raw; canEdit: boolean; onSave: (patch: Raw) => Promise<boolean>;
+  sectionKey: AssessmentSectionKey; profile: Raw; canEdit: boolean; onSave: SaveFn;
 }) {
   const spec = SECTION_SPECS.find((x) => x.key === sectionKey)!;
   const initial = useMemo(() => Object.fromEntries(spec.fields.map((f) => [f.path, currentValue(profile, f)])) as Record<string, CompletionValue>, [spec, profile]);
   const [values, setValues] = useState<Record<string, CompletionValue>>(initial);
   const [saving, setSaving] = useState(false);
+  // Fields the person has typed in. Every other field follows the saved profile, so a
+  // value saved elsewhere (an accepted suggestion, another tab) is shown here and is
+  // never sent back as an "edit" that would clear it.
+  const touched = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    setValues((cur) => Object.fromEntries(Object.entries(initial).map(([p, v]) => [p, touched.current.has(p) ? cur[p] : v])));
+  }, [initial]);
   const changed = Object.fromEntries(Object.entries(values).filter(([p, v]) => JSON.stringify(v) !== JSON.stringify(initial[p])));
   const dirty = Object.keys(changed).length > 0;
   if (!canEdit) {
@@ -286,18 +304,19 @@ function CompletionEditor({ sectionKey, profile, canEdit, onSave }: {
       e.preventDefault();
       if (!dirty) return;
       setSaving(true);
-      await onSave(buildCompletionPatch(profile, changed));
+      if (await onSave(buildCompletionPatch(profile, changed))) touched.current.clear();
       setSaving(false);
     }}>
       {spec.fields.map((f) => (
-        <label key={f.path} className="bcp-field">
-          <span>{f.label}</span>
-          <ValueEditor value={values[f.path]} onChange={(v) => setValues((cur) => ({ ...cur, [f.path]: v }))} label={f.label} hint={f.hint} />
-        </label>
+        <div key={f.path} className="bcp-field">
+          {/* A list editor labels itself; a text field gets its label here. */}
+          {!Array.isArray(values[f.path]) && <span>{f.label}</span>}
+          <ValueEditor value={values[f.path]} onChange={(v) => { touched.current.add(f.path); setValues((cur) => ({ ...cur, [f.path]: v })); }} label={f.label} hint={f.hint} />
+        </div>
       ))}
       <div className="bcp-actions">
         <Button size="sm" type="submit" disabled={!dirty || saving}>{saving ? 'Saving…' : `Save ${spec.title.toLowerCase()}`}</Button>
-        <Button size="sm" type="button" variant="ghost" disabled={!dirty || saving} onClick={() => setValues(initial)}>Discard changes</Button>
+        <Button size="sm" type="button" variant="ghost" disabled={!dirty || saving} onClick={() => { touched.current.clear(); setValues(initial); }}>Discard changes</Button>
       </div>
     </form>
   );
@@ -339,13 +358,13 @@ const KIND_LABEL: Record<IcpConflict['kind'], string> = {
 };
 
 export function IcpConflictList({ conflicts, canEdit, onSave }: {
-  conflicts: IcpConflict[]; canEdit: boolean; onSave: (patch: Raw) => Promise<boolean>;
+  conflicts: IcpConflict[]; canEdit: boolean; onSave: SaveFn;
 }) {
   if (!conflicts.length) return null;
   return <div className="bcp-conflicts">{conflicts.map((c) => <IcpConflictCard key={c.id} conflict={c} canEdit={canEdit} onSave={onSave} />)}</div>;
 }
 
-function IcpConflictCard({ conflict: c, canEdit, onSave }: { conflict: IcpConflict; canEdit: boolean; onSave: (patch: Raw) => Promise<boolean> }) {
+function IcpConflictCard({ conflict: c, canEdit, onSave }: { conflict: IcpConflict; canEdit: boolean; onSave: SaveFn }) {
   const [busy, setBusy] = useState<string | null>(null);
   const same = JSON.stringify(c.authoritative) === JSON.stringify(c.other);
   return (
@@ -364,12 +383,43 @@ function IcpConflictCard({ conflict: c, canEdit, onSave }: { conflict: IcpConfli
         <div className="bcp-actions">
           {c.resolutions.map((r, n) => (
             <Button key={r.id} size="sm" variant={n === 0 ? 'default' : 'outline'} disabled={busy !== null}
-              onClick={async () => { setBusy(r.id); await onSave(r.patch); setBusy(null); }}>
+              onClick={async () => { setBusy(r.id); await onSave(r.patch, { source: 'resolution', conflict_id: c.id, resolution_id: r.id }); setBusy(null); }}>
               {busy === r.id ? 'Saving…' : r.label}
             </Button>
           ))}
         </div>
       )}
     </article>
+  );
+}
+
+// B2.2 — where this section's knowledge came from: the latest recorded change
+// (who, how, when, why) and the confirmed memory that also shapes it.
+function ProvenanceBlock({ p }: { p: ProvenanceLine }) {
+  return (
+    <div className={cn('bcp-prov', `is-${p.tone}`)} data-provenance={p.tone}>
+      <div className="bcp-prov-head">
+        <span className="bcp-prov-kicker">Where this came from</span>
+        {p.history && <span className="bcp-prov-history">{p.history}</span>}
+      </div>
+      <p className="bcp-prov-line">
+        <strong>{p.headline}</strong>
+        {p.at && <> · <time dateTime={p.at}>{new Date(p.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time></>}
+      </p>
+      {p.trust && <p className="bcp-prov-trust">{p.trust}</p>}
+      {p.reason && <p className="bcp-prov-reason">“{p.reason}”</p>}
+      {p.link && (
+        <a className="bcp-prov-link" href={p.link.href} target="_blank" rel="noreferrer noopener">
+          {p.link.text}<ArrowUpRight size={12} aria-hidden />
+        </a>
+      )}
+      {p.memory.length > 0 && (
+        <ul className="bcp-prov-memory" aria-label="Company memory used here">
+          {p.memory.map((m) => (
+            <li key={m.id}><BookMarked size={12} aria-hidden /><span>{m.title}</span><span className="bcp-prov-trust"> · {m.detail}</span></li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

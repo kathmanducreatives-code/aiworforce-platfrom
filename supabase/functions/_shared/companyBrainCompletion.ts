@@ -42,6 +42,8 @@ export interface CompletionSuggestion {
     label: string;
     urls: string[];
     observed_at: string | null;
+    /** B2.2: the stored research run this came from (website research only), when the run was read with its id. */
+    run_id?: string;
     /** Why to double-check it, when there is a reason. */
     caution?: string;
   };
@@ -49,6 +51,8 @@ export interface CompletionSuggestion {
 
 /** A stored research run, as `company_brain_research_runs` holds it. */
 export interface StoredResearchRun {
+  /** The run's id (B2.2 provenance links an accepted suggestion to it). */
+  id?: string;
   source_type: string;
   status: string;
   output: unknown;
@@ -182,6 +186,7 @@ export function buildCompletionSuggestions(profile: Raw | null | undefined, rese
     const ambiguous = o.ambiguous === true || u.ambiguous === true;
     const source = {
       kind: "website_research" as const, label: `Your website research (${day(web.created_at)})`, urls, observed_at: web.created_at,
+      ...(typeof web.id === "string" && web.id ? { run_id: web.id } : {}),
       ...(ambiguous ? { caution: "The research found mixed signals on the site. Check before accepting." } : {}),
     };
     const conf = ambiguous ? "low" : "medium";

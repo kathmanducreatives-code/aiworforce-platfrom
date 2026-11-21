@@ -50,8 +50,8 @@ Deno.test("2. every section's inline-field patch uses only accepted keys", () =>
 
 Deno.test("3. the page saves through saveCompanyBrainPatch, sends the patch, chains the version", async () => {
   const src = await Deno.readTextFile(new URL("src/pages/CompanyBrainDashboard.tsx", ROOT));
-  assert(/saveCompanyBrainPatch\(\{\s*workspaceId,\s*patch,\s*expectedUpdatedAt:\s*version\.current\s*\}\)/.test(src),
-    "the queue sends the edit's patch with the version it builds on");
+  assert(/saveCompanyBrainPatch\(\{\s*workspaceId,\s*patch,\s*expectedUpdatedAt:\s*version\.current,\s*provenance\s*\}\)/.test(src),
+    "the queue sends the edit's patch with the version it builds on (and B2.2's provenance claim, verified by the server)");
   assert(/\(result as \{ updatedAt\?: string \}\)\.updatedAt;\s*version\.current = next \?\? version\.current;/.test(src), "and carries the returned version into the next save");
   // Phase 3c (held): a client Brain saves through its own call and chains its integer version.
   assert(/saveClientBrainPatch\(\{ workspaceId, scope, patch, expectedVersion: version\.current === null \? null : Number\(version\.current\) \}\)/.test(src));

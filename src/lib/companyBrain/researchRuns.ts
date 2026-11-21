@@ -9,7 +9,7 @@ export async function fetchStoredResearch(workspaceId: string): Promise<StoredRe
   try {
     const { data, error } = await supabase
       .from('company_brain_research_runs')
-      .select('source_type, status, output, created_at')
+      .select('id, source_type, status, output, created_at')
       .eq('workspace_id', workspaceId)
       .eq('status', 'completed')
       .order('created_at', { ascending: false })

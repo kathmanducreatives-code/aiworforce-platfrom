@@ -94,6 +94,8 @@ done
 # Depends on 20261024120000_company_brain_authorized_writer (in migrations/).
 held_memory=(
   20261110120000_company_brain_memory.sql
+  # Company Brain V2 · B2.2: provenance on every profile revision (needs the table above).
+  20261122120000_company_brain_provenance.sql
 )
 for f in "${held_memory[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi

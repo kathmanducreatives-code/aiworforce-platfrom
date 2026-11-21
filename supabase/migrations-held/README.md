@@ -359,3 +359,14 @@ role). Applied together with `20261113120000` by
 `scripts/test-project/install-workforce-v2-security.sh`. Proven by
 `leadModelCallsView.contract.test.ts` and its mutation proof. Rollback:
 `rollback/20261114120000_lead_model_calls_view_lockdown.down.sql`.
+
+## `20261122120000_company_brain_provenance.sql`
+
+Company Brain V2 · B2.2: provenance on every profile revision.
+- **New columns** on `company_brain_revisions`: `source_kind`, `source_ref` and `reason`.
+- **Updated trigger:** the revision trigger reads three transaction-local settings.
+- **New wrapper:** `company_brain_provenanced_write`, for the service role only. It validates the claim against the database (the research run is completed and belongs to the same workspace; the memory item is confirmed and active), then calls `company_brain_authorized_write` unchanged.
+
+**Depends on** `20261110120000_company_brain_memory.sql`. It is additive. **Not approved for any hosted project.** Handlers fall back to `company_brain_authorized_write` where it is absent, and those revisions read as "unrecorded".
+
+Rollback: `rollback/20261122120000_company_brain_provenance.down.sql`. It restores the V1 trigger and drops the wrapper and the three columns. It was checked on a disposable database: apply, roll back, re-apply, re-apply again.

@@ -328,6 +328,22 @@ a.brain-site:hover { color: rgb(var(--ag-text)); }
 .bcp-row-body { display: flex; flex-direction: column; gap: 12px; padding: 2px 14px 16px 46px; }
 .bcp-missing { font-size: 12px; color: rgb(var(--ag-text-muted)); }
 .bcp-suggestions { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+/* B2.2 — provenance */
+.bcp-prov { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--ag-line-strong); background: var(--ag-fill); font-size: 12px; }
+.bcp-prov.is-trusted { border-left: 3px solid rgb(var(--ag-emerald) / .7); }
+.bcp-prov.is-review { border-left: 3px solid rgb(251 191 36 / .8); }
+.bcp-prov.is-muted { border-left: 3px solid rgb(var(--ag-text-muted) / .5); }
+.bcp-prov-head { display: flex; justify-content: space-between; gap: 8px; }
+.bcp-prov-kicker { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: rgb(var(--ag-text-muted)); }
+.bcp-prov-history { color: rgb(var(--ag-text-muted)); }
+.bcp-prov-line { color: rgb(var(--ag-text)); }
+.bcp-prov-line strong { font-weight: 500; }
+.bcp-prov-trust { color: rgb(var(--ag-text-muted)); }
+.bcp-prov.is-review .bcp-prov-trust { color: rgb(251 191 36); }
+.bcp-prov-reason { color: rgb(var(--ag-text-muted)); font-style: italic; }
+.bcp-prov-link { display: inline-flex; align-items: center; gap: 3px; width: fit-content; color: rgb(var(--ag-emerald)); text-decoration: underline; text-underline-offset: 2px; }
+.bcp-prov-memory { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
+.bcp-prov-memory li { display: flex; align-items: center; gap: 6px; color: rgb(var(--ag-text)); }
 .bcp-sug { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px dashed rgb(var(--ag-emerald) / .35); background: rgb(var(--ag-emerald) / .04); }
 .bcp-sug-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .bcp-sug-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: rgb(var(--ag-emerald)); }

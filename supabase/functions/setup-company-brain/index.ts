@@ -3,7 +3,7 @@
 // All AI/tool calls are server-side. Workspace membership enforced.
 
 import { canBrain, normalizeWorkspaceRole } from "../_shared/brainRole.ts";
-import { authorizedBrainWrite, brainWriteRefusal, sessionIdFromBearer, type BrainWriteOutcome } from "../_shared/brainWriter.ts";
+import { authorizedBrainWrite, brainWriteRefusal, sessionIdFromBearer, type BrainProvenance, type BrainWriteOutcome } from "../_shared/brainWriter.ts";
 import { clientBrainRefusal, resolveBrainScope } from "../_shared/clientBrain.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
@@ -150,10 +150,13 @@ Deno.serve(withBuildStamp(async (req) => {
   // only lands on the version it read; on a race it re-reads and re-applies the
   // patch (a small top-level merge), and gives up loudly after a few tries.
   // `activate` marks the Brain activated in the same authorized write (finalize).
-  async function saveProfile(patch: AnyObj, opts: { activate?: boolean } = {}) {
+  // B2.2: every setup step is the person's own input (founder), except analyze,
+  // whose draft comes from a model (ai_inference).
+  type SaveOpts = { activate?: boolean; provenance?: BrainProvenance };
+  async function saveProfile(patch: AnyObj, opts: SaveOpts = {}) {
     return saveProfileWith((current) => ({ ...current, ...patch }), opts);
   }
-  async function saveProfileWith(merge: (current: AnyObj) => AnyObj, opts: { activate?: boolean } = {}) {
+  async function saveProfileWith(merge: (current: AnyObj) => AnyObj, opts: SaveOpts = {}) {
     for (let attempt = 0; attempt < 4; attempt++) {
       const { data: row } = await admin
         .from("company_brain").select("profile, updated_at").eq("workspace_id", workspace_id).maybeSingle();
@@ -165,6 +168,7 @@ Deno.serve(withBuildStamp(async (req) => {
         mode: row ? "cas" : "insert", profile: merged,
         expectedUpdatedAt: row ? (row as { updated_at: string }).updated_at : null,
         activate: opts.activate === true,
+        provenance: opts.provenance ?? { kind: "founder", reason: action === "finalize" ? "Confirmed during onboarding." : null },
       });
       if (written.outcome === "ok") return merged;
       if (written.outcome !== "stale") throw new BrainWriteRefused(written.outcome);
@@ -280,7 +284,8 @@ Deno.serve(withBuildStamp(async (req) => {
 
       const draft = (ai.ok && ai.json ? ai.json : {}) as AnyObj;
       // B2.1: never let the model's ICP or competitor opinions overwrite a structured Brain.
-      const merged = await saveProfileWith((current) => ({ ...current, ...writableAnalyzeDraft(current, draft), enriched: enrichments.length > 0 }));
+      const merged = await saveProfileWith((current) => ({ ...current, ...writableAnalyzeDraft(current, draft), enriched: enrichments.length > 0 }),
+        { provenance: { kind: "ai_inference", reason: "Drafted by AI from your website and the sources you added. Not yet reviewed." } });
       return json({ ok: true, draft, profile: merged, warnings, phases, enriched: enrichments.length > 0, connectors: { scrape_url: scrapeReady } });
     }
 

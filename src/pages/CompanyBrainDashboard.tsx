@@ -29,7 +29,11 @@ import { BrainMemoryPanel } from '@/components/company-brain/memory/BrainMemoryP
 import { companyBrainWritesBlocked, COMPANY_BRAIN_UNAVAILABLE_MESSAGE, COMPANY_BRAIN_UNAVAILABLE_TITLE } from '@/lib/env/companyBrainAvailability';
 import { BrainCompletionPanel, IcpConflictList } from '@/components/company-brain/completion/BrainCompletionPanel';
 import { fetchStoredResearch } from '@/lib/companyBrain/researchRuns';
-import { assessCompanyBrain, assessIcpConsistency, buildCompletionSuggestions, type StoredResearchRun } from '@/lib/companyBrain/completion';
+import { assessCompanyBrain, assessIcpConsistency, buildCompletionSuggestions, type AssessmentSectionKey, type ProvenanceClaim, type StoredResearchRun } from '@/lib/companyBrain/completion';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import { fetchMemorySnapshot } from '@/lib/companyBrain/memoryApi';
+import { describeSectionProvenance } from '@/lib/companyBrain/provenanceView';
 
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
@@ -119,6 +123,20 @@ export default function CompanyBrainDashboard() {
   const icpConflicts = useMemo(() => (scope.kind === 'agency' ? assessIcpConsistency(view.raw).conflicts : []), [scope.kind, view.raw]);
   const assessment = useMemo(() => (scope.kind === 'agency' ? assessCompanyBrain(view.raw, { conflicts: icpConflicts }) : null), [scope.kind, view.raw, icpConflicts]);
   const suggestions = useMemo(() => (scope.kind === 'agency' ? buildCompletionSuggestions(view.raw, research) : []), [scope.kind, view.raw, research]);
+  // B2.2: "where this came from" per section — the recorded revisions (with their
+  // source) and confirmed memory, from the same snapshot the memory panel reads.
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const memoryQ = useQuery({
+    queryKey: ['brain-memory', workspaceId],
+    queryFn: () => fetchMemorySnapshot(workspaceId as string),
+    enabled: scope.kind === 'agency' && !!workspaceId,
+    staleTime: 15_000,
+    retry: false,
+  });
+  const provenanceFor = useCallback((section: AssessmentSectionKey) => (memoryQ.data
+    ? describeSectionProvenance({ section, revisions: memoryQ.data.revisions, runs: research, memory: memoryQ.data.items, currentUserId: user?.id ?? null })
+    : null), [memoryQ.data, research, user?.id]);
 
   // Seller-identity state for the diagnostic banner (nested vs hidden legacy flat).
   const identityState = useMemo(() => deriveSellerIdentityState(data?.profile), [data?.profile]);
@@ -145,7 +163,7 @@ export default function CompanyBrainDashboard() {
    * copy for display only. Queued saves chain the version each save returns, so
    * this page's own consecutive edits never conflict with each other.
    */
-  const writePatch = useCallback((patch: BrainProfile): Promise<boolean> => {
+  const writePatch = useCallback((patch: BrainProfile, provenance?: ProvenanceClaim): Promise<boolean> => {
     if (!workspaceId) { toast.error('No workspace'); return Promise.resolve(false); }
     const merged = mergeProfilePatch(latestRaw.current, patch);
     latestRaw.current = merged;
@@ -165,7 +183,7 @@ export default function CompanyBrainDashboard() {
       const savedFor = enqueuedFor;
       const result = scope.kind === 'client'
         ? await saveClientBrainPatch({ workspaceId, scope, patch, expectedVersion: version.current === null ? null : Number(version.current) })
-        : await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: version.current });
+        : await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: version.current, provenance });
       // The user switched Brain while this was saving: its answer is not this Brain's.
       if (currentScopeKey.current !== savedFor) return result.ok;
       if (!result.ok && 'denied' in result && result.denied) {
@@ -196,15 +214,17 @@ export default function CompanyBrainDashboard() {
           setOptimistic(null);
         }
         refresh();
+        // B2.2: the new revision (and its source) is now on record.
+        void queryClient.invalidateQueries({ queryKey: ['brain-memory', workspaceId] });
       }
     });
     queue.current = run;
     return run;
-  }, [workspaceId, refresh, scope, accessChanged]);
+  }, [workspaceId, refresh, scope, accessChanged, queryClient]);
 
   // A completion save (typed or an accepted suggestion): the same queue and backend `update`.
-  const saveCompletion = useCallback(async (patch: BrainProfile) => {
-    const ok = await writePatch(patch);
+  const saveCompletion = useCallback(async (patch: BrainProfile, provenance?: ProvenanceClaim) => {
+    const ok = await writePatch(patch, provenance);
     if (ok) toast.success('Saved to your Company Brain');
     return ok;
   }, [writePatch]);
@@ -302,6 +322,7 @@ export default function CompanyBrainDashboard() {
             <BrainCompletionPanel assessment={assessment} profile={view.raw} suggestions={suggestions}
               canEdit={canEditBrain && !brainWritesBlocked} onSave={saveCompletion}
               onOpenEditor={(section) => setOpenSection(section)}
+              provenanceFor={provenanceFor}
               renderConflicts={(section) => (
                 <IcpConflictList conflicts={icpConflicts.filter((c) => c.section === section)}
                   canEdit={canEditBrain && !brainWritesBlocked} onSave={saveCompletion} />

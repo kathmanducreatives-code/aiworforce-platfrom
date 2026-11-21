@@ -32,6 +32,8 @@ export async function saveCompanyBrainPatch(input: {
   patch: BrainProfile;
   /** `company_brain.updated_at` of the copy being edited. */
   expectedUpdatedAt: string | null;
+  /** B2.2: what the person did (accepted a suggestion, chose a resolution). A claim the server verifies. */
+  provenance?: Record<string, unknown>;
 }): Promise<BrainSaveResult> {
   // Never send a write the database is built to refuse.
   if (companyBrainWritesBlocked(import.meta.env)) {
@@ -51,6 +53,7 @@ export async function saveCompanyBrainPatch(input: {
       workspace_id: input.workspaceId,
       patch: input.patch,
       expected_updated_at: input.expectedUpdatedAt,
+      ...(input.provenance ? { provenance: input.provenance } : {}),
     },
   });
   // supabase-js reports a non-2xx as `error` and keeps the body on `error.context`.
