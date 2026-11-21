@@ -82,6 +82,8 @@ export interface RunLedger extends UsageLedger {
   recordRun(key: string, run: RecordedRun): Promise<void>;
   /** The run recorded on an in-flight reservation; null when none was recorded. */
   recordedRun(key: string): Promise<RecordedRun | null>;
+  /** A SETTLED row's figure, re-read from a later receipt (provider_reported → settled). */
+  resettle(key: string, actual: number, result: unknown): Promise<void>;
 }
 
 const r6 = (n: number | null) => (n === null ? null : Math.round(n * 1e6) / 1e6);
@@ -251,8 +253,21 @@ export function asyncLedgeredInvoker(transport: ApifyTransport, ledger: RunLedge
 
     const r = await ledger.reserve({ workspaceId: scope.workspaceId, missionId: scope.missionId, provider: "apify", key, credits: units, providerCap: usdToUnits(scope.maxUsd), missionCap: Infinity });
     if (r.ok && r.replay) {
-      const stored = (r.result ?? {}) as { items?: unknown[]; runId?: string | null; charge?: { state: ChargeState; usd: number } };
-      charges.push({ actorKey, key, runId: stored.runId ?? null, state: stored.charge?.state ?? "provider_reported", usd: 0, reservedUsd: 0, build: build.build, status: "REPLAYED" });
+      const stored = (r.result ?? {}) as { items?: unknown[]; runId?: string | null; charge?: { state: ChargeState; usd: number } } & Record<string, unknown>;
+      let state: ChargeState = stored.charge?.state ?? "provider_reported";
+      // A figure not yet confirmed final is read again (a free GET): V2's rule — a read at least
+      // APIFY_SETTLE_MS after the run finished that repeats the stored figure settles it; a
+      // different figure replaces it (still provider_reported). It is never charged again.
+      if ((state === "provider_reported" || state === "unknown") && stored.runId) {
+        const again = await transport.run(stored.runId, 0);
+        const usd2 = r6(receiptUsd(apifyReceiptFromRun(again)));
+        if (usd2 !== null) {
+          const prev = state === "provider_reported" ? stored.charge?.usd ?? null : null;
+          state = prev !== null && Math.abs(prev - usd2) < 1e-9 && apifyRunSettled(again, now()) ? "settled" : "provider_reported";
+          await ledger.resettle(key, Math.min(units, usdToUnits(usd2)), { ...stored, charge: { state, usd: usd2 } }).catch(() => undefined);
+        }
+      }
+      charges.push({ actorKey, key, runId: stored.runId ?? null, state, usd: 0, reservedUsd: 0, build: build.build, status: "REPLAYED" });
       return { items: stored.items ?? [], runId: stored.runId ?? null, chargedUsd: 0 };
     }
     if (!r.ok && r.reason === "in_flight") {
@@ -324,6 +339,11 @@ export function memoryRunLedger(base: UsageLedger & { entries: Map<string, { key
   return Object.assign(base, {
     recordRun(key: string, run: RecordedRun) { const e = find(key); if (!e) return Promise.reject(new Error("no in-flight reservation")); e.result = { run }; return Promise.resolve(); },
     recordedRun(key: string) { const e = find(key); return Promise.resolve(((e?.result as { run?: RecordedRun } | undefined)?.run) ?? null); },
+    resettle(key: string, actual: number, result: unknown) {
+      const e = [...base.entries.values()].find((x) => x.key === key && x.state === "settled") as { actual?: number | null; result?: unknown } | undefined;
+      if (e) { e.actual = actual; e.result = result; }
+      return Promise.resolve();
+    },
   });
 }
 
@@ -350,6 +370,12 @@ export function supabaseRunLedger(
       const { data, error } = await admin.from("provider_usage_ledger").select("result").eq("workspace_id", workspaceId).eq("idempotency_key", key).eq("state", "reserved").maybeSingle();
       if (error) throw new Error(`run not read: ${error.message}`);
       return ((data?.result as { run?: RecordedRun } | null)?.run) ?? null;
+    },
+    async resettle(key: string, actual: number, result: unknown) {
+      // Only a SETTLED row; its figure moves to the provider's later, confirmed receipt.
+      const { error } = await admin.from("provider_usage_ledger").update({ credits_actual: actual, result, updated_at: new Date().toISOString() })
+        .eq("workspace_id", workspaceId).eq("idempotency_key", key).eq("state", "settled");
+      if (error) throw new Error(`receipt not re-settled: ${error.message}`);
     },
   });
 }

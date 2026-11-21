@@ -208,3 +208,30 @@ Deno.test("1,000 randomized interruptions: never two purchases for one step, nev
   }
   assert(pending > 0 && adopted > 0 && unknown > 0, `the trials exercised pending (${pending}), adoption (${adopted}) and unknown starts (${unknown})`);
 });
+
+Deno.test("a provider_reported figure is confirmed on the next request (a free re-read), never charged again", async () => {
+  // late charges: the first request's two reads disagree ($0.001 then $0.011) → provider_reported
+  const { api, base, make } = rig({ plan: () => ({ durationS: 20, items: items(6), lateS: 5, lateUsd: 0.001 }) });
+  const first = make();
+  await first(JOBS, jobInput, { maxItems: 10, idempotencyKey: "kr" });
+  assertEquals(first.charges[0].state, "provider_reported");
+  api.advance(60_000);
+  const second = make();
+  const again = await second(JOBS, jobInput, { maxItems: 10, idempotencyKey: "kr" });
+  assertEquals([again.chargedUsd, second.charges[0].state, api.purchases()], [0, "settled", 1]);
+  const e = [...base.entries.values()][0] as { actual: number; result: { charge: { state: string; usd: number } } };
+  assertEquals([e.actual, e.result.charge.state, e.result.charge.usd], [usdToUnits(0.011), "settled", 0.011]);
+});
+
+Deno.test("an UNKNOWN receipt is read again on the next request and becomes provider_reported when readable", async () => {
+  const { base, make, api } = rig({ plan: () => ({ durationS: 10, items: items(2), receiptUnreadable: true }) });
+  const first = make();
+  await first(JOBS, jobInput, { maxItems: 10, idempotencyKey: "kq" });
+  assertEquals(first.charges[0].state, "unknown");
+  api.runs.get("run1")!.plan.receiptUnreadable = false; api.advance(30_000);
+  const second = make();
+  await second(JOBS, jobInput, { maxItems: 10, idempotencyKey: "kq" });
+  assertEquals(second.charges[0].state, "provider_reported", "one read is not yet confirmation");
+  const e = [...base.entries.values()][0] as { actual: number };
+  assertEquals(e.actual, usdToUnits(0.005), "the ledger moves from the worst case to Apify's figure");
+});

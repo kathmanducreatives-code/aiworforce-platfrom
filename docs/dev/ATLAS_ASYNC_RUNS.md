@@ -32,7 +32,7 @@ The outcome's `spend.basis` is `provider_reported` only when every paid run was 
 
 | Situation | Result |
 |---|---|
-| Request repeated after success | The settled key replays its stored items at $0 |
+| Request repeated after success | The settled key replays its stored items at $0. A figure not yet confirmed (`provider_reported` / `unknown`) is re-read for free and moves to `settled` when a later read repeats it |
 | Request repeated while running | The in-flight key's recorded run is adopted, never started again |
 | Adopting with a different input or build | Refused |
 | Start answered 4xx (bad input, missing build) | Definite: reservation released, $0 |
@@ -72,6 +72,6 @@ The plan hash includes `actorId@build` for every Apify step. A new reviewed buil
 
 | Suite | What it covers |
 |---|---|
-| `apifyRuns.test.ts` (17) | Recorded receipts from this account's TEST runs ($0.00405 record; empty company search billed $0.001), adoption, lost start, 4xx and 5xx starts, missing build, unknown input field, unreadable receipt and status, late charges, FAILED, concurrency, abort, spend basis, and **1,000 randomized interruptions: never two purchases, never above the worst case** |
+| `apifyRuns.test.ts` (19) | Recorded receipts from this account's TEST runs ($0.00405 record; empty company search billed $0.001), adoption, lost start, 4xx and 5xx starts, missing build, unknown input field, unreadable receipt and status, late charges, FAILED, concurrency, abort, spend basis, and **1,000 randomized interruptions: never two purchases, never above the worst case** |
 | Simulator (`async-*` fixtures, 6) | The whole service on the fake Apify API: same verdicts as run-sync; `202 → 202 → 200` adoption with one purchase per step; lost start re-sent with one purchase; unreadable receipt reported as estimate; failed record run |
 | `strategyDiscovery.test.ts` | The Workbench panel re-sends the same approval while `running`, bounded |
