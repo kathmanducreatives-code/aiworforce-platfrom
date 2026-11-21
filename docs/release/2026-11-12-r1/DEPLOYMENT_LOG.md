@@ -35,7 +35,24 @@
 
 ## Stage 2: flags and functions. PENDING (owner's shell)
 
-`scripts/release/deploy-production-release.sh --check`, then `--deploy`, with `--confirm ohsdatpvfdjdemstoiuj --sha 3bef8fd03998c4133b9bebaf87acdd03a3dad5f9`, from a clean checkout of that commit.
+**First attempt (2026-11-13), refused safely at "5. backups".** `--check` passed. `--deploy` stopped with "could not back up pilot-chat; nothing was changed". No secret, function, database or frontend change was made.
+- **Cause:** the backup step ran the `supabase:prod` wrapper from inside `release-backups/r1-…`. The wrapper looked for `scripts/verify-deploy-target.mjs` relative to that directory (`Cannot find module`). The script also discarded stderr, which hid the error.
+- **Hotfix (deployment tool only):**
+  - the wrapper resolves its helpers from the repo root;
+  - downloads run from the repo root into `--workdir release-backups/r1-<UTC>`;
+  - failures print sanitized diagnostics;
+  - each of the 4 backups is validated (source present, ≥200 bytes, a server entry point), the repo's `supabase/functions/` is checked as unchanged, and `MANIFEST.sha256` is written, all before the first write;
+  - regression test: `tests/infra/releaseBackupWorkdir.test.ts`.
+- **Two SHAs, kept distinct:**
+  - **App release (approved, unchanged):** `3bef8fd03998c4133b9bebaf87acdd03a3dad5f9`. Bundles are built from a git worktree of this commit and must carry `"sha": "3bef8fd0…"` as their `x-agentory-build` stamp.
+  - **Deployment tool:** the hotfix commit, passed as `--tool-sha`. It must equal HEAD and must contain the app commit.
+- **Scope unchanged:** the same five functions, the same flags, no database steps.
+
+**Run:** from a clean checkout of the tool commit:
+```bash
+scripts/release/deploy-production-release.sh --check --confirm ohsdatpvfdjdemstoiuj --sha 3bef8fd03998c4133b9bebaf87acdd03a3dad5f9 --tool-sha <TOOL_SHA>
+```
+Then run the same command with `--deploy`.
 
 ## Stage 3: frontend. PENDING (owner, in Lovable)
 

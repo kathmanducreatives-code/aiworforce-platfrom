@@ -310,13 +310,18 @@ Deno.test("15. an UNRESOLVED referent never reaches the router at all", async ()
   // Proven at the call site: pilot-chat returns on a failure, before routing.
   const SRC = await Deno.readTextFile(
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
-  const resolveAt = SRC.indexOf("const resolution = resolveReferents(");
+  // R1.2: resolution is part of the single reference-policy step.
+  const resolveAt = SRC.indexOf("turnRouting = planTurnRouting(");
   const routeAt = SRC.indexOf("brainRoute = routeRequest(");
   assert(resolveAt > 0 && routeAt > resolveAt,
     "referents must be resolved BEFORE the router runs");
   const between = SRC.slice(resolveAt, routeAt);
-  assert(between.includes("resolution.failures.length > 0"),
+  assert(between.includes("if (turnRouting.ask)"),
     "a resolution failure must be handled before routing");
+  // And the policy turns this exact failure (a paid part, "them", unresolvable) into a question.
+  const { planTurnRouting } = await import("../../../supabase/functions/_shared/orionReferencePolicy.ts");
+  const t = planTurnRouting({ request, message: "Research them", source: null, evidenceEnabled: true, delegationEnabled: false });
+  assert(t.ask !== null, "a paid request with an unresolved referent asks");
   assert(between.includes("return json("),
     "and it must RETURN, not fall through into a route");
   // COMMENTS STRIPPED FIRST. The prose in this region explains that nothing has

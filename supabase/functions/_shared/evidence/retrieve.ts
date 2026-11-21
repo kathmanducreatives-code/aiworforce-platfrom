@@ -27,6 +27,13 @@ export interface RetrieveInput {
   subject?: { name?: string | null; domain?: string | null } | null;
   now?: Date;
   limit?: number;
+  /**
+   * R1.2: cap EACH source at this many items instead of the whole result at
+   * `limit`. Ranking puts lead inferences above unverified signals, so a global
+   * cap of 50 over 61 leads + 37 signals returned no signal at all. Opt-in, so
+   * other callers (daily-brief) are unchanged.
+   */
+  perSourceLimit?: number;
 }
 
 export type SourceStatus = "ok" | "empty" | "unavailable" | "skipped";
@@ -196,5 +203,11 @@ export async function retrieveEvidence(db: EvidenceDb, i: RetrieveInput): Promis
   const scoped = i.subject && (i.subject.name || i.subject.domain)
     ? own.filter((x) => concerns(x, i.subject!) || (x.source_type === "company_brain" && !x.subject.name))
     : own;
-  return { ok: true, items: rankEvidence(dedupeEvidence(scoped)).slice(0, limit), sources, brain, cost };
+  const ranked = rankEvidence(dedupeEvidence(scoped));
+  if (i.perSourceLimit) {
+    const cap = Math.min(Math.max(i.perSourceLimit, 1), 100);
+    const seen: Record<string, number> = {};
+    return { ok: true, items: ranked.filter((x) => (seen[x.source_type] = (seen[x.source_type] ?? 0) + 1) <= cap), sources, brain, cost };
+  }
+  return { ok: true, items: ranked.slice(0, limit), sources, brain, cost };
 }
