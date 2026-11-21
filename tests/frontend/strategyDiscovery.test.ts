@@ -174,3 +174,12 @@ Deno.test("a run still going at the provider (202 running) is picked up with the
   const s = await runStrategy(stuck, req, p.value, { attempts: 3, sleep: () => Promise.resolve() });
   assert(!s.ok && /still in progress/.test(s.error) && /never|nothing will be bought twice/.test(s.error));
 });
+
+Deno.test("an either/or group is ONE requirement in the panel, not one row per alternative", () => {
+  const route = (label: string, extra: Record<string, unknown> = {}) => ({ label, necessity: "required", route: "not_checkable", checkedBy: [], explanation: "", ...extra });
+  const g = "Industry: commercial contracting or manufacturing";
+  const p = readStrategyPlan({ status: "ready", plan: { status: "ready", strategy: "apify_only", steps: [], estimate: { apifyUsd: 0.07, leadoceanRecords: 0 }, planHash: "h", rationale: [],
+    requirementRoutes: [route("Headquarters: United States", { route: "checked" }), route(g), route(g), route(g), route("Excluding: consumer")] } });
+  assert(p);
+  assertEquals(p.requirements.map((r) => r.label), ["Headquarters: United States", g, "Excluding: consumer"]);
+});

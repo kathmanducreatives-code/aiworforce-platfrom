@@ -75,6 +75,16 @@ export interface RequirementView {
   checkedBy: string[]; explanation: string;
 }
 
+/**
+ * An either/or group ("SaaS or fintech", "HQ in Texas or California") is one requirement to the
+ * user: the plan routes each alternative, and every alternative carries the group's label
+ * ("Industry: SaaS or fintech"). Shown once — not once per alternative.
+ */
+export function oncePerGroup(rows: RequirementView[]): RequirementView[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => { const k = `${r.necessity}|${r.route}|${r.label}`; if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
 /** Human names for the capabilities a requirement can be checked by. */
 export const CAPABILITY_LABEL: Record<string, string> = {
   'apify.linkedin_job_search': 'dated job postings',
@@ -113,11 +123,11 @@ export function readStrategyPlan(body: unknown): StrategyPlanView | null {
     rationale: Array.isArray(p.rationale) ? p.rationale.map(String) : [],
     steps, worstCase: { apifyUsd: usd, leadoceanRecords: lo }, planHash: p.planHash,
     approvalToken: str(body.approval_token),
-    requirements: Array.isArray(p.requirementRoutes) ? p.requirementRoutes.filter(isObj).map((r) => ({
+    requirements: Array.isArray(p.requirementRoutes) ? oncePerGroup(p.requirementRoutes.filter(isObj).map((r) => ({
       label: String(r.label ?? ''), necessity: r.necessity === 'preferred' ? 'preferred' as const : 'required' as const,
       route: r.route === 'checked' || r.route === 'ranked_only' ? r.route : 'not_checkable' as const,
       checkedBy: Array.isArray(r.checkedBy) ? r.checkedBy.map(String) : [], explanation: String(r.explanation ?? ''),
-    })) : [],
+    }))) : [],
     questions: Array.isArray(p.questions) ? p.questions.map(String) : [],
     interpretation: interpretationOf(body),
   };
