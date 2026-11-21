@@ -62,6 +62,7 @@ export function decideConversationBinding(i: {
 /** The narrow service-role client surface this module uses. */
 export interface BindingDb {
   // deno-lint-ignore no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a PostgREST builder; see `ReadDb`
   from: (table: string) => any;
 }
 
