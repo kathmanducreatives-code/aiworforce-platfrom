@@ -46,13 +46,14 @@ import type { ConnectionStore } from "../discoveryProviders/connections.ts";
 import type { DiscoveryFlags, Env } from "../discoveryProviders/flags.ts";
 import type { ProviderConnectionState } from "../discoveryProviders/routing.ts";
 import type { CheckpointStore } from "./checkpoint.ts";
+import { RunPending, spendBasis } from "./apifyRuns.ts";
 import { ExclusionIndex, type ExistingRecord } from "./exclusions.ts";
 import { configureIcp, ICPS, type IcpConfig, type IcpId } from "./icp.ts";
 import { runLeadPipeline, worstCase, type PipelineApprovals, type PipelineLead, type PipelineRun } from "./pipeline.ts";
 import { projectPipelineLead, type PipelineRow } from "./projection.ts";
 import type { GenerateJsonFn } from "../intelligence/plannerWrapper.ts";
 import type { ProviderId } from "../discoveryProviders/types.ts";
-import { runDiscoveryStrategy, type StrategyRun } from "./multiProvider.ts";
+import { runDiscoveryStrategy, type StrategyRun, type StrategyRunInput } from "./multiProvider.ts";
 import { adviseStrategy, isStrategy, planStrategy, specFromMission, type DiscoveryStrategyId, type StrategyContext, type StrategyPlan } from "./strategy.ts";
 
 const on = (v: string | undefined) => !!v && ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
@@ -317,6 +318,8 @@ export interface StrategyDeps extends PipelineDeps {
    * failing: the leads are still saved, and the response says there is no Workbench view.
    */
   recordRunPlan?(p: { workspaceId: string; userId: string; query: string; planHash: string; status: "completed" | "partial" | "failed"; summary: string }): Promise<string | null>;
+  /** Asynchronous Apify runs with recorded run ids and receipts (V5 Phase C); null/absent = run-sync. */
+  apifyRuns?: StrategyRunInput["apifyRuns"];
 }
 
 /** Words by which a request asks for VERIFIED companies (then likely matches never count). */
@@ -445,7 +448,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     commercialTermsConfirmed: f.commercialTerms.leadocean, remainingCredits: lo?.usage?.remaining ?? null,
     recentFailures: lo && lo.status !== "connected" ? 1 : 0, restrictions: lo?.usage?.restrictions ?? [],
   }];
-  const run: StrategyRun = await runDiscoveryStrategy({
+  const run: StrategyRun | RunPending = await runDiscoveryStrategy({
     workspaceId: req.workspaceId, walkId: req.walkId, spec, plan,
     approval: { planHash: req.approval.planHash, leadoceanRecords: req.approval.leadoceanRecords, apifyUsd: req.approval.apifyUsd, approvedBy: d.userId, approvedAt: now().toISOString() },
     leadocean: key ? d.leadoceanFor(key).adapter : null, apify: d.apify, connections,
@@ -453,13 +456,29 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     evidenceCache: d.evidenceCache ?? null,
     groundBusinessModel: d.groundBusinessModel ?? null,
     acceptLikely: req.user?.acceptLikely === true,
+    apifyRuns: d.apifyRuns ?? null,
+  }).catch((e) => {
+    // A RUN STILL GOING (Phase C): nothing is lost and nothing is bought again — the run id is
+    // recorded on its reservation, and calling strategy_run again with the SAME approval token
+    // adopts it (completed steps replay from the ledger at $0).
+    if (e instanceof RunPending) return e;
+    throw e;
   });
+  if (run instanceof RunPending) {
+    return { status: 202, body: { status: "running", plan: { planHash: plan.planHash },
+      running: { actor: run.actorKey, runId: run.runId, state: run.status, reservedUsd: run.reservedUsd },
+      next: "Call strategy_run again with the same approval token: the run in progress is adopted, never bought again.",
+      outcome: { status: "running", summary: `Still running: ${run.actorKey.replace(/^apify_/, "").replace(/_/g, " ")} (${run.status.toLowerCase()}). Check again shortly — nothing will be bought twice.`,
+        spend: { apifyUsd: run.reservedUsd, leadoceanRecords: 0, basis: "reserved" } } } };
+  }
+  const charged = run.charges ? spendBasis(run.charges) : null;
   if (run.status === "blocked") {
     // A "blocked" run that already spent is a FAILED run, not a refusal (audit S3/S4).
     const spent = run.spend.apifyUsd > 0 || run.spend.leadoceanRecords > 0;
     const outcome = missionOutcome({ requested: spec.requestedCount, qualified: 0, pending: 0, rejected: 0, runStatus: spent ? "failed" : "blocked", reason: run.reason,
-      spend: { ...run.spend, basis: "estimate" } });
-    return { status: 409, body: { error: run.reason, plan, outcome, steps: run.steps, spend: run.spend } };
+      spend: { ...run.spend, basis: charged?.basis ?? "estimate" } });
+    return { status: 409, body: { error: run.reason, plan, outcome, steps: run.steps, spend: run.spend,
+      ...(run.charges ? { charges: run.charges.map((c) => ({ actor: c.actorKey, runId: c.runId, state: c.state, usd: c.usd, reservedUsd: c.reservedUsd, build: c.build, status: c.status })), chargeStates: charged?.states ?? {} } : {}) } };
   }
   // The run's own plan: what the Workbench reads (`lead_candidates.plan_id`). Recorded before
   // the rows so every new lead carries it; a failure here never loses the leads.
@@ -486,11 +505,13 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
         likely: run.review.filter((l) => l.acceptedAsLikely).length,
         runStatus: run.status, reason: run.reason,
         openRequirements: [...new Set(run.review.flatMap((l) => l.qualification?.gaps ?? []))].map((g) => g.replace(/_/g, " ")),
-        // run-sync reports no charge: the ledger settles the worst case for the items returned.
-        spend: { ...run.spend, basis: "estimate" },
+        // Async runs (Phase C) report Apify's own receipt; run-sync reports none (estimate).
+        spend: { ...run.spend, basis: charged?.basis ?? "estimate" },
         saved: { failed: saved.failed, attempted: projected.length },
       }),
       mergedCompanies: run.mergedCompanies ?? [],
+      // Every Apify run: its id, how sure its charge is (settled / provider_reported / unknown).
+      ...(run.charges ? { charges: run.charges.map((c) => ({ actor: c.actorKey, runId: c.runId, state: c.state, usd: c.usd, reservedUsd: c.reservedUsd, build: c.build, status: c.status })), chargeStates: charged?.states ?? {} } : {}),
       evidenceRefused: run.evidenceRefused, queue: run.queue, review: run.review, excludedCount: run.excluded.length,
       // Who was ruled out and why — the count alone hid it from the user.
       rejected: rejectedSummary(run.excluded),

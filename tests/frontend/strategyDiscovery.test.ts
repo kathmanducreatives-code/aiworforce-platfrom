@@ -151,3 +151,26 @@ Deno.test("plan: a clarification (422) shows the model's question to the user, n
   const r = await planStrategy(invoke, { workspaceId: "ws", messageId: "m", query: "Find US companies hiring salespeople", choice: "auto" });
   assertEquals(r, { ok: false, error: body.error });
 });
+
+Deno.test("a run still going at the provider (202 running) is picked up with the SAME approval, bounded, never re-planned", async () => {
+  const sent: Record<string, unknown>[] = [];
+  const planBody = { status: "ready", plan: { status: "ready", strategy: "apify_only", steps: [], estimate: { apifyUsd: 0.05, leadoceanRecords: 0 }, planHash: "h1", rationale: [] }, approval_token: "tok" };
+  const running = { status: "running", plan: { planHash: "h1" }, running: { actor: "apify_linkedin_job_search", runId: "r1", state: "RUNNING", reservedUsd: 0.011 } };
+  const done = { status: "completed", steps: [], spend: { apifyUsd: 0.011, leadoceanRecords: 0 }, queue: [], review: [] };
+  const answers = [planBody, running, running, done];
+  const invoke: Invoke = async <T,>(_n: string, b: unknown) => { sent.push(b as Record<string, unknown>); return { data: answers.shift() as T, error: null }; };
+  const req = { workspaceId: "ws", messageId: "m1", query: "q", choice: "auto" as const };
+  const p = await planStrategy(invoke, req);
+  assert(p.ok);
+  const waits: number[] = [];
+  const r = await runStrategy(invoke, req, p.value, { sleep: (ms) => { waits.push(ms); return Promise.resolve(); } });
+  assert(r.ok && r.value.status === "completed");
+  const runs = sent.slice(1);
+  assertEquals(runs.length, 3);
+  assertEquals(new Set(runs.map((b) => JSON.stringify(b.approval))).size, 1, "every retry carries the same approval token");
+  assertEquals(waits.length, 2);
+  // bounded: a run that never finishes ends with a clear message, not an endless loop
+  const stuck: Invoke = async <T,>() => ({ data: running as T, error: null });
+  const s = await runStrategy(stuck, req, p.value, { attempts: 3, sleep: () => Promise.resolve() });
+  assert(!s.ok && /still in progress/.test(s.error) && /never|nothing will be bought twice/.test(s.error));
+});

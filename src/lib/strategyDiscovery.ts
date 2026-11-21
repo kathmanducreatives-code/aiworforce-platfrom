@@ -162,18 +162,32 @@ export async function planStrategy(invoke: Invoke, r: PlanRequest): Promise<Resu
   return plan ? { ok: true, value: plan } : { ok: false, error: await errorMessage(res.error, 'The discovery service is unavailable.') };
 }
 
-/** Run exactly the plan the owner approved: its hash, its worst case as the ceilings, and its signed token. */
-export async function runStrategy(invoke: Invoke, r: PlanRequest, plan: StrategyPlanView): Promise<Result<StrategyRunView>> {
+/** How a run still going at Apify is picked up again (the server answers 202 `running`). */
+export const RUNNING_RETRY = { attempts: 12, waitMs: 5_000 } as const;
+
+/**
+ * Run exactly the plan the owner approved: its hash, its worst case as the ceilings, and its signed token.
+ * A run that outlives one request answers `running` (V5 Phase C): the SAME approval is sent again,
+ * which adopts the run in progress at the provider — it is never bought twice.
+ */
+export async function runStrategy(invoke: Invoke, r: PlanRequest, plan: StrategyPlanView,
+  o: { attempts?: number; waitMs?: number; sleep?: (ms: number) => Promise<void> } = {}): Promise<Result<StrategyRunView>> {
   if (plan.status !== 'ready') return { ok: false, error: plan.blockedReason ?? 'This plan cannot run.' };
-  const res = await invoke<Record<string, unknown>>('lead-pipeline', {
-    action: 'strategy_run', ...baseBody(r),
-    approval: { plan_hash: plan.planHash, apify_usd: plan.worstCase.apifyUsd, leadocean_records: plan.worstCase.leadoceanRecords, ...(plan.approvalToken ? { token: plan.approvalToken } : {}) },
-  });
-  let body: unknown = res.data;
-  // A failed or refused run answers 409 with its outcome, steps and spend: still a result to show.
-  if (!body && res.error?.context) { try { body = await res.error.context.clone().json(); } catch { body = null; } }
-  const run = readStrategyRun(body);
-  return run ? { ok: true, value: run } : { ok: false, error: await errorMessage(res.error, 'The run did not return a readable result.') };
+  const sleep = o.sleep ?? ((ms: number) => new Promise<void>((res) => setTimeout(res, ms)));
+  const attempts = Math.max(1, o.attempts ?? RUNNING_RETRY.attempts);
+  for (let i = 0; i < attempts; i++) {
+    const res = await invoke<Record<string, unknown>>('lead-pipeline', {
+      action: 'strategy_run', ...baseBody(r),
+      approval: { plan_hash: plan.planHash, apify_usd: plan.worstCase.apifyUsd, leadocean_records: plan.worstCase.leadoceanRecords, ...(plan.approvalToken ? { token: plan.approvalToken } : {}) },
+    });
+    let body: unknown = res.data;
+    // A failed or refused run answers 409 with its outcome, steps and spend: still a result to show.
+    if (!body && res.error?.context) { try { body = await res.error.context.clone().json(); } catch { body = null; } }
+    if (isObj(body) && body.status === 'running') { if (i < attempts - 1) await sleep(o.waitMs ?? RUNNING_RETRY.waitMs); continue; }
+    const run = readStrategyRun(body);
+    return run ? { ok: true, value: run } : { ok: false, error: await errorMessage(res.error, 'The run did not return a readable result.') };
+  }
+  return { ok: false, error: 'The run is still in progress at the provider. Run the same plan again to pick it up — nothing will be bought twice.' };
 }
 
 // ── Run ─────────────────────────────────────────────────────────────────────

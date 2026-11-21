@@ -32,6 +32,7 @@ import type { DiscoverySpec } from "./strategy.ts";
 import { normalizeLinkedInCompanyCandidate } from "../hiringActorNormalizers.ts";
 import { compileHarvestCompanySearchInput, type HarvestCompanySearchInput } from "../hiringActorInputs.ts";
 import { COMPANY_SEARCH_ACTOR } from "./apifyInvoker.ts";
+import { failedChargeUsd, rethrowPending } from "./runErrors.ts";
 
 export const JOB_DISCOVERY_ROUTE = "lead_pipeline_job_discovery" as const;
 
@@ -102,7 +103,8 @@ export async function discoverHiringCompanies(
     out.runId = run.runId ?? null;
     out.spentUsd = run.chargedUsd ?? (items.length ? worstCaseUsd(SIGNAL_ACTORS.jobs, items.length) : SIGNAL_ACTORS.jobs.perStartUsd);
   } catch (e) {
-    out.spentUsd = worst;
+    rethrowPending(e);
+    out.spentUsd = failedChargeUsd(e, worst);
     out.stopped = `job search failed (${(e as Error)?.name ?? "error"}); counted at its worst case, not retried`;
     return out;
   }
@@ -182,7 +184,8 @@ export async function discoverFirmographicCompanies(
     out.runId = run.runId ?? null;
     out.spentUsd = run.chargedUsd ?? Math.round((COMPANY_SEARCH_ACTOR.perStartUsd + COMPANY_SEARCH_ACTOR.perItemUsd * items.length) * 1e6) / 1e6;
   } catch (e) {
-    out.spentUsd = worst;
+    rethrowPending(e);
+    out.spentUsd = failedChargeUsd(e, worst);
     out.stopped = `company search failed (${(e as Error)?.name ?? "error"}); counted at its worst case, not retried`;
     return out;
   }
@@ -280,7 +283,8 @@ export async function discoverPostingCompanies(
     out.spentUsd = run.chargedUsd ?? (opts.perStartUsd + opts.perItemUsd * run.items.length);
     return out;
   } catch (e) {
-    return { ...empty(`post search failed (${(e as Error)?.name ?? "error"}); counted at its worst case, not retried`), spentUsd: worst };
+    rethrowPending(e);
+    return { ...empty(`post search failed (${(e as Error)?.name ?? "error"}); counted at its worst case, not retried`), spentUsd: failedChargeUsd(e, worst) };
   }
 }
 
