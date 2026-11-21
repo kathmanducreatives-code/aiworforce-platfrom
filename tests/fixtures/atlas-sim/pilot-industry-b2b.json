@@ -1,6 +1,6 @@
 {
  "name": "pilot-industry-b2b",
- "description": "Rehearsal of the first real Apify pilot (fictional companies): industry-targeted, US-HQ B2B companies discovered by an Account Executive hiring signal.",
+ "description": "Rehearsal of the first real Apify pilot (fictional companies): industry-targeted, US-HQ B2B companies discovered by an Account Executive hiring signal. Phase A (2026-11-21): the four industries are ONE either/or group; Cloudly CRM is no longer rejected for not being a field-service firm (one failing alternative never rejects) — its industry is unknown, so it needs verification, never qualified.",
  "covers": [
   "industry-scoped request (industry never provable): website check still runs",
   "consumer-only exclusion from 'for homeowners'",
@@ -189,17 +189,17 @@
   "qualified": [],
   "needsVerification": [
    "Atlas Forge Manufacturing",
+   "Cloudly CRM",
    "CoolPro Mechanical",
    "Ironline Builders",
    "Midstate Industrial Supply",
    "Vector Fabrication"
   ],
-  "excluded": 3,
-  "leadsSaved": 5,
+  "excluded": 2,
+  "leadsSaved": 6,
   "actorCalls": 3,
   "persistFailed": 0,
   "rejected": [
-   "Cloudly CRM",
    "Northbay Steel",
    "Sunny Roofs"
   ]
