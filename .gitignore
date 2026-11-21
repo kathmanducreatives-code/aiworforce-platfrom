@@ -49,3 +49,4 @@ AgriDrone-Guardian/
 dev-sim/
 .orion-pilot-activation.state
 release-backups/
+.release-build/
