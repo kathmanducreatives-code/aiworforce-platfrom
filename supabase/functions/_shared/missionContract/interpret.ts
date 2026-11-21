@@ -30,11 +30,11 @@ import { DEFAULT_SIGNAL_WINDOWS, type CanonicalSignalKind } from "../signalKinds
 import { SIGNAL_WINDOWS_PROPERTY } from "../missionInterpretationContract.ts";
 import { canonicalTitleOf } from "../roleFamilies.ts";
 import {
-  familyOfTitle, parseUnderstanding, spanInRequest, titleTerm, UNDERSTANDING_INSTRUCTION, UNDERSTANDING_SCHEMA,
+  familyOfTitle, parseUnderstanding, PLACE_IDS, spanInRequest, titleTerm, UNDERSTANDING_INSTRUCTION, UNDERSTANDING_SCHEMA,
   validateUnderstanding,
 } from "../missionUnderstanding.ts";
 import {
-  assumptionsOf, type MergedDuplicate, type MissionContract, MISSION_CONTRACT_VERSION, type Necessity, type Origin, type Requirement, type SignalWindow,
+  assumptionsOf, isExecutable, type MergedDuplicate, type MissionContract, MISSION_CONTRACT_VERSION, type Necessity, type Origin, type Requirement, type SignalWindow,
 } from "./contract.ts";
 
 export const CONTRACT_INTERPRETER_VERSION = "gpt-contract-v4" as const;
@@ -139,10 +139,18 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     roles: raw.roles.map((r) => (!r.title && !r.family ? { ...r, title: canonicalTitleOf(r.span) } : r)),
     industries: [...raw.industries, ...audienceItems.map((x) => ({ span: x.span, industry: audienceDescriptor(x.span) === "b2b" ? "B2B" : x.span.trim(), necessity: "required" as const }))],
     unsupported: raw.unsupported.filter((x) => !audienceItems.includes(x)),
+    // A PLACE THE USER NAMED IS NEVER DROPPED (V5 validation 2026-11-20). The model may put a
+    // state or city ("texas") in `place`, which holds COUNTRY ids only; validation rejected it
+    // as `unknown_place_id` and the user's location vanished — the search ran worldwide. When
+    // the user's own quoted words ARE that name, it is the named place the schema keeps in
+    // `other_place` (a slot correction, not a reading). Anything else becomes a question below.
+    places: raw.places.map((p) => (p.place && !PLACE_IDS.includes(p.place) && normPlace(p.span) === normPlace(p.place)
+      ? { ...p, place: null, other_place: p.span.trim() } : p)),
   };
   const u = validateUnderstanding(query, parsed);
   const rejected = [...u.rejected];
   const unidentifiedRoles = rejected.filter((x) => x.reason === "no_role_id").map((x) => x.item.replace(/^role:/, ""));
+  const unidentifiedPlaces = rejected.filter((x) => x.reason === "unknown_place_id" || x.reason === "no_place").map((x) => x.item.replace(/^place:/, ""));
   const reqs: Requirement[] = [];
   const ids = new Set<string>();
   const idOf = (base: string) => { let id = base, n = 2; while (ids.has(id)) id = `${base}:${n++}`; ids.add(id); return id; };
@@ -235,7 +243,8 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     const terms = hiring ? [...new Set(reqRoles.filter((r) => r.title).map((r) => titleTerm(r.title!)))] : [];
     const families = hiring ? [...new Set(reqRoles.map((r) => r.family ?? (r.title ? familyOfTitle(r.title) : null)).filter((f): f is string => !!f))] : [];
     const excluded = hiring ? [...new Set(excRoles.map((r) => (r.title ? titleTerm(r.title) : r.span)))] : [];
-    const label = hiring && terms.length ? `Hiring: ${terms.join(" or ")}` : hiring && families.length ? `Hiring: ${families.join(" or ")}` : `Signal: ${s.kind}`;
+    // Card text only (outside the hash): a family reads as words, never as its id ("gtm_sales").
+    const label = hiring && terms.length ? `Hiring: ${terms.join(" or ")}` : hiring && families.length ? `Hiring: ${families.map((f) => FAMILY_DISPLAY[f] ?? f.replace(/_/g, " ")).join(" or ")}` : `Signal: ${s.kind}`;
     const r: Requirement = {
       ...base(`${s.kind}:${slug(s.span)}`, s.necessity, userOrigin(s.span), label, `a signal the request requires ("${s.span}")`),
       dimension: "signal", kind: s.kind, event: s.kind, subject: "company", topics: [],
@@ -251,6 +260,18 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     anyOf.push(signalIds);
     const kinds = signalIds.map((id) => (reqs.find((r) => r.id === id) as Extract<Requirement, { dimension: "signal" }>).kind);
     for (const r of reqs) if (signalIds.includes(r.id)) r.alternatives = kinds.map((k) => `signal:${k}`);
+  }
+  // ── Alternatives among places and industries (V5 validation 2026-11-20, case 9) ──
+  // "HQ in Texas or Ohio", "manufacturers or distributors" compiled as ANDed hard criteria:
+  // a Texas manufacturer was rejected as "outside Ohio". The eligibility engine already
+  // treats criteria sharing an `any_of` as ONE requirement (candidateEligibility anyOfResolved,
+  // RC02); the contract now forms those groups, from the user's own joining words.
+  for (const g of alternativeGroups(query, reqs)) {
+    anyOf.push(g.map((r) => r.id));
+    const values = g.map((r) => (r.dimension === "geography" ? r.place : (r as Extract<Requirement, { dimension: "industry" }>).value));
+    // The card names the WHOLE group ("Headquarters: Texas or Ohio"): display only, outside the hash.
+    const prefix = g[0].display.label.split(":")[0];
+    for (const r of g) { r.alternatives = values; r.display = { ...r.display, label: `${prefix}: ${values.join(" or ")}` }; }
   }
 
   // ── What the vocabulary cannot express: disclosed at approval, never dropped, never executed ──
@@ -295,6 +316,8 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
       ...u.ambiguities.map((a) => ({ span: a.span, question: a.question })),
       ...unidentifiedRoles.map((span) => ({ span: JSON.parse(span) as string,
         question: `Which job title do you mean by ${span}? I couldn't match it to a role I can check, and I won't run without it.` })),
+      ...unidentifiedPlaces.map((p) => { const span = p.startsWith('"') ? JSON.parse(p) as string : p; return { span,
+        question: `Which place do you mean by "${span}"? I couldn't match it to a country, state or city I can check, and I won't search without it.` }; }),
     ],
     authorizedActions: ["discover", "verify"],
     budget: null,
@@ -308,6 +331,19 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
   // One question per thing: a restriction already asked about ("growth hackers") is not asked twice.
   const asked = contract.ambiguities.map((a) => a.span.replace(/^"|"$/g, ""));
   for (const q of coverageQuestions(query, contract)) if (!asked.some((a) => spanInRequest(q.span, a))) contract.ambiguities.push(q);
+  // NOTHING LEFT TO CHECK IS A QUESTION, NEVER A CRASH (ATLAS inventory 2026-11-20): "Find
+  // companies using HubSpot" reads as one disclosed, never-executed requirement. Compiling
+  // that froze an empty criteria list and threw — HTTP 500 from lead-pipeline. When no
+  // requirement can be executed (and nothing was asked already), ask what qualifies a result.
+  if (!contract.ambiguities.length && !reqs.some(isExecutable)) {
+    const unchecked = reqs.filter((r) => r.dimension === "unsupported").map((r) => `"${r.origin.span}"`);
+    contract.ambiguities.push({
+      span: unchecked.length ? unchecked.join(", ").replace(/"/g, "") : query.trim(),
+      question: unchecked.length
+        ? `I can't check ${unchecked.join(" or ")} with the tools I have. What else should a company match — industry, location, size, or a signal such as hiring?`
+        : "What should a company match — industry, location, size, or a signal such as hiring?",
+    });
+  }
   return { contract, rejected };
 }
 
@@ -343,3 +379,47 @@ function elevatedAround(query: string, span: string): boolean {
 }
 
 const placeLabel = (id: string) => (id.length <= 4 ? id.toUpperCase() : id.replace(/\b\w/g, (c) => c.toUpperCase()));
+const FAMILY_DISPLAY: Readonly<Record<string, string>> = {
+  gtm_sales: "sales roles", sales_operations: "sales operations roles", marketing_growth: "marketing roles", growth: "growth roles",
+  customer_success: "customer success roles", engineering: "engineering roles", finance: "finance roles", ops: "operations roles",
+};
+const normPlace = (s: string | null | undefined) => String(s ?? "").toLowerCase().replace(/[^a-z]+/g, " ").trim();
+
+/** The request's words between two quoted spans (in request order), or null when they overlap or are missing. */
+function wordsBetween(query: string, a: string, b: string): string | null {
+  const q = query.toLowerCase();
+  const i = q.indexOf(a.toLowerCase()), j = q.indexOf(b.toLowerCase());
+  if (i < 0 || j < 0) return null;
+  const [first, second] = i <= j ? [{ at: i, len: a.length }, { at: j }] : [{ at: j, len: b.length }, { at: i }];
+  return second.at >= first.at + first.len ? q.slice(first.at + first.len, second.at) : null;
+}
+
+/**
+ * Groups of REQUIRED include requirements that are ALTERNATIVES ("any of"), read from the
+ * user's joining words — deterministic, never a second model reading:
+ *
+ *   headquarters places  always one group: a company has ONE headquarters, so "in Texas and
+ *                        Ohio" can only mean either (ANDing them could never be satisfied)
+ *   presence places      one group unless the words between them say "and" / "both"
+ *                        ("offices in Austin and Denver" requires both)
+ *   industries           one group unless the words between them say "both" / "also" /
+ *                        "as well as" (a company is classified in one industry; "fintech and
+ *                        healthcare companies" means either)
+ *
+ * The business-model facet (B2B), exclusions, preferences and signals are never grouped here.
+ */
+function alternativeGroups(query: string, reqs: Requirement[]): Requirement[][] {
+  const out: Requirement[][] = [];
+  const req = reqs.filter((r) => r.necessity === "required");
+  // The joining words between members, plus the three words just before the first one
+  // ("both fintech and healthcare": "both" precedes the list).
+  const before = (span: string) => { const i = query.toLowerCase().indexOf(span.toLowerCase()); return i < 0 ? "" : query.slice(0, i).toLowerCase().split(/\s+/).slice(-3).join(" "); };
+  const conj = (g: Requirement[], re: RegExp) => re.test(before(g[0].origin.span)) || g.some((r, k) => k > 0 && re.test(wordsBetween(query, g[k - 1].origin.span, r.origin.span) ?? ""));
+  const hq = req.filter((r): r is Extract<Requirement, { dimension: "geography" }> => r.dimension === "geography" && r.polarity === "include" && r.scope === "headquarters");
+  if (hq.length > 1) out.push(hq);
+  const presence = req.filter((r): r is Extract<Requirement, { dimension: "geography" }> => r.dimension === "geography" && r.polarity === "include" && r.scope !== "headquarters");
+  if (presence.length > 1 && !conj(presence, /\b(and|both)\b/)) out.push(presence);
+  const industries = req.filter((r): r is Extract<Requirement, { dimension: "industry" }> => r.dimension === "industry" && r.facet === "industry" && r.polarity === "include");
+  if (industries.length > 1 && !conj(industries, /\b(both|also|as well as)\b/)) out.push(industries);
+  return out;
+}

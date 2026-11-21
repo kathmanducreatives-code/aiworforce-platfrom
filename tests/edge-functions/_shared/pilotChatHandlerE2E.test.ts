@@ -158,7 +158,7 @@ Deno.test("8. safety runs before any surface can be reached", () => {
 });
 
 Deno.test("9. referents are resolved before the router runs", () => {
-  const resolve = BLOCK.indexOf("const resolution = resolveReferents(");
+  const resolve = BLOCK.indexOf("turnRouting = planTurnRouting("); // R1.2: resolution is the policy's first step
   const route = BLOCK.indexOf("brainRoute = routeRequest(");
   assert(resolve > 0 && route > resolve,
     "an unresolvable reference must cost a question, not a mission");

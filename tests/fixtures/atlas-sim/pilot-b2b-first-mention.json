@@ -1,6 +1,6 @@
 {
  "name": "pilot-b2b-first-mention",
- "description": "Live TEST plan 2026-11-09: the model quoted the FIRST, descriptive mention ('active B2B companies') while the request also says 'Companies must be B2B'. B2B must stay required.",
+ "description": "Live TEST plan 2026-11-09: the model quoted the FIRST, descriptive mention ('active B2B companies') while the request also says 'Companies must be B2B'. B2B must stay required. Phase A (2026-11-21): the four industries are ONE either/or group; Cloudly CRM is no longer rejected for not being a field-service firm (one failing alternative never rejects) — its industry is unknown, so it needs verification, never qualified.",
  "covers": [
   "a strong audience word elsewhere in the request keeps B2B required"
  ],
@@ -185,17 +185,17 @@
   "qualified": [],
   "needsVerification": [
    "Atlas Forge Manufacturing",
+   "Cloudly CRM",
    "CoolPro Mechanical",
    "Ironline Builders",
    "Midstate Industrial Supply",
    "Vector Fabrication"
   ],
-  "excluded": 3,
-  "leadsSaved": 5,
+  "excluded": 2,
+  "leadsSaved": 6,
   "actorCalls": 3,
   "persistFailed": 0,
   "rejected": [
-   "Cloudly CRM",
    "Northbay Steel",
    "Sunny Roofs"
   ]
