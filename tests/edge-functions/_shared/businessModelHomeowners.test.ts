@@ -17,3 +17,10 @@ Deno.test("a business audience is still not a consumer customer", () => {
   assertFalse(consumer("Ironline Builders is a commercial general contractor serving developers and property management companies."));
   assertFalse(consumer("Midstate distributes MRO supplies to manufacturers and maintenance teams."));
 });
+
+Deno.test("'sells … to homeowners' is a consumer buyer, like 'for homeowners' (company-first rehearsal 2026-11-20)", () => {
+  assert(consumer("DIY King sells tools and hardware to homeowners and weekend DIYers."));
+  assert(consumer("We sold mattresses to families across Ohio."));
+  // …and a business buyer after "sells … to" is still not a consumer.
+  assertFalse(consumer("Tri-State Building Supply sells lumber and drywall to contractors and builders."));
+});

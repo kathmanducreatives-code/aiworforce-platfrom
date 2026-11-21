@@ -36,7 +36,7 @@ import { classifyDecisionMakerRole } from "../decisionMaker/roleFamily.ts";
 import { ledgeredInvoker } from "./apifyInvoker.ts";
 import { canonicalDomain, collapseDuplicateLeads, type MergedLead } from "./identity.ts";
 import { apifyPageFetcher, checkBusinessModels, type BusinessModelFinding, type Grounder } from "./businessModelCheck.ts";
-import { COMPANY_EMPLOYEES_ACTOR_KEY, companyEmployeesInput, discoverHiringCompanies, discoverPostingCompanies, peopleFromEmployeeRows, slugOf } from "./apifyDiscovery.ts";
+import { COMPANY_EMPLOYEES_ACTOR_KEY, companyEmployeesInput, discoverFirmographicCompanies, discoverHiringCompanies, discoverPostingCompanies, peopleFromEmployeeRows, slugOf } from "./apifyDiscovery.ts";
 import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
 import type { Signal } from "./signals.ts";
 import { COMPANY_RECORD_ACTOR, readCompanyRecordsCached } from "./canonical.ts";
@@ -47,7 +47,7 @@ import { NON_DECISION_TITLES } from "./icp.ts";
 import { bestContact, personVerification, runLeadPipeline, PIPELINE_VERSION, type PipelineLead, type PipelineRun } from "./pipeline.ts";
 import { DEFAULT_WEIGHTS, rankLeads } from "./ranking.ts";
 import {
-  APOLLO_ACCESS_VALIDATED, DISCOVERY_CAPABILITIES, discoveryJobTitles, icpFromSpec, postTopics, sizePreferenceDistance, leadoceanDiscoveryRequirements,
+  APOLLO_ACCESS_VALIDATED, companySearchInput, DISCOVERY_CAPABILITIES, discoveryJobTitles, icpFromSpec, postTopics, sizePreferenceDistance, leadoceanDiscoveryRequirements,
   type DiscoverySpec, type DiscoveryStrategyId, type Limitation, type StrategyPlan,
 } from "./strategy.ts";
 
@@ -267,9 +267,12 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   const postActor = PIPELINE_ACTORS["apify_linkedin_post_search"];
   const apifyDiscovery = async (): Promise<Awaited<ReturnType<typeof discoverHiringCompanies>> & { signals?: Signal[] }> =>
     jobStep.capability === "apify.linkedin_job_search"
-      ? await discoverHiringCompanies(spec, discoveryJobTitles(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission })
+      ? await discoverHiringCompanies(spec, discoveryJobTitles(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission, input: jobStep.input ?? null })
       : jobStep.capability === "apify.linkedin_post_search" && postActor
       ? await discoverPostingCompanies(spec, postTopics(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission, perItemUsd: postActor.perItemUsd, perStartUsd: postActor.perStartUsd })
+      // Company-first: the SAME input the signed plan priced (strategy.companySearchInput).
+      : jobStep.capability === "apify.linkedin_company_search"
+      ? await discoverFirmographicCompanies((jobStep.input as never) ?? companySearchInput(spec, jobStep.maxItems).input, apify, { maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission })
       : { companies: [], evidence: new Map(), jobs: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: `no executor for ${jobStep.capability}`, runId: null };
   // CONCURRENT (apify_leadocean_concurrent): LeadOcean searches the SAME mission at the same
   // time, by the filters it can express (never the hiring signal, which only Apify proves).

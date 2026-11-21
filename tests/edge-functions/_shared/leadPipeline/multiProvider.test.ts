@@ -295,7 +295,7 @@ Deno.test("strategy: Query A as worded — the plan states that SaaS and a 10–
   const acme = byDomain(r)["acmesaas.example"];
   assertEquals(acme.statuses.qualification, "pending");
   assertEquals(acme.qualification!.gaps.sort(), ["company_size_band", "industry"], "51–200 cannot settle 10–100; no source proves 'saas'");
-  assertEquals(acme.qualification!.checks.find((c) => c.dimension === "geography")!.result, "pass");
+  assertEquals(acme.qualification!.checks.find((c: { dimension: string; result: string }) => c.dimension === "geography")!.result, "pass");
 });
 
 // ── 4 / 5 model choice, validated ───────────────────────────────────────────
@@ -390,7 +390,7 @@ Deno.test("strategy: a LeadOcean failure after Apify verification keeps every co
   const step = r.steps.find((s) => s.capability === "leadocean.people_by_domain")!;
   assertEquals(step.status, "failed");
   const by = byDomain(r);
-  assertEquals(by["northwind.example"].qualification?.checks.find((c) => c.dimension === "geography")?.result, "pass", "the company record's verdict survives");
+  assertEquals(by["northwind.example"].qualification?.checks.find((c: { dimension: string; result: string }) => c.dimension === "geography")?.result, "pass", "the company record's verdict survives");
   assertEquals(by["mapleledger.example"].statuses.qualification, "ineligible");
   assertEquals(by["northwind.example"].statuses.qualification, "eligible", "the company's own verdict is unchanged");
   assertEquals(by["northwind.example"].person, null, "no person was invented");
@@ -687,7 +687,9 @@ Deno.test("service (contract mode): an ambiguity is a question, never a run", as
 
 Deno.test("consolidation: the Apify allowlist and its 100-item cap are unchanged", async () => {
   // MRLE Phase 1 adds ONE reviewed actor: the Website Content Crawler, for business-model pages.
-  assertEquals(Object.keys(PIPELINE_ACTORS).sort(), ["apify_linkedin_company_details", "apify_linkedin_company_posts", "apify_linkedin_job_search", "apify_linkedin_profile_posts", "apify_website_content"]);
+  // Company-first discovery (2026-11-20) adds ONE more: harvestapi/linkedin-company-search,
+  // V2's compiled input, usable only with LEAD_PIPELINE_COMPANY_SEARCH (off by default).
+  assertEquals(Object.keys(PIPELINE_ACTORS).sort(), ["apify_linkedin_company_details", "apify_linkedin_company_posts", "apify_linkedin_company_search", "apify_linkedin_job_search", "apify_linkedin_profile_posts", "apify_website_content"]);
   const inv = pipelineApifyInvoker({ token: "t", fetch: (() => Promise.resolve(new Response("[]"))) as never });
   let refused = "";
   await inv("apify_linkedin_job_search", {}, { maxItems: 101, idempotencyKey: "k" }).catch((e) => { refused = String(e.message); });
@@ -814,7 +816,7 @@ Deno.test("consolidation: a stale or unreadable cache entry is bought again, nev
   const stale = memoryEvidenceCache();
   await stale.put({ workspaceId: WS, slug: "northwind", evidence: [], facts: null, observedAt: "2026-01-01T00:00:00Z" });
   const a = await execute(spec, plan, { cache: stale });
-  assert(a.ap.calls.find((c) => c.actor === "apify_linkedin_company_details")!.input.companies.toString().includes("northwind"));
+  assert((a.ap.calls.find((c) => c.actor === "apify_linkedin_company_details")!.input as { companies: unknown }).companies!.toString().includes("northwind"));
   const broken: EvidenceCache = { get: () => Promise.reject(new Error("table missing")), put: () => Promise.reject(new Error("table missing")) };
   const b = await execute(spec, plan, { cache: broken });
   assertEquals(byDomain(b.r)["northwind.example"].statuses.qualification, "eligible", "a broken cache costs a purchase, never a verdict");
@@ -963,7 +965,7 @@ Deno.test("identity: when the provider's own row says the person is not current,
   const north = byDomain(r)["northwind.example"];
   assertEquals(north.statuses.qualification, "eligible");
   assertEquals([north.person!.verification.status, north.statuses.outreachReadiness], ["employment_mismatch", "blocked"]);
-  assert(north.outreachBlockers.some((b) => b.includes("does not show this person currently")));
+  assert(north.outreachBlockers.some((b: string) => b.includes("does not show this person currently")));
 });
 
 Deno.test("service: strategy_plan explains hard vs soft and how the Company Brain was used", async () => {
@@ -986,7 +988,11 @@ Deno.test("service: strategy_plan explains hard vs soft and how the Company Brai
   // The TEST smoke suite judges this exact response shape (scripts/deploy/test-functions-smoke.ts).
   const smoke = planChecks(r.status, r.body as never);
   assertEquals(smoke.filter((c) => c.status !== "pass").map((c) => `${c.id} ${c.detail}`), [], "the deployed planner must pass the TEST planning smoke");
-  assert(smoke.find((c) => c.id === "P3")!.detail.includes("Account Executive"), "salespeople → an Account Executive search");
+  // V5 Phase B: "salespeople" is the sales FAMILY — searched as "Sales" with LinkedIn's sales and
+  // business-development job functions — never narrowed to one title ("Account Executive").
+  assert(smoke.find((c) => c.id === "P3")!.detail.includes("Sales"), "salespeople → a Sales family search");
+  const job = (r.body.plan as StrategyPlan).steps.find((s) => s.capability === "apify.linkedin_job_search")!;
+  assertEquals((job.input as { functionIds?: string[] }).functionIds, ["sale", "bd"]);
 });
 
 // ── B2B: a description ranks, only the user's own "only/must" requires (TEST plan 116a1b45) ──

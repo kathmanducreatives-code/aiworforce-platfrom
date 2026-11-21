@@ -29,6 +29,9 @@ import type { ActorInvoker } from "../discoveryProviders/adapters/apify.ts";
 import type { ProviderCompany, ProviderPerson } from "../discoveryProviders/types.ts";
 import { SIGNAL_ACTORS, signalsFromPosts, worstCaseUsd, type Signal } from "./signals.ts";
 import type { DiscoverySpec } from "./strategy.ts";
+import { normalizeLinkedInCompanyCandidate } from "../hiringActorNormalizers.ts";
+import { compileHarvestCompanySearchInput, type HarvestCompanySearchInput } from "../hiringActorInputs.ts";
+import { COMPANY_SEARCH_ACTOR } from "./apifyInvoker.ts";
 
 export const JOB_DISCOVERY_ROUTE = "lead_pipeline_job_discovery" as const;
 
@@ -54,21 +57,34 @@ function postedLimit(days: number | null): string {
   return "month";
 }
 
-/** The run's input. Titles and locations follow the catalogued discovery limits (≤3 titles, ≤2 locations). */
-export function jobDiscoveryInput(spec: DiscoverySpec, titles: string[], maxItems: number): Record<string, unknown> {
+/**
+ * The run's input. ≤3 titles (the catalogued discovery limit); EVERY required location (an
+ * either/or group of three states is three locations — none is silently dropped).
+ *
+ * `maxItems` IS PER QUERY on this Actor (its schema: "per each job title and location input"),
+ * so the step's total is split across titles × locations: the run returns about `maxItems`
+ * rows in all, as the plan priced, instead of maxItems × queries cut off by the charge cap.
+ * `functionIds`: the LinkedIn job-function filter for a family-only search (strategy
+ * `hiringFunctions`), passed in so this module never imports the planner.
+ */
+export function jobDiscoveryInput(spec: DiscoverySpec, titles: string[], maxItems: number, functionIds: readonly string[] = []): Record<string, unknown> {
   const hiring = spec.signals.find((s) => s.kind === "hiring");
+  const jobTitles = titles.slice(0, 3);
+  const locations = [...new Set(spec.geography)];
+  const queries = Math.max(1, jobTitles.length) * Math.max(1, locations.length);
   return {
-    jobTitles: titles.slice(0, 3),
-    ...(spec.geography.length ? { locations: spec.geography.slice(0, 2) } : {}),
+    jobTitles,
+    ...(locations.length ? { locations } : {}),
+    ...(functionIds.length ? { functionIds: [...functionIds] } : {}),
     postedLimit: postedLimit(hiring?.windowDays ?? null),
     sortBy: "date",
-    maxItems,
+    maxItems: Math.max(1, Math.floor(maxItems / queries)),
   };
 }
 
 export async function discoverHiringCompanies(
   spec: DiscoverySpec, titles: string[], invoke: ActorInvoker | null,
-  opts: { maxItems: number; maxUsd: number; now: Date; idPrefix: string; missionId?: string | null },
+  opts: { maxItems: number; maxUsd: number; now: Date; idPrefix: string; missionId?: string | null; input?: Record<string, unknown> | null },
 ): Promise<HiringDiscovery> {
   const out: HiringDiscovery = { companies: [], evidence: new Map(), jobs: new Map(), sizeClaims: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: null, runId: null };
   const drop = (why: string) => { out.dropped[why] = (out.dropped[why] ?? 0) + 1; };
@@ -81,7 +97,7 @@ export async function discoverHiringCompanies(
     qualifier: { role_terms: hiring.roleTerms, excluded_role_terms: hiring.excludedRoleTerms ?? [] } }]) : null;
   let items: unknown[];
   try {
-    const run = await invoke(SIGNAL_ACTORS.jobs.key, jobDiscoveryInput(spec, titles, opts.maxItems), { maxItems: opts.maxItems, idempotencyKey: `${opts.idPrefix}:${SIGNAL_ACTORS.jobs.key}:discovery` });
+    const run = await invoke(SIGNAL_ACTORS.jobs.key, opts.input ?? jobDiscoveryInput(spec, titles, opts.maxItems), { maxItems: opts.maxItems, idempotencyKey: `${opts.idPrefix}:${SIGNAL_ACTORS.jobs.key}:discovery` });
     items = run.items;
     out.runId = run.runId ?? null;
     out.spentUsd = run.chargedUsd ?? (items.length ? worstCaseUsd(SIGNAL_ACTORS.jobs, items.length) : SIGNAL_ACTORS.jobs.perStartUsd);
@@ -124,6 +140,69 @@ export async function discoverHiringCompanies(
       .map((ev) => (ev.dimension === "hiring" || ev.dimension === "job") && newest ? { ...ev, occurred_at: ev.dimension === "job" ? ((ev.value as { posted_date?: string })?.posted_date ?? newest) : newest } : ev);
     out.evidence.set(slug, evidence);
     out.jobs.set(slug, jobs);
+    out.sizeClaims!.set(slug, norm.company_size_band ? { min: norm.company_size_band.min ?? null, max: norm.company_size_band.max ?? null } : null);
+    out.companies.push({
+      provider: "apify", recordId: norm.external_source_id, retrievedAt: at,
+      name: norm.company_name, domain: norm.canonical_domain, linkedinUrl: norm.linkedin_company_url,
+      industry: norm.provider_industry ? [norm.provider_industry] : null,
+      assertedFilters: [], ignoredFilters: [],
+    });
+  }
+  return out;
+}
+
+// ── COMPANY-FIRST DISCOVERY (V2's company search, reused under V4) ──────────
+//
+// One `harvestapi/linkedin-company-search` run (short mode) with the input V2's own compiler
+// produced (`compileHarvestCompanySearchInput`: structured filters, never a concept in the
+// name index). Rows are normalised by V2's `normalizeLinkedInCompanyCandidate`: every row is
+// a CANDIDATE — its industry label is "unsafe" and its size band a plausible claim — so only
+// IDENTITY is carried as evidence here. HQ and size are left to the company record, business
+// model to the website step, exactly as for job discovery. Spend: one run, reserved by the
+// caller's ledgered invoker, capped at its worst case; a failed run is counted, never retried.
+export const COMPANY_DISCOVERY_ROUTE = "lead_pipeline_company_discovery" as const;
+
+export async function discoverFirmographicCompanies(
+  input: HarvestCompanySearchInput, invoke: ActorInvoker | null,
+  opts: { maxUsd: number; now: Date; idPrefix: string; missionId?: string | null },
+): Promise<HiringDiscovery> {
+  const out: HiringDiscovery = { companies: [], evidence: new Map(), jobs: new Map(), sizeClaims: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: null, runId: null };
+  const drop = (why: string) => { out.dropped[why] = (out.dropped[why] ?? 0) + 1; };
+  if (!invoke) { out.stopped = "apify_unavailable"; return out; }
+  // Re-compiled at the boundary: the plan validated this input, the run refuses it again if not.
+  const compiled = compileHarvestCompanySearchInput(input);
+  if (!compiled.ok) { out.stopped = `company search input refused before any spend: ${compiled.errors.join("; ")}`; return out; }
+  const worst = worstCaseUsd({ key: COMPANY_SEARCH_ACTOR.key, actorId: COMPANY_SEARCH_ACTOR.actorId, perItemUsd: COMPANY_SEARCH_ACTOR.perItemUsd, perStartUsd: COMPANY_SEARCH_ACTOR.perStartUsd, emptyUsd: 0 }, input.maxItems);
+  if (worst > opts.maxUsd + 1e-9) { out.stopped = "budget"; return out; }
+
+  let items: unknown[];
+  try {
+    const run = await invoke(COMPANY_SEARCH_ACTOR.key, compiled.input as unknown as Record<string, unknown>, { maxItems: input.maxItems, idempotencyKey: `${opts.idPrefix}:${COMPANY_SEARCH_ACTOR.key}:discovery` });
+    items = run.items;
+    out.runId = run.runId ?? null;
+    out.spentUsd = run.chargedUsd ?? Math.round((COMPANY_SEARCH_ACTOR.perStartUsd + COMPANY_SEARCH_ACTOR.perItemUsd * items.length) * 1e6) / 1e6;
+  } catch (e) {
+    out.spentUsd = worst;
+    out.stopped = `company search failed (${(e as Error)?.name ?? "error"}); counted at its worst case, not retried`;
+    return out;
+  }
+
+  const at = opts.now.toISOString();
+  const seen = new Set<string>();
+  for (const raw of items) {
+    out.rows++;
+    const norm = normalizeLinkedInCompanyCandidate((raw ?? {}) as Record<string, unknown>);
+    const slug = slugOf(norm.linkedin_company_url);
+    if (!slug) { drop("no_company_linkedin"); continue; }
+    if (seen.has(slug)) { drop("duplicate_row"); continue; }
+    seen.add(slug);
+    const obs = observationFromCompany(norm, {
+      capability: "company_discovery", actor_key: COMPANY_SEARCH_ACTOR.key, provider: "apify", route_id: COMPANY_DISCOVERY_ROUTE,
+      plan_version: null, provider_call_id: out.runId, mission_id: opts.missionId ?? null, observed_at: at,
+    }, []);
+    // A search row proves who the company is, nothing else: HQ, size, industry are re-checked.
+    out.evidence.set(slug, obs.evidence.filter((ev) => ev.dimension === "identity"));
+    out.jobs.set(slug, []);
     out.sizeClaims!.set(slug, norm.company_size_band ? { min: norm.company_size_band.min ?? null, max: norm.company_size_band.max ?? null } : null);
     out.companies.push({
       provider: "apify", recordId: norm.external_source_id, retrievedAt: at,
