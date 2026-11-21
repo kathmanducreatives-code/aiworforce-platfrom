@@ -100,8 +100,12 @@ export function buildInput(e: ActorEntry, c: MissionContract, opts: { limit: num
     const ids = [...new Set(inds.flatMap((r) => LINKEDIN_INDUSTRY_IDS[r.value] ?? []))];
     const unmapped = inds.filter((r) => !LINKEDIN_INDUSTRY_IDS[r.value]);
     const industryFiltered = ids.length ? put("industries", ids) : false;
-    for (const r of inds) disclose(r, false, "industry_verified", LINKEDIN_INDUSTRY_IDS[r.value] && industryFiltered ? `narrowed by LinkedIn industry ids ${JSON.stringify(LINKEDIN_INDUSTRY_IDS[r.value])}; a taxonomy label proves no industry` : "no reviewed LinkedIn industry code: not narrowed at source");
-    if (!ids.length && unmapped.length && e.slots.query) put("query", unmapped.map((r) => r.value).join(" OR "));
+    // NEVER A CONCEPT IN A NAME INDEX. linkedin-company-search's `searchQuery` matches company
+    // NAMES; a concept ("B2B SaaS") returns a successful, empty, still-billed run (V2 learned this
+    // live: leadCapabilityEngine.ts, compileHarvestCompanySearchInput). An industry with no
+    // reviewed code is disclosed as not narrowed — it is never written into `query`.
+    for (const r of inds) disclose(r, false, "industry_verified", LINKEDIN_INDUSTRY_IDS[r.value] && industryFiltered ? `narrowed by LinkedIn industry ids ${JSON.stringify(LINKEDIN_INDUSTRY_IDS[r.value])}; a taxonomy label proves no industry` : "no reviewed LinkedIn industry code: not narrowed at source (searchQuery matches names, never concepts)");
+    void unmapped;
     for (const s of reqs(c, "company_size")) {
       const b = sizeBands(s.min, s.max);
       const sized = put("companySize", b.bands);
@@ -171,6 +175,13 @@ export function planSelection(c: MissionContract, opts: { ceilingUsd?: number; a
   }
   const worstUsd = Math.round(steps.reduce((s, x) => s + x.worstUsd, 0) * 1e6) / 1e6;
   if (worstUsd > ceilingUsd) blockers.push(`worst case $${worstUsd} exceeds the $${ceilingUsd} ceiling`);
+  // NO DISCOVERY STEP, NO PLAN: a mission none of whose needs DISCOVERS anything is not
+  // "executable at $0" — it has no way to find a single company.
+  if (!needs.some((n) => n.capability.startsWith("discover_"))) blockers.push("no capability in the catalogue can discover companies for this mission");
+  // A REQUIRED signal with no capability (funding, news, headcount…) blocks, by name.
+  for (const s of reqs(c, "signal").filter((x) => x.necessity === "required" && x.kind !== "hiring")) blockers.push(`"${s.display.label}": no capability provides a ${s.kind} signal`);
+  // A REQUIRED disclosed requirement ("Not checked: using HubSpot") blocks, as in the live engine.
+  for (const u of reqs(c, "unsupported").filter((x) => x.necessity === "required")) blockers.push(`"${u.display.label}": cannot be checked by any capability`);
   // As the live engine: a REQUIRED requirement no approved step can prove blocks the plan
   // unless the owner explicitly accepts review-only results (they stay "needs verification").
   if (!opts.allowReviewOnly) for (const d of steps.flatMap((s) => s.disclosures)) if (d.handling === "unverifiable") blockers.push(`"${d.label}": no approved step can prove it (allow review-only to run)`);
