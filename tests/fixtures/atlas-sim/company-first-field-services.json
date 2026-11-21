@@ -1,0 +1,97 @@
+{
+ "name": "company-first-field-services",
+ "description": "Company-first discovery (flag on): US commercial field-service companies.",
+ "covers": [
+  "commercial field services narrows by reviewed LinkedIn codes 122/2247/453"
+ ],
+ "query": "Find 5 commercial field services companies headquartered in the US.",
+ "requestedCount": 5,
+ "interpretation": {
+  "understanding": {
+   "roles": [],
+   "role_match": "any",
+   "places": [
+    {
+     "span": "headquartered in the US",
+     "place": "united states",
+     "other_place": null,
+     "scope": "headquarters",
+     "necessity": "required"
+    }
+   ],
+   "industries": [
+    {
+     "span": "commercial field services",
+     "industry": "commercial field services",
+     "necessity": "required"
+    }
+   ],
+   "signals": [],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": []
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": 5,
+   "count_span": "5",
+   "person_roles": []
+  },
+  "company_size": null,
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [
+  {
+   "slug": "coolpro",
+   "name": "CoolPro Mechanical",
+   "site": "coolpro.example",
+   "industry": "Facilities Services",
+   "employees": 60,
+   "model": "b2b_service",
+   "page": "CoolPro Mechanical services HVAC and refrigeration systems for commercial buildings, restaurants and hospitals."
+  },
+  {
+   "slug": "liftcare",
+   "name": "LiftCare Elevator Service",
+   "site": "liftcare.example",
+   "industry": "Commercial and Industrial Machinery Maintenance",
+   "employees": 110,
+   "model": "b2b_service",
+   "page": "LiftCare maintains elevators and escalators for property managers and hospitals."
+  },
+  {
+   "slug": "sparkline",
+   "name": "Sparkline Electric",
+   "site": "sparkline.example",
+   "industry": "Building Equipment Contractors",
+   "employees": 75,
+   "model": "b2b_service",
+   "page": "Sparkline Electric installs and services electrical systems for commercial buildings."
+  }
+ ],
+ "flags": {
+  "LEAD_PIPELINE_COMPANY_SEARCH": "true"
+ },
+ "allowReviewOnly": true,
+ "expect": {
+  "planStatus": 200,
+  "planState": "ready",
+  "runStatuses": [
+   200
+  ],
+  "outcome": "needs_verification",
+  "qualified": [],
+  "needsVerification": [
+   "CoolPro Mechanical",
+   "LiftCare Elevator Service",
+   "Sparkline Electric"
+  ],
+  "excluded": 0,
+  "leadsSaved": 3,
+  "actorCalls": 2,
+  "persistFailed": 0,
+  "rejected": []
+ }
+}

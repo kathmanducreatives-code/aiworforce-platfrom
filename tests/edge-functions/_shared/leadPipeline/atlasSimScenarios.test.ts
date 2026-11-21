@@ -52,6 +52,11 @@ for (const s of scenarios) {
     // INVARIANTS (every scenario)
     if (b.excludedCount !== undefined) assertEquals((b.rejected ?? []).length, Math.min(50, b.excludedCount), `${s.name}: every excluded company is named`);
     const planHash = planOf(r.plan.body).planHash;
+    // WHAT RUNS IS WHAT WAS APPROVED (V5 Phase B): a discovery step's exact input is in the
+    // signed plan, and the Actor receives exactly that input — never a re-derived one.
+    const approvedStep = (planOf(r.plan.body) as { steps?: { actor?: string; input?: Record<string, unknown> }[] }).steps?.[0];
+    const sent = r.actorCalls.find((c) => c.actor === approvedStep?.actor);
+    if (approvedStep?.input && sent) assertEquals(sent.input, approvedStep.input, `${s.name}: the Actor input differs from the approved plan`);
     for (const c of r.actorCalls) {
       assert(planHash && c.key.includes(planHash.slice(0, 16)) || r.runs.length > 1, `${s.name}: Actor key not bound to the plan (${c.key})`);
       assert(c.items <= c.maxItems, `${s.name}: ${c.actor} delivered more than maxItems`);
