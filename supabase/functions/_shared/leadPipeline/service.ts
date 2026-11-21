@@ -57,7 +57,7 @@ import { adviseStrategy, isStrategy, planStrategy, specFromMission, type Discove
 
 const on = (v: string | undefined) => !!v && ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
 
-export interface PipelineFlags { enabled: boolean; workspaces: Set<string>; signals: boolean; phones: boolean; strictRequirements?: boolean }
+export interface PipelineFlags { enabled: boolean; workspaces: Set<string>; signals: boolean; phones: boolean; strictRequirements?: boolean; companySearch?: boolean }
 export function readPipelineFlags(env: Env): PipelineFlags {
   return {
     enabled: on(env("LEAD_PIPELINE_ENABLED")),
@@ -68,6 +68,9 @@ export function readPipelineFlags(env: Env): PipelineFlags {
     // Option E Stage 6: refuse a model-invented requirement outside the closed vocabulary.
     // Off by default; until it is on, the plan only REPORTS what it would refuse.
     strictRequirements: on(env("LEAD_STRICT_REQUIREMENTS_ENABLED")),
+    // Company-first discovery (harvestapi/linkedin-company-search). Off by default: until an
+    // owner turns it on, a request with no hiring or post signal is refused exactly as before.
+    companySearch: on(env("LEAD_PIPELINE_COMPANY_SEARCH")),
   };
 }
 
@@ -399,7 +402,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       apify: { enabled: f.enabled && f.provider.apify, connected: !!d.apify, authorized: true },
       apollo: { enabled: f.enabled && f.provider.apollo && f.commercialTerms.apollo, connected: ap?.status === "connected", authorized: true },
     },
-    budget: req.budget, user: req.user, businessModelGrounding: !!d.groundBusinessModel,
+    budget: req.budget, user: req.user, businessModelGrounding: !!d.groundBusinessModel, companySearch: !!d.flags.companySearch,
     // The plan hash binds the workspace and the interpretation contract it was read under.
     // Contract mode: the plan hash binds the contract's own hash, so an approval names one exact meaning.
     binding: { workspaceId: req.workspaceId, contractVersion: mc ? `${MISSION_CONTRACT_VERSION}:${mcHash}` : d.contractVersion ?? activeMissionContract() },
