@@ -39,6 +39,7 @@ import { configureIcp, ICP_A, NON_DECISION_TITLES, type IcpConfig } from "./icp.
 import { SIGNAL_ACTORS, worstCaseUsd } from "./signals.ts";
 import { COMPANY_SEARCH_ACTOR, PIPELINE_ACTORS } from "./apifyInvoker.ts";
 import { jobDiscoveryInput } from "./apifyDiscovery.ts";
+import { reviewedBuild } from "./actorBuilds.ts";
 import { compileHarvestCompanySearchInput, type HarvestCompanySearchInput } from "../hiringActorInputs.ts";
 import { companySizeBandsFor, industryIdsForVertical } from "../icpDiscoveryConstraints.ts";
 
@@ -110,6 +111,12 @@ export interface DiscoveryCapability {
  * (`PIPELINE_ACTORS`, which also prices it and caps maxItems at 100). The registry
  * never widens that list: adding an actor is a reviewed change to apifyInvoker.ts.
  */
+/** The reviewed Apify build a capability's Actor runs (`${actorId}@${build}`), or null. */
+export const buildOf = (capabilityId: string): string | null => {
+  const k = DISCOVERY_CAPABILITIES[capabilityId]?.actorKey;
+  const b = k ? reviewedBuild(k) : null;
+  return b ? `${b.actorId}@${b.build}` : null;
+};
 export const actorStatus = (key: string): CapabilityStatus => (Object.hasOwn(PIPELINE_ACTORS, key) ? "available" : "not_approved");
 
 /** Apollo People Search returned HTTP 403 (API_INACCESSIBLE) on 2026-10-30. Flipping this is a reviewed change after a validated, approved check. */
@@ -878,7 +885,10 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
     meaning, strategy: chosen?.strategy ?? null,
     // Actor and EXACT input are bound (V5 Phase B): a different input at run time is a different hash.
     steps: (chosen?.steps ?? []).map((x) => ({ capability: x.capability, provider: x.provider, role: x.role, maxItems: x.maxItems, estimate: x.estimate,
-      ...(x.actor ? { actor: x.actor } : {}), ...(x.input ? { input: x.input } : {}) })),
+      ...(x.actor ? { actor: x.actor } : {}), ...(x.input ? { input: x.input } : {}),
+      // ...and the reviewed BUILD of every Apify step's Actor (V5 Phase C, actorBuilds.ts): a new
+      // reviewed build is a new plan, so an approval never covers an unreviewed Actor version.
+      ...(buildOf(x.capability) ? { build: buildOf(x.capability) } : {}) })),
     limitations: (chosen?.limitations ?? []).map((l) => ({ code: l.code, detail: l.detail })), estimate: chosen?.estimate ?? null,
     routes: (chosen?.requirementRoutes ?? []).map((r) => ({ id: r.criterionId, route: r.route, by: [...r.checkedBy].sort() })),
     ceilings: { maxLeadoceanRecords: ctx.budget.maxLeadoceanRecords, maxApifyUsd: ctx.budget.maxApifyUsd },

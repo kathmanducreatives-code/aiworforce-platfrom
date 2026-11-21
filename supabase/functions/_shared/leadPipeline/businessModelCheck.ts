@@ -28,6 +28,7 @@ import type { EvidenceItem } from "../candidateObservation.ts";
 import type { ActorInvoker } from "../discoveryProviders/adapters/apify.ts";
 import { canonicalDomain } from "./identity.ts";
 import { WEBSITE_PAGES_WORST_USD } from "./apifyInvoker.ts";
+import { rethrowPending } from "./runErrors.ts";
 
 export const WEBSITE_PAGES_ACTOR_KEY = "apify_website_content" as const;
 export const BUSINESS_MODEL_PAGES_PER_COMPANY = 3;
@@ -99,6 +100,7 @@ export async function checkBusinessModels(
   try {
     fetched = await io.fetchPages(targets.map((t) => ({ companyKey: t.companyKey, domain: t.domain })), { maxUsd: opts.maxUsd, idempotencyKey: opts.idempotencyKey });
   } catch (e) {
+    rethrowPending(e);
     // A failed page run cites nothing: every company stays unknown (pending), nothing is retried.
     return { findings: targets.map((t) => ({ companyKey: t.companyKey, status: "unknown", quote: null, url: null, fetchedAt: null, reason: "the website could not be read", item: null })),
       // A failed run may have billed (the invoker marks it uncertain): report its worst case, never $0.

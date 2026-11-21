@@ -12,7 +12,7 @@ import { loadScenarios, runScenario } from "../../../../scripts/dev/atlas-sim/ha
 const DIR = new URL("../../../fixtures/atlas-sim/", import.meta.url);
 type Obj = Record<string, unknown>;
 type Company = { company: { name: string } };
-type RunBody = { outcome?: { status?: string; spend?: { basis?: string } }; queue?: Company[]; review?: Company[]; excludedCount?: number; rejected?: { name: string }[];
+type RunBody = { outcome?: { status?: string; spend?: { basis?: string } }; chargeStates?: Record<string, number>; queue?: Company[]; review?: Company[]; excludedCount?: number; rejected?: { name: string }[];
   persistence?: { failed?: number }; spend?: { apifyUsd: number } };
 const planOf = (b: Obj) => (b.plan ?? {}) as { status?: string; planHash?: string; estimate?: { apifyUsd: number } };
 const scenarios = await loadScenarios(DIR);
@@ -24,6 +24,7 @@ const REQUIRED_COVERAGE = [
   "employee-count preferences", "employee-count exclusions",
   "soft preferences", "negative requirements", "unsupported requirements", "review-only plans", "approval rejection", "contract-hash mismatch",
   "provider timeout", "invalid Actor input", "HTTP errors", "empty dataset", "duplicate delivery", "budget-limit rejection", "unknown actual spend",
+  "async runs", "run adoption", "interrupted connection", "provider receipts",
   "existing company", "existing holds", "repeated run", "workspace isolation", "Workbench plan_id association", "database write failure",
 ];
 
@@ -46,6 +47,8 @@ for (const s of scenarios) {
       needsVerification: (b.review ?? []).map((c) => c.company.name).sort(),
       excluded: b.excludedCount ?? null, leadsSaved: r.db.leads.length, actorCalls: r.actorCalls.length, persistFailed: b.persistence?.failed ?? null,
       rejected: (b.rejected ?? []).map((x) => x.name).sort(),
+      // Phase C (async runs): Actor runs bought, the spend's basis and how sure each charge is.
+      purchases: r.purchases, spendBasis: b.outcome?.spend?.basis ?? null, chargeStates: (b as { chargeStates?: unknown }).chargeStates ?? null,
     };
     for (const [k, v] of Object.entries(s.expect ?? {})) assertEquals(got[k], v, `${s.name}: ${k}`);
 
@@ -60,6 +63,13 @@ for (const s of scenarios) {
     for (const c of r.actorCalls) {
       assert(planHash && c.key.includes(planHash.slice(0, 16)) || r.runs.length > 1, `${s.name}: Actor key not bound to the plan (${c.key})`);
       assert(c.items <= c.maxItems, `${s.name}: ${c.actor} delivered more than maxItems`);
+    }
+    // AT MOST ONE PURCHASE PER STEP (Phase C): however many times the run is sent, interrupted
+    // or adopted, one ledger key never creates two Apify runs.
+    if (s.async) {
+      const bought = r.actorCalls.filter((c) => c.outcome === "started" || c.outcome === "start unanswered");
+      assertEquals(bought.length, new Set(bought.map((c) => c.key)).size, `${s.name}: a step was bought twice`);
+      assertEquals(r.purchases, bought.length, `${s.name}: a purchase was not recorded`);
     }
     if (!r.runs.some((x) => x.status === 200)) {
       assertEquals(r.actorCalls.length, s.approval === "approve" || !s.approval ? r.actorCalls.length : 0, `${s.name}: an Actor ran without an approved run`);
