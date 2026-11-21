@@ -343,6 +343,12 @@ a.brain-site:hover { color: rgb(var(--ag-text)); }
 .bcp-readonly { display: grid; gap: 8px; }
 .bcp-readonly dt { font-size: 11px; color: rgb(var(--ag-text-muted)); }
 .bcp-readonly dd { font-size: 13px; color: rgb(var(--ag-text)); }
+.bcp-conflicts { display: flex; flex-direction: column; gap: 10px; }
+.bcp-conflict { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgb(251 191 36 / .35); background: rgb(251 191 36 / .05); }
+.bcp-conflict-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: rgb(251 191 36); }
+.bcp-compare { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bcp-compare dt { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: rgb(var(--ag-text-muted)); }
+.bcp-compare dd { margin-top: 2px; font-size: 13px; color: rgb(var(--ag-text)); }
 @container (min-width: 900px) {
   .bcp-suggestions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bcp-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }

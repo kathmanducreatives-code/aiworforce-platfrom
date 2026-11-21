@@ -27,9 +27,9 @@ import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { BrainEditableContext } from '@/components/company-brain/brainEditable';
 import { BrainMemoryPanel } from '@/components/company-brain/memory/BrainMemoryPanel';
 import { companyBrainWritesBlocked, COMPANY_BRAIN_UNAVAILABLE_MESSAGE, COMPANY_BRAIN_UNAVAILABLE_TITLE } from '@/lib/env/companyBrainAvailability';
-import { BrainCompletionPanel } from '@/components/company-brain/completion/BrainCompletionPanel';
+import { BrainCompletionPanel, IcpConflictList } from '@/components/company-brain/completion/BrainCompletionPanel';
 import { fetchStoredResearch } from '@/lib/companyBrain/researchRuns';
-import { assessCompanyBrain, buildCompletionSuggestions, type StoredResearchRun } from '@/lib/companyBrain/completion';
+import { assessCompanyBrain, assessIcpConsistency, buildCompletionSuggestions, type StoredResearchRun } from '@/lib/companyBrain/completion';
 
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
@@ -115,7 +115,9 @@ export default function CompanyBrainDashboard() {
     if (scope.kind === 'agency' && workspaceId) void fetchStoredResearch(workspaceId).then((r) => { if (live) setResearch(r); });
     return () => { live = false; };
   }, [scope.kind, workspaceId]);
-  const assessment = useMemo(() => (scope.kind === 'agency' ? assessCompanyBrain(view.raw) : null), [scope.kind, view.raw]);
+  // B2.1: the ICP copies' disagreements, attached to their sections with one-click resolutions.
+  const icpConflicts = useMemo(() => (scope.kind === 'agency' ? assessIcpConsistency(view.raw).conflicts : []), [scope.kind, view.raw]);
+  const assessment = useMemo(() => (scope.kind === 'agency' ? assessCompanyBrain(view.raw, { conflicts: icpConflicts }) : null), [scope.kind, view.raw, icpConflicts]);
   const suggestions = useMemo(() => (scope.kind === 'agency' ? buildCompletionSuggestions(view.raw, research) : []), [scope.kind, view.raw, research]);
 
   // Seller-identity state for the diagnostic banner (nested vs hidden legacy flat).
@@ -176,7 +178,8 @@ export default function CompanyBrainDashboard() {
         batchFailed.current = true;
         lastFailureWasConflict.current = result.conflict === true;
         toast.error(
-          'unavailable' in result && result.unavailable ? COMPANY_BRAIN_UNAVAILABLE_TITLE : result.conflict ? 'Company Brain was changed elsewhere' : 'Save failed',
+          'unavailable' in result && result.unavailable ? COMPANY_BRAIN_UNAVAILABLE_TITLE : result.conflict ? 'Company Brain was changed elsewhere'
+            : 'contradiction' in result && result.contradiction ? 'This change would contradict your ICP' : 'Save failed',
           { description: result.message });
         return false;
       }
@@ -298,7 +301,11 @@ export default function CompanyBrainDashboard() {
           completion={assessment && (
             <BrainCompletionPanel assessment={assessment} profile={view.raw} suggestions={suggestions}
               canEdit={canEditBrain && !brainWritesBlocked} onSave={saveCompletion}
-              onOpenEditor={(section) => setOpenSection(section)} />
+              onOpenEditor={(section) => setOpenSection(section)}
+              renderConflicts={(section) => (
+                <IcpConflictList conflicts={icpConflicts.filter((c) => c.section === section)}
+                  canEdit={canEditBrain && !brainWritesBlocked} onSave={saveCompletion} />
+              )} />
           )}
           scopeSwitcher={brainScope.available ? <BrainScopeSwitcher scope={scope} clients={brainScope.clients} onSelect={brainScope.select} disabled={openSection !== null} /> : undefined} /></BrainEditableContext.Provider>}
         {/* Company memory: decisions, preferences, approved facts, agent

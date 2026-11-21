@@ -22,6 +22,8 @@ export interface BrainSaveResult {
   message?: string;
   /** This environment does not allow Company Brain writes at all (isolated TEST). */
   unavailable?: boolean;
+  /** Company Brain V2 (B2.1): refused because it would make the ICP contradict itself. */
+  contradiction?: boolean;
 }
 
 export async function saveCompanyBrainPatch(input: {
@@ -60,6 +62,10 @@ export async function saveCompanyBrainPatch(input: {
     return { ok: false, conflict: true, message: 'The Company Brain was changed elsewhere. Showing the latest version — please make your change again.' };
   }
   const reason = typeof body?.detail === 'string' ? body.detail : typeof body?.rejected_reason === 'string' ? body.rejected_reason : error?.message;
+  // Company Brain V2 (B2.1): the edit would make the ICP contradict itself.
+  if (body?.rejected_reason === 'icp_contradiction') {
+    return { ok: false, conflict: false, contradiction: true, message: reason || 'This change would contradict your ICP.' };
+  }
   return { ok: false, conflict: false, message: reason || 'Save failed' };
 }
 

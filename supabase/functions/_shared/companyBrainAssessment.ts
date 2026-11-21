@@ -211,6 +211,8 @@ export interface SectionAssessment {
   filled: string[];
   missing: Array<{ path: string; label: string }>;
   issues: SectionIssue[];
+  /** Every field is filled but the section still holds a conflict: not complete until resolved. */
+  needs_review: boolean;
   editor: SectionEditor;
 }
 
@@ -316,12 +318,17 @@ export function assessCompanyBrain(profile: Raw | null | undefined, opts: { conf
     const anyOf = spec.any_of ?? spec.fields.map((f) => f.path);
     const started = anyOf.some((p) => isFilled(b, raw, p));
     const needed = spec.complete_min ?? spec.fields.length;
-    const status: SectionStatus = !started ? "missing" : filled.length >= needed ? "complete" : "incomplete";
+    const issues = sectionIssues(spec, b, conflicts);
+    const allFilled = started && filled.length >= needed;
+    // A filled section that still holds a conflict is not complete: agents would read a
+    // disagreement. It counts as incomplete (half credit) until the conflict is resolved.
+    const needs_review = allFilled && issues.some((i) => i.kind === "conflicting");
+    const status: SectionStatus = !started ? "missing" : allFilled && !needs_review ? "complete" : "incomplete";
     return {
       key: spec.key, title: spec.title, used_by: spec.used_by, tier: spec.tier, status, filled,
-      // A complete section lists nothing as missing, even when optional fields of it are empty.
-      missing: status === "complete" ? [] : spec.fields.filter((f) => !filled.includes(f.path)).map((f) => ({ path: f.path, label: f.label })),
-      issues: sectionIssues(spec, b, conflicts),
+      // A filled section lists nothing as missing, even when optional fields of it are empty.
+      missing: allFilled ? [] : spec.fields.filter((f) => !filled.includes(f.path)).map((f) => ({ path: f.path, label: f.label })),
+      issues, needs_review,
       editor: spec.editor,
     };
   });

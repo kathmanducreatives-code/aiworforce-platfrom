@@ -185,15 +185,21 @@ Deno.test("B2.0 · an editor sees the truthful state, fills goals, accepts and e
   await signIn(EDITOR.email);
   assert(await waitFor(`!!document.querySelector('#brain-completion')`, 30000), "the completion panel rendered");
   assert(await waitFor(`document.body.innerText.includes('Finish the essentials your AI team relies on')`));
-  // Truthful: activation says complete, the panel does not.
+  // Truthful: activation says complete, the panel does not. The 2 conflicts are B2.1's (this
+  // fixture's size label disagrees with its bounds; its legacy persona copy is stale). A filled
+  // section with an open conflict is "Needs review", not complete: only the company profile counts.
   assertEquals(await evaluate(`[...document.querySelectorAll('.bcp-metric')].map((m) => m.innerText.replace(/\\s+/g, ' ').trim())`),
-    ["ESSENTIALS 3 of 7", "ENRICHMENT 0 of 5", "CONFLICTS 0", "NEEDS VERIFICATION 0"]);
+    ["ESSENTIALS 1 of 7", "ENRICHMENT 0 of 5", "CONFLICTS 2", "NEEDS VERIFICATION 0"]);
   assertEquals(await rowStatus("Business goals"), "Missing");
-  assertEquals(await rowStatus("Target customer (ICP)"), "Complete");
-  assert(await waitFor(`document.querySelector('.brain-identity').innerText.includes('4 essentials to finish')`), "the identity ring counts essentials (7 − 3)");
+  assertEquals(await rowStatus("Company profile"), "Complete");
+  assertEquals(await rowStatus("Target customer (ICP)"), "Needs review");
+  assertEquals(await rowStatus("Buyer personas"), "Needs review");
+  assert(await waitFor(`document.querySelector('.brain-identity').innerText.includes('6 essentials to finish')`), "the identity ring counts essentials (7 − 1)");
   await shot("1-before-goals-open");
 
-  // Goals is the first thing to do and is open: type two goals, save explicitly.
+  // Goals: open it (a section with a conflict opens first), type two goals, save explicitly.
+  if (!(await evaluate(`!!document.querySelector('#bcp-goals')`))) assert(await click(`(${row("Business goals")}).querySelector('.bcp-row-head')`));
+  assert(await waitFor(`!!document.querySelector('#bcp-goals input[aria-label="Go-to-market goal"]')`));
   await typeInto(`document.querySelector('#bcp-goals input[aria-label="Go-to-market goal"]')`, "10 qualified meetings a month");
   await typeInto(`document.querySelector('#bcp-goals input[aria-label="Outreach goal"]')`, "50 replies a month");
   await shot("2-goals-typed");
@@ -258,6 +264,75 @@ Deno.test("B2.0 · a save built on an out-of-date version is refused, not silent
   const p = (await profile()).profile.gtm as Record<string, unknown>;
   assertEquals(p.primary_channel, "LinkedIn", "the other change is kept");
   assertEquals(p.motion, "", "the stale save did not land");
+  await signOut();
+});
+
+// ── B2.1: a second workspace whose ICP copies disagree (fictional) ─────────────
+const ws2 = await seedWorkspace();
+const OWNER2 = await signUp();
+await sql`insert into public.workspace_members (workspace_id, user_id, role) values (${ws2}, ${OWNER2.id}, 'owner')`;
+await sql`insert into public.company_brain (workspace_id, profile, onboarding_completed) values (${ws2}, ${sql.json({
+  ...FIX.contradictory_copies, company: { name: "Contoso Retail Tech", description: "Store analytics", business_model: "B2B SaaS" },
+} as never)}, true)`;
+const profile2 = async () => (await sql`select profile, updated_at from public.company_brain where workspace_id = ${ws2}`)[0] as { profile: Record<string, unknown>; updated_at: string };
+const conflict = (id: string) => `document.querySelector('[data-conflict="${id}"]')`;
+
+Deno.test("B2.1 · disagreeing ICP copies are shown with what each says, resolved in one click, and lead search then reads the ICP", opts, async () => {
+  await signIn(OWNER2.email);
+  assert(await waitFor(`!!document.querySelector('#brain-completion')`, 30000));
+  assert(await waitFor(`[...document.querySelectorAll('.bcp-metric')].some((m) => m.innerText.replace(/\\s+/g, ' ').includes('CONFLICTS 8'))`), "eight conflicts counted");
+  // The section with conflicts opens first, with the stale copy shown next to the ICP.
+  assert(await waitFor(`!!(${conflict("mirror_industries")})`), "the stale industries conflict is shown");
+  assert(await waitFor(`(${conflict("mirror_industries")}).innerText.includes('Manufacturing') && (${conflict("mirror_industries")}).innerText.includes('Retail')`));
+  // Layout: the open section's text and conflict cards line up with the row title.
+  const xs = await evaluate(`(() => { const r = document.querySelector('.bcp-row.is-open'); const x = (sel) => Math.round(r.querySelector(sel).getBoundingClientRect().x); return [x('.bcp-row-title'), x('.bcp-row-body > .bcp-missing'), x('.bcp-conflict')]; })()`) as number[];
+  console.log("[layout] title / body text / conflict card x:", JSON.stringify(xs));
+  assert(Math.abs(xs[0] - xs[1]) <= 1 && Math.abs(xs[0] - xs[2]) <= 1, `open section aligned with its title: ${JSON.stringify(xs)}`);
+  await shot("6-conflicts");
+  const before = compilerBrainContext((await profile2()).profile);
+  assertEquals([before.industries, before.locations], [["Manufacturing"], ["Japan"]], "lead search reads the stale copy");
+
+  // One click: the copy lead search reads is rewritten from the ICP (through the authorized update).
+  assert(await click(button("Update the copy lead search reads to match your target industries", `(${conflict("mirror_industries")})`)));
+  assert(await waitFor(`!(${conflict("mirror_industries")})`), "the resolved conflict leaves");
+  const end = Date.now() + 10000;
+  let after = compilerBrainContext((await profile2()).profile);
+  while (Date.now() < end && after.industries?.[0] !== "Retail") { await sleep(250); after = compilerBrainContext((await profile2()).profile); }
+  assertEquals(after.industries, ["Retail"], "lead search now reads the ICP's industries");
+  assertEquals(after.locations, ["France"], "and the ICP's geography (one resync writes every copy)");
+
+  // A contradiction is resolved by choosing a side.
+  assert(await click(`(${row("Qualification rules")}).querySelector('.bcp-row-head')`));
+  assert(await waitFor(`!!(${conflict("industry_targeted_and_excluded")})`));
+  assert(await click(button("Keep as a target industry", `(${conflict("industry_targeted_and_excluded")})`)));
+  assert(await waitFor(`!(${conflict("industry_targeted_and_excluded")})`));
+  const e2 = Date.now() + 10000;
+  let disq: unknown = null;
+  while (Date.now() < e2) {
+    disq = (((await profile2()).profile.target_customer as Record<string, unknown>).disqualifiers as Record<string, unknown>).industries;
+    if (Array.isArray(disq) && disq.length === 0) break;
+    await sleep(250);
+  }
+  assertEquals(disq, []);
+  await shot("7-after-resolve");
+
+  // A write that would CREATE a contradiction is refused by the server, from this page, with the reason.
+  const stamp = (await profile2()).updated_at;
+  const refused = await evaluate(`(async () => {
+    const { supabase } = await import('/src/integrations/supabase/client.ts');
+    const { data: { session } } = await supabase.auth.getSession();
+    // The CURRENT version, as the server sees it (PostgREST's format).
+    const { data: row } = await supabase.from('company_brain').select('updated_at').eq('workspace_id', ${JSON.stringify(ws2)}).single();
+    const r = await fetch('/functions/v1/generate-company-brain-draft', { method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update', workspace_id: ${JSON.stringify(ws2)}, expected_updated_at: row.updated_at,
+        patch: { buyer_personas: ['VP Operations', 'Intern'], target_customer: { disqualifiers: { industries: [], company_types: [], domains: [], keywords: [], titles: ['Intern'] } } } }) });
+    return { status: r.status, body: await r.json() };
+  })()`) as { status: number; body: { rejected_reason?: string; detail?: string } };
+  assertEquals(refused.status, 400);
+  assertEquals(refused.body.rejected_reason, "icp_contradiction");
+  assert((refused.body.detail ?? "").includes("both a buyer persona and an excluded title"));
+  assertEquals((await profile2()).updated_at, stamp, "nothing was written");
   await signOut();
 });
 

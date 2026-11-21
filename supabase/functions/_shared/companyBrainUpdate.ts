@@ -29,6 +29,7 @@ import { normalizeCompanyBrain, type CompanyBrainV2 } from "./normalizeCompanyBr
 import { computeCompanyBrainCompleteness } from "./companyBrainCompleteness.ts";
 import { resolveOriginAwareSave } from "./companyBrainOriginSave.ts";
 import { reconcileDerivedCopies, structuredAuthoritative } from "./companyBrainMirror.ts";
+import { introducedIcpContradictions } from "./companyBrainIcpConsistency.ts";
 
 // Re-exported: callers and tests import them from here since #147.
 export { mirrorLegacyIcp, reconcileDerivedCopies, structuredAuthoritative } from "./companyBrainMirror.ts";
@@ -95,7 +96,7 @@ export interface BrainUpdateInput {
   alreadyActive: boolean;
 }
 
-export type BrainUpdateRejection = "brain_not_found" | "missing_expected_version" | "stale" | "invalid_patch";
+export type BrainUpdateRejection = "brain_not_found" | "missing_expected_version" | "stale" | "invalid_patch" | "icp_contradiction";
 
 export type BrainUpdatePlan =
   | { ok: false; reason: BrainUpdateRejection; detail?: string }
@@ -147,6 +148,16 @@ export function planBrainUpdate(i: BrainUpdateInput): BrainUpdatePlan {
   merged.is_draft = i.alreadyActive ? false : merged.is_draft === true;
 
   reconcileDerivedCopies(merged, before, i.existing, after, "signal_preferences" in cleanPatch);
+
+  // B2.1 · ONE ICP: an edit may not CREATE a contradiction (the same industry
+  // targeted and excluded, a persona that is an excluded title, a size label
+  // that disagrees with its bounds, the radar watching an excluded industry).
+  // Contradictions already on record do not block unrelated edits — and the
+  // resolutions the Brain page offers remove them.
+  const introduced = introducedIcpContradictions(i.existing, merged);
+  if (introduced.length) {
+    return { ok: false, reason: "icp_contradiction", detail: introduced.map((c) => c.message).join(" ") };
+  }
 
   return { ok: true, profile: merged, normalized: normalizeCompanyBrain(merged), applied_paths: decision.applied_paths };
 }

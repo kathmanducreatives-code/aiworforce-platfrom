@@ -15,6 +15,7 @@ import {
   resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, spendRefusalMessage,
   describeSpend, MODEL_SPEND_REFUSED, type SpendDb,
 } from "../_shared/modelSpendCeiling.ts";
+import { writableAnalyzeDraft } from "../_shared/companyBrainIcpConsistency.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
 /**
  * LAYER 1, PER SPENDING BRANCH.
@@ -278,7 +279,8 @@ Deno.serve(withBuildStamp(async (req) => {
       }).catch(() => {});
 
       const draft = (ai.ok && ai.json ? ai.json : {}) as AnyObj;
-      const merged = await saveProfile({ ...draft, enriched: enrichments.length > 0 });
+      // B2.1: never let the model's ICP or competitor opinions overwrite a structured Brain.
+      const merged = await saveProfileWith((current) => ({ ...current, ...writableAnalyzeDraft(current, draft), enriched: enrichments.length > 0 }));
       return json({ ok: true, draft, profile: merged, warnings, phases, enriched: enrichments.length > 0, connectors: { scrape_url: scrapeReady } });
     }
 

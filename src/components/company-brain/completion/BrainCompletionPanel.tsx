@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import {
   acceptSuggestionPatch, buildCompletionPatch, readProfilePath, SECTION_SPECS,
   type AssessmentField, type AssessmentSectionKey, type BrainAssessment, type CompletionSuggestion,
-  type CompletionValue, type SectionAssessment,
+  type CompletionValue, type IcpConflict, type SectionAssessment,
 } from '@/lib/companyBrain/completion';
 import type { SectionKey as DrawerSection } from '@/lib/companyBrainSections';
 
@@ -56,8 +56,22 @@ const STAGE_COPY: Record<BrainAssessment['stage'], { title: string; text: string
 
 const STATUS_LABEL = { complete: 'Complete', incomplete: 'Incomplete', missing: 'Missing' } as const;
 
+// What each side of a conflict is, in words: "your ICP" is ambiguous when both sides live in it.
+const CONFLICT_COLUMNS: Record<string, [string, string]> = {
+  size_label_vs_bounds: ['Bounds lead search enforces', 'Size label'],
+  industry_targeted_and_excluded: ['Target industries', 'Also excluded'],
+  persona_title_excluded: ['Buyer personas', 'Also excluded titles'],
+  mirror_size: ['Your size label', 'What lead search reads'],
+  mirror_personas: ['Your buyer personas', 'Older copy'],
+  mirror_disqualifiers: ['Your disqualifiers', 'Older copy'],
+};
+const columns = (c: IcpConflict): [string, string] => CONFLICT_COLUMNS[c.id]
+  ?? ['Your ICP', c.kind === 'radar_drift' ? 'Signal monitoring' : 'What lead search reads'];
+
 export function BrainCompletionPanel({ assessment, profile, suggestions, canEdit, onSave, onOpenEditor, renderConflicts }: Props) {
-  const [open, setOpen] = useState<AssessmentSectionKey | null>(assessment.next);
+  // Open first: a section with a conflict (it changes what agents read), else the next thing to do.
+  const [open, setOpen] = useState<AssessmentSectionKey | null>(
+    assessment.sections.find((s) => s.issues.some((i) => i.kind === 'conflicting'))?.key ?? assessment.next);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const visible = useMemo(() => suggestions.filter((s) => !dismissed.has(s.id)), [suggestions, dismissed]);
   const bySection = (k: AssessmentSectionKey) => visible.filter((s) => s.section === k);
@@ -132,7 +146,8 @@ function SectionGroup({ title, hint, children }: { title: string; hint: string; 
   );
 }
 
-function StatusMark({ status }: { status: SectionAssessment['status'] }) {
+function StatusMark({ status, review }: { status: SectionAssessment['status']; review: boolean }) {
+  if (review) return <span className="bcp-mark is-incomplete" aria-hidden><AlertTriangle size={13} /></span>;
   if (status === 'complete') return <span className="bcp-mark is-complete" aria-hidden><Check size={12} strokeWidth={3} /></span>;
   if (status === 'incomplete') return <span className="bcp-mark is-incomplete" aria-hidden><CircleDot size={14} /></span>;
   return <span className="bcp-mark is-missing" aria-hidden><CircleDashed size={14} /></span>;
@@ -158,7 +173,7 @@ function SectionRow({ section: s, profile, canEdit, open, onToggle, suggestions,
   return (
     <li className={cn('bcp-row', open && 'is-open')}>
       <button type="button" className="bcp-row-head" aria-expanded={open} aria-controls={panelId} onClick={onToggle}>
-        <StatusMark status={s.status} />
+        <StatusMark status={s.status} review={s.needs_review} />
         <span className="bcp-row-main">
           <span className="bcp-row-title">{s.title}</span>
           <span className="bcp-row-used">{s.used_by}</span>
@@ -167,7 +182,7 @@ function SectionRow({ section: s, profile, canEdit, open, onToggle, suggestions,
           {conflicting.length > 0 && <span className="brain-status is-caution"><AlertTriangle size={11} aria-hidden />{conflicting.length} conflict{conflicting.length === 1 ? '' : 's'}</span>}
           {unverified.length > 0 && <span className="brain-status is-caution">Unverified</span>}
           {suggestions.length > 0 && s.status !== 'complete' && <span className="brain-status"><Sparkles size={11} aria-hidden />{suggestions.length} suggestion{suggestions.length === 1 ? '' : 's'}</span>}
-          <span className={cn('brain-status', s.status === 'complete' ? 'is-positive' : s.status === 'incomplete' && 'is-caution')}>{STATUS_LABEL[s.status]}</span>
+          <span className={cn('brain-status', s.status === 'complete' ? 'is-positive' : s.status === 'incomplete' && 'is-caution')}>{s.needs_review ? 'Needs review' : STATUS_LABEL[s.status]}</span>
         </span>
         <ChevronDown size={15} className="bcp-chevron" aria-hidden />
       </button>
@@ -175,6 +190,7 @@ function SectionRow({ section: s, profile, canEdit, open, onToggle, suggestions,
         <div id={panelId} className="bcp-row-body">
           {s.missing.length > 0 && <p className="bcp-missing">{missingText(s)}</p>}
           {s.status === 'complete' && <p className="bcp-missing">Complete. Agents use it as written.</p>}
+          {s.needs_review && <p className="bcp-missing">Filled in, but {conflicting.length === 1 ? 'one disagreement needs' : `${conflicting.length} disagreements need`} your decision. Until then agents may read different versions.</p>}
           {unverified.map((i) => <p key={i.message} className="bcp-issue"><Info size={13} aria-hidden />{i.message}</p>)}
           {conflicts}
           {suggestions.length > 0 && (
@@ -192,7 +208,7 @@ function SectionRow({ section: s, profile, canEdit, open, onToggle, suggestions,
               <div className="bcp-actions">
                 <Button size="sm" variant="outline" className="gap-2"
                   onClick={() => onOpenEditor((s.editor as { section: DrawerSection }).section)}>
-                  <Pencil size={13} />{s.status === 'complete' ? 'Review' : 'Complete'} {s.title.toLowerCase()}
+                  <Pencil size={13} />{s.status === 'complete' || s.needs_review ? 'Review in the editor' : 'Complete in the editor'}
                 </Button>
               </div>
             )}
@@ -313,4 +329,47 @@ const display = (v: CompletionValue | undefined) => (Array.isArray(v) ? v.join('
 const isEmptyValue = (v: CompletionValue) => (Array.isArray(v) ? v.length === 0 : !v.trim());
 function hostPath(u: string): string {
   try { const x = new URL(u); return (x.hostname.replace(/^www\./, '') + (x.pathname === '/' ? '' : x.pathname)).slice(0, 48); } catch { return u.slice(0, 48); }
+}
+
+// ── B2.1 · ICP conflicts: what disagrees, and one-click resolutions ─────────
+const KIND_LABEL: Record<IcpConflict['kind'], string> = {
+  projection_stale: 'Out of date',
+  contradiction: 'Contradiction',
+  radar_drift: 'Signal monitoring',
+};
+
+export function IcpConflictList({ conflicts, canEdit, onSave }: {
+  conflicts: IcpConflict[]; canEdit: boolean; onSave: (patch: Raw) => Promise<boolean>;
+}) {
+  if (!conflicts.length) return null;
+  return <div className="bcp-conflicts">{conflicts.map((c) => <IcpConflictCard key={c.id} conflict={c} canEdit={canEdit} onSave={onSave} />)}</div>;
+}
+
+function IcpConflictCard({ conflict: c, canEdit, onSave }: { conflict: IcpConflict; canEdit: boolean; onSave: (patch: Raw) => Promise<boolean> }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const same = JSON.stringify(c.authoritative) === JSON.stringify(c.other);
+  return (
+    <article className="bcp-conflict" aria-label={`Conflict: ${c.message}`} data-conflict={c.id}>
+      <div className="bcp-sug-head">
+        <span className="bcp-conflict-label"><AlertTriangle size={12} aria-hidden />{KIND_LABEL[c.kind]}</span>
+      </div>
+      <p className="bcp-sug-text">{c.message}</p>
+      {!same && (
+        <dl className="bcp-compare">
+          <div><dt>{columns(c)[0]}</dt><dd>{c.authoritative.length ? c.authoritative.join(', ') : 'empty'}</dd></div>
+          <div><dt>{columns(c)[1]}</dt><dd>{c.other.length ? c.other.join(', ') : 'empty'}</dd></div>
+        </dl>
+      )}
+      {canEdit && (
+        <div className="bcp-actions">
+          {c.resolutions.map((r, n) => (
+            <Button key={r.id} size="sm" variant={n === 0 ? 'default' : 'outline'} disabled={busy !== null}
+              onClick={async () => { setBusy(r.id); await onSave(r.patch); setBusy(null); }}>
+              {busy === r.id ? 'Saving…' : r.label}
+            </Button>
+          ))}
+        </div>
+      )}
+    </article>
+  );
 }

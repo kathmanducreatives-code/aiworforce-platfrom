@@ -9,3 +9,6 @@ export {
   acceptSuggestionPatch, buildCompletionPatch, buildCompletionSuggestions,
   type CompletionSuggestion, type CompletionValue, type StoredResearchRun,
 } from '../../../supabase/functions/_shared/companyBrainCompletion.ts';
+export {
+  assessIcpConsistency, type IcpConflict, type IcpResolution,
+} from '../../../supabase/functions/_shared/companyBrainIcpConsistency.ts';
