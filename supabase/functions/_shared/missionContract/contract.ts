@@ -179,6 +179,9 @@ export function contractProblems(c: MissionContract): ContractProblem[] {
   // A mission with no requirement at all cannot be frozen, and an unfrozen mission is
   // re-derived from the sentence by legacy readers: refuse it (ask), never run it.
   if (!c.requirements.length) p("empty_mission", null, "the mission states no requirement; ask what qualifies a result");
+  // …nor can one whose every requirement is only disclosed (shown, never executed): it would
+  // freeze an EMPTY criteria list. Refused as a typed contract problem, not a crash.
+  else if (!c.requirements.some(isExecutable)) p("empty_mission", null, "no requirement can be checked (all are disclosed only); ask what qualifies a result");
   const ids = new Set<string>();
   for (const r of c.requirements) {
     if (!r.id || ids.has(r.id)) p("duplicate_id", r.id, "requirement ids must be unique and non-empty");
