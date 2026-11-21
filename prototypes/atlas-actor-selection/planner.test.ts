@@ -78,3 +78,21 @@ Deno.test("a built input never carries a model-chosen Actor or property: only ca
   const allowed = new Set([...Object.values(e.slots), ...Object.keys(e.fixed ?? {})]);
   for (const k of Object.keys(input)) assert(allowed.has(k), k);
 });
+
+// ── Defects found by the ATLAS inventory (2026-11-20), fixed ─────────────────
+Deno.test("never a concept in company-search's name index: an unmapped industry stays out of searchQuery", () => {
+  const p = planSelection(contractOf(scenario("r5-founders")));
+  assertFalse("searchQuery" in p.steps[0].input!, JSON.stringify(p.steps[0].input));
+  assert(p.steps[0].disclosures[0].note.includes("names, never concepts"));
+});
+
+Deno.test("no discovery capability is never 'executable at $0': funding, technology", () => {
+  for (const name of ["r7-funding", "r9-technology"]) {
+    const s = scenario(name);
+    const p = planSelection(contractOf(s), { allowReviewOnly: true });
+    assertFalse(p.executable, `${name} must not be executable`);
+    assert(p.blockers.some((b) => b.includes("can discover companies")), p.blockers.join(" | "));
+  }
+  const funding = planSelection(contractOf(scenario("r7-funding")));
+  assert(funding.blockers.some((b) => b.includes("funding signal")), funding.blockers.join(" | "));
+});
