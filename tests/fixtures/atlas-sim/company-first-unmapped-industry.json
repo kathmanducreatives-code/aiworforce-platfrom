@@ -1,0 +1,86 @@
+{
+ "name": "company-first-unmapped-industry",
+ "description": "Company-first (flag on) for an industry with no reviewed LinkedIn code: refused by name, never searched wider than asked.",
+ "covers": [
+  "a required industry with no reviewed code is never silently dropped or broadened"
+ ],
+ "query": "Find 5 craft breweries headquartered in the US.",
+ "requestedCount": 5,
+ "interpretation": {
+  "understanding": {
+   "roles": [],
+   "role_match": "any",
+   "places": [
+    {
+     "span": "headquartered in the US",
+     "place": "united states",
+     "other_place": null,
+     "scope": "headquarters",
+     "necessity": "required"
+    }
+   ],
+   "industries": [
+    {
+     "span": "craft breweries",
+     "industry": "craft brewing",
+     "necessity": "required"
+    }
+   ],
+   "signals": [],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": []
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": 5,
+   "count_span": "5",
+   "person_roles": []
+  },
+  "company_size": null,
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [
+  {
+   "slug": "coolpro",
+   "name": "CoolPro Mechanical",
+   "site": "coolpro.example",
+   "industry": "Facilities Services",
+   "employees": 60,
+   "model": "b2b_service",
+   "page": "CoolPro Mechanical services HVAC and refrigeration systems for commercial buildings, restaurants and hospitals."
+  },
+  {
+   "slug": "liftcare",
+   "name": "LiftCare Elevator Service",
+   "site": "liftcare.example",
+   "industry": "Commercial and Industrial Machinery Maintenance",
+   "employees": 110,
+   "model": "b2b_service",
+   "page": "LiftCare maintains elevators and escalators for property managers and hospitals."
+  },
+  {
+   "slug": "sparkline",
+   "name": "Sparkline Electric",
+   "site": "sparkline.example",
+   "industry": "Building Equipment Contractors",
+   "employees": 75,
+   "model": "b2b_service",
+   "page": "Sparkline Electric installs and services electrical systems for commercial buildings."
+  }
+ ],
+ "flags": {
+  "LEAD_PIPELINE_COMPANY_SEARCH": "true"
+ },
+ "allowReviewOnly": true,
+ "expect": {
+  "planStatus": 409,
+  "planState": "blocked",
+  "actorCalls": 0,
+  "leadsSaved": 0,
+  "qualified": [],
+  "needsVerification": []
+ }
+}

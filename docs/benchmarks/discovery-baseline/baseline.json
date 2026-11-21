@@ -1,7 +1,7 @@
 {
  "version": "atlas-discovery-baseline-v1",
  "mode": "offline",
- "generatedAt": "2026-11-08",
+ "generatedAt": "2026-11-21",
  "summary": [
   {
    "id": "A1",
@@ -10,7 +10,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "46cb3caddf5631fe218b1a61f79b97294ebc53c7077312488d1563dad7a6bcaa",
+   "planHash": "338d74bcd602b2c694557d56258b9c4f9d343137a10b4ea4cd2e1dd6a10e54c1",
    "semanticFingerprint": "c0efa9f40821ee80af2f9d096493dd1f77dfb33934c41a9f0727ebcf28c9afcb",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -64,7 +64,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "ea5ac803e010d5cbbe9f92503dab907d665f8a88e744e25d70c4cbf1e30e1e56",
+   "planHash": "816ced3206ee681f211efda233f29a06cba319a08b6002a3db6959b7332b69e2",
    "semanticFingerprint": "0a29f86b9483c6a0280ca51b23ce83845b0b04bd54d9d81983ba52b32a7cea89",
    "hardRequirements": 3,
    "hardPreserved": true,
@@ -199,7 +199,7 @@
    "verdict": "FAIL",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "67c4ef6581dc740a46976602f12c883f6b1e32532a2257892471767afc55a95b",
+   "planHash": "3235de12c3224d4030d38d746aae79f361b7b1faca7183c8717ba7ec78b1b84f",
    "semanticFingerprint": "9867ec64d33c0c751c8009db60c2f3483bde09c4029fc27c5e848be63b9a88ff",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -226,7 +226,7 @@
    "verdict": "PASS",
    "strategy": "apify_plus_leadocean",
    "planStatus": "ready",
-   "planHash": "07120027b02725d121201a66c863ed6da644b1eb36f9dea12ab419b42b73cb1a",
+   "planHash": "433abbf58839241a1058e528d2f0a80dc4bcae308052a9cc5efa612bb64c0f51",
    "semanticFingerprint": "dfa407d579d63bed11fab9bc49c8dc2e8c00051d453d3d085c645e68667704e0",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -280,7 +280,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "e681facfdbfb21f98e4a0b4a92a28206e7cbc9b80a8a0657b6b53895ad0e89c8",
+   "planHash": "fa0412ed96bbd8bce086e4bc3c495dca6809071bd29c9d81dae82cbf1a094a5d",
    "semanticFingerprint": "03864d6aba69b43d5d851a4ca79022f9c0d7c934d6e6f537c234c237bebec6bb",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -307,7 +307,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "425510e4ad749a2e7f8cfa6f115b67461ad8a905e4125ba612074e761116cf2b",
+   "planHash": "e1c9a87098c537777905bc0e29a239999f4c8375e491f9b538c8dd0d1b898ecf",
    "semanticFingerprint": "545e16ce3442f0469d7ef855961fc8d0b26188bd5333a55769e09c609f15acf7",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -334,7 +334,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "691754ae71a6c83e1c160785f17c06a20dd66d244db1a64c6c7326050eb20d29",
+   "planHash": "702e61185e1f06a136027b61672b8c8e2fa9be553251f1e16e64b49c31fe223c",
    "semanticFingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -361,7 +361,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "db8780f2b34a3c53617013fe99d4d290552f4b4aa536dbc705aede3d2d25a2c6",
+   "planHash": "680639640b46aa6df52b32bae9a00a59cca877fdcb5dbce3c8423f2b578e0477",
    "semanticFingerprint": "63f0ed922c56eb85be30f286af65df1cff70fe7b15c020ccca3e0b45740b8f28",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -388,7 +388,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "90d57c9c1202ffe2a971f2fab4143e850067ed6cbf4924c5b4e8f0b64bebd8ea",
+   "planHash": "db8c209b20942ff2e07bc4f1f4c6089f6957c00768170aa3ae20da5bf9d66a17",
    "semanticFingerprint": "3df8ae017cfe36ac57f83f928ad973115e61b92c78f570d4fdf9674bae997e10",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -415,7 +415,7 @@
    "verdict": "PASS",
    "strategy": "apify_only",
    "planStatus": "ready",
-   "planHash": "65cf292f8d0a13d2685ed0c07d076b2e269113e7e270c5bb89459cc6d921f580",
+   "planHash": "8055d3d521ef6e9a2719ffb31cee9f53ffff67f0c790300c2b13a3c10ef3a153",
    "semanticFingerprint": "1f99b1ebd32558da60db9439de3e192640f29c203d3b792a2d8d1eee71197c90",
    "hardRequirements": 2,
    "hardPreserved": true,
@@ -468,7 +468,7 @@
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
      "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
     ],
-    "planHash": "46cb3caddf5631fe218b1a61f79b97294ebc53c7077312488d1563dad7a6bcaa",
+    "planHash": "338d74bcd602b2c694557d56258b9c4f9d343137a10b4ea4cd2e1dd6a10e54c1",
     "semanticFingerprint": "c0efa9f40821ee80af2f9d096493dd1f77dfb33934c41a9f0727ebcf28c9afcb",
     "hardRequirements": [
      "geography:United States",
@@ -756,7 +756,7 @@
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
      "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
     ],
-    "planHash": "ea5ac803e010d5cbbe9f92503dab907d665f8a88e744e25d70c4cbf1e30e1e56",
+    "planHash": "816ced3206ee681f211efda233f29a06cba319a08b6002a3db6959b7332b69e2",
     "semanticFingerprint": "0a29f86b9483c6a0280ca51b23ce83845b0b04bd54d9d81983ba52b32a7cea89",
     "hardRequirements": [
      "industry:manufacturing",
@@ -1193,7 +1193,7 @@
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
      "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
     ],
-    "planHash": "67c4ef6581dc740a46976602f12c883f6b1e32532a2257892471767afc55a95b",
+    "planHash": "3235de12c3224d4030d38d746aae79f361b7b1faca7183c8717ba7ec78b1b84f",
     "semanticFingerprint": "9867ec64d33c0c751c8009db60c2f3483bde09c4029fc27c5e848be63b9a88ff",
     "hardRequirements": [
      "geography:United States",
@@ -1340,7 +1340,7 @@
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     ],
-    "planHash": "07120027b02725d121201a66c863ed6da644b1eb36f9dea12ab419b42b73cb1a",
+    "planHash": "433abbf58839241a1058e528d2f0a80dc4bcae308052a9cc5efa612bb64c0f51",
     "semanticFingerprint": "dfa407d579d63bed11fab9bc49c8dc2e8c00051d453d3d085c645e68667704e0",
     "hardRequirements": [
      "geography:United States",
@@ -1654,7 +1654,7 @@
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
      "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
     ],
-    "planHash": "e681facfdbfb21f98e4a0b4a92a28206e7cbc9b80a8a0657b6b53895ad0e89c8",
+    "planHash": "fa0412ed96bbd8bce086e4bc3c495dca6809071bd29c9d81dae82cbf1a094a5d",
     "semanticFingerprint": "03864d6aba69b43d5d851a4ca79022f9c0d7c934d6e6f537c234c237bebec6bb",
     "hardRequirements": [
      "geography:Atlantis",
@@ -1804,7 +1804,7 @@
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts",
      "budget_limited: discovery overfetch reduced to 8 candidates for 5 requested to fit the ceilings"
     ],
-    "planHash": "425510e4ad749a2e7f8cfa6f115b67461ad8a905e4125ba612074e761116cf2b",
+    "planHash": "e1c9a87098c537777905bc0e29a239999f4c8375e491f9b538c8dd0d1b898ecf",
     "semanticFingerprint": "545e16ce3442f0469d7ef855961fc8d0b26188bd5333a55769e09c609f15acf7",
     "hardRequirements": [
      "geography:Texas",
@@ -1947,7 +1947,7 @@
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     ],
-    "planHash": "691754ae71a6c83e1c160785f17c06a20dd66d244db1a64c6c7326050eb20d29",
+    "planHash": "702e61185e1f06a136027b61672b8c8e2fa9be553251f1e16e64b49c31fe223c",
     "semanticFingerprint": "0a5eb0bb807782d4e1bb5f33d82b014c7817fdad7ce6aa2ba6a9bb3670f04397",
     "hardRequirements": [
      "geography:United States",
@@ -2090,7 +2090,7 @@
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     ],
-    "planHash": "db8780f2b34a3c53617013fe99d4d290552f4b4aa536dbc705aede3d2d25a2c6",
+    "planHash": "680639640b46aa6df52b32bae9a00a59cca877fdcb5dbce3c8423f2b578e0477",
     "semanticFingerprint": "63f0ed922c56eb85be30f286af65df1cff70fe7b15c020ccca3e0b45740b8f28",
     "hardRequirements": [
      "geography:United States",
@@ -2233,7 +2233,7 @@
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     ],
-    "planHash": "90d57c9c1202ffe2a971f2fab4143e850067ed6cbf4924c5b4e8f0b64bebd8ea",
+    "planHash": "db8c209b20942ff2e07bc4f1f4c6089f6957c00768170aa3ae20da5bf9d66a17",
     "semanticFingerprint": "3df8ae017cfe36ac57f83f928ad973115e61b92c78f570d4fdf9674bae997e10",
     "hardRequirements": [
      "geography:United States",
@@ -2378,7 +2378,7 @@
     "planLimitations": [
      "fuzzy_source: job-search titles are fuzzy: each posting must match the requested role and window before it counts"
     ],
-    "planHash": "65cf292f8d0a13d2685ed0c07d076b2e269113e7e270c5bb89459cc6d921f580",
+    "planHash": "8055d3d521ef6e9a2719ffb31cee9f53ffff67f0c790300c2b13a3c10ef3a153",
     "semanticFingerprint": "1f99b1ebd32558da60db9439de3e192640f29c203d3b792a2d8d1eee71197c90",
     "hardRequirements": [
      "geography:United States",
