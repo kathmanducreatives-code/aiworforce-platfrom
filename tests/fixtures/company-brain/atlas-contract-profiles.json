@@ -1,0 +1,43 @@
+{
+  "_note": "FICTIONAL Company Brain profiles for the ATLAS read-contract golden tests (B2.1). Shapes, not real data.",
+  "profiles": {
+    "live_shape": {
+      "schema_version": 2, "is_draft": false, "brain_confidence": "partial", "setup_status": "complete",
+      "company": { "name": "Northwind Analytics", "website_url": "https://northwind.example", "description": "AI workforce for small B2B teams", "business_model": "B2B SaaS" },
+      "target_customer": {
+        "industries": ["B2B Software", "Professional Services"], "business_models": ["B2B SaaS"],
+        "company_size": { "min": 2, "max": 2, "label": "5" }, "geography": ["United States", "Canada"],
+        "disqualifiers": { "industries": ["Gambling"], "company_types": ["Agencies"], "domains": [], "keywords": ["crypto"], "titles": ["Intern"] }
+      },
+      "icp": { "industries": ["B2B Software", "Professional Services"], "buyer_roles": ["Founder", "Head of Sales"], "company_size": "5", "geography": "United States", "pain_points": ["Manual prospecting"], "disqualifiers": ["Gambling", "Agencies", "crypto", "Intern"] },
+      "signal_preferences": { "industries": ["B2B Software"], "geographies": ["United States"], "hiring_roles": ["SDR"], "pain_points": ["Manual prospecting"], "disqualifiers": ["Gambling"] },
+      "buyer_personas": ["Founder", "Head of Sales", "RevOps lead"], "pain_points": ["Manual prospecting"],
+      "triggers": ["Hiring first SDR", "Raised seed round"], "competitors": [], "qualification_rules": { "required_evidence": [], "reject_if": [], "manual_review_if": [] }
+    },
+    "legacy_only": {
+      "company": { "name": "Legacy Co" },
+      "icp": { "industries": "Fintech, Insurance", "buyer_roles": ["CFO"], "company_size": "11-50 employees", "geography": "United Kingdom", "company_stage": "Seed", "disqualifiers": ["Government"] }
+    },
+    "v2_only": {
+      "schema_version": 2,
+      "target_customer": { "industries": ["Healthcare"], "funding_stage": ["Series A"], "company_size": { "min": 51, "max": 200, "label": "51-200" }, "geography": ["Germany"], "disqualifiers": { "industries": ["Tobacco"], "company_types": [], "domains": [], "keywords": [], "titles": [] } },
+      "buyer_personas": ["COO"]
+    },
+    "empty": {},
+    "text_size_label": {
+      "schema_version": 2,
+      "target_customer": { "industries": ["Logistics"], "company_size": { "label": "Founder-led to early-stage teams" }, "geography": ["Australia"] },
+      "icp": { "industries": ["Logistics"], "company_size": "Founder-led to early-stage teams", "geography": "Australia" }
+    },
+    "contradictory_copies": {
+      "schema_version": 2,
+      "target_customer": { "industries": ["Retail"], "company_size": { "min": 10, "max": 50, "label": "200-500" }, "geography": ["France", "Spain"], "disqualifiers": { "industries": ["Retail"], "company_types": [], "domains": [], "keywords": [], "titles": [] } },
+      "icp": { "industries": ["Manufacturing"], "company_size": "1000+", "geography": "Japan", "buyer_roles": ["CTO"] },
+      "signal_preferences": { "industries": ["Energy"], "geographies": ["Brazil"] },
+      "buyer_personas": ["VP Operations"]
+    },
+    "stage_and_location_aliases": {
+      "icp": { "industry": "Media", "stages": ["Series B", "Series C"], "locations": ["Nordics"], "company_size": "100+" }
+    }
+  }
+}
