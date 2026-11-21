@@ -65,6 +65,9 @@ cleanup() {
   echo "  conversations created by this run: $conv (their messages go with them); seeded records: orion-r11-cleanup.sql"
   q "delete from public.messages where conversation_id in (select id from public.conversations where workspace_id='$WS' and created_at >= '$START')" >/dev/null
   q "delete from public.conversations where workspace_id='$WS' and created_at >= '$START'" >/dev/null
+  # R1.2.1 probe rows that did not bind (a failed probe leaves them unbound).
+  q "delete from public.messages where conversation_id in (select id from public.conversations where title='r121-binding-probe' and created_at >= '$START')" >/dev/null
+  q "delete from public.conversations where title='r121-binding-probe' and created_at >= '$START'" >/dev/null
   psql "$db" -X -q -v ON_ERROR_STOP=1 --single-transaction -f scripts/test-project/orion-r11-cleanup.sql | tail -1
 }
 trap cleanup EXIT

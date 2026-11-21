@@ -22,6 +22,9 @@ const FIXTURES = JSON.parse(await Deno.readTextFile(new URL("../../tests/fixture
 // --suite r12: the owner's R1.2 manual acceptance prompts (verbatim) + paraphrases.
 const R12 = JSON.parse(await Deno.readTextFile(new URL("../../tests/fixtures/orion-r12-acceptance.json", import.meta.url)));
 type T = { n: number; prompt: string; expected_route: string; id?: string };
+/** R1.2.1 probe rows carry this title (cleanup removes them by it); the foreign workspace is TEST's second pilot workspace. */
+export const R121_PROBE_TITLE = "r121-binding-probe";
+const R121_FOREIGN_WS = "a71a0000-0000-4000-8000-0000000011a2";
 export function r12Tests(): T[] {
   return [...R12.findings.map((f: { id: string; prompt: string; expected_route: string }, i: number) => ({ n: i + 1, id: f.id, prompt: f.prompt, expected_route: f.expected_route })),
     ...R12.paraphrases.slice(0, 4).map((p: { prompt: string; expected_route: string }, i: number) => ({ n: R12.findings.length + i + 1, id: `para-${i + 1}`, prompt: p.prompt, expected_route: p.expected_route }))];
@@ -116,6 +119,36 @@ if (import.meta.main) {
     console.log(`${String(t.n).padStart(2)} ${f.length ? "FAIL" : "ok  "} ${String((r.metadata?.chat_brain as Record<string, unknown> | undefined)?.route ?? "-").padEnd(11)} ${r.ms}ms ${f.join("; ")}`);
     out.push({ n: t.n, prompt: t.prompt, expected_route: t.expected_route, ...r, failures: f });
   }
+  // R1.2.1: an APP-CREATED conversation (inserted by the browser, as the app's
+  // "New chat" does) is bound to its workspace on first use; the database refuses
+  // a conversation naming a workspace the user does not belong to. One model call.
+  let bindingOk = true;
+  if (suite === "r11") {
+    const rest = async (method: string, path: string, body?: unknown) => {
+      const res = await fetch(`${base!.replace(/\/$/, "")}/rest/v1/${path}`, { method,
+        headers: { "Content-Type": "application/json", apikey: anon, Authorization: `Bearer ${owner}`, Prefer: "return=representation" },
+        body: body ? JSON.stringify(body) : undefined });
+      return { http: res.status, rows: (await res.json().catch(() => null)) as Array<{ id: string; workspace_id: string | null }> | null };
+    };
+    const me = JSON.parse(atob(owner.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sub as string;
+    const legacy = await rest("POST", "conversations", { user_id: me, agent_slug: "pilot", title: R121_PROBE_TITLE, status: "active" });
+    const legacyId = legacy.rows?.[0]?.id ?? null;
+    const first = legacyId ? await ask(base!, anon, owner, PILOT_WS, "In one sentence: what is this workspace for?", legacyId) : null;
+    const after = legacyId ? await rest("GET", `conversations?id=eq.${legacyId}&select=id,workspace_id`) : null;
+    const bound = after?.rows?.[0]?.workspace_id === PILOT_WS;
+    const modern = await rest("POST", "conversations", { user_id: me, workspace_id: PILOT_WS, agent_slug: "pilot", title: R121_PROBE_TITLE, status: "active" });
+    const foreign = await rest("POST", "conversations", { user_id: me, workspace_id: R121_FOREIGN_WS, agent_slug: "pilot", title: R121_PROBE_TITLE, status: "active" });
+    const checks = {
+      app_created_chat_accepted: first?.http === 200,
+      bound_on_first_use: bound,
+      new_client_insert_with_workspace: modern.http === 201,
+      foreign_workspace_insert_refused: foreign.http >= 400,
+    };
+    bindingOk = Object.values(checks).every(Boolean);
+    console.log(`R1.2.1 workspace binding: ${bindingOk ? "ok" : "FAIL"} ${JSON.stringify(checks)}`);
+    out.push({ probe: "r121_workspace_binding", checks, http: { legacy: legacy.http, first: first?.http ?? null, modern: modern.http, foreign: foreign.http } });
+  }
+
   // ISOLATION: the outsider asks about the pilot workspace — must be refused with nothing read.
   const probe = await ask(base!, anon, outsider, PILOT_WS, "How many leads and signals does this workspace have?", null);
   const isolated = probe.http === 403 || probe.http === 404;
@@ -123,5 +156,5 @@ if (import.meta.main) {
   out.push({ probe: "outsider_on_pilot_workspace", http: probe.http, answer_chars: probe.answer.length });
   await Deno.writeTextFile(`${suite}-transcript.json`, JSON.stringify(out, null, 2));
   console.log(`\n${tests.length - failures}/${tests.length} turns passed the automatic checks; transcript: ${suite}-transcript.json`);
-  Deno.exit(failures || !isolated ? 1 : 0);
+  Deno.exit(failures || !isolated || !bindingOk ? 1 : 0);
 }
