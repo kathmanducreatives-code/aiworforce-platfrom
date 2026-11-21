@@ -100,10 +100,14 @@ Deno.test("test 16's misleading copy is gone: an empty conversation is not an em
 Deno.test("R1.2: a conversation is bound to its workspace — stamped on create, refused when reused in another workspace", () => {
   const at = PILOT.indexOf("// 4. Get or create conversation.");
   const block = PILOT.slice(at, PILOT.indexOf("conversationId = created.id;", at));
-  assertStringIncludes(block, '.select("id, user_id, workspace_id")');
-  assertStringIncludes(block, "existing.user_id !== userId");
-  assertStringIncludes(block, "(existing.workspace_id && existing.workspace_id !== workspaceId)");
+  // R1.2.1: the owner + workspace check (and first-use binding) lives in
+  // conversationBinding.ts, tested in conversationBinding.test.ts.
+  assertStringIncludes(block, "bindConversationWorkspace(admin as unknown as BindingDb,");
+  assertStringIncludes(block, "{ conversationId, userId, workspaceId }");
+  assertStringIncludes(block, "if (!binding.ok) {");
   assertStringIncludes(block, "workspace_id: workspaceId,");
+  // Membership is checked BEFORE the conversation is bound.
+  assert(PILOT.indexOf('.from("workspace_members")') < at, "membership check precedes binding");
   assertStringIncludes(block, '"Conversation not found or not yours" }, 404');
 });
 

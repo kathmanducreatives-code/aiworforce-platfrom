@@ -29,6 +29,10 @@ export function useConversationActions() {
           .from('conversations' as any)
           .insert({
             user_id: userId,
+            // R1.2.1: bind the chat to the workspace it is started in. pilot-chat
+            // re-checks membership and refuses a conversation bound elsewhere;
+            // an older client that omits this is bound on first use instead.
+            workspace_id: workspaceId,
             agent_slug: agentSlug,
             title: 'New chat',
             status: 'active',

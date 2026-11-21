@@ -44,3 +44,55 @@ export function startedCardIds(messages: readonly MessageLike[]): Set<string> {
   }
   return started;
 }
+
+// ── R1.2.1 · WHAT HAPPENED AFTER START — ALSO READ FROM THE CONVERSATION ──────
+//
+// The card said "Started Find 20 companies in saas" although the backend had
+// answered the Start with `delegation_disabled` ("…isn't switched on in this
+// release yet… Nothing was started and nothing was charged."), production smoke
+// test 2026-11-21. A Start is not a start: the reply to it decides.
+
+export type StartOutcome = 'pending' | 'started' | 'refused';
+
+const REFUSAL_TYPES = new Set(['delegation_disabled']);
+
+/**
+ * For every started card: the outcome of its Start, from the first assistant
+ * reply after the Start message. `refused` when that reply is a refusal
+ * (delegation disabled); `pending` while no reply has arrived yet; otherwise
+ * `started`.
+ */
+export function cardStartOutcomes(messages: readonly MessageLike[]): Map<string, StartOutcome> {
+  const out = new Map<string, StartOutcome>();
+  let lastCard: string | null = null;
+  let awaiting: string | null = null; // card whose Start has not been answered yet
+  for (const m of messages) {
+    if (isCard(m)) { lastCard = m.id; continue; }
+    const meta = (m.metadata ?? {}) as Record<string, unknown>;
+    if (m.role === 'user' && meta.confirmed === true) {
+      const named = typeof meta.confirmation_message_id === 'string' ? meta.confirmation_message_id : null;
+      const card = named ?? (lastCard && meta.action_source === 'lead_intake_card' ? lastCard : null);
+      if (card) { out.set(card, 'pending'); awaiting = card; }
+      continue;
+    }
+    if (m.role === 'assistant' && awaiting) {
+      out.set(awaiting, REFUSAL_TYPES.has(String(meta.type ?? '')) ? 'refused' : 'started');
+      awaiting = null;
+    }
+  }
+  return out;
+}
+
+/** The card's status line after Start. Never "Started" for a refused Start. */
+export function startLabel(workflowName: string, outcome: StartOutcome | undefined, submitted: boolean): string {
+  if (outcome === 'refused') return startNotStartedLabel(workflowName);
+  if (outcome === 'started') return `Started ${workflowName}`;
+  // No reply yet (just pressed, or the reply is still on its way).
+  if (submitted || outcome === 'pending') return `Starting ${workflowName}…`;
+  return `Started ${workflowName}`;
+}
+
+/** Shown when the backend refused to run the workflow (agent execution disabled). */
+export function startNotStartedLabel(workflowName: string): string {
+  return `Not started: ${workflowName}. Agent work isn't switched on in this release. Nothing was run or charged.`;
+}

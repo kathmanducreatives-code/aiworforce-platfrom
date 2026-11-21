@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { dispatchChatAction } from '@/lib/chatActions';
+import { startLabel, startNotStartedLabel, type StartOutcome } from '@/lib/chat/startedCards';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 import {
@@ -79,13 +80,19 @@ interface Props {
    * never offer Start again on a card that has already run.
    */
   alreadyStarted?: boolean;
+  /**
+   * R1.2.1: the backend's answer to this card's Start, read from the
+   * conversation (`cardStartOutcomes`). `refused` when it replied that agent
+   * execution is disabled — the card must not then say "Started".
+   */
+  startOutcome?: StartOutcome;
 }
 
 // Compact, premium "workflow preview" card. It is NOT a confirmation modal — the
 // natural Pilot reply sits above it (message content) and this card is a smooth
 // handoff: title, agent team, input chips, output, calm safety note, credits,
 // and a primary Start / secondary Edit / subtle Cancel.
-export default function WorkflowConfirmationCard({ payload, conversationId, messageId, alreadyStarted }: Props) {
+export default function WorkflowConfirmationCard({ payload, conversationId, messageId, alreadyStarted, startOutcome }: Props) {
   const tools = useToolAvailability();
   const [isEditing, setIsEditing] = useState(false);
   const [inputs, setInputs] = useState({ ...payload.inputs });
@@ -187,11 +194,20 @@ export default function WorkflowConfirmationCard({ payload, conversationId, mess
     );
   }
 
+  if (startOutcome === 'refused') {
+    return (
+      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] px-3.5 py-2.5 text-[13px] text-amber-200 flex items-center gap-2 max-w-[420px]">
+        <Info className="h-4 w-4 text-amber-300" />
+        {startNotStartedLabel(payload.workflow_name)}
+      </div>
+    );
+  }
+
   if (submitted || alreadyStarted) {
     return (
       <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-3.5 py-2.5 text-[13px] text-emerald-300 flex items-center gap-2 max-w-[420px]">
         <Sparkles className="h-4 w-4 text-emerald-400" />
-        {submitted ? `Starting ${payload.workflow_name}…` : `Started ${payload.workflow_name}`}
+        {startLabel(payload.workflow_name, startOutcome, submitted)}
       </div>
     );
   }

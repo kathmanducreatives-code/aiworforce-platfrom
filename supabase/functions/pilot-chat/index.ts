@@ -138,6 +138,7 @@ function actualModelUsed(): string {
 import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
 import { subQuestions, ORION_INTELLIGENCE_VERSION, type OrionRouting } from "../_shared/orionIntelligence.ts";
 import { planTurnRouting, ORION_REFERENCE_POLICY_VERSION, type TurnRouting } from "../_shared/orionReferencePolicy.ts";
+import { bindConversationWorkspace, type BindingDb } from "../_shared/conversationBinding.ts";
 import { orionDraftSystemPrompt, draftMaxTokens, withDraftNotice, ORION_DRAFT_VERSION } from "../_shared/orionDraft.ts";
 import { retrieveEvidence, type EvidenceDb as StoredEvidenceDb } from "../_shared/evidence/retrieve.ts";
 import { orionEvidenceForTurn, orionEvidenceEnabledFor, orionAnswerShapeFor, digestFacts, presentedSubjectsFor, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
@@ -1642,16 +1643,18 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // R1.2: a conversation is also bound to the workspace it was started in
   // (`conversations.workspace_id`, nullable, FK → workspaces), so one user who
   // belongs to two workspaces cannot carry a conversation — and its earlier
-  // turns — from one workspace into another. Legacy conversations (NULL) keep
-  // working and are not rewritten.
+  // turns — from one workspace into another.
+  //
+  // R1.2.1: the app's "New chat" creates the row itself, so a conversation can
+  // arrive here unbound. It is bound on first use, atomically, to this
+  // (membership-checked) workspace — unless the server's own record shows its
+  // history came from another workspace (conversationBinding.ts). A refusal is
+  // indistinguishable from someone else's conversation: 404.
   if (conversationId) {
-    const { data: existing } = await admin
-      .from("conversations")
-      .select("id, user_id, workspace_id")
-      .eq("id", conversationId)
-      .maybeSingle();
-    if (!existing || existing.user_id !== userId ||
-        (existing.workspace_id && existing.workspace_id !== workspaceId)) {
+    const binding = await bindConversationWorkspace(admin as unknown as BindingDb,
+      { conversationId, userId, workspaceId });
+    if (!binding.ok) {
+      console.warn(`[pilot-chat][conversation] refused (${binding.reason})`);
       return json({ error: "Conversation not found or not yours" }, 404);
     }
   } else {

@@ -125,3 +125,13 @@ for f in "${held_security[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done
+
+# R1.2.1: a conversation's workspace is set once, by a member, and never moved
+# (trigger on public.conversations). Independent of the chains above.
+held_conversations=(
+  20261121120000_conversation_workspace_guard.sql
+)
+for f in "${held_conversations[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done

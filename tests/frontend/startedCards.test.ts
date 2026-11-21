@@ -75,3 +75,50 @@ Deno.test("the card is wired to both: it sends its id and obeys the conversation
   assert(/if \(submitted \|\| alreadyStarted\) \{\s*return \(/.test(cardSrc),
     "and a started card renders no Start button at all");
 });
+
+// ── R1.2.1 · A REFUSED START IS NOT A START ───────────────────────────────────
+// Production smoke test 2026-11-21 (conversation f5fae205): Start was answered
+// with `delegation_disabled`, and the card still read "Started Find 20 companies
+// in saas". The exact message sequence from that conversation:
+import { cardStartOutcomes, startLabel, startNotStartedLabel } from "../../src/lib/chat/startedCards.ts";
+
+const PROD = [
+  { id: "27f956f7", role: "assistant", metadata: {} },
+  { id: "88e4fc07", role: "user", metadata: {} },
+  { id: "1c2c4540", role: "assistant", metadata: { type: "workflow_confirmation" } },
+  { id: "06c045fd", role: "user", metadata: { confirmed: true, confirmation_message_id: "1c2c4540", action_source: "lead_intake_card" } },
+  { id: "eb7d5df3", role: "assistant", metadata: { type: "delegation_disabled" } },
+];
+
+Deno.test("R1.2.1: the production sequence reads as REFUSED, and the label never says Started", () => {
+  const o = cardStartOutcomes(PROD);
+  assertEquals(o.get("1c2c4540"), "refused");
+  const label = startLabel("Find 20 companies in saas", o.get("1c2c4540"), true);
+  assertFalse(/^Started\b/.test(label), label);
+  assertEquals(label, startNotStartedLabel("Find 20 companies in saas"));
+  assert(/Not started/.test(label) && /Nothing was run or charged/.test(label));
+  // The card still cannot be started again (the refusal does not reopen Start).
+  assert(startedCardIds(PROD).has("1c2c4540"));
+});
+
+Deno.test("R1.2.1: a Start with no reply yet is pending ('Starting…'); a real start says Started", () => {
+  const pending = PROD.slice(0, 4);
+  assertEquals(cardStartOutcomes(pending).get("1c2c4540"), "pending");
+  assertEquals(startLabel("X", "pending", false), "Starting X…");
+  const ran = [...PROD.slice(0, 4), { id: "run", role: "assistant", metadata: { type: "task_started" } }];
+  assertEquals(cardStartOutcomes(ran).get("1c2c4540"), "started");
+  assertEquals(startLabel("X", "started", true), "Started X");
+});
+
+Deno.test("R1.2.1: outcomes are per card — a refusal of one card does not mark another", () => {
+  const msgs = [
+    card("c1"), startOf("c1"), { id: "r1", role: "assistant", metadata: { type: "delegation_disabled" } },
+    card("c2"), startOf("c2"), { id: "r2", role: "assistant", metadata: { type: "task_started" } },
+  ];
+  const o = cardStartOutcomes(msgs);
+  assertEquals(o.get("c1"), "refused");
+  assertEquals(o.get("c2"), "started");
+  // A legacy Start (no confirmation_message_id) is attributed to the nearest card above.
+  const legacy = cardStartOutcomes([card("c3"), startOf(null), { id: "r3", role: "assistant", metadata: { type: "delegation_disabled" } }]);
+  assertEquals(legacy.get("c3"), "refused");
+});

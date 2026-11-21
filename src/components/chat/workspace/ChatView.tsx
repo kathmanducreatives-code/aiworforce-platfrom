@@ -20,7 +20,7 @@ import AgentAvatar from './agents/AgentAvatar';
 import AgentTypingIndicator from './AgentTypingIndicator';
 import EmptyState from './EmptyState';
 import { dispatchChatAction } from '@/lib/chatActions';
-import { startedCardIds } from '@/lib/chat/startedCards';
+import { startedCardIds, cardStartOutcomes } from '@/lib/chat/startedCards';
 
 /** The person's own message: a quiet raised surface, warm white text. */
 const USER_BUBBLE =
@@ -70,6 +70,8 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
   // Workflow cards a Start has already approved — from the messages, so a
   // remounted card cannot offer Start again.
   const startedCards = startedCardIds(messages);
+  // R1.2.1: what the backend answered to each Start (a refusal is not a start).
+  const startOutcomes = cardStartOutcomes(messages);
 
   // Hide pending user text once it appears in real messages
   const showPending = pendingUserText && !messages.some(
@@ -285,6 +287,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                       conversationId={m.conversation_id}
                       messageId={m.id}
                       alreadyStarted={startedCards.has(m.id)}
+                      startOutcome={startOutcomes.get(m.id)}
                     />
                   </div>
                 )}
