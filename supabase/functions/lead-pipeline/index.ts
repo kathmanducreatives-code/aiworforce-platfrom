@@ -22,7 +22,7 @@ import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBindi
 import { MissionNeedsClarificationError } from "../_shared/leadMissionCompiler.ts";
 import { gptContractGenerate, interpretContract } from "../_shared/missionContract/gptInterpreter.ts";
 import { applyCompanyBrain } from "../_shared/missionContract/brain.ts";
-import { compileContract } from "../_shared/missionContract/compile.ts";
+import { compileContract, ContractInvalidError } from "../_shared/missionContract/compile.ts";
 import { contractHash, type MissionContract } from "../_shared/missionContract/contract.ts";
 import { createStrategyAdvisorGenerateJson } from "../_shared/leadPipeline/strategyAdvisorModel.ts";
 import { compileWithBrain, loadBrainPlanningContext } from "../_shared/leadPipeline/brainContext.ts";
@@ -163,6 +163,8 @@ Deno.serve(withBuildStamp(async (req) => {
     const r = await handleLeadPipeline(parsed!, deps);
     return json(r.body, r.status);
   } catch (e) {
+    // An invalid contract is a request we cannot run, not a server fault: say why (422).
+    if (e instanceof ContractInvalidError) return json({ status: "not_approvable", error: e.message }, 422);
     console.error("[lead-pipeline] failed", { name: (e as Error)?.name });
     return json({ error: "lead pipeline failed" }, 500);
   }
