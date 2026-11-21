@@ -1,0 +1,44 @@
+{
+ "name": "unsupported-only-request",
+ "description": "\"Find companies using HubSpot.\": nothing in it can be checked, so the plan asks what qualifies a result (was HTTP 500, ATLAS inventory 2026-11-20).",
+ "covers": [
+  "a request whose only requirement cannot be checked asks instead of failing (was HTTP 500)"
+ ],
+ "query": "Find companies using HubSpot.",
+ "requestedCount": 5,
+ "interpretation": {
+  "understanding": {
+   "roles": [],
+   "role_match": "any",
+   "places": [],
+   "industries": [],
+   "signals": [],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": [
+    {
+     "span": "using HubSpot",
+     "why": "technology adoption is not a mission dimension"
+    }
+   ]
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": null,
+   "count_span": null,
+   "person_roles": []
+  },
+  "company_size": null,
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [],
+ "expect": {
+  "planStatus": 422,
+  "leadsSaved": 0,
+  "actorCalls": 0,
+  "qualified": [],
+  "needsVerification": []
+ }
+}
