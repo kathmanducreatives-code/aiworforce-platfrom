@@ -28,6 +28,7 @@ import { contractFromProposal } from "../../../supabase/functions/_shared/missio
 import { compileContract } from "../../../supabase/functions/_shared/missionContract/compile.ts";
 import { contractHash, type MissionContract } from "../../../supabase/functions/_shared/missionContract/contract.ts";
 import { leadPlanOrFilter } from "../../../src/lib/leads/leadPlanFilter.ts";
+import { LINKEDIN_INDUSTRY_BY_LABEL } from "../../../supabase/functions/_shared/linkedinIndustryTaxonomy.ts";
 
 export const SIM_WS = "22222222-2222-4222-8222-222222222222";
 export const OTHER_WS = "33333333-3333-4333-8333-333333333333";
@@ -50,6 +51,8 @@ export interface SimCompany {
   page?: string | null;
   /** The grounding model's reading of the page (it can only quote `page`). */
   model?: "b2b_software" | "b2b_service" | "consumer" | "mixed" | "unknown";
+  /** Company search: returned even when the request's LinkedIn filters exclude it (LinkedIn's industry filter is imperfect). */
+  leaksThroughFilter?: boolean;
 }
 export interface Scenario {
   name: string; description: string; covers: string[];
@@ -57,7 +60,9 @@ export interface Scenario {
   /** The interpreter model's answer (Mission Contract proposal shape). */
   interpretation: Record<string, unknown>;
   companies: SimCompany[];
-  providers?: { jobs?: ProviderMode; records?: ProviderMode; pages?: ProviderMode; duplicateDelivery?: boolean; unknownSpend?: boolean };
+  providers?: { jobs?: ProviderMode; records?: ProviderMode; pages?: ProviderMode; search?: ProviderMode; duplicateDelivery?: boolean; unknownSpend?: boolean };
+  /** Extra function env for this scenario (e.g. LEAD_PIPELINE_COMPANY_SEARCH). */
+  flags?: Record<string, string>;
   grounding?: boolean;
   approval?: "approve" | "none" | "tampered_hash" | "under_estimate" | "reject";
   allowReviewOnly?: boolean;
@@ -86,6 +91,24 @@ function jobItem(i: number, c: SimCompany) {
       locations: [{ headquarter: true, parsed: { text: h.text } }] },
     location: { linkedinText: h.text }, descriptionText: `${c.name} is hiring.` };
 }
+/** LinkedIn's company-search filters, as the Actor applies them: industry id, location text, declared band. */
+function searchMatches(c: SimCompany, input: Record<string, unknown>): boolean {
+  const ids = (input.industryIds as string[] | undefined) ?? [];
+  const locs = (input.locations as string[] | undefined) ?? [];
+  const sizes = (input.companySize as string[] | undefined) ?? [];
+  const id = LINKEDIN_INDUSTRY_BY_LABEL.get((c.industry ?? "Software Development").toLowerCase());
+  if (ids.length && (!id || !ids.includes(id))) return false;
+  if (locs.length && !locs.some((l) => hqOf(c).text.toLowerCase().includes(l.toLowerCase()) || hqOf(c).countryFull.toLowerCase() === l.toLowerCase())) return false;
+  const b = band(c.employees ?? 85);
+  if (sizes.length && !sizes.includes(b.end === null ? `${b.start}+` : `${b.start}-${b.end}`)) return false;
+  return true;
+}
+/** A short-mode company-search row (no size band, no member count — as the Actor returns it). */
+function searchItem(c: SimCompany) {
+  const h = hqOf(c);
+  return { id: `cs-${li(c)}`, name: c.name, linkedinUrl: `https://www.linkedin.com/company/${li(c)}`, website: `https://${c.site}`,
+    industry: c.industry ?? "Software Development", location: { linkedinText: h.text }, pageType: "COMPANY" };
+}
 function recordItem(c: SimCompany) {
   const h = hqOf(c);
   return { id: `li-${li(c)}`, name: c.name, linkedinUrl: `https://www.linkedin.com/company/${li(c)}`, website: `https://${c.site}`, description: null,
@@ -100,7 +123,7 @@ function simApify(s: Scenario) {
   const calls: ActorCall[] = [];
   const p = s.providers ?? {};
   const modeFor = (actor: string): ProviderMode =>
-    (actor === "apify_linkedin_job_search" ? p.jobs : actor === "apify_linkedin_company_details" ? p.records : actor === "apify_website_content" ? p.pages : "ok") ?? "ok";
+    (actor === "apify_linkedin_job_search" ? p.jobs : actor === "apify_linkedin_company_details" ? p.records : actor === "apify_website_content" ? p.pages : actor === "apify_linkedin_company_search" ? p.search : "ok") ?? "ok";
   const invoke: ActorInvoker = (actor, input, opts) => {
     const mode = modeFor(actor);
     const call: ActorCall = { actor, input: structuredClone(input) as Record<string, unknown>, key: opts.idempotencyKey, maxItems: opts.maxItems, outcome: mode, items: 0, chargedUsd: null };
@@ -111,7 +134,13 @@ function simApify(s: Scenario) {
     let items: unknown[] = [];
     if (mode === "ok") {
       if (actor === "apify_linkedin_job_search") items = s.companies.filter((c) => c.job !== null).map((c, i) => jobItem(i, c));
-      else if (actor === "apify_linkedin_company_details") items = s.companies.filter((c) => c.inRecords !== false).map(recordItem);
+      else if (actor === "apify_linkedin_company_details") {
+        // The Actor reads the company pages it is GIVEN: a record for a company nobody asked for
+        // never comes back (it used to return the first N scenario companies regardless).
+        const asked = new Set(((input.companies as string[] | undefined) ?? []).map((u) => u.toLowerCase().replace(/\/+$/, "")));
+        items = s.companies.filter((c) => c.inRecords !== false && (!asked.size || asked.has(`https://www.linkedin.com/company/${li(c)}`))).map(recordItem);
+      }
+      else if (actor === "apify_linkedin_company_search") items = s.companies.filter((c) => c.leaksThroughFilter || searchMatches(c, input)).map(searchItem);
       else if (actor === "apify_website_content") {
         items = (input.startUrls as { url: string }[]).map(({ url }) => {
           const u = new URL(url); const c = s.companies.find((x) => x.site === u.host);
@@ -191,7 +220,7 @@ export interface SimResult {
 
 export async function runScenario(s: Scenario): Promise<SimResult> {
   const signer = await planSigner("offline-sim-secret-0123456789abcdef");
-  const env: Record<string, string> = { LEAD_PIPELINE_ENABLED: "true", LEAD_PIPELINE_WORKSPACES: SIM_WS, PROVIDER_DISCOVERY_ENABLED: "true", PROVIDER_APIFY_DISCOVERY_ENABLED: "true" };
+  const env: Record<string, string> = { LEAD_PIPELINE_ENABLED: "true", LEAD_PIPELINE_WORKSPACES: SIM_WS, PROVIDER_DISCOVERY_ENABLED: "true", PROVIDER_APIFY_DISCOVERY_ENABLED: "true", ...(s.flags ?? {}) };
   const ap = simApify(s);
   const grounding: { host: string; value: string }[] = [];
   const mem = memoryStore(s.persistence?.fail === true, s.persistence?.failNames ?? []);
