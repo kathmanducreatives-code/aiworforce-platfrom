@@ -37,6 +37,14 @@ interface Props {
   scopeSwitcher?: ReactNode;
   /** Set when this is a client's Brain. */
   clientName?: string | null;
+  /**
+   * Company Brain V2 (B2.0): the truthful readiness summary (shared assessment).
+   * When present, the identity card's ring counts essentials, not the six
+   * legacy section checks, and links to the completion panel.
+   */
+  readiness?: { required: { complete: number; total: number }; optional: { complete: number; total: number }; stage: 'foundation' | 'core' | 'enriched' } | null;
+  /** The "Complete your Company Brain" panel, rendered under the identity card. */
+  completion?: ReactNode;
 }
 
 const TABS: { key: TabKey; label: string; sections: SectionKey[] }[] = [
@@ -55,7 +63,7 @@ const COVERAGE_LABEL: Record<SectionKey, string> = {
 
 const uniq = (values: string[]) => [...new Set(values.map((v) => v.trim()).filter(Boolean))];
 
-export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEdit, onRestart, onStartSetup, onSaveFields, scopeSwitcher, clientName }: Props) {
+export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEdit, onRestart, onStartSetup, onSaveFields, scopeSwitcher, clientName, readiness = null, completion = null }: Props) {
   const editable = useBrainEditable();
   const [params, setParams] = useSearchParams();
   const tab: TabKey = isTab(params.get('tab')) ? (params.get('tab') as TabKey) : 'overview';
@@ -94,7 +102,7 @@ export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEd
         </div>
       </header>
 
-      <IdentityCard brain={brain} health={health} active={active} activatedAt={activatedAt} saved={saved === 'company'} onEdit={onEdit} clientName={clientName ?? null} />
+      <IdentityCard brain={brain} health={health} active={active} activatedAt={activatedAt} saved={saved === 'company'} onEdit={onEdit} clientName={clientName ?? null} readiness={readiness} />
 
       {empty && (
         <section className="brain-empty" aria-labelledby="brain-empty-title">
@@ -112,6 +120,8 @@ export function BrainOverview({ brain, active, activatedAt, saved, syncing, onEd
           {editable && onStartSetup && <Button onClick={onStartSetup} className="shrink-0">Start guided setup</Button>}
         </section>
       )}
+
+      {!empty && completion}
 
       <Tabs value={tab} onValueChange={setTab} className="brain-tabs">
         <div ref={tabScroll} className="brain-tablist-scroll" data-more-start={edges.start || undefined} data-more-end={edges.end || undefined}>
@@ -152,17 +162,25 @@ function ReadinessRing({ ready, total }: { ready: number; total: number }) {
   );
 }
 
-function IdentityCard({ brain, health, active, activatedAt, saved, onEdit, clientName = null }: {
+function IdentityCard({ brain, health, active, activatedAt, saved, onEdit, clientName = null, readiness = null }: {
   clientName?: string | null;
   brain: CompanyBrainV2; health: Record<SectionKey, SectionHealth>; active: boolean; activatedAt: string | null;
   saved: boolean; onEdit: (s: SectionKey) => void;
+  readiness?: Props['readiness'];
 }) {
   const editable = useBrainEditable();
   const c = brain.company;
   const site = c.website_url ? formatSource(c.website_url) : null;
   const meta = uniq([c.category, c.business_model, c.stage, c.location, c.team_size ? `${c.team_size} people` : '']);
   const keys = Object.keys(health) as SectionKey[];
-  const ready = keys.filter((k) => health[k] === 'configured').length;
+  // V2: the truthful count (essential sections) when the assessment is available.
+  const ready = readiness ? readiness.required.complete : keys.filter((k) => health[k] === 'configured').length;
+  const total = readiness ? readiness.required.total : keys.length;
+  const readyTitle = readiness
+    ? (readiness.stage === 'foundation'
+      ? `${total - ready} essential${total - ready === 1 ? '' : 's'} to finish`
+      : readiness.stage === 'core' ? 'Essentials complete' : 'Fully complete')
+    : ready === keys.length ? 'Ready for your team' : `${keys.length - ready} area${keys.length - ready === 1 ? '' : 's'} to finish`;
 
   return (
     <section className={cn('brain-card brain-identity', saved && 'is-saved')} aria-label="Company identity">
@@ -183,9 +201,10 @@ function IdentityCard({ brain, health, active, activatedAt, saved, onEdit, clien
         </div>
       </div>
       <div className="brain-identity-side">
-        <ReadinessRing ready={ready} total={keys.length} />
+        <ReadinessRing ready={ready} total={total} />
         <div className="min-w-0">
-          <p className="brain-ready-title">{ready === keys.length ? 'Ready for your team' : `${keys.length - ready} area${keys.length - ready === 1 ? '' : 's'} to finish`}</p>
+          <p className="brain-ready-title">{readyTitle}</p>
+          {readiness && <a href="#brain-completion" className="brain-meta-line block underline-offset-2 hover:underline">{readiness.optional.complete} of {readiness.optional.total} enrichments · see what&apos;s missing</a>}
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <span className={cn('brain-status', active ? 'is-positive' : 'is-caution')}>{active ? 'Active' : 'Setup needed'}</span>
             <span className="brain-status">{CONFIDENCE_LABEL[brain.brain_confidence]}</span>

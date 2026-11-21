@@ -10,7 +10,9 @@
 // Vite, and headless Chrome driven over CDP with real mouse and key events.
 // The gateway only routes. Fictional data; nothing leaves loopback.
 // The window is tall: the harness mounts the page without the app shell's
-// scroll container, and the app's CSS locks document scrolling.
+// scroll container, and the app's CSS locks document scrolling. (5600 since
+// Company Brain V2's completion panel sits above Company memory; at 3200 the
+// memory panel's buttons fell below the viewport and could not be clicked.)
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captured, restoreServe } from "../db-contract/lib/captureServe.ts";
 import "../../supabase/functions/generate-company-brain-draft/index.ts";
@@ -67,7 +69,7 @@ for (let i = 0; i < 120; i++) {
 const cdpPort = port();
 const profileDir = await Deno.makeTempDir({ prefix: "brain-memory-chrome-" });
 new Deno.Command(CHROME, {
-  args: ["--headless=new", `--remote-debugging-port=${cdpPort}`, `--user-data-dir=${profileDir}`, "--window-size=1280,3200",
+  args: ["--headless=new", `--remote-debugging-port=${cdpPort}`, `--user-data-dir=${profileDir}`, "--window-size=1280,5600",
     "--no-first-run", "--disable-gpu", "--no-sandbox", "--force-prefers-reduced-motion", "about:blank"],
   stdout: "null", stderr: "null",
 }).spawn();

@@ -27,6 +27,9 @@ import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { BrainEditableContext } from '@/components/company-brain/brainEditable';
 import { BrainMemoryPanel } from '@/components/company-brain/memory/BrainMemoryPanel';
 import { companyBrainWritesBlocked, COMPANY_BRAIN_UNAVAILABLE_MESSAGE, COMPANY_BRAIN_UNAVAILABLE_TITLE } from '@/lib/env/companyBrainAvailability';
+import { BrainCompletionPanel } from '@/components/company-brain/completion/BrainCompletionPanel';
+import { fetchStoredResearch } from '@/lib/companyBrain/researchRuns';
+import { assessCompanyBrain, buildCompletionSuggestions, type StoredResearchRun } from '@/lib/companyBrain/completion';
 
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
@@ -102,6 +105,18 @@ export default function CompanyBrainDashboard() {
 
   const view = useMemo(() => (optimistic ? toSavedBrainView(optimistic) : serverView), [optimistic, serverView]);
   const { brain } = view;
+
+  // ── Company Brain V2 (B2.0): truthful readiness + guided completion ──────
+  // Agency Brain only: client Brains have their own (held) store and save path.
+  const [research, setResearch] = useState<StoredResearchRun[]>([]);
+  useEffect(() => {
+    let live = true;
+    setResearch([]);
+    if (scope.kind === 'agency' && workspaceId) void fetchStoredResearch(workspaceId).then((r) => { if (live) setResearch(r); });
+    return () => { live = false; };
+  }, [scope.kind, workspaceId]);
+  const assessment = useMemo(() => (scope.kind === 'agency' ? assessCompanyBrain(view.raw) : null), [scope.kind, view.raw]);
+  const suggestions = useMemo(() => (scope.kind === 'agency' ? buildCompletionSuggestions(view.raw, research) : []), [scope.kind, view.raw, research]);
 
   // Seller-identity state for the diagnostic banner (nested vs hidden legacy flat).
   const identityState = useMemo(() => deriveSellerIdentityState(data?.profile), [data?.profile]);
@@ -183,6 +198,13 @@ export default function CompanyBrainDashboard() {
     queue.current = run;
     return run;
   }, [workspaceId, refresh, scope, accessChanged]);
+
+  // A completion save (typed or an accepted suggestion): the same queue and backend `update`.
+  const saveCompletion = useCallback(async (patch: BrainProfile) => {
+    const ok = await writePatch(patch);
+    if (ok) toast.success('Saved to your Company Brain');
+    return ok;
+  }, [writePatch]);
 
   // The drawer keeps its edit when this throws (see CompanyBrainEditDrawer).
   async function saveSection(section: SectionKey, patch: BrainProfile) {
@@ -272,6 +294,12 @@ export default function CompanyBrainDashboard() {
         {error && <div role="alert" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 p-4 text-sm"><span>Company Brain could not refresh. Please try again.</span><Button size="sm" variant="outline" onClick={() => refresh()}>Retry</Button></div>}
         {(!error || data) && <BrainEditableContext.Provider value={canEditBrain && !brainWritesBlocked}><BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} syncing={isRefreshing} onEdit={setOpenSection} onRestart={scope.kind === 'agency' && !brainWritesBlocked ? () => setRestartOpen(true) : undefined} onStartSetup={scope.kind === 'agency' && !brainWritesBlocked ? () => navigate('/onboarding/company-brain') : undefined} onSaveFields={saveFields}
           clientName={brainScope.currentClient?.name ?? null}
+          readiness={assessment}
+          completion={assessment && (
+            <BrainCompletionPanel assessment={assessment} profile={view.raw} suggestions={suggestions}
+              canEdit={canEditBrain && !brainWritesBlocked} onSave={saveCompletion}
+              onOpenEditor={(section) => setOpenSection(section)} />
+          )}
           scopeSwitcher={brainScope.available ? <BrainScopeSwitcher scope={scope} clients={brainScope.clients} onSelect={brainScope.select} disabled={openSection !== null} /> : undefined} /></BrainEditableContext.Provider>}
         {/* Company memory: decisions, preferences, approved facts, agent
             suggestions and history. The agency Brain only — client Brains are
