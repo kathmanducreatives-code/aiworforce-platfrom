@@ -182,11 +182,22 @@ The last two apply **with every flag off**, so a Brain redeploy of pilot-chat ch
 
 **`run-agent`: remains excluded** from the initial Brain release. Its 41 bundle commits since v275 are ATLAS lead-engine changes, and B2.4 only adds a stamp there.
 
-**A finding outside the Brain release (production, pre-existing).** The production alarm ("Ops health") has failed on all of its last 100 runs:
-- `CRITICAL queue_unclaimed`: one mission has waited about 58,000 minutes (about 40 days).
-- `CRITICAL worker_unhealthy`: the worker's `/health` returns HTTP 404.
+**Production worker: investigated read-only on 2026-11-22. Verdict: a real outage of an unused path; the alarm is accurate.**
 
-The last Railway production deploy was 2026-10-12. This is the ATLAS/worker owner's to triage. It does not block the Brain release, but production lead missions started from chat would not be processed until it is fixed.
+| Evidence | Finding |
+|---|---|
+| Ops health (every 15 minutes) | Its last 100+ runs all failed. `CRITICAL queue_unclaimed` (1 mission) and `CRITICAL worker_unhealthy` (`/health` returns HTTP 404) |
+| The unclaimed mission (`lead_mission_queue` `986149e1…`) | Created 2026-10-13 09:54 in a single-member workspace. Its one attempt failed: `worker_error: No space left on device (os error 28)`, not terminal. Since 2026-10-13 10:11 it has been `resumable` with no worker. Its task is `ready` |
+| Production activity since then | **No new queue rows and no new tasks** (newest task: 2026-10-13 09:54). The queue holds 36 complete, 13 failed, 11 cancelled and 1 resumable |
+| Railway deployments (GitHub records) | The last deployment, `7566af44` (2026-10-12 07:14), succeeded, then became `inactive` at 08:06 that day. **No later deployment exists** |
+| Worker code | The 2026-10-12 build serves `/`, `/health` and `/healthz` (`worker/health.ts`). A 404 on `/health` therefore means the service is not answering, not that the path is wrong. **The monitor's assumption is not stale** |
+| Records | `docs/launch/merge-safety-checklist.md` (owner-verified 2026-10-14/15): Railway worker "automatic deployments DISABLED … **trial expired**". The only recorded containment decision is Option A (one monitoring subject, 2026-11-20). **No record says lead execution was intentionally stopped** |
+
+**Conclusion.** The production lead-execution worker has not run since about 2026-10-12/13. The likeliest cause is the expired Railway trial, after a disk-full failure on the last mission. This is not a decision on record, so it is a real outage, but of a path nobody has used for 40 days. The health alarm is accurate, and has gone unanswered.
+
+**Risk if a worker comes back.** It would claim the `resumable` mission from 2026-10-13 and continue it, including any paid provider steps. Before the worker is restored, the owner should decide whether that mission is resumed or cancelled.
+
+**Effect on the Brain release: none.** The Brain release uses Edge Functions only. A chat-started lead mission in production, however, would be queued and not run.
 
 ## 6. Hosted Brain TEST acceptance
 
