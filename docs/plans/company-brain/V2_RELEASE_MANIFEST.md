@@ -53,7 +53,7 @@ These are the functions whose own source changed. Each one bundles `_shared` cod
 | `daily-brief` | v49 | B2.4 Brain stamp on the stored brief | none |
 | `run-radar-scan` | (record) | B2.4 single LISA radar rule. **Manual scans are unchanged and stay available** | none |
 | `run-monitoring-scan` | (record) | B2.4 stamp. Manual run only; scheduling stays off | none |
-| `run-agent` | v275 | B2.4 LYRA single snapshot. **Shared with the ATLAS track; coordinate before deploying** | none |
+| ~~`run-agent`~~ | v275 | **Excluded from the Brain release.** It has 41 bundle commits since v275, mostly ATLAS, and ships with the ATLAS release. LYRA keeps working; it only lacks the B2.4 stamp | — |
 
 - **Not redeployed:** `lisa-monitor`, `orchestrate`, `agent-collaboration`, `lead-pipeline`, `run-lead-action`, `unlock-founders` and `workforce-dashboard` import changed shared modules. They keep their current bundles, which stay valid because every shared change is additive.
 - **Kept off:** monitoring scheduling and ORION delegation.
@@ -63,8 +63,8 @@ These are the functions whose own source changed. Each one bundles `_shared` cod
 
 1. **Brain TEST:** build (§5), deploy, then run the acceptance suite.
 2. **Production database:** take the dump, then apply migrations 1 → 3.
-3. **Production functions:** deploy in the table order. `run-agent` goes last and only with the ATLAS owner's agreement.
-4. **Frontend.** Vercel builds every branch, previews included. `main` was last committed on 2026-05-22 and has no Vercel status, while `launch/hardening` deploys on every push. **The production branch could not be verified from this environment.** The owner checks it in Vercel → Project → Settings → Git → Production Branch, or with `curl https://<prod-domain>/version.json` (its `context` and `sha` show the branch and commit). If production tracks `launch/hardening`, merging the release **is** the frontend deploy, so steps 2–3 must be done first.
+3. **Production functions:** deploy in the table order, without `run-agent`. **Every one of these bundles includes ATLAS's `_shared/missionContract`, and its V4 commits (`9656073e`, `adc69510`) are not yet live, so the ATLAS owner's agreement is required first** (V2_HOSTED_VALIDATION_PLAN.md §5).
+4. **Frontend.** The production branch is **verified as `launch/hardening`** (V2_HOSTED_VALIDATION_PLAN.md §2): merging the release is the frontend deploy. Vercel builds every branch, previews included. `main` was last committed on 2026-05-22 and has no Vercel status, while `launch/hardening` deploys on every push. **The production branch could not be verified from this environment.** The owner checks it in Vercel → Project → Settings → Git → Production Branch, or with `curl https://<prod-domain>/version.json` (its `context` and `sha` show the branch and commit). If production tracks `launch/hardening`, merging the release **is** the frontend deploy, so steps 2–3 must be done first.
 
 ## 5. Brain TEST environment: reproducibility
 
