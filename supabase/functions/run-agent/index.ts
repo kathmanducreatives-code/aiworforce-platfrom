@@ -1773,6 +1773,8 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     ? tool_input_body.content_loop as { content_item_id?: string; use_company_brain?: boolean }
     : null;
   let brainBlock = renderBrainForAgent(brain, brainContextAllowed);
+  // B2.4: set by the content branch below; recorded on the saved draft.
+  let lyraBrainContextId: string | null = null;
   if (contentLoop) {
     let recent: RecentContent[] = [];
     try {
@@ -1802,19 +1804,28 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     // `brain` exactly as before — this changes the content branch only.
     let contentProfile: CompanyBrain = brain;
     let memoryBlock = "";
+    // B2.4: ONE snapshot for the whole content run. The readiness gate, the
+    // profile and the memory block all come from the same shared context, so a
+    // save landing mid-run cannot make LYRA gate on one Brain and write from
+    // another. The run is stamped with that context's id (saved with the draft).
+    let contentGate = brainContextAllowed;
     try {
       const loaded = await loadCompanyBrainContext(supabase as unknown as LoaderDb, workspace_id, { skipMembershipCheck: true });
       if (loaded.ok && loaded.context.status !== "missing") {
         contentProfile = loaded.context.effective_profile;
         memoryBlock = renderBrainMemoryBlock(loaded.context, "lyra");
+        contentGate = brainReadinessV2Enabled((k) => { try { return Deno.env.get(k); } catch { return undefined; } })
+          ? companyBrainReadiness(normalizeCompanyBrain(contentProfile ?? {}), loaded.context.onboarding_completed).state !== "draft"
+          : loaded.context.onboarding_completed;
+        lyraBrainContextId = loaded.context.context_id;
       }
     } catch { /* the stored profile still drafts; memory is additive context */ }
     const useBrain = contentLoop.use_company_brain !== false;
-    brainBlock = renderContentBrain(brainContextAllowed ? contentProfile : null, {
-      onboardingCompleted: brainContextAllowed,
+    brainBlock = renderContentBrain(contentGate ? contentProfile : null, {
+      onboardingCompleted: contentGate,
       useCompanyBrain: useBrain,
       recent,
-    }) + (brainContextAllowed && useBrain && memoryBlock ? `\n\n${memoryBlock}` : "");
+    }) + (contentGate && useBrain && memoryBlock ? `\n\n${memoryBlock}` : "");
   }
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${getAgentorySystemPrompt({
     taskType: "agent_execution",
@@ -8857,6 +8868,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         content_loop: (tool_input_body?.content_loop && typeof tool_input_body.content_loop === "object")
           ? tool_input_body.content_loop
           : undefined,
+        brain_context_id: lyraBrainContextId,
       });
     } catch (e) {
       console.warn("[run-agent] memoryWriter failed:", e);

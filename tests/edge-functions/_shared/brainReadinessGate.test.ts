@@ -104,8 +104,11 @@ Deno.test("G-8 run-agent: an admitted run on a usable Brain gets it as context; 
   const src = read("supabase/functions/run-agent/index.ts");
   assert(/const brainContextAllowed = brainReadinessV2Enabled\([\s\S]{0,120}\)\s*\?\s*companyBrainReadiness\(normalizeCompanyBrain\(brain \?\? \{\}\), brainOnboardingCompleted\)\.state !== "draft"\s*:\s*brainOnboardingCompleted;/.test(src));
   assert(src.includes("renderBrainForAgent(brain, brainContextAllowed)"));
-  // Content reads the shared loader's effective profile (Company Brain V1), behind the SAME gate.
-  assert(src.includes("renderContentBrain(brainContextAllowed ? contentProfile : null"));
-  assert(src.includes("(brainContextAllowed && useBrain && memoryBlock ?"), "the memory block is behind the gate too");
+  // Content reads the shared loader's effective profile behind the SAME readiness rule — since
+  // B2.4 evaluated on that one snapshot (contentGate), falling back to brainContextAllowed.
+  assert(src.includes("let contentGate = brainContextAllowed;"));
+  assert(/contentGate = brainReadinessV2Enabled\([\s\S]{0,120}\)\s*\?\s*companyBrainReadiness\(normalizeCompanyBrain\(contentProfile \?\? \{\}\), loaded\.context\.onboarding_completed\)\.state !== "draft"\s*:\s*loaded\.context\.onboarding_completed;/.test(src));
+  assert(src.includes("renderContentBrain(contentGate ? contentProfile : null"));
+  assert(src.includes("(contentGate && useBrain && memoryBlock ?"), "the memory block is behind the gate too");
   assertFalse(src.includes("renderBrainForAgent(brain, brainOnboardingCompleted)"));
 });

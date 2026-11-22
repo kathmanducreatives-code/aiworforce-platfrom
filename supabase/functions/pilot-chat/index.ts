@@ -1968,7 +1968,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       const { data: saved } = await admin.from("messages").insert({
         conversation_id: conversationId, role: "assistant", content: ask, agent_slug: "pilot",
         metadata: { classifier_source: "workspace_question", clarification: true, department: "atlas",
-          brain_fingerprint: chatBrain.fingerprint, pronoun_resolution: resolved.kind },
+          brain_fingerprint: chatBrain.fingerprint, brain_context_id: chatBrain.shared?.context_id ?? null, pronoun_resolution: resolved.kind },
       }).select("*").single();
       return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
     }
@@ -1998,7 +1998,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           const { data: saved } = await admin.from("messages").insert({
             conversation_id: conversationId, role: "assistant", content: ask, agent_slug: "pilot",
             metadata: { classifier_source: "evidence_answer", clarification: true, department: "lisa",
-              brain_fingerprint: chatBrain.fingerprint },
+              brain_fingerprint: chatBrain.fingerprint, brain_context_id: chatBrain.shared?.context_id ?? null },
           }).select("*").single();
           return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
         }
@@ -2016,7 +2016,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           department: evidenceKind === "verification" ? "lisa" : "orion",
           structured_answer: structured,
           evidence_sources: retrieved.sources,
-          brain_fingerprint: chatBrain.fingerprint,
+          brain_fingerprint: chatBrain.fingerprint, brain_context_id: chatBrain.shared?.context_id ?? null,
           chat_brain: { route: "read", target: `evidence:${evidenceKind}`, served_from: "stored_evidence", spent: false },
           outcome: satisfied(`read:evidence:${evidenceKind}`),
         },
@@ -2193,7 +2193,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     confidence: brainConfidence,
     prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
     // Which Company Brain version this answer was given (shared loader fingerprint).
-    brain_fingerprint: chatBrain.fingerprint,
+    brain_fingerprint: chatBrain.fingerprint, brain_context_id: chatBrain.shared?.context_id ?? null,
     // Which department answered (ORION / ATLAS / LISA / LYRA).
     department: departmentForRoute(brainRoute?.kind ?? null, null),
   });

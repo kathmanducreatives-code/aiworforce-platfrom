@@ -75,6 +75,15 @@ export interface SharedBrainContext {
   status: BrainStatus;
   /** Changes whenever the profile or any memory item changes: cache key + staleness check. */
   fingerprint: string;
+  /**
+   * Company Brain V2 · B2.4: WHICH KNOWLEDGE AGENTS WERE SERVED, versioned. A hash
+   * of the profile version and every SERVABLE memory item (id, version, effective
+   * status) at load time. Unlike `fingerprint`, it also changes when an item
+   * merely crosses its review or expiry time (it stops being served), and it does
+   * not change for pending proposals or retracted history no agent sees. Two
+   * agents with the same context_id were given the same Brain.
+   */
+  context_id: string;
   onboarding_completed: boolean;
   /** The stored profile, untouched. */
   profile: Record<string, unknown>;
@@ -331,6 +340,13 @@ export async function loadCompanyBrainContext(
   if (!hasBrain) warnings.push("no_company_brain");
 
   const maxMem = memory.reduce((a, m) => (m.updated_at > a ? m.updated_at : a), "");
+  const context_id = brainContextId({
+    workspace_id: workspaceId,
+    brain_updated_at: String(brainRow?.updated_at ?? "none"),
+    onboarding_completed,
+    served: servable.map((m) => `${m.id}@${m.version}`),
+    excluded: memory.filter((m) => !isServable(m, now)).map((m) => `${m.id}:${effectiveStatus(m, now)}`),
+  });
   const fingerprint = `${String(brainRow?.updated_at ?? "none")}|${maxMem || "none"}|${memory.length}`;
 
   return {
@@ -339,6 +355,7 @@ export async function loadCompanyBrainContext(
       workspace_id: workspaceId,
       status,
       fingerprint,
+      context_id,
       onboarding_completed,
       profile,
       effective_profile: fold.effective,
@@ -357,4 +374,31 @@ export async function loadCompanyBrainContext(
       warnings,
     },
   };
+}
+
+// ─────────────────────────────────────────────────── B2.4 context identity ────
+
+export const BRAIN_CONTEXT_VERSION = "bctx1";
+
+/**
+ * Deterministic id of a served context: `bctx1-` + 16 letters a–p (FNV-1a 64 over
+ * a canonical, order-independent description). Not a security hash — an
+ * identity for "same knowledge", recorded on what agents produce.
+ */
+export function brainContextId(input: {
+  workspace_id: string; brain_updated_at: string; onboarding_completed: boolean; served: string[]; excluded: string[];
+}): string {
+  const canon = JSON.stringify([
+    BRAIN_CONTEXT_VERSION, input.workspace_id, input.brain_updated_at, input.onboarding_completed,
+    [...input.served].sort(), [...input.excluded].sort(),
+  ]);
+  let h = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(canon)) {
+    h ^= BigInt(byte);
+    h = (h * 0x100000001b3n) & 0xffffffffffffffffn;
+  }
+  // Letters only (hex digit d → 'a'+d): an id stored beside signals and drafts must never
+  // contain a digit run that a contact-data guard reads as a phone number.
+  const hex = h.toString(16).padStart(16, "0");
+  return `${BRAIN_CONTEXT_VERSION}-${[...hex].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join("")}`;
 }

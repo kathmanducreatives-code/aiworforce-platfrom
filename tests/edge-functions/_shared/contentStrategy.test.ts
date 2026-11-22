@@ -305,10 +305,11 @@ Deno.test("run-agent gives Scribe content runs the strategist's brain, once, beh
   // The gate is `brainContextAllowed`: an activated Brain, or (BRAIN_READINESS_V2) a usable one.
   // Company Brain V1: the effective profile (approved memory folded in), behind the same gate,
   // and the memory block only when the Brain may be used at all.
-  assert(s.includes("brainBlock = renderContentBrain(brainContextAllowed ? contentProfile : null, {"));
+  // B2.4: the gate is the same rule, evaluated on the one shared snapshot the content run uses.
+  assert(s.includes("brainBlock = renderContentBrain(contentGate ? contentProfile : null, {"));
   assert(s.includes("const useBrain = contentLoop.use_company_brain !== false;"));
   assert(s.includes("useCompanyBrain: useBrain,"));
-  assert(s.includes("(brainContextAllowed && useBrain && memoryBlock ?"));
+  assert(s.includes("(contentGate && useBrain && memoryBlock ?"));
   assert(s.includes(".neq(\"status\", \"archived\")"), "recent content excludes archived drafts");
 });
 
