@@ -183,3 +183,13 @@ Deno.test("an either/or group is ONE requirement in the panel, not one row per a
   assert(p);
   assertEquals(p.requirements.map((r) => r.label), ["Headquarters: United States", g, "Excluding: consumer"]);
 });
+
+Deno.test("a pipeline operation the user asked for ('no duplicates') is shown as handled, never as 'Not checked'", () => {
+  const p = readStrategyPlan({ status: "ready", plan: { status: "ready", strategy: "apify_only", steps: [], estimate: { apifyUsd: 0.07, leadoceanRecords: 0 }, planHash: "h", rationale: [] },
+    interpretation: { missionContract: { assumptions: [], disclosures: [], mergedDuplicates: [{ span: "active B2B companies", kind: "implied", coveredBy: ["s"], reason: "a dated hiring signal (last 30 days) shows the company is operating" }],
+      contract: { operations: [{ span: "duplicates", operation: "deduplicate", appliedBy: "one lead per company" }] } } } });
+  assert(p);
+  assertEquals(p.interpretation.merged.map((m) => m.span), ["active B2B companies", "duplicates"]);
+  assert(/handled on every run/.test(p.interpretation.merged[1].reason));
+  assertEquals(p.interpretation.disclosures, []);
+});
