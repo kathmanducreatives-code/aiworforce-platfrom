@@ -91,7 +91,7 @@ Deno.serve(withBuildStamp(async (req) => {
         if (!loaded.ok) return json({ error: loaded.error }, 403);
         const c = loaded.context;
         return json({
-          ok: true, status: c.status, fingerprint: c.fingerprint, warnings: c.warnings,
+          ok: true, status: c.status, fingerprint: c.fingerprint, context_id: c.context_id, warnings: c.warnings,
           pending_proposals: c.pending_proposals, needs_review: c.needs_review.length,
           applied: c.applied, recent_changes: c.recent_changes,
           competitors: c.competitors, exclusions: { ...c.exclusions, items: undefined },
