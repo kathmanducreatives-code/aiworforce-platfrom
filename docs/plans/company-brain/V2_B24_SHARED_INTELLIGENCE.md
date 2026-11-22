@@ -17,7 +17,7 @@
 | `orchestrate` planner | delegation | Raw profile | Unchanged. ORION delegation stays off |
 
 ## The context id
-`SharedBrainContext.context_id` = `bctx1-` + FNV-1a-64 over:
+`SharedBrainContext.context_id` = `bctx1-` + FNV-1a-64, written as 16 letters a–p, over:
 - the workspace;
 - the profile's `updated_at`;
 - onboarding state;
@@ -28,6 +28,7 @@ Properties:
 - **The same id means the same knowledge.** It changes when anything served changes, including an item crossing its review or expiry time, which the old `fingerprint` could not see. It does not change for a pending proposal, which serves nothing.
 - **Versioned (`bctx1`),** so a future change of definition is visible in stored outputs.
 - **Additive.** `fingerprint` is kept for existing readers.
+- **Letters only.** The first version used hex. The full contract lane caught LISA's contact-data guard randomly rejecting signals whose stored id held a phone-number-like digit run. A regression test pins the fix.
 
 ## Evidence (fictional data, real Postgres and PostgREST, the real memory RPCs and the same modules each function uses)
 
@@ -44,7 +45,19 @@ Properties:
 3. **Freshness:** an item crossing its review date changes `context_id`, but not `fingerprint`. A pending proposal changes neither.
 4. **Isolation:** another workspace gets its own context, and a non-member's chat load gets nothing.
 
-Unit tests: `companyBrainSharedIntelligence.test.ts` (6: id determinism and sensitivity, radar rule, stamp, consumers stamped).
+Unit tests: `companyBrainSharedIntelligence.test.ts` (7: id determinism and sensitivity, letters-only against the LISA guard, radar rule, stamp, consumers stamped).
+
+**Full gates on the B2.4 tree:**
+
+| Lane | Result |
+|---|---|
+| Contract lane | **478 / 0** |
+| Edge functions | 10,284 passed, 1 failed (the date-dependent ATLAS RECENCY test) |
+| UI | 807 / 0 |
+| `deno check`, CI-style | pass |
+| tsc / eslint ratchets | baseline |
+| Build | pass |
+| Browser tests | 4/4, 4/4 and 5/5. "Grant revoked" in cache session failed once under parallel load, then passed 5/5 twice in a row; it also fails intermittently on `launch/hardening` |
 
 ## Remaining for B2.4
 - **ATLAS reading memory** (exclusions in lead search) needs a decision by the ATLAS owner. Today ATLAS honours only the stored profile, which B2.1 keeps consistent.
