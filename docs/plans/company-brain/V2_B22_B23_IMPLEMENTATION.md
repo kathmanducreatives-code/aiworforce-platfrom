@@ -16,7 +16,7 @@ Branch `claude/company-brain-v2`. These changes follow B2.0 and B2.1 (see `V2_B2
 - Delegation stays off, scheduled monitoring stays off, and manual LISA scans are unchanged.
 - The ATLAS Brain read contract (`BrainMergeInput`) is pinned by the golden test, which is unchanged after both milestones.
 
-V1 memory was never applied to a hosted project. It exists only as the held migration `20261110120000` (decision recorded 2026-11-09). B2.2 and B2.3 build on it with additive held migrations.
+**Correction (2026-11-22):** an earlier version of this note said V1 memory had never been applied to a hosted project. That was wrong. **Production has V1 memory, applied 2026-11-13** (verified read-only; see `ENVIRONMENT_INVENTORY.md`). TEST does not. B2.2 and B2.3 are additive held migrations on top of it.
 
 ## B2.2: where every piece of knowledge came from
 

@@ -8,6 +8,23 @@ is synced to the production-connected repository (Lovable builds from its
 Migrations are applied to production one at a time, deliberately — see
 `docs/SUPABASE_TARGETING.md`.
 
+## Verified hosted status (read-only catalog check, 2026-11-22)
+
+This table **overrides any older "not applied" statement below**. See `docs/plans/company-brain/ENVIRONMENT_INVENTORY.md`.
+
+| Held file | Production `ohsdatpvfdjdemstoiuj` | TEST `tlvnfrxzjhsjgdofwehb` |
+|---|---|---|
+| `20261110120000_company_brain_memory.sql` | **Applied 2026-11-13** as version `20261113080619`. The function bodies equal this file with comments stripped | Not applied |
+| `20261113120000_workforce_v2_security.sql` | **Applied** as `20261113075021` | **Applied** as `20261112072003` |
+| `20261114120000_lead_model_calls_view_lockdown.sql` | **Applied** as `20261113075202` | **Applied** as `20261112072104` |
+| `20261121120000_conversation_workspace_guard.sql` (R1.2.1 branch) | Not applied | **Applied** as `20261121085947` |
+| `20261122120000_company_brain_provenance.sql` (B2.2) | Not applied | Not applied |
+| `20261122130000_company_brain_memory_activation.sql` (B2.3) | Not applied | Not applied |
+
+`supabase/migrations/20261023120000_company_brain_server_writes_only.sql` and `20261024120000_company_brain_authorized_writer.sql` are applied in production (as `20261113075433` and `20261113075522`) but **not on TEST**.
+
+Release housekeeping: held files already applied in production should move into `supabase/migrations/` under the version production recorded. Do this deliberately as part of the release, so the files match the hosted history.
+
 ## `20260816120000_baseline_schema.sql`
 
 The schema baseline: a `pg_dump` of the live schema taken 2026-08-16 (111

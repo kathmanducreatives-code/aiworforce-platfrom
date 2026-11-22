@@ -2,6 +2,8 @@
 
 Everything below is verified locally on a disposable, loopback-only stack: Postgres 17, GoTrue, PostgREST, the real handlers and the real page in headless Chrome. **Nothing here has run on a hosted project.** Each gate needs explicit approval, and none touches production.
 
+> **Corrected 2026-11-22:** production already has V1 memory and the Brain write-hardening (`ENVIRONMENT_INVENTORY.md`). So G1 applies only to a TEST or Brain-TEST project. The production release delta is G2, G3 and the function deploys. The hosted-validation choice is in `BRAIN_TEST_ENVIRONMENT_OPTIONS.md`.
+
 ## Blockers (decide before any gate)
 
 | # | Blocker | Owner / action |
