@@ -317,6 +317,8 @@ Deno.test("B2.3 · ORION offers to remember in chat; a person edits and approves
   // Reload: the card reads the proposal's live state.
   await send("Page.reload");
   assert(await waitFor(`document.querySelector('[data-testid="memory-offer"]')?.dataset.status === 'remembered'`, 20000), "still remembered after a reload");
+  assert(await waitFor(`document.querySelector('[data-testid="memory-offer"]').innerText.includes('Focus on dental clinics in Portugal and Spain') && document.querySelector('[data-testid="memory-offer"]').innerText.includes('Remembered with your edit')`, 10000),
+    "the card shows what was actually remembered, not the original wording");
 
   // The dashboard shows what is still waiting (the gambling exclusion), never approving from there.
   await send("Page.navigate", { url: `${APP}/tests/browser/brain-cache-session.html?view=dashboard` });

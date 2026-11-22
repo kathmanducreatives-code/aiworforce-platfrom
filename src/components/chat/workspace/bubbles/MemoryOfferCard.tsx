@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { MemoryWriteError, fetchProposal, newIdempotencyKey, reviewProposal } from '@/lib/companyBrain/memoryApi';
-import { correctedProposalValue, editableProposalText } from '@/lib/companyBrain/memoryView';
+import { correctedProposalValue, editableProposalText, formatValue } from '@/lib/companyBrain/memoryView';
 import { readMemoryOffer } from '@/lib/chat/memoryOffer';
 import { ConflictConfirm } from '@/components/company-brain/memory/ConflictConfirm';
 
@@ -76,8 +76,9 @@ export default function MemoryOfferCard({ metadata }: { metadata: unknown }) {
           </div>
           {editing
             ? <Input className="mt-1 h-8" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Edit before remembering" autoFocus />
-            : <div className="mt-0.5 font-medium">{offer.summary}</div>}
-          {done === 'remembered' && <p className="mt-1 inline-flex items-center gap-1 text-emerald-200"><Check className="h-3.5 w-3.5" aria-hidden />Remembered. Every agent uses it from its next run.</p>}
+            : <div className="mt-0.5 font-medium">{done === 'remembered' && live.data?.remembered && status === 'corrected'
+              ? formatValue(live.data.remembered.value_type, live.data.remembered.value) : offer.summary}</div>}
+          {done === 'remembered' && <p className="mt-1 inline-flex items-center gap-1 text-emerald-200"><Check className="h-3.5 w-3.5" aria-hidden />{status === 'corrected' ? 'Remembered with your edit.' : 'Remembered.'} Every agent uses it from its next run.</p>}
           {done === 'declined' && <p className="mt-1 inline-flex items-center gap-1 text-[#9aa4af]"><X className="h-3.5 w-3.5" aria-hidden />Not remembered. ORION will not suggest it again.</p>}
           {done === 'withdrawn' && <p className="mt-1 text-[#9aa4af]">This suggestion was withdrawn.</p>}
           {!done && later && <p className="mt-1 inline-flex items-center gap-1 text-[#9aa4af]"><Clock className="h-3.5 w-3.5" aria-hidden />Waiting in your Company Brain review queue.</p>}

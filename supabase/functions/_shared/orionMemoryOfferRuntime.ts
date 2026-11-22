@@ -44,22 +44,21 @@ export async function offerMemoryFromTurn(admin: Admin, input: {
   if (offer.kind === "temporary") return { status: "temporary", summary: offer.summary };
   const said = input.message.trim().replace(/\s+/g, " ");
   try {
+    const payload = {
+      kind: offer.item.kind, category: offer.item.category, fact_key: offer.item.fact_key,
+      value_type: offer.item.value_type, value: offer.item.value,
+      rationale: `You told ORION in chat: “${said.slice(0, 400)}”`,
+      evidence: [{
+        source_ref: `conversation:${input.conversationId}${input.messageId ? `#message:${input.messageId}` : ""}`,
+        excerpt: said.slice(0, 500),
+        observed_at: (input.now ?? new Date()).toISOString(),
+      }],
+      // What a person said in chat, read by rules: a suggestion until a person approves it.
+      source_type: "agent_suggestion",
+      confidence: "medium",
+    };
     const { data, error } = await admin.rpc("company_brain_proposal_submit", {
-      p_workspace_id: input.workspaceId,
-      p_agent: "orion",
-      p_payload: {
-        kind: offer.item.kind, category: offer.item.category, fact_key: offer.item.fact_key,
-        value_type: offer.item.value_type, value: offer.item.value,
-        rationale: `You told ORION in chat: “${said.slice(0, 400)}”`,
-        evidence: [{
-          source_ref: `conversation:${input.conversationId}${input.messageId ? `#message:${input.messageId}` : ""}`,
-          excerpt: said.slice(0, 500),
-          observed_at: (input.now ?? new Date()).toISOString(),
-        }],
-        // What a person said in chat, read by rules: a suggestion until a person approves it.
-        source_type: "agent_suggestion",
-        confidence: "medium",
-      },
+      p_workspace_id: input.workspaceId, p_agent: "orion", p_payload: payload,
     });
     if (error) return null;
     const out = (data ?? {}) as { outcome?: string; proposal_id?: string; contradicts_memory_id?: string | null };

@@ -180,13 +180,22 @@ export async function proposeFromApprovedContent(workspaceId: string, contentIte
 }
 
 /** B2.3: one proposal's live state (the chat's offer card reads it, so a reload shows what happened). */
-export async function fetchProposal(workspaceId: string, proposalId: string): Promise<MemoryProposal | null> {
+export async function fetchProposal(workspaceId: string, proposalId: string):
+  Promise<(MemoryProposal & { remembered?: { value_type: string; value: unknown } | null }) | null> {
   const { data, error } = await from('company_brain_memory_proposals')
-    .select('id, proposed_by_agent, kind, category, fact_key, value_type, value, rationale, evidence, source_type, confidence, status, contradicts_memory_id, created_at, updated_at')
+    .select('id, proposed_by_agent, kind, category, fact_key, value_type, value, rationale, evidence, source_type, confidence, status, contradicts_memory_id, resulting_memory_id, created_at, updated_at')
     .eq('workspace_id', workspaceId).eq('id', proposalId).maybeSingle();
   if (missing(error)) throw new MemoryUnavailableError();
   if (error) throw error;
-  return (data ?? null) as MemoryProposal | null;
+  if (!data) return null;
+  // What was actually remembered (a person may have edited it before approving).
+  let remembered: { value_type: string; value: unknown } | null = null;
+  const rid = (data as { resulting_memory_id?: string | null }).resulting_memory_id;
+  if (rid) {
+    const m = await from('company_brain_memory').select('value_type, value').eq('workspace_id', workspaceId).eq('id', rid).maybeSingle();
+    remembered = (m.data ?? null) as { value_type: string; value: unknown } | null;
+  }
+  return { ...(data as MemoryProposal), remembered };
 }
 
 /** B2.3: how many agent suggestions wait for review (the dashboard). Null where memory is not enabled. */

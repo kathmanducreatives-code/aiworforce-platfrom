@@ -94,7 +94,14 @@ export async function authorizedBrainWrite(admin: Admin, w: AuthorizedBrainWrite
   let res: RpcResult | null = null;
   if (w.provenance) {
     res = await admin.rpc("company_brain_provenanced_write", {
-      ...args,
+      p_workspace_id: args.p_workspace_id,
+      p_actor_id: args.p_actor_id,
+      p_session_id: args.p_session_id,
+      p_permission: args.p_permission,
+      p_mode: args.p_mode,
+      p_profile: args.p_profile,
+      p_expected_updated_at: args.p_expected_updated_at,
+      p_activate: args.p_activate,
       p_source_kind: w.provenance.kind,
       p_source_ref: w.provenance.ref ?? null,
       p_reason: w.provenance.reason?.trim() ? w.provenance.reason.trim().slice(0, 500) : null,
