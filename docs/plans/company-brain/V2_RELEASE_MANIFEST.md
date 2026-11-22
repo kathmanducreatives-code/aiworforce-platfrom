@@ -112,10 +112,38 @@ BRAIN_TEST_URL=https://<ref>.supabase.co BRAIN_TEST_ANON_KEY=… BRAIN_TEST_SERV
   8. workspace isolation and roles.
 - It was proven locally against real GoTrue, real PostgREST and the real handlers: `tests/browser/brainAcceptance.local.test.ts`, **38/38**.
 
-## 7. Evidence on the release tree
+## 7. Evidence on the release tree (`claude/brain-v2-integration` at `475ce518`, 2026-11-22)
 
-See §8 for the gate results recorded at release time.
+All runs are local: fictional data, loopback only, no provider call.
+
+| Gate | Result |
+|---|---|
+| Contract lane (real Postgres and PostgREST) | **483 / 0** (at `bcfcce49`; the later commits add only the acceptance suite, the scripts, and `context_id` in one response) |
+| Mutation proof | **152 / 152 killed** |
+| Edge functions | **10,303 / 0** (includes PR #278's date fix) |
+| Infra | 335 / 0 |
+| UI | 813 / 0 |
+| `deno check`, CI-style | pass |
+| tsc / eslint ratchets | 23 / 23 and 1,265 / 1,265, both at baseline |
+| Browser (real GoTrue, real page in headless Chrome) | completion 4/4, memory 4/4, cache session 5/5 |
+| Hosted acceptance suite against the local stand-in | **38/38**; eight areas; zero model calls |
+| Real-process rehearsals | 4 / 0 |
+| `build-brain-test.sh` on an empty database | builds; all four catalogue checks ok |
+| Rollback 3 → 2 → 1, then re-apply 1 → 3 (same database) | clean both ways; catalogue back to the same state |
 
 ## 8. Recorded at release time
 
-(Filled in below.)
+| Branch | SHA |
+|---|---|
+| `launch/hardening` | `784b8829` |
+| `claude/r1.2.1-workspace-binding` | `06297002` |
+| `claude/company-brain-v2-rc` | `ddc9c389` |
+| `claude/company-brain-v2-b24` | this commit's parent is `c4447aaf` (code); docs-only on top |
+| `claude/brain-v2-integration` | code tested at `475ce518`; the merge of this document follows |
+
+**Not yet done, and needs the owner:**
+- a Brain TEST project;
+- acceptance against it;
+- the Vercel production branch;
+- the production dump and migrations;
+- the function deploys.
