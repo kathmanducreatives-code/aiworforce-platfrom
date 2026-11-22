@@ -166,6 +166,20 @@ The bundled changes since production pilot-chat (`2a0438bb`) are `9656073e` and 
 
 If either condition is not met, the Brain release follows the ATLAS production release.
 
+**Correction from the ATLAS session (2026-11-22 23:27), verified here.** The pilot-chat bundle also carries **ungated** rule changes from `262fb3e7`.
+
+Excluding Brain and R1.2.1 code, exactly six shared files in pilot-chat's module graph changed since production's build (`2a0438bb`):
+- four `missionContract/*` files, all behind the V4 flags;
+- `_shared/businessModelMatch.ts` (+3/−1): "sells/sold … to homeowners/consumers/diyers" now reads as a **consumer buyer**;
+- `_shared/icpDiscoveryConstraints.ts` (+9): new industry mappings for commercial contracting, industrial/MRO distribution and field services.
+
+The last two apply **with every flag off**, so a Brain redeploy of pilot-chat changes how production reads business model and industry in lead requests. They are narrow and unit-tested, and have run on TEST, but have not been validated in production. They are also in the bundle of `run-monitoring-scan`. `generate-company-brain-draft`, `setup-company-brain`, `daily-brief`, `run-radar-scan` and `company-brain-memory` do not contain them.
+
+**Revised verdict:**
+- **Initial Brain release:** `generate-company-brain-draft`, `setup-company-brain`, `company-brain-memory` and `daily-brief`. Their only non-Brain bundle changes are the flag-gated contract files.
+- **`pilot-chat`:** needed for the ORION memory offer and the R1.2.1 binding. It goes in **only with the ATLAS owner's explicit sign-off on those two rule changes.** Without that sign-off, the pilot-chat deploy follows the ATLAS production release. Pinning those files to older versions only for the Brain build is not recommended: it would produce a build that exists in no branch and was tested nowhere.
+- **`run-radar-scan` and `run-monitoring-scan`:** deferred. Their B2.4 change is a stamp, and `run-monitoring-scan` carries the same rule changes.
+
 **`run-agent`: remains excluded** from the initial Brain release. Its 41 bundle commits since v275 are ATLAS lead-engine changes, and B2.4 only adds a stamp there.
 
 **A finding outside the Brain release (production, pre-existing).** The production alarm ("Ops health") has failed on all of its last 100 runs:
