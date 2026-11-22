@@ -35,7 +35,7 @@ import {
   renderExecutiveBriefMarkdown, synthesizeExecutiveBrief, type ExecutiveBrief,
 } from "../_shared/executiveBrief.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
-import { renderBrainMemoryBlock } from "../_shared/companyBrainAgentViews.ts";
+import { agentBrainStamp, renderBrainMemoryBlock } from "../_shared/companyBrainAgentViews.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
 
 /**
@@ -217,6 +217,7 @@ Deno.serve(withBuildStamp(async (req) => {
   }
 
   const markdown = renderExecutiveBriefMarkdown(brief);
+  const briefBrain = agentBrainStamp(ctx.shared_brain ?? null, "orion");
 
   // ---- Persist: the briefing history (append-only) ----
   const { data: savedOutput, error: saveErr } = await admin.from("saved_outputs").insert({
@@ -225,7 +226,8 @@ Deno.serve(withBuildStamp(async (req) => {
     type: EXECUTIVE_BRIEF_OUTPUT_TYPE,
     title: `Executive brief · ${brief.generated_at.slice(0, 10)}`,
     body: markdown,
-    raw: brief,
+    // B2.4: which Brain this brief was ranked and worded against.
+    raw: { ...brief, brain: briefBrain },
   }).select("id, created_at").single();
   if (saveErr) console.warn("[daily-brief] could not store brief history:", saveErr.message);
 
@@ -255,6 +257,7 @@ Deno.serve(withBuildStamp(async (req) => {
     message: saved,
     brief,
     saved_output_id: savedOutput?.id ?? null,
+    brain: briefBrain,
     stored: !saveErr,
     connectors_missing: connectorsMissing,
   });

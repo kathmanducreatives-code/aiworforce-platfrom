@@ -288,6 +288,8 @@ interface AgentResultCtx extends BaseCtx {
    */
   /** The model and provider that produced `output_text`, for provenance. */
   model_used?: string | null;
+  /** Company Brain V2 · B2.4: the shared Brain context a content draft was written against. */
+  brain_context_id?: string | null;
   provider_used?: string | null;
   content_loop?: {
     source?: string;
@@ -1403,7 +1405,8 @@ async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
       type: "content_draft",
       title: cleaned.title,
       body: cleaned.body,
-      raw: cleaned.structured ? { ...raw, structured: cleaned.structured } : raw,
+      raw: { ...(cleaned.structured ? { ...raw, structured: cleaned.structured } : raw),
+        ...(ctx.brain_context_id ? { brain_context_id: ctx.brain_context_id } : {}) },
     });
   }
 

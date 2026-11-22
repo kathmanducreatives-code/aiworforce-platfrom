@@ -110,6 +110,8 @@ export interface Relevance {
   excluded_by: string | null;
   /** The Company Brain version this was judged against (loader fingerprint). */
   brain_fingerprint: string | null;
+  /** Company Brain V2 · B2.4: the shared context id the verdict was computed against. */
+  brain_context_id?: string | null;
   computed_at: string;
 }
 

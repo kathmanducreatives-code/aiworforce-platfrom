@@ -31,7 +31,8 @@ Deno.test("every brief is stored as briefing history in saved_outputs", () => {
   const save = code.slice(at('.from("saved_outputs").insert({'));
   assert(/workspace_id: workspaceId,/.test(save.slice(0, 400)));
   assert(/type: EXECUTIVE_BRIEF_OUTPUT_TYPE,/.test(save.slice(0, 400)));
-  assert(/raw: brief,/.test(save.slice(0, 400)));
+  // The whole brief, plus (B2.4) the Brain context it was ranked against.
+  assert(/raw: \{ \.\.\.brief, brain: briefBrain \},/.test(save.slice(0, 600)));
 });
 
 Deno.test("chat messages are written as Orion; the dashboard surface creates no conversation", () => {

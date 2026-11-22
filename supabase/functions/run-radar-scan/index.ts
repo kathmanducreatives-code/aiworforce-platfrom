@@ -9,6 +9,7 @@ import { writeSignalEventV2 } from "../_shared/signalsV2Writer.ts";
 import { mapRadarSignalToV2, type RadarLegacyRow } from "../_shared/radarSignalToV2.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
 import { loadCompanyBrainContext, type LoaderDb } from "../_shared/companyBrainContextLoader.ts";
+import { agentBrainStamp, lisaRadarPreferences } from "../_shared/companyBrainAgentViews.ts";
 import { buildRadarScanPlan } from "../_shared/radarScanPlanner.ts";
 import { scoreCandidates, type RadarPlanSource, type ScoredCandidate } from "../_shared/radarCandidatePipeline.ts";
 import { runFirecrawlSource, type FirecrawlSearchResult } from "../_shared/radarSourceExecution.ts";
@@ -252,17 +253,11 @@ Deno.serve(async (req) => {
   const shared = loaded.ok ? loaded.context : null;
   const profile = (shared?.effective_profile as any) ?? {};
   const prefs = readPrefs(profile);
-  if (shared) {
-    const lc = (x: string) => x.trim().toLowerCase();
-    const retracted = new Set(shared.retracted_competitors);
-    prefs.competitors = [...new Map([...prefs.competitors, ...shared.competitors.map((c) => c.name)]
-      .filter((c) => !retracted.has(lc(c))).map((c) => [lc(c), c])).values()];
-    prefs.disqualifiers = [...new Map([...prefs.disqualifiers, ...shared.exclusions.industries,
-      ...shared.exclusions.companies, ...shared.exclusions.keywords].map((c) => [lc(c), c])).values()];
-    const applied = new Set(shared.applied.map((a) => a.effect));
-    if (applied.has("target industries")) prefs.industries = shared.canonical.target_customer.industries;
-    if (applied.has("target geography")) prefs.geographies = shared.canonical.target_customer.geography;
-  }
+  // B2.4: the ONE rule for LISA's radar preferences (shared with every LISA
+  // surface): approved competitors and exclusions folded in, retractions
+  // honoured, newer ICP preferences applied. Unservable memory never applies.
+  const radarPrefs = shared ? lisaRadarPreferences(shared, prefs) : prefs;
+  const brainStamp = agentBrainStamp(shared, "lisa");
 
   // Capabilities
   const apifyToken = present("APIFY_API_TOKEN");
@@ -325,11 +320,11 @@ Deno.serve(async (req) => {
 
   // Mix
   const mix: Record<Category, number> = {
-    hiring: prefs.default_mix.hiring ?? 3,
-    linkedin_intent: prefs.default_mix.linkedin_intent ?? 3,
-    competitor: prefs.default_mix.competitors ?? 2,
-    workflow_trend: prefs.default_mix.workflows ?? 2,
-    people: prefs.default_mix.people ?? 0,
+    hiring: radarPrefs.default_mix.hiring ?? 3,
+    linkedin_intent: radarPrefs.default_mix.linkedin_intent ?? 3,
+    competitor: radarPrefs.default_mix.competitors ?? 2,
+    workflow_trend: radarPrefs.default_mix.workflows ?? 2,
+    people: radarPrefs.default_mix.people ?? 0,
   };
 
   // Mode adjustments
@@ -671,6 +666,8 @@ Deno.serve(async (req) => {
     // one, and reporting a Radar provider here would say otherwise.
     hiring_provider: null,
     brain_confidence: scanPlan.brain_confidence,
+    // B2.4: which Brain this scan ranked against (the same id every agent records).
+    brain: brainStamp,
     setup_required: scanPlan.setup_required,
     warnings: scanPlan.warnings,
     mode,

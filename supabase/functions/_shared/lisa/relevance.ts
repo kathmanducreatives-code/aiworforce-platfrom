@@ -82,7 +82,7 @@ function nextStep(s: LisaSignal): string {
 export function evaluateRelevance(
   s: LisaSignal, brain: SharedBrainContext | null, watch: Pick<WatchSubject, "kind" | "origin">, now: Date,
 ): Relevance {
-  const base = { why_now: whyNow(s, now), suggested_action: nextStep(s), brain_fingerprint: brain?.fingerprint ?? null, computed_at: now.toISOString() };
+  const base = { why_now: whyNow(s, now), suggested_action: nextStep(s), brain_fingerprint: brain?.fingerprint ?? null, brain_context_id: brain?.context_id ?? null, computed_at: now.toISOString() };
   const text = `${s.title} ${s.description} ${s.evidence.map((e) => e.excerpt).join(" ")}`;
   const place = typeof (s as unknown as { location?: string }).location === "string" ? (s as unknown as { location: string }).location : null;
   const location = place ?? (text.match(/\bin\s+([A-Z][A-Za-z.'-]+(?:[ ,]+[A-Z][A-Za-z.'-]+){0,3})/)?.[1] ?? null);

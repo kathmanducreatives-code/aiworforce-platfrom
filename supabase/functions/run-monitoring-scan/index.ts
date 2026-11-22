@@ -44,7 +44,7 @@ import type { ExistingEvidence } from "../_shared/monitoringPreflight.ts";
 import { clusterSignalEvents } from "../_shared/signalCluster.ts";
 import { judgeCluster, type RelevanceContext } from "../_shared/signalRelevanceJudge.ts";
 import { loadCompanyBrainContext, type LoaderDb } from "../_shared/companyBrainContextLoader.ts";
-import { lisaView } from "../_shared/companyBrainAgentViews.ts";
+import { agentBrainStamp, lisaView } from "../_shared/companyBrainAgentViews.ts";
 import { competitorProposalsFromMonitoring, submitProposals } from "../_shared/lisaBrainProposals.ts";
 import { canonicalSubjectKey } from "../_shared/signalSubject.ts";
 
@@ -557,6 +557,8 @@ Deno.serve(async (req) => {
     ...outcome,
     brain_proposals,
     brain_memory: shared ? { status: shared.status, warnings: shared.warnings } : { status: "unavailable", warnings: [] },
+    // B2.4: which Brain this scan ranked against (the same id every agent records).
+    brain: agentBrainStamp(shared, "lisa"),
     signals_v2_enabled: v2Enabled,
     workspace_id,
     invoked_by: scheduled ? "scheduler" : "user",

@@ -234,3 +234,56 @@ export function renderBrainMemoryBlock(ctx: SharedBrainContext, agent: BrainAgen
   kept.sort((a, b) => a.i - b.i);
   return [head, ...kept.map((x) => x.t), ...(dropped ? [`- (${dropped} lower-priority memory line(s) omitted to fit)`] : [])].join("\n");
 }
+
+// ───────────────────────────────────────── B2.4: one Brain, every agent ────
+
+/** What an agent output records about the Brain it was given (stamped on briefs, drafts, scans, replies). */
+export interface AgentBrainStamp {
+  agent: BrainAgent;
+  brain_context_id: string | null;
+  brain_fingerprint: string | null;
+  brain_status: SharedBrainContext["status"] | "unavailable";
+}
+
+export function agentBrainStamp(ctx: SharedBrainContext | null, agent: BrainAgent): AgentBrainStamp {
+  return {
+    agent,
+    brain_context_id: ctx?.context_id ?? null,
+    brain_fingerprint: ctx?.fingerprint ?? null,
+    brain_status: ctx ? ctx.status : "unavailable",
+  };
+}
+
+/** The radar's preference shape (run-radar-scan readPrefs). */
+export interface RadarPreferences {
+  competitors: string[];
+  disqualifiers: string[];
+  industries: string[];
+  geographies: string[];
+  [key: string]: unknown;
+}
+
+/**
+ * LISA's radar preferences from the SHARED context — the one rule the manual
+ * radar scan applies (it used to merge memory by hand in its handler):
+ *   · competitors: the profile's list plus approved competitor facts, minus any
+ *     a person retracted after the profile listed them;
+ *   · disqualifiers: the profile's plus every explicit exclusion (industries,
+ *     companies, keywords) — exclusions only narrow;
+ *   · industries / geography: the canonical ICP whenever an approved memory
+ *     preference changed them (newest-wins, the loader's fold rule).
+ * Pure. Stale, disputed, expired and unapproved memory never reaches here.
+ */
+export function lisaRadarPreferences<T extends RadarPreferences>(ctx: SharedBrainContext, base: T): T {
+  const lc = (x: string) => x.trim().toLowerCase();
+  const uniq = (xs: string[]) => [...new Map(xs.filter((x) => typeof x === "string" && x.trim()).map((x) => [lc(x), x.trim()])).values()];
+  const retracted = new Set(ctx.retracted_competitors.map(lc));
+  const applied = new Set(ctx.applied.map((a) => a.effect));
+  return {
+    ...base,
+    competitors: uniq([...base.competitors, ...ctx.competitors.map((c) => c.name)]).filter((c) => !retracted.has(lc(c))),
+    disqualifiers: uniq([...base.disqualifiers, ...ctx.exclusions.industries, ...ctx.exclusions.companies, ...ctx.exclusions.keywords]),
+    industries: applied.has("target industries") ? [...ctx.canonical.target_customer.industries] : base.industries,
+    geographies: applied.has("target geography") ? [...ctx.canonical.target_customer.geography] : base.geographies,
+  };
+}
