@@ -116,7 +116,11 @@ Deno.test("RECENCY: the verifier buys atomus only, records its dated history, an
 
   // Eligibility decides the window from the record alone.
   const graph = buildCompanyEvidenceGraph(KEY, [f.item as EvidenceItem], { now: new Date("2026-09-23T12:00:00Z") });
-  assertEquals(checkCriterion(recencyCriterion(730), graph).result, "pass", "Seed 2024-11-21 is inside two years");
+  // checkCriterion reads the wall clock, so the "inside" window is measured
+  // from today: a fixed 730 days stopped covering the 2024-11-21 Seed on
+  // 2026-11-22 and failed every CI run from then on.
+  const sinceSeed = Math.ceil((Date.now() - Date.parse("2024-11-21")) / 86_400_000);
+  assertEquals(checkCriterion(recencyCriterion(sinceSeed + 30), graph).result, "pass", "a window that reaches the 2024-11-21 Seed");
   assertEquals(checkCriterion(recencyCriterion(180), graph).result, "fail", "a complete history with nothing in six months");
 });
 
