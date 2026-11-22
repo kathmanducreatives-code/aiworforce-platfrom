@@ -24,6 +24,9 @@ import { generateBrainDraft, type DraftInput } from "../_shared/companyBrainRese
 import type { FirecrawlPage, ResearchDeps, ResearchSourceType, ResearchProvider } from "../_shared/companyBrainResearch/types.ts";
 import { brainPermissionForAction, canBrain, normalizeWorkspaceRole } from "../_shared/brainRole.ts";
 import { authorizedBrainWrite, brainWriteRefusal, sessionIdFromBearer } from "../_shared/brainWriter.ts";
+import { parseProvenanceClaim, provenanceForOrigin, resolveUpdateProvenance } from "../_shared/companyBrainProvenance.ts";
+import type { BrainProvenance } from "../_shared/brainWriter.ts";
+import type { StoredResearchRun } from "../_shared/companyBrainCompletion.ts";
 import { clientBrainRefusal, clientBrainsEnabled, listClientsForActor, resolveBrainScope } from "../_shared/clientBrain.ts";
 import { handleClientBrainAction } from "../_shared/clientBrainSave.ts";
 import { applyBrainSave, type CompanyBrainV2Patch } from "../_shared/companyBrainV2Save.ts";
@@ -468,15 +471,32 @@ Deno.serve(withBuildStamp(async (req) => {
         const status = plan.reason === "stale" ? 409 : plan.reason === "brain_not_found" ? 404 : 400;
         return json({ ok: false, rejected_reason: plan.reason, detail: plan.detail ?? null, current_updated_at: current?.updated_at ?? null }, status);
       }
+      // B2.2 PROVENANCE, decided here. A suggestion claim is re-derived from the
+      // research runs THIS server reads for THIS workspace (never from the body);
+      // anything it cannot prove is recorded as the person's own edit.
+      const claim = parseProvenanceClaim(body.provenance);
+      let runs: StoredResearchRun[] = [];
+      if (claim?.source === "suggestion") {
+        const { data: runRows } = await admin.from("company_brain_research_runs")
+          .select("id, source_type, status, output, created_at")
+          .eq("workspace_id", workspace_id).eq("status", "completed")
+          .order("created_at", { ascending: false }).limit(10);
+        runs = Array.isArray(runRows) ? runRows as StoredResearchRun[] : [];
+      }
+      const provenance = resolveUpdateProvenance({ profileBefore: current?.profile ?? {}, patch: body.patch, claim, runs });
       const written = await authorizedBrainWrite(admin, {
         workspaceId: workspace_id, actorId: userId, sessionId, permission: "edit",
         mode: "cas", profile: plan.profile, expectedUpdatedAt: current!.updated_at!,
+        provenance,
       });
       if (written.outcome === "stale") {
         return json({ ok: false, rejected_reason: "stale", detail: "changed during save", current_updated_at: null }, 409);
       }
       if (written.outcome !== "ok") { const r = brainWriteRefusal(written.outcome); return json(r.body, r.status); }
-      return json({ ok: true, profile: plan.profile, updated_at: written.updated_at, applied_paths: plan.applied_paths });
+      return json({
+        ok: true, profile: plan.profile, updated_at: written.updated_at, applied_paths: plan.applied_paths,
+        provenance: { kind: provenance.kind, research_run_id: provenance.kind === "research" ? provenance.ref : null, downgraded: provenance.downgraded },
+      });
     }
 
     // ---------------- Step 4/5: save draft, then activate -------------------
@@ -510,11 +530,14 @@ Deno.serve(withBuildStamp(async (req) => {
       // are checked by the writer inside its locked transaction, after it has
       // re-checked the caller's session, membership and role.
       const versioned = setup !== null;
+      // B2.2: set once the origin-aware boundary has validated the origin (below).
+      let saveProvenance: BrainProvenance | null = null;
       const writeBrain = (w: { permission: "edit" | "activate"; profile: AnyObj; activate?: boolean }) =>
         authorizedBrainWrite(admin, {
           workspaceId: workspace_id, actorId: userId, sessionId, ...w,
           mode: !versioned ? "upsert" : currentUpdatedAt !== null ? "cas" : "insert",
           expectedUpdatedAt: versioned ? currentUpdatedAt : null,
+          provenance: saveProvenance,
         });
       const staleDuringSave = () =>
         json({ ok: false, rejected_reason: "stale", detail: "changed during save", current_updated_at: null }, 409);
@@ -550,6 +573,7 @@ Deno.serve(withBuildStamp(async (req) => {
       }
 
       const result = applyBrainSave(existing, saveDecision.safe_patch as CompanyBrainV2Patch, { activate: action === "activate" });
+      saveProvenance = provenanceForOrigin(saveDecision.effective_origin);
       if (setup) result.profile = withSetupProgress(result.profile, setup, new Date().toISOString());
 
       if (action === "activate" && !result.onboarding_completed) {

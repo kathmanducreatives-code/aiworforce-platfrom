@@ -6,7 +6,7 @@ import type { MemoryItem } from '../../../supabase/functions/_shared/brainMemory
 export interface MemoryProposal {
   id: string;
   proposed_by_agent: string;
-  kind: 'fact' | 'preference';
+  kind: 'fact' | 'preference' | 'decision';
   category: string;
   fact_key: string;
   value_type: string;
@@ -45,6 +45,10 @@ export interface RevisionRow {
   actor_id: string | null;
   written_at: string;
   redacted_at: string | null;
+  /** B2.2 provenance; absent where the held B2.2 migration is not applied. */
+  source_kind?: 'founder' | 'research' | 'memory' | 'ai_inference' | 'system' | 'backfill' | 'unrecorded' | null;
+  source_ref?: string | null;
+  reason?: string | null;
 }
 
 export interface MemorySnapshot {

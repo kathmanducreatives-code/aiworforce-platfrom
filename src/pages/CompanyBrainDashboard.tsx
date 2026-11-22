@@ -27,6 +27,13 @@ import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { BrainEditableContext } from '@/components/company-brain/brainEditable';
 import { BrainMemoryPanel } from '@/components/company-brain/memory/BrainMemoryPanel';
 import { companyBrainWritesBlocked, COMPANY_BRAIN_UNAVAILABLE_MESSAGE, COMPANY_BRAIN_UNAVAILABLE_TITLE } from '@/lib/env/companyBrainAvailability';
+import { BrainCompletionPanel, IcpConflictList } from '@/components/company-brain/completion/BrainCompletionPanel';
+import { fetchStoredResearch } from '@/lib/companyBrain/researchRuns';
+import { assessCompanyBrain, assessIcpConsistency, buildCompletionSuggestions, type AssessmentSectionKey, type ProvenanceClaim, type StoredResearchRun } from '@/lib/companyBrain/completion';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import { fetchMemorySnapshot } from '@/lib/companyBrain/memoryApi';
+import { describeSectionProvenance } from '@/lib/companyBrain/provenanceView';
 
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
@@ -103,6 +110,34 @@ export default function CompanyBrainDashboard() {
   const view = useMemo(() => (optimistic ? toSavedBrainView(optimistic) : serverView), [optimistic, serverView]);
   const { brain } = view;
 
+  // ── Company Brain V2 (B2.0): truthful readiness + guided completion ──────
+  // Agency Brain only: client Brains have their own (held) store and save path.
+  const [research, setResearch] = useState<StoredResearchRun[]>([]);
+  useEffect(() => {
+    let live = true;
+    setResearch([]);
+    if (scope.kind === 'agency' && workspaceId) void fetchStoredResearch(workspaceId).then((r) => { if (live) setResearch(r); });
+    return () => { live = false; };
+  }, [scope.kind, workspaceId]);
+  // B2.1: the ICP copies' disagreements, attached to their sections with one-click resolutions.
+  const icpConflicts = useMemo(() => (scope.kind === 'agency' ? assessIcpConsistency(view.raw).conflicts : []), [scope.kind, view.raw]);
+  const assessment = useMemo(() => (scope.kind === 'agency' ? assessCompanyBrain(view.raw, { conflicts: icpConflicts }) : null), [scope.kind, view.raw, icpConflicts]);
+  const suggestions = useMemo(() => (scope.kind === 'agency' ? buildCompletionSuggestions(view.raw, research) : []), [scope.kind, view.raw, research]);
+  // B2.2: "where this came from" per section — the recorded revisions (with their
+  // source) and confirmed memory, from the same snapshot the memory panel reads.
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const memoryQ = useQuery({
+    queryKey: ['brain-memory', workspaceId],
+    queryFn: () => fetchMemorySnapshot(workspaceId as string),
+    enabled: scope.kind === 'agency' && !!workspaceId,
+    staleTime: 15_000,
+    retry: false,
+  });
+  const provenanceFor = useCallback((section: AssessmentSectionKey) => (memoryQ.data
+    ? describeSectionProvenance({ section, revisions: memoryQ.data.revisions, runs: research, memory: memoryQ.data.items, currentUserId: user?.id ?? null })
+    : null), [memoryQ.data, research, user?.id]);
+
   // Seller-identity state for the diagnostic banner (nested vs hidden legacy flat).
   const identityState = useMemo(() => deriveSellerIdentityState(data?.profile), [data?.profile]);
   const identityBanner = useMemo(() => sellerIdentityBanner(identityState), [identityState]);
@@ -128,7 +163,7 @@ export default function CompanyBrainDashboard() {
    * copy for display only. Queued saves chain the version each save returns, so
    * this page's own consecutive edits never conflict with each other.
    */
-  const writePatch = useCallback((patch: BrainProfile): Promise<boolean> => {
+  const writePatch = useCallback((patch: BrainProfile, provenance?: ProvenanceClaim): Promise<boolean> => {
     if (!workspaceId) { toast.error('No workspace'); return Promise.resolve(false); }
     const merged = mergeProfilePatch(latestRaw.current, patch);
     latestRaw.current = merged;
@@ -148,7 +183,7 @@ export default function CompanyBrainDashboard() {
       const savedFor = enqueuedFor;
       const result = scope.kind === 'client'
         ? await saveClientBrainPatch({ workspaceId, scope, patch, expectedVersion: version.current === null ? null : Number(version.current) })
-        : await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: version.current });
+        : await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: version.current, provenance });
       // The user switched Brain while this was saving: its answer is not this Brain's.
       if (currentScopeKey.current !== savedFor) return result.ok;
       if (!result.ok && 'denied' in result && result.denied) {
@@ -161,7 +196,8 @@ export default function CompanyBrainDashboard() {
         batchFailed.current = true;
         lastFailureWasConflict.current = result.conflict === true;
         toast.error(
-          'unavailable' in result && result.unavailable ? COMPANY_BRAIN_UNAVAILABLE_TITLE : result.conflict ? 'Company Brain was changed elsewhere' : 'Save failed',
+          'unavailable' in result && result.unavailable ? COMPANY_BRAIN_UNAVAILABLE_TITLE : result.conflict ? 'Company Brain was changed elsewhere'
+            : 'contradiction' in result && result.contradiction ? 'This change would contradict your ICP' : 'Save failed',
           { description: result.message });
         return false;
       }
@@ -178,11 +214,20 @@ export default function CompanyBrainDashboard() {
           setOptimistic(null);
         }
         refresh();
+        // B2.2: the new revision (and its source) is now on record.
+        void queryClient.invalidateQueries({ queryKey: ['brain-memory', workspaceId] });
       }
     });
     queue.current = run;
     return run;
-  }, [workspaceId, refresh, scope, accessChanged]);
+  }, [workspaceId, refresh, scope, accessChanged, queryClient]);
+
+  // A completion save (typed or an accepted suggestion): the same queue and backend `update`.
+  const saveCompletion = useCallback(async (patch: BrainProfile, provenance?: ProvenanceClaim) => {
+    const ok = await writePatch(patch, provenance);
+    if (ok) toast.success('Saved to your Company Brain');
+    return ok;
+  }, [writePatch]);
 
   // The drawer keeps its edit when this throws (see CompanyBrainEditDrawer).
   async function saveSection(section: SectionKey, patch: BrainProfile) {
@@ -272,6 +317,17 @@ export default function CompanyBrainDashboard() {
         {error && <div role="alert" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 p-4 text-sm"><span>Company Brain could not refresh. Please try again.</span><Button size="sm" variant="outline" onClick={() => refresh()}>Retry</Button></div>}
         {(!error || data) && <BrainEditableContext.Provider value={canEditBrain && !brainWritesBlocked}><BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} syncing={isRefreshing} onEdit={setOpenSection} onRestart={scope.kind === 'agency' && !brainWritesBlocked ? () => setRestartOpen(true) : undefined} onStartSetup={scope.kind === 'agency' && !brainWritesBlocked ? () => navigate('/onboarding/company-brain') : undefined} onSaveFields={saveFields}
           clientName={brainScope.currentClient?.name ?? null}
+          readiness={assessment}
+          completion={assessment && (
+            <BrainCompletionPanel assessment={assessment} profile={view.raw} suggestions={suggestions}
+              canEdit={canEditBrain && !brainWritesBlocked} onSave={saveCompletion}
+              onOpenEditor={(section) => setOpenSection(section)}
+              provenanceFor={provenanceFor}
+              renderConflicts={(section) => (
+                <IcpConflictList conflicts={icpConflicts.filter((c) => c.section === section)}
+                  canEdit={canEditBrain && !brainWritesBlocked} onSave={saveCompletion} />
+              )} />
+          )}
           scopeSwitcher={brainScope.available ? <BrainScopeSwitcher scope={scope} clients={brainScope.clients} onSelect={brainScope.select} disabled={openSection !== null} /> : undefined} /></BrainEditableContext.Provider>}
         {/* Company memory: decisions, preferences, approved facts, agent
             suggestions and history. The agency Brain only — client Brains are

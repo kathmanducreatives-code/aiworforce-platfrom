@@ -29,6 +29,7 @@ import DepartmentPreview from '@/components/workforce/DepartmentPreview';
 import WorkforceHandoffStrip from '@/components/workforce/WorkforceHandoffStrip';
 import FirstRunHelper from '@/components/dashboard/FirstRunHelper';
 import DashboardChecklist from '@/components/dashboard/DashboardChecklist';
+import MemoryReviewStrip from '@/components/dashboard/MemoryReviewStrip';
 import AskPilotAboutPage from '@/components/help/AskPilotAboutPage';
 import type { AgentId } from '@/components/workforce/agents';
 
@@ -115,6 +116,7 @@ const Dashboard = () => {
         <DashboardChecklist />
 
         <CompanyBrainStrip visible={!brainComplete} />
+        <MemoryReviewStrip workspaceId={workspaceId} />
 
         <div data-tour="dashboard-main">
           <section className="team-gallery" aria-label="Your AI workforce">

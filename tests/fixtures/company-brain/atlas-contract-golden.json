@@ -1,0 +1,4004 @@
+{
+  "profile:live_shape": {
+    "compilerBrainContext": {
+      "industries": [
+        "B2B Software",
+        "Professional Services"
+      ],
+      "stages": [],
+      "locations": [
+        "United States"
+      ],
+      "employee_min": 2,
+      "employee_max": 2,
+      "employee_policy": true
+    },
+    "contractBrainInput": {
+      "industries": [
+        "B2B Software",
+        "Professional Services"
+      ],
+      "stages": [],
+      "locations": [
+        "United States"
+      ],
+      "employee_min": 2,
+      "employee_max": 2,
+      "employee_policy": true,
+      "excluded_industries_explicit": [
+        "Gambling"
+      ],
+      "excluded_industries_generic": [
+        "lab testing",
+        "laboratory testing",
+        "testing laboratory",
+        "clinical laboratory",
+        "analytical services",
+        "analytical laboratory",
+        "laboratory services",
+        "environmental testing",
+        "pharma",
+        "pharmaceutical",
+        "pharmaceuticals",
+        "biopharma",
+        "life sciences testing",
+        "chemical",
+        "chemicals",
+        "specialty chemicals",
+        "packaging",
+        "contract packaging",
+        "packaging solutions",
+        "staffing",
+        "staffing agency",
+        "recruiting agency",
+        "recruitment agency",
+        "staffing and recruiting"
+      ]
+    },
+    "planning_onboarded": {
+      "context": {
+        "industries": [
+          "B2B Software",
+          "Professional Services"
+        ],
+        "stages": [],
+        "locations": [
+          "United States"
+        ],
+        "employee_min": 2,
+        "employee_max": 2,
+        "employee_policy": true
+      },
+      "status": "used",
+      "fields": [
+        "industries",
+        "locations",
+        "size_policy"
+      ],
+      "contractInput": {
+        "industries": [
+          "B2B Software",
+          "Professional Services"
+        ],
+        "stages": [],
+        "locations": [
+          "United States"
+        ],
+        "employee_min": 2,
+        "employee_max": 2,
+        "employee_policy": true,
+        "excluded_industries_explicit": [
+          "Gambling"
+        ],
+        "excluded_industries_generic": [
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
+        ]
+      }
+    },
+    "planning_not_onboarded": {
+      "context": null,
+      "status": "not_onboarded",
+      "fields": []
+    },
+    "compiled": {
+      "workspace_id": "w",
+      "company_summary": {
+        "product_name": "Northwind Analytics",
+        "description": "AI workforce for small B2B teams"
+      },
+      "icp": {
+        "industries": [
+          "B2B Software",
+          "Professional Services"
+        ],
+        "categories": [
+          "B2B Software",
+          "Professional Services",
+          "B2B SaaS",
+          "AI SaaS",
+          "sales software",
+          "revenue operations software",
+          "workflow automation",
+          "data enrichment",
+          "outbound infrastructure",
+          "CRM",
+          "pipeline automation"
+        ],
+        "business_models": [
+          "B2B SaaS"
+        ],
+        "company_size_min": 2,
+        "company_size_max": 2,
+        "locations": [
+          "United States",
+          "Canada"
+        ],
+        "maturity_stage": [],
+        "target_customer_segments": []
+      },
+      "buyer_personas": {
+        "titles": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
+        ],
+        "seniority": [
+          "founder/exec",
+          "leadership",
+          "ic/manager",
+          "unspecified"
+        ],
+        "departments": [
+          "executive",
+          "sales",
+          "revenue",
+          "operations",
+          "growth"
+        ],
+        "title_keywords": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "Growth Lead"
+        ],
+        "negative_title_keywords": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ]
+      },
+      "buying_triggers": {
+        "hiring": [
+          "SDR",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Operations",
+          "Growth Lead"
+        ],
+        "funding": [
+          "recently funded",
+          "seed",
+          "Series A",
+          "founder-led sales"
+        ],
+        "technology": [],
+        "competitor": [],
+        "workflow_pain": [
+          "Manual prospecting"
+        ],
+        "content_topics": []
+      },
+      "competitors_and_tools": {
+        "competitors": [],
+        "adjacent_tools": [],
+        "integration_tools": [],
+        "watchlist": [
+          "Clay",
+          "Apollo",
+          "Instantly",
+          "Smartlead",
+          "HubSpot",
+          "Salesforce",
+          "Attio",
+          "Common Room",
+          "Unify"
+        ]
+      },
+      "disqualifiers": {
+        "industries": [
+          "Gambling",
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
+        ],
+        "industries_explicit": [
+          "Gambling"
+        ],
+        "industries_generic": [
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
+        ],
+        "company_types": [
+          "Agencies"
+        ],
+        "titles": [
+          "Intern",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ],
+        "keywords": [
+          "crypto"
+        ],
+        "domains": []
+      },
+      "query_strategy": {
+        "positive_terms": [
+          "B2B Software",
+          "Professional Services",
+          "B2B SaaS",
+          "AI SaaS",
+          "sales software",
+          "revenue operations software",
+          "workflow automation",
+          "data enrichment",
+          "outbound infrastructure",
+          "CRM",
+          "pipeline automation",
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
+        ],
+        "negative_terms": [
+          "Gambling",
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ],
+        "hiring_role_terms": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "Growth Lead"
+        ],
+        "funding_terms": [
+          "raised funding",
+          "seed round",
+          "Series A",
+          "B2B Software",
+          "Professional Services",
+          "B2B SaaS"
+        ],
+        "linkedin_topic_terms": [
+          "Manual prospecting"
+        ],
+        "competitor_terms": [
+          "Clay",
+          "Apollo",
+          "Instantly",
+          "Smartlead",
+          "HubSpot",
+          "Salesforce",
+          "Attio",
+          "Common Room",
+          "Unify"
+        ],
+        "workflow_terms": [
+          "Manual prospecting"
+        ]
+      },
+      "content_strategy": {
+        "audience": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
+        ],
+        "core_beliefs": [
+          "Manual prospecting"
+        ],
+        "proof_themes": [],
+        "ctas": [],
+        "banned_claims": [],
+        "voice_notes": []
+      },
+      "positive_examples": [],
+      "negative_examples": [],
+      "jobs_to_watch": [],
+      "qualification_rules": {
+        "required_evidence": [],
+        "reject_if": [],
+        "manual_review_if": []
+      },
+      "meta": {
+        "confidence": "strong",
+        "warnings": [],
+        "derivation_sources": [
+          "structured_icp"
+        ],
+        "matched_from": {
+          "B2B Software": [
+            "icp.industries"
+          ],
+          "Professional Services": [
+            "icp.industries"
+          ],
+          "Founder": [
+            "icp.buyer_roles",
+            "derived:saas_context"
+          ],
+          "Head of Sales": [
+            "icp.buyer_roles"
+          ],
+          "RevOps lead": [
+            "icp.buyer_roles"
+          ],
+          "SDR": [
+            "icp.buyer_roles"
+          ],
+          "Manual prospecting": [
+            "icp.pain_points"
+          ],
+          "B2B SaaS": [
+            "derived:saas_context"
+          ],
+          "AI SaaS": [
+            "derived:saas_context"
+          ],
+          "sales software": [
+            "derived:saas_context"
+          ],
+          "revenue operations software": [
+            "derived:saas_context"
+          ],
+          "workflow automation": [
+            "derived:saas_context"
+          ],
+          "data enrichment": [
+            "derived:saas_context"
+          ],
+          "outbound infrastructure": [
+            "derived:saas_context"
+          ],
+          "CRM": [
+            "derived:saas_context"
+          ],
+          "pipeline automation": [
+            "derived:saas_context"
+          ],
+          "Co-Founder": [
+            "derived:saas_context"
+          ],
+          "CEO": [
+            "derived:saas_context"
+          ],
+          "Head of Growth": [
+            "derived:saas_context"
+          ],
+          "Revenue Leader": [
+            "derived:saas_context"
+          ],
+          "GTM Operator": [
+            "derived:saas_context"
+          ],
+          "RevOps": [
+            "derived:saas_context"
+          ],
+          "Revenue Operations": [
+            "derived:saas_context"
+          ],
+          "Sales Ops": [
+            "derived:saas_context"
+          ],
+          "Sales Operations": [
+            "derived:saas_context"
+          ],
+          "Clay": [
+            "derived:saas_context"
+          ],
+          "Apollo": [
+            "derived:saas_context"
+          ],
+          "Instantly": [
+            "derived:saas_context"
+          ],
+          "Smartlead": [
+            "derived:saas_context"
+          ],
+          "HubSpot": [
+            "derived:saas_context"
+          ],
+          "Salesforce": [
+            "derived:saas_context"
+          ],
+          "Attio": [
+            "derived:saas_context"
+          ],
+          "Common Room": [
+            "derived:saas_context"
+          ],
+          "Unify": [
+            "derived:saas_context"
+          ],
+          "Gambling": [
+            "icp.disqualifiers"
+          ],
+          "lab testing": [
+            "derived:software_icp_reject"
+          ],
+          "laboratory testing": [
+            "derived:software_icp_reject"
+          ],
+          "testing laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "clinical laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "analytical services": [
+            "derived:software_icp_reject"
+          ],
+          "analytical laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "laboratory services": [
+            "derived:software_icp_reject"
+          ],
+          "environmental testing": [
+            "derived:software_icp_reject"
+          ],
+          "pharma": [
+            "derived:software_icp_reject"
+          ],
+          "pharmaceutical": [
+            "derived:software_icp_reject"
+          ],
+          "pharmaceuticals": [
+            "derived:software_icp_reject"
+          ],
+          "biopharma": [
+            "derived:software_icp_reject"
+          ],
+          "life sciences testing": [
+            "derived:software_icp_reject"
+          ],
+          "chemical": [
+            "derived:software_icp_reject"
+          ],
+          "chemicals": [
+            "derived:software_icp_reject"
+          ],
+          "specialty chemicals": [
+            "derived:software_icp_reject"
+          ],
+          "packaging": [
+            "derived:software_icp_reject"
+          ],
+          "contract packaging": [
+            "derived:software_icp_reject"
+          ],
+          "packaging solutions": [
+            "derived:software_icp_reject"
+          ],
+          "staffing": [
+            "derived:software_icp_reject"
+          ],
+          "staffing agency": [
+            "derived:software_icp_reject"
+          ],
+          "recruiting agency": [
+            "derived:software_icp_reject"
+          ],
+          "recruitment agency": [
+            "derived:software_icp_reject"
+          ],
+          "staffing and recruiting": [
+            "derived:software_icp_reject"
+          ]
+        },
+        "setup_required": false,
+        "schema_version": 2,
+        "brain_confidence": "strong",
+        "missing_fields": []
+      }
+    }
+  },
+  "profile:legacy_only": {
+    "compilerBrainContext": {
+      "industries": [
+        "Fintech, Insurance"
+      ],
+      "stages": [
+        "Seed"
+      ],
+      "locations": [
+        "United Kingdom"
+      ],
+      "employee_min": 11,
+      "employee_max": 50,
+      "employee_policy": true
+    },
+    "contractBrainInput": {
+      "industries": [
+        "Fintech, Insurance"
+      ],
+      "stages": [
+        "Seed"
+      ],
+      "locations": [
+        "United Kingdom"
+      ],
+      "employee_min": 11,
+      "employee_max": 50,
+      "employee_policy": true,
+      "excluded_industries_explicit": [
+        "Government"
+      ],
+      "excluded_industries_generic": []
+    },
+    "planning_onboarded": {
+      "context": {
+        "industries": [
+          "Fintech, Insurance"
+        ],
+        "stages": [
+          "Seed"
+        ],
+        "locations": [
+          "United Kingdom"
+        ],
+        "employee_min": 11,
+        "employee_max": 50,
+        "employee_policy": true
+      },
+      "status": "used",
+      "fields": [
+        "industries",
+        "stages",
+        "locations",
+        "size_policy"
+      ],
+      "contractInput": {
+        "industries": [
+          "Fintech, Insurance"
+        ],
+        "stages": [
+          "Seed"
+        ],
+        "locations": [
+          "United Kingdom"
+        ],
+        "employee_min": 11,
+        "employee_max": 50,
+        "employee_policy": true,
+        "excluded_industries_explicit": [
+          "Government"
+        ],
+        "excluded_industries_generic": []
+      }
+    },
+    "planning_not_onboarded": {
+      "context": null,
+      "status": "not_onboarded",
+      "fields": []
+    },
+    "compiled": {
+      "workspace_id": "w",
+      "company_summary": {
+        "product_name": "Legacy Co"
+      },
+      "icp": {
+        "industries": [
+          "Fintech",
+          "Insurance",
+          "Fintech, Insurance"
+        ],
+        "categories": [
+          "Fintech",
+          "Insurance",
+          "Fintech, Insurance"
+        ],
+        "business_models": [],
+        "company_size_min": 11,
+        "company_size_max": 50,
+        "locations": [
+          "United Kingdom"
+        ],
+        "maturity_stage": [],
+        "target_customer_segments": []
+      },
+      "buyer_personas": {
+        "titles": [
+          "CFO"
+        ],
+        "seniority": [
+          "unspecified"
+        ],
+        "departments": [
+          "unspecified"
+        ],
+        "title_keywords": [
+          "CFO"
+        ],
+        "negative_title_keywords": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ]
+      },
+      "buying_triggers": {
+        "hiring": [],
+        "funding": [],
+        "technology": [],
+        "competitor": [],
+        "workflow_pain": [],
+        "content_topics": []
+      },
+      "competitors_and_tools": {
+        "competitors": [],
+        "adjacent_tools": [],
+        "integration_tools": [],
+        "watchlist": []
+      },
+      "disqualifiers": {
+        "industries": [
+          "Government"
+        ],
+        "industries_explicit": [
+          "Government"
+        ],
+        "industries_generic": [],
+        "company_types": [],
+        "titles": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "keywords": [],
+        "domains": []
+      },
+      "query_strategy": {
+        "positive_terms": [
+          "Fintech",
+          "Insurance",
+          "Fintech, Insurance",
+          "CFO"
+        ],
+        "negative_terms": [
+          "Government",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "hiring_role_terms": [
+          "CFO"
+        ],
+        "funding_terms": [
+          "Fintech",
+          "Insurance",
+          "Fintech, Insurance"
+        ],
+        "linkedin_topic_terms": [],
+        "competitor_terms": [],
+        "workflow_terms": []
+      },
+      "content_strategy": {
+        "audience": [
+          "CFO"
+        ],
+        "core_beliefs": [],
+        "proof_themes": [],
+        "ctas": [],
+        "banned_claims": [],
+        "voice_notes": []
+      },
+      "positive_examples": [],
+      "negative_examples": [],
+      "jobs_to_watch": [],
+      "qualification_rules": {
+        "required_evidence": [],
+        "reject_if": [],
+        "manual_review_if": []
+      },
+      "meta": {
+        "confidence": "strong",
+        "warnings": [],
+        "derivation_sources": [
+          "structured_icp"
+        ],
+        "matched_from": {
+          "Fintech": [
+            "icp.industries"
+          ],
+          "Insurance": [
+            "icp.industries"
+          ],
+          "Fintech, Insurance": [
+            "icp.industries"
+          ],
+          "CFO": [
+            "icp.buyer_roles"
+          ],
+          "Government": [
+            "icp.disqualifiers"
+          ]
+        },
+        "setup_required": false,
+        "schema_version": 1,
+        "brain_confidence": "partial",
+        "missing_fields": [
+          "company.identity",
+          "company.business_model",
+          "triggers",
+          "voice"
+        ]
+      }
+    }
+  },
+  "profile:v2_only": {
+    "compilerBrainContext": {
+      "industries": [],
+      "stages": [],
+      "locations": [],
+      "employee_min": 51,
+      "employee_max": 200,
+      "employee_policy": true
+    },
+    "contractBrainInput": {
+      "industries": [],
+      "stages": [],
+      "locations": [],
+      "employee_min": 51,
+      "employee_max": 200,
+      "employee_policy": true,
+      "excluded_industries_explicit": [
+        "Tobacco"
+      ],
+      "excluded_industries_generic": []
+    },
+    "planning_onboarded": {
+      "context": {
+        "industries": [],
+        "stages": [],
+        "locations": [],
+        "employee_min": 51,
+        "employee_max": 200,
+        "employee_policy": true
+      },
+      "status": "used",
+      "fields": [
+        "size_policy"
+      ],
+      "contractInput": {
+        "industries": [],
+        "stages": [],
+        "locations": [],
+        "employee_min": 51,
+        "employee_max": 200,
+        "employee_policy": true,
+        "excluded_industries_explicit": [
+          "Tobacco"
+        ],
+        "excluded_industries_generic": []
+      }
+    },
+    "planning_not_onboarded": {
+      "context": null,
+      "status": "not_onboarded",
+      "fields": []
+    },
+    "compiled": {
+      "workspace_id": "w",
+      "company_summary": {},
+      "icp": {
+        "industries": [
+          "Healthcare"
+        ],
+        "categories": [
+          "Healthcare"
+        ],
+        "business_models": [],
+        "company_size_min": 51,
+        "company_size_max": 200,
+        "locations": [
+          "Germany"
+        ],
+        "maturity_stage": [],
+        "target_customer_segments": []
+      },
+      "buyer_personas": {
+        "titles": [
+          "COO"
+        ],
+        "seniority": [
+          "unspecified"
+        ],
+        "departments": [
+          "unspecified"
+        ],
+        "title_keywords": [
+          "COO"
+        ],
+        "negative_title_keywords": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ]
+      },
+      "buying_triggers": {
+        "hiring": [],
+        "funding": [],
+        "technology": [],
+        "competitor": [],
+        "workflow_pain": [],
+        "content_topics": []
+      },
+      "competitors_and_tools": {
+        "competitors": [],
+        "adjacent_tools": [],
+        "integration_tools": [],
+        "watchlist": []
+      },
+      "disqualifiers": {
+        "industries": [
+          "Tobacco"
+        ],
+        "industries_explicit": [
+          "Tobacco"
+        ],
+        "industries_generic": [],
+        "company_types": [],
+        "titles": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "keywords": [],
+        "domains": []
+      },
+      "query_strategy": {
+        "positive_terms": [
+          "Healthcare",
+          "COO"
+        ],
+        "negative_terms": [
+          "Tobacco",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "hiring_role_terms": [
+          "COO"
+        ],
+        "funding_terms": [
+          "Healthcare"
+        ],
+        "linkedin_topic_terms": [],
+        "competitor_terms": [],
+        "workflow_terms": []
+      },
+      "content_strategy": {
+        "audience": [
+          "COO"
+        ],
+        "core_beliefs": [],
+        "proof_themes": [],
+        "ctas": [],
+        "banned_claims": [],
+        "voice_notes": []
+      },
+      "positive_examples": [],
+      "negative_examples": [],
+      "jobs_to_watch": [],
+      "qualification_rules": {
+        "required_evidence": [],
+        "reject_if": [],
+        "manual_review_if": []
+      },
+      "meta": {
+        "confidence": "strong",
+        "warnings": [],
+        "derivation_sources": [
+          "structured_icp"
+        ],
+        "matched_from": {
+          "Healthcare": [
+            "icp.industries"
+          ],
+          "COO": [
+            "icp.buyer_roles"
+          ],
+          "Tobacco": [
+            "icp.disqualifiers"
+          ]
+        },
+        "setup_required": false,
+        "schema_version": 2,
+        "brain_confidence": "partial",
+        "missing_fields": [
+          "company.name",
+          "company.identity",
+          "company.business_model",
+          "triggers",
+          "voice"
+        ]
+      }
+    }
+  },
+  "profile:empty": {
+    "compilerBrainContext": {
+      "industries": [],
+      "stages": [],
+      "locations": []
+    },
+    "contractBrainInput": {
+      "industries": [],
+      "stages": [],
+      "locations": [],
+      "excluded_industries_explicit": [],
+      "excluded_industries_generic": [
+        "manufacturing",
+        "construction",
+        "retail",
+        "restaurant",
+        "hospitality",
+        "university",
+        "school",
+        "hospital",
+        "bank",
+        "government",
+        "logistics",
+        "local services",
+        "plant operations",
+        "field operations",
+        "warehouse operations"
+      ]
+    },
+    "planning_onboarded": {
+      "context": null,
+      "status": "empty",
+      "fields": []
+    },
+    "planning_not_onboarded": {
+      "context": null,
+      "status": "not_onboarded",
+      "fields": []
+    },
+    "compiled": {
+      "workspace_id": "w",
+      "company_summary": {},
+      "icp": {
+        "industries": [],
+        "categories": [],
+        "business_models": [],
+        "locations": [],
+        "maturity_stage": [],
+        "target_customer_segments": []
+      },
+      "buyer_personas": {
+        "titles": [],
+        "seniority": [],
+        "departments": [],
+        "title_keywords": [],
+        "negative_title_keywords": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ]
+      },
+      "buying_triggers": {
+        "hiring": [],
+        "funding": [],
+        "technology": [],
+        "competitor": [],
+        "workflow_pain": [],
+        "content_topics": []
+      },
+      "competitors_and_tools": {
+        "competitors": [],
+        "adjacent_tools": [],
+        "integration_tools": [],
+        "watchlist": []
+      },
+      "disqualifiers": {
+        "industries": [
+          "manufacturing",
+          "construction",
+          "retail",
+          "restaurant",
+          "hospitality",
+          "university",
+          "school",
+          "hospital",
+          "bank",
+          "government",
+          "logistics",
+          "local services",
+          "plant operations",
+          "field operations",
+          "warehouse operations"
+        ],
+        "industries_explicit": [],
+        "industries_generic": [
+          "manufacturing",
+          "construction",
+          "retail",
+          "restaurant",
+          "hospitality",
+          "university",
+          "school",
+          "hospital",
+          "bank",
+          "government",
+          "logistics",
+          "local services",
+          "plant operations",
+          "field operations",
+          "warehouse operations"
+        ],
+        "company_types": [],
+        "titles": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "keywords": [],
+        "domains": []
+      },
+      "query_strategy": {
+        "positive_terms": [],
+        "negative_terms": [
+          "manufacturing",
+          "construction",
+          "retail",
+          "restaurant",
+          "hospitality",
+          "university",
+          "school",
+          "hospital",
+          "bank",
+          "government",
+          "logistics",
+          "local services",
+          "plant operations",
+          "field operations",
+          "warehouse operations",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "hiring_role_terms": [],
+        "funding_terms": [],
+        "linkedin_topic_terms": [],
+        "competitor_terms": [],
+        "workflow_terms": []
+      },
+      "content_strategy": {
+        "audience": [],
+        "core_beliefs": [],
+        "proof_themes": [],
+        "ctas": [],
+        "banned_claims": [],
+        "voice_notes": []
+      },
+      "positive_examples": [],
+      "negative_examples": [],
+      "jobs_to_watch": [],
+      "qualification_rules": {
+        "required_evidence": [],
+        "reject_if": [],
+        "manual_review_if": []
+      },
+      "meta": {
+        "confidence": "weak",
+        "warnings": [
+          "Company Brain has no structured ICP — using conservative context. Fill ICP for precise radar.",
+          "Using default high-risk disqualifiers (Brain supplied none)."
+        ],
+        "derivation_sources": [],
+        "matched_from": {
+          "manufacturing": [
+            "default:high_risk"
+          ],
+          "construction": [
+            "default:high_risk"
+          ],
+          "retail": [
+            "default:high_risk"
+          ],
+          "restaurant": [
+            "default:high_risk"
+          ],
+          "hospitality": [
+            "default:high_risk"
+          ],
+          "university": [
+            "default:high_risk"
+          ],
+          "school": [
+            "default:high_risk"
+          ],
+          "hospital": [
+            "default:high_risk"
+          ],
+          "bank": [
+            "default:high_risk"
+          ],
+          "government": [
+            "default:high_risk"
+          ],
+          "logistics": [
+            "default:high_risk"
+          ],
+          "local services": [
+            "default:high_risk"
+          ],
+          "plant operations": [
+            "default:high_risk"
+          ],
+          "field operations": [
+            "default:high_risk"
+          ],
+          "warehouse operations": [
+            "default:high_risk"
+          ]
+        },
+        "setup_required": true,
+        "schema_version": 1,
+        "brain_confidence": "weak",
+        "missing_fields": [
+          "company.name",
+          "company.identity",
+          "company.business_model",
+          "target_customer.market",
+          "buyer_personas",
+          "triggers",
+          "disqualifiers",
+          "voice"
+        ]
+      }
+    }
+  },
+  "profile:text_size_label": {
+    "compilerBrainContext": {
+      "industries": [
+        "Logistics"
+      ],
+      "stages": [],
+      "locations": [
+        "Australia"
+      ],
+      "employee_min": 1,
+      "employee_max": 150,
+      "employee_policy": true
+    },
+    "contractBrainInput": {
+      "industries": [
+        "Logistics"
+      ],
+      "stages": [],
+      "locations": [
+        "Australia"
+      ],
+      "employee_min": 1,
+      "employee_max": 150,
+      "employee_policy": true,
+      "excluded_industries_explicit": [],
+      "excluded_industries_generic": [
+        "manufacturing",
+        "construction",
+        "retail",
+        "restaurant",
+        "hospitality",
+        "university",
+        "school",
+        "hospital",
+        "bank",
+        "government",
+        "logistics",
+        "local services",
+        "plant operations",
+        "field operations",
+        "warehouse operations"
+      ]
+    },
+    "planning_onboarded": {
+      "context": {
+        "industries": [
+          "Logistics"
+        ],
+        "stages": [],
+        "locations": [
+          "Australia"
+        ],
+        "employee_min": 1,
+        "employee_max": 150,
+        "employee_policy": true
+      },
+      "status": "used",
+      "fields": [
+        "industries",
+        "locations",
+        "size_policy"
+      ],
+      "contractInput": {
+        "industries": [
+          "Logistics"
+        ],
+        "stages": [],
+        "locations": [
+          "Australia"
+        ],
+        "employee_min": 1,
+        "employee_max": 150,
+        "employee_policy": true,
+        "excluded_industries_explicit": [],
+        "excluded_industries_generic": [
+          "manufacturing",
+          "construction",
+          "retail",
+          "restaurant",
+          "hospitality",
+          "university",
+          "school",
+          "hospital",
+          "bank",
+          "government",
+          "logistics",
+          "local services",
+          "plant operations",
+          "field operations",
+          "warehouse operations"
+        ]
+      }
+    },
+    "planning_not_onboarded": {
+      "context": null,
+      "status": "not_onboarded",
+      "fields": []
+    },
+    "compiled": {
+      "workspace_id": "w",
+      "company_summary": {},
+      "icp": {
+        "industries": [
+          "Logistics"
+        ],
+        "categories": [
+          "Logistics"
+        ],
+        "business_models": [],
+        "company_size_min": 1,
+        "company_size_max": 150,
+        "locations": [
+          "Australia"
+        ],
+        "maturity_stage": [],
+        "target_customer_segments": []
+      },
+      "buyer_personas": {
+        "titles": [],
+        "seniority": [],
+        "departments": [],
+        "title_keywords": [],
+        "negative_title_keywords": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ]
+      },
+      "buying_triggers": {
+        "hiring": [],
+        "funding": [],
+        "technology": [],
+        "competitor": [],
+        "workflow_pain": [],
+        "content_topics": []
+      },
+      "competitors_and_tools": {
+        "competitors": [],
+        "adjacent_tools": [],
+        "integration_tools": [],
+        "watchlist": []
+      },
+      "disqualifiers": {
+        "industries": [
+          "manufacturing",
+          "construction",
+          "retail",
+          "restaurant",
+          "hospitality",
+          "university",
+          "school",
+          "hospital",
+          "bank",
+          "government",
+          "logistics",
+          "local services",
+          "plant operations",
+          "field operations",
+          "warehouse operations"
+        ],
+        "industries_explicit": [],
+        "industries_generic": [
+          "manufacturing",
+          "construction",
+          "retail",
+          "restaurant",
+          "hospitality",
+          "university",
+          "school",
+          "hospital",
+          "bank",
+          "government",
+          "logistics",
+          "local services",
+          "plant operations",
+          "field operations",
+          "warehouse operations"
+        ],
+        "company_types": [],
+        "titles": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "keywords": [],
+        "domains": []
+      },
+      "query_strategy": {
+        "positive_terms": [
+          "Logistics"
+        ],
+        "negative_terms": [
+          "manufacturing",
+          "construction",
+          "retail",
+          "restaurant",
+          "hospitality",
+          "university",
+          "school",
+          "hospital",
+          "bank",
+          "government",
+          "logistics",
+          "local services",
+          "plant operations",
+          "field operations",
+          "warehouse operations",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "hiring_role_terms": [],
+        "funding_terms": [
+          "Logistics"
+        ],
+        "linkedin_topic_terms": [],
+        "competitor_terms": [],
+        "workflow_terms": []
+      },
+      "content_strategy": {
+        "audience": [],
+        "core_beliefs": [],
+        "proof_themes": [],
+        "ctas": [],
+        "banned_claims": [],
+        "voice_notes": []
+      },
+      "positive_examples": [],
+      "negative_examples": [],
+      "jobs_to_watch": [],
+      "qualification_rules": {
+        "required_evidence": [],
+        "reject_if": [],
+        "manual_review_if": []
+      },
+      "meta": {
+        "confidence": "medium",
+        "warnings": [
+          "No buyer roles in Company Brain.",
+          "Using default high-risk disqualifiers (Brain supplied none)."
+        ],
+        "derivation_sources": [
+          "structured_icp"
+        ],
+        "matched_from": {
+          "Logistics": [
+            "icp.industries"
+          ],
+          "manufacturing": [
+            "default:high_risk"
+          ],
+          "construction": [
+            "default:high_risk"
+          ],
+          "retail": [
+            "default:high_risk"
+          ],
+          "restaurant": [
+            "default:high_risk"
+          ],
+          "hospitality": [
+            "default:high_risk"
+          ],
+          "university": [
+            "default:high_risk"
+          ],
+          "school": [
+            "default:high_risk"
+          ],
+          "hospital": [
+            "default:high_risk"
+          ],
+          "bank": [
+            "default:high_risk"
+          ],
+          "government": [
+            "default:high_risk"
+          ],
+          "logistics": [
+            "default:high_risk"
+          ],
+          "local services": [
+            "default:high_risk"
+          ],
+          "plant operations": [
+            "default:high_risk"
+          ],
+          "field operations": [
+            "default:high_risk"
+          ],
+          "warehouse operations": [
+            "default:high_risk"
+          ]
+        },
+        "setup_required": true,
+        "schema_version": 2,
+        "brain_confidence": "partial",
+        "missing_fields": [
+          "company.name",
+          "company.identity",
+          "company.business_model",
+          "buyer_personas",
+          "triggers",
+          "disqualifiers",
+          "voice"
+        ]
+      }
+    }
+  },
+  "profile:contradictory_copies": {
+    "compilerBrainContext": {
+      "industries": [
+        "Manufacturing"
+      ],
+      "stages": [],
+      "locations": [
+        "Japan"
+      ],
+      "employee_min": 10,
+      "employee_max": 50,
+      "employee_policy": true
+    },
+    "contractBrainInput": {
+      "industries": [
+        "Manufacturing"
+      ],
+      "stages": [],
+      "locations": [
+        "Japan"
+      ],
+      "employee_min": 10,
+      "employee_max": 50,
+      "employee_policy": true,
+      "excluded_industries_explicit": [
+        "Retail"
+      ],
+      "excluded_industries_generic": []
+    },
+    "planning_onboarded": {
+      "context": {
+        "industries": [
+          "Manufacturing"
+        ],
+        "stages": [],
+        "locations": [
+          "Japan"
+        ],
+        "employee_min": 10,
+        "employee_max": 50,
+        "employee_policy": true
+      },
+      "status": "used",
+      "fields": [
+        "industries",
+        "locations",
+        "size_policy"
+      ],
+      "contractInput": {
+        "industries": [
+          "Manufacturing"
+        ],
+        "stages": [],
+        "locations": [
+          "Japan"
+        ],
+        "employee_min": 10,
+        "employee_max": 50,
+        "employee_policy": true,
+        "excluded_industries_explicit": [
+          "Retail"
+        ],
+        "excluded_industries_generic": []
+      }
+    },
+    "planning_not_onboarded": {
+      "context": null,
+      "status": "not_onboarded",
+      "fields": []
+    },
+    "compiled": {
+      "workspace_id": "w",
+      "company_summary": {},
+      "icp": {
+        "industries": [
+          "Retail",
+          "Manufacturing",
+          "Energy"
+        ],
+        "categories": [
+          "Retail",
+          "Manufacturing",
+          "Energy"
+        ],
+        "business_models": [],
+        "company_size_min": 10,
+        "company_size_max": 50,
+        "locations": [
+          "France",
+          "Spain",
+          "Japan",
+          "Brazil"
+        ],
+        "maturity_stage": [],
+        "target_customer_segments": []
+      },
+      "buyer_personas": {
+        "titles": [
+          "VP Operations",
+          "CTO"
+        ],
+        "seniority": [
+          "leadership",
+          "ic/manager",
+          "unspecified"
+        ],
+        "departments": [
+          "operations",
+          "unspecified"
+        ],
+        "title_keywords": [
+          "VP Operations",
+          "CTO"
+        ],
+        "negative_title_keywords": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ]
+      },
+      "buying_triggers": {
+        "hiring": [],
+        "funding": [],
+        "technology": [],
+        "competitor": [],
+        "workflow_pain": [],
+        "content_topics": []
+      },
+      "competitors_and_tools": {
+        "competitors": [],
+        "adjacent_tools": [],
+        "integration_tools": [],
+        "watchlist": []
+      },
+      "disqualifiers": {
+        "industries": [
+          "Retail"
+        ],
+        "industries_explicit": [
+          "Retail"
+        ],
+        "industries_generic": [],
+        "company_types": [],
+        "titles": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "keywords": [],
+        "domains": []
+      },
+      "query_strategy": {
+        "positive_terms": [
+          "Retail",
+          "Manufacturing",
+          "Energy",
+          "VP Operations",
+          "CTO"
+        ],
+        "negative_terms": [
+          "Retail",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "hiring_role_terms": [
+          "VP Operations",
+          "CTO"
+        ],
+        "funding_terms": [
+          "Retail",
+          "Manufacturing",
+          "Energy"
+        ],
+        "linkedin_topic_terms": [],
+        "competitor_terms": [],
+        "workflow_terms": []
+      },
+      "content_strategy": {
+        "audience": [
+          "VP Operations",
+          "CTO"
+        ],
+        "core_beliefs": [],
+        "proof_themes": [],
+        "ctas": [],
+        "banned_claims": [],
+        "voice_notes": []
+      },
+      "positive_examples": [],
+      "negative_examples": [],
+      "jobs_to_watch": [],
+      "qualification_rules": {
+        "required_evidence": [],
+        "reject_if": [],
+        "manual_review_if": []
+      },
+      "meta": {
+        "confidence": "strong",
+        "warnings": [],
+        "derivation_sources": [
+          "structured_icp"
+        ],
+        "matched_from": {
+          "Retail": [
+            "icp.industries",
+            "icp.disqualifiers"
+          ],
+          "Manufacturing": [
+            "icp.industries"
+          ],
+          "Energy": [
+            "icp.industries"
+          ],
+          "VP Operations": [
+            "icp.buyer_roles"
+          ],
+          "CTO": [
+            "icp.buyer_roles"
+          ]
+        },
+        "setup_required": false,
+        "schema_version": 2,
+        "brain_confidence": "partial",
+        "missing_fields": [
+          "company.name",
+          "company.identity",
+          "company.business_model",
+          "triggers",
+          "voice"
+        ]
+      }
+    }
+  },
+  "profile:stage_and_location_aliases": {
+    "compilerBrainContext": {
+      "industries": [
+        "Media"
+      ],
+      "stages": [
+        "Series B",
+        "Series C"
+      ],
+      "locations": [
+        "Nordics"
+      ]
+    },
+    "contractBrainInput": {
+      "industries": [
+        "Media"
+      ],
+      "stages": [
+        "Series B",
+        "Series C"
+      ],
+      "locations": [
+        "Nordics"
+      ],
+      "excluded_industries_explicit": [],
+      "excluded_industries_generic": [
+        "manufacturing",
+        "construction",
+        "retail",
+        "restaurant",
+        "hospitality",
+        "university",
+        "school",
+        "hospital",
+        "bank",
+        "government",
+        "logistics",
+        "local services",
+        "plant operations",
+        "field operations",
+        "warehouse operations"
+      ]
+    },
+    "planning_onboarded": {
+      "context": {
+        "industries": [
+          "Media"
+        ],
+        "stages": [
+          "Series B",
+          "Series C"
+        ],
+        "locations": [
+          "Nordics"
+        ]
+      },
+      "status": "used",
+      "fields": [
+        "industries",
+        "stages",
+        "locations"
+      ],
+      "contractInput": {
+        "industries": [
+          "Media"
+        ],
+        "stages": [
+          "Series B",
+          "Series C"
+        ],
+        "locations": [
+          "Nordics"
+        ],
+        "excluded_industries_explicit": [],
+        "excluded_industries_generic": [
+          "manufacturing",
+          "construction",
+          "retail",
+          "restaurant",
+          "hospitality",
+          "university",
+          "school",
+          "hospital",
+          "bank",
+          "government",
+          "logistics",
+          "local services",
+          "plant operations",
+          "field operations",
+          "warehouse operations"
+        ]
+      }
+    },
+    "planning_not_onboarded": {
+      "context": null,
+      "status": "not_onboarded",
+      "fields": []
+    },
+    "compiled": {
+      "workspace_id": "w",
+      "company_summary": {},
+      "icp": {
+        "industries": [],
+        "categories": [],
+        "business_models": [],
+        "locations": [],
+        "maturity_stage": [],
+        "target_customer_segments": []
+      },
+      "buyer_personas": {
+        "titles": [],
+        "seniority": [],
+        "departments": [],
+        "title_keywords": [],
+        "negative_title_keywords": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ]
+      },
+      "buying_triggers": {
+        "hiring": [],
+        "funding": [],
+        "technology": [],
+        "competitor": [],
+        "workflow_pain": [],
+        "content_topics": []
+      },
+      "competitors_and_tools": {
+        "competitors": [],
+        "adjacent_tools": [],
+        "integration_tools": [],
+        "watchlist": []
+      },
+      "disqualifiers": {
+        "industries": [
+          "manufacturing",
+          "construction",
+          "retail",
+          "restaurant",
+          "hospitality",
+          "university",
+          "school",
+          "hospital",
+          "bank",
+          "government",
+          "logistics",
+          "local services",
+          "plant operations",
+          "field operations",
+          "warehouse operations"
+        ],
+        "industries_explicit": [],
+        "industries_generic": [
+          "manufacturing",
+          "construction",
+          "retail",
+          "restaurant",
+          "hospitality",
+          "university",
+          "school",
+          "hospital",
+          "bank",
+          "government",
+          "logistics",
+          "local services",
+          "plant operations",
+          "field operations",
+          "warehouse operations"
+        ],
+        "company_types": [],
+        "titles": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "keywords": [],
+        "domains": []
+      },
+      "query_strategy": {
+        "positive_terms": [],
+        "negative_terms": [
+          "manufacturing",
+          "construction",
+          "retail",
+          "restaurant",
+          "hospitality",
+          "university",
+          "school",
+          "hospital",
+          "bank",
+          "government",
+          "logistics",
+          "local services",
+          "plant operations",
+          "field operations",
+          "warehouse operations",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "hiring_role_terms": [],
+        "funding_terms": [],
+        "linkedin_topic_terms": [],
+        "competitor_terms": [],
+        "workflow_terms": []
+      },
+      "content_strategy": {
+        "audience": [],
+        "core_beliefs": [],
+        "proof_themes": [],
+        "ctas": [],
+        "banned_claims": [],
+        "voice_notes": []
+      },
+      "positive_examples": [],
+      "negative_examples": [],
+      "jobs_to_watch": [],
+      "qualification_rules": {
+        "required_evidence": [],
+        "reject_if": [],
+        "manual_review_if": []
+      },
+      "meta": {
+        "confidence": "weak",
+        "warnings": [
+          "Company Brain has no structured ICP — using conservative context. Fill ICP for precise radar.",
+          "Using default high-risk disqualifiers (Brain supplied none)."
+        ],
+        "derivation_sources": [],
+        "matched_from": {
+          "manufacturing": [
+            "default:high_risk"
+          ],
+          "construction": [
+            "default:high_risk"
+          ],
+          "retail": [
+            "default:high_risk"
+          ],
+          "restaurant": [
+            "default:high_risk"
+          ],
+          "hospitality": [
+            "default:high_risk"
+          ],
+          "university": [
+            "default:high_risk"
+          ],
+          "school": [
+            "default:high_risk"
+          ],
+          "hospital": [
+            "default:high_risk"
+          ],
+          "bank": [
+            "default:high_risk"
+          ],
+          "government": [
+            "default:high_risk"
+          ],
+          "logistics": [
+            "default:high_risk"
+          ],
+          "local services": [
+            "default:high_risk"
+          ],
+          "plant operations": [
+            "default:high_risk"
+          ],
+          "field operations": [
+            "default:high_risk"
+          ],
+          "warehouse operations": [
+            "default:high_risk"
+          ]
+        },
+        "setup_required": true,
+        "schema_version": 1,
+        "brain_confidence": "weak",
+        "missing_fields": [
+          "company.name",
+          "company.identity",
+          "company.business_model",
+          "target_customer.market",
+          "buyer_personas",
+          "triggers",
+          "disqualifiers",
+          "voice"
+        ]
+      }
+    }
+  },
+  "edit:edit_industries": {
+    "compilerBrainContext": {
+      "industries": [
+        "Healthcare"
+      ],
+      "stages": [],
+      "locations": [
+        "United States"
+      ],
+      "employee_min": 2,
+      "employee_max": 2,
+      "employee_policy": true
+    },
+    "contractBrainInput": {
+      "industries": [
+        "Healthcare"
+      ],
+      "stages": [],
+      "locations": [
+        "United States"
+      ],
+      "employee_min": 2,
+      "employee_max": 2,
+      "employee_policy": true,
+      "excluded_industries_explicit": [
+        "Gambling"
+      ],
+      "excluded_industries_generic": []
+    },
+    "planning_onboarded": {
+      "context": {
+        "industries": [
+          "Healthcare"
+        ],
+        "stages": [],
+        "locations": [
+          "United States"
+        ],
+        "employee_min": 2,
+        "employee_max": 2,
+        "employee_policy": true
+      },
+      "status": "used",
+      "fields": [
+        "industries",
+        "locations",
+        "size_policy"
+      ],
+      "contractInput": {
+        "industries": [
+          "Healthcare"
+        ],
+        "stages": [],
+        "locations": [
+          "United States"
+        ],
+        "employee_min": 2,
+        "employee_max": 2,
+        "employee_policy": true,
+        "excluded_industries_explicit": [
+          "Gambling"
+        ],
+        "excluded_industries_generic": []
+      }
+    },
+    "planning_not_onboarded": {
+      "context": null,
+      "status": "not_onboarded",
+      "fields": []
+    },
+    "compiled": {
+      "workspace_id": "w",
+      "company_summary": {
+        "product_name": "Northwind Analytics",
+        "description": "AI workforce for small B2B teams"
+      },
+      "icp": {
+        "industries": [
+          "Healthcare"
+        ],
+        "categories": [
+          "Healthcare"
+        ],
+        "business_models": [],
+        "company_size_min": 2,
+        "company_size_max": 2,
+        "locations": [
+          "United States",
+          "Canada"
+        ],
+        "maturity_stage": [],
+        "target_customer_segments": []
+      },
+      "buyer_personas": {
+        "titles": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR"
+        ],
+        "seniority": [
+          "founder/exec",
+          "leadership",
+          "ic/manager"
+        ],
+        "departments": [
+          "executive",
+          "sales",
+          "revenue",
+          "operations"
+        ],
+        "title_keywords": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR"
+        ],
+        "negative_title_keywords": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ]
+      },
+      "buying_triggers": {
+        "hiring": [
+          "SDR"
+        ],
+        "funding": [],
+        "technology": [],
+        "competitor": [],
+        "workflow_pain": [
+          "Manual prospecting"
+        ],
+        "content_topics": []
+      },
+      "competitors_and_tools": {
+        "competitors": [],
+        "adjacent_tools": [],
+        "integration_tools": [],
+        "watchlist": []
+      },
+      "disqualifiers": {
+        "industries": [
+          "Gambling"
+        ],
+        "industries_explicit": [
+          "Gambling"
+        ],
+        "industries_generic": [],
+        "company_types": [
+          "Agencies"
+        ],
+        "titles": [
+          "Intern",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ],
+        "keywords": [
+          "crypto"
+        ],
+        "domains": []
+      },
+      "query_strategy": {
+        "positive_terms": [
+          "Healthcare",
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR"
+        ],
+        "negative_terms": [
+          "Gambling",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ],
+        "hiring_role_terms": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR"
+        ],
+        "funding_terms": [
+          "Healthcare"
+        ],
+        "linkedin_topic_terms": [
+          "Manual prospecting"
+        ],
+        "competitor_terms": [],
+        "workflow_terms": [
+          "Manual prospecting"
+        ]
+      },
+      "content_strategy": {
+        "audience": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR"
+        ],
+        "core_beliefs": [
+          "Manual prospecting"
+        ],
+        "proof_themes": [],
+        "ctas": [],
+        "banned_claims": [],
+        "voice_notes": []
+      },
+      "positive_examples": [],
+      "negative_examples": [],
+      "jobs_to_watch": [],
+      "qualification_rules": {
+        "required_evidence": [],
+        "reject_if": [],
+        "manual_review_if": []
+      },
+      "meta": {
+        "confidence": "strong",
+        "warnings": [],
+        "derivation_sources": [
+          "structured_icp"
+        ],
+        "matched_from": {
+          "Healthcare": [
+            "icp.industries"
+          ],
+          "Founder": [
+            "icp.buyer_roles"
+          ],
+          "Head of Sales": [
+            "icp.buyer_roles"
+          ],
+          "RevOps lead": [
+            "icp.buyer_roles"
+          ],
+          "SDR": [
+            "icp.buyer_roles"
+          ],
+          "Manual prospecting": [
+            "icp.pain_points"
+          ],
+          "Gambling": [
+            "icp.disqualifiers"
+          ]
+        },
+        "setup_required": false,
+        "schema_version": 2,
+        "brain_confidence": "strong",
+        "missing_fields": []
+      }
+    }
+  },
+  "edit:clear_geography": {
+    "compilerBrainContext": {
+      "industries": [
+        "B2B Software",
+        "Professional Services"
+      ],
+      "stages": [],
+      "locations": [],
+      "employee_min": 2,
+      "employee_max": 2,
+      "employee_policy": true
+    },
+    "contractBrainInput": {
+      "industries": [
+        "B2B Software",
+        "Professional Services"
+      ],
+      "stages": [],
+      "locations": [],
+      "employee_min": 2,
+      "employee_max": 2,
+      "employee_policy": true,
+      "excluded_industries_explicit": [
+        "Gambling"
+      ],
+      "excluded_industries_generic": [
+        "lab testing",
+        "laboratory testing",
+        "testing laboratory",
+        "clinical laboratory",
+        "analytical services",
+        "analytical laboratory",
+        "laboratory services",
+        "environmental testing",
+        "pharma",
+        "pharmaceutical",
+        "pharmaceuticals",
+        "biopharma",
+        "life sciences testing",
+        "chemical",
+        "chemicals",
+        "specialty chemicals",
+        "packaging",
+        "contract packaging",
+        "packaging solutions",
+        "staffing",
+        "staffing agency",
+        "recruiting agency",
+        "recruitment agency",
+        "staffing and recruiting"
+      ]
+    },
+    "planning_onboarded": {
+      "context": {
+        "industries": [
+          "B2B Software",
+          "Professional Services"
+        ],
+        "stages": [],
+        "locations": [],
+        "employee_min": 2,
+        "employee_max": 2,
+        "employee_policy": true
+      },
+      "status": "used",
+      "fields": [
+        "industries",
+        "size_policy"
+      ],
+      "contractInput": {
+        "industries": [
+          "B2B Software",
+          "Professional Services"
+        ],
+        "stages": [],
+        "locations": [],
+        "employee_min": 2,
+        "employee_max": 2,
+        "employee_policy": true,
+        "excluded_industries_explicit": [
+          "Gambling"
+        ],
+        "excluded_industries_generic": [
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
+        ]
+      }
+    },
+    "planning_not_onboarded": {
+      "context": null,
+      "status": "not_onboarded",
+      "fields": []
+    },
+    "compiled": {
+      "workspace_id": "w",
+      "company_summary": {
+        "product_name": "Northwind Analytics",
+        "description": "AI workforce for small B2B teams"
+      },
+      "icp": {
+        "industries": [
+          "B2B Software",
+          "Professional Services"
+        ],
+        "categories": [
+          "B2B Software",
+          "Professional Services",
+          "B2B SaaS",
+          "AI SaaS",
+          "sales software",
+          "revenue operations software",
+          "workflow automation",
+          "data enrichment",
+          "outbound infrastructure",
+          "CRM",
+          "pipeline automation"
+        ],
+        "business_models": [
+          "B2B SaaS"
+        ],
+        "company_size_min": 2,
+        "company_size_max": 2,
+        "locations": [],
+        "maturity_stage": [],
+        "target_customer_segments": []
+      },
+      "buyer_personas": {
+        "titles": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
+        ],
+        "seniority": [
+          "founder/exec",
+          "leadership",
+          "ic/manager",
+          "unspecified"
+        ],
+        "departments": [
+          "executive",
+          "sales",
+          "revenue",
+          "operations",
+          "growth"
+        ],
+        "title_keywords": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "Growth Lead"
+        ],
+        "negative_title_keywords": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ]
+      },
+      "buying_triggers": {
+        "hiring": [
+          "SDR",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Operations",
+          "Growth Lead"
+        ],
+        "funding": [
+          "recently funded",
+          "seed",
+          "Series A",
+          "founder-led sales"
+        ],
+        "technology": [],
+        "competitor": [],
+        "workflow_pain": [
+          "Manual prospecting"
+        ],
+        "content_topics": []
+      },
+      "competitors_and_tools": {
+        "competitors": [],
+        "adjacent_tools": [],
+        "integration_tools": [],
+        "watchlist": [
+          "Clay",
+          "Apollo",
+          "Instantly",
+          "Smartlead",
+          "HubSpot",
+          "Salesforce",
+          "Attio",
+          "Common Room",
+          "Unify"
+        ]
+      },
+      "disqualifiers": {
+        "industries": [
+          "Gambling",
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
+        ],
+        "industries_explicit": [
+          "Gambling"
+        ],
+        "industries_generic": [
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
+        ],
+        "company_types": [
+          "Agencies"
+        ],
+        "titles": [
+          "Intern",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ],
+        "keywords": [
+          "crypto"
+        ],
+        "domains": []
+      },
+      "query_strategy": {
+        "positive_terms": [
+          "B2B Software",
+          "Professional Services",
+          "B2B SaaS",
+          "AI SaaS",
+          "sales software",
+          "revenue operations software",
+          "workflow automation",
+          "data enrichment",
+          "outbound infrastructure",
+          "CRM",
+          "pipeline automation",
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
+        ],
+        "negative_terms": [
+          "Gambling",
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ],
+        "hiring_role_terms": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "Growth Lead"
+        ],
+        "funding_terms": [
+          "raised funding",
+          "seed round",
+          "Series A",
+          "B2B Software",
+          "Professional Services",
+          "B2B SaaS"
+        ],
+        "linkedin_topic_terms": [
+          "Manual prospecting"
+        ],
+        "competitor_terms": [
+          "Clay",
+          "Apollo",
+          "Instantly",
+          "Smartlead",
+          "HubSpot",
+          "Salesforce",
+          "Attio",
+          "Common Room",
+          "Unify"
+        ],
+        "workflow_terms": [
+          "Manual prospecting"
+        ]
+      },
+      "content_strategy": {
+        "audience": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
+        ],
+        "core_beliefs": [
+          "Manual prospecting"
+        ],
+        "proof_themes": [],
+        "ctas": [],
+        "banned_claims": [],
+        "voice_notes": []
+      },
+      "positive_examples": [],
+      "negative_examples": [],
+      "jobs_to_watch": [],
+      "qualification_rules": {
+        "required_evidence": [],
+        "reject_if": [],
+        "manual_review_if": []
+      },
+      "meta": {
+        "confidence": "strong",
+        "warnings": [],
+        "derivation_sources": [
+          "structured_icp"
+        ],
+        "matched_from": {
+          "B2B Software": [
+            "icp.industries"
+          ],
+          "Professional Services": [
+            "icp.industries"
+          ],
+          "Founder": [
+            "icp.buyer_roles",
+            "derived:saas_context"
+          ],
+          "Head of Sales": [
+            "icp.buyer_roles"
+          ],
+          "RevOps lead": [
+            "icp.buyer_roles"
+          ],
+          "SDR": [
+            "icp.buyer_roles"
+          ],
+          "Manual prospecting": [
+            "icp.pain_points"
+          ],
+          "B2B SaaS": [
+            "derived:saas_context"
+          ],
+          "AI SaaS": [
+            "derived:saas_context"
+          ],
+          "sales software": [
+            "derived:saas_context"
+          ],
+          "revenue operations software": [
+            "derived:saas_context"
+          ],
+          "workflow automation": [
+            "derived:saas_context"
+          ],
+          "data enrichment": [
+            "derived:saas_context"
+          ],
+          "outbound infrastructure": [
+            "derived:saas_context"
+          ],
+          "CRM": [
+            "derived:saas_context"
+          ],
+          "pipeline automation": [
+            "derived:saas_context"
+          ],
+          "Co-Founder": [
+            "derived:saas_context"
+          ],
+          "CEO": [
+            "derived:saas_context"
+          ],
+          "Head of Growth": [
+            "derived:saas_context"
+          ],
+          "Revenue Leader": [
+            "derived:saas_context"
+          ],
+          "GTM Operator": [
+            "derived:saas_context"
+          ],
+          "RevOps": [
+            "derived:saas_context"
+          ],
+          "Revenue Operations": [
+            "derived:saas_context"
+          ],
+          "Sales Ops": [
+            "derived:saas_context"
+          ],
+          "Sales Operations": [
+            "derived:saas_context"
+          ],
+          "Clay": [
+            "derived:saas_context"
+          ],
+          "Apollo": [
+            "derived:saas_context"
+          ],
+          "Instantly": [
+            "derived:saas_context"
+          ],
+          "Smartlead": [
+            "derived:saas_context"
+          ],
+          "HubSpot": [
+            "derived:saas_context"
+          ],
+          "Salesforce": [
+            "derived:saas_context"
+          ],
+          "Attio": [
+            "derived:saas_context"
+          ],
+          "Common Room": [
+            "derived:saas_context"
+          ],
+          "Unify": [
+            "derived:saas_context"
+          ],
+          "Gambling": [
+            "icp.disqualifiers"
+          ],
+          "lab testing": [
+            "derived:software_icp_reject"
+          ],
+          "laboratory testing": [
+            "derived:software_icp_reject"
+          ],
+          "testing laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "clinical laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "analytical services": [
+            "derived:software_icp_reject"
+          ],
+          "analytical laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "laboratory services": [
+            "derived:software_icp_reject"
+          ],
+          "environmental testing": [
+            "derived:software_icp_reject"
+          ],
+          "pharma": [
+            "derived:software_icp_reject"
+          ],
+          "pharmaceutical": [
+            "derived:software_icp_reject"
+          ],
+          "pharmaceuticals": [
+            "derived:software_icp_reject"
+          ],
+          "biopharma": [
+            "derived:software_icp_reject"
+          ],
+          "life sciences testing": [
+            "derived:software_icp_reject"
+          ],
+          "chemical": [
+            "derived:software_icp_reject"
+          ],
+          "chemicals": [
+            "derived:software_icp_reject"
+          ],
+          "specialty chemicals": [
+            "derived:software_icp_reject"
+          ],
+          "packaging": [
+            "derived:software_icp_reject"
+          ],
+          "contract packaging": [
+            "derived:software_icp_reject"
+          ],
+          "packaging solutions": [
+            "derived:software_icp_reject"
+          ],
+          "staffing": [
+            "derived:software_icp_reject"
+          ],
+          "staffing agency": [
+            "derived:software_icp_reject"
+          ],
+          "recruiting agency": [
+            "derived:software_icp_reject"
+          ],
+          "recruitment agency": [
+            "derived:software_icp_reject"
+          ],
+          "staffing and recruiting": [
+            "derived:software_icp_reject"
+          ]
+        },
+        "setup_required": false,
+        "schema_version": 2,
+        "brain_confidence": "strong",
+        "missing_fields": []
+      }
+    }
+  },
+  "edit:edit_size": {
+    "compilerBrainContext": {
+      "industries": [
+        "B2B Software",
+        "Professional Services"
+      ],
+      "stages": [],
+      "locations": [
+        "United States"
+      ],
+      "employee_min": 11,
+      "employee_max": 50,
+      "employee_policy": true
+    },
+    "contractBrainInput": {
+      "industries": [
+        "B2B Software",
+        "Professional Services"
+      ],
+      "stages": [],
+      "locations": [
+        "United States"
+      ],
+      "employee_min": 11,
+      "employee_max": 50,
+      "employee_policy": true,
+      "excluded_industries_explicit": [
+        "Gambling"
+      ],
+      "excluded_industries_generic": [
+        "lab testing",
+        "laboratory testing",
+        "testing laboratory",
+        "clinical laboratory",
+        "analytical services",
+        "analytical laboratory",
+        "laboratory services",
+        "environmental testing",
+        "pharma",
+        "pharmaceutical",
+        "pharmaceuticals",
+        "biopharma",
+        "life sciences testing",
+        "chemical",
+        "chemicals",
+        "specialty chemicals",
+        "packaging",
+        "contract packaging",
+        "packaging solutions",
+        "staffing",
+        "staffing agency",
+        "recruiting agency",
+        "recruitment agency",
+        "staffing and recruiting"
+      ]
+    },
+    "planning_onboarded": {
+      "context": {
+        "industries": [
+          "B2B Software",
+          "Professional Services"
+        ],
+        "stages": [],
+        "locations": [
+          "United States"
+        ],
+        "employee_min": 11,
+        "employee_max": 50,
+        "employee_policy": true
+      },
+      "status": "used",
+      "fields": [
+        "industries",
+        "locations",
+        "size_policy"
+      ],
+      "contractInput": {
+        "industries": [
+          "B2B Software",
+          "Professional Services"
+        ],
+        "stages": [],
+        "locations": [
+          "United States"
+        ],
+        "employee_min": 11,
+        "employee_max": 50,
+        "employee_policy": true,
+        "excluded_industries_explicit": [
+          "Gambling"
+        ],
+        "excluded_industries_generic": [
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
+        ]
+      }
+    },
+    "planning_not_onboarded": {
+      "context": null,
+      "status": "not_onboarded",
+      "fields": []
+    },
+    "compiled": {
+      "workspace_id": "w",
+      "company_summary": {
+        "product_name": "Northwind Analytics",
+        "description": "AI workforce for small B2B teams"
+      },
+      "icp": {
+        "industries": [
+          "B2B Software",
+          "Professional Services"
+        ],
+        "categories": [
+          "B2B Software",
+          "Professional Services",
+          "B2B SaaS",
+          "AI SaaS",
+          "sales software",
+          "revenue operations software",
+          "workflow automation",
+          "data enrichment",
+          "outbound infrastructure",
+          "CRM",
+          "pipeline automation"
+        ],
+        "business_models": [
+          "B2B SaaS"
+        ],
+        "company_size_min": 11,
+        "company_size_max": 50,
+        "locations": [
+          "United States",
+          "Canada"
+        ],
+        "maturity_stage": [],
+        "target_customer_segments": []
+      },
+      "buyer_personas": {
+        "titles": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
+        ],
+        "seniority": [
+          "founder/exec",
+          "leadership",
+          "ic/manager",
+          "unspecified"
+        ],
+        "departments": [
+          "executive",
+          "sales",
+          "revenue",
+          "operations",
+          "growth"
+        ],
+        "title_keywords": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "Growth Lead"
+        ],
+        "negative_title_keywords": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ]
+      },
+      "buying_triggers": {
+        "hiring": [
+          "SDR",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Operations",
+          "Growth Lead"
+        ],
+        "funding": [
+          "recently funded",
+          "seed",
+          "Series A",
+          "founder-led sales"
+        ],
+        "technology": [],
+        "competitor": [],
+        "workflow_pain": [
+          "Manual prospecting"
+        ],
+        "content_topics": []
+      },
+      "competitors_and_tools": {
+        "competitors": [],
+        "adjacent_tools": [],
+        "integration_tools": [],
+        "watchlist": [
+          "Clay",
+          "Apollo",
+          "Instantly",
+          "Smartlead",
+          "HubSpot",
+          "Salesforce",
+          "Attio",
+          "Common Room",
+          "Unify"
+        ]
+      },
+      "disqualifiers": {
+        "industries": [
+          "Gambling",
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
+        ],
+        "industries_explicit": [
+          "Gambling"
+        ],
+        "industries_generic": [
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
+        ],
+        "company_types": [
+          "Agencies"
+        ],
+        "titles": [
+          "Intern",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ],
+        "keywords": [
+          "crypto"
+        ],
+        "domains": []
+      },
+      "query_strategy": {
+        "positive_terms": [
+          "B2B Software",
+          "Professional Services",
+          "B2B SaaS",
+          "AI SaaS",
+          "sales software",
+          "revenue operations software",
+          "workflow automation",
+          "data enrichment",
+          "outbound infrastructure",
+          "CRM",
+          "pipeline automation",
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
+        ],
+        "negative_terms": [
+          "Gambling",
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager"
+        ],
+        "hiring_role_terms": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "Growth Lead"
+        ],
+        "funding_terms": [
+          "raised funding",
+          "seed round",
+          "Series A",
+          "B2B Software",
+          "Professional Services",
+          "B2B SaaS"
+        ],
+        "linkedin_topic_terms": [
+          "Manual prospecting"
+        ],
+        "competitor_terms": [
+          "Clay",
+          "Apollo",
+          "Instantly",
+          "Smartlead",
+          "HubSpot",
+          "Salesforce",
+          "Attio",
+          "Common Room",
+          "Unify"
+        ],
+        "workflow_terms": [
+          "Manual prospecting"
+        ]
+      },
+      "content_strategy": {
+        "audience": [
+          "Founder",
+          "Head of Sales",
+          "RevOps lead",
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
+        ],
+        "core_beliefs": [
+          "Manual prospecting"
+        ],
+        "proof_themes": [],
+        "ctas": [],
+        "banned_claims": [],
+        "voice_notes": []
+      },
+      "positive_examples": [],
+      "negative_examples": [],
+      "jobs_to_watch": [],
+      "qualification_rules": {
+        "required_evidence": [],
+        "reject_if": [],
+        "manual_review_if": []
+      },
+      "meta": {
+        "confidence": "strong",
+        "warnings": [],
+        "derivation_sources": [
+          "structured_icp"
+        ],
+        "matched_from": {
+          "B2B Software": [
+            "icp.industries"
+          ],
+          "Professional Services": [
+            "icp.industries"
+          ],
+          "Founder": [
+            "icp.buyer_roles",
+            "derived:saas_context"
+          ],
+          "Head of Sales": [
+            "icp.buyer_roles"
+          ],
+          "RevOps lead": [
+            "icp.buyer_roles"
+          ],
+          "SDR": [
+            "icp.buyer_roles"
+          ],
+          "Manual prospecting": [
+            "icp.pain_points"
+          ],
+          "B2B SaaS": [
+            "derived:saas_context"
+          ],
+          "AI SaaS": [
+            "derived:saas_context"
+          ],
+          "sales software": [
+            "derived:saas_context"
+          ],
+          "revenue operations software": [
+            "derived:saas_context"
+          ],
+          "workflow automation": [
+            "derived:saas_context"
+          ],
+          "data enrichment": [
+            "derived:saas_context"
+          ],
+          "outbound infrastructure": [
+            "derived:saas_context"
+          ],
+          "CRM": [
+            "derived:saas_context"
+          ],
+          "pipeline automation": [
+            "derived:saas_context"
+          ],
+          "Co-Founder": [
+            "derived:saas_context"
+          ],
+          "CEO": [
+            "derived:saas_context"
+          ],
+          "Head of Growth": [
+            "derived:saas_context"
+          ],
+          "Revenue Leader": [
+            "derived:saas_context"
+          ],
+          "GTM Operator": [
+            "derived:saas_context"
+          ],
+          "RevOps": [
+            "derived:saas_context"
+          ],
+          "Revenue Operations": [
+            "derived:saas_context"
+          ],
+          "Sales Ops": [
+            "derived:saas_context"
+          ],
+          "Sales Operations": [
+            "derived:saas_context"
+          ],
+          "Clay": [
+            "derived:saas_context"
+          ],
+          "Apollo": [
+            "derived:saas_context"
+          ],
+          "Instantly": [
+            "derived:saas_context"
+          ],
+          "Smartlead": [
+            "derived:saas_context"
+          ],
+          "HubSpot": [
+            "derived:saas_context"
+          ],
+          "Salesforce": [
+            "derived:saas_context"
+          ],
+          "Attio": [
+            "derived:saas_context"
+          ],
+          "Common Room": [
+            "derived:saas_context"
+          ],
+          "Unify": [
+            "derived:saas_context"
+          ],
+          "Gambling": [
+            "icp.disqualifiers"
+          ],
+          "lab testing": [
+            "derived:software_icp_reject"
+          ],
+          "laboratory testing": [
+            "derived:software_icp_reject"
+          ],
+          "testing laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "clinical laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "analytical services": [
+            "derived:software_icp_reject"
+          ],
+          "analytical laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "laboratory services": [
+            "derived:software_icp_reject"
+          ],
+          "environmental testing": [
+            "derived:software_icp_reject"
+          ],
+          "pharma": [
+            "derived:software_icp_reject"
+          ],
+          "pharmaceutical": [
+            "derived:software_icp_reject"
+          ],
+          "pharmaceuticals": [
+            "derived:software_icp_reject"
+          ],
+          "biopharma": [
+            "derived:software_icp_reject"
+          ],
+          "life sciences testing": [
+            "derived:software_icp_reject"
+          ],
+          "chemical": [
+            "derived:software_icp_reject"
+          ],
+          "chemicals": [
+            "derived:software_icp_reject"
+          ],
+          "specialty chemicals": [
+            "derived:software_icp_reject"
+          ],
+          "packaging": [
+            "derived:software_icp_reject"
+          ],
+          "contract packaging": [
+            "derived:software_icp_reject"
+          ],
+          "packaging solutions": [
+            "derived:software_icp_reject"
+          ],
+          "staffing": [
+            "derived:software_icp_reject"
+          ],
+          "staffing agency": [
+            "derived:software_icp_reject"
+          ],
+          "recruiting agency": [
+            "derived:software_icp_reject"
+          ],
+          "recruitment agency": [
+            "derived:software_icp_reject"
+          ],
+          "staffing and recruiting": [
+            "derived:software_icp_reject"
+          ]
+        },
+        "setup_required": false,
+        "schema_version": 2,
+        "brain_confidence": "strong",
+        "missing_fields": []
+      }
+    }
+  },
+  "edit:edit_personas": {
+    "compilerBrainContext": {
+      "industries": [
+        "Healthcare"
+      ],
+      "stages": [],
+      "locations": [
+        "Germany"
+      ],
+      "employee_min": 51,
+      "employee_max": 200,
+      "employee_policy": true
+    },
+    "contractBrainInput": {
+      "industries": [
+        "Healthcare"
+      ],
+      "stages": [],
+      "locations": [
+        "Germany"
+      ],
+      "employee_min": 51,
+      "employee_max": 200,
+      "employee_policy": true,
+      "excluded_industries_explicit": [
+        "Tobacco"
+      ],
+      "excluded_industries_generic": []
+    },
+    "planning_onboarded": {
+      "context": {
+        "industries": [
+          "Healthcare"
+        ],
+        "stages": [],
+        "locations": [
+          "Germany"
+        ],
+        "employee_min": 51,
+        "employee_max": 200,
+        "employee_policy": true
+      },
+      "status": "used",
+      "fields": [
+        "industries",
+        "locations",
+        "size_policy"
+      ],
+      "contractInput": {
+        "industries": [
+          "Healthcare"
+        ],
+        "stages": [],
+        "locations": [
+          "Germany"
+        ],
+        "employee_min": 51,
+        "employee_max": 200,
+        "employee_policy": true,
+        "excluded_industries_explicit": [
+          "Tobacco"
+        ],
+        "excluded_industries_generic": []
+      }
+    },
+    "planning_not_onboarded": {
+      "context": null,
+      "status": "not_onboarded",
+      "fields": []
+    },
+    "compiled": {
+      "workspace_id": "w",
+      "company_summary": {},
+      "icp": {
+        "industries": [
+          "Healthcare"
+        ],
+        "categories": [
+          "Healthcare"
+        ],
+        "business_models": [],
+        "company_size_min": 51,
+        "company_size_max": 200,
+        "locations": [
+          "Germany"
+        ],
+        "maturity_stage": [],
+        "target_customer_segments": []
+      },
+      "buyer_personas": {
+        "titles": [
+          "COO",
+          "Head of Finance"
+        ],
+        "seniority": [
+          "unspecified",
+          "leadership"
+        ],
+        "departments": [
+          "unspecified"
+        ],
+        "title_keywords": [
+          "COO",
+          "Head of Finance"
+        ],
+        "negative_title_keywords": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ]
+      },
+      "buying_triggers": {
+        "hiring": [],
+        "funding": [],
+        "technology": [],
+        "competitor": [],
+        "workflow_pain": [],
+        "content_topics": []
+      },
+      "competitors_and_tools": {
+        "competitors": [],
+        "adjacent_tools": [],
+        "integration_tools": [],
+        "watchlist": []
+      },
+      "disqualifiers": {
+        "industries": [
+          "Tobacco"
+        ],
+        "industries_explicit": [
+          "Tobacco"
+        ],
+        "industries_generic": [],
+        "company_types": [],
+        "titles": [
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "keywords": [],
+        "domains": []
+      },
+      "query_strategy": {
+        "positive_terms": [
+          "Healthcare",
+          "COO",
+          "Head of Finance"
+        ],
+        "negative_terms": [
+          "Tobacco",
+          "General Manager",
+          "Plant Manager",
+          "Facilities Manager",
+          "Warehouse Manager",
+          "Field Operations Manager",
+          "Operations Manager"
+        ],
+        "hiring_role_terms": [
+          "COO",
+          "Head of Finance"
+        ],
+        "funding_terms": [
+          "Healthcare"
+        ],
+        "linkedin_topic_terms": [],
+        "competitor_terms": [],
+        "workflow_terms": []
+      },
+      "content_strategy": {
+        "audience": [
+          "COO",
+          "Head of Finance"
+        ],
+        "core_beliefs": [],
+        "proof_themes": [],
+        "ctas": [],
+        "banned_claims": [],
+        "voice_notes": []
+      },
+      "positive_examples": [],
+      "negative_examples": [],
+      "jobs_to_watch": [],
+      "qualification_rules": {
+        "required_evidence": [],
+        "reject_if": [],
+        "manual_review_if": []
+      },
+      "meta": {
+        "confidence": "strong",
+        "warnings": [],
+        "derivation_sources": [
+          "structured_icp"
+        ],
+        "matched_from": {
+          "Healthcare": [
+            "icp.industries"
+          ],
+          "COO": [
+            "icp.buyer_roles"
+          ],
+          "Head of Finance": [
+            "icp.buyer_roles"
+          ],
+          "Tobacco": [
+            "icp.disqualifiers"
+          ]
+        },
+        "setup_required": false,
+        "schema_version": 2,
+        "brain_confidence": "partial",
+        "missing_fields": [
+          "company.name",
+          "company.identity",
+          "company.business_model",
+          "triggers",
+          "voice"
+        ]
+      }
+    }
+  }
+}

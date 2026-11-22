@@ -137,10 +137,16 @@ Deno.test("E1 an editor's preference lands through the real handler, attributed,
   assertEquals(b.status, 200); assertEquals(b.body.replayed, true);
   const rows = await items(t.ws);
   assertEquals(rows.length, 1); assertEquals(rows[0].created_by, t.editor.id); assertEquals(rows[0].source_type, "user_provided");
-  const c = await memory(t.owner, { action: "write", workspace_id: t.ws, op: "correct", idempotency_key: k(),
+  // B2.3: 50-200 disagrees with the profile's 10-50 — refused until the person confirms, and nothing changes.
+  const unconfirmed = await memory(t.owner, { action: "write", workspace_id: t.ws, op: "correct", idempotency_key: k(),
     payload: sizePref(50, 200, { expected_version: 1, reason: "upmarket" }) });
+  assertEquals([unconfirmed.status, unconfirmed.body.outcome], [409, "needs_resolution"]);
+  assert(String(unconfirmed.body.conflict).includes("targets 10–50 employees"));
+  assertEquals((await items(t.ws))[0].version, 1);
+  const c = await memory(t.owner, { action: "write", workspace_id: t.ws, op: "correct", idempotency_key: k(),
+    payload: sizePref(50, 200, { expected_version: 1, reason: "upmarket" }), confirm_conflict: true });
   assertEquals(c.status, 200);
-  const stale = await memory(t.editor, { action: "write", workspace_id: t.ws, op: "set", idempotency_key: k(), payload: sizePref(1, 2, { expected_version: 1 }) });
+  const stale = await memory(t.editor, { action: "write", workspace_id: t.ws, op: "set", idempotency_key: k(), payload: sizePref(1, 2, { expected_version: 1 }), confirm_conflict: true });
   assertEquals(stale.status, 409); assertEquals(stale.body.outcome, "stale");
   const h = await sql`select change_kind, actor_id, previous from public.company_brain_memory_history where memory_id = ${rows[0].id} order by created_at`;
   assertEquals(h.map((x) => x.change_kind), ["created", "corrected"]);
@@ -179,7 +185,7 @@ Deno.test("E4 demoted AFTER the handler's role check, before its write → the l
       await sql`update public.workspace_members set role = 'viewer' where workspace_id = ${t.ws} and user_id = ${t.editor.id}`;
     }
   };
-  const r = await memory(t.editor, { action: "write", workspace_id: t.ws, op: "set", payload: sizePref(1, 2), idempotency_key: k() });
+  const r = await memory(t.editor, { action: "write", workspace_id: t.ws, op: "set", payload: sizePref(1, 2), idempotency_key: k(), confirm_conflict: true });
   assertEquals(r.status, 403); assertEquals(r.body.outcome, "forbidden_role");
   assertEquals((await items(t.ws)).length, 0);
 });

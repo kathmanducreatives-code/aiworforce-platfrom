@@ -109,7 +109,14 @@ async function call(u: User, body: Record<string, unknown>): Promise<Reply> {
   }));
   return { status: res.status, body: await res.json() as Record<string, unknown> };
 }
-const posts = (path: string) => seen.filter((s) => s.method !== "GET" && s.method !== "HEAD" && s.path.startsWith(path)).length;
+const posts = (path: string) => seen.filter((s) => s.method !== "GET" && s.method !== "HEAD" && writerMatches(s.path, path)).length;
+// The agency AUTH-06 writer. Since Company Brain V2 · B2.2 a save that knows its source calls
+// company_brain_provenanced_write, which validates the source and then runs
+// company_brain_authorized_write UNCHANGED in the same transaction — the same locked writer.
+const AGENCY_WRITER = "agency-auth06-writer";
+const writerMatches = (path: string, want: string) => want === AGENCY_WRITER
+  ? path.startsWith("/rpc/company_brain_authorized_write") || path.startsWith("/rpc/company_brain_provenanced_write")
+  : path.startsWith(want);
 const writes = () => seen.filter((s) => s.method !== "GET" && s.method !== "HEAD").length;
 function freshLog() { seen = []; external = []; onRest = null; }
 
@@ -205,7 +212,7 @@ Deno.test("1. a user edits and autosaves the AGENCY Brain: versioned, through th
   assertEquals(s1.reply.status, 200, JSON.stringify(s1.reply.body));
   assertEquals(s1.next.status, "saved");
   assertNotEquals(s1.page.version, page.version, "a new version");
-  assertEquals(posts("/rpc/company_brain_authorized_write"), 1, "the AUTH-06 writer, once");
+  assertEquals(posts(AGENCY_WRITER), 1, "the AUTH-06 writer, once");
   assertEquals(posts("/company_brain"), 0, "never a direct table write");
   assertEquals(answersIn(await agencyProfile(ag.ws)).company?.description, "We run outbound for SaaS");
   page = s1.page;
@@ -232,7 +239,7 @@ Deno.test("2. a user edits and autosaves an AUTHORIZED CLIENT Brain: first inser
   assertEquals(s1.page.version, "1");
   assertEquals(s1.reply.body.client_id, ag.A);
   assertEquals(posts("/rpc/client_brain_authorized_write"), 1);
-  assertEquals(posts("/rpc/company_brain_authorized_write") + posts("/company_brain"), 0, "the agency writer is never called");
+  assertEquals(posts(AGENCY_WRITER) + posts("/company_brain"), 0, "the agency writer is never called");
   page = s1.page;
   const s2 = await autosave(ag.editor, page, copy({ company: { name: "Client A Inc", description: "A-SECRET: sells to hospitals and clinics" } }, 2));
   assertEquals(s2.page.version, "2"); page = s2.page;
@@ -288,10 +295,10 @@ for (const target of ["agency", "client"] as const) {
     // (b) a true race lost at the locked write: ONE's write is held while TWO saves.
     p1 = await open(ag.editor);
     p2 = await open(ag.editor2);
-    const writer = target === "agency" ? "/rpc/company_brain_authorized_write" : "/rpc/client_brain_authorized_write";
+    const writer = target === "agency" ? AGENCY_WRITER : "/rpc/client_brain_authorized_write";
     let raced = false;
     onRest = async (s) => {
-      if (raced || s.method !== "POST" || !s.path.startsWith(writer)) return;
+      if (raced || s.method !== "POST" || !writerMatches(s.path, writer)) return;
       raced = true; onRest = null;
       const t = await autosave(ag.editor2, p2, copy({ company: { name: "Shared by ONE", description: "TWO raced in" } }));
       assertEquals(t.reply.status, 200);
@@ -626,7 +633,7 @@ const activateBody = (ws: string, extra: Record<string, unknown> = {}) =>
 async function atWriter(writer: string, act: () => Promise<unknown>) {
   let fired = false;
   onRest = async (s) => {
-    if (fired || s.method !== "POST" || !s.path.startsWith(writer)) return;
+    if (fired || s.method !== "POST" || !writerMatches(s.path, writer)) return;
     fired = true; onRest = null; await act();
   };
   return () => fired;
@@ -637,7 +644,7 @@ Deno.test("12. activation goes through the AUTH-06 writer: an admin demoted in f
   const a = await agencyWith(COMPLETE);
   const before = await brainRow(a.ws);
   freshLog();
-  const fired = await atWriter("/rpc/company_brain_authorized_write",
+  const fired = await atWriter(AGENCY_WRITER,
     () => sql`update public.workspace_members set role = 'editor' where workspace_id = ${a.ws} and user_id = ${a.admin.id}`);
   const r = await call(a.admin, activateBody(a.ws));
   assert(fired(), "the demotion committed between the handler's check and the write");
@@ -657,7 +664,7 @@ Deno.test("12. activation goes through the AUTH-06 writer: an admin demoted in f
   const done = await brainRow(a.ws);
   assertEquals(done?.onboarding_completed, true);
   assertEquals(readServerProgress(done?.profile), null, "activation ends onboarding progress (withoutSetupProgress)");
-  assertEquals(posts("/rpc/company_brain_authorized_write"), 1); assertEquals(posts("/company_brain"), 0);
+  assertEquals(posts(AGENCY_WRITER), 1); assertEquals(posts("/company_brain"), 0);
   assertEquals(external, []);
 });
 
@@ -666,7 +673,7 @@ Deno.test("13. blocked activation (incomplete Brain) saves its draft only throug
   const a = await agencyWith({ company: { name: "Half Co" } });
   const before = await brainRow(a.ws);
   freshLog();
-  const fired = await atWriter("/rpc/company_brain_authorized_write",
+  const fired = await atWriter(AGENCY_WRITER,
     () => sql`delete from public.workspace_members where workspace_id = ${a.ws} and user_id = ${a.admin.id}`);
   const r = await call(a.admin, activateBody(a.ws));
   assert(fired());
@@ -688,7 +695,7 @@ Deno.test("14. a versioned activation that loses the race at the write is stale:
   const s1 = await autosave(a.owner, p, copy({ company: { name: "Ready Co" } }));
   assertEquals(s1.reply.status, 200); p = s1.page;
   freshLog();
-  const fired = await atWriter("/rpc/company_brain_authorized_write", async () => {
+  const fired = await atWriter(AGENCY_WRITER, async () => {
     const other = await autosave(a.admin, await openAgency(a.ws), copy({ company: { name: "Ready Co", description: "another device" } }));
     assertEquals(other.reply.status, 200);
   });
@@ -706,7 +713,7 @@ Deno.test("15. a versioned first save never overwrites a Brain another device cr
   clientsOn(false);
   const a = await agencyWith(null);
   freshLog();
-  const fired = await atWriter("/rpc/company_brain_authorized_write", async () => {
+  const fired = await atWriter(AGENCY_WRITER, async () => {
     const other = await call(a.admin, buildProgressSaveBody({ workspaceId: a.ws, step: 1, answers: { company: { name: "FIRST DEVICE" } }, expectedUpdatedAt: null }));
     assertEquals(other.status, 200, JSON.stringify(other.body));
   });
@@ -724,7 +731,7 @@ Deno.test("16. logged out during activation → session_invalid; nothing activat
   const a = await agencyWith(COMPLETE);
   const before = await brainRow(a.ws);
   freshLog();
-  const fired = await atWriter("/rpc/company_brain_authorized_write", () => logout(a.owner));
+  const fired = await atWriter(AGENCY_WRITER, () => logout(a.owner));
   const r = await call(a.owner, activateBody(a.ws));
   assert(fired());
   assertEquals(r.status, 401, JSON.stringify(r.body)); assertEquals(r.body.reason, "session_invalid");

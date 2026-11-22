@@ -8,6 +8,23 @@ is synced to the production-connected repository (Lovable builds from its
 Migrations are applied to production one at a time, deliberately — see
 `docs/SUPABASE_TARGETING.md`.
 
+## Verified hosted status (read-only catalog check, 2026-11-22)
+
+This table **overrides any older "not applied" statement below**. See `docs/plans/company-brain/ENVIRONMENT_INVENTORY.md`.
+
+| Held file | Production `ohsdatpvfdjdemstoiuj` | TEST `tlvnfrxzjhsjgdofwehb` |
+|---|---|---|
+| `20261110120000_company_brain_memory.sql` | **Applied 2026-11-13** as version `20261113080619`. The function bodies equal this file with comments stripped | Not applied |
+| `20261113120000_workforce_v2_security.sql` | **Applied** as `20261113075021` | **Applied** as `20261112072003` |
+| `20261114120000_lead_model_calls_view_lockdown.sql` | **Applied** as `20261113075202` | **Applied** as `20261112072104` |
+| `20261121120000_conversation_workspace_guard.sql` (R1.2.1 branch) | Not applied | **Applied** as `20261121085947` |
+| `20261122120000_company_brain_provenance.sql` (B2.2) | Not applied | Not applied |
+| `20261122130000_company_brain_memory_activation.sql` (B2.3) | Not applied | Not applied |
+
+`supabase/migrations/20261023120000_company_brain_server_writes_only.sql` and `20261024120000_company_brain_authorized_writer.sql` are applied in production (as `20261113075433` and `20261113075522`) but **not on TEST**.
+
+Release housekeeping: held files already applied in production should move into `supabase/migrations/` under the version production recorded. Do this deliberately as part of the release, so the files match the hosted history.
+
 ## `20260816120000_baseline_schema.sql`
 
 The schema baseline: a `pg_dump` of the live schema taken 2026-08-16 (111
@@ -359,3 +376,22 @@ role). Applied together with `20261113120000` by
 `scripts/test-project/install-workforce-v2-security.sh`. Proven by
 `leadModelCallsView.contract.test.ts` and its mutation proof. Rollback:
 `rollback/20261114120000_lead_model_calls_view_lockdown.down.sql`.
+
+## `20261122120000_company_brain_provenance.sql`
+
+Company Brain V2 · B2.2: provenance on every profile revision.
+- **New columns** on `company_brain_revisions`: `source_kind`, `source_ref` and `reason`.
+- **Updated trigger:** the revision trigger reads three transaction-local settings.
+- **New wrapper:** `company_brain_provenanced_write`, for the service role only. It validates the claim against the database (the research run is completed and belongs to the same workspace; the memory item is confirmed and active), then calls `company_brain_authorized_write` unchanged.
+
+**Depends on** `20261110120000_company_brain_memory.sql`. It is additive. **Not approved for any hosted project.** Handlers fall back to `company_brain_authorized_write` where it is absent, and those revisions read as "unrecorded".
+
+Rollback: `rollback/20261122120000_company_brain_provenance.down.sql`. It restores the V1 trigger and drops the wrapper and the three columns. It was checked on a disposable database: apply, roll back, re-apply, re-apply again.
+
+## `20261122130000_company_brain_memory_activation.sql`
+
+Company Brain V2 · B2.3: agents may propose **decisions**. A proposal's `kind` may now be `decision`. A decision proposal must carry `value.outcome`, and it can apply to the whole workspace only in the standing categories: strategy, ICP change, brand, exclusion and correction. `company_brain_proposal_submit` validates this; the rest of its body is V1 unchanged. Approval still goes through `company_brain_proposal_review`: an editor, checked inside the transaction, with idempotency. Nothing an agent proposes becomes memory without a person's approval.
+
+**Depends on** `20261110120000`. It is additive. **Not approved for any hosted project.**
+
+Rollback: `rollback/20261122130000_company_brain_memory_activation.down.sql`. It withdraws any pending decision proposals and restores the V1 function. Reviewed decision proposals stay on record, because the restored check is `NOT VALID`.

@@ -116,6 +116,7 @@ import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.t
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, resolveCompanyContactTarget, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
 import { loadChatBrain } from "../_shared/chatBrainContext.ts";
+import { memoryOfferMessage, offerMemoryFromTurn, type MemoryOfferRecord } from "../_shared/orionMemoryOfferRuntime.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 // THE MODEL THAT ACTUALLY ANSWERED THIS TURN — read from the request's model
@@ -1742,6 +1743,22 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       error: "failed to record your message",
       detail: userMessageError.message,
     }, 500);
+  }
+
+  // ── B2.3: ORION OFFERS TO REMEMBER — IT NEVER REMEMBERS ON ITS OWN ─────────
+  //
+  // A typed message that states a LASTING preference or decision ("from now on,
+  // never target gambling") becomes a PENDING proposal; a temporary one ("for
+  // this search, skip gambling") is noted as this-request-only. The offer is
+  // posted after the answer, by the serve wrapper below, on every successful
+  // exit. Only a person's approval turns a proposal into memory. Card actions
+  // are not statements, so they are never read for offers. Best-effort: a
+  // failure here never touches the answer.
+  if (!actionSource && conversationId) {
+    fail.memoryOffer = await offerMemoryFromTurn(admin as never, {
+      workspaceId, conversationId, messageId: insertedUserMessage?.id ?? null, message,
+      profile: chatBrain.shared?.profile ?? chatBrain.row?.profile ?? null,
+    });
   }
 
   // 5a. Resolve pending clarification (people-vs-companies) BEFORE classifying intent.
@@ -4790,6 +4807,22 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 // shape a normal reply has, so the UI renders it with no change — and leaves
 // the throw itself in the logs where it belongs.
 
+/**
+ * B2.3: ORION's offer to remember, as its own message AFTER the answer, so the
+ * conversation reads answer → offer. Never throws: the answer is already served.
+ */
+async function postMemoryOffer(fail: FailureContext): Promise<void> {
+  if (!fail.admin || !fail.conversationId || !fail.memoryOffer) return;
+  try {
+    const { content, metadata } = memoryOfferMessage(fail.memoryOffer);
+    await fail.admin.from("messages").insert({
+      conversation_id: fail.conversationId, role: "assistant", content, agent_slug: "pilot", metadata,
+    });
+  } catch (e) {
+    console.warn("[pilot-chat][memory-offer] not posted", String(e).slice(0, 200));
+  }
+}
+
 interface FailureContext {
   admin?: { from: (t: string) => any };
   conversationId?: string | null;
@@ -4807,6 +4840,8 @@ interface FailureContext {
   ledgerWriter?: LedgerWriter | null;
   workspaceId?: string | null;
   correlationId?: string | null;
+  /** B2.3: an offer to remember, posted after the answer on a successful exit. */
+  memoryOffer?: MemoryOfferRecord | null;
 }
 
 /** What the user is told. Honest about the class, silent about internals. */
@@ -4871,7 +4906,9 @@ export { handlePilotChat };
 export async function servePilotChat(req: Request): Promise<Response> {
   const fail: FailureContext = {};
   try {
-    return await handlePilotChat(req, fail);
+    const res = await handlePilotChat(req, fail);
+    if (res.status === 200 && fail.memoryOffer) await postMemoryOffer(fail);
+    return res;
   } catch (e) {
     // LOUD IN THE LOGS, CALM IN THE CHAT. The stack is what a maintainer needs
     // and the last thing a user does.

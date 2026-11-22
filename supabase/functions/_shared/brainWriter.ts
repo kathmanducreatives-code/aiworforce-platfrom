@@ -43,7 +43,25 @@ export interface AuthorizedBrainWrite {
   profile: Record<string, unknown>;
   expectedUpdatedAt?: string | null;
   activate?: boolean;
+  /**
+   * B2.2: where this change came from, decided by SERVER code (never taken from
+   * the request as-is). Recorded on the revision by company_brain_provenanced_write,
+   * which also checks a research run or memory item against the database.
+   */
+  provenance?: BrainProvenance | null;
 }
+
+export type BrainSourceKind = "founder" | "research" | "memory" | "ai_inference";
+export interface BrainProvenance {
+  kind: BrainSourceKind;
+  /** The research run id (research) or memory item id (memory); null otherwise. */
+  ref?: string | null;
+  reason?: string | null;
+}
+
+/** The provenanced writer is absent where the held B2.2 migration is not applied. */
+const provenanceUnavailable = (e: { message?: string; code?: string } | null) =>
+  !!e && (e.code === "PGRST202" || e.code === "42883" || (/company_brain_provenanced_write/.test(e.message ?? "") && /(not find|does not exist|schema cache)/i.test(e.message ?? "")));
 
 export async function authorizedBrainWrite(admin: Admin, w: AuthorizedBrainWrite): Promise<{ outcome: BrainWriteOutcome; updated_at: string | null }> {
   if (!w.sessionId) return { outcome: "session_invalid", updated_at: null };
@@ -63,7 +81,7 @@ export async function authorizedBrainWrite(admin: Admin, w: AuthorizedBrainWrite
   // 2. The write, which locks the session and membership rows and applies the
   //    same rule again in its own transaction — closing the window between the
   //    check above and this write.
-  const { data, error } = await admin.rpc("company_brain_authorized_write", {
+  const args = {
     p_workspace_id: w.workspaceId,
     p_actor_id: w.actorId,
     p_session_id: w.sessionId,
@@ -72,7 +90,27 @@ export async function authorizedBrainWrite(admin: Admin, w: AuthorizedBrainWrite
     p_profile: w.profile,
     p_expected_updated_at: w.expectedUpdatedAt ?? null,
     p_activate: w.activate === true,
-  });
+  };
+  let res: RpcResult | null = null;
+  if (w.provenance) {
+    res = await admin.rpc("company_brain_provenanced_write", {
+      p_workspace_id: args.p_workspace_id,
+      p_actor_id: args.p_actor_id,
+      p_session_id: args.p_session_id,
+      p_permission: args.p_permission,
+      p_mode: args.p_mode,
+      p_profile: args.p_profile,
+      p_expected_updated_at: args.p_expected_updated_at,
+      p_activate: args.p_activate,
+      p_source_kind: w.provenance.kind,
+      p_source_ref: w.provenance.ref ?? null,
+      p_reason: w.provenance.reason?.trim() ? w.provenance.reason.trim().slice(0, 500) : null,
+    });
+    // An environment without the held B2.2 migration: the same authorized write,
+    // with the revision marked 'unrecorded' (never a guessed source).
+    if (res.error && provenanceUnavailable(res.error)) res = null;
+  }
+  const { data, error } = res ?? await admin.rpc("company_brain_authorized_write", args);
   if (error) throw error;
   const row = (Array.isArray(data) ? data[0] : data) as { outcome?: string; updated_at?: string | null } | null;
   const outcome = (row?.outcome ?? "") as BrainWriteOutcome;
