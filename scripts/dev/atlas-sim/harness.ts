@@ -19,6 +19,10 @@ import { modelGrounder } from "../../../supabase/functions/_shared/leadPipeline/
 import { readFlags } from "../../../supabase/functions/_shared/discoveryProviders/flags.ts";
 import { memoryLedger } from "../../../supabase/functions/_shared/discoveryProviders/budget.ts";
 import { memoryCheckpointStore } from "../../../supabase/functions/_shared/leadPipeline/checkpoint.ts";
+import { apifyHttpTransport, memoryRunLedger, type ApifyTransport } from "../../../supabase/functions/_shared/leadPipeline/apifyRuns.ts";
+import { ACTOR_BUILDS } from "../../../supabase/functions/_shared/leadPipeline/actorBuilds.ts";
+import { PIPELINE_ACTORS } from "../../../supabase/functions/_shared/leadPipeline/apifyInvoker.ts";
+import { fakeApify } from "./fakeApifyAsync.ts";
 import { planSigner } from "../../../supabase/functions/_shared/leadPipeline/planToken.ts";
 import { persistRows, type LeadStore } from "../../../supabase/functions/_shared/leadPipeline/persistRows.ts";
 import type { ActorInvoker } from "../../../supabase/functions/_shared/discoveryProviders/adapters/apify.ts";
@@ -69,6 +73,29 @@ export interface Scenario {
   runs?: number;
   workspace?: "member" | "not_member";
   persistence?: { fail?: boolean; failNames?: string[]; planRecordFails?: boolean; existingAccounts?: { name: string; domain: string }[]; existingRecords?: ExistingRecord[] };
+  /**
+   * V5 Phase C: run Apify ASYNCHRONOUSLY against the fake Apify API (fakeApifyAsync.ts) on a
+   * virtual clock: start → record run id → poll → items → receipt. A run that outlives the
+   * request answers 202 and the SAME strategy_run is sent again (up to `resumes`), adopting it.
+   */
+  async?: {
+    /** Seconds each Actor run takes (per actor key, or one number for all). Default 20. */
+    durationS?: number | Record<string, number>;
+    /** This request's wait on one run before 202 (default 90 000 ms). */
+    deadlineMs?: number;
+    /** strategy_run re-sent while 202, with this many virtual seconds between (default 4 × 60 s). */
+    resumes?: number; resumeGapS?: number;
+    /** Actor keys whose start response is lost after the run was created. */
+    dropStart?: string[];
+    /** Actor keys whose receipt cannot be read once terminal. */
+    receiptUnreadable?: string[];
+    /** Actor keys whose run ends FAILED (it may still have billed its start). */
+    failed?: string[];
+    /** Charges post this many seconds after finish (a read inside the window sees only the start). */
+    lateS?: number;
+    /** Send the same strategy_run once more whatever the answer (a user retrying). */
+    resendOnce?: boolean;
+  };
   expect?: Record<string, unknown>;
 }
 
@@ -124,13 +151,8 @@ function simApify(s: Scenario) {
   const p = s.providers ?? {};
   const modeFor = (actor: string): ProviderMode =>
     (actor === "apify_linkedin_job_search" ? p.jobs : actor === "apify_linkedin_company_details" ? p.records : actor === "apify_website_content" ? p.pages : actor === "apify_linkedin_company_search" ? p.search : "ok") ?? "ok";
-  const invoke: ActorInvoker = (actor, input, opts) => {
+  const itemsFor = (actor: string, input: Record<string, unknown>, maxItems: number): unknown[] => {
     const mode = modeFor(actor);
-    const call: ActorCall = { actor, input: structuredClone(input) as Record<string, unknown>, key: opts.idempotencyKey, maxItems: opts.maxItems, outcome: mode, items: 0, chargedUsd: null };
-    calls.push(call);
-    if (mode === "timeout") return Promise.reject(new Error(`apify timeout (${actor})`));
-    if (mode === "http_502") return Promise.reject(new Error(`apify 502 (${actor})`));
-    if (mode === "invalid_input") return Promise.reject(new Error(`apify 400 invalid input (${actor})`));
     let items: unknown[] = [];
     if (mode === "ok") {
       if (actor === "apify_linkedin_job_search") items = s.companies.filter((c) => c.job !== null).map((c, i) => jobItem(i, c));
@@ -150,13 +172,22 @@ function simApify(s: Scenario) {
       }
     }
     if (p.duplicateDelivery) items = [...items, ...items];
-    items = items.slice(0, opts.maxItems);            // the Actor honours maxItems
+    return items.slice(0, maxItems);                  // the Actor honours maxItems
+  };
+  const invoke: ActorInvoker = (actor, input, opts) => {
+    const mode = modeFor(actor);
+    const call: ActorCall = { actor, input: structuredClone(input) as Record<string, unknown>, key: opts.idempotencyKey, maxItems: opts.maxItems, outcome: mode, items: 0, chargedUsd: null };
+    calls.push(call);
+    if (mode === "timeout") return Promise.reject(new Error(`apify timeout (${actor})`));
+    if (mode === "http_502") return Promise.reject(new Error(`apify 502 (${actor})`));
+    if (mode === "invalid_input") return Promise.reject(new Error(`apify 400 invalid input (${actor})`));
+    const items = itemsFor(actor, input, opts.maxItems);
     call.items = items.length;
     const charged = p.unknownSpend ? undefined : Number((items.length * 0.001 + 0.001).toFixed(5));
     call.chargedUsd = charged ?? null;
     return Promise.resolve({ items, runId: `run-${actor}-${calls.length}`, ...(charged === undefined ? {} : { chargedUsd: charged }) });
   };
-  return { invoke, calls };
+  return { invoke, calls, itemsFor, modeFor };
 }
 
 /** The grounding model, mocked: classifies the page and quotes ONLY its first sentence. */
@@ -211,6 +242,8 @@ export interface SimResult {
   plan: { status: number; body: Record<string, unknown> };
   runs: { approval: string; status: number; body: Record<string, unknown> }[];
   actorCalls: ActorCall[];
+  /** Actor runs PURCHASED (async: runs created at the fake Apify; sync: invocations). */
+  purchases: number;
   groundingCalls: { host: string; value: string }[];
   db: { accounts: Record<string, unknown>[]; contacts: Record<string, unknown>[]; leads: Record<string, unknown>[] };
   planRecords: { planId: string | null; status: string; summary: string }[];
@@ -218,10 +251,44 @@ export interface SimResult {
   timingsMs: { plan: number; runs: number[] };
 }
 
+/** The fake Apify API wired as the pipeline's async transport (Phase C). */
+function asyncRig(s: Scenario, ap: ReturnType<typeof simApify>, base: ReturnType<typeof memoryLedger>) {
+  const a = s.async!;
+  const keyOf = (actorId: string) => Object.entries(PIPELINE_ACTORS).find(([, v]) => v.actorId === actorId)?.[0] ?? actorId;
+  const api = fakeApify({
+    builds: Object.fromEntries(Object.values(ACTOR_BUILDS).map((b) => [b.actorId, b.build])),
+    startStatus: (actorId) => { const m = ap.modeFor(keyOf(actorId)); return m === "http_502" ? 502 : m === "invalid_input" ? 400 : null; },
+    dropStartResponse: (actorId) => (a.dropStart ?? []).includes(keyOf(actorId)),
+    plan: (actorId, input) => {
+      const k = keyOf(actorId), price = PIPELINE_ACTORS[k];
+      const d = typeof a.durationS === "number" ? a.durationS : a.durationS?.[k] ?? 20;
+      const mode = ap.modeFor(k);
+      return { durationS: mode === "timeout" ? 10_000 : d, terminal: (a.failed ?? []).includes(k) ? "FAILED" : "SUCCEEDED",
+        items: ap.itemsFor(k, input, Number(input.maxItems ?? 100) || 100), receiptUnreadable: (a.receiptUnreadable ?? []).includes(k), lateS: a.lateS ?? 0, lateUsd: price?.perStartUsd ?? 0,
+        pricing: { "apify-actor-start": price?.perStartUsd ?? 0.001, "apify-default-dataset-item": price?.perItemUsd ?? 0.001 } };
+    },
+  });
+  const ledger = memoryRunLedger(base);
+  const calls: ActorCall[] = [];
+  let lastKey = "";
+  const reserve = ledger.reserve.bind(ledger);
+  ledger.reserve = (e) => { lastKey = e.key; return reserve(e); };
+  const http = apifyHttpTransport({ token: "sim-token", fetch: api.fetch as never });
+  const transport: ApifyTransport = { ...http, async start(actorId, input, q) {
+    const r = await http.start(actorId, input, q);
+    const k = keyOf(actorId);
+    calls.push({ actor: k, input: structuredClone(input), key: lastKey, maxItems: q.maxItems, outcome: r.ok ? "started" : r.definite ? `refused ${r.status}` : "start unanswered", items: Math.min(q.maxItems, ap.itemsFor(k, input, q.maxItems).length), chargedUsd: null });
+    return r;
+  } };
+  return { api, calls, apifyRuns: { transport, ledger, deadlineMs: a.deadlineMs ?? 90_000, now: api.now, sleep: api.sleep } };
+}
+
 export async function runScenario(s: Scenario): Promise<SimResult> {
   const signer = await planSigner("offline-sim-secret-0123456789abcdef");
   const env: Record<string, string> = { LEAD_PIPELINE_ENABLED: "true", LEAD_PIPELINE_WORKSPACES: SIM_WS, PROVIDER_DISCOVERY_ENABLED: "true", PROVIDER_APIFY_DISCOVERY_ENABLED: "true", ...(s.flags ?? {}) };
   const ap = simApify(s);
+  const ledger = memoryLedger();
+  const rig = s.async ? asyncRig(s, ap, ledger) : null;
   const grounding: { host: string; value: string }[] = [];
   const mem = memoryStore(s.persistence?.fail === true, s.persistence?.failNames ?? []);
   for (const a of s.persistence?.existingAccounts ?? []) {
@@ -232,7 +299,8 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
   const d: StrategyDeps = {
     userId: "u-owner", flags: readPipelineFlags((k) => env[k]), discoveryFlags: readFlags((k) => env[k]),
     store: { memberRole: (u: string, w: string) => Promise.resolve(w === SIM_WS && u === "u-owner" ? "owner" : null), list: () => Promise.resolve([]), secret: () => Promise.resolve(null) } as never,
-    ledger: memoryLedger(), checkpoints: memoryCheckpointStore(),
+    ledger, checkpoints: memoryCheckpointStore(),
+    apifyRuns: rig?.apifyRuns ?? null,
     loadExisting: () => Promise.resolve(s.persistence?.existingRecords ?? []),
     leadoceanFor: () => { throw new Error("LeadOcean is not simulated (flag off)"); },
     apify: ap.invoke,
@@ -290,9 +358,16 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
         : mode === "under_estimate" ? { plan_hash: cp.planHash, apify_usd: Number((cp.estimate.apifyUsd / 2).toFixed(5)), token: tok }
         : { plan_hash: cp.planHash, apify_usd: cp.estimate.apifyUsd, token: tok };
       const t = performance.now();
-      const r = await handleStrategyRequest(req({ action: "strategy_run", ...(approval ? { approval } : {}), ...(s.allowReviewOnly ? { allow_review_only: true } : {}) }, walk), d);
+      const send = () => handleStrategyRequest(req({ action: "strategy_run", ...(approval ? { approval } : {}), ...(s.allowReviewOnly ? { allow_review_only: true } : {}) }, walk), d);
+      let r = await send();
       runTimes.push(performance.now() - t);
       runs.push({ approval: mode, status: r.status, body: r.body });
+      // 202 running: the SAME request again (same walk, same approval) adopts the run in progress.
+      for (let k = 0; rig && (r.status === 202 || (k === 0 && s.async?.resendOnce)) && k < (s.async?.resumes ?? 4); k++) {
+        rig.api.advance((s.async?.resumeGapS ?? 60) * 1000);
+        r = await send();
+        runs.push({ approval: mode, status: r.status, body: r.body });
+      }
     }
   }
 
@@ -303,7 +378,7 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
     return { planId: r.planId!, leadIds, filter };
   });
 
-  return { scenario: s, correlationId, plan, runs, actorCalls: ap.calls, groundingCalls: grounding,
+  return { scenario: s, correlationId, plan, runs, actorCalls: rig ? rig.calls : ap.calls, purchases: rig ? rig.api.purchases() : ap.calls.length, groundingCalls: grounding,
     db: { accounts: mem.accounts, contacts: mem.contacts, leads: mem.leads }, planRecords, workbench, timingsMs: { plan: tPlan, runs: runTimes } };
 }
 

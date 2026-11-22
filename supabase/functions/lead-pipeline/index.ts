@@ -31,6 +31,7 @@ import { supabaseEvidenceCache } from "../_shared/leadPipeline/evidenceCache.ts"
 import { supabaseCheckpointStore } from "../_shared/leadPipeline/checkpoint.ts";
 import { loadExistingRecords } from "../_shared/leadPipeline/history.ts";
 import { pipelineApifyInvoker } from "../_shared/leadPipeline/apifyInvoker.ts";
+import { apifyHttpTransport, supabaseRunLedger } from "../_shared/leadPipeline/apifyRuns.ts";
 import type { PipelineRow } from "../_shared/leadPipeline/projection.ts";
 import { persistRows, supabaseLeadStore } from "../_shared/leadPipeline/persistRows.ts";
 import { modelGrounder } from "../_shared/leadPipeline/businessModelCheck.ts";
@@ -72,6 +73,12 @@ Deno.serve(withBuildStamp(async (req) => {
     loadExisting: (ws: string) => loadExistingRecords(admin, ws, new Date()),
     leadoceanFor: (apiKey: string) => { const d = { apiKey, fetch: f }; return { adapter: leadOceanAdapter(d), deps: d }; },
     apify: apifyToken ? pipelineApifyInvoker({ token: apifyToken, fetch: f }) : null,
+    // V5 PHASE C: asynchronous runs — start, record the run id on its reservation, poll, read
+    // Apify's receipt. LEAD_PIPELINE_SYNC_RUNS=enabled restores run-sync for one release (rollback).
+    apifyRuns: apifyToken && (env("LEAD_PIPELINE_SYNC_RUNS") ?? "").trim().toLowerCase() !== "enabled"
+      ? { transport: apifyHttpTransport({ token: apifyToken, fetch: f }), ledger: supabaseRunLedger(admin, workspaceId, supabaseLedger(admin, workspaceId)),
+        deadlineMs: Number(env("LEAD_PIPELINE_RUN_WAIT_MS") ?? "") || 90_000 }
+      : null,
     persist: (rows: PipelineRow[]) => persist(admin, rows, (env("LEAD_PIPELINE_PERSIST_TX") ?? "").trim().toLowerCase() === "enabled"),
     // Off unless DISCOVERY_EVIDENCE_CACHE_ENABLED and the held cache migration is applied.
     evidenceCache: ["1", "true", "yes", "on"].includes((env("DISCOVERY_EVIDENCE_CACHE_ENABLED") ?? "").trim().toLowerCase()) ? supabaseEvidenceCache(admin) : null,
