@@ -44,6 +44,12 @@ Also take a data-only dump with `--data-only`.
 
 These are the functions whose own source changed. Each one bundles `_shared` code at deploy time.
 
+> **Revised 2026-11-22 (V2_HOSTED_VALIDATION_PLAN.md §5).**
+> - The initial production release is `generate-company-brain-draft`, `setup-company-brain`, `company-brain-memory` and `daily-brief`.
+> - `pilot-chat` follows only with the ATLAS owner's sign-off on the ungated `businessModelMatch` and `icpDiscoveryConstraints` rule changes it would carry, or after the ATLAS production release.
+> - `run-radar-scan` and `run-monitoring-scan` are deferred.
+> - Brain TEST still receives all seven.
+
 | Function | Production now | Why it is redeployed | Depends on |
 |---|---|---|---|
 | `generate-company-brain-draft` | v46 | B2.0 completion saves: goals, gtm and evidence are not updatable in v46, so **completion saves fail until this is deployed**. B2.1 ICP resolution and B2.2 provenance | migration 2 (degrades without it) |
