@@ -3,7 +3,8 @@
 //   BRAIN_TEST_URL=https://<brain-test-ref>.supabase.co \
 //   BRAIN_TEST_ANON_KEY=… BRAIN_TEST_SERVICE_ROLE_KEY=… \
 //   deno run --allow-net --allow-env --allow-read --allow-write \
-//     scripts/test-project/brain-test/acceptance.ts --confirm <brain-test-ref> [--allow-orion-chat] [--report out.json]
+//     scripts/test-project/brain-test/acceptance.ts --confirm <brain-test-ref> \
+//       [--allow-orion-chat --max-usd <approved limit>] [--report out.json]
 //
 // What it does, through the project's own Auth, REST and Edge Functions only:
 //   seeds two FICTIONAL workspaces (owner/editor/viewer + an outsider) through
@@ -22,7 +23,12 @@
 //     stored "research" is a fictional row. ORION's offer path is exercised
 //     exactly as pilot-chat runs it server-side (offerMemoryFromTurn → the
 //     proposal RPC) with NO model call. --allow-orion-chat additionally sends
-//     two real ORION chat turns (OpenAI tokens, a few cents) — off by default.
+//     exactly TWO real ORION chat turns (OpenAI tokens, a few cents) — off by
+//     default, and only with --max-usd: the spend recorded in lead_model_calls
+//     for this run's workspace must be priced, non-zero and <= that limit, or the
+//     run FAILS. The hard stop is server-side: set MODEL_SPEND_CEILING_USD on the
+//     project (deploy-brain-test.sh --spend-ceiling-usd), which pilot-chat checks
+//     before every turn, per workspace; each run uses a fresh workspace.
 //   · Keys are read from the environment and never printed. Fixture passwords
 //     are random per run and never written anywhere.
 import { assessIcpConsistency } from "../../../supabase/functions/_shared/companyBrainIcpConsistency.ts";
@@ -36,6 +42,8 @@ export interface AcceptanceConfig {
   anonKey: string;
   serviceKey: string;
   allowOrionChat?: boolean;
+  /** Required with allowOrionChat: the approved limit, in USD, for this run's model spend. */
+  maxUsd?: number;
   log?: (line: string) => void;
 }
 export interface Check { id: string; area: string; ok: boolean; detail: string }
@@ -83,6 +91,9 @@ function client(cfg: AcceptanceConfig) {
     },
     async svcRpc(fn: string, args: Raw) {
       return j(await fetch(`${base}/rest/v1/rpc/${fn}`, { method: "POST", headers: svc, body: JSON.stringify(args) }));
+    },
+    async svcSelect(path: string) {
+      return j(await fetch(`${base}/rest/v1/${path}`, { headers: svc }));
     },
     async select(token: string, path: string) {
       return j(await fetch(`${base}/rest/v1/${path}`, { headers: as(token) }));
@@ -249,13 +260,46 @@ export async function runBrainAcceptance(cfg: AcceptanceConfig): Promise<Accepta
     check("A6.8", "ORION memory", String(after.body?.agents?.orion ?? "").includes("Focus on dental clinics in Portugal and Spain"), "a NEW load (as in a new conversation) gives ORION the approved decision");
   }
   if (cfg.allowOrionChat) {
+    const area = "ORION memory (real chat, opt-in)";
+    const maxUsd = Number(cfg.maxUsd);
+    if (!(maxUsd > 0)) throw new Error("allowOrionChat requires maxUsd (the approved spending limit)");
+    const chatStart = new Date().toISOString();
+    // Turn 1 (model call): a durable preference, which ORION offers to remember.
     const chat = await c.fn(ed, "pilot-chat", { workspace_id: wsA, message: "From now on, never target crypto companies." });
-    check("A6.9", "ORION memory (real chat, opt-in)", chat.status === 200, `ORION answers a real chat turn → ${chat.status}`);
+    check("A6.9", area, chat.status === 200, `ORION answers a real chat turn → ${chat.status}`);
     const convId = String(chat.body?.conversation_id ?? "");
     const msgs = await c.select(ed, `messages?conversation_id=eq.${convId}&select=metadata&order=created_at.asc`);
-    const offered = (Array.isArray(msgs.body) ? msgs.body : []).some((m: Raw) => (m.metadata as Raw | null)?.memory_offer);
-    check("A6.10", "ORION memory (real chat, opt-in)", offered, "ORION's offer appears in the conversation");
-  } else notes.push("A6.9–A6.10 (real ORION chat turns) skipped: pass --allow-orion-chat to spend a few cents of OpenAI tokens.");
+    const offer = (Array.isArray(msgs.body) ? msgs.body : [])
+      .map((m: Raw) => (m.metadata as Raw | null)?.memory_offer as Raw | undefined).find(Boolean);
+    check("A6.10", area, !!offer?.proposal_id, "ORION's offer appears in the conversation, as a pending proposal");
+    // The editor approves it (no model call); a NEW conversation must load the Brain that holds it.
+    const ctxBefore = await mem(ow, { action: "context" });
+    const approved = offer?.proposal_id
+      ? await mem(ed, { action: "review_proposal", proposal_id: offer.proposal_id, decision: "approve", idempotency_key: idem() })
+      : { status: 0, body: null };
+    check("A6.11", area, approved.status === 200, `the editor approves ORION's offer → ${approved.status}`);
+    const ctxNow = await mem(ow, { action: "context" });
+    // Turn 2 (model call): a NEW conversation (no conversation_id).
+    const chat2 = await c.fn(ed, "pilot-chat", { workspace_id: wsA, message: "In one sentence: which industries should we avoid?" });
+    const conv2 = String(chat2.body?.conversation_id ?? "");
+    const msgs2 = await c.select(ed, `messages?conversation_id=eq.${conv2}&select=role,metadata&order=created_at.asc`);
+    const reply2 = (Array.isArray(msgs2.body) ? msgs2.body : []).filter((m: Raw) => m.role === "assistant").pop() as Raw | undefined;
+    const usedCtx = (reply2?.metadata as Raw | null)?.brain_context_id;
+    check("A6.12", area,
+      chat2.status === 200 && conv2 !== "" && conv2 !== convId && !!ctxNow.body?.context_id && usedCtx === ctxNow.body.context_id
+        && ctxNow.body.context_id !== ctxBefore.body?.context_id,
+      `a new conversation answers with the Brain that holds the approval (context ${String(usedCtx ?? "none")} = ${String(ctxNow.body?.context_id ?? "none")})`);
+    // Spend: every chat model call is recorded in lead_model_calls for this workspace;
+    // it must be priced, non-zero and within the approved limit.
+    const ledger = await c.svcSelect(`lead_model_calls?workspace_id=eq.${wsA}&started_at=gte.${encodeURIComponent(chatStart)}&select=estimated_cost_usd,actual_cost_usd`);
+    const rows = (Array.isArray(ledger.body) ? ledger.body : []) as Raw[];
+    const cost = (r: Raw) => (r.actual_cost_usd ?? r.estimated_cost_usd) == null ? NaN : Number(r.actual_cost_usd ?? r.estimated_cost_usd);
+    const unpriced = rows.filter((r) => !Number.isFinite(cost(r))).length;
+    const spent = rows.reduce((t, r) => t + (Number.isFinite(cost(r)) ? cost(r) : 0), 0);
+    check("A6.13", area, ledger.status === 200 && rows.length > 0 && unpriced === 0 && spent > 0 && spent <= maxUsd,
+      `model spend recorded: ${rows.length} call(s), $${spent.toFixed(4)} (limit $${maxUsd.toFixed(2)}${unpriced ? `, ${unpriced} UNPRICED` : ""})`);
+    notes.push(`model spend: ${rows.length} call(s), $${spent.toFixed(4)} of the approved $${maxUsd.toFixed(2)}`);
+  } else notes.push("A6.9–A6.13 (two real ORION chat turns) skipped: pass --allow-orion-chat --max-usd <limit> to spend a few cents of OpenAI tokens.");
 
   // ── A7 shared context across ORION, LISA, LYRA ─────────────────────────────
   const ctx = await mem(ed, { action: "context" });
@@ -293,7 +337,11 @@ if (import.meta.main) {
   if (arg("--confirm") !== ref) refuse("--confirm must repeat the project ref exactly");
   const anonKey = Deno.env.get("BRAIN_TEST_ANON_KEY") ?? "", serviceKey = Deno.env.get("BRAIN_TEST_SERVICE_ROLE_KEY") ?? "";
   if (!anonKey || !serviceKey) refuse("BRAIN_TEST_ANON_KEY and BRAIN_TEST_SERVICE_ROLE_KEY are required (never printed)");
-  const report = await runBrainAcceptance({ url, anonKey, serviceKey, allowOrionChat: args.includes("--allow-orion-chat") });
+  const allowOrionChat = args.includes("--allow-orion-chat");
+  const maxUsd = arg("--max-usd") === undefined ? undefined : Number(arg("--max-usd"));
+  if (allowOrionChat && !(maxUsd! > 0 && maxUsd! <= 1)) refuse("--allow-orion-chat needs --max-usd <limit>, a positive amount no larger than 1.00 USD");
+  if (!allowOrionChat && maxUsd !== undefined) refuse("--max-usd only applies with --allow-orion-chat");
+  const report = await runBrainAcceptance({ url, anonKey, serviceKey, allowOrionChat, maxUsd });
   console.log(`\n${report.passed} passed, ${report.failed} failed${report.notes.length ? `\nnotes:\n- ${report.notes.join("\n- ")}` : ""}`);
   const out = arg("--report");
   if (out) await Deno.writeTextFile(out, JSON.stringify(report, null, 2));

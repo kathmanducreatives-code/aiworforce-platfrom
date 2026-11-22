@@ -52,7 +52,7 @@ The combined tree is RC + R1.2.1 (`tmp/rc-plus-r121`): the exact state after bot
 1. **R1.2.1 → `launch/hardening`** (`claude/r1.2.1-workspace-binding`), once the owner's TEST run passes. It is small, its migration is already on TEST, and it is independent of the Brain.
 2. **The Company Brain V2 RC → `launch/hardening`.** Both change `pilot-chat`; the merge is clean and the combined tree is validated above. The binding check runs before the user's turn is recorded and the memory offer after it, so a refused cross-workspace chat never produces an offer.
 3. **B2.4 → `launch/hardening`**, after step 2. Its deploy includes `run-agent`, which is shared with the ATLAS track and needs coordination.
-4. `launch/hardening` → `main` (Lovable builds production's frontend from `main`).
+4. **Merging into `launch/hardening` is the production frontend deploy.** Vercel's production branch is `launch/hardening`, verified 2026-11-22 in V2_HOSTED_VALIDATION_PLAN.md §2; `main` has no deployment. So steps 1–3 merge only after the production database and functions are live.
 
 ## Remaining steps for a complete live release
 Every step needs the owner's explicit approval. Production stays read-only until each one is approved.
@@ -78,7 +78,7 @@ Every step needs the owner's explicit approval. Production stays read-only until
 6. **Apply `20261122120000` (B2.2), then verify:** the columns exist; a test revision on a fictional internal workspace records `founder`.
 7. **Apply `20261122130000` (B2.3), then verify:** a decision proposal submits on the fictional workspace.
 8. **Deploy, with an explicit `--project-ref` and `verify-deploy-target --expect production`:** `generate-company-brain-draft`, `setup-company-brain`, `company-brain-memory`, and `pilot-chat` (B2.3 offer + R1.2.1 binding).
-9. **Frontend:** merge to `main` so Lovable builds it.
+9. **Frontend:** merge the release into `launch/hardening`, which Vercel deploys to production. This step comes after 1–8.
 10. **Smoke** on the fictional internal workspace: Brain page readiness and provenance; Teach Agentory (one decision, one conflict confirmation); one chat offer → Remember → a new chat knows it; the dashboard strip. There are no paid calls in any of these steps.
 11. **Rollback, if needed:** redeploy the recorded function versions, then run B2.3 down, then B2.2 down.
 
