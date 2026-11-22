@@ -139,7 +139,11 @@ function interpretationOf(body: Record<string, unknown>): StrategyPlanView['inte
   return {
     assumptions: list(mc?.assumptions).filter(isObj).map((a) => String(a.text ?? '')).filter(Boolean),
     disclosures: list(mc?.disclosures).map(String),
-    merged: list(mc?.mergedDuplicates).filter(isObj).map((m) => ({ span: String(m.span ?? ''), reason: String(m.reason ?? '') })),
+    merged: [
+      ...list(mc?.mergedDuplicates).filter(isObj).map((m) => ({ span: String(m.span ?? ''), reason: String(m.reason ?? '') })),
+      // Pipeline operations the user asked for ("no duplicates"): performed on every run.
+      ...list(isObj(mc?.contract) ? mc.contract.operations : null).filter(isObj).map((o) => ({ span: String(o.span ?? ''), reason: `handled on every run — ${String(o.appliedBy ?? '')}` })),
+    ],
   };
 }
 

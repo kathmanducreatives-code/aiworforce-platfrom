@@ -25,6 +25,7 @@ import { audienceIntent, namesAudience } from "../missionCriteria.ts";
 import { spanInRequest } from "../missionUnderstanding.ts";
 import { canonicalTitleOf } from "../roleFamilies.ts";
 import { isExecutable, type MissionContract, type Requirement } from "./contract.ts";
+import { operationsOnly } from "./semanticClasses.ts";
 
 export interface ExplicitCue {
   kind: "audience" | "exclusion" | "bound";
@@ -130,6 +131,11 @@ export function cueCovered(cue: ExplicitCue, c: MissionContract): boolean {
     const toks = contentTokens(cue.object).filter((t) => /\d/.test(t));
     return own.some((r) => toks.length ? toks.every((t) => mentions([r.origin.span], t)) : mentions([r.origin.span], cue.object));
   }
+  // A PIPELINE OPERATION, not a company exclusion ("no duplicates", "exclude companies already
+  // in my CRM"): answered by the contract's recorded operation (semanticClasses.ts), which the
+  // pipeline always performs — never by a requirement, and never asked as one.
+  const asOps = operationsOnly(cue.object);
+  if (asOps) return asOps.every((op) => (c.operations ?? []).some((o) => o.operation === op));
   // An exclusion. Roles first: every title it names must be an excluded role.
   const titles = titlesIn(cue.object);
   const excludedTitles = new Set<string>();
