@@ -77,7 +77,8 @@ export interface MemoryWriteResult {
 
 /** A user-facing error that carries the server's outcome (stale, forbidden_role, …). */
 export class MemoryWriteError extends Error {
-  constructor(public outcome: string, message: string) { super(message); }
+  /** B2.3: for `needs_resolution`, how the item disagrees with the business profile. */
+  constructor(public outcome: string, message: string, public conflict: string | null = null) { super(message); }
 }
 
 const OUTCOME_TEXT: Record<string, string> = {
@@ -90,6 +91,7 @@ const OUTCOME_TEXT: Record<string, string> = {
   not_found: 'That item no longer exists.',
   idempotency_conflict: 'This request was already used for a different change. Please try again.',
   memory_unavailable: 'Company Brain memory is not enabled on this environment yet.',
+  needs_resolution: 'This disagrees with your Company Brain. Review the difference and confirm to remember it anyway.',
 };
 
 export function memoryErrorText(outcome: string, reason?: string): string {
@@ -107,7 +109,8 @@ async function invokeMemory(body: Record<string, unknown>): Promise<MemoryWriteR
       payload = ctx && typeof ctx.json === 'function' ? await ctx.json() : null;
     } catch { payload = null; }
     const outcome = String(payload?.outcome ?? payload?.reason ?? payload?.error ?? 'error');
-    throw new MemoryWriteError(outcome, memoryErrorText(outcome, String(payload?.reason ?? '')));
+    throw new MemoryWriteError(outcome, memoryErrorText(outcome, String(payload?.reason ?? '')),
+      typeof payload?.conflict === 'string' ? payload.conflict : null);
   }
   const out = (payload ?? {}) as unknown as MemoryWriteResult;
   if (!['ok', 'unchanged', 'already_recorded', 'created', 'duplicate_pending', 'already_known', 'contradiction', 'nothing_to_propose'].includes(out.outcome)) {
@@ -118,17 +121,18 @@ async function invokeMemory(body: Record<string, unknown>): Promise<MemoryWriteR
 
 export const newIdempotencyKey = (): string => `ui-${crypto.randomUUID()}`;
 
-export function writeMemory(workspaceId: string, op: string, payload: Record<string, unknown>, idempotencyKey = newIdempotencyKey()) {
-  return invokeMemory({ action: 'write', workspace_id: workspaceId, op, payload, idempotency_key: idempotencyKey });
+export function writeMemory(workspaceId: string, op: string, payload: Record<string, unknown>, idempotencyKey = newIdempotencyKey(), confirmConflict = false) {
+  return invokeMemory({ action: 'write', workspace_id: workspaceId, op, payload, idempotency_key: idempotencyKey, ...(confirmConflict ? { confirm_conflict: true } : {}) });
 }
 
 export function reviewProposal(workspaceId: string, proposalId: string, decision: 'approve' | 'correct' | 'reject', extra: {
-  correctedValue?: unknown; note?: string; expectedMemoryVersion?: number | null; idempotencyKey?: string;
+  correctedValue?: unknown; note?: string; expectedMemoryVersion?: number | null; idempotencyKey?: string; confirmConflict?: boolean;
 } = {}) {
   return invokeMemory({
     action: 'review_proposal', workspace_id: workspaceId, proposal_id: proposalId, decision,
     corrected_value: extra.correctedValue, note: extra.note ?? null,
     expected_memory_version: extra.expectedMemoryVersion ?? null, idempotency_key: extra.idempotencyKey ?? newIdempotencyKey(),
+    ...(extra.confirmConflict ? { confirm_conflict: true } : {}),
   });
 }
 
@@ -173,4 +177,31 @@ export async function proposeFromApprovedContent(workspaceId: string, contentIte
   try {
     await invokeMemory({ action: 'content_approved', workspace_id: workspaceId, content_item_id: contentItemId });
   } catch { /* advisory */ }
+}
+
+/** B2.3: one proposal's live state (the chat's offer card reads it, so a reload shows what happened). */
+export async function fetchProposal(workspaceId: string, proposalId: string): Promise<MemoryProposal | null> {
+  const { data, error } = await from('company_brain_memory_proposals')
+    .select('id, proposed_by_agent, kind, category, fact_key, value_type, value, rationale, evidence, source_type, confidence, status, contradicts_memory_id, created_at, updated_at')
+    .eq('workspace_id', workspaceId).eq('id', proposalId).maybeSingle();
+  if (missing(error)) throw new MemoryUnavailableError();
+  if (error) throw error;
+  return (data ?? null) as MemoryProposal | null;
+}
+
+/** B2.3: how many agent suggestions wait for review (the dashboard). Null where memory is not enabled. */
+export async function countPendingProposals(workspaceId: string): Promise<number | null> {
+  const { count, error } = await from('company_brain_memory_proposals')
+    .select('id', { count: 'exact', head: true }).eq('workspace_id', workspaceId).eq('status', 'pending');
+  if (error) return null;
+  return count ?? 0;
+}
+
+/** B2.3: the oldest pending agent suggestions, for the dashboard. Null where memory is not enabled. */
+export async function fetchPendingProposals(workspaceId: string, limit = 3): Promise<{ total: number; items: MemoryProposal[] } | null> {
+  const { data, count, error } = await from('company_brain_memory_proposals')
+    .select('id, proposed_by_agent, kind, category, fact_key, value_type, value, rationale, evidence, source_type, confidence, status, contradicts_memory_id, created_at, updated_at', { count: 'exact' })
+    .eq('workspace_id', workspaceId).eq('status', 'pending').order('created_at', { ascending: true }).limit(limit);
+  if (error) return null;
+  return { total: count ?? 0, items: (data ?? []) as MemoryProposal[] };
 }

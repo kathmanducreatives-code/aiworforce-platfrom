@@ -12,9 +12,9 @@ export type MemoryOp = typeof MEMORY_OPS[number];
 
 export type MemoryRequest =
   | { action: "context"; workspace_id: string }
-  | { action: "write"; workspace_id: string; op: MemoryOp; payload: Record<string, unknown>; idempotency_key: string }
+  | { action: "write"; workspace_id: string; op: MemoryOp; payload: Record<string, unknown>; idempotency_key: string; confirm_conflict: boolean }
   | { action: "review_proposal"; workspace_id: string; proposal_id: string; decision: "approve" | "correct" | "reject";
-      corrected_value: unknown; note: string | null; expected_memory_version: number | null; idempotency_key: string }
+      corrected_value: unknown; note: string | null; expected_memory_version: number | null; idempotency_key: string; confirm_conflict: boolean }
   | { action: "redact"; workspace_id: string; target: "memory" | "revision"; id: string; reason: string }
   | { action: "content_approved"; workspace_id: string; content_item_id: string };
 
@@ -77,7 +77,8 @@ export function parseMemoryRequest(body: unknown): { ok: true; req: MemoryReques
           return { ok: false, error: "expected_version must be an integer" };
         }
       }
-      return { ok: true, req: { action, workspace_id, op, payload, idempotency_key: idem } };
+      // B2.3: a person who saw the disagreement with the profile and chose to remember anyway.
+      return { ok: true, req: { action, workspace_id, op, payload, idempotency_key: idem, confirm_conflict: b.confirm_conflict === true } };
     }
 
     case "review_proposal": {
@@ -92,6 +93,7 @@ export function parseMemoryRequest(body: unknown): { ok: true; req: MemoryReques
         action, workspace_id, proposal_id: s(b.proposal_id), decision,
         corrected_value: decision === "correct" ? b.corrected_value : null,
         note: s(b.note) || null, expected_memory_version: (ev as number | null) ?? null, idempotency_key: idem,
+        confirm_conflict: b.confirm_conflict === true,
       } };
     }
 

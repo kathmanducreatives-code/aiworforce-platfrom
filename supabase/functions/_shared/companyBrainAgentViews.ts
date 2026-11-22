@@ -193,7 +193,13 @@ export function renderBrainMemoryBlock(ctx: SharedBrainContext, agent: BrainAgen
   }
   if (agent === "lyra" || agent === "orion") {
     for (const f of ctx.facts.filter((f) => f.category !== "competitors")) {
-      lines.push([3, `- Fact ${f.fact_key}: ${textOf(f)} [${provenanceTag(f)}]`]);
+      // B2.3: a correction says what is true AND what to stop believing.
+      const v = f.value as { wrong?: unknown; right?: unknown } | null;
+      if (f.category === "corrections" && v && typeof v.right === "string") {
+        lines.push([1, `- Correction (the team corrected this; it overrides anything else you saw): ${v.right}${typeof v.wrong === "string" ? ` — NOT "${v.wrong}"` : ""} [${provenanceTag(f)}]`]);
+      } else {
+        lines.push([3, `- Fact ${f.fact_key}: ${textOf(f)} [${provenanceTag(f)}]`]);
+      }
     }
   }
   if (ctx.competitors.length) {
@@ -205,7 +211,10 @@ export function renderBrainMemoryBlock(ctx: SharedBrainContext, agent: BrainAgen
     : agent === "lyra" ? d.scope === "content" || d.category === "brand_preference"
     : true);
   for (const d of decisions.slice(0, 8)) {
-    lines.push([4, `- Decision ${d.category}${d.scope_ref ? ` on ${d.scope} ${d.scope_ref}` : ""}: ${textOf(d)} — applies to that ${d.scope} only`]);
+    lines.push(d.scope === "workspace"
+      // B2.3: a standing business decision the team recorded (workspace-wide categories only).
+      ? [2, `- Business decision (${d.category.replace(/_/g, " ")}): ${textOf(d)} — a standing decision by the team [${provenanceTag(d)}]`]
+      : [4, `- Decision ${d.category}${d.scope_ref ? ` on ${d.scope} ${d.scope_ref}` : ""}: ${textOf(d)} — applies to that ${d.scope} only`]);
   }
   if (ctx.needs_review.length) {
     lines.push([5, `- ${ctx.needs_review.length} memory item(s) are stale or disputed and are NOT included above.`]);

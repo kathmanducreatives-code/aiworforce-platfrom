@@ -5,7 +5,7 @@
 // company-brain-memory edge function. Viewers see everything and can change
 // nothing (the server refuses them too). Every write carries an idempotency
 // key, so a double-click is one change.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ExternalLink, Loader2, ShieldAlert, Sparkles } from 'lucide-react';
@@ -22,9 +22,11 @@ import {
   type MemoryProposal,
 } from '@/lib/companyBrain/memoryApi';
 import {
-  ADD_OPTIONS, AGENT_USE, buildAddPayload, buildEditPayload, buildSections, buildTimeline, proposalSummary,
-  type AddKind, type MemoryCard,
+  AGENT_USE, buildEditPayload, buildSections, buildTimeline, correctedProposalValue, editableProposalText, proposalSummary,
+  type MemoryCard,
 } from '@/lib/companyBrain/memoryView';
+import { TeachAgentoryButton } from './TeachAgentoryDialog';
+import { ConflictConfirm } from './ConflictConfirm';
 
 interface Props {
   workspaceId: string;
@@ -40,6 +42,13 @@ export function BrainMemoryPanel({ workspaceId, canEdit }: Props) {
   const q = useQuery({ queryKey: key, queryFn: () => fetchMemorySnapshot(workspaceId), staleTime: 15_000, retry: (n, e) => !(e instanceof MemoryUnavailableError) && n < 2 });
   const sections = useMemo(() => (q.data ? buildSections(q.data) : null), [q.data]);
   const timeline = useMemo(() => (q.data ? buildTimeline(q.data, user?.id ?? null) : []), [q.data, user?.id]);
+  // Arriving from the dashboard's "Review in Company Brain": bring the review queue into view once it renders.
+  const loaded = !!q.data;
+  useEffect(() => {
+    if (loaded && typeof window !== 'undefined' && window.location.hash === '#brain-memory') {
+      document.getElementById('brain-memory')?.scrollIntoView({ block: 'start' });
+    }
+  }, [loaded]);
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: key });
     void qc.invalidateQueries({ queryKey: ['brain-memory-usage', workspaceId] });
@@ -72,15 +81,15 @@ export function BrainMemoryPanel({ workspaceId, canEdit }: Props) {
 
   const reviewCount = sections.pendingProposals.length + sections.needsReview.length;
   return (
-    <section aria-labelledby="brain-memory-title" className="mt-8">
+    <section id="brain-memory" aria-labelledby="brain-memory-title" className="mt-8 scroll-mt-6">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 id="brain-memory-title" className="text-lg font-semibold">Company memory</h2>
+          <h2 id="brain-memory-title" className="text-lg font-semibold">What Agentory knows</h2>
           <p className="text-sm text-muted-foreground">
-            What your team decided, prefers and confirmed. Agents use {sections.servedCount} confirmed item{sections.servedCount === 1 ? '' : 's'}; suggestions stay untrusted until someone approves them.
+            What your team decided, prefers and confirmed. Agents use {sections.servedCount} confirmed item{sections.servedCount === 1 ? '' : 's'}; anything an agent suggests waits for a person to approve it.
           </p>
         </div>
-        {canEdit ? <AddMemoryButton workspaceId={workspaceId} onDone={refresh} /> : (
+        {canEdit ? <TeachAgentoryButton workspaceId={workspaceId} onDone={refresh} /> : (
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><ShieldAlert className="h-3.5 w-3.5" aria-hidden /> View only — your role cannot change memory</span>
         )}
       </div>
@@ -180,9 +189,15 @@ function ItemCard({ card, workspaceId, canEdit, onDone }: { card: MemoryCard; wo
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>{card.provenance}</span>
             {card.scopeLabel && <span>· {card.scopeLabel}</span>}
-            <span>· v{card.version} · {new Date(card.updatedAt).toLocaleDateString()}</span>
+            <span>· {card.freshness} · v{card.version}</span>
             {card.sourceUrl && <a className="inline-flex items-center gap-0.5 underline" href={card.sourceUrl} target="_blank" rel="noreferrer noopener">source <ExternalLink className="h-3 w-3" aria-hidden /></a>}
           </div>
+          {card.usedBy.length > 0 && (
+            <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground" aria-label="Used by">
+              <span>Used by</span>
+              {card.usedBy.map((a) => <span key={a} className="rounded-full border border-border px-1.5 py-px text-[10.5px] tracking-wide">{a}</span>)}
+            </div>
+          )}
         </div>
         {card.statusLabel && <Badge variant={card.status === 'disputed' || card.status === 'stale' ? 'outline' : 'secondary'}>{card.statusLabel}</Badge>}
       </div>
@@ -204,22 +219,27 @@ function ProposalCard({ p, workspaceId, canEdit, onDone, contradicts }: {
 }) {
   const s = proposalSummary(p);
   const [correcting, setCorrecting] = useState(false);
-  const [draft, setDraft] = useState(s.value);
-  const [idem] = useState(newIdempotencyKey);
+  const [draft, setDraft] = useState(() => editableProposalText(p));
+  const [conflict, setConflict] = useState<{ text: string; decision: 'approve' | 'correct' } | null>(null);
+  // One key per decision: a double-click, a retry or a second tab records ONE outcome.
+  const [idem] = useState(() => ({ approve: newIdempotencyKey(), correct: newIdempotencyKey(), reject: newIdempotencyKey() }));
   const act = useMutation({
-    mutationFn: (decision: 'approve' | 'correct' | 'reject') => {
+    mutationFn: ({ decision, confirm }: { decision: 'approve' | 'correct' | 'reject'; confirm?: boolean }) => {
       let corrected: unknown;
       if (decision === 'correct') {
-        corrected = p.value_type === 'object' && p.value && typeof p.value === 'object'
-          ? { ...(p.value as Record<string, unknown>), name: draft.trim() }
-          : p.value_type === 'list' ? draft.split(',').map((x) => x.trim()).filter(Boolean) : draft.trim();
+        const c = correctedProposalValue(p, draft);
+        if (!c.ok) throw new MemoryWriteError('invalid', (c as { error: string }).error);
+        corrected = (c as { value: unknown }).value;
       }
       return reviewProposal(workspaceId, p.id, decision, {
-        correctedValue: corrected, expectedMemoryVersion: contradicts?.version ?? null, idempotencyKey: idem,
+        correctedValue: corrected, expectedMemoryVersion: contradicts?.version ?? null, idempotencyKey: idem[decision], confirmConflict: confirm,
       });
     },
-    onSuccess: (_r, d) => { toast.success(d === 'reject' ? 'Rejected — it will not be suggested again.' : 'Approved — agents can now use it.'); onDone(); },
-    onError: (e) => { fail(e); onDone(); },
+    onSuccess: (_r, v) => { toast.success(v.decision === 'reject' ? 'Rejected — it will not be suggested again.' : 'Remembered — every agent uses it from its next run.'); onDone(); },
+    onError: (e, v) => {
+      if (e instanceof MemoryWriteError && e.outcome === 'needs_resolution' && v.decision !== 'reject') { setConflict({ text: e.conflict ?? e.message, decision: v.decision }); return; }
+      fail(e); onDone();
+    },
   });
   return (
     <article className="rounded-xl border border-primary/30 bg-primary/5 p-3" aria-label={`Suggestion: ${s.title}`}>
@@ -242,78 +262,30 @@ function ProposalCard({ p, workspaceId, canEdit, onDone, contradicts }: {
           )}
         </div>
       </div>
-      {canEdit ? (
+      {conflict && (
+        <div className="mt-2">
+          <ConflictConfirm conflict={conflict.text} busy={act.isPending}
+            onConfirm={() => { const d = conflict.decision; setConflict(null); act.mutate({ decision: d, confirm: true }); }}
+            onCancel={() => setConflict(null)} />
+        </div>
+      )}
+      {canEdit && !conflict ? (
         <div className="mt-2 flex flex-wrap gap-2">
           {correcting ? (
             <>
-              <Button size="sm" disabled={act.isPending} onClick={() => act.mutate('correct')}>Save correction</Button>
+              <Button size="sm" disabled={act.isPending} onClick={() => act.mutate({ decision: 'correct' })}>Save and remember</Button>
               <Button size="sm" variant="ghost" onClick={() => setCorrecting(false)}>Cancel</Button>
             </>
           ) : (
             <>
-              <Button size="sm" disabled={act.isPending} onClick={() => act.mutate('approve')}>Approve</Button>
-              {p.value_type !== 'number_range' && <Button size="sm" variant="outline" disabled={act.isPending} onClick={() => setCorrecting(true)}>Correct</Button>}
-              <Button size="sm" variant="ghost" disabled={act.isPending} onClick={() => act.mutate('reject')}>Reject</Button>
+              <Button size="sm" disabled={act.isPending} onClick={() => act.mutate({ decision: 'approve' })}>Approve</Button>
+              <Button size="sm" variant="outline" disabled={act.isPending} onClick={() => setCorrecting(true)}>Edit</Button>
+              <Button size="sm" variant="ghost" disabled={act.isPending} onClick={() => act.mutate({ decision: 'reject' })}>Reject</Button>
             </>
           )}
         </div>
-      ) : <div className="mt-2 text-xs text-muted-foreground">An editor, admin or owner can approve or reject this.</div>}
+      ) : !canEdit ? <div className="mt-2 text-xs text-muted-foreground">An editor, admin or owner can approve or reject this.</div> : null}
     </article>
-  );
-}
-
-function AddMemoryButton({ workspaceId, onDone }: { workspaceId: string; onDone: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<AddKind>('exclude_industry');
-  const [value, setValue] = useState('');
-  const [until, setUntil] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [idem, setIdem] = useState(newIdempotencyKey);
-  const hint = ADD_OPTIONS.find((o) => o.kind === kind)?.hint ?? '';
-  const add = useMutation({
-    mutationFn: () => {
-      const built = buildAddPayload(kind, value, { temporaryUntil: until ? new Date(`${until}T23:59:59Z`).toISOString() : null });
-      if ('error' in built) throw new MemoryWriteError('invalid', built.error);
-      return writeMemory(workspaceId, 'set', built.payload, idem);
-    },
-    onSuccess: (r) => {
-      toast.success(r.outcome === 'unchanged' ? 'Already saved.' : 'Saved. Every agent will use it from the next run.');
-      setOpen(false); setValue(''); setUntil(''); setError(null); setIdem(newIdempotencyKey()); onDone();
-    },
-    onError: (e) => setError(e instanceof MemoryWriteError
-      ? (e.outcome === 'stale' ? 'This already exists — edit it in the list instead.' : e.message)
-      : 'Something went wrong. Nothing was changed.'),
-  });
-  return (
-    <>
-      <Button size="sm" onClick={() => setOpen(true)}>Add to memory</Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add to company memory</DialogTitle>
-            <DialogDescription>Saved as your team’s own statement. Every agent will follow it, and the change is kept in history.</DialogDescription>
-          </DialogHeader>
-          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); setError(null); add.mutate(); }}>
-            <Select value={kind} onValueChange={(v) => { setKind(v as AddKind); setError(null); }}>
-              <SelectTrigger aria-label="What to add"><SelectValue /></SelectTrigger>
-              <SelectContent>{ADD_OPTIONS.map((o) => <SelectItem key={o.kind} value={o.kind}>{o.label}</SelectItem>)}</SelectContent>
-            </Select>
-            <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={hint} aria-label="Value" autoFocus />
-            {kind !== 'product' && (
-              <label className="block text-sm text-muted-foreground">
-                Temporary until (optional)
-                <Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} className="mt-1" aria-label="Expires on" />
-              </label>
-            )}
-            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={add.isPending}>{add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
   );
 }
 

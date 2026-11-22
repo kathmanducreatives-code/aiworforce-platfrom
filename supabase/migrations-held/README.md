@@ -370,3 +370,11 @@ Company Brain V2 · B2.2: provenance on every profile revision.
 **Depends on** `20261110120000_company_brain_memory.sql`. It is additive. **Not approved for any hosted project.** Handlers fall back to `company_brain_authorized_write` where it is absent, and those revisions read as "unrecorded".
 
 Rollback: `rollback/20261122120000_company_brain_provenance.down.sql`. It restores the V1 trigger and drops the wrapper and the three columns. It was checked on a disposable database: apply, roll back, re-apply, re-apply again.
+
+## `20261122130000_company_brain_memory_activation.sql`
+
+Company Brain V2 · B2.3: agents may propose **decisions**. A proposal's `kind` may now be `decision`. A decision proposal must carry `value.outcome`, and it can apply to the whole workspace only in the standing categories: strategy, ICP change, brand, exclusion and correction. `company_brain_proposal_submit` validates this; the rest of its body is V1 unchanged. Approval still goes through `company_brain_proposal_review`: an editor, checked inside the transaction, with idempotency. Nothing an agent proposes becomes memory without a person's approval.
+
+**Depends on** `20261110120000`. It is additive. **Not approved for any hosted project.**
+
+Rollback: `rollback/20261122130000_company_brain_memory_activation.down.sql`. It withdraws any pending decision proposals and restores the V1 function. Reviewed decision proposals stay on record, because the restored check is `NOT VALID`.

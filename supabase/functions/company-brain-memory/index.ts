@@ -3,6 +3,7 @@
 // Actions:
 //   context            read: the shared context summary + what each agent receives
 //   write              set | correct | decide | retract | dispute | mark_stale | reactivate
+//                      (B2.3: a preference that disagrees with the profile needs confirm_conflict)
 //   review_proposal    approve | correct | reject an agent proposal
 //   redact             privacy redaction of a memory item or a profile revision (owner/admin)
 //   content_approved   LYRA: offer the approved content's angle back as a PROPOSAL
@@ -25,6 +26,7 @@ import {
 import { loadCompanyBrainContext, type LoaderDb } from "../_shared/companyBrainContextLoader.ts";
 import { atlasView, renderBrainMemoryBlock } from "../_shared/companyBrainAgentViews.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
+import { profileConflictForItem } from "../_shared/orionMemoryOffer.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -77,6 +79,11 @@ Deno.serve(withBuildStamp(async (req) => {
     return { status: statusForOutcome(String(res.outcome ?? "")), body: res };
   };
 
+  const loadProfile = async (ws: string): Promise<Record<string, unknown> | null> => {
+    const { data } = await admin.from("company_brain").select("profile").eq("workspace_id", ws).maybeSingle();
+    return ((data as { profile?: Record<string, unknown> } | null)?.profile) ?? null;
+  };
+
   try {
     switch (r.action) {
       case "context": {
@@ -99,6 +106,12 @@ Deno.serve(withBuildStamp(async (req) => {
       }
       case "write": {
         if (!sessionId) return json({ error: "Unauthorized", reason: "session_invalid" }, 401);
+        // B2.3: a preference that disagrees with the business profile changes what agents
+        // read. It is saved only once the person has seen the disagreement and confirmed.
+        if ((r.op === "set" || r.op === "correct") && !r.confirm_conflict && typeof r.payload.fact_key === "string") {
+          const conflict = profileConflictForItem(await loadProfile(r.workspace_id), r.payload as never);
+          if (conflict) return json({ outcome: "needs_resolution", conflict }, 409);
+        }
         const out = await rpc("company_brain_memory_write", {
           p_workspace_id: r.workspace_id, p_actor_id: userId, p_session_id: sessionId,
           p_op: r.op, p_payload: r.payload, p_idempotency_key: r.idempotency_key,
@@ -107,6 +120,17 @@ Deno.serve(withBuildStamp(async (req) => {
       }
       case "review_proposal": {
         if (!sessionId) return json({ error: "Unauthorized", reason: "session_invalid" }, 401);
+        // B2.3: approving a proposal that disagrees with the profile needs an explicit choice too.
+        if (r.decision !== "reject" && !r.confirm_conflict) {
+          const { data: p } = await admin.from("company_brain_memory_proposals").select("fact_key, value, status")
+            .eq("id", r.proposal_id).eq("workspace_id", r.workspace_id).maybeSingle();
+          const row = p as { fact_key?: string; value?: unknown; status?: string } | null;
+          if (row?.status === "pending" && row.fact_key) {
+            const conflict = profileConflictForItem(await loadProfile(r.workspace_id),
+              { fact_key: row.fact_key, value: r.decision === "correct" ? r.corrected_value : row.value });
+            if (conflict) return json({ outcome: "needs_resolution", conflict }, 409);
+          }
+        }
         const out = await rpc("company_brain_proposal_review", {
           p_workspace_id: r.workspace_id, p_actor_id: userId, p_session_id: sessionId,
           p_proposal_id: r.proposal_id, p_action: r.decision, p_corrected_value: r.corrected_value,

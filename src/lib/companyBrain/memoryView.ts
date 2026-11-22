@@ -9,6 +9,10 @@ import {
   type EffectiveStatus, type MemoryItem,
 } from '../../../supabase/functions/_shared/brainMemoryModel.ts';
 import type { MemoryHistoryRow, MemoryProposal, MemorySnapshot, RevisionRow } from './memoryTypes';
+import {
+  companySizeItem, correctionItem, decisionItem, exclusionItem, factItem, goalItem, parseSizeRange, priorityItem, productItem,
+  restrictionItem, toneItem, type ItemPayload, type WorkspaceDecisionCategory,
+} from '../../../supabase/functions/_shared/brainMemoryPayloads.ts';
 
 export type MemoryTab = 'review' | 'preferences' | 'decisions' | 'facts' | 'history' | 'agents';
 
@@ -26,6 +30,10 @@ export interface MemoryCard {
   scopeLabel: string | null;
   /** Can a person act on it (edit/retract/dispute)? Retracted/redacted history is read-only. */
   actionable: boolean;
+  /** B2.3: how fresh it is, in words ("Confirmed 21 Nov 2026", "Due for review", "Temporary · until 1 Dec 2026"). */
+  freshness: string;
+  /** B2.3: which agents receive it (the shared loader's rules, companyBrainAgentViews.renderBrainMemoryBlock). */
+  usedBy: string[];
   item: MemoryItem;
 }
 
@@ -47,7 +55,7 @@ const KEY_TITLE: Record<string, string> = {
   'content.avoid': 'Words and claims to avoid',
   'content.restrictions': 'Content restrictions',
 };
-const PREFIX_TITLE: Array<[RegExp, string]> = [[/^content\.restrictions:/, 'Content restriction'], [/^content\.avoid:/, 'Avoid in content'], [/^priority\./, 'Sales priority'], [/^goal\./, 'Business goal'], [/^product\./, 'Product or service']];
+const PREFIX_TITLE: Array<[RegExp, string]> = [[/^content\.restrictions:/, 'Content restriction'], [/^content\.avoid:/, 'Avoid in content'], [/^priority\./, 'Sales priority'], [/^goal\./, 'Business goal'], [/^product\./, 'Product or service'], [/^fact\./, 'Business fact'], [/^correction\./, 'Correction']];
 
 const DECISION_TITLE: Record<string, string> = {
   lead_rejected: 'Lead rejected',
@@ -92,14 +100,44 @@ export function formatValue(valueType: string, value: unknown): string {
     const note = typeof o.note === 'string' ? ` (“${o.note}”)` : '';
     return `${o.outcome.charAt(0).toUpperCase()}${o.outcome.slice(1)}${label}${note}`;
   }
+  if (typeof o.right === 'string') return typeof o.wrong === 'string' ? `${o.right} — replaces “${o.wrong}”` : o.right;
   if (typeof o.name === 'string') return typeof o.domain === 'string' ? `${o.name} (${o.domain})` : o.name;
   if (typeof o.value === 'string') return o.value;
   return Object.entries(o).map(([k, v]) => `${k}: ${String(v)}`).join(', ');
 }
 
+const shortDay = (iso: string | null) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+};
+
+/** Which agents receive an item — the same rules the shared loader's agent views apply. */
+export function agentsUsing(i: Pick<MemoryItem, 'kind' | 'category' | 'fact_key' | 'scope'>): string[] {
+  if (i.kind === 'decision') {
+    if (i.scope === 'lead' || i.scope === 'account') return ['ORION', 'ATLAS'];
+    if (i.scope === 'signal') return ['ORION', 'LISA'];
+    if (i.scope === 'content' || i.category === 'brand_preference') return ['ORION', 'LYRA'];
+    return ['ORION'];
+  }
+  if (i.category === 'exclusions' || i.fact_key.startsWith('competitor')) return ['ORION', 'ATLAS', 'LYRA', 'LISA'];
+  if (i.kind === 'preference') return i.category === 'content' || i.category === 'brand_voice' ? ['LYRA'] : ['ORION', 'ATLAS', 'LYRA', 'LISA'];
+  return ['ORION', 'LYRA'];
+}
+
+function freshnessOf(i: MemoryItem, status: EffectiveStatus): string {
+  if (status === 'stale') return `Due for review · last confirmed ${shortDay(i.observed_at)}`;
+  if (status === 'disputed') return 'Disputed · agents do not use it until someone confirms it';
+  if (status === 'expired') return `Expired ${shortDay(i.expires_at)}`;
+  if (i.persistence === 'temporary' && i.expires_at) return `Temporary · until ${shortDay(i.expires_at)}`;
+  return `Confirmed ${shortDay(i.observed_at)}`;
+}
+
 export function toCard(i: MemoryItem, now: Date = new Date()): MemoryCard {
   const status = effectiveStatus(i, now);
   return {
+    freshness: freshnessOf(i, status),
+    usedBy: status === 'active' && isServable(i, now) ? agentsUsing(i) : [],
     id: i.id, kind: i.kind, title: title(i), value: formatValue(i.value_type, i.value),
     provenance: provenanceLabel(i), status, statusLabel: STATUS_LABEL[status] ?? null,
     version: i.version, updatedAt: i.updated_at, sourceUrl: i.source_url,
@@ -213,7 +251,7 @@ export function buildTimeline(s: MemorySnapshot, currentUserId: string | null): 
 
 export type AddKind =
   | 'exclude_industry' | 'exclude_company' | 'exclude_geography' | 'exclude_keyword'
-  | 'company_size' | 'content_tone' | 'content_restriction' | 'sales_priority' | 'goal' | 'product';
+  | 'company_size' | 'content_tone' | 'content_restriction' | 'sales_priority' | 'goal' | 'product' | 'fact';
 
 export const ADD_OPTIONS: Array<{ kind: AddKind; label: string; hint: string }> = [
   { kind: 'exclude_industry', label: 'Exclude an industry', hint: 'e.g. Gambling' },
@@ -237,35 +275,52 @@ export function buildAddPayload(kind: AddKind, raw: string, opts: { temporaryUnt
   if (!text) return { ok: false, error: 'Enter a value.' };
   if (text.length > 500) return { ok: false, error: 'Keep it under 500 characters.' };
   const temp = opts.temporaryUntil ? { persistence: 'temporary', expires_at: opts.temporaryUntil } : {};
-  const exclusion = (type: string, value: string) => ({
-    kind: 'preference', category: 'exclusions', fact_key: `exclusion.${type}:${slug(value)}`,
-    value_type: 'object', value: { type, value }, ...temp,
-  });
-  let payload: Record<string, unknown>;
+  // Shapes come from the shared builders, so ORION's offers land on the same keys.
+  let item: ItemPayload;
   switch (kind) {
-    case 'exclude_industry': payload = exclusion('industry', text); break;
-    case 'exclude_geography': payload = exclusion('geography', text); break;
-    case 'exclude_keyword': payload = exclusion('keyword', text); break;
+    case 'exclude_industry': item = exclusionItem('industry', text); break;
+    case 'exclude_geography': item = exclusionItem('geography', text); break;
+    case 'exclude_keyword': item = exclusionItem('keyword', text); break;
     case 'exclude_company': {
       const d = slug(text);
       if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)) return { ok: false, error: 'Enter the company’s domain, e.g. rivalco.com.' };
-      payload = exclusion('company', d); break;
+      item = exclusionItem('company', d); break;
     }
     case 'company_size': {
-      const m = text.match(/^(\d+)\s*(?:-|–|to)\s*(\d+)$/) ?? text.match(/^(\d+)\s*\+$/);
-      if (!m) return { ok: false, error: 'Use a range like 50-200, or 50+.' };
-      const value = m[2] ? { min: Number(m[1]), max: Number(m[2]) } : { min: Number(m[1]), max: null };
-      if (!valueMatchesType('number_range', value)) return { ok: false, error: 'The smaller number goes first.' };
-      payload = { kind: 'preference', category: 'icp', fact_key: 'icp.company_size', value_type: 'number_range', value, ...temp };
-      break;
+      const range = parseSizeRange(text);
+      if (!range && /^(\d+)\s*(?:-|–|to)\s*(\d+)$/.test(text)) return { ok: false, error: 'The smaller number goes first.' };
+      if (!range) return { ok: false, error: 'Use a range like 50-200, or 50+.' };
+      if (!valueMatchesType('number_range', range)) return { ok: false, error: 'The smaller number goes first.' };
+      item = companySizeItem(range.min, range.max); break;
     }
-    case 'content_tone': payload = { kind: 'preference', category: 'content', fact_key: 'content.tone', value_type: 'text', value: text, ...temp }; break;
-    case 'content_restriction': payload = { kind: 'preference', category: 'content', fact_key: `content.restrictions:${slug(text).slice(0, 60)}`, value_type: 'list', value: [text], ...temp }; break;
-    case 'sales_priority': payload = { kind: 'preference', category: 'sales_priority', fact_key: `priority.${slug(text).slice(0, 40)}`, value_type: 'text', value: text, ...temp }; break;
-    case 'goal': payload = { kind: 'fact', category: 'goals', fact_key: `goal.${slug(text).slice(0, 40)}`, value_type: 'text', value: text, ...temp }; break;
-    case 'product': payload = { kind: 'fact', category: 'products', fact_key: `product.${slug(text).slice(0, 40)}`, value_type: 'text', value: text }; break;
+    case 'content_tone': item = toneItem(text); break;
+    case 'content_restriction': item = restrictionItem(text); break;
+    case 'sales_priority': item = priorityItem(text); break;
+    case 'goal': item = goalItem(text); break;
+    case 'fact': item = factItem(text); break;
+    case 'product': return { ok: true, payload: { ...productItem(text) } };
   }
-  return { ok: true, payload };
+  return { ok: true, payload: { ...item, ...temp } };
+}
+
+/** "Record a business decision": a standing decision the whole team and every agent follow. */
+export function buildDecisionPayload(outcome: string, category: WorkspaceDecisionCategory, reason = ''):
+  { ok: true; payload: Record<string, unknown> } | { ok: false; error: string } {
+  const text = outcome.trim();
+  if (!text) return { ok: false, error: 'Say what was decided.' };
+  if (text.length > 500) return { ok: false, error: 'Keep it under 500 characters.' };
+  const item = decisionItem(text, category);
+  return { ok: true, payload: { category: item.category, fact_key: item.fact_key, value: item.value, ...(reason.trim() ? { reason: reason.trim().slice(0, 500) } : {}) } };
+}
+
+/** "Correct something Agentory got wrong": recorded as a correction that supersedes the old belief. */
+export function buildCorrectionPayload(wrong: string, right: string):
+  { ok: true; payload: Record<string, unknown> } | { ok: false; error: string } {
+  const w = wrong.trim(); const r = right.trim();
+  if (!w || !r) return { ok: false, error: 'Say what is wrong and what is right.' };
+  if (w.length > 300 || r.length > 500) return { ok: false, error: 'Keep it shorter.' };
+  if (w.toLowerCase() === r.toLowerCase()) return { ok: false, error: 'The correction is the same as what it replaces.' };
+  return { ok: true, payload: { ...correctionItem(w, r) } };
 }
 
 /** The payload that edits an existing item to a new text/list/range value (CAS on its version). */
@@ -301,3 +356,38 @@ export const AGENT_USE: Array<{ id: 'orion' | 'atlas' | 'lyra' | 'lisa'; name: s
   { id: 'lyra', name: 'Lyra', uses: 'Writes in your tone, respects your content restrictions, and only states company facts you have confirmed.' },
   { id: 'lisa', name: 'Lisa', uses: 'Watches your competitors and markets, judges relevance against your priorities, and suggests new knowledge for you to approve.' },
 ];
+
+/**
+ * B2.3: the value a person's edit of a proposal stands for, in the proposal's own
+ * shape: a decision keeps its outcome field, an exclusion its {type, value}, a
+ * competitor its name. (V1 always wrote `name`, which broke exclusions and decisions.)
+ */
+export function correctedProposalValue(p: Pick<MemoryProposal, 'value_type' | 'value'>, draft: string):
+  { ok: true; value: unknown } | { ok: false; error: string } {
+  const text = draft.trim();
+  if (!text) return { ok: false, error: 'Enter a value.' };
+  if (p.value_type === 'text') return { ok: true, value: text };
+  if (p.value_type === 'list') {
+    const list = text.split(',').map((x) => x.trim()).filter(Boolean);
+    return list.length ? { ok: true, value: list } : { ok: false, error: 'Enter at least one item.' };
+  }
+  if (p.value_type === 'number_range') {
+    const r = parseSizeRange(text);
+    return r ? { ok: true, value: r } : { ok: false, error: 'Use a range like 50-200, or 50+.' };
+  }
+  const o = (p.value && typeof p.value === 'object' ? p.value : {}) as Record<string, unknown>;
+  if (typeof o.outcome === 'string') return { ok: true, value: { ...o, outcome: text } };
+  if (typeof o.type === 'string' && 'value' in o) return { ok: true, value: { ...o, value: text } };
+  if (typeof o.right === 'string') return { ok: true, value: { ...o, right: text } };
+  return { ok: true, value: { ...o, name: text } };
+}
+
+/** The text a person edits for a proposal (the part that `correctedProposalValue` writes back). */
+export function editableProposalText(p: Pick<MemoryProposal, 'value_type' | 'value'>): string {
+  const o = (p.value && typeof p.value === 'object' && !Array.isArray(p.value) ? p.value : null) as Record<string, unknown> | null;
+  if (o && typeof o.outcome === 'string') return o.outcome;
+  if (o && typeof o.type === 'string' && typeof o.value === 'string') return o.value;
+  if (o && typeof o.right === 'string') return o.right;
+  if (o && typeof o.name === 'string') return o.name;
+  return formatValue(p.value_type, p.value).replace(/ employees$/, '').replace('–', '-');
+}
