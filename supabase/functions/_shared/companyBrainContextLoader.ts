@@ -381,7 +381,7 @@ export async function loadCompanyBrainContext(
 export const BRAIN_CONTEXT_VERSION = "bctx1";
 
 /**
- * Deterministic id of a served context: `bctx1-` + 16 hex chars (FNV-1a 64 over
+ * Deterministic id of a served context: `bctx1-` + 16 letters a–p (FNV-1a 64 over
  * a canonical, order-independent description). Not a security hash — an
  * identity for "same knowledge", recorded on what agents produce.
  */
@@ -397,5 +397,8 @@ export function brainContextId(input: {
     h ^= BigInt(byte);
     h = (h * 0x100000001b3n) & 0xffffffffffffffffn;
   }
-  return `${BRAIN_CONTEXT_VERSION}-${h.toString(16).padStart(16, "0")}`;
+  // Letters only (hex digit d → 'a'+d): an id stored beside signals and drafts must never
+  // contain a digit run that a contact-data guard reads as a phone number.
+  const hex = h.toString(16).padStart(16, "0");
+  return `${BRAIN_CONTEXT_VERSION}-${[...hex].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join("")}`;
 }

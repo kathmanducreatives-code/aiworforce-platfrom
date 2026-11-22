@@ -8,7 +8,7 @@ const base = { workspace_id: "w1", brain_updated_at: "2026-11-22T00:00:00Z", onb
 
 Deno.test("B2.4: the context id is versioned, deterministic and order-independent", () => {
   const id = brainContextId(base);
-  assert(/^bctx1-[0-9a-f]{16}$/.test(id), id);
+  assert(/^bctx1-[a-p]{16}$/.test(id), id);
   assertEquals(brainContextId({ ...base, served: ["b@2", "a@1"] }), id);
   assertEquals(brainContextId(base), id);
 });
@@ -66,4 +66,16 @@ Deno.test("B2.4: consumers record the stamp — radar, monitoring, the brief, LY
   assert((await read("run-agent/index.ts")).includes("brain_context_id: lyraBrainContextId,"));
   assert((await read("_shared/lisa/relevance.ts")).includes("brain_context_id: brain?.context_id ?? null"));
   assert(((await read("pilot-chat/index.ts")).match(/brain_context_id: chatBrain\.shared\?\.context_id \?\? null/g) ?? []).length >= 4);
+});
+
+Deno.test("B2.4: the id never contains digits beyond its version, so no contact-data guard can mistake it for a phone number", async () => {
+  const { containsContactData } = await import("../../../supabase/functions/_shared/lisa/persistence.ts");
+  // The bug this pins: a hex id can carry a digit run the guard reads as a phone number,
+  // and LISA then refused to store the signal ("sanitization_rejected").
+  assertEquals(containsContactData({ relevance: { brain_context_id: "bctx1-8070238491234567" } }), true, "the old hex form could trip the guard");
+  for (let i = 0; i < 500; i++) {
+    const id = brainContextId({ ...base, brain_updated_at: `2026-11-22T00:00:${String(i % 60).padStart(2, "0")}.${i}Z` });
+    assert(/^bctx1-[a-p]{16}$/.test(id), id);
+    assertEquals(containsContactData({ relevance: { brain_context_id: id } }), false, id);
+  }
 });

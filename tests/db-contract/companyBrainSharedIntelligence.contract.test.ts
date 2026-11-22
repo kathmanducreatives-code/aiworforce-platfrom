@@ -95,7 +95,7 @@ Deno.test("B2.4: an approved preference reaches every agent it is meant for, fro
 
   // ONE Brain: every consumer, each from its own load, was given the same context.
   assertEquals(new Set(v.ids).size, 1, JSON.stringify(v.ids));
-  assert(/^bctx1-[0-9a-f]{16}$/.test(v.ids[0]));
+  assert(/^bctx1-[a-p]{16}$/.test(v.ids[0]));
   assertEquals(v.stamp, { agent: "lisa", brain_context_id: v.ids[0], brain_fingerprint: v.stamp.brain_fingerprint, brain_status: "incomplete" }); // the fixture is not a complete Brain
 
   // The exclusion ORION was told and a person approved: ORION, LYRA and LISA all honour it.
