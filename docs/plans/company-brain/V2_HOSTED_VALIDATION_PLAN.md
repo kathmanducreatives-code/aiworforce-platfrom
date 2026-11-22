@@ -133,7 +133,46 @@ Redeploying the Brain functions would therefore put this ATLAS code into product
 - LYRA keeps working on the current bundle; it only lacks the B2.4 stamp.
 - `run-agent` ships with the ATLAS release.
 
-A coordination message went to the ATLAS session ("Agentory lead discovery development") on 2026-11-22. **No reply yet.**
+A coordination message went to the ATLAS session ("Agentory lead discovery development") on 2026-11-22. It received the message and began checking ATLAS TEST, then stopped at a permission prompt. **No reply yet.** The independent verdict is below.
+
+### Coordination verdict (2026-11-22, read-only evidence)
+
+**ATLAS TEST transfer window: safe now, with one precondition.**
+- No GitHub run is in progress or queued.
+- The queue has no open items (last change 2026-10-30) and there are no open tasks.
+- The last model call was the 08:22 smoke run.
+- `discovery-test-worker` and `plan-test-strategy` run on manual dispatch only.
+- The two in-database cron jobs (`sweep-stuck-runs`, `release-stale-credit-reservations`) move with the project.
+- Only "TEST deploy" can start on its own: it follows CI on every `launch/hardening` push. **The window is any time without a push to `launch/hardening`.**
+- **Precondition:** the ATLAS session is disconnected and waiting on a permission prompt for a read-only SQL query against ATLAS TEST. The owner should answer it, so the session doesn't resume mid-transfer.
+
+**Mission Contract: the Brain release can include the newer contract code, under two conditions.**
+
+The bundled changes since production pilot-chat (`2a0438bb`) are `9656073e` and `adc69510`, plus `262fb3e7`, which is flag-gated and defaults to off.
+- **What changed:** an optional `operations` field, a new `implied` duplicate kind, and a stricter `empty_mission` check. The schema and instructions of the GPT V4 interpreter also changed.
+- **Old and new readers agree on approvals.** The approval hash spreads every contract field (`hashedView`), so production's older lead engine (`run-agent` v275, `lead-pipeline`) hashes a contract exactly as the new code does. The new fields are optional and absent from v1-converted contracts, so old readers ignore nothing they would have needed.
+- **Production runs with the V4 flags off.**
+  - Messages in the last 30 days: 0 shadow cards, 0 V4 cards, 1 card carrying a v1 contract binding.
+  - With `AGENTORY_CHAT_CONTRACT_V4` and `_SHADOW` unset, pilot-chat returns the **v1 mission unchanged** plus its binding stamp (`chatIntegration.contractForCard`).
+  - The GPT interpreter, where most of the change sits, is never called.
+  - The stricter check applies only to missions that already carry a V4 contract, which production does not create.
+- **Other Brain functions:**
+  - `generate-company-brain-draft`, `setup-company-brain`, `daily-brief`, `run-radar-scan` and `run-monitoring-scan` reach the contract only as a deep transitive import (through `missionContract/authority.ts`), and create or approve no mission.
+  - `company-brain-memory` does not import it.
+- **TEST has already run this code** (`784b8829`), and the smoke run passed with "contract mission-contract-v1; criteria frozen".
+- **Conditions:**
+  1. **Before the deploy,** check the production secret *names*: `AGENTORY_CHAT_CONTRACT_V4` and `AGENTORY_CHAT_CONTRACT_V4_SHADOW` must be absent, and `AGENTORY_CHAT_CONTRACT_BINDING` must not be `enforce`.
+  2. **The ATLAS owner acknowledges** that the change reaches production pilot-chat in its dormant state. Turning it on remains the ATLAS rollout's own staged decision (mission-contract-rollout.md §7).
+
+If either condition is not met, the Brain release follows the ATLAS production release.
+
+**`run-agent`: remains excluded** from the initial Brain release. Its 41 bundle commits since v275 are ATLAS lead-engine changes, and B2.4 only adds a stamp there.
+
+**A finding outside the Brain release (production, pre-existing).** The production alarm ("Ops health") has failed on all of its last 100 runs:
+- `CRITICAL queue_unclaimed`: one mission has waited about 58,000 minutes (about 40 days).
+- `CRITICAL worker_unhealthy`: the worker's `/health` returns HTTP 404.
+
+The last Railway production deploy was 2026-10-12. This is the ATLAS/worker owner's to triage. It does not block the Brain release, but production lead missions started from chat would not be processed until it is fixed.
 
 ## 6. Hosted Brain TEST acceptance
 
