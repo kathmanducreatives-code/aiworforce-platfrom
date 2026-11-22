@@ -408,9 +408,17 @@ function useScrollEdges<T extends HTMLElement>(selected: string) {
     ro?.observe(el);
     return () => { el.removeEventListener('scroll', update); ro?.disconnect(); };
   }, []);
+  // Bring the active tab into view INSIDE the strip only. scrollIntoView would also
+  // scroll the page (and every scrolling ancestor) to the tabs — since Company Brain
+  // V2's readiness panel sits above them, that jumped the page down on load.
   useEffect(() => {
-    const active = ref.current?.querySelector<HTMLElement>('[data-state="active"]');
-    active?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    const el = ref.current;
+    const active = el?.querySelector<HTMLElement>('[data-state="active"]');
+    if (!el || !active) return;
+    const left = active.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft;
+    const right = left + active.getBoundingClientRect().width;
+    if (left < el.scrollLeft) el.scrollLeft = left;
+    else if (right > el.scrollLeft + el.clientWidth) el.scrollLeft = right - el.clientWidth;
   }, [selected]);
   return { ref, edges };
 }
