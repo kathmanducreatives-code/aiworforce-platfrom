@@ -34,9 +34,10 @@ import type { EvidenceItem } from "../candidateObservation.ts";
 import type { Eligibility } from "../candidateEligibility.ts";
 import { classifyDecisionMakerRole } from "../decisionMaker/roleFamily.ts";
 import { ledgeredInvoker } from "./apifyInvoker.ts";
+import { asyncLedgeredInvoker, type ApifyTransport, type RunCharge, type RunLedger } from "./apifyRuns.ts";
 import { canonicalDomain, collapseDuplicateLeads, type MergedLead } from "./identity.ts";
 import { apifyPageFetcher, checkBusinessModels, type BusinessModelFinding, type Grounder } from "./businessModelCheck.ts";
-import { COMPANY_EMPLOYEES_ACTOR_KEY, companyEmployeesInput, discoverHiringCompanies, discoverPostingCompanies, peopleFromEmployeeRows, slugOf } from "./apifyDiscovery.ts";
+import { COMPANY_EMPLOYEES_ACTOR_KEY, companyEmployeesInput, discoverFirmographicCompanies, discoverHiringCompanies, discoverPostingCompanies, peopleFromEmployeeRows, slugOf } from "./apifyDiscovery.ts";
 import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
 import type { Signal } from "./signals.ts";
 import { COMPANY_RECORD_ACTOR, readCompanyRecordsCached } from "./canonical.ts";
@@ -47,9 +48,10 @@ import { NON_DECISION_TITLES } from "./icp.ts";
 import { bestContact, personVerification, runLeadPipeline, PIPELINE_VERSION, type PipelineLead, type PipelineRun } from "./pipeline.ts";
 import { DEFAULT_WEIGHTS, rankLeads } from "./ranking.ts";
 import {
-  APOLLO_ACCESS_VALIDATED, DISCOVERY_CAPABILITIES, discoveryJobTitles, icpFromSpec, postTopics, sizePreferenceDistance, leadoceanDiscoveryRequirements,
+  APOLLO_ACCESS_VALIDATED, companySearchInput, DISCOVERY_CAPABILITIES, discoveryJobTitles, icpFromSpec, postTopics, sizePreferenceDistance, leadoceanDiscoveryRequirements,
   type DiscoverySpec, type DiscoveryStrategyId, type Limitation, type StrategyPlan,
 } from "./strategy.ts";
+import { rethrowPending } from "./runErrors.ts";
 
 export const STRATEGY_RUN_VERSION = "discovery-strategy-run-v1" as const;
 
@@ -83,6 +85,12 @@ export interface StrategyRunInput {
   groundBusinessModel?: Grounder | null;
   /** The plan's hash-bound permission to count likely business-model matches (strategy.ts `acceptLikely`). */
   acceptLikely?: boolean;
+  /**
+   * Asynchronous Apify runs (V5 Phase C, apifyRuns.ts): start → record the run id → poll →
+   * receipt. When present it replaces the synchronous invoker for every Apify step; a run that
+   * outlives `deadlineMs` throws RunPending, and the next request with the same plan adopts it.
+   */
+  apifyRuns?: { transport: ApifyTransport; ledger: RunLedger; deadlineMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void> } | null;
 }
 
 export interface ProviderStepOutcome {
@@ -113,6 +121,8 @@ export interface StrategyRun {
   contactValues: [];
   /** The LeadOcean-led path's full pipeline run (funnel, checkpoint, yield), when it ran. */
   pipeline: Pick<PipelineRun, "funnel" | "checkpoint" | "yield" | "discovery" | "canonical"> | null;
+  /** Every Apify run's charge and how sure it is (async runs only; absent on the sync path). */
+  charges?: RunCharge[];
 }
 
 const r6 = (n: number) => Math.round(n * 1e6) / 1e6;
@@ -152,11 +162,12 @@ export async function runDiscoveryStrategy(input: StrategyRunInput): Promise<Str
   const a = input.approval!;
   // The server's estimate is the ceiling: an approval naming more never raises it.
   const cap = { leadoceanRecords: Math.min(a.leadoceanRecords, plan.estimate.leadoceanRecords), apifyUsd: Math.min(a.apifyUsd, plan.estimate.apifyUsd) };
+  const chargesOut: { current: RunCharge[] | null } = { current: null };
   const run = plan.strategy === "leadocean_only" || plan.strategy === "leadocean_plus_apify" ? await runLeadOceanLed(input, cap, now)
-    : plan.strategy === "apify_only" || plan.strategy === "apify_plus_leadocean" || plan.strategy === "apify_leadocean_concurrent" ? await runApifyLed(input, cap, now)
+    : plan.strategy === "apify_only" || plan.strategy === "apify_plus_leadocean" || plan.strategy === "apify_leadocean_concurrent" ? await runApifyLed(input, cap, now, chargesOut)
     : null;
   if (!run) return blocked(`strategy ${plan.strategy} has no executor`);
-  return withOneLeadPerCompany(run);
+  return { ...withOneLeadPerCompany(run), ...(chargesOut.current ? { charges: chargesOut.current } : {}) };
 }
 
 /** One company, one lead (identity.ts): collapse across every lane, then re-file by the kept verdict. */
@@ -252,14 +263,18 @@ async function leadOceanConcurrentDiscovery(input: StrategyRunInput, step: Strat
 
 // ── Apify-led: discover by an open role ─────────────────────────────────────
 
-async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: number; apifyUsd: number }, now: () => Date): Promise<StrategyRun> {
+async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: number; apifyUsd: number }, now: () => Date, chargesOut: { current: RunCharge[] | null }): Promise<StrategyRun> {
   const { plan, spec } = input;
   const at = now().toISOString();
   const mission = `ms:${input.walkId}:${plan.planHash}`;
   const steps: ProviderStepOutcome[] = [];
   const timed = withTimeout(input.apify, input.actorTimeoutMs ?? 120_000);
   // Every Apify run reserves its worst case in the durable ledger first: a re-run replays, an uncertain charge is never re-bought.
-  const apify = timed ? ledgeredInvoker(timed, input.ledger, { workspaceId: input.workspaceId, missionId: `${mission}:apify`, maxUsd: cap.apifyUsd }) : null;
+  const ar = input.apifyRuns;
+  const runs = ar ? asyncLedgeredInvoker(ar.transport, ar.ledger, { workspaceId: input.workspaceId, missionId: `${mission}:apify`, maxUsd: cap.apifyUsd },
+    { deadlineMs: ar.deadlineMs, now: ar.now, sleep: ar.sleep }) : null;
+  const apify = runs ?? (timed ? ledgeredInvoker(timed, input.ledger, { workspaceId: input.workspaceId, missionId: `${mission}:apify`, maxUsd: cap.apifyUsd }) : null);
+  chargesOut.current = runs?.charges ?? null;
 
   // 1 discovery by the defining signal: open roles (job search) or posts on a topic (post search)
   const jobStep = plan.steps[0];
@@ -267,9 +282,12 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   const postActor = PIPELINE_ACTORS["apify_linkedin_post_search"];
   const apifyDiscovery = async (): Promise<Awaited<ReturnType<typeof discoverHiringCompanies>> & { signals?: Signal[] }> =>
     jobStep.capability === "apify.linkedin_job_search"
-      ? await discoverHiringCompanies(spec, discoveryJobTitles(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission })
+      ? await discoverHiringCompanies(spec, discoveryJobTitles(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission, input: jobStep.input ?? null })
       : jobStep.capability === "apify.linkedin_post_search" && postActor
       ? await discoverPostingCompanies(spec, postTopics(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission, perItemUsd: postActor.perItemUsd, perStartUsd: postActor.perStartUsd })
+      // Company-first: the SAME input the signed plan priced (strategy.companySearchInput).
+      : jobStep.capability === "apify.linkedin_company_search"
+      ? await discoverFirmographicCompanies((jobStep.input as never) ?? companySearchInput(spec, jobStep.maxItems).input, apify, { maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission })
       : { companies: [], evidence: new Map(), jobs: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: `no executor for ${jobStep.capability}`, runId: null };
   // CONCURRENT (apify_leadocean_concurrent): LeadOcean searches the SAME mission at the same
   // time, by the filters it can express (never the hiring signal, which only Apify proves).
@@ -279,6 +297,8 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
     apifyDiscovery(),
     loStep ? leadOceanConcurrentDiscovery(input, loStep, cap, mission) : Promise.resolve(null),
   ]);
+  // A discovery run still going at Apify (Phase C) is not a failure: the request answers 202.
+  if (apifySettled.status === "rejected") rethrowPending(apifySettled.reason);
   const found: Awaited<ReturnType<typeof apifyDiscovery>> = apifySettled.status === "fulfilled" ? apifySettled.value
     : { companies: [], evidence: new Map(), jobs: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: `${(apifySettled.reason as Error)?.message ?? "failed"}; not retried`, runId: null };
   steps.push({ capability: jobStep.capability, provider: "apify", status: found.stopped ? "failed" : "completed",
@@ -372,6 +392,7 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
       apifySpent += spent;
       steps.push({ capability: peopleStep.capability, provider: "apify", status: run ? "completed" : "skipped", reason: run ? null : "no company to look up", spend: { leadoceanRecords: 0, apifyUsd: r6(spent) } });
     } catch (e) {
+      rethrowPending(e);
       apifySpent += peopleStep.estimate.apifyUsd;
       steps.push({ capability: peopleStep.capability, provider: "apify", status: "failed", reason: `${(e as Error)?.message ?? "failed"}; not retried`, spend: { leadoceanRecords: 0, apifyUsd: peopleStep.estimate.apifyUsd } });
     }

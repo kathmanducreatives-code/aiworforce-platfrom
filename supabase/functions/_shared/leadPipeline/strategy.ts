@@ -37,7 +37,11 @@ import { criteriaOf, signalAlternativesOf } from "../missionCriteriaReader.ts";
 import { COMPANY_RECORD_ACTOR } from "./canonical.ts";
 import { configureIcp, ICP_A, NON_DECISION_TITLES, type IcpConfig } from "./icp.ts";
 import { SIGNAL_ACTORS, worstCaseUsd } from "./signals.ts";
-import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
+import { COMPANY_SEARCH_ACTOR, PIPELINE_ACTORS } from "./apifyInvoker.ts";
+import { jobDiscoveryInput } from "./apifyDiscovery.ts";
+import { reviewedBuild } from "./actorBuilds.ts";
+import { compileHarvestCompanySearchInput, type HarvestCompanySearchInput } from "../hiringActorInputs.ts";
+import { companySizeBandsFor, industryIdsForVertical } from "../icpDiscoveryConstraints.ts";
 
 import { resolveRequirementRoutes, uncheckedQuestion, uncheckedRequired, type ProofDimension, type RequirementRoute } from "./capabilityResolution.ts";
 
@@ -107,6 +111,12 @@ export interface DiscoveryCapability {
  * (`PIPELINE_ACTORS`, which also prices it and caps maxItems at 100). The registry
  * never widens that list: adding an actor is a reviewed change to apifyInvoker.ts.
  */
+/** The reviewed Apify build a capability's Actor runs (`${actorId}@${build}`), or null. */
+export const buildOf = (capabilityId: string): string | null => {
+  const k = DISCOVERY_CAPABILITIES[capabilityId]?.actorKey;
+  const b = k ? reviewedBuild(k) : null;
+  return b ? `${b.actorId}@${b.build}` : null;
+};
 export const actorStatus = (key: string): CapabilityStatus => (Object.hasOwn(PIPELINE_ACTORS, key) ? "available" : "not_approved");
 
 /** Apollo People Search returned HTTP 403 (API_INACCESSIBLE) on 2026-10-30. Flipping this is a reviewed change after a validated, approved check. */
@@ -131,6 +141,13 @@ export const DISCOVERY_CAPABILITIES: Readonly<Record<string, DiscoveryCapability
     cost: { unit: "usd", perItem: SIGNAL_ACTORS.jobs.perItemUsd, perStart: SIGNAL_ACTORS.jobs.perStartUsd },
     actorKey: SIGNAL_ACTORS.jobs.key,
     note: "employers with a dated open role; titles are fuzzy, so every posting is post-filtered; agency postings dropped",
+  },
+  "apify.linkedin_company_search": {
+    id: "apify.linkedin_company_search", provider: "apify", role: "discover_companies", status: actorStatus(COMPANY_SEARCH_ACTOR.key),
+    filters: ["geography", "employee_range", "industry"], discoversBySignal: null, claims: [], proves: ["identity"],
+    cost: { unit: "usd", perItem: COMPANY_SEARCH_ACTOR.perItemUsd, perStart: COMPANY_SEARCH_ACTOR.perStartUsd },
+    actorKey: COMPANY_SEARCH_ACTOR.key,
+    note: "harvestapi/linkedin-company-search, short mode ($0.002/company + $0.001/run): CANDIDATES by LinkedIn industry, declared size band and location filters — input compiled by V2's compileHarvestCompanySearchInput (never a concept in the name index); industry and size are claims the company record and website re-check. Used only with LEAD_PIPELINE_COMPANY_SEARCH",
   },
   "apify.linkedin_company_record": {
     id: "apify.linkedin_company_record", provider: "apify", role: "verify_company", status: "available",
@@ -195,11 +212,16 @@ export const DISCOVERY_CAPABILITIES: Readonly<Record<string, DiscoveryCapability
  * posts on a topic → post search. Companies are verified BEFORE their people are
  * bought, so no record is spent on a disproven company.
  */
-export function chainFor(strategy: DiscoveryStrategyId, spec: DiscoverySpec): readonly string[] {
+export function chainFor(strategy: DiscoveryStrategyId, spec: DiscoverySpec, opts: { companySearch?: boolean } = {}): readonly string[] {
   const kinds = new Set(spec.signals.map((x) => x.kind));
+  // COMPANY-FIRST, ONLY BEHIND ITS FLAG: with no hiring or post signal, a request defined by
+  // industry / size / location is discovered by company search. Off, it falls through to job
+  // search exactly as before — which `judge` refuses ("names no hiring signal").
+  const companyFirst = !!opts.companySearch && !spec.wantsPeople && (spec.industry.length > 0 || spec.geography.length > 0 || !!spec.employees);
   const seed = kinds.has("hiring") ? "apify.linkedin_job_search"
     : kinds.has("social_activity") ? "apify.linkedin_post_search"
     : spec.wantsPeople && strategy === "apify_only" ? "apify.people_search"
+    : companyFirst ? "apify.linkedin_company_search"
     : "apify.linkedin_job_search";
   const rec = "apify.linkedin_company_record";
   // A REQUIRED business model is checked on the company's own pages, after its record.
@@ -395,6 +417,8 @@ export interface StrategyContext {
   peoplePerCompany?: number;
   /** The website grounding model is configured: business-model verification can run. */
   businessModelGrounding?: boolean;
+  /** LEAD_PIPELINE_COMPANY_SEARCH: company-first discovery may seed a chain with no signal. Off by default. */
+  companySearch?: boolean;
   /** Who the plan is for and under which interpretation contract: bound into the plan hash. */
   binding?: { workspaceId: string; contractVersion: string };
 }
@@ -414,6 +438,14 @@ export interface StrategyStep {
   maxItems: number;
   estimate: { leadoceanRecords: number; apifyUsd: number };
   why: string;
+  /**
+   * The EXACT Actor input this step will send, when it can be known at plan time (discovery
+   * steps). It is in the plan hash, so the signed approval binds it; the executor sends it
+   * verbatim. Verification steps' inputs depend on what discovery finds and are bound by
+   * their capability, actor and maxItems instead.
+   */
+  actor?: string;
+  input?: Record<string, unknown>;
 }
 
 export interface StrategyCandidate {
@@ -490,6 +522,31 @@ function access(ctx: StrategyContext, p: ProviderId): string | null {
   return null;
 }
 
+/**
+ * The company-search input for a spec: V2's compiler (`compileHarvestCompanySearchInput`)
+ * over the REQUIRED location, industry and size only (preferences never filter). Industry
+ * ids come from the reviewed taxonomy bridge; a required industry with none is returned in
+ * `unmappedIndustries` (the planner refuses rather than search wider). No `searchQuery` is
+ * ever set: it is a company-NAME index, and a concept phrase is a paid empty run.
+ */
+export function companySearchInput(spec: DiscoverySpec, maxItems: number) {
+  const ids = new Set<string>();
+  const unmappedIndustries: string[] = [];
+  for (const v of spec.industry) {
+    const found = industryIdsForVertical(String(v));
+    if (found.length) for (const id of found) ids.add(id);
+    else unmappedIndustries.push(String(v));
+  }
+  const bands = companySizeBandsFor(spec.employees);
+  const input: HarvestCompanySearchInput = {
+    scraperMode: "short", maxItems,
+    ...(spec.geography.length ? { locations: spec.geography.map(String) } : {}),
+    ...(ids.size ? { industryIds: [...ids] } : {}),
+    ...(bands.length ? { companySize: bands } : {}),
+  };
+  return { input, compiled: compileHarvestCompanySearchInput(input), unmappedIndustries };
+}
+
 /** The job-search titles for the request's hiring signal (≤3, the catalogued discovery limit). */
 export function hiringTitles(spec: DiscoverySpec): string[] {
   const s = spec.signals.find((x) => x.kind === "hiring");
@@ -515,7 +572,8 @@ export function hiringTitles(spec: DiscoverySpec): string[] {
 export function discoveryJobTitles(spec: DiscoverySpec): string[] {
   const base = hiringTitles(spec);
   const small = spec.preferredEmployees?.max != null && spec.preferredEmployees.max <= 500;
-  if (!small || !base.length || base.some((t) => /\bfounding\b/i.test(t))) return base;
+  // No "Founding Sales": the founding variant applies to a named TITLE, not a family search.
+  if (!small || !base.length || base.some((t) => /\bfounding\b/i.test(t)) || hiringFunctions(spec).length) return base;
   return [`Founding ${base[0].replace(/s$/i, "")}`, ...base].slice(0, 3);
 }
 
@@ -523,8 +581,29 @@ export function discoveryJobTitles(spec: DiscoverySpec): string[] {
 export function postTopics(spec: DiscoverySpec): string[] {
   return (spec.signals.find((x) => x.kind === "social_activity")?.topics ?? []).slice(0, 3);
 }
-/** Job-search titles for a role family the user named only as a family ("salespeople"). Fuzzy search input only; postings are post-filtered. */
-const FAMILY_TITLES: Record<string, string> = { gtm_sales: "Account Executive", sales_operations: "Sales Operations", marketing_growth: "Marketing Manager", growth: "Growth Manager", customer_success: "Customer Success Manager", engineering: "Software Engineer", finance: "Finance Manager", ops: "Operations Manager" };
+/**
+ * A role FAMILY the user named only as a family ("expanding their sales teams", "salespeople")
+ * is searched as the FAMILY, never as one stand-in title (V5 validation 2026-11-20, case 2:
+ * "sales teams" became `jobTitles: ["Account Executive"]`). The search query is the family's
+ * broad word, narrowed by LinkedIn's job-FUNCTION filter (`functionIds`, an enum in the
+ * job-search Actor's input schema, build 0.0.62). Postings are still post-filtered to the family.
+ */
+const FAMILY_QUERY: Record<string, string> = { gtm_sales: "Sales", sales_operations: "Sales Operations", marketing_growth: "Marketing", growth: "Growth", customer_success: "Customer Success", engineering: "Engineer", finance: "Finance", ops: "Operations" };
+/** LinkedIn job-function codes per family (job-search `functionIds` enum). A family with no clean code gets none (no filter, never a wrong one). */
+export const FAMILY_FUNCTIONS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  gtm_sales: ["sale", "bd"], sales_operations: ["sale"], marketing_growth: ["mrkt"], growth: ["mrkt", "bd"],
+  customer_success: ["cust"], engineering: ["eng", "it"], finance: ["fin", "acct"],
+});
+const FAMILY_TITLES = FAMILY_QUERY;
+
+/** The job-function filter for a hiring signal named only as a family (no real job title stated); [] otherwise. */
+export function hiringFunctions(spec: DiscoverySpec): string[] {
+  const s = spec.signals.find((x) => x.kind === "hiring");
+  if (!s || !s.roleFamilies.length) return [];
+  const named = hiringTitles(spec);
+  const familyOnly = named.every((t) => Object.values(FAMILY_QUERY).includes(t));
+  return familyOnly ? [...new Set(s.roleFamilies.flatMap((f) => FAMILY_FUNCTIONS[f] ?? []))] : [];
+}
 
 function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: StrategyContext): StrategyCandidate {
   const refusals: string[] = [];
@@ -532,7 +611,7 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   const rationale: string[] = [];
   // Business-model verification reads pages with the shared grounded classifier: without the
   // model the step is not in the chain, so the requirement routes to not_checkable (a question).
-  const chain = chainFor(strategy, spec).map((id) => DISCOVERY_CAPABILITIES[id])
+  const chain = chainFor(strategy, spec, { companySearch: ctx.companySearch }).map((id) => DISCOVERY_CAPABILITIES[id])
     .filter((c) => c.id !== "apify.website_business_model" || ctx.businessModelGrounding === true);
   const n = spec.requestedCount;
 
@@ -556,6 +635,17 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   }
   if (discover.discoversBySignal === "hiring" && hiring && !hiringTitles(spec).length) refusals.push("the hiring signal names no role to search postings for");
   if (discover.discoversBySignal === "social_activity" && !postTopics(spec).length) refusals.push("the post signal names no topic to search posts for");
+  // COMPANY SEARCH NEVER BROADENS SILENTLY. Every REQUIRED industry must narrow the search
+  // through a reviewed LinkedIn code (icpDiscoveryConstraints.industryIdsForVertical); one
+  // with no code would make the search wider than the request, so the plan is refused, by
+  // name. The input is compiled by V2's own compiler, whose refusals (unbounded search, bad
+  // size band, too many ids, a concept in the name index) are refusals here.
+  if (discover.id === "apify.linkedin_company_search") {
+    const cs = companySearchInput(spec, 1);
+    if (cs.unmappedIndustries.length) refusals.push(`company search cannot narrow by industry ${cs.unmappedIndustries.map((v) => `"${v}"`).join(", ")}: no reviewed LinkedIn industry code — searching without it would be broader than the request`);
+    if (!cs.compiled.ok) refusals.push(`company search input refused: ${cs.compiled.errors.join("; ")}`);
+    limitations.push({ code: "fuzzy_source", detail: "company-search rows are CANDIDATES: the LinkedIn industry label and size band are claims; headquarters and size are re-read from each company record" });
+  }
 
   // 3 what can be PROVED (the shared engine decides; this predicts honestly)
   const proves = new Set(chain.flatMap((c) => c.proves));
@@ -642,12 +732,19 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
         companies = out.some((x) => x.role === "discover_companies") ? companies + max : max;
         out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: price(max), why: "people and employers matching roles, geography, size and industry labels (narrowing only)" });
       } else if (c.role === "discover_companies") {
-        const max = Math.max(1, Math.min(100, cap * JOB_ROWS_PER_COMPANY));
-        companies = Math.ceil(max / JOB_ROWS_PER_COMPANY);
-        const why = c.discoversBySignal === "social_activity"
+        // A company-search row IS a company; a job-search row is one posting (≈2 per employer).
+        const rowsPer = c.id === "apify.linkedin_company_search" ? 1 : JOB_ROWS_PER_COMPANY;
+        const max = Math.max(1, Math.min(100, cap * rowsPer));
+        companies = Math.ceil(max / rowsPer);
+        const cs = c.id === "apify.linkedin_company_search" ? companySearchInput(spec, max) : null;
+        const why = cs
+          ? `company candidates by LinkedIn filters ${JSON.stringify({ locations: cs.input.locations ?? [], industryIds: cs.input.industryIds ?? [], companySize: cs.input.companySize ?? [] })} (short mode; claims, re-checked by the record)`
+          : c.discoversBySignal === "social_activity"
           ? `companies posting about ${postTopics(spec).join(" / ") || "the topic"}${defining?.windowDays ? ` in the last ${defining.windowDays} days` : ""} (company-page authors only)`
           : `employers with an open ${hiringTitles(spec).join(" / ") || "role"} posting${hiring?.windowDays ? ` in the last ${hiring.windowDays} days` : ""}${discoveryJobTitles(spec).length > hiringTitles(spec).length ? ` (search also uses "${discoveryJobTitles(spec)[0]}" for the stated smaller-company preference; search bias only)` : ""}`;
-        out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: price(max), why });
+        const input = cs ? cs.input as unknown as Record<string, unknown>
+          : c.id === "apify.linkedin_job_search" ? jobDiscoveryInput(spec, discoveryJobTitles(spec), max, hiringFunctions(spec)) : undefined;
+        out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: price(max), why, ...(c.actorKey ? { actor: c.actorKey } : {}), ...(input ? { input } : {}) });
       } else if (c.role === "people_at_companies") {
         const max = Math.max(0, Math.min(companies * peoplePer, itemCap));
         out.push({ capability: c.id, provider: c.provider, role: c.role, maxItems: max, estimate: price(max), why: `${spec.roles.join(" / ") || "decision-makers"} at the discovered companies, by ${lo ? "exact domain" : "LinkedIn company page"}` });
@@ -786,7 +883,12 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
   const body = {
     v: STRATEGY_PLANNER_VERSION, workspace: ctx.binding?.workspaceId ?? null, contract: ctx.binding?.contractVersion ?? null,
     meaning, strategy: chosen?.strategy ?? null,
-    steps: (chosen?.steps ?? []).map((x) => ({ capability: x.capability, provider: x.provider, role: x.role, maxItems: x.maxItems, estimate: x.estimate })),
+    // Actor and EXACT input are bound (V5 Phase B): a different input at run time is a different hash.
+    steps: (chosen?.steps ?? []).map((x) => ({ capability: x.capability, provider: x.provider, role: x.role, maxItems: x.maxItems, estimate: x.estimate,
+      ...(x.actor ? { actor: x.actor } : {}), ...(x.input ? { input: x.input } : {}),
+      // ...and the reviewed BUILD of every Apify step's Actor (V5 Phase C, actorBuilds.ts): a new
+      // reviewed build is a new plan, so an approval never covers an unreviewed Actor version.
+      ...(buildOf(x.capability) ? { build: buildOf(x.capability) } : {}) })),
     limitations: (chosen?.limitations ?? []).map((l) => ({ code: l.code, detail: l.detail })), estimate: chosen?.estimate ?? null,
     routes: (chosen?.requirementRoutes ?? []).map((r) => ({ id: r.criterionId, route: r.route, by: [...r.checkedBy].sort() })),
     ceilings: { maxLeadoceanRecords: ctx.budget.maxLeadoceanRecords, maxApifyUsd: ctx.budget.maxApifyUsd },

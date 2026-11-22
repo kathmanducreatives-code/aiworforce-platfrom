@@ -24,6 +24,7 @@
 
 import { AUDIENCE_PERMIT_RE, AUDIENCE_REQUIRE_RE, audienceDescriptor, audienceIntent } from "../missionCriteria.ts";
 import { coverageQuestions, explicitCues, redundantUnsupported, spanAlreadyEnforced } from "./coverage.ts";
+import { type CompanyStatus, meaningUnits, OPERATION_APPLIED_BY, operationsOnly, type PipelineOperation } from "./semanticClasses.ts";
 
 const AUDIENCE_NEGATION_RE = /\b(?:exclude[sd]?|excluding|no|not|non|without|except|avoid|never|other\s+than)\b/i;
 import { DEFAULT_SIGNAL_WINDOWS, type CanonicalSignalKind } from "../signalKinds.ts";
@@ -34,7 +35,7 @@ import {
   validateUnderstanding,
 } from "../missionUnderstanding.ts";
 import {
-  assumptionsOf, isExecutable, type MergedDuplicate, type MissionContract, MISSION_CONTRACT_VERSION, type Necessity, type Origin, type Requirement, type SignalWindow,
+  assumptionsOf, type ContractOperation, isExecutable, type MergedDuplicate, type MissionContract, MISSION_CONTRACT_VERSION, type Necessity, type Origin, type Requirement, type SignalWindow,
 } from "./contract.ts";
 
 export const CONTRACT_INTERPRETER_VERSION = "gpt-contract-v4" as const;
@@ -43,10 +44,11 @@ export const CONTRACT_INTERPRETER_VERSION = "gpt-contract-v4" as const;
 export const BROADENING_DIMENSIONS = ["geography", "industry", "business_model", "stage", "size", "role", "recency"] as const;
 
 /** The ONE schema the model answers (OpenAI strict mode: every key required, closed enums). */
+const OP_SPAN = { type: "string" as const, description: "The user's own words, copied exactly as written." };
 export const GPT_CONTRACT_SCHEMA_V4 = Object.freeze({
   type: "object" as const,
   additionalProperties: false,
-  required: ["understanding", "signal_windows", "deliverable", "company_size", "funding_stages", "forbid_broadening"],
+  required: ["understanding", "signal_windows", "deliverable", "company_size", "funding_stages", "forbid_broadening", "operations", "company_status"],
   properties: {
     understanding: UNDERSTANDING_SCHEMA,
     signal_windows: SIGNAL_WINDOWS_PROPERTY,
@@ -79,6 +81,22 @@ export const GPT_CONTRACT_SCHEMA_V4 = Object.freeze({
       type: "array" as const, items: { type: "string" as const, enum: [...BROADENING_DIMENSIONS] },
       description: "Dimensions the user said must not be relaxed ('only', 'must', 'strictly').",
     },
+    operations: {
+      type: "array" as const,
+      description: "Instructions about how the RESULTS are produced, which describe no company: 'no duplicates', 'exclude duplicates', 'skip companies already in my CRM / leads'. Never a requirement.",
+      items: {
+        type: "object" as const, additionalProperties: false, required: ["span", "operation"],
+        properties: { span: OP_SPAN, operation: { type: "string" as const, enum: ["deduplicate", "exclude_known_records"] } },
+      },
+    },
+    company_status: {
+      type: "array" as const,
+      description: "Whether the company must be operating: 'active', 'operating', 'still in business' (active); 'defunct', 'closed' (inactive). Not a signal and not an industry.",
+      items: {
+        type: "object" as const, additionalProperties: false, required: ["span", "status", "necessity"],
+        properties: { span: OP_SPAN, status: { type: "string" as const, enum: ["active", "inactive"] }, necessity: { type: "string" as const, enum: ["required", "preferred"] } },
+      },
+    },
   },
 });
 
@@ -93,6 +111,12 @@ export const CONTRACT_INSTRUCTION = [
   "never in unsupported and never omitted. Include 'only'/'must' in its span when the user says so; 'no B2C' is necessity excluded.",
   "Every exclusion the user states ('excluding X', 'but not X', 'no X', 'without X', 'except X') must appear: an excluded role in roles",
   "(relation excluded, abbreviations like 'SDRs' resolved to their title), an excluded place or industry with necessity excluded.",
+  // TEST live pilot 2026-11-21: "active B2B companies" and "duplicates" were filed as unsupported,
+  // and a REQUIRED unsupported item blocks approval. Each phrase has ONE kind of meaning.
+  "Split a phrase that combines several meanings into one entry per meaning, each quoting its own words:",
+  "'active B2B companies' is a business model (B2B, in industries) AND a company status (active, in company_status).",
+  "How the results are produced is an operation, never a requirement: 'no duplicates', 'exclude duplicates',",
+  "'not companies already in my CRM' go in operations. 'unsupported' is ONLY for a property of a company the vocabulary cannot express.",
 ].join(" ");
 
 export interface ContractProposalV4 {
@@ -102,6 +126,10 @@ export interface ContractProposalV4 {
   company_size: { min: number | null; max: number | null; necessity: "required" | "preferred"; span: string } | null;
   funding_stages: { stage: string; necessity: "required" | "preferred"; span: string }[];
   forbid_broadening: string[];
+  /** Pipeline operations ("no duplicates"). Optional: proposals before 2026-11-21 lack it. */
+  operations?: { span: string; operation: PipelineOperation }[];
+  /** Company status ("active"). Optional, as above. */
+  company_status?: { span: string; status: CompanyStatus; necessity: "required" | "preferred" }[];
 }
 
 export interface InterpretationResult {
@@ -116,6 +144,12 @@ const userOrigin = (span: string): Origin => ({ source: "user_explicit", span, p
 export const AUDIENCE_POLICY = "audience_descriptor_is_preference";
 /** The named policy that keeps a WIDENING clause ("include strong opportunities outside that range") from becoming a requirement. */
 export const PERMISSION_POLICY = "permission_widens_search";
+
+/** The user's own text for a meaning unit's words inside `span` (case and hyphens kept). */
+function ownWords(span: string, words: string[]): string {
+  const re = new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^\\p{L}\\p{N}]+"), "iu");
+  return re.exec(span)?.[0] ?? span;
+}
 
 /** The model's v4 proposal → a validated contract (deterministic; see the header). */
 export function contractFromProposal(query: string, p: ContractProposalV4, opts: { model?: string | null } = {}): InterpretationResult {
@@ -134,10 +168,25 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     const a = audienceDescriptor(x.span);
     return a !== null && !AUDIENCE_NEGATION_RE.test(x.span) && audienceIntent(query, a) !== "exclude";
   });
+  // A COMPOUND PHRASE IS SPLIT INTO ITS MEANINGS (semanticClasses.ts). An unsupported item
+  // that NAMES an audience ("active B2B companies") states that business model: it becomes the
+  // industry it names (unless the request excludes it, or already states it). The rest of the
+  // phrase is resolved — or kept, blocking — in the unsupported pass below.
+  // Already stated when any industry the reading kept names that audience ("B2B SaaS" names B2B).
+  const haveAudience = (a: "b2b" | "consumer") => [...raw.industries.map((i) => `${i.span} ${i.industry}`), ...audienceItems.map((x) => x.span)]
+    .some((t) => meaningUnits(t).units.some((un) => un.kind === "audience" && un.audience === a));
+  const audienceFromUnits = raw.unsupported.filter((x) => !audienceItems.includes(x)).flatMap((x) => {
+    const m = meaningUnits(x.span);
+    return m.units.filter((un): un is Extract<typeof un, { kind: "audience" }> => un.kind === "audience")
+      .filter((un) => audienceIntent(query, un.audience) !== (m.negated ? "require" : "exclude") && !haveAudience(un.audience))
+      // The new requirement quotes ONLY its own words ("B2B"), never the whole phrase: otherwise
+      // the rest of the phrase ("family-owned") would look already enforced and vanish.
+      .map((un) => ({ span: ownWords(x.span, un.words), industry: un.audience === "b2b" ? "B2B" : "consumer", necessity: (m.negated ? "excluded" : "required") as Necessity }));
+  }).filter((x, i, a) => a.findIndex((y) => y.industry === x.industry) === i);
   const parsed = {
     ...raw,
     roles: raw.roles.map((r) => (!r.title && !r.family ? { ...r, title: canonicalTitleOf(r.span) } : r)),
-    industries: [...raw.industries, ...audienceItems.map((x) => ({ span: x.span, industry: audienceDescriptor(x.span) === "b2b" ? "B2B" : x.span.trim(), necessity: "required" as const }))],
+    industries: [...raw.industries, ...audienceItems.map((x) => ({ span: x.span, industry: audienceDescriptor(x.span) === "b2b" ? "B2B" : x.span.trim(), necessity: "required" as const })), ...audienceFromUnits],
     unsupported: raw.unsupported.filter((x) => !audienceItems.includes(x)),
     // A PLACE THE USER NAMED IS NEVER DROPPED (V5 validation 2026-11-20). The model may put a
     // state or city ("texas") in `place`, which holds COUNTRY ids only; validation rejected it
@@ -280,7 +329,40 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
   // "Not checked" copy blocked a correct plan). It is merged into what enforces it and
   // recorded in `mergedDuplicates`; anything short of the same restriction stays below.
   const mergedDuplicates: MergedDuplicate[] = [];
+  const operations: ContractOperation[] = [];
+  const quotedInQuery = (sp: string) => !!sp?.trim() && query.toLowerCase().replace(/\s+/g, " ").includes(sp.toLowerCase().replace(/\s+/g, " ").trim());
+  const addOperation = (sp: string, op: PipelineOperation) => { if (!operations.some((o) => o.operation === op)) operations.push({ span: sp, operation: op, appliedBy: OPERATION_APPLIED_BY[op] }); };
+  // A COMPANY STATUS ("active") is proven by an enforced, dated, REQUIRED signal: a job posted in
+  // the last N days shows the company is operating. Without one, no approved tool checks it and
+  // it stays a blocking requirement (below) — it is never assumed.
+  const datedSignals = () => reqs.filter((r): r is Extract<Requirement, { dimension: "signal" }> => r.dimension === "signal" && r.necessity === "required" && isExecutable(r) && !!r.window?.days);
+  const statusLeft: { span: string; status: CompanyStatus; necessity: "required" | "preferred" }[] = [];
+  const resolveStatus = (sp: string, status: CompanyStatus, necessity: "required" | "preferred") => {
+    const sig = status === "active" ? datedSignals() : [];
+    if (sig.length) {
+      mergedDuplicates.push({ kind: "implied", span: sp, coveredBy: sig.map((r) => r.id),
+        reason: `a dated ${sig.map((r) => r.kind).join(" or ")} signal (last ${Math.max(...sig.map((r) => r.window!.days))} days) shows the company is operating` });
+    } else statusLeft.push({ span: sp, status, necessity });
+  };
+  // The model's own operations and statuses (quoted from the request).
+  for (const o of p.operations ?? []) if (quotedInQuery(o.span) && o.operation in OPERATION_APPLIED_BY) addOperation(o.span, o.operation);
+  for (const st of p.company_status ?? []) if (quotedInQuery(st.span)) resolveStatus(st.span, st.status, st.necessity === "preferred" ? "preferred" : "required");
+  const countWordsAll = p.deliverable.count !== null ? [String(p.deliverable.count), p.deliverable.count_span ?? ""].join(" ") : null;
   for (const x of u.unsupported) {
+    // EVERY WORD EXPLAINED, OR NOTHING CHANGES: the item's meaning units (audience, status,
+    // operation) plus words the contract already enforces must account for all of it.
+    const m = meaningUnits(x.span);
+    if (m.units.length) {
+      const rest = m.residual.length ? spanAlreadyEnforced(m.residual.join(" "), reqs, countWordsAll) : null;
+      if (!m.residual.length || rest) {
+        for (const un of m.units) {
+          if (un.kind === "operation") addOperation(x.span, un.operation);
+          else if (un.kind === "status") resolveStatus(x.span, m.negated ? (un.status === "active" ? "inactive" : "active") : un.status, "required");
+        }
+        if (rest?.coveredBy.length) mergedDuplicates.push({ span: x.span, kind: "same_words", coveredBy: rest.coveredBy, reason: rest.reason });
+        continue;
+      }
+    }
     const dup = redundantUnsupported(x.span, reqs);
     if (dup) { mergedDuplicates.push({ span: x.span, ...dup }); continue; }
     // Words the contract already enforces (or the requested count) are not a second, unchecked
@@ -301,6 +383,12 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     reqs.push({ ...base(`unsupported:${slug(x.span)}`, permits ? "preferred" : "required",
       permits ? { source: "user_explicit", span: x.span, policy: PERMISSION_POLICY } : userOrigin(x.span), `Not checked: ${x.span}`, x.why || "not expressible in the mission vocabulary"),
       evaluability: "unrepresentable", dimension: "unsupported", polarity: excludes ? "exclude" : "include", compiledAs: "disclosed", value: x.span });
+  }
+
+  for (const st of statusLeft) {
+    reqs.push({ ...base(`unsupported:status_${st.status}`, st.necessity, userOrigin(st.span), `Not checked: company status ${st.status} ("${st.span}")`,
+      st.status === "active" ? "no approved tool checks that a company is operating without a dated signal (e.g. hiring in the last 30 days)" : "no approved tool checks that a company has closed"),
+      evaluability: "unrepresentable", dimension: "unsupported", polarity: "include", compiledAs: "disclosed", value: `company status: ${st.status}` });
   }
 
   const count = p.deliverable.count !== null && Number.isInteger(p.deliverable.count) && p.deliverable.count > 0 ? p.deliverable.count : null;
@@ -324,7 +412,19 @@ export function contractFromProposal(query: string, p: ContractProposalV4, opts:
     completion: { targetCount: count, stopWhen: "target_reached_or_budget_exhausted" },
     provenance: { interpreter: "gpt_contract_v4", model: opts.model ?? null, from: null },
     ...(mergedDuplicates.length ? { mergedDuplicates } : {}),
+    ...(operations.length ? { operations } : {}),
   };
+  // AN OPERATION THE USER STATED IS RECORDED EVEN WHEN THE MODEL FILED IT NOWHERE: a negated
+  // phrase made only of pipeline operations ("no duplicates") describes the results, not a
+  // company. Recording it adds no criterion (the pipeline always performs it); without it the
+  // coverage check below would ask about it as an unenforced company exclusion.
+  for (const cue of explicitCues(query)) {
+    if (cue.kind !== "exclusion") continue;
+    for (const op of operationsOnly(cue.object) ?? []) {
+      if (!(contract.operations ??= []).some((o) => o.operation === op)) contract.operations.push({ span: cue.span, operation: op, appliedBy: OPERATION_APPLIED_BY[op] });
+    }
+  }
+  if (contract.operations && !contract.operations.length) delete contract.operations;
   // NOTHING THE USER STATED EXPLICITLY MAY VANISH (coverage.ts): an audience word or a
   // negative constraint the contract does not represent — omitted by the model, rejected
   // by validation, or only disclosed — is a blocking question, never a silent omission.
