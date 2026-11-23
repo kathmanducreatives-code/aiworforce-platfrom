@@ -1,0 +1,84 @@
+running 40 tests from ./tests/edge-functions/_shared/modelSpendIsBounded.test.ts
+THE HOLE: a workspace over the ceiling is refused in enforce ... ok (5ms)
+under the ceiling proceeds ... ok (0ms)
+exactly at the ceiling is over, not under ... ok (0ms)
+observe reports the same verdict and permits the call ... ok (0ms)
+an unreadable meter: observe permits, ENFORCE REFUSES, both say why ... ok (0ms)
+a throwing db is a failed read, not an exception — and enforce refuses it ... ok (0ms)
+no workspace: observe permits, ENFORCE REFUSES — unattributable spend is unmetered spend ... ok (0ms)
+a misconfigured ceiling: observe permits on the default, ENFORCE REFUSES ... ok (0ms)
+the production configuration ($5 / 1 day, enforce) meters normally and refuses at $5 ... ok (0ms)
+a refusal says WHY — never 'you reached your ceiling' for a meter it could not read ... ok (0ms)
+THE BLIND SPOT: unpriced calls are counted, never read as $0 ... ok (0ms)
+actual cost wins over estimated ... ok (0ms)
+THE GAP THIS MAKES LOUD: selectable models that cannot be priced ... ok (0ms)
+enforcement is ON unless explicitly turned off ... ok (0ms)
+the ceiling is configurable; a bad value falls back AND is reported ... ok (0ms)
+pilot-chat checks the ceiling before it can spend ... ok (0ms)
+CAPTURE: a successful chat call reaches the sink with its tokens ...
+------- output -------
+[aiProvider] ok {
+  fn: "pilot-chat",
+  task: "pilot_chat",
+  agent: undefined,
+  provider: "anthropic",
+  model: "claude-haiku-4-5-20251001",
+  latencyMs: 3
+}
+----- output end -----
+CAPTURE: a successful chat call reaches the sink with its tokens ... ok (3ms)
+CAPTURE: a FAILED attempt is still recorded ...
+------- output -------
+[aiProvider] attempt failed {
+  fn: undefined,
+  task: "pilot_chat",
+  provider: "anthropic",
+  model: "claude-haiku-4-5-20251001",
+  error: "Anthropic 500: upstream exploded"
+}
+----- output end -----
+CAPTURE: a FAILED attempt is still recorded ... ok (0ms)
+CAPTURE: chat's model is PRICED now, and an unknown one is still marked ...
+------- output -------
+[aiProvider] ok {
+  fn: undefined,
+  task: "pilot_chat",
+  agent: undefined,
+  provider: "anthropic",
+  model: "claude-haiku-4-5-20251001",
+  latencyMs: 0
+}
+----- output end -----
+CAPTURE: chat's model is PRICED now, and an unknown one is still marked ... ok (0ms)
+pilot-chat drains what it captured, on every exit ... ok (0ms)
+L2: an unpriced call within the token budget is allowed ... ok (0ms)
+L2: exceeding the CALL budget refuses ... ok (0ms)
+L2: exceeding the TOKEN budget refuses even with calls to spare ... ok (0ms)
+L2: output and total bounds are separate from input ... ok (0ms)
+L2: MULTIPLE CALLS AGGREGATE against one run budget ... ok (0ms)
+L2: UNKNOWN COST IS NEVER TREATED AS ZERO ... ok (0ms)
+L2: priced calls do NOT consume the unpriced budget ... ok (0ms)
+L2: a FAILED unpriced call still consumes budget ... ok (0ms)
+L2: no budget means unchanged behaviour for every existing caller ... ok (0ms)
+L2: separate runs do not share budget state ... ok (0ms)
+L2: the fallback chain cannot bypass an exhausted budget ...
+------- output -------
+[aiProvider] model budget reached {
+  fn: undefined,
+  task: "pilot_chat",
+  exceeded: "calls",
+  model: "claude-haiku-4-5-20251001"
+}
+----- output end -----
+L2: the fallback chain cannot bypass an exhausted budget ... ok (0ms)
+the remaining unpriced models are named, and none has a price ... ok (0ms)
+THE RETIRED ENTRY: haiku-4.5 is priced, and priced correctly ... ok (0ms)
+FAIL SAFE: an unrecognised haiku snapshot does not inherit this price ... ok (0ms)
+L2 is OFF unless a limit is configured ... ok (0ms)
+THE OTHER HALF: run-agent wires both layers too ... ok (1ms)
+LAYER 1 REACHES EVERY FUNCTION THAT SPENDS ON MODELS ... ok (1ms)
+THE CEILING IS NOT OVER-BROAD: free paths are not gated ... ok (0ms)
+THE BRIEF DEGRADES INSTEAD OF DISAPPEARING ... ok (0ms)
+chat wires both layers, and Layer 2 into the fallback chain ... ok (0ms)
+
+ok | 40 passed | 0 failed (17ms)

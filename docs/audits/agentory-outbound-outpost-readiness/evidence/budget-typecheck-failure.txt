@@ -1,0 +1,40 @@
+Check tests/edge-functions/_shared/companyBrainConsumption.test.ts
+Check tests/edge-functions/_shared/companyBrainOriginSave.test.ts
+Check tests/edge-functions/_shared/companyBrainSourceRole.test.ts
+Check tests/edge-functions/_shared/companyBrainRefreshDiff.test.ts
+Check tests/edge-functions/_shared/taskModelPolicy.test.ts
+Check tests/edge-functions/_shared/modelFailurePropagation.test.ts
+Check tests/edge-functions/_shared/modelCostTelemetry.test.ts
+Check tests/edge-functions/_shared/modelSpendIsBounded.test.ts
+Check tests/edge-functions/_shared/workflowContinuation.test.ts
+Check tests/edge-functions/_shared/signalsWorkspaceIsolation.test.ts
+Check tests/edge-functions/endpointSecuritySweep.test.ts
+TS2741 [ERROR]: Property 'cached_input_tokens' is missing in type '{ input_tokens: number; output_tokens: number; }' but required in type 'ModelUsage'.
+    usage: { input_tokens: 1000, output_tokens: 100 },
+    ~~~~~
+    at file://<audit-checkout>/tests/edge-functions/_shared/modelSpendIsBounded.test.ts:623:5
+
+    'cached_input_tokens' is declared here.
+      cached_input_tokens: number | null;
+      ~~~~~~~~~~~~~~~~~~~
+        at file://<audit-checkout>/supabase/functions/_shared/modelCostModel.ts:294:3    The expected type comes from property 'usage' which is declared here on type '{ model: string; usage: ModelUsage; }'
+      usage: ModelUsage;
+      ~~~~~
+        at file://<audit-checkout>/supabase/functions/_shared/modelCostModel.ts:340:3
+
+TS2739 [ERROR]: Type '{}' is missing the following properties from type 'ModelUsage': input_tokens, cached_input_tokens, output_tokens
+  const noUsage = priceModelCall({ model: "claude-haiku-4-5-20251001", usage: {} });
+                                                                       ~~~~~
+    at file://<audit-checkout>/tests/edge-functions/_shared/modelSpendIsBounded.test.ts:630:72
+
+    The expected type comes from property 'usage' which is declared here on type '{ model: string; usage: ModelUsage; }'
+      usage: ModelUsage;
+      ~~~~~
+        at file://<audit-checkout>/supabase/functions/_shared/modelCostModel.ts:340:3
+
+Found 2 errors.
+
+error: Type checking failed.
+
+  info: The program failed type-checking, but it still might work correctly.
+  hint: Re-run with --no-check to skip type-checking.
