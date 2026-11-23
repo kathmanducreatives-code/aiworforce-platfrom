@@ -17,6 +17,7 @@
 // no change here. Pure.
 
 import type { MissionCriterion } from "../missionCriteria.ts";
+import { isControlledPhrase } from "../businessModelMatch.ts";
 
 /** What a capability can establish about a company (strategy.ts `Provable`, plus verification routes). */
 export type ProofDimension =
@@ -47,13 +48,21 @@ export function proofNeeded(c: Pick<MissionCriterion, "dimension" | "value"> & {
     case "company_size": return ["size_band"];
     case "hiring": return ["hiring"];
     case "business_model": return ["business_model"];
-    case "industry": return ["industry"];
+    // An industry or excluded company type that the controlled business-model vocabulary
+    // reads ("B2B SaaS", "consumer") is decided by business-model evidence: eligibility's
+    // checkBusinessModel / checkExcludedTypes read the business_model items for it. Any
+    // other value ("manufacturing") needs industry proof, which no approved step offers.
+    case "industry": return isControlledPhrase(c.value) ? ["business_model"] : ["industry"];
     case "funding": case "company_stage": return ["funding"];
     case "known_companies": return ["identity"];
     case "exclusion": {
-      const field = (c.value as { field?: string } | null)?.field ?? "";
+      const v = c.value as { field?: string; value?: unknown } | null;
+      const field = v?.field ?? "";
       if (field === "excluded_geographies") return ["headquarters"];
-      if (field === "excluded_company_types") return ["industry"];
+      if (field === "excluded_company_types") {
+        const types = (Array.isArray(v?.value) ? v!.value : [v?.value]).map((x) => String(x ?? "").trim()).filter(Boolean);
+        return types.length && types.every((t) => isControlledPhrase(t)) ? ["business_model"] : ["industry"];
+      }
       return [];
     }
     default: return []; // other signal kinds, unsupported carriers: no capability proves them today
@@ -115,6 +124,17 @@ export function resolveRequirementRoutes(
 
 /** The REQUIRED requirements no step can check — what blocks normal execution. */
 export const uncheckedRequired = (routes: readonly RequirementRoute[]) => routes.filter((r) => r.route === "not_checkable");
+
+/**
+ * One entry per requirement as the user sees it. The members of an any-of group ("commercial
+ * contracting or … or manufacturing") are separate criteria sharing one label; listing each
+ * repeated the same sentence once per alternative. Presentation only: routing, coverage and
+ * eligibility still see every criterion.
+ */
+export const oncePerLabel = (routes: readonly RequirementRoute[]): RequirementRoute[] => {
+  const seen = new Set<string>();
+  return routes.filter((r) => (seen.has(r.label) ? false : (seen.add(r.label), true)));
+};
 
 /** The question the approval card asks for each unchecked REQUIRED requirement. */
 export function uncheckedQuestion(r: RequirementRoute): string {

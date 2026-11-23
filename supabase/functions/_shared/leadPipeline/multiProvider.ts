@@ -52,6 +52,7 @@ import {
   type DiscoverySpec, type DiscoveryStrategyId, type Limitation, type StrategyPlan,
 } from "./strategy.ts";
 import { rethrowPending } from "./runErrors.ts";
+import { proofNeeded } from "./capabilityResolution.ts";
 
 export const STRATEGY_RUN_VERSION = "discovery-strategy-run-v1" as const;
 
@@ -461,9 +462,21 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
     // [business_model, industry], the website step never ran, and a homeowner-only roofer was
     // saved as "needs verification" instead of being rejected as consumer.
     const closable = (g: string) => g !== "industry";
+    // A requirement business-model evidence decides is not always filed as a business_model gap:
+    // "Exclude consumer-only companies" is an exclusion, which no gap names (pilot 2026-11-23 —
+    // the step was planned for it and then read no site). Such a company is read too, when
+    // every check still open on it is either one the website decides or one nothing can close.
+    const hardCrit = spec.requirements.criteria.filter((c) => c.kind === "hard");
+    const siteDecides = new Set(hardCrit.filter((c) => proofNeeded(c as never).includes("business_model")).map((c) => c.id));
+    const neverCloses = new Set(hardCrit.filter((c) => { const n = proofNeeded(c as never); return n.length === 1 && n[0] === "industry"; }).map((c) => c.id));
+    const openOnSite = (l: VerifiedLead) => {
+      const unknown = (l.shared?.checks ?? []).filter((c) => c.result === "unknown").map((c) => c.criterion_id);
+      return unknown.some((id) => siteDecides.has(id)) && unknown.every((id) => siteDecides.has(id) || neverCloses.has(id));
+    };
     const open = leads.filter((l) => {
       const gaps = (l.shared?.gaps ?? []).filter(closable);
-      return l.shared?.eligibility === "pending" && gaps.length === 1 && gaps[0] === "business_model" && !(l.shared.disproven ?? []).length && l.company.domain.length;
+      return l.shared?.eligibility === "pending" && ((gaps.length === 1 && gaps[0] === "business_model") || (gaps.length === 0 && openOnSite(l)))
+        && !(l.shared.disproven ?? []).length && l.company.domain.length;
     });
     // ONE SITE, ONE READ. Two records of one company (two LinkedIn pages, one domain) are merged
     // only after this step, so without this both were targeted: the same three pages were bought

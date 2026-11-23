@@ -2,7 +2,7 @@
 // DIMENSION — decided by dimension and capability, never by the words of the request.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { proofNeeded, resolveRequirementRoutes, uncheckedQuestion, uncheckedRequired, type ProofDimension } from "../../../../supabase/functions/_shared/leadPipeline/capabilityResolution.ts";
+import { oncePerLabel, proofNeeded, resolveRequirementRoutes, uncheckedQuestion, uncheckedRequired, type ProofDimension } from "../../../../supabase/functions/_shared/leadPipeline/capabilityResolution.ts";
 import type { MissionCriterion } from "../../../../supabase/functions/_shared/missionCriteria.ts";
 
 const crit = (o: Partial<MissionCriterion> & Record<string, unknown>): MissionCriterion =>
@@ -70,4 +70,42 @@ Deno.test("the real registry: the company record proves presence, so an Apify ch
   // No discovery row proves presence on its own: a job search alone leaves it unchecked.
   const jobsOnly = new Map<ProofDimension, string[]>([["identity", ["jobs"]], ["hiring", ["jobs"]]]);
   assertEquals(resolveRequirementRoutes([crit({ dimension: "geography", geography_scope: "presence" })], jobsOnly)[0].route, "not_checkable");
+});
+
+// ── 2026-11-23 pilot: what decides "consumer-only" and a sector industry ────────────────
+// Eligibility answers an excluded company type and an industry through the controlled
+// business-model vocabulary (checkExcludedTypes / checkBusinessModel read business_model
+// items). Routing must ask for the proof that eligibility actually reads.
+
+Deno.test("PILOT 2026-11-23: 'consumer-only' and 'B2B SaaS' need business-model proof; a sector industry needs industry proof", () => {
+  const excl = (v: unknown) => proofNeeded(crit({ dimension: "exclusion", value: { field: "excluded_company_types", value: v } }) as never);
+  assertEquals(excl(["consumer"]), ["business_model"], "consumer-only is a business model");
+  assertEquals(excl("consumer"), ["business_model"], "a single value, not a list");
+  assertEquals(excl(["consumer", "staffing"]), ["industry"], "one type outside the vocabulary needs industry proof");
+  assertEquals(excl([]), ["industry"], "nothing named: never treated as checkable by the website");
+  assertEquals(proofNeeded(crit({ dimension: "industry", value: "B2B SaaS" }) as never), ["business_model"]);
+  for (const v of ["manufacturing", "commercial contracting", "industrial distribution", "commercial field services"]) {
+    assertEquals(proofNeeded(crit({ dimension: "industry", value: v }) as never), ["industry"], v);
+  }
+});
+
+Deno.test("PILOT 2026-11-23: with the website step, consumer-only is checked; the sector group stays not checkable (no approved proof)", () => {
+  const withSite = proves({ ...Object.fromEntries(APIFY), business_model: ["website"] });
+  const group = ["commercial contracting", "industrial distribution", "commercial field services", "manufacturing"];
+  const label = `Industry: ${group.join(" or ")}`;
+  const criteria = [
+    ...group.map((v) => crit({ dimension: "industry", value: v, label, any_of: group })),
+    crit({ dimension: "exclusion", label: "Excluding: consumer", value: { field: "excluded_company_types", value: ["consumer"] } }),
+  ];
+  const routes = resolveRequirementRoutes(criteria, withSite);
+  assertEquals(routes.find((r) => r.label === "Excluding: consumer")?.route, "checked");
+  assertEquals(routes.find((r) => r.label === "Excluding: consumer")?.checkedBy, ["website"]);
+  // Every member is still routed (eligibility and coverage see each), all not checkable…
+  assertEquals(routes.filter((r) => r.label === label).map((r) => r.route), ["not_checkable", "not_checkable", "not_checkable", "not_checkable"]);
+  // …but the user is asked once.
+  const asked = oncePerLabel(uncheckedRequired(routes));
+  assertEquals(asked.map((r) => r.label), [label]);
+  assertEquals(asked.map(uncheckedQuestion).length, 1);
+  // Without the website step, consumer-only is honestly not checkable.
+  assertEquals(resolveRequirementRoutes(criteria, APIFY).find((r) => r.label === "Excluding: consumer")?.route, "not_checkable");
 });

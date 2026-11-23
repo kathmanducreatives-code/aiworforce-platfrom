@@ -130,11 +130,17 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
           {plan.status === 'blocked' && plan.questions.length > 0 && (
             <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.04] px-3 py-2 space-y-1.5" data-testid="strategy-questions">
               <div className="text-[#ECE9E4] font-medium">This request can't run normally yet</div>
-              {plan.questions.map((q) => <p key={q} className="text-[#A3A7AD]">{q}</p>)}
+              <p className="text-[11px] text-[#8B8F96]" data-testid="strategy-check-timing">
+                Before you approve, Agentory only decides which tools will run and what each can prove. Each company is checked after research, against what those tools return.
+                {plan.questions.length === 1 ? ' The requirement below' : ' The requirements below'} can't be proven by any approved tool, before or after research.
+              </p>
+              {plan.questions.map((q) => <p key={q} className="text-[#A3A7AD]" data-testid="strategy-question">{q}</p>)}
               <Button size="sm" variant="outline" onClick={() => void makePlan(choice, true)} className="h-7 px-3 rounded-lg text-[12px]" data-testid="strategy-review-only">
                 Run as review-only
               </Button>
-              <p className="text-[11px] text-[#6E7278]">Review-only companies are never counted as qualified. To change the requirement instead, edit your request.</p>
+              <p className="text-[11px] text-[#6E7278]" data-testid="strategy-review-only-explainer">
+                Review-only buys the same research and keeps every requirement. Companies that fail a requirement that can be checked are still excluded. Companies that can't be proven on the requirement above are listed as “Needs verification” and never count toward the number you asked for. To make it a preference instead, edit your request.
+              </p>
             </div>
           )}
           {plan.status === 'blocked' && plan.questions.length === 0 && (
@@ -147,7 +153,7 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
             </label>
           )}
           {plan.status === 'ready' && reviewOnly && (
-            <div className="text-[11px] text-amber-200/80" data-testid="strategy-review-only-note">Review-only: requirements no tool can check stay unverified; those companies are listed as needing verification.</div>
+            <div className="text-[11px] text-amber-200/80" data-testid="strategy-review-only-note">Review-only: requirements no approved tool can prove stay unverified. Those companies are listed as “Needs verification” and are never counted as qualified.</div>
           )}
           {plan.status === 'ready' && (
             <div className="flex items-center gap-2 pt-1">

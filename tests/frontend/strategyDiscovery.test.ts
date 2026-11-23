@@ -193,3 +193,15 @@ Deno.test("a pipeline operation the user asked for ('no duplicates') is shown as
   assert(/handled on every run/.test(p.interpretation.merged[1].reason));
   assertEquals(p.interpretation.disclosures, []);
 });
+
+Deno.test("PILOT 2026-11-23: a blocked plan's questions and requirement rows appear once each, even from a backend that repeated them", () => {
+  const q = 'Your request requires "Industry: a or b", but no approved tool in this plan can establish industry. …';
+  const route = { label: "Industry: a or b", necessity: "required", route: "not_checkable", checkedBy: [], explanation: "required, but no approved tool in this plan can establish industry" };
+  const v = readStrategyPlan({ plan: {
+    status: "blocked", planHash: "h", estimate: { apifyUsd: 0, leadoceanRecords: 0 }, steps: [],
+    requirementRoutes: [route, route, route, route, { ...route, label: "Excluding: consumer", route: "checked", checkedBy: ["apify.website_business_model"] }],
+    questions: [q, q, q, q],
+  } })!;
+  assertEquals(v.questions, [q]);
+  assertEquals(v.requirements.map((r) => `${r.label}:${r.route}`), ["Industry: a or b:not_checkable", "Excluding: consumer:checked"]);
+});
