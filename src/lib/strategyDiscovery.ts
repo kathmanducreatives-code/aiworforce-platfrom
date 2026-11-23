@@ -128,7 +128,8 @@ export function readStrategyPlan(body: unknown): StrategyPlanView | null {
       route: r.route === 'checked' || r.route === 'ranked_only' ? r.route : 'not_checkable' as const,
       checkedBy: Array.isArray(r.checkedBy) ? r.checkedBy.map(String) : [], explanation: String(r.explanation ?? ''),
     }))) : [],
-    questions: Array.isArray(p.questions) ? p.questions.map(String) : [],
+    // Once each: an any-of group's alternatives used to repeat the same question (pre-fix backends).
+    questions: Array.isArray(p.questions) ? [...new Set(p.questions.map(String))] : [],
     interpretation: interpretationOf(body),
   };
 }

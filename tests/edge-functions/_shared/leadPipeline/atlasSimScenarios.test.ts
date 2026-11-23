@@ -48,6 +48,8 @@ for (const s of scenarios) {
       excluded: b.excludedCount ?? null, leadsSaved: r.db.leads.length, actorCalls: r.actorCalls.length, persistFailed: b.persistence?.failed ?? null,
       rejected: (b.rejected ?? []).map((x) => x.name).sort(),
       // Phase C (async runs): Actor runs bought, the spend's basis and how sure each charge is.
+      // What a blocked plan asks the user — once per requirement, never once per alternative.
+      questions: (planOf(r.plan.body) as { questions?: string[] }).questions ?? null,
       purchases: r.purchases, spendBasis: b.outcome?.spend?.basis ?? null, chargeStates: (b as { chargeStates?: unknown }).chargeStates ?? null,
     };
     for (const [k, v] of Object.entries(s.expect ?? {})) assertEquals(got[k], v, `${s.name}: ${k}`);
