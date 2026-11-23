@@ -1,0 +1,286 @@
+{
+  "sha": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+  "method": "regex cross-check of calls and factory wiring; curated runtime interpretation in current-map.md; not a call-count receipt",
+  "sites": [
+    {
+      "path": "supabase/functions/_shared/actorInputPlanner.ts",
+      "line": 341,
+      "symbol": "generateJson",
+      "source": "ai = await generateJson({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/actorInputPlanner.ts#L341"
+    },
+    {
+      "path": "supabase/functions/_shared/aiProvider.ts",
+      "line": 449,
+      "symbol": "generateText",
+      "source": "const r = await generateText({ ...opts, jsonMode: true });",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/aiProvider.ts#L449"
+    },
+    {
+      "path": "supabase/functions/_shared/broadeningPlannerAdapter.ts",
+      "line": 158,
+      "symbol": "generateJson",
+      "source": "const call = generateJson({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/broadeningPlannerAdapter.ts#L158"
+    },
+    {
+      "path": "supabase/functions/_shared/chatBrain.ts",
+      "line": 310,
+      "symbol": "gptStructured",
+      "source": "const r: GptResult<unknown> = await gptStructured<unknown>({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/chatBrain.ts#L310"
+    },
+    {
+      "path": "supabase/functions/_shared/companyBrainResearch/generateBrainDraft.ts",
+      "line": 412,
+      "symbol": "generateJson",
+      "source": "const res = await deps.generateJson({ system, user });",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/companyBrainResearch/generateBrainDraft.ts#L412"
+    },
+    {
+      "path": "supabase/functions/_shared/gptDiscoveryPlanner.ts",
+      "line": 315,
+      "symbol": "gptStructured",
+      "source": "const r: GptResult<GptDiscoveryProposal> = await gptStructured<GptDiscoveryProposal>({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/gptDiscoveryPlanner.ts#L315"
+    },
+    {
+      "path": "supabase/functions/_shared/gptDiscoveryPlanner.ts",
+      "line": 356,
+      "symbol": "gptStructured",
+      "source": "return await gptStructured<GptDiscoveryProposal>({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/gptDiscoveryPlanner.ts#L356"
+    },
+    {
+      "path": "supabase/functions/_shared/gptExecutionPlanner.ts",
+      "line": 372,
+      "symbol": "gptStructured",
+      "source": "const r: GptResult<GptExecutionProposal> = await gptStructured<GptExecutionProposal>({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/gptExecutionPlanner.ts#L372"
+    },
+    {
+      "path": "supabase/functions/_shared/gptMissionModel.ts",
+      "line": 94,
+      "symbol": "gptStructured",
+      "source": "const r = await gptStructured<Record<string, unknown>>({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/gptMissionModel.ts#L94"
+    },
+    {
+      "path": "supabase/functions/_shared/gptOpportunityReasoner.ts",
+      "line": 120,
+      "symbol": "gptStructured",
+      "source": "const r = await gptStructured<Record<string, unknown>>({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/gptOpportunityReasoner.ts#L120"
+    },
+    {
+      "path": "supabase/functions/_shared/gptRouteController.ts",
+      "line": 100,
+      "symbol": "gptStructured",
+      "source": "const r = await gptStructured<Record<string, unknown>>({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/gptRouteController.ts#L100"
+    },
+    {
+      "path": "supabase/functions/_shared/gptStrategistModel.ts",
+      "line": 107,
+      "symbol": "gptStructured",
+      "source": "const r = await gptStructured<Record<string, unknown>>({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/gptStrategistModel.ts#L107"
+    },
+    {
+      "path": "supabase/functions/_shared/groundedBrainBinding.ts",
+      "line": 172,
+      "symbol": "createGptStrategistGenerateJson",
+      "source": "createGptStrategistGenerateJson({ onModelCall: input.onModelCall }, (() => {",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/groundedBrainBinding.ts#L172"
+    },
+    {
+      "path": "supabase/functions/_shared/leadMissionCompilerBinding.ts",
+      "line": 211,
+      "symbol": "createGptMissionGenerateJson",
+      "source": "createGptMissionGenerateJson({ onModelCall: input.onModelCall });",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/leadMissionCompilerBinding.ts#L211"
+    },
+    {
+      "path": "supabase/functions/_shared/missionEvaluationBinding.ts",
+      "line": 186,
+      "symbol": "createGptStrategistGenerateJson",
+      "source": "createGptStrategistGenerateJson({ onModelCall: input.onModelCall }, {",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/missionEvaluationBinding.ts#L186"
+    },
+    {
+      "path": "supabase/functions/_shared/missionTriageBinding.ts",
+      "line": 181,
+      "symbol": "createGptStrategistGenerateJson",
+      "source": "createGptStrategistGenerateJson({ onModelCall: input.onModelCall }, {",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/missionTriageBinding.ts#L181"
+    },
+    {
+      "path": "supabase/functions/_shared/multiRoundBinding.ts",
+      "line": 152,
+      "symbol": "createGptStrategistGenerateJson",
+      "source": "createGptStrategistGenerateJson({ onModelCall: input.onModelCall }, (() => {",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/multiRoundBinding.ts#L152"
+    },
+    {
+      "path": "supabase/functions/_shared/poolEvaluationBinding.ts",
+      "line": 202,
+      "symbol": "createGptStrategistGenerateJson",
+      "source": "createGptStrategistGenerateJson({ onModelCall: input.onModelCall }, (() => {",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/poolEvaluationBinding.ts#L202"
+    },
+    {
+      "path": "supabase/functions/_shared/semanticClassificationBinding.ts",
+      "line": 186,
+      "symbol": "createGptStrategistGenerateJson",
+      "source": "createGptStrategistGenerateJson({ onModelCall: input.onModelCall }, (() => {",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/semanticClassificationBinding.ts#L186"
+    },
+    {
+      "path": "supabase/functions/_shared/signalRelevanceJudge.ts",
+      "line": 193,
+      "symbol": "gptStructured",
+      "source": "const r: GptResult<RawRelevanceVerdict> = await gptStructured<RawRelevanceVerdict>({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/signalRelevanceJudge.ts#L193"
+    },
+    {
+      "path": "supabase/functions/_shared/workbench/openerModel.ts",
+      "line": 195,
+      "symbol": "generateText",
+      "source": "const res = await generateText({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/_shared/workbench/openerModel.ts#L195"
+    },
+    {
+      "path": "supabase/functions/daily-brief/index.ts",
+      "line": 311,
+      "symbol": "generateText",
+      "source": "const ai = await generateText({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/daily-brief/index.ts#L311"
+    },
+    {
+      "path": "supabase/functions/generate-company-brain-draft/index.ts",
+      "line": 322,
+      "symbol": "generateJson",
+      "source": "const ai = await generateJson({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/generate-company-brain-draft/index.ts#L322"
+    },
+    {
+      "path": "supabase/functions/orchestrate/index.ts",
+      "line": 1416,
+      "symbol": "generateJson",
+      "source": "ai = await generateJson({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/orchestrate/index.ts#L1416"
+    },
+    {
+      "path": "supabase/functions/pilot-chat/index.ts",
+      "line": 263,
+      "symbol": "generateJson",
+      "source": "const ai = await generateJson({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/pilot-chat/index.ts#L263"
+    },
+    {
+      "path": "supabase/functions/pilot-chat/index.ts",
+      "line": 2120,
+      "symbol": "understandRequest",
+      "source": "const understood = await understandRequest(message, {",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/pilot-chat/index.ts#L2120"
+    },
+    {
+      "path": "supabase/functions/pilot-chat/index.ts",
+      "line": 2710,
+      "symbol": "generateText",
+      "source": "const ai = await generateText({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/pilot-chat/index.ts#L2710"
+    },
+    {
+      "path": "supabase/functions/pilot-chat/index.ts",
+      "line": 3521,
+      "symbol": "generateText",
+      "source": "const ai = await generateText({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/pilot-chat/index.ts#L3521"
+    },
+    {
+      "path": "supabase/functions/pilot-chat/index.ts",
+      "line": 4250,
+      "symbol": "generateJson",
+      "source": "const ai = await generateJson({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/pilot-chat/index.ts#L4250"
+    },
+    {
+      "path": "supabase/functions/run-agent/index.ts",
+      "line": 3504,
+      "symbol": "makeGptDiscoveryPlanner",
+      "source": "planDiscovery: makeGptDiscoveryPlanner({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/run-agent/index.ts#L3504"
+    },
+    {
+      "path": "supabase/functions/run-agent/index.ts",
+      "line": 3544,
+      "symbol": "makeGptRouteController",
+      "source": "controlRoutes: makeGptRouteController({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/run-agent/index.ts#L3544"
+    },
+    {
+      "path": "supabase/functions/run-agent/index.ts",
+      "line": 3550,
+      "symbol": "makeGptExecutionPlanner",
+      "source": "planExecution: makeGptExecutionPlanner({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/run-agent/index.ts#L3550"
+    },
+    {
+      "path": "supabase/functions/run-agent/index.ts",
+      "line": 5009,
+      "symbol": "createGptStrategistGenerateJson",
+      "source": "const planGen = createGptStrategistGenerateJson({ onModelCall: modelCalls.sink }, {",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/run-agent/index.ts#L5009"
+    },
+    {
+      "path": "supabase/functions/run-agent/index.ts",
+      "line": 5016,
+      "symbol": "createGptStrategistGenerateJson",
+      "source": "const extractGen = createGptStrategistGenerateJson({ onModelCall: modelCalls.sink }, {",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/run-agent/index.ts#L5016"
+    },
+    {
+      "path": "supabase/functions/run-agent/index.ts",
+      "line": 5113,
+      "symbol": "createGptStrategistGenerateJson",
+      "source": "const reevalGen = createGptStrategistGenerateJson({ onModelCall: modelCalls.sink }, {",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/run-agent/index.ts#L5113"
+    },
+    {
+      "path": "supabase/functions/run-agent/index.ts",
+      "line": 6776,
+      "symbol": "makeGptOpportunityReasoner",
+      "source": "reason: makeGptOpportunityReasoner({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/run-agent/index.ts#L6776"
+    },
+    {
+      "path": "supabase/functions/run-agent/index.ts",
+      "line": 8512,
+      "symbol": "generateText",
+      "source": "const ai = await generateText({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/run-agent/index.ts#L8512"
+    },
+    {
+      "path": "supabase/functions/run-monitoring-scan/index.ts",
+      "line": 279,
+      "symbol": "makeGptDiscoveryPlanner",
+      "source": "planDiscovery: makeGptDiscoveryPlanner({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/run-monitoring-scan/index.ts#L279"
+    },
+    {
+      "path": "supabase/functions/setup-company-brain/index.ts",
+      "line": 221,
+      "symbol": "generateJson",
+      "source": "const ai = await generateJson({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/setup-company-brain/index.ts#L221"
+    },
+    {
+      "path": "supabase/functions/setup-company-brain/index.ts",
+      "line": 254,
+      "symbol": "generateJson",
+      "source": "const ai = await generateJson({",
+      "url": "https://github.com/kathmanducreatives-code/aiworforce-platfrom/blob/5d86703712205a04d059a39cf0d38a0621fc3ddb/supabase/functions/setup-company-brain/index.ts#L254"
+    }
+  ]
+}

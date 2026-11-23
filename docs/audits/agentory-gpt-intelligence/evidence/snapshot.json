@@ -1,0 +1,14 @@
+{
+  "pins": {
+    "integration": "5d86703712205a04d059a39cf0d38a0621fc3ddb",
+    "pr113": "671edf35da4b4271ffcbd849ffece856ebd1057f",
+    "pr123": "2d0a6327978ba5605d12f6e2315af3df78041ccc",
+    "pr125": "a542b2f1e768e48d3ee794145b982d910d8253c7"
+  },
+  "date": "2026-10-20",
+  "routing_harness_sha": "aca94e6b739e5f5c129ae0e11b56676e9da09c80",
+  "external_execution": false,
+  "database_writes": false,
+  "paid_calls": 0,
+  "notes": "Synthetic transports and pure modules only; no native DB or deployed receipts. PR heads remain separate from integration."
+}
