@@ -201,6 +201,8 @@
       "Northbay Steel",
       "Sunny Roofs"
     ],
-    "purchases": 3
+    "purchases": 3,
+    "discoveryMode": "strict",
+    "flexibleTiers": null
   }
 }

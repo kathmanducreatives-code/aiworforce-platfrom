@@ -70,6 +70,10 @@ export interface Scenario {
   grounding?: boolean;
   approval?: "approve" | "none" | "tampered_hash" | "under_estimate" | "reject";
   allowReviewOnly?: boolean;
+  /** FLEXIBLE DISCOVERY: the mode the request is sent in (absent = strict). */
+  mode?: "strict" | "flexible";
+  /** The simulated model's answer when Flexible Discovery asks for related industries (absent = no model). */
+  relatedIndustries?: string[];
   runs?: number;
   workspace?: "member" | "not_member";
   persistence?: { fail?: boolean; failNames?: string[]; planRecordFails?: boolean; existingAccounts?: { name: string; domain: string }[]; existingRecords?: ExistingRecord[] };
@@ -328,14 +332,18 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
       planRecords.push({ planId, status: p.status, summary: p.summary });
       return Promise.resolve(planId);
     },
-    signer, advisor: null,
+    signer,
+    // The only model call a simulated plan makes: Flexible Discovery's related industries.
+    advisor: s.relatedIndustries ? (async (o: { functionName?: string }) => o.functionName === "lead-pipeline-flexible-industries"
+      ? { ok: true, content: JSON.stringify({ related: s.relatedIndustries }), json: { related: s.relatedIndustries }, model: "sim-model" }
+      : { ok: false, content: "", error: "the simulator answers only the related-industries call", model: "sim-model" }) as never : null,
     ...(s.grounding === false ? {} : { groundBusinessModel: modelGrounder(simModel(s, grounding) as never, s.query) }),
   } as StrategyDeps;
 
   const ws = s.workspace === "not_member" ? OTHER_WS : SIM_WS;
   const correlationId = `sim-${s.name}`;
   const req = (b: Record<string, unknown>, walk = correlationId) =>
-    parseStrategyRequest({ workspace_id: ws, walk_id: walk, query: s.query, requested_count: s.requestedCount ?? 5, ...b })!;
+    parseStrategyRequest({ workspace_id: ws, walk_id: walk, query: s.query, requested_count: s.requestedCount ?? 5, ...(s.mode ? { discovery_mode: s.mode } : {}), ...b })!;
 
   const t0 = performance.now();
   const plan = await handleStrategyRequest(req({ action: "strategy_plan", ...(s.allowReviewOnly ? { allow_review_only: true } : {}) }), d);

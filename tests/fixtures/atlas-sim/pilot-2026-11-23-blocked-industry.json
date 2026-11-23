@@ -198,6 +198,8 @@
     ],
     "runStatuses": [],
     "leadsSaved": 0,
-    "actorCalls": 0
+    "actorCalls": 0,
+    "discoveryMode": "strict",
+    "flexibleTiers": null
   }
 }

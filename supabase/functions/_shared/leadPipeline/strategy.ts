@@ -227,7 +227,9 @@ export function chainFor(strategy: DiscoveryStrategyId, spec: DiscoverySpec, opt
   // A REQUIRED business model is checked on the company's own pages, after its record —
   // and so is any other required criterion that business-model evidence decides
   // ("Exclude consumer-only companies", an industry like "B2B SaaS"): proofNeeded says which.
-  const bm = spec.requirements.criteria.some((c) => c.kind === "hard" && proofNeeded(c as never).includes("business_model")) ? ["apify.website_business_model"] : [];
+  // Flexible Discovery reads the website for a business-model PREFERENCE too ("B2B", a relaxed
+  // "exclude consumer-only"): it ranks by it, within the same approved step.
+  const bm = spec.requirements.criteria.some((c) => (c.kind === "hard" || !!spec.flexible) && proofNeeded(c as never).includes("business_model")) ? ["apify.website_business_model"] : [];
   switch (strategy) {
     case "leadocean_only": return ["leadocean.people_search"];
     case "leadocean_plus_apify": return ["leadocean.people_search", rec];
@@ -283,6 +285,8 @@ export interface DiscoverySpec {
   forbidBroadening: string[];
   /** For the executor and the shared engine: the compiler's requirements, criteria untouched. */
   requirements: DiscoveryRequirements;
+  /** FLEXIBLE DISCOVERY (flexibleDiscovery.ts): what was relaxed and the related industries. Absent = strict. */
+  flexible?: import("./flexibleDiscovery.ts").FlexibleSpec;
 }
 
 interface MissionLike {
@@ -897,6 +901,9 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
     user: { strategy: ctx.user?.strategy ?? null, excludeProviders: [...(ctx.user?.excludeProviders ?? [])].sort(), allowReviewOnly: ctx.user?.allowReviewOnly === true,
       // Only when granted, so every plan without it keeps its hash.
       ...(ctx.user?.acceptLikely === true ? { acceptLikely: true } : {}) },
+    // FLEXIBLE DISCOVERY: the mode, what it relaxed and GPT's related industries are part of
+    // what is approved. Absent in strict mode, so every strict plan keeps its hash.
+    ...(spec.flexible ? { flexible: { v: spec.flexible.version, relaxed: spec.flexible.relaxed.map((r) => r.criterionId).sort(), related: spec.flexible.industries.related } } : {}),
   };
   return {
     version: STRATEGY_PLANNER_VERSION,
