@@ -33,6 +33,7 @@ for r in $REFUSED; do [ "$ref" != "$r" ] || refuse "$ref is never the Brain TEST
 echo "$ceiling" | grep -Eq '^[0-9]*\.?[0-9]+$' && awk -v c="$ceiling" 'BEGIN { exit !(c > 0 && c <= 1) }' \
   || refuse "--spend-ceiling-usd must be a positive amount no larger than 1.00 (e.g. 0.25)"
 [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || refuse "SUPABASE_ACCESS_TOKEN is not set (never printed)"
+command -v supabase >/dev/null && command -v docker >/dev/null && docker info >/dev/null 2>&1 || refuse "the supabase CLI and a running Docker are required"
 root="$(cd "$(dirname "$0")/../../.." && pwd)"; cd "$root"
 FUNCTIONS="generate-company-brain-draft setup-company-brain company-brain-memory pilot-chat daily-brief run-radar-scan run-monitoring-scan"
 supabase secrets set --project-ref "$ref" \
@@ -41,7 +42,8 @@ supabase secrets set --project-ref "$ref" \
 echo "configured: spend ceiling \$$ceiling per workspace per 30 days; delegation off"
 for f in $FUNCTIONS; do
   echo "deploying $f → $ref"
-  supabase functions deploy "$f" --project-ref "$ref" >/dev/null
+  # --use-docker bundles locally: a plain upload of pilot-chat's ~280 modules is refused (HTTP 413).
+  supabase functions deploy "$f" --project-ref "$ref" --use-docker >/dev/null
 done
 echo "secret NAMES on $ref (values are never shown):"
 supabase secrets list --project-ref "$ref" | awk -F'|' 'NR>2 {gsub(/ /,"",$1); if ($1!="") print "  " $1}'
