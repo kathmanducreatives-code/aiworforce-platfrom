@@ -122,7 +122,7 @@ const INDUSTRY_SYSTEM_PROMPT = [
   "accept as the same market or an adjacent one. Never name companies. Answer JSON: {\"related\": [string, ...]}.",
 ].join(" ");
 
-const LABEL = /^[A-Za-z][A-Za-z0-9&,'()\/ .-]{1,59}$/;
+const LABEL = /^[A-Za-z][A-Za-z0-9&,'()/ .-]{1,59}$/;
 
 /** Keep only plain industry labels, not already requested, deduplicated, at most 12. */
 export function cleanRelated(raw: unknown, requested: readonly string[]): string[] {
