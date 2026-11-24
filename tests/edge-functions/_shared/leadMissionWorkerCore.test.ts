@@ -104,3 +104,26 @@ Deno.test("heartbeat controller renews by QUEUE ROW, then reports loss on first 
   assert(seen.length >= 2, "must have renewed at least once before losing");
   assert(seen.every((q) => q === "q1"), "the heartbeat is keyed on the queue row");
 });
+
+Deno.test("heartbeat: stop() cancels the pending interval sleep, so shutdown is not held for an interval", async () => {
+  // Hosted dry run: the worker logged "stopped" and then took ~13 s to exit —
+  // the 60 s heartbeat sleep of the finished mission was still pending.
+  let aborted = false, beats = 0;
+  let entered!: () => void;
+  const sleeping = new Promise<void>((r) => { entered = r; });
+  const ctl = makeHeartbeatController({
+    mission, workerId: "w1", leaseSeconds: 180, intervalMs: 60_000,
+    heartbeat: async () => { beats++; return { ok: true, reason: "renewed" }; },
+    // A sleep that only ever ends by abort: if stop() did not abort it, it would never settle.
+    sleep: (_ms, signal) => new Promise<void>((r) => {
+      entered();
+      signal?.addEventListener("abort", () => { aborted = true; r(); }, { once: true });
+    }),
+  });
+  ctl.start(() => {});
+  await sleeping;
+  ctl.stop();
+  await new Promise((r) => setTimeout(r, 0));
+  assert(aborted, "stop() must abort the pending sleep");
+  assertEquals(beats, 0, "a stopped controller never renews afterwards");
+});

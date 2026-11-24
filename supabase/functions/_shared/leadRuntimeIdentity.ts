@@ -22,6 +22,23 @@
 // PURE. No network, provider, model or database access.
 
 import { BUILD_INFO } from "./buildInfo.ts";
+import { buildInfo as currentBuildStamp } from "./buildStamp.ts";
+
+/**
+ * THE BUILD THIS PROCESS IS RUNNING. `buildInfo.ts` is regenerated only by the
+ * legacy deploy-lead-intelligence script, so it went stale (it still named
+ * 046b61b0 on 8b0e2b6b). The canonical stamp (`buildStamp.ts`) is what every
+ * production surface and the worker's /health report: the deploy stamp, else
+ * Railway's injected SHA, else the local run's. It is used when it names a full
+ * SHA; otherwise the legacy file stands. Reporting only — admission decides on
+ * the contract VERSION (`checkContractCompatibility`), never on this.
+ */
+function currentBuild(): { git_sha: string; build_timestamp: string; dirty: boolean } {
+  const stamp = currentBuildStamp();
+  return /^[0-9a-f]{40}$/i.test(stamp.sha)
+    ? { git_sha: stamp.sha.toLowerCase(), build_timestamp: stamp.built_at === "unknown" ? BUILD_INFO.build_timestamp : stamp.built_at, dirty: false }
+    : { git_sha: BUILD_INFO.git_sha, build_timestamp: BUILD_INFO.build_timestamp, dirty: BUILD_INFO.dirty };
+}
 
 /**
  * The lead-intelligence contract generation.
@@ -66,14 +83,15 @@ export interface LeadRuntimeIdentity {
 export function runtimeIdentity(
   role: LeadRuntimeRole, fn: string,
 ): LeadRuntimeIdentity {
+  const build = currentBuild();
   return {
     role,
     function: fn,
-    git_sha: BUILD_INFO.git_sha,
-    git_short: BUILD_INFO.git_sha.slice(0, 8),
-    build_timestamp: BUILD_INFO.build_timestamp,
+    git_sha: build.git_sha,
+    git_short: build.git_sha.slice(0, 8),
+    build_timestamp: build.build_timestamp,
     lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION,
-    dirty: BUILD_INFO.dirty,
+    dirty: build.dirty,
   };
 }
 
@@ -117,7 +135,7 @@ export function checkContractCompatibility(
     ok: true, planner_version: planner, executor_version: executor,
     // Informational only. Different builds speaking the same contract is a
     // supported, normal state — not a warning.
-    same_build: !!plannerSha && plannerSha === BUILD_INFO.git_sha,
+    same_build: !!plannerSha && plannerSha === currentBuild().git_sha,
   };
 }
 
