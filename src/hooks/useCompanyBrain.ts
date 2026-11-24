@@ -22,24 +22,50 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import type { BrainProfile } from '@/lib/companyBrainView';
+import { AGENCY_SCOPE, principalKeyPart, type BrainPrincipal, type BrainScope } from '@/lib/brainScope';
+import { loadClientBrain, type ClientBrainDenial } from '@/lib/clientBrainApi';
+import { invokeBrain } from '@/lib/brainInvoke';
 
 export interface CompanyBrainRow {
   profile: BrainProfile;
   onboarding_completed: boolean;
   onboarding_completed_at: string | null;
+  /** Row version (set by a database trigger on every update). Edits are built on it. */
+  updated_at: string | null;
+  /** A CLIENT Brain's integer version (Phase 3c); null for the agency Brain and before a client's first save. */
+  version?: number | null;
 }
 
-/** Stable, workspace-scoped key. One workspace's cache can never serve another. */
-export const companyBrainKey = (workspaceId: string | null | undefined) =>
-  ['company_brain', workspaceId ?? null] as const;
+/** A client Brain the server would not show (revoked, archived, signed out…). Never retried, never replaced by another Brain. */
+export class ClientBrainDeniedError extends Error {
+  constructor(public readonly reason: ClientBrainDenial) { super(`client_brain_denied:${reason}`); }
+}
 
-export function useCompanyBrain() {
-  const { workspaceId, loading: wsLoading } = useWorkspace();
+/**
+ * Stable key, scoped to the signed-in session, the workspace and the Brain.
+ * One login's cache can never serve another (CACHE-SESSION, Codex #185), one
+ * workspace's never another's, one client's never another client's or the
+ * agency's. Without a principal the key matches nothing else (principalKeyPart),
+ * so an unidentified read always goes to the server. The agency key is a prefix
+ * of that principal's client keys, so a workspace invalidation covers both.
+ */
+export const companyBrainKey = (workspaceId: string | null | undefined, scope: BrainScope = AGENCY_SCOPE, principal?: BrainPrincipal | null) =>
+  scope.kind === 'agency'
+    ? (['company_brain', principalKeyPart(principal), workspaceId ?? null] as const)
+    : (['company_brain', principalKeyPart(principal), workspaceId ?? null, 'client', scope.clientId] as const);
+const SIGNED_OUT_KEY = ['company_brain', 'signed-out'] as const;
+
+export function useCompanyBrain(scope: BrainScope = AGENCY_SCOPE) {
+  const { workspaceId, loading: wsLoading, principal } = useWorkspace();
   const qc = useQueryClient();
+  // No signed-in session: nothing is read or shown (a fixed, never-fetched key).
+  const queryKey = principal ? companyBrainKey(workspaceId, scope, principal) : SIGNED_OUT_KEY;
 
   const query = useQuery({
-    queryKey: companyBrainKey(workspaceId),
-    enabled: !wsLoading && !!workspaceId,
+    queryKey,
+    enabled: !wsLoading && !!workspaceId && !!principal,
+    // A refusal is an answer, not a network blip.
+    retry: (count, err) => !(err instanceof ClientBrainDeniedError) && count < 3,
 
     // Five minutes of freshness: a tab switch or route return inside that
     // window renders from cache with no request at all.
@@ -57,9 +83,14 @@ export function useCompanyBrain() {
     refetchOnMount: true,
 
     queryFn: async (): Promise<CompanyBrainRow> => {
+      if (scope.kind === 'client') {
+        const r = await loadClientBrain(invokeBrain, workspaceId!, scope.clientId);
+        if (r.kind === 'denied') throw new ClientBrainDeniedError(r.reason);
+        return { profile: r.row.profile, onboarding_completed: r.row.onboarding_completed, onboarding_completed_at: null, updated_at: null, version: r.row.version };
+      }
       const { data: row, error } = await supabase
         .from('company_brain')
-        .select('profile, onboarding_completed, onboarding_completed_at')
+        .select('profile, onboarding_completed, onboarding_completed_at, updated_at')
         .eq('workspace_id', workspaceId!)
         .maybeSingle();
       // Surfaced rather than swallowed: the old code ignored `error` entirely
@@ -69,6 +100,7 @@ export function useCompanyBrain() {
         profile: (row?.profile ?? {}) as BrainProfile,
         onboarding_completed: !!row?.onboarding_completed,
         onboarding_completed_at: row?.onboarding_completed_at ?? null,
+        updated_at: row?.updated_at ?? null,
       };
     },
   });
@@ -85,9 +117,10 @@ export function useCompanyBrain() {
   /** A read is in flight but there is already something to render. */
   const isRefreshing = !!data && query.isFetching;
 
+  const keyId = JSON.stringify(queryKey);
   const refresh = useCallback(
-    () => qc.invalidateQueries({ queryKey: companyBrainKey(workspaceId) }),
-    [qc, workspaceId],
+    () => qc.invalidateQueries({ queryKey: JSON.parse(keyId), exact: true }),
+    [qc, keyId],
   );
 
   return {
@@ -96,6 +129,7 @@ export function useCompanyBrain() {
     loading,
     isRefreshing,
     error: query.error instanceof Error ? query.error : null,
+    denied: query.error instanceof ClientBrainDeniedError ? query.error.reason : null,
     refresh,
   };
 }

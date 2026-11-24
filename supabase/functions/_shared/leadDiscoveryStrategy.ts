@@ -45,6 +45,7 @@
 // PURE. No network, provider, model or database access. The model call is
 // injected by the caller; this module only validates what comes back.
 
+import { contractOf } from "./missionContract/authority.ts";
 import {
   actorsForPurpose, hiringActorCard, type HiringActorCard,
 } from "./hiringActorCatalog.ts";
@@ -547,6 +548,11 @@ const COHORT_MEMBERSHIP: Record<string, (m: LeadMissionV1) => boolean> = {
     const stages = (m.company_profile?.stages ?? []).map((s) => String(s).toLowerCase());
     if (stages.some((s) => /startup|seed|series a|early|venture|pre-seed/.test(s))) return true;
     // The user naming the cohort is the other way in, and outranks the profile.
+    // A v4 mission states it in its approved contract; the sentence is display only there.
+    const contract = contractOf(m);
+    if (contract) {
+      return contract.requirements.some((r) => r.dimension === "company_stage" && /\by ?combinator\b|\byc\b/i.test(JSON.stringify(r.stage)));
+    }
     return /\by ?combinator\b|\byc\b/i.test(String(m.original_user_query ?? ""));
   },
 };

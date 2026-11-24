@@ -121,6 +121,56 @@ Tested against real Postgres + PostgREST in
 `tests/db-contract/leadMissionExhaustedLease.contract.test.ts` (unit:
 `tests/edge-functions/_shared/leadMissionLapsedLease.test.ts`).
 
+## `20261025130000_tasks_commit_boundary.sql`
+
+**Not approved for any hosted project.** The database half of #179's
+pre-effect guard. For the application roles (every PostgREST writer), a task
+is authorized in the transaction that writes it:
+- its plan (`plan_id`, `task_plan_id`) must exist in the task's workspace;
+- a new task's principal must be a current member, read under a `FOR KEY SHARE`
+  lock, so a concurrent membership `DELETE` either commits first (the task is
+  refused) or waits for the task's transaction.
+
+This closes Codex's EXEC-PLAN and EXEC-REVOKE findings. Codex's own
+reproduction passes unchanged. Status and result writes do not fire it, so
+authorized work keeps settling. Administrative SQL (role `postgres`) is not
+checked. Independent of every other held migration.
+`tests/db-contract/taskCommitBoundary.contract.test.ts` proves it, including
+the two-session race; `mutation.sh` proves it fails without the migration,
+without the lock, and without the plan-workspace comparison. Rollback:
+`rollback/20261025130000_tasks_commit_boundary.down.sql` (round trip verified: rolled back equals never applied, privileges included). Before applying on a hosted project, run `scripts/test-project/tasks-commit-boundary-preflight.sql` (read-only); it must end in `OK`.
+
+## `20261025120000_lead_graph_same_workspace_parents.sql`
+
+**OWN-01. Not approved for any hosted project.** Every parent reference in the
+Lead Discovery graph (26 foreign keys into `accounts`, `contacts`,
+`lead_candidates`, `lead_evidence` and `signals`) becomes a composite key on
+`(workspace_id, <col>)` → parent `(workspace_id, id)`, so a row can only point
+at a parent in its own workspace, whoever writes it. Before it, a member who
+could not read another workspace's account could still store a contact under
+it (201; #173's native reproduction). Constraint names, optional parents,
+`SET NULL` (now `SET NULL (<col>)`) and `CASCADE` are preserved, so PostgREST
+embeds and hints are unchanged. The migration counts existing mismatches first
+and **aborts without changing anything** if there are any; it never reassigns a
+parent. Run `scripts/test-project/own01-parent-preflight.sql` (read-only) on the
+target first. Needs PostgreSQL 15+. Independent of every other held migration.
+`tests/db-contract/leadGraphSameWorkspaceParents.contract.test.ts` proves the
+behaviour; `tests/db-contract/mutation.sh` proves it fails without the
+migration, with plain `SET NULL`, with a reference left out, and without the
+preflight abort. Rollback (restores the ID-only keys under the same names):
+`rollback/20261025120000_lead_graph_same_workspace_parents.down.sql`.
+
+
+## `20261025150000_task_plans_parent_identity.sql`
+
+**Not approved for any hosted project.** This is the parent side of `20261025130000` and closes Codex's PLAN-PARENT finding. For application roles:
+- a plan's `id` and `workspace_id` are fixed once it exists (`42501`). No application code changes them; every writer updates status only.
+- a deleted plan's id cannot be re-created in another workspace while tasks still point at it (`23503`). `tasks.plan_id` has no foreign key, so it can outlive its plan.
+
+A plan is never moved, so a task is never left under a foreign plan or silently re-homed. Status writes, new plans and administrative SQL are unchanged.
+
+- **Proof:** `tests/db-contract/taskPlanParentIdentity.contract.test.ts`. Codex's `task-parent-membership-audit.test.ts` PLAN-PARENT case passes unchanged. `mutation.sh` covers it with the migration omitted, the workspace comparison removed and the re-creation check removed.
+- **Rollback:** `rollback/20261025150000_task_plans_parent_identity.down.sql`.
 ## `20261015120000_provider_purchase_claims.sql`
 
 **PROPOSED — NOT APPLIED, NOT WIRED, NOT APPROVED.** One buyer per provider-call
@@ -192,3 +242,120 @@ default).
 
 Rollback (refuses while any authorization or operation row exists):
 `rollback/20261015140000_discovery_smoke_admission.down.sql`.
+
+## `20261024160000_client_company_brain.sql`
+
+Company Brain **Phase 3c**: canonical client accounts, append-only client
+access grants (generations), one Company Brain per client, and a
+`permission_revision` on every membership (one global sequence, renewed on
+each role change and each new membership). Writes go only through the
+service-role SECURITY DEFINER functions in the file, which re-authorize under
+the lock order session → membership → client → grant → data. The agency Brain
+(`company_brain`) and its writers are untouched.
+
+**Not approved.** It implements the contract proposed in #174
+(`docs/plans/company-brain/CLIENT_BRAIN_CONTRACT.md`); O3 (the membership
+writer) needs Backend's confirmation and the whole contract needs owner
+approval before this moves to `supabase/migrations/`. Applied only by
+`tests/db-contract/bootstrap.sh` to the lane's throwaway database.
+`tests/db-contract/clientCompanyBrain.contract.test.ts` proves the behaviour;
+`tests/db-contract/mutation.sh` proves those tests fail without its locks and
+rules. Nothing reads or writes these tables yet outside tests and the
+switched-off `_shared/clientBrain.ts`.
+
+Rollback: the statements listed in the file's header (drops only the new
+objects and the new column).
+
+## `20261025140000_workspace_member_writers.sql`
+
+**Backend. Not approved for any hosted project; needs #176 and approval of the #174 contract first.** These are the canonical membership writers from contract §8 O3 option A and §9.4: `workspace_member_remove(ws, target, actor, session)` and `workspace_member_set_role(ws, target, role, actor, session)`. Both are service-role only and return an outcome. Any refusal changes nothing.
+
+- **Lock order (§5):** the actor's session (L1, `FOR SHARE`), then the actor, the target and **every owner** row in one `FOR UPDATE` statement, in `user_id` order (L2). Locking every owner row serializes concurrent last-owner changes, which Codex required. #176's triggers then revoke grants (`membership_removed`) or renew `permission_revision` in the same transaction.
+- **Policy (agreed on #174):**
+  - owners and admins may remove or demote;
+  - an admin may not touch an owner;
+  - the last owner can be neither removed nor demoted;
+  - anyone may remove themself, except the last owner.
+- **Refused, because it is not decided:** promotion (`promotion_unsupported`), and roles outside owner/admin/editor/viewer.
+- **Proof:** `tests/db-contract/workspaceMemberWriters.contract.test.ts` and `mutation.sh`.
+- **Rollback:** `rollback/20261025140000_workspace_member_writers.down.sql`. It removes the writers only; memberships, grants and #176's triggers are untouched.
+
+## `20261025160000_workspace_members_app_surface.sql`
+
+**Not approved for any hosted project; needs #176 and `20261025140000` first.** This closes Codex's MEMBER-SURFACE findings. Before it, a raw service-role PATCH promoted a viewer to owner, and a raw service-role DELETE removed the last owner.
+
+Application roles now change or delete a membership **only** through #186's writers:
+- **The grant.** UPDATE, DELETE and TRUNCATE are revoked from `service_role`. The browser roles' grants belong to #159. SELECT and the provisioning INSERT are unchanged.
+- **The invariant.** A SECURITY INVOKER trigger refuses the same writes from `anon`, `authenticated` and `service_role`, whatever their grants, and names the canonical writer.
+- **What it leaves alone.** Definer functions (provisioning, the canonical writers), foreign-key cascades (workspace deletion) and administrative SQL run as the owner, so the trigger doesn't apply to them.
+
+- **Proof:** `tests/db-contract/workspaceMembersAppSurface.contract.test.ts`. Codex's two MEMBER-SURFACE cases pass unchanged. Seven mutation proofs cover:
+  - the migration omitted;
+  - the revoke removed;
+  - the trigger bypassed;
+  - the trigger made definer;
+  - role changes allowed;
+  - deletes allowed;
+  - TRUNCATE unguarded.
+- **Rollback:** `rollback/20261025160000_workspace_members_app_surface.down.sql`.
+
+## `20261101120000_discovery_evidence_cache.sql`
+
+Per-workspace reuse of purchased company records (`leadPipeline/evidenceCache.ts`,
+ported from PR #198). One table, `discovery_evidence_cache`, keyed by workspace and
+LinkedIn company slug: one workspace never reads another's purchases. RLS on;
+members read their own workspace's rows; only `service_role` writes. Additive.
+
+Optional: needed only when `DISCOVERY_EVIDENCE_CACHE_ENABLED` is set; without it
+the pipeline buys every record. **Not approved for production.** Rollback:
+`rollback/20261101120000_discovery_evidence_cache.down.sql` (drops the table; the
+records can be bought again).
+
+## `20261108120000_lead_pipeline_one_lead_per_company.sql`
+
+MRLE Phase 0 (audit 2026-11-07 X3 / X8). The lead pipeline wrote accounts, contacts and
+`lead_candidates` as separate calls with no transaction and no uniqueness for its own leads
+(`lead_type = 'lead_pipeline'`). Adds a unique index (one pipeline lead per workspace and
+account) and `lead_pipeline_persist_lead(...)`, which writes the account (by domain, then a
+same-named account with no or the same domain), contact (by LinkedIn URL) and lead in ONE
+transaction. Service role only.
+
+**HELD — NOT APPLIED, not approved for any hosted project.** The application already writes
+idempotently without it (`leadPipeline/persistRows.ts`); the RPC path is used only with
+`LEAD_PIPELINE_PERSIST_TX=enabled` after this is applied. **It refuses to apply** (and
+changes nothing) while any workspace already holds two pipeline leads for one account: it
+never deletes or merges data. Before applying on a hosted project, run
+`scripts/test-project/lead-pipeline-one-lead-preflight.sql` (read-only); it must start with
+`OK 0 duplicate pairs`, or each listed pair needs an owner decision first. Rollback:
+`rollback/20261108120000_lead_pipeline_one_lead_per_company.down.sql`. Replayed against real
+Postgres (PGlite) in `tests/infra/leadPipelineOneLeadPerCompany.test.ts`.
+
+## `20261113120000_workforce_v2_security.sql`
+
+Workforce V2 security. Makes `signal_events`, `signal_event_evidence`,
+`monitoring_subjects` and `approvals` read-only for browser roles: drops the
+member INSERT/UPDATE/DELETE policies (and the FOR ALL
+`approvals_workspace_member_access`), revokes those grants from `anon` and
+`authenticated`, and keeps a member SELECT policy. Every legitimate writer is
+server-side with the service role (`lisa_record_signal`, scanners,
+`approve-and-continue`, `run-agent`, `toolRegistry`); the browser only reads.
+
+**Not applied anywhere.** Proven in the DB contract lane
+(`workforceV2Security.contract.test.ts`, plus a mutation proof that omits it).
+Before applying to TEST: confirm no client build writes these tables directly
+(`grep -rn "from('approvals')\|from('signal_events')" src` showed reads only on
+2026-11-11). Rollback: `rollback/20261113120000_workforce_v2_security.down.sql`.
+
+## `20261114120000_lead_model_calls_view_lockdown.sql`
+
+The model-spend view `public.lead_model_calls` is owned by `postgres` without
+`security_invoker` and is granted to `anon` / `authenticated`, so it bypassed the
+base table's RLS: anyone with the publishable key could read every workspace's
+model-call rows and UPDATE / DELETE them through the auto-updatable view, which
+erases the ledger the spend ceiling sums. Found read-only on TEST 2026-11-11.
+Production carries the same migration and was **not** checked or changed. The fix
+sets `security_invoker = true` and revokes browser roles (every reader is service
+role). Applied together with `20261113120000` by
+`scripts/test-project/install-workforce-v2-security.sh`. Proven by
+`leadModelCallsView.contract.test.ts` and its mutation proof. Rollback:
+`rollback/20261114120000_lead_model_calls_view_lockdown.down.sql`.

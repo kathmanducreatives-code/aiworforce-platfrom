@@ -193,6 +193,15 @@ export const PROVIDER_FAILURE_CODES = [
    * already established and thrown away.
    */
   "quota_exhausted",
+  /**
+   * The mission's own spend gate refused the call before it reached OpenAI
+   * (`smokeAdmission.refusal`, header `x-agentory-admission: refused`) — a
+   * budget or attempt limit, not a provider fault. Canary session 2's fifth
+   * worker call was this, reported as `http_error`. Never retried: the gate
+   * answers the same question the same way, and a 503 "purchase may exist"
+   * refusal is the gate's own uncertainty, not OpenAI's.
+   */
+  "admission_refused",
 ] as const;
 
 export type GptFailureCode =
@@ -200,6 +209,8 @@ export type GptFailureCode =
   | "empty_response"
   | "unparseable_json"
   | "schema_refused"
+  /** The request body could not be built for this model (e.g. an effort it refuses). Never retried. */
+  | "request_build_failed"
   | typeof TERMINAL_COMPLETION_FAILURE_CODES[number];
 
 export function isProviderFailure(code: GptFailureCode): boolean {
@@ -460,10 +471,12 @@ export async function gptStructured<T>(
   // `buildChatCompletionsBody` decides the shape from the model id, so this
   // transport can now reach either family. No model and no effort changes
   // here — see `reasoningEffort` on the request.
-  const requestInit = {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify(buildChatCompletionsBody({
+  // BUILT BEFORE THE REQUEST, AND A FAILURE TO BUILD IS A RESULT, NOT A THROW.
+  // The builder refuses an effort a model cannot take (gpt-6.1-sol and
+  // `none`); that refusal reaches the caller as a failed call it can handle.
+  let bodyText: string;
+  try {
+    bodyText = JSON.stringify(buildChatCompletionsBody({
       model,
       systemPrompt: req.system,
       userMessage: req.user,
@@ -473,7 +486,17 @@ export async function gptStructured<T>(
       // this is inert until routing actually moves a stage to GPT-5.
       reasoningEffort: (req.reasoningEffort as ReasoningEffort | null | undefined) ?? null,
       schema: req.schema ?? null,
-    })),
+    }));
+  } catch (e) {
+    return {
+      ok: false, code: "request_build_failed", detail: String((e as Error)?.message ?? e).slice(0, 300),
+      latency_ms: elapsed(), retryable: false, attempts: 0,
+    };
+  }
+  const requestInit = {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: bodyText,
   } satisfies RequestInit;
 
   // BOUNDED RETRY, NOT A LOOP. The bound is a constant, so the worst case is
@@ -490,7 +513,8 @@ export async function gptStructured<T>(
         // A 429 that says the balance is gone is not a rate limit. Retrying it
         // burns the caller's clock on a condition only a human can clear.
         const quotaExhausted = bodyIsQuotaExhausted(body);
-        const transient = statusIsTransient(res.status) && !quotaExhausted;
+        const admissionRefused = res.headers?.get?.("x-agentory-admission") === "refused";
+        const transient = statusIsTransient(res.status) && !quotaExhausted && !admissionRefused;
         // The status and a bounded excerpt only. A provider error body can echo
         // request content, and this string is persisted into task results.
         failure = {
@@ -498,8 +522,10 @@ export async function gptStructured<T>(
           // NAMED, NOT BURIED. The distinction already existed one line above
           // and only reached `retryable`; a caller cannot branch on a boolean
           // that says "do not retry" without knowing WHY not.
-          code: quotaExhausted ? "quota_exhausted" : "http_error",
-          detail: redact(`OpenAI returned HTTP ${res.status}: ${body.slice(0, 300)}`, key),
+          code: admissionRefused ? "admission_refused" : quotaExhausted ? "quota_exhausted" : "http_error",
+          detail: admissionRefused
+            ? redact(`the mission's spend gate refused the call (HTTP ${res.status}): ${body.slice(0, 300)}`, key)
+            : redact(`OpenAI returned HTTP ${res.status}: ${body.slice(0, 300)}`, key),
           latency_ms: elapsed(), retryable: transient, attempts,
         };
         if (quotaExhausted) {

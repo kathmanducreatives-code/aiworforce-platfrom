@@ -33,11 +33,25 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
+// THE REPOSITORY ROOT, from this file's own location — never the caller's cwd.
+// The R1 release script ran this wrapper from inside release-backups/<dir>, and
+// the relative `scripts/verify-deploy-target.mjs` then resolved to a file that
+// does not exist there, so every backup refused (2026-11-13). Paths this wrapper
+// needs are anchored here; the SUPABASE CLI still runs in the caller's cwd.
+export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// TEST is the ISOLATED project `agentory-discovery-test` (created 2026-10-18).
+// It used to name production — "TEST" was the live project — which is how a
+// "test" command could reach production. It must never equal `production`
+// again: main() refuses outright if it does (see testIsProduction).
 const CANONICAL = {
   production: "ohsdatpvfdjdemstoiuj",
-  test: "ohsdatpvfdjdemstoiuj",
+  test: "tlvnfrxzjhsjgdofwehb",
 };
+export { CANONICAL };
 
 /**
  * Commands this wrapper refuses outright, with the reason.
@@ -62,7 +76,7 @@ function fail(msg) {
 }
 
 /** The project ref currently checked into config.toml. */
-export function configuredRef(path = "supabase/config.toml") {
+export function configuredRef(path = join(REPO_ROOT, "supabase/config.toml")) {
   const m = /^\s*project_id\s*=\s*"([a-z0-9]+)"/m.exec(readFileSync(path, "utf8"));
   return m ? m[1] : null;
 }
@@ -108,6 +122,27 @@ export function resolveTarget({ requested, env = process.env }) {
   return { ok: true, target: "test", ref: CANONICAL.test };
 }
 
+/**
+ * "TEST" IS PRODUCTION TODAY (docs/SUPABASE_TARGETING.md): both canonical refs
+ * name `ohsdatpvfdjdemstoiuj`. Until an isolated TEST project exists and
+ * CANONICAL.test names it, the test target may only READ; anything that could
+ * change the project (deploy, secrets, migrations, storage…) is refused, so
+ * "deploy to TEST" can never quietly deploy to production. Production changes
+ * go through `supabase:prod` with SUPABASE_TARGET=production, deliberately.
+ */
+const READ_ONLY = ["functions list", "secrets list", "migration list", "projects list", "inspect db"];
+export function testIsProduction(canonical = CANONICAL) {
+  return canonical.test === canonical.production;
+}
+export function testTargetRefusal(args, canonical = CANONICAL) {
+  if (!testIsProduction(canonical)) return null;
+  const joined = args.filter((a) => !a.startsWith("-")).slice(0, 2).join(" ");
+  if (READ_ONLY.some((r) => joined === r || joined.startsWith(`${r} `))) return null;
+  return `the test target resolves to the PRODUCTION project (${canonical.test}); ` +
+    `only read-only commands (${READ_ONLY.join(", ")}) are allowed through it. ` +
+    "Create the isolated TEST project and point CANONICAL.test at it, or use supabase:prod deliberately.";
+}
+
 export function refusalFor(args) {
   const joined = args.filter((a) => !a.startsWith("-")).slice(0, 2).join(" ");
   for (const [cmd, why] of REFUSED) if (joined.startsWith(cmd)) return { cmd, why };
@@ -133,9 +168,13 @@ function main() {
 
   const refused = refusalFor(args);
   if (refused) fail(`\`supabase ${refused.cmd}\` is not available through this repo.\n  ${refused.why}`);
+  if (resolved.target === "test") {
+    const notTest = testTargetRefusal(args);
+    if (notTest) fail(notTest);
+  }
 
   // The canonical check, delegated — one definition of which ref is which env.
-  execFileSync("node", ["scripts/verify-deploy-target.mjs", "--expect", resolved.target], {
+  execFileSync("node", [join(REPO_ROOT, "scripts/verify-deploy-target.mjs"), "--expect", resolved.target], {
     stdio: "inherit",
     env: { ...process.env, DEPLOY_SUPABASE_PROJECT_REF: resolved.ref },
   });
@@ -152,7 +191,14 @@ function main() {
   }
 
   console.log(`[supabase-target] running: supabase ${args.join(" ")} --project-ref ${resolved.ref}`);
-  execFileSync("supabase", [...args, "--project-ref", resolved.ref], { stdio: "inherit" });
+  try {
+    execFileSync("supabase", [...args, "--project-ref", resolved.ref], { stdio: "inherit" });
+  } catch (err) {
+    // The CLI already printed its own error; exit with its status rather than
+    // a Node stack trace that would bury that message in callers' logs.
+    console.error(`[supabase-target] supabase exited with status ${err.status ?? "unknown"}`);
+    process.exit(typeof err.status === "number" && err.status > 0 ? err.status : 1);
+  }
 }
 
 // Only run when invoked directly, so the helpers above stay importable by tests.

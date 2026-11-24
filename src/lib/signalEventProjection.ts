@@ -36,12 +36,14 @@ export interface RawSignalEventRow {
   source_url?: string | null;
   legacy_signal_id?: string | null;
   normalized_value?: Record<string, unknown> | null;
+  /** Read by the LISA V2 quality projection; absent on older selects (treated as active). */
+  lifecycle_status?: string | null;
 }
 
 export const EVENT_COLUMNS =
   "id, workspace_id, signal_type, signal_category, origin, subject_type, subject_key, " +
   "occurred_at, occurred_at_basis, observed_at, verification_status, confidence, " +
-  "provider, source_url, legacy_signal_id, normalized_value";
+  "provider, source_url, legacy_signal_id, normalized_value, lifecycle_status";
 
 /**
  * How a canonical type reads in the feed.
@@ -64,9 +66,23 @@ export function feedSignalTypeOf(row: RawSignalEventRow): string {
  * so quality classification, badges and the "why" text stay in ONE place. A
  * second copy would drift the first time either changed.
  */
+/**
+ * LISA V2 rows carry a COUNTED verification level and a relevance verdict.
+ * Verified (corroborated / self-reported), active and sourced → "verified";
+ * anything else → "needs_verification". Never "verified" by provider label.
+ */
+export function lisaFeedQuality(row: Pick<RawSignalEventRow, "lifecycle_status" | "source_url">, lisa: Record<string, unknown>): "verified" | "needs_verification" {
+  const level = (lisa.verification as { level?: unknown } | undefined)?.level;
+  const ok = (level === "corroborated" || level === "self_reported") &&
+    (row.lifecycle_status ?? "active") === "active" && /^https?:\/\//.test(row.source_url ?? "");
+  return ok ? "verified" : "needs_verification";
+}
+
 export function normalizeSignalEventRow(row: RawSignalEventRow): FeedSignal {
   const nv = (row.normalized_value ?? {}) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const lisa = (nv.lisa && typeof nv.lisa === "object") ? nv.lisa as Record<string, unknown> : null;
+  const lisaRel = (lisa?.relevance ?? {}) as Record<string, unknown>;
 
   const asLegacyShape: RawSignalRow = {
     id: row.id,
@@ -74,7 +90,7 @@ export function normalizeSignalEventRow(row: RawSignalEventRow): FeedSignal {
     signal_type: feedSignalTypeOf(row),
     signal_label: null,
     title: str(nv.title) ?? signalTypeLabel(feedSignalTypeOf(row)),
-    description: str(nv.description),
+    description: str(nv.description) ?? str(nv.summary),
     source_url: row.source_url ?? null,
     source: row.provider ?? null,
     // WHEN AGENTORY SAW IT, never when it happened. `occurred_at` is null on
@@ -92,7 +108,8 @@ export function normalizeSignalEventRow(row: RawSignalEventRow): FeedSignal {
       ...(str(nv.company_name) ? { company_name: nv.company_name } : {}),
       ...(str(nv.company_location) ? { location: nv.company_location } : {}),
       ...(str(nv.why_it_matters) ? { why_it_matters: nv.why_it_matters } : {}),
-      signal_quality: nv.radar_signal_quality ?? null,
+      ...(lisa && str(lisaRel.why_it_matters) ? { why_it_matters: lisaRel.why_it_matters } : {}),
+      signal_quality: lisa ? lisaFeedQuality(row, lisa) : nv.radar_signal_quality ?? null,
       // PROVENANCE, SURFACED. The one thing the v1 row could never say: which
       // workflow collected this.
       origin: row.origin ?? null,

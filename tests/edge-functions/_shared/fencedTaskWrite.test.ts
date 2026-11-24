@@ -75,7 +75,8 @@ Deno.test("D1 run-agent: every slice result write goes through the fence, the ge
     assert(src.slice(call, g).includes(`{ requireOpen: ${open} }`), `${path}: requireOpen should be ${open}`);
   }
   assert(src.includes('checkpointVersion: "checkpointVersion" in rpc ? rpc.checkpointVersion : null,'));
-  assert(src.includes("generation: await resolveSliceGeneration(supabase as never, task.id, heldClaim?.checkpointVersion ?? null),"));
+  // The claim's generation, else the one a first-slice re-entry swapped in (firstSliceReentry.ts).
+  assert(src.includes("generation: await resolveSliceGeneration(supabase as never, task.id, heldClaim?.checkpointVersion ?? reentryGeneration),"));
   // No other write replaces a task's result through a guard path.
   const unfenced = [...src.matchAll(/supabase\.from\("tasks"\)\s*\.update\(\{\s*(?:\/\/[^\n]*\n\s*)*result: guardResult\(/g)];
   assertEquals(unfenced.length, 0);

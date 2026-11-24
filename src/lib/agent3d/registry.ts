@@ -67,6 +67,7 @@ export const AGENT_3D_REGISTRY: Readonly<Record<VisualAgentKey, Agent3DEntry>> =
   atlas: { key: 'atlas', model: null },
   mira: { key: 'mira', model: null },
   orion: { key: 'orion', model: null },
+  lisa: { key: 'lisa', model: null },
 });
 
 export function modelFor(key: VisualAgentKey | null | undefined, registry: Readonly<Record<VisualAgentKey, Agent3DEntry>> = AGENT_3D_REGISTRY): AgentModelManifest | null {

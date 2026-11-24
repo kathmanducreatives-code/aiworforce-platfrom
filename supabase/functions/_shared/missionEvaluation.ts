@@ -240,6 +240,25 @@ export interface CriterionVerdict {
   result: "pass" | "fail" | "unknown";
   reason: string;
   evidence: Array<{ evidence_id: string; excerpt: string }>;
+  /**
+   * WHAT THE STRICT PARSER DID TO THE MODEL'S ANSWER — provenance, so an
+   * `unknown` the parser MADE is never read as one the model GAVE:
+   *   `answered`         the model's pass/fail survived with its receipts;
+   *   `abstained`        the model itself said unknown and offered no receipt;
+   *   `downgraded`       the model said pass/fail (or an unrecognised result)
+   *                      and the parser lowered it: receipts missing or rejected;
+   *   `receipts_rejected` the model said unknown but cited receipts the parser
+   *                      rejected (stale, conflicting, invalid, foreign, unquoted);
+   *   `missing`          no single row for this criterion;
+   *   `unparsed`         the whole answer failed to parse.
+   * Absent on verdicts written before this field existed: treated as unknown
+   * provenance, never as an abstention.
+   */
+  origin?: "answered" | "abstained" | "downgraded" | "receipts_rejected" | "missing" | "unparsed";
+  /** The result the model gave before parsing, when it gave a string. */
+  model_result?: string | null;
+  /** Receipts the model offered that the parser rejected. */
+  rejected_receipts?: number;
 }
 
 /** Evidence types that describe the company itself (Q3): the only receipts for industry or business model. */
@@ -1018,7 +1037,7 @@ export function parseMissionEvaluationStrict(
   const fail = (why: string): ParsedMissionEvaluation => ({
     evaluation: { ...FALLBACK_INSUFFICIENT,
       ...(criteria.length ? { criterion_verdicts: criteria.filter(judged).map((c) => ({
-        criterion_id: c.id, result: "unknown" as const, reason: why, evidence: [],
+        criterion_id: c.id, result: "unknown" as const, reason: why, evidence: [], origin: "unparsed" as const,
       })) } : {}) },
     parse_status: "invalid_insufficient_evidence",
     raw_shape: {
@@ -1167,6 +1186,7 @@ export function parseMissionEvaluationStrict(
     const v = rows.length === 1 ? rows[0] : null;
     const evidence: CriterionVerdict["evidence"] = [];
     let invalid = false;
+    let rejected = 0;
     for (const receipt of Array.isArray(v?.evidence) ? v.evidence : []) {
       const id = typeof receipt?.evidence_id === "string" ? receipt.evidence_id : "";
       const excerpt = typeof receipt?.excerpt === "string" ? receipt.excerpt : "";
@@ -1197,13 +1217,21 @@ export function parseMissionEvaluationStrict(
         (c.time_window?.days && c.dimension !== "hiring" && c.dimension !== "funding" &&
           !eventWithinWindow(item.occurred_at, c.time_window.days).inside)) {
         invalid = true;
+        rejected++;
       } else evidence.push({ evidence_id: id, excerpt });
     }
     const geography_scope = v?.geography_scope === "headquarters" || v?.geography_scope === "presence" ? v.geography_scope : undefined;
     if (c.dimension === "geography" && (!geography_scope || (c.geography_scope && geography_scope !== c.geography_scope))) invalid = true;
     const result = !invalid && evidence.length > 0 && ["pass", "fail"].includes(v?.result)
       ? v.result as "pass" | "fail" : "unknown";
+    const said = typeof v?.result === "string" ? v.result : null;
+    const origin: NonNullable<CriterionVerdict["origin"]> = !v ? "missing"
+      : result !== "unknown" ? "answered"
+      : said !== "unknown" ? "downgraded"
+      : rejected > 0 || invalid ? "receipts_rejected"
+      : "abstained";
     return { criterion_id: c.id, result, evidence, ...(geography_scope ? { geography_scope } : {}),
+      origin, model_result: said, ...(rejected > 0 ? { rejected_receipts: rejected } : {}),
       reason: (result !== "unknown" || (v?.result === "unknown" && !invalid)) && typeof v?.reason === "string" && v.reason.trim()
         ? v.reason : "criterion evidence is missing or unusable" };
   });
@@ -1245,6 +1273,63 @@ export function parseMissionEvaluationStrict(
 }
 
 /** The evaluation for a company the evaluator never received. */
+/**
+ * Did the evaluator actually ANSWER, or is this a placeholder for a call that
+ * produced nothing?
+ *
+ * A failed call (HTTP error, an admission refusal, a timeout) reaches the
+ * strict parser as `null`, which returns `insufficient_evidence` with every
+ * verdict `origin: "unparsed"`. That is a safe HOLD — but canary session 2
+ * recorded it as `model_evaluated`, restored it as a decision the next slice
+ * never revisits, and let its fabricated `unknown` rows lower Oscilar's
+ * evidence-proven hiring check. A placeholder (`notEvaluated`) is the same.
+ * Only an answer the model gave counts.
+ */
+export function evaluatorAnswered(e: MissionEvaluation | null | undefined): boolean {
+  if (!e) return false;
+  if ((e.unknown_fields ?? []).includes("not_evaluated")) return false;
+  const verdicts = e.criterion_verdicts ?? [];
+  if (verdicts.length > 0 && verdicts.every((v) => v.origin === "unparsed")) return false;
+  return !(verdicts.length === 0 && e.reasoning === FALLBACK_INSUFFICIENT.reasoning);
+}
+
+/** Opt-in: re-evaluate, once, a company whose only evaluator call failed. Default off. */
+export const REEVALUATE_FAILED_EVALUATION_ENV = "LEAD_REEVALUATE_FAILED_EVALUATION";
+/** `unknown_fields` mark: the evaluator was CALLED and returned nothing usable. */
+export const FAILED_EVALUATION_MARK = "evaluation_failed";
+/** `unknown_fields` mark: that failure was already retried once. */
+export const RETRIED_EVALUATION_MARK = "evaluation_retried";
+
+export function failedEvaluationMarks(e: { unknown_fields?: readonly string[] } | null | undefined) {
+  const f = e?.unknown_fields ?? [];
+  return { failed: f.includes(FAILED_EVALUATION_MARK), retried: f.includes(RETRIED_EVALUATION_MARK) };
+}
+
+/**
+ * Is a restored decision that rests on a FAILED evaluator call re-evaluated?
+ *
+ * Canary session 2: Oscilar's only evaluation was refused by the spend gate,
+ * so its proven hiring stayed unknown and it could never be verified further.
+ * The acceptance matrix deliberately asserts that a resume evaluates nothing
+ * (Q4.9, an evaluator timeout), so this is OFF unless
+ * `LEAD_REEVALUATE_FAILED_EVALUATION=on`, and even then it applies only to a
+ * call that was made and failed (never "no evaluator", "budget spent" or a
+ * timeout, which reach the engine as `null`) and only ONCE per company: a
+ * second failure is marked retried and restored like any other decision. The
+ * call is still bounded by the slice's evaluation budget and the spend gate.
+ */
+export function retryFailedEvaluation(
+  e: { unknown_fields?: readonly string[] } | null | undefined,
+  readEnv?: (key: string) => string | undefined,
+): boolean {
+  // The engine passes `opts.readEnv`, which run-agent leaves unset: read the
+  // process environment then, exactly as the investigation-budget resolvers do.
+  const read = readEnv ?? ((k: string) => { try { return Deno.env.get(k); } catch { return undefined; } });
+  if (String(read(REEVALUATE_FAILED_EVALUATION_ENV) ?? "").trim().toLowerCase() !== "on") return false;
+  const m = failedEvaluationMarks(e);
+  return m.failed && !m.retried;
+}
+
 export function notEvaluated(reason: string): MissionEvaluation {
   return {
     ...FALLBACK_INSUFFICIENT,

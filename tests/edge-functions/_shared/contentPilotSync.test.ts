@@ -291,7 +291,7 @@ Deno.test("19. the signal id is verified in the shared module, scoped by workspa
   const s = stripComments(await read("pilot-chat/index.ts"));
   const verify = s.indexOf("resolveSignalHandoff(");
   const anchor = s.indexOf("anchorComposeToSignal(");
-  const referents = s.indexOf("resolveReferents(understood.request");
+  const referents = s.indexOf("turnRouting = planTurnRouting("); // R1.2: lead referents resolve inside the policy
   const route = s.indexOf("brainRoute = routeRequest(");
   assert(verify > 0 && anchor > verify, "verify, then anchor");
   assert(anchor < referents && anchor < route,

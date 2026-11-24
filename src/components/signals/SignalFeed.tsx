@@ -535,6 +535,7 @@ export default function SignalFeed() {
         onOpenChange={setEditRadarOpen}
         workspaceId={workspaceId}
         brainProfile={(brainData?.profile as any) ?? null}
+        brainUpdatedAt={brainData?.updated_at ?? null}
         onSaved={() => refreshBrain()}
       />
       <LoadMoreConfirmDialog

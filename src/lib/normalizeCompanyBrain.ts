@@ -205,8 +205,13 @@ function normalizeDisqualifiers(v: unknown, legacyIcpDisq: unknown): Disqualifie
   const domains = asStringArray(o.domains);
   const keywords = asStringArray(o.keywords);
   const titles = asStringArray(o.titles);
-  // Legacy: icp.disqualifiers used to be a flat string[] of industries.
-  if (industries.length === 0 && legacyIcpDisq != null) {
+  // Legacy: icp.disqualifiers used to be a flat string[] of industries. It is a
+  // fallback only while the structured buckets hold NOTHING. Once any bucket has
+  // a value the structured data is authoritative — otherwise clearing the
+  // industry exclusions resurrected the legacy mirror, which flattens every
+  // bucket, as industry exclusions.
+  const structuredEmpty = !industries.length && !company_types.length && !domains.length && !keywords.length && !titles.length;
+  if (structuredEmpty && legacyIcpDisq != null) {
     const legacy = asStringArray(legacyIcpDisq);
     return { industries: legacy, company_types, domains, keywords, titles };
   }
@@ -225,10 +230,9 @@ function parseSizeLabel(label: string): { min: number | null; max: number | null
   return { min: null, max: null };
 }
 
-function normalizeTargetCustomer(v2: unknown, legacyIcp: unknown, legacyCompany: unknown): TargetCustomer {
+function normalizeTargetCustomer(v2: unknown, legacyIcp: unknown, _legacyCompany: unknown): TargetCustomer {
   const t = asObject(v2);
   const icp = asObject(legacyIcp);
-  const co = asObject(legacyCompany);
 
   const industries = asStringArray(t.industries).length ? asStringArray(t.industries) : asStringArray(icp.industries);
   const business_models = asStringArray(t.business_models);
@@ -240,7 +244,8 @@ function normalizeTargetCustomer(v2: unknown, legacyIcp: unknown, legacyCompany:
   const nice_to_have = asStringArray(t.nice_to_have);
 
   const sizeObj = asObject(t.company_size);
-  const sizeLabel = asString(sizeObj.label) || asString(icp.company_size) || asString(co.team_size);
+  // The TARGET size only: the seller's own `company.team_size` is never the target (1.4 C3).
+  const sizeLabel = asString(sizeObj.label) || asString(icp.company_size);
   const parsed = parseSizeLabel(sizeLabel);
   const min = typeof sizeObj.min === "number" ? sizeObj.min : parsed.min;
   const max = typeof sizeObj.max === "number" ? sizeObj.max : parsed.max;

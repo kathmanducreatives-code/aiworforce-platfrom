@@ -11,6 +11,8 @@
 // Nothing here re-implements a provider normalizer, an Actor input compiler, an
 // identity resolver or the Company Brain gate. Those are correct, tested, and
 // the source of the evidence discipline this engine depends on. The engine
+import { executionQueryOf } from "./missionContract/authority.ts";
+import { criteriaOf } from "./missionCriteriaReader.ts";
 import { sizeBandLabel } from "./companySize.ts";
 import { YC_MEMO23_MAX_SIZES } from "./hiringActorCatalog.ts";
 import { normalizeCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
@@ -93,7 +95,8 @@ import {
   type QualificationContext,
 } from "./missionQualificationContext.ts";
 import {
-  buildMissionEvaluationInput, notEvaluated, reevaluationContextFrom,
+  buildMissionEvaluationInput, evaluatorAnswered, failedEvaluationMarks, FAILED_EVALUATION_MARK, notEvaluated,
+  reevaluationContextFrom, RETRIED_EVALUATION_MARK, retryFailedEvaluation,
   type MissionReevaluationContextV1,
   type MissionEvaluation, type MissionEvaluationInput,
   type ParsedMissionEvaluation, type DecisionSource,
@@ -253,14 +256,15 @@ import { PRODUCTION_READINESS, routeActorReady, type ReadinessPolicy } from "./r
 import { markProviderUnavailable, unavailableProvider, type UnavailableProvider } from "./providerAvailability.ts";
 import {
   attemptedRoutes, unaffordableOpKey, unaffordableRoutes, verifyOpKey, type ClaimVerifier, type PendingVerifierRun, type VerificationTarget,
-  type VerifierFinding,
+  type VerifiableCandidate, type VerificationDecision, type VerifierFinding,
 } from "./claimVerifier.ts";
 import type { MapSelection } from "./webEvidenceRunner.ts";
 import { atomusInput, FUNDING_STAGE_VERIFIER_KEY } from "./fundingStageVerifier.ts";
 import { bucketOf, candidateDecision, decisionCounts, decisionSummary, type CandidateDecision, type MissionCandidate } from "./workbenchMissionView.ts";
 import { evaluateEligibility } from "./candidateEligibility.ts";
+import type { RequirementEvidence } from "./compoundSourcingPipeline.ts";
 import { canStillQualify, evidenceGapsFor } from "./evidenceGapRouter.ts";
-import { deriveMissionCriteria } from "./missionCriteria.ts";
+import type { MissionCriterion } from "./missionCriteria.ts";
 import { fundingRecordEvidenceItem, fundingRecordFromDiscoveredRound } from "./fundingCorroboration.ts";
 import {
   decideFundingStage, fundingStageEvidenceItem, normalizeRoundType, requiredStagesOf, stageRank,
@@ -285,6 +289,8 @@ import { canonicalJson } from "./planHash.ts";
 import { sha256Hex } from "./providerInputFingerprint.ts";
 import { PENDING_RUN_MAX_POLLS, PENDING_RUN_MAX_WAIT_MS } from "./leadAutoContinuation.ts";
 import { tightenCeilings, type RunBudget } from "./runBudget.ts";
+import { missionEscalationCap } from "./modelEscalation.ts";
+import { activeModelFamily } from "./gptModelRouter.ts";
 import {
   nextUnreadPage, screenAdmissionOrder, type FundingScreenPlan, type ScreenVerdict,
 } from "./fundingPoolScreen.ts";
@@ -635,6 +641,11 @@ export interface CapabilityExecutionState {
    */
   unavailable_providers?: UnavailableProvider[];
   /**
+   * Repair rounds (escalations) this MISSION has made, across slices. Counted
+   * only when a mission escalation cap applies (`missionEscalationCap`).
+   */
+  escalations_used?: number;
+  /**
    * Claim-verifier provider runs still executing when a slice ended — adopted
    * by run id on the next slice, never bought twice (`claimVerifier`).
    */
@@ -645,6 +656,13 @@ export interface CapabilityExecutionState {
    * next slice. Never provider runs, so never read as work in flight.
    */
   verifier_deferred_steps?: PendingVerifierRun[];
+  /**
+   * Each candidate's verification decision for each verifier at the start of
+   * the last verification phase, with its reason (`verificationDecisions`):
+   * why a purchase was or was not made, kept on the checkpoint rather than in
+   * a worker log nobody keeps.
+   */
+  verification_decisions?: VerificationDecision[];
   /**
    * The pages each bought site map selected, by domain and intent set
    * (`webEvidenceRunner.recordMapMemory`), so a later collection for the same
@@ -2631,6 +2649,23 @@ export async function runCapabilityPlan(
       ? { ...opts.state!, provider_attempts: [...opts.state!.provider_attempts] }
       : newExecutionState(opts.plan, hash, bindingPrint);
 
+  // ── A REPAIR ROUND IS AN ESCALATION, AND A MISSION HAS A FEW ──────────────
+  //
+  // Null on the default model family (no cap; unchanged). Under gpt-6 a repair
+  // runs on Sol, and the count rides on the checkpointed state so a later
+  // slice cannot spend the allowance again. See `missionEscalationCap`.
+  const escalationCap = missionEscalationCap(activeModelFamily(opts.readEnv), opts.readEnv);
+  const spendEscalation = (stage: string): boolean => {
+    if (escalationCap === null) return true;
+    const used = state.escalations_used ?? 0;
+    if (used >= escalationCap) {
+      log("mission_escalation_budget_exhausted", { stage, used, cap: escalationCap });
+      return false;
+    }
+    state.escalations_used = used + 1;
+    return true;
+  };
+
   // ── REPAIR A CHECKPOINT AN OLDER BUILD POISONED ──────────────────────────
   //
   // The rule in `finish` stops this state being created. This undoes the ones
@@ -2881,7 +2916,7 @@ export async function runCapabilityPlan(
    * Several acceptable rungs travel joined by "|" ("series_a|series_b", RC02) and are decided as one set.
    */
   const requiredRoundStage: string | null = (() => {
-    const c = deriveMissionCriteria(opts.mission, guardPolicy).find((x) => x.dimension === "company_stage" &&
+    const c = criteriaOf(opts.mission, { readiness: guardPolicy, legacy: "rederive" }).find((x) => x.dimension === "company_stage" &&
       typeof x.value === "string" && requiredStagesOf(x.value).length > 0 &&
       requiredStagesOf(x.value).every((s) => stageRank(normalizeRoundType(s)) !== null));
     return c ? String(c.value) : null;
@@ -3251,6 +3286,8 @@ export async function runCapabilityPlan(
       }
 
       const blocking = first.violations.filter((v) => v.severity === "block");
+      // Past the mission's escalation cap the refusal stands, as a failed repair does.
+      if (!spendEscalation("discovery_actor_selection_repair")) return first;
       log("discovery_strategy_repair_attempt", {
         violations: blocking.map((v) => v.code),
         actors: blocking.map((v) => v.actor_key ?? null),
@@ -4784,6 +4821,15 @@ export async function runCapabilityPlan(
         executionPlan = first;
       } else {
         const blocking = first.violations.filter((v) => v.severity === "block");
+        if (!spendEscalation("execution_plan_repair")) {
+          state.terminal_reason = "execution_plan_blocked";
+          state.fallback_reason = "escalation_budget_exhausted";
+          log("execution_plan_blocked", {
+            first: blocking.map((v) => ({ code: v.code, actor_key: v.actor_key, message: v.message })),
+            reason: "mission escalation budget exhausted",
+          });
+          throw new ExecutionPlanBlockedError(first.violations);
+        }
         // THE MESSAGE, NOT ONLY THE CODE. `no_valid_step` on its own says a
         // plan was refused and nothing about why; the message now carries the
         // proposed steps and the reasons each was dropped, and a log that
@@ -8631,6 +8677,7 @@ export async function runCapabilityPlan(
       // company only when THIS run discovered it by a funding round, so a
       // hiring mission — which has no rounds — filters exactly as it did
       // before. Test 6 in `fundingCoverage.test.ts` pins that.
+      const missionRequiresSignal = (opts.mission.required_signals ?? []).length > 0;
       const eligible = companies.filter((c) =>
         c.record.stage === "hiring_verified" || c.hiring_jobs.length > 0 ||
         (c.hiring_assessment ? reachesCompanyBrain(c.hiring_assessment) : false) ||
@@ -8642,7 +8689,19 @@ export async function runCapabilityPlan(
         // statement that it expanded, or launched, carries evidence for the
         // signal the mission required — and a filter that only asks about
         // openings cannot see it.
-        Object.values(c.signal_evidence).some((a) => a.length > 0));
+        Object.values(c.signal_evidence).some((a) => a.length > 0) ||
+        // ── OR, FOR A MISSION THAT ASKS FOR NO SIGNAL AT ALL, ITS RECORD ───
+        //
+        // Every clause above asks about a SIGNAL, so a purely firmographic
+        // mission ("US manufacturers under 100 employees", "US marketing
+        // agencies with 5–200 employees") admitted nobody: the evaluator never
+        // ran, and an industry outside the controlled business-model
+        // vocabulary — which only the evaluator, citing the company's own
+        // words, can answer — stayed unknown forever. Such a mission qualified
+        // no one. With no signal required, a company whose company record
+        // ANSWERED (so headquarters and size are checkable) is admitted; the
+        // evaluation budget and the clock below still bound the calls.
+        (!missionRequiresSignal && enrichmentWasAnswered(asEnrichmentOutcome(c.enrichment_outcome))));
 
       // ── AND WHY EVERYONE ELSE IS NOT ────────────────────────────────────
       //
@@ -9011,7 +9070,8 @@ export async function runCapabilityPlan(
         eligibleOrdered
           .filter((c) =>
             c.brain !== null &&
-            (c.brain.outcome === "QUALIFIED" || c.mission_evaluation !== null))
+            (c.brain.outcome === "QUALIFIED" || c.mission_evaluation !== null) &&
+            !retryFailedEvaluation(c.mission_evaluation, opts.readEnv))
           .map((c) => c.key));
       for (let qIndex = 0; qIndex < eligibleOrdered.length; qIndex++) {
         const c = eligibleOrdered[qIndex];
@@ -9144,7 +9204,8 @@ export async function runCapabilityPlan(
         // the mission, then only the workspace categories that actually relate to
         // it. "Recruiting Agencies" must not broaden a SaaS mission.
         const appliedPolicy = applyMissionPrecedence({
-          original_user_query: opts.mission.original_user_query,
+          // Under contract authority, the approved contract's text — never the sentence.
+          original_user_query: executionQueryOf(opts.mission),
           mission_verticals: opts.mission.company_profile?.verticals ?? [],
           mission_geography: opts.brain?.required_geography ?? null,
           workspace_industries: opts.brain?.positive_industries ?? [],
@@ -9436,7 +9497,9 @@ export async function runCapabilityPlan(
           break;
         }
 
-        if (evaluation) {
+        // A CALL THAT RETURNED NOTHING IS NOT AN EVALUATION (canary session 2,
+        // Oscilar): it falls through to the held, never-evaluated path below.
+        if (evaluation && evaluatorAnswered(evaluation.evaluation)) {
           c.evaluation_path = "model_evaluated";
           c.decision_source = "gpt_evaluation";
           c.mission_evaluation = evaluation.evaluation;
@@ -9542,8 +9605,18 @@ export async function runCapabilityPlan(
         // site, and a run with no evaluator makes no model call here at all —
         // it qualifies nobody and says so through `evaluation_paths` and
         // `mission_evaluation_observability`. Silence reported as silence.
+        // A CALL THAT WAS MADE AND FAILED is marked apart from "no evaluator" and
+        // "budget spent" (both `null`): only the former may be retried, once, and
+        // only under `LEAD_REEVALUATE_FAILED_EVALUATION` (`retryFailedEvaluation`).
+        const priorFailed = failedEvaluationMarks(c.mission_evaluation);
         c.decision_source = "insufficient_evidence";
-        c.mission_evaluation = notEvaluated("no evaluator was available for this run");
+        c.mission_evaluation = notEvaluated(evaluation
+          ? "the mission evaluator was called and returned no usable answer"
+          : "no evaluator was available for this run");
+        if (evaluation) {
+          c.mission_evaluation.unknown_fields = [...c.mission_evaluation.unknown_fields, FAILED_EVALUATION_MARK,
+            ...(priorFailed.failed ? [RETRIED_EVALUATION_MARK] : [])];
+        }
         // An enabled evaluator that failed to answer cannot be bypassed by
         // the broader facts the earlier batch happened to establish.
         if (deps.evaluateMission) c.mission_evaluation.criterion_verdicts = [];
@@ -11699,79 +11772,8 @@ export function researchFabricSummary(
   return { ...f, companies: [], companies_deferred: f.companies.length };
 }
 
-/**
- * The business model, when the company's own words established it.
- *
- * The registry holds the description, the YC record and any fetched page as
- * HARD FACTS; `groundedClaims` then checks every excerpt against that text and
- * drops what it cannot find. What survives is the company's own statement,
- * quoted and verified — admitted at `model_extraction`, which `compareEvidence`
- * ranks below any provider field that disagrees.
- *
- * ── THE BUSINESS MODEL'S OWN DECISION DECIDES (P5.2) ────────────────────────
- *
- * `businessModelDecision` judges the business-model CLAIM on its own evidence;
- * the grounder's whole-company verdict (`final_grounded_decision`) is recorded
- * beside it and never used as proof. Canary c584fd77 showed why: a request
- * with unprovable targets makes that verdict `review` for nearly everyone.
- *
- *   accepted  the reading is PROVEN and may pass — or, through the controlled
- *             vocabulary, fail — a hard rule (verified "consumer" rules out B2B)
- *   review    the reading is PLAUSIBLE — shown, ranked, never proof, so the
- *             hard rule stays pending
- *
- * Both decisions travel on the item (`assessment`) into eligibility.
- *
- * Null when no business-model claim survived, or when the grounder itself said
- * the model is unknown — the honest answer for a company whose description does
- * not say what it sells.
- */
-export function groundedBusinessModelItem(
-  c: EngineCompany, missionId: string | null, at: string,
-): EvidenceItem | null {
-  const g = c.grounded;
-  const bm = g?.classifier_result?.business_model;
-  const claims = (g?.validated_claims ?? []).filter((x) => x.claim_type === "business_model");
-  if (!g || !bm || bm.value === "unknown" || claims.length === 0) return null;
-  const decision = g.final_grounded_decision;
-  const bmDecision = businessModelDecision(g);
-  const accepted = bmDecision.decision === "accepted";
-  const excerpt = claims.flatMap((x) => x.evidence_excerpts).map((x) => x.excerpt).find(Boolean) ?? null;
-  // The page the quote was read from, when the cited evidence has one — so a
-  // hard check can link to its source instead of saying "grounded evaluation".
-  const cited = new Set(claims.flatMap((x) => x.evidence_ids));
-  const url = (c.evidence_registry?.items ?? []).find((it) => cited.has(it.evidence_id) && !!it.source_url)?.source_url ?? null;
-  // The weight is the authority layer's: an ACCEPTED website statement proves
-  // (or, by contradiction, disproves) a business-model rule; a `review` does not.
-  const authority = authorityForEvidence({
-    claim: "business_model", source: "grounded_evidence_evaluation", field: "grounded_statement",
-    observed_at: at, quality: { grounding: accepted ? "accepted" : "review" },
-  });
-  return {
-    evidence_id: `grd_${c.key}_business_model`, company_key: c.key, dimension: "business_model",
-    // The audience the verified quotes state rides on the value, when the code
-    // names none (`ai_saas` sold to teams is B2B). See `valueWithStatedAudience`.
-    value: valueWithStatedAudience(bm.value.replace(/_/g, " "), bmDecision.facets_stated),
-    status: statusForAuthority(authority.authority),
-    authority: authorityRecord(authority),
-    source: {
-      provider: "engine", actor: "grounded_evidence_evaluation", provider_call_id: null,
-      url, excerpt: excerpt ? excerpt.slice(0, 280) : null,
-    },
-    method: "model_extraction", observed_at: at, valid_until: null,
-    // NEVER `high`: a verified reading of a self-description is weaker than a
-    // provider field, and the graph must rank it that way.
-    confidence: accepted ? "medium" : "low",
-    derived_from: [...new Set(claims.flatMap((x) => x.evidence_ids))],
-    mission_id: missionId, origin: "web",
-    assessment: {
-      decision, grounding_score: Number(g.grounding_score ?? 0), validated_claims: claims.length,
-      business_model_decision: bmDecision.decision, business_model_reasons: bmDecision.reasons,
-      business_model_facets: bmDecision.facets_stated,
-      business_model_quotes: bmDecision.quotes,
-    },
-  };
-}
+export { groundedBusinessModelItem } from "./groundedBusinessModel.ts";
+import { groundedBusinessModelItem } from "./groundedBusinessModel.ts";
 
 /**
  * A grounded item persisted BEFORE P5.2 carried no `assessment`, and a `review`
@@ -11782,6 +11784,21 @@ export function groundedBusinessModelItem(
 function normaliseGroundedItem(e: EvidenceItem): EvidenceItem {
   if (e.source?.actor !== "grounded_evidence_evaluation" || e.assessment) return e;
   return e.status === "proven" && e.confidence === "low" ? { ...e, status: "plausible" } : e;
+}
+
+/**
+ * The authority-layer source id of a normalized posting's `source`. Normalizers record
+ * the actor id ("harvestapi/linkedin-job-search"); the authority rules are keyed by the
+ * route's actor key ("apify_linkedin_job_search"). An unknown source maps to itself and
+ * so meets no proving rule.
+ */
+const JOB_SOURCE_AUTHORITY: Readonly<Record<string, string>> = Object.freeze({
+  "harvestapi/linkedin-job-search": "apify_linkedin_job_search",
+  "memo23/y-combinator-scraper": "apify_yc_companies_memo23",
+});
+export function jobAuthoritySource(source: string | null | undefined): string {
+  const s = String(source ?? "");
+  return JOB_SOURCE_AUTHORITY[s] ?? s;
 }
 
 /** Every evidence item for one company: route observations, the registry, derived verdict facts. */
@@ -11842,7 +11859,58 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
     });
   }
   if (c.hiring_assessment?.verdict === "hiring_verified") {
-    derived("hiring", true, "proven", c.hiring_jobs.map((j) => j.job_url ?? "").filter(Boolean).slice(0, 5), "high");
+    // ── R7 (mission reliability S2): A VERDICT IS NOT AUTHORITY ───────────────
+    //
+    // This item used to be `proven` straight from the verdict, the one evidence
+    // producer that bypassed `authorityForEvidence`. Now the verdict's postings are
+    // put through the same rule every other producer uses (`job_evidence`: a dated
+    // posting from a job source proves `open_role`), keyed by the posting's own
+    // source. A verdict resting only on postings no rule lets prove anything is
+    // `plausible`: it ranks, it never qualifies. Freshness stays the verdict's own
+    // window check (the clock is the retrieval time, so a replay is not time-bound).
+    //
+    // GATED BY AUTHORITY, BUT CARRYING NO AUTHORITY RECORD. A record with level
+    // "proven" would let `authorityResolvesAbstention` keep this check passing over
+    // an evaluator's "the required role is not established" — and the reviewed
+    // contract (qualificationHardening S10d) is that such an unknown VETOES. So the
+    // authority decides only whether the verdict may be proof at all; qualification
+    // weighs it exactly as before.
+    const decisions = c.hiring_jobs.map((j) => {
+      const observed = j.retrieved_at ?? at;
+      return authorityForEvidence({
+        claim: "open_role", source: jobAuthoritySource(j.source), field: "job_posting",
+        observed_at: observed, now: new Date(observed),
+      });
+    });
+    const best = decisions.find((d) => d.authority === "proven") ?? decisions[0] ?? null;
+    const status = best?.authority === "proven" ? "proven" : "plausible";
+    items.push({
+      evidence_id: `drv_${c.key}_hiring`, company_key: c.key, dimension: "hiring", value: true, status,
+      source: { provider: "engine", actor: "deterministic_verdict", provider_call_id: null,
+        url: c.hiring_jobs.find((j) => j.job_url)?.job_url ?? null, excerpt: null },
+      method: "deterministic_derivation", observed_at: at, valid_until: null, confidence: status === "proven" ? "high" : "medium",
+      derived_from: c.hiring_jobs.map((j) => j.job_url ?? "").filter(Boolean).slice(0, 5), mission_id: missionId, origin: "lead_mission",
+    });
+    // ── THE POSTINGS BEHIND THE VERDICT, WITH THEIR TITLES (ATLAS review D1) ──
+    //
+    // Qualification re-checks a NAMED title ("Account Executives") against the
+    // posting titles the evidence carries; a bare `hiring: true` proves no title.
+    // The verdict above cites only URLs, so each posting is recorded as the `job`
+    // item job discovery already emits (candidateObservation): its own title, date
+    // and location, with the posting URL as provenance. Nothing else reads `job`
+    // items; the hiring item itself is unchanged.
+    for (const [i, j] of c.hiring_jobs.slice(0, 5).entries()) {
+      if (!j.title) continue;
+      items.push({
+        evidence_id: `drv_${c.key}_job_${i}`, company_key: c.key, dimension: "job",
+        value: { title: j.title, posted_date: j.posted_date, location: j.location },
+        // R7: each posting's status follows its OWN authority decision (no record: see above).
+        status: decisions[i]?.authority === "proven" ? "proven" : "plausible",
+        source: { provider: "engine", actor: "deterministic_verdict", provider_call_id: null, url: j.job_url ?? null, excerpt: j.title },
+        method: "deterministic_derivation", observed_at: at, valid_until: null, confidence: "high",
+        derived_from: [j.job_url ?? j.job_id ?? ""].filter(Boolean), mission_id: missionId, origin: "lead_mission",
+      });
+    }
   }
   const f = c.first_in_function;
   if (f) {
@@ -11903,6 +11971,31 @@ export function missionCandidatesFrom(
 }
 
 /**
+ * The verification phase's candidates, decided exactly as the canonical view
+ * decides them: the same graph, the evaluator's verdicts and the engine's
+ * holds (Q1). It lived inline in run-agent, and the Replay Lab carried a
+ * "verbatim" copy that had lost the verdicts and holds — so no replay could
+ * reproduce an evaluator abstention lowering a proven check (canary session 2).
+ * One function now, called by both.
+ */
+export function verifiableCandidatesFrom(
+  run: { companies: readonly EngineCompany[] }, criteria: readonly MissionCriterion[], missionId: string,
+): VerifiableCandidate[] {
+  return missionCandidatesFrom(run, { missionId: String(missionId) }).map((cand) => {
+    const e = evaluateEligibility(criteria as MissionCriterion[], cand.graph, cand.criterion_verdicts, cand.holds);
+    return {
+      company_key: cand.company_key, name: cand.name, domain: cand.domain, linkedin_url: cand.linkedin_url,
+      graph: cand.graph, eligibility: e.eligibility,
+      hard_checks: e.checks.filter((x) => x.kind === "hard"),
+      attempted_routes: cand.attempted_routes ?? [],
+      unaffordable_routes: cand.unaffordable_routes ?? [],
+      // Triage withheld paid verification: `verificationTargets` skips it.
+      paid_verification_blocked: cand.paid_verification_blocked ?? null,
+    };
+  });
+}
+
+/**
  * ENRICHMENT THAT ANSWERED IS A TRIED ROUTE.
  *
  * `attemptedRoutes` reads only the claim verifiers' `verify:` marks, so the
@@ -11939,13 +12032,64 @@ export function canonicalDecisions(
     readiness?: ReadinessPolicy;
   },
 ): Map<string, CandidateDecision> {
-  const criteria = deriveMissionCriteria(opts.mission, opts.readiness ?? PRODUCTION_READINESS);
+  const criteria = criteriaOf(opts.mission, { readiness: opts.readiness ?? PRODUCTION_READINESS, legacy: "rederive" });
   const anchor = anchorForCapability(String(opts.plan.entry_capability ?? "")) ?? null;
   const out = new Map<string, CandidateDecision>();
   for (const candidate of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
     out.set(candidate.company_key, candidateDecision({ criteria, candidate, anchor }));
   }
   return out;
+}
+
+/**
+ * WHAT EACH HARD ANSWER RESTS ON, per company, from the same eligibility read
+ * `canonicalDecisions` makes. A separate map (not a field on the decision) so
+ * nothing that compares decisions changes; the persistence projection carries
+ * it onto the lead row for the Leads page.
+ */
+export function canonicalHardEvidence(
+  companies: readonly EngineCompany[], opts: Parameters<typeof canonicalDecisions>[1],
+): Map<string, RequirementEvidence[]> {
+  const criteria = criteriaOf(opts.mission, { readiness: opts.readiness ?? PRODUCTION_READINESS, legacy: "rederive" });
+  const out = new Map<string, RequirementEvidence[]>();
+  for (const c of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
+    const e = evaluateEligibility(criteria, c.graph, c.criterion_verdicts, c.holds);
+    out.set(c.company_key, e.checks.filter((x) => x.kind === "hard").map((x) => {
+      const claim = x.provenance ? c.graph.claims.find((cl) => cl.dimension === x.provenance!.dimension) ?? null : null;
+      const providers = (claim?.sources ?? []).filter((a) => originOfActor(a) !== null);
+      // Who said it, by data ORIGIN: two LinkedIn scrapes are one source.
+      const agreeing = claim ? [claim.current, ...claim.supporting].filter((i) => i && i.status === "proven") : [];
+      const origins = new Set(agreeing.map((i) => originOfActor(i!.source.actor)).filter((o): o is string => o !== null));
+      const actor = x.provenance?.actor ?? null;
+      return {
+        dimension: x.dimension, result: x.result, reason: x.reason,
+        source: actor && originOfActor(actor) !== null ? actor : providers[0] ?? null,
+        providers,
+        corroborated: origins.has(CORROBORATED_ORIGIN) || origins.size >= 2,
+        checked_by_rule: x.provenance?.method === "deterministic_derivation",
+        method: x.provenance?.method ?? null,
+        status: x.provenance?.status ?? null, confidence: x.provenance?.confidence ?? null,
+        url: x.provenance?.url ?? null, excerpt: x.provenance?.excerpt ?? null,
+      };
+    }));
+  }
+  return out;
+}
+
+/** Engine rules, not sources: they read other items and never add an origin. */
+const ENGINE_RULE_ACTORS: ReadonlySet<string> = new Set(["deterministic_verdict", "engine"]);
+const CORROBORATED_ORIGIN = "corroborated";
+
+/**
+ * The data origin behind an actor, so agreement is counted by independent
+ * source rather than by scraper: every LinkedIn actor (and the LinkedIn
+ * registry) is one origin. Null for an engine rule.
+ */
+function originOfActor(actor: string): string | null {
+  if (ENGINE_RULE_ACTORS.has(actor)) return null;
+  if (actor === "linkedin" || actor.startsWith("apify_linkedin_")) return "linkedin";
+  if (actor === "funding_corroboration") return CORROBORATED_ORIGIN;
+  return actor;
 }
 
 /**
@@ -11963,7 +12107,7 @@ export function canonicallyWorkableKeys(
   companies: readonly EngineCompany[], opts: Parameters<typeof canonicalDecisions>[1],
 ): Set<string> {
   const readiness = opts.readiness ?? PRODUCTION_READINESS;
-  const criteria = deriveMissionCriteria(opts.mission, readiness);
+  const criteria = criteriaOf(opts.mission, { readiness: readiness, legacy: "rederive" });
   const out = new Set<string>();
   for (const c of missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null })) {
     const eligibility = evaluateEligibility(criteria, c.graph, c.criterion_verdicts, c.holds);
@@ -12006,7 +12150,7 @@ export function canonicalDecisionSummary(
     readiness?: ReadinessPolicy;
   },
 ) {
-  const criteria = deriveMissionCriteria(opts.mission, opts.readiness ?? PRODUCTION_READINESS);
+  const criteria = criteriaOf(opts.mission, { readiness: opts.readiness ?? PRODUCTION_READINESS, legacy: "rederive" });
   const candidates = missionCandidatesFrom({ companies }, { missionId: opts.identity?.task_id ?? null });
   return decisionSummary(decisionCounts({
     criteria, candidates, anchor: anchorForCapability(String(opts.plan.entry_capability ?? "")) ?? null,

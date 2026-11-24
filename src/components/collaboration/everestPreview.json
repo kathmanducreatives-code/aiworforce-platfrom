@@ -1,0 +1,420 @@
+{
+ "simulated": true,
+ "fictional": true,
+ "generated_by": "npm run dev:collab",
+ "customer": "Everest Industrial Automation (fictional)",
+ "signal": {
+  "id": "00000000-0000-4000-8000-0000000051a1",
+  "title": "Northstar Manufacturing opens new production facility in Texas",
+  "sources": [
+   "https://texas-industry-news.example/northstar-plant",
+   "https://plantfloor-weekly.example/2026/11/northstar-texas",
+   "https://northstar.example/news/texas-facility"
+  ]
+ },
+ "atlas_request": {
+  "query": "Research Northstar Manufacturing (northstar.example) and check whether it fits our ICP (Manufacturing). Context: Northstar Manufacturing opens new production facility in Texas (2026-11-05) — confirmed by 2 independent sources.",
+  "guardrails": {
+   "paid_discovery": "requires_mission_approval",
+   "contact_enrichment": false,
+   "outreach": false,
+   "max_companies": 1,
+   "note": "A market signal is not permission to contact anyone. ATLAS qualifies the company only; any paid step needs your mission approval."
+  }
+ },
+ "lyra_draft": {
+  "title": "Draft: Northstar Manufacturing opens new production facility in Texas",
+  "body": "Northstar Manufacturing opens new production facility in Texas (2026-11-05).\n\nWhy it matters: What this expansion signals for your market, and what to consider now.\n\n[Your point of view here — keep it to what the sources support.]\n\nSources:\n- https://texas-industry-news.example/northstar-plant\n- https://plantfloor-weekly.example/2026/11/northstar-texas\n- https://northstar.example/news/texas-facility",
+  "needs_confirmation": [
+   "Northstar Manufacturing may be worth researching because its expansion aligns with your target manufacturing market in United States. This is an inference, not a confirmed buying intent."
+  ],
+  "status": "draft (not published)"
+ },
+ "brain_proposal": {
+  "fact_key": "account_fit:northstar.example",
+  "value": {
+   "name": "Northstar Manufacturing",
+   "domain": "northstar.example",
+   "fit": "fits_icp",
+   "reason": "US manufacturer with ~300 employees (inside your 50–500 range)"
+  },
+  "status": "pending — awaiting your review"
+ },
+ "steps": [
+  {
+   "label": "1 · LISA stores a sourced signal",
+   "note": "Corroborated by two outlets plus Northstar's own release; nothing proposed yet.",
+   "board": {
+    "brain": {
+     "status": "ready",
+     "fingerprint": "fp-everest-v1",
+     "goals": [
+      "Win US manufacturers expanding production capacity"
+     ],
+     "exclusions": 1,
+     "pending_proposals": 0
+    },
+    "items": [
+     {
+      "signal_id": "00000000-0000-4000-8000-0000000051a1",
+      "discovered_by": "lisa",
+      "company": "Northstar Manufacturing",
+      "what_happened": "Northstar Manufacturing opens new production facility in Texas (2026-11-05) — confirmed by 2 independent sources.",
+      "why_it_matters": "Relevant because it is in Manufacturing, an industry you sell to, and it is in United States, where you sell, and it relates to your goal \"Win US manufacturers expanding production capacity\".",
+      "inferred_opportunity": "Northstar Manufacturing may be worth researching because its expansion aligns with your target manufacturing market in United States. This is an inference, not a confirmed buying intent.",
+      "evidence": [
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://northstar.example/news/texas-facility"
+       },
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://texas-industry-news.example/northstar-plant"
+       },
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://plantfloor-weekly.example/2026/11/northstar-texas"
+       }
+      ],
+      "verification": "corroborated",
+      "trusted": true,
+      "attention": "executive",
+      "blocked": null,
+      "actions": [
+       {
+        "kind": "atlas_research",
+        "agent": "atlas",
+        "action": "Research Northstar Manufacturing as a potential customer.",
+        "approval": "Approving prepares an ATLAS research plan. Paid discovery still needs your mission approval in Leads; no contacts are enriched and nobody is contacted.",
+        "handoff_id": null,
+        "status": "not_proposed",
+        "status_label": "Not proposed yet",
+        "done": null,
+        "error": null,
+        "stale_context": false,
+        "no_longer_recommended": false
+       },
+       {
+        "kind": "lyra_content",
+        "agent": "lyra",
+        "action": "Draft a post on what this expansion means for your audience.",
+        "approval": "Approving creates an unpublished draft for review.",
+        "handoff_id": null,
+        "status": "not_proposed",
+        "status_label": "Not proposed yet",
+        "done": null,
+        "error": null,
+        "stale_context": false,
+        "no_longer_recommended": false
+       }
+      ]
+     }
+    ],
+    "awaiting_you": 0,
+    "in_progress": 0,
+    "completed": 0,
+    "problems": 0
+   }
+  },
+  {
+   "label": "2 · ORION proposes work",
+   "note": "ATLAS research and a LYRA draft are proposed and wait for you. Nothing runs.",
+   "board": {
+    "brain": {
+     "status": "ready",
+     "fingerprint": "fp-everest-v1",
+     "goals": [
+      "Win US manufacturers expanding production capacity"
+     ],
+     "exclusions": 1,
+     "pending_proposals": 0
+    },
+    "items": [
+     {
+      "signal_id": "00000000-0000-4000-8000-0000000051a1",
+      "discovered_by": "lisa",
+      "company": "Northstar Manufacturing",
+      "what_happened": "Northstar Manufacturing opens new production facility in Texas (2026-11-05) — confirmed by 2 independent sources.",
+      "why_it_matters": "Relevant because it is in Manufacturing, an industry you sell to, and it is in United States, where you sell, and it relates to your goal \"Win US manufacturers expanding production capacity\".",
+      "inferred_opportunity": "Northstar Manufacturing may be worth researching because its expansion aligns with your target manufacturing market in United States. This is an inference, not a confirmed buying intent.",
+      "evidence": [
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://northstar.example/news/texas-facility"
+       },
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://texas-industry-news.example/northstar-plant"
+       },
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://plantfloor-weekly.example/2026/11/northstar-texas"
+       }
+      ],
+      "verification": "corroborated",
+      "trusted": true,
+      "attention": "executive",
+      "blocked": null,
+      "actions": [
+       {
+        "kind": "atlas_research",
+        "agent": "atlas",
+        "action": "Research Northstar Manufacturing as a potential customer.",
+        "approval": "Approving prepares an ATLAS research plan. Paid discovery still needs your mission approval in Leads; no contacts are enriched and nobody is contacted.",
+        "handoff_id": "h-atlas",
+        "status": "awaiting_review",
+        "status_label": "Awaiting your approval",
+        "done": null,
+        "error": null,
+        "stale_context": false,
+        "no_longer_recommended": false
+       },
+       {
+        "kind": "lyra_content",
+        "agent": "lyra",
+        "action": "Draft a post on what this expansion means for your audience.",
+        "approval": "Approving creates an unpublished draft for review.",
+        "handoff_id": "h-lyra",
+        "status": "awaiting_review",
+        "status_label": "Awaiting your approval",
+        "done": null,
+        "error": null,
+        "stale_context": false,
+        "no_longer_recommended": false
+       }
+      ]
+     }
+    ],
+    "awaiting_you": 2,
+    "in_progress": 0,
+    "completed": 0,
+    "problems": 0
+   }
+  },
+  {
+   "label": "3 · You approve",
+   "note": "Approval prepares a prefilled ATLAS plan; launching paid research is still a separate mission approval in Leads.",
+   "board": {
+    "brain": {
+     "status": "ready",
+     "fingerprint": "fp-everest-v1",
+     "goals": [
+      "Win US manufacturers expanding production capacity"
+     ],
+     "exclusions": 1,
+     "pending_proposals": 0
+    },
+    "items": [
+     {
+      "signal_id": "00000000-0000-4000-8000-0000000051a1",
+      "discovered_by": "lisa",
+      "company": "Northstar Manufacturing",
+      "what_happened": "Northstar Manufacturing opens new production facility in Texas (2026-11-05) — confirmed by 2 independent sources.",
+      "why_it_matters": "Relevant because it is in Manufacturing, an industry you sell to, and it is in United States, where you sell, and it relates to your goal \"Win US manufacturers expanding production capacity\".",
+      "inferred_opportunity": "Northstar Manufacturing may be worth researching because its expansion aligns with your target manufacturing market in United States. This is an inference, not a confirmed buying intent.",
+      "evidence": [
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://northstar.example/news/texas-facility"
+       },
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://texas-industry-news.example/northstar-plant"
+       },
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://plantfloor-weekly.example/2026/11/northstar-texas"
+       }
+      ],
+      "verification": "corroborated",
+      "trusted": true,
+      "attention": "executive",
+      "blocked": null,
+      "actions": [
+       {
+        "kind": "atlas_research",
+        "agent": "atlas",
+        "action": "Research Northstar Manufacturing as a potential customer.",
+        "approval": "Approving prepares an ATLAS research plan. Paid discovery still needs your mission approval in Leads; no contacts are enriched and nobody is contacted.",
+        "handoff_id": "h-atlas",
+        "status": "approved",
+        "status_label": "Approved",
+        "done": null,
+        "error": null,
+        "stale_context": false,
+        "no_longer_recommended": false
+       },
+       {
+        "kind": "lyra_content",
+        "agent": "lyra",
+        "action": "Draft a post on what this expansion means for your audience.",
+        "approval": "Approving creates an unpublished draft for review.",
+        "handoff_id": "h-lyra",
+        "status": "approved",
+        "status_label": "Approved",
+        "done": null,
+        "error": null,
+        "stale_context": false,
+        "no_longer_recommended": false
+       }
+      ]
+     }
+    ],
+    "awaiting_you": 0,
+    "in_progress": 2,
+    "completed": 0,
+    "problems": 0
+   }
+  },
+  {
+   "label": "4 · ATLAS researches (simulated result)",
+   "note": "A recorded, synthetic ATLAS outcome — no discovery provider was called.",
+   "board": {
+    "brain": {
+     "status": "ready",
+     "fingerprint": "fp-everest-v1",
+     "goals": [
+      "Win US manufacturers expanding production capacity"
+     ],
+     "exclusions": 1,
+     "pending_proposals": 0
+    },
+    "items": [
+     {
+      "signal_id": "00000000-0000-4000-8000-0000000051a1",
+      "discovered_by": "lisa",
+      "company": "Northstar Manufacturing",
+      "what_happened": "Northstar Manufacturing opens new production facility in Texas (2026-11-05) — confirmed by 2 independent sources.",
+      "why_it_matters": "Relevant because it is in Manufacturing, an industry you sell to, and it is in United States, where you sell, and it relates to your goal \"Win US manufacturers expanding production capacity\".",
+      "inferred_opportunity": "Northstar Manufacturing may be worth researching because its expansion aligns with your target manufacturing market in United States. This is an inference, not a confirmed buying intent.",
+      "evidence": [
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://northstar.example/news/texas-facility"
+       },
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://texas-industry-news.example/northstar-plant"
+       },
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://plantfloor-weekly.example/2026/11/northstar-texas"
+       }
+      ],
+      "verification": "corroborated",
+      "trusted": true,
+      "attention": "executive",
+      "blocked": null,
+      "actions": [
+       {
+        "kind": "atlas_research",
+        "agent": "atlas",
+        "action": "Research Northstar Manufacturing as a potential customer.",
+        "approval": "Approving prepares an ATLAS research plan. Paid discovery still needs your mission approval in Leads; no contacts are enriched and nobody is contacted.",
+        "handoff_id": "h-atlas",
+        "status": "running",
+        "status_label": "Running",
+        "done": null,
+        "error": null,
+        "stale_context": false,
+        "no_longer_recommended": false
+       },
+       {
+        "kind": "lyra_content",
+        "agent": "lyra",
+        "action": "Draft a post on what this expansion means for your audience.",
+        "approval": "Approving creates an unpublished draft for review.",
+        "handoff_id": "h-lyra",
+        "status": "approved",
+        "status_label": "Approved",
+        "done": null,
+        "error": null,
+        "stale_context": false,
+        "no_longer_recommended": false
+       }
+      ]
+     }
+    ],
+    "awaiting_you": 0,
+    "in_progress": 2,
+    "completed": 0,
+    "problems": 0
+   }
+  },
+  {
+   "label": "5 · Results return",
+   "note": "ATLAS qualified the company; LYRA prepared an unpublished draft; a Brain proposal waits for review.",
+   "board": {
+    "brain": {
+     "status": "ready",
+     "fingerprint": "fp-everest-v1",
+     "goals": [
+      "Win US manufacturers expanding production capacity"
+     ],
+     "exclusions": 1,
+     "pending_proposals": 0
+    },
+    "items": [
+     {
+      "signal_id": "00000000-0000-4000-8000-0000000051a1",
+      "discovered_by": "lisa",
+      "company": "Northstar Manufacturing",
+      "what_happened": "Northstar Manufacturing opens new production facility in Texas (2026-11-05) — confirmed by 2 independent sources.",
+      "why_it_matters": "Relevant because it is in Manufacturing, an industry you sell to, and it is in United States, where you sell, and it relates to your goal \"Win US manufacturers expanding production capacity\".",
+      "inferred_opportunity": "Northstar Manufacturing may be worth researching because its expansion aligns with your target manufacturing market in United States. This is an inference, not a confirmed buying intent.",
+      "evidence": [
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://northstar.example/news/texas-facility"
+       },
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://texas-industry-news.example/northstar-plant"
+       },
+       {
+        "ref": "signal_events:00000000-0000-4000-8000-0000000051a1",
+        "url": "https://plantfloor-weekly.example/2026/11/northstar-texas"
+       }
+      ],
+      "verification": "corroborated",
+      "trusted": true,
+      "attention": "executive",
+      "blocked": null,
+      "actions": [
+       {
+        "kind": "atlas_research",
+        "agent": "atlas",
+        "action": "Research Northstar Manufacturing as a potential customer.",
+        "approval": "Approving prepares an ATLAS research plan. Paid discovery still needs your mission approval in Leads; no contacts are enriched and nobody is contacted.",
+        "handoff_id": "h-atlas",
+        "status": "completed",
+        "status_label": "Completed",
+        "done": "ATLAS qualified Northstar Manufacturing against your ICP (confidence medium). US manufacturer with ~300 employees (inside your 50–500 range); New Texas production capacity.",
+        "error": null,
+        "stale_context": false,
+        "no_longer_recommended": false
+       },
+       {
+        "kind": "lyra_content",
+        "agent": "lyra",
+        "action": "Draft a post on what this expansion means for your audience.",
+        "approval": "Approving creates an unpublished draft for review.",
+        "handoff_id": "h-lyra",
+        "status": "completed",
+        "status_label": "Completed",
+        "done": "Draft ready for review (not published)",
+        "error": null,
+        "stale_context": false,
+        "no_longer_recommended": false
+       }
+      ]
+     }
+    ],
+    "awaiting_you": 0,
+    "in_progress": 0,
+    "completed": 2,
+    "problems": 0
+   }
+  }
+ ]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "missing_source",
+  "fictional": true,
+  "note": "Hits without a usable URL are dropped as missing_source; no link is ever invented.",
+  "now": "2026-11-10T12:00:00Z",
+  "subject": {
+    "kind": "competitor",
+    "domain": "corvane.example",
+    "name": "Corvane Systems",
+    "origin": "brain_competitor",
+    "categories": [
+      "funding",
+      "hiring",
+      "expansion",
+      "product_launch"
+    ],
+    "cadence_minutes": 10080
+  },
+  "responses": {
+    "funding": {
+      "hits": [
+        {
+          "url": null,
+          "title": "Corvane Systems raises $40 million Series B",
+          "description": "Corvane Systems raised $40 million."
+        },
+        {
+          "url": "javascript:alert(1)",
+          "title": "Corvane Systems raises $40 million Series B",
+          "description": "x"
+        }
+      ],
+      "error": null,
+      "credits": 1
+    }
+  },
+  "expect": {
+    "events": 0,
+    "dropped": {
+      "missing_source": 2
+    }
+  }
+}

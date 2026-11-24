@@ -2,7 +2,7 @@
  * Legacy AgentProfile export — retained for backward compatibility with the
  * many components that already import from '@/data/agentProfiles'.
  *
- * The public identity data (Pilot / Lyra / Atlas / Mira / Orion) is derived
+ * The public identity data (Orion / Atlas / Lisa / Lyra; hidden pilot/mira aliases) is derived
  * from the canonical registry at `@/config/agentRegistry`. Historical legacy
  * slugs (scout / aria / hawk / penn / scribe) are still resolvable via
  * AGENT_BY_ID / AGENT_BY_NAME so historical rows continue to render the
@@ -13,6 +13,7 @@ import {
   PUBLIC_AGENTS,
   PUBLIC_AGENT_ORDER,
   LEGACY_TO_PUBLIC,
+  PUBLIC_ALIASES,
   type PublicAgentProfile,
   type PublicAgentId,
   type LegacyAgentId,
@@ -20,7 +21,7 @@ import {
 } from '@/config/agentRegistry';
 
 export type AgentDept = RegistryAgentDept;
-export type AgentModelKey = 'gpt-4o' | 'claude-sonnet' | 'claude-haiku' | 'gemini-pro';
+export type AgentModelKey = 'gpt-4o' | 'claude-sonnet' | 'claude-haiku' | 'gemini-pro' | 'gpt-5.6-luna';
 
 /**
  * Backwards-compatible shape. `id` is the canonical public id (e.g. 'lyra').
@@ -37,12 +38,18 @@ export interface AgentProfile {
   description?: string;
 }
 
+// THE MODEL EACH DEPARTMENT ACTUALLY WRITES WITH, for the badge — not a
+// marketing choice. Mirrors the server routing (aiProvider TASK_MODELS and
+// gptModelRouter): prose (ORION answers and briefs, LYRA drafts) is Claude
+// Haiku 4.5; ATLAS's and LISA's decisions are GPT-5.6 Luna. Pinned by
+// tests/frontend/workforceIdentity.test.ts against the server tables.
 const MODEL_BY_PUBLIC_ID: Record<PublicAgentId, AgentModelKey> = {
-  pilot: 'claude-sonnet',
-  lyra: 'gpt-4o',
-  atlas: 'claude-sonnet',
+  orion: 'claude-haiku',
+  atlas: 'gpt-5.6-luna',
+  lisa: 'gpt-5.6-luna',
+  lyra: 'claude-haiku',
+  pilot: 'claude-haiku',
   mira: 'claude-haiku',
-  orion: 'claude-sonnet',
 };
 
 function toLegacyProfile(p: PublicAgentProfile): AgentProfile {
@@ -64,7 +71,7 @@ export const AGENT_PROFILES: AgentProfile[] = PUBLIC_AGENT_ORDER
   .map((id) => toLegacyProfile(PUBLIC_AGENTS[id]));
 
 /** Pilot profile — kept separate so iterators over AGENT_PROFILES are unchanged. */
-export const PILOT_PROFILE: AgentProfile = toLegacyProfile(PUBLIC_AGENTS.pilot);
+export const PILOT_PROFILE: AgentProfile = toLegacyProfile(PUBLIC_AGENTS.orion);
 
 /**
  * AGENT_BY_ID indexes BOTH canonical public ids AND legacy backend slugs so
@@ -79,6 +86,10 @@ export const AGENT_BY_ID: Record<string, AgentProfile> = (() => {
   for (const legacy of Object.keys(LEGACY_TO_PUBLIC) as LegacyAgentId[]) {
     const publicId = LEGACY_TO_PUBLIC[legacy];
     out[legacy] = toLegacyProfile(PUBLIC_AGENTS[publicId]);
+  }
+  // Hidden compatibility ids (pilot → Orion, mira → Lyra) still resolve.
+  for (const [hidden, target] of Object.entries(PUBLIC_ALIASES)) {
+    out[hidden] = toLegacyProfile(PUBLIC_AGENTS[target as PublicAgentId]);
   }
   return out;
 })();

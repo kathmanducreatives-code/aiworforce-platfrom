@@ -1,10 +1,36 @@
 // companyBrainContext: compact, prompt-safe Company Brain context for Pilot.
-// Pure / import-free (Deno + Node testable). Handles BOTH shapes:
+// Pure (Deno testable); its one import, the normalizer, is itself import-free.
+//
+// TARGETING IS READ FROM THE STRUCTURED BRAIN. ICP, exclusions, must-haves and
+// qualification rules come from `normalizeCompanyBrain`, the same reading the
+// lead compiler and the Company Brain page use. Before, this block read the
+// legacy `icp.*` copy, so an edit on the Company Brain page never reached the
+// agents (docs/audits/company-brain-onboarding, P0-1/P0-2). Legacy-only
+// profiles still work: the normalizer folds `icp.*` into the structured shape
+// whenever the structured field is absent. Handles BOTH stored shapes:
 //   - flat (legacy/seed): { company_name, what_we_do, who_we_sell_to, voice_and_tone, website, competitors }
 //   - structured (onboarding wizard): { icp:{}, goals:{}, positioning:{}, brand_voice:{}, competitors:{known,adjacent}, approval_rules:{} }
 // Only present fields are emitted — never invents missing ICP/competitors/voice.
 
+import { flattenDisqualifiers, normalizeCompanyBrain, type CompanyBrainV2 } from "./normalizeCompanyBrain.ts";
+
 type Profile = Record<string, unknown> | null | undefined;
+
+/** Live provider readiness (see integrationReadiness.ts); status keys only, never secrets. */
+export type IntegrationStatusMap = Record<string, { status?: string; label?: string } | undefined>;
+
+function structured(p: Profile): CompanyBrainV2 {
+  return normalizeCompanyBrain(obj(p));
+}
+
+/** The target size as a person would say it — an explicit range wins over a free label. */
+function targetSize(b: CompanyBrainV2): string | null {
+  const s = b.target_customer.company_size;
+  if (s.min != null && s.max != null) return `${s.min}–${s.max} employees`;
+  if (s.min != null) return `${s.min}+ employees`;
+  if (s.max != null) return `up to ${s.max} employees`;
+  return str(s.label);
+}
 
 function obj(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -41,14 +67,17 @@ export function brainDescription(p: Profile): string | null {
 
 export function brainICP(p: Profile): string | null {
   const o = obj(p);
-  const icp = obj(o.icp);
+  const b = structured(p);
+  const t = b.target_customer;
   const parts: string[] = [];
   const flat = str(o.who_we_sell_to);
   if (flat) parts.push(flat);
-  const roles = arr(icp.buyer_roles); if (roles.length) parts.push(roles.join(", "));
-  const inds = arr(icp.industries); if (inds.length) parts.push(inds.join(", "));
-  const size = str(icp.company_size); if (size) parts.push(size);
-  const geo = str(icp.geography); if (geo) parts.push(geo);
+  if (b.buyer_personas.length) parts.push(b.buyer_personas.join(", "));
+  if (t.industries.length) parts.push(t.industries.join(", "));
+  if (t.business_models.length) parts.push(t.business_models.join(", "));
+  const size = targetSize(b); if (size) parts.push(size);
+  if (t.geography.length) parts.push(t.geography.join(", "));
+  if (t.funding_stage.length) parts.push(t.funding_stage.join(", "));
   return parts.length ? uniq(parts).join("; ") : null;
 }
 
@@ -66,8 +95,10 @@ export function hasUsableBrain(p: Profile, onboardingCompleted?: boolean | null)
  * Compact, human-readable context block. Lines are omitted when absent.
  * Keep this small — it is injected into prompts, not raw JSON.
  */
-export function buildCompanyBrainContext(p: Profile): string {
+export function buildCompanyBrainContext(p: Profile, opts: { integrationStatus?: IntegrationStatusMap } = {}): string {
   const o = obj(p);
+  const b = structured(p);
+  const tc = b.target_customer;
   const company = obj(o.company);
   const founder = obj(o.founder);
   const lines: string[] = [];
@@ -102,25 +133,26 @@ export function buildCompanyBrainContext(p: Profile): string {
   const icp = brainICP(p);
   if (icp) lines.push(`ICP: ${icp}`);
 
-  const icpObj = obj(o.icp);
-  const disq = arr(icpObj.disqualifiers);
+  if (tc.must_have.length) lines.push(`Must have: ${tc.must_have.join("; ")}`);
+  if (tc.nice_to_have.length) lines.push(`Nice to have: ${tc.nice_to_have.join("; ")}`);
+  const disq = flattenDisqualifiers(tc.disqualifiers);
   if (disq.length) lines.push(`Disqualifiers: ${disq.join(", ")}`);
+  const qual = b.qualification_rules;
+  if (qual.required_evidence.length) lines.push(`Qualify only with evidence of: ${qual.required_evidence.join("; ")}`);
+  if (qual.manual_review_if.length) lines.push(`Send to review if: ${qual.manual_review_if.join("; ")}`);
+  if (qual.reject_if.length) lines.push(`Reject if: ${qual.reject_if.join("; ")}`);
 
   // Compiled-brain signals consumed by content, agents and outreach drafting.
   // v2 fields preferred, legacy fallback; only present fields render (never invented).
-  const painPoints = uniq([...arr(o.pain_points), ...arr(icpObj.pain_points)]);
-  if (painPoints.length) lines.push(`Pain points: ${painPoints.join("; ")}`);
-  const triggers = arr(o.triggers);
-  if (triggers.length) lines.push(`Triggers: ${triggers.join(", ")}`);
+  if (b.pain_points.length) lines.push(`Pain points: ${b.pain_points.join("; ")}`);
+  if (b.triggers.length) lines.push(`Triggers: ${b.triggers.join(", ")}`);
+  if (b.jobs_to_watch.length) lines.push(`Roles to watch for: ${b.jobs_to_watch.join(", ")}`);
   const contentAngles = arr(o.content_angles);
   if (contentAngles.length) lines.push(`Content angles: ${contentAngles.join("; ")}`);
 
   // Honesty layer: when the Brain lacks a workable ICP (no industries+buyers and
   // no must-have), agents/content/outreach must ask for setup, not fabricate a fit.
-  const icpIndustries = uniq([...arr(icpObj.industries), ...arr(obj(o.target_customer).industries)]);
-  const icpBuyers = uniq([...arr(icpObj.buyer_roles), ...arr(o.buyer_personas)]);
-  const mustHave = arr(obj(o.target_customer).must_have);
-  const setupRequired = !((icpIndustries.length && icpBuyers.length) || mustHave.length);
+  const setupRequired = !((tc.industries.length && b.buyer_personas.length) || tc.must_have.length);
   if (setupRequired) lines.push("Setup needed: Company Brain ICP incomplete — ask for target customer + buyer roles before targeting; draft low-confidence only, never claim a strong fit.");
 
   // GTM (new) – falls back to legacy goals if missing
@@ -164,12 +196,15 @@ export function buildCompanyBrainContext(p: Profile): string {
   const voiceParts = uniq([voiceStr ?? "", voiceTags.join(", ")].filter(Boolean) as string[]);
   if (voiceParts.length) lines.push(`Voice: ${voiceParts.join("; ")}`);
   if (voiceAvoid.length) lines.push(`Voice avoid: ${voiceAvoid.join(", ")}`);
+  if (b.brand_voice.style_rules.length) lines.push(`Voice rules: ${b.brand_voice.style_rules.join("; ")}`);
 
   const wfp = arr(obj(o.workflow_preferences).priority_workflows);
   if (wfp.length) lines.push(`Priority workflows: ${wfp.join(", ")}`);
 
-  // Integration readiness summary (status keys only, never secret values)
-  const integ = obj(o.integration_status);
+  // Integration readiness summary (status keys only, never secret values). The
+  // live map is preferred; a stored `integration_status` is a legacy snapshot
+  // from when integration-readiness wrote the Brain on every page visit.
+  const integ = opts.integrationStatus ? obj(opts.integrationStatus) : obj(o.integration_status);
   const ready: string[] = [];
   const setupNeeded: string[] = [];
   for (const k of Object.keys(integ)) {
@@ -202,11 +237,15 @@ export function buildCompanyBrainContext(p: Profile): string {
  * brain is not ready and must not invent an ICP. Passing the real flag (rather
  * than a hardcoded null) is what makes the active brain reach the agents.
  */
-export function renderCompanyBrainBlock(p: Profile, onboardingCompleted?: boolean | null): string {
+export function renderCompanyBrainBlock(
+  p: Profile,
+  onboardingCompleted?: boolean | null,
+  opts: { integrationStatus?: IntegrationStatusMap } = {},
+): string {
   if (!hasUsableBrain(p, onboardingCompleted)) {
     return "<company_brain>\n(no active company brain yet — workspace hasn't completed onboarding. Do not invent company details, ICP, or competitors.)\n</company_brain>";
   }
-  return `<company_brain>\n${buildCompanyBrainContext(p)}\n</company_brain>`;
+  return `<company_brain>\n${buildCompanyBrainContext(p, opts)}\n</company_brain>`;
 }
 
 /** Field-presence map so callers can honestly say "I don't have X yet." */

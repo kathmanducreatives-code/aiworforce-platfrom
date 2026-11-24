@@ -1,0 +1,64 @@
+{
+  "company_record_one": {
+    "note": "Recorded run (TEST, lead-v2 run 1e52d43c): harvestapi/linkedin-company, 1 record. Fields the receipt reads only.",
+    "run": {
+      "id": "paRmY6609UebBnLtV",
+      "actId": "UwSdACBp7ymaGUJjS",
+      "status": "SUCCEEDED",
+      "startedAt": "2026-09-14T07:23:01.419Z",
+      "finishedAt": "2026-09-14T07:23:19.810Z",
+      "defaultDatasetId": "ezNZ0wNStfZ9lt6hE",
+      "usageTotalUsd": 0.00405,
+      "chargedEventCounts": {
+        "apify-actor-start": 1,
+        "apify-default-dataset-item": 1
+      },
+      "pricingInfo": {
+        "pricingModel": "PAY_PER_EVENT",
+        "pricingPerEvent": {
+          "actorChargeEvents": {
+            "apify-actor-start": {
+              "eventPriceUsd": 0.00005
+            },
+            "apify-default-dataset-item": {
+              "eventPriceUsd": 0.004
+            }
+          }
+        }
+      }
+    }
+  },
+  "company_search_empty": {
+    "note": "Recorded run (TEST, lead-v2 run 4250f181): harvestapi/linkedin-company-search, a concept query that returned 0 companies and still billed the start.",
+    "run": {
+      "id": "OU43gsiNE6jW4hHNf",
+      "actId": "taHaRcqil3scbchuI",
+      "status": "SUCCEEDED",
+      "startedAt": "2026-09-13T16:05:25.539Z",
+      "finishedAt": "2026-09-13T16:05:27.654Z",
+      "defaultDatasetId": "qAOn1TobgCxrqBtNI",
+      "usageTotalUsd": 0.001,
+      "chargedEventCounts": {
+        "apify-actor-start": 1,
+        "full-company": 0,
+        "short-company": 0
+      },
+      "pricingInfo": {
+        "pricingModel": "PAY_PER_EVENT",
+        "pricingPerEvent": {
+          "actorChargeEvents": {
+            "apify-actor-start": {
+              "eventPriceUsd": 0.001
+            },
+            "full-company": {
+              "eventPriceUsd": 0.004
+            },
+            "short-company": {
+              "eventPriceUsd": 0.002
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -29,6 +29,7 @@
 import {
   executabilityStateOf, type ExecutabilityGateMode, type ExecutabilityState,
 } from "./capabilityExecutability.ts";
+import { icpDiscoveryConstraints } from "./icpDiscoveryConstraints.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 import { evidenceCoversPopulation, evidenceProducedBy } from "./actorEvidenceCapability.ts";
 import { isMonitoringMission } from "./monitoringMission.ts";
@@ -749,7 +750,10 @@ function step(
 }
 
 /** P3 — the hiring requirement names a role, and the user named no cohort. */
-export function hiringLedMission(m: LeadMissionV1): boolean {
+/** The claim-verifier pair that proves a company's funding after eligibility (`fundingStageVerifier`). */
+const FUNDING_VERIFIER_ACTORS = ["apify_funding_atomus", "apify_funding_pvalyou"] as const;
+
+export function hiringLedMission(m: LeadMissionV1, o: { fundingVerifiedPerCompany?: boolean } = {}): boolean {
   if (m.target_entity === "person") return false;
   const hiring = m.required_signals.filter((s) => s.type === "hiring" && (s.subject ?? "company") === "company");
   if (hiring.length === 0) return false;
@@ -763,7 +767,14 @@ export function hiringLedMission(m: LeadMissionV1): boolean {
   // raised funding", Q3 C02): a company proving the hiring already satisfies
   // the request, so the posting is the right entry, and funding is never
   // bought for it (`anyOfResolved`).
-  if (m.required_signals.some((s) => s.type === "funding") &&
+  //
+  // Nor when funding discovery cannot run here but a funding VERIFIER can
+  // (`fundingVerifiedPerCompany`): funding is then proven per company after
+  // eligibility (atomus/pvalyou, READY), and the posting is the only selective
+  // way in. Without this the demo request ("US companies hiring AEs that raised
+  // funding within six months") fell through to an unfiltered company search
+  // that refuses to run, and found nothing.
+  if (m.required_signals.some((s) => s.type === "funding") && !o.fundingVerifiedPerCompany &&
     !crossSignalAlternatives(String(m.original_user_query ?? ""), ["hiring", "funding"])
       .some((g) => g.includes("hiring") && g.includes("funding"))) return false;
   const cohortFirst = (m.directives?.source_strategy ?? [])[0] === "startup_cohort_first";
@@ -914,6 +925,25 @@ export function buildCapabilityGraph(
     }
     return false;
   };
+  /**
+   * Funding discovery cannot run under this policy, a funding verifier can, and
+   * a company search would have nothing to select by. The last condition keeps
+   * the funding pool screen's missions (US B2B SaaS 11–50, recently funded)
+   * where they are: their profile selects a population and the screen reads it.
+   * With no industry, concept or name — "US companies hiring AEs that raised
+   * funding" — the engine refuses the unfiltered company search, so the posting
+   * is the only way in. Read without `usable`, so asking records nothing.
+   */
+  const fundingVerifiedPerCompany = () => isCapabilitySupported("funding_signal_discovery") &&
+    !runnable("funding_signal_discovery").runnable &&
+    FUNDING_VERIFIER_ACTORS.some((a) => readiness.decide(a, "funding_verification").executable) &&
+    known.length === 0 && !icpDiscoveryConstraints(mission).expresses_concept && !statesEmployeeRange();
+  // A stated size is what the funding pool screen filters its company search
+  // by (W3, canaries 5bfa76db…): those missions keep company discovery.
+  const statesEmployeeRange = () => {
+    const r = mission.company_profile.employee_range as { min?: number | null; max?: number | null } | null | undefined;
+    return !!r && (r.min != null || r.max != null);
+  };
   /** V2 gates every entry row on readiness; legacy rows are exactly as they were. */
   const entryGate = (id: CapabilityId) => !enforceExecutability || usable(id, "entry");
   const known = mission.company_profile.known_companies ?? [];
@@ -953,7 +983,8 @@ export function buildCapabilityGraph(
     { capability: "job_discovery", applies: () => mission.requested_output === "job_listings" && entryGate("job_discovery"),
       reason: () => "the requested output is job listings" },
     { capability: "job_discovery",
-      applies: () => enforceExecutability && hiringLedMission(mission) && usable("job_discovery", "entry"),
+      applies: () => enforceExecutability && hiringLedMission(mission, { fundingVerifiedPerCompany: fundingVerifiedPerCompany() }) &&
+        usable("job_discovery", "entry"),
       reason: () => `the mission is hiring-led: an open ${hiringRoleOf(mission)} role is how these companies are found` },
     { capability: "startup_company_discovery",
       applies: () => missionSaysSo && asked("startup_company_discovery") && entryGate("startup_company_discovery"),

@@ -1,0 +1,446 @@
+{
+ "summary": {
+  "cases": 80,
+  "failing": 0,
+  "by": {
+   "role": {
+    "ok": 30,
+    "unmappable": 0,
+    "dropped": 0,
+    "inverted": 0
+   },
+   "size_preference": {
+    "ok": 10,
+    "unmappable": 0,
+    "dropped": 0,
+    "inverted": 0
+   },
+   "geography": {
+    "ok": 10,
+    "unmappable": 0,
+    "dropped": 0,
+    "inverted": 0
+   },
+   "industry": {
+    "ok": 10,
+    "unmappable": 0,
+    "dropped": 0,
+    "inverted": 0
+   },
+   "role_exclusion": {
+    "ok": 10,
+    "unmappable": 0,
+    "dropped": 0,
+    "inverted": 0
+   },
+   "hiring_window": {
+    "ok": 10,
+    "unmappable": 0,
+    "dropped": 0,
+    "inverted": 0
+   }
+  }
+ },
+ "results": [
+  {
+   "category": "role",
+   "spelling": "hiring_role",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "hiring.role",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "hiring role",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "hiringRole",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "hiring_activity",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "hiring_status",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "hiring",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "open_roles",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "job_title",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "job_titles",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "signal role",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "signal.role",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "signal_role",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "role",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "roles",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "target_role",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "target_roles",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "required_role",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "role_requirement",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "position",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "positions",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "open_position",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "job_role",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "hiring_for",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "sales_role",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "role_family",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "job_function",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "function",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "signal_detail",
+   "outcome": "ok"
+  },
+  {
+   "category": "role",
+   "spelling": "signal_qualifier",
+   "outcome": "ok"
+  },
+  {
+   "category": "size_preference",
+   "spelling": "employee_range",
+   "outcome": "ok"
+  },
+  {
+   "category": "size_preference",
+   "spelling": "company_size",
+   "outcome": "ok"
+  },
+  {
+   "category": "size_preference",
+   "spelling": "headcount",
+   "outcome": "ok"
+  },
+  {
+   "category": "size_preference",
+   "spelling": "size",
+   "outcome": "ok"
+  },
+  {
+   "category": "size_preference",
+   "spelling": "employees",
+   "outcome": "ok"
+  },
+  {
+   "category": "size_preference",
+   "spelling": "employee_count",
+   "outcome": "ok"
+  },
+  {
+   "category": "size_preference",
+   "spelling": "team_size",
+   "outcome": "ok"
+  },
+  {
+   "category": "size_preference",
+   "spelling": "company_headcount",
+   "outcome": "ok"
+  },
+  {
+   "category": "size_preference",
+   "spelling": "staff_count",
+   "outcome": "ok"
+  },
+  {
+   "category": "size_preference",
+   "spelling": "number_of_employees",
+   "outcome": "ok"
+  },
+  {
+   "category": "geography",
+   "spelling": "geography",
+   "outcome": "ok"
+  },
+  {
+   "category": "geography",
+   "spelling": "location",
+   "outcome": "ok"
+  },
+  {
+   "category": "geography",
+   "spelling": "country",
+   "outcome": "ok"
+  },
+  {
+   "category": "geography",
+   "spelling": "hq",
+   "outcome": "ok"
+  },
+  {
+   "category": "geography",
+   "spelling": "headquarters",
+   "outcome": "ok"
+  },
+  {
+   "category": "geography",
+   "spelling": "hq_country",
+   "outcome": "ok"
+  },
+  {
+   "category": "geography",
+   "spelling": "region",
+   "outcome": "ok"
+  },
+  {
+   "category": "geography",
+   "spelling": "company_location",
+   "outcome": "ok"
+  },
+  {
+   "category": "geography",
+   "spelling": "based_in",
+   "outcome": "ok"
+  },
+  {
+   "category": "geography",
+   "spelling": "market",
+   "outcome": "ok"
+  },
+  {
+   "category": "industry",
+   "spelling": "industry",
+   "outcome": "ok"
+  },
+  {
+   "category": "industry",
+   "spelling": "industries",
+   "outcome": "ok"
+  },
+  {
+   "category": "industry",
+   "spelling": "vertical",
+   "outcome": "ok"
+  },
+  {
+   "category": "industry",
+   "spelling": "sector",
+   "outcome": "ok"
+  },
+  {
+   "category": "industry",
+   "spelling": "company_type",
+   "outcome": "ok"
+  },
+  {
+   "category": "industry",
+   "spelling": "market_segment",
+   "outcome": "ok"
+  },
+  {
+   "category": "industry",
+   "spelling": "business_type",
+   "outcome": "ok"
+  },
+  {
+   "category": "industry",
+   "spelling": "category",
+   "outcome": "ok"
+  },
+  {
+   "category": "industry",
+   "spelling": "niche",
+   "outcome": "ok"
+  },
+  {
+   "category": "industry",
+   "spelling": "domain",
+   "outcome": "ok"
+  },
+  {
+   "category": "role_exclusion",
+   "spelling": "excluded_roles",
+   "outcome": "ok"
+  },
+  {
+   "category": "role_exclusion",
+   "spelling": "exclude_roles",
+   "outcome": "ok"
+  },
+  {
+   "category": "role_exclusion",
+   "spelling": "excluded_role_terms",
+   "outcome": "ok"
+  },
+  {
+   "category": "role_exclusion",
+   "spelling": "role_exclusions",
+   "outcome": "ok"
+  },
+  {
+   "category": "role_exclusion",
+   "spelling": "excluded_titles",
+   "outcome": "ok"
+  },
+  {
+   "category": "role_exclusion",
+   "spelling": "not_roles",
+   "outcome": "ok"
+  },
+  {
+   "category": "role_exclusion",
+   "spelling": "exclude",
+   "outcome": "ok"
+  },
+  {
+   "category": "role_exclusion",
+   "spelling": "excluded",
+   "outcome": "ok"
+  },
+  {
+   "category": "role_exclusion",
+   "spelling": "roles_to_exclude",
+   "outcome": "ok"
+  },
+  {
+   "category": "role_exclusion",
+   "spelling": "negative_roles",
+   "outcome": "ok"
+  },
+  {
+   "category": "hiring_window",
+   "spelling": "hiring_window",
+   "outcome": "ok"
+  },
+  {
+   "category": "hiring_window",
+   "spelling": "hiring_signal_recency",
+   "outcome": "ok"
+  },
+  {
+   "category": "hiring_window",
+   "spelling": "posting_recency",
+   "outcome": "ok"
+  },
+  {
+   "category": "hiring_window",
+   "spelling": "recency",
+   "outcome": "ok"
+  },
+  {
+   "category": "hiring_window",
+   "spelling": "within_days",
+   "outcome": "ok"
+  },
+  {
+   "category": "hiring_window",
+   "spelling": "posted_within",
+   "outcome": "ok"
+  },
+  {
+   "category": "hiring_window",
+   "spelling": "timeframe",
+   "outcome": "ok"
+  },
+  {
+   "category": "hiring_window",
+   "spelling": "time_window",
+   "outcome": "ok"
+  },
+  {
+   "category": "hiring_window",
+   "spelling": "freshness",
+   "outcome": "ok"
+  },
+  {
+   "category": "hiring_window",
+   "spelling": "signal_recency_days",
+   "outcome": "ok"
+  }
+ ]
+}

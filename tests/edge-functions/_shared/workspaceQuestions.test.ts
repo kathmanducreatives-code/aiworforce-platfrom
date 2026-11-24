@@ -202,20 +202,21 @@ Deno.test("1. pending for me: 0 pending approvals, said directly — evidence-wa
   const withOne = await ask("What's pending for me right now?", { tables: { ...BASE,
     approvals: [{ id: "ap1", workspace_id: WS, status: "pending", agent_slug: "penn", title: "Outreach to Salvo Software", created_at: "2026-10-01T09:00:00Z" }] } });
   assertStringIncludes(withOne.a.text, "1 item waiting for your approval");
-  assertStringIncludes(withOne.a.text, "Mira: Outreach to Salvo Software");
+  assertStringIncludes(withOne.a.text, "Lyra: Outreach to Salvo Software");
 });
 
-Deno.test("2. Lyra today: real timestamps — nothing today is said directly, with the last real activity", async () => {
-  const { a } = await ask("What has Lyra been working on today?");
-  assertMatch(a.text, /^Lyra hasn't worked on anything today \(UTC\)\./);
+Deno.test("2. Atlas today: real timestamps — nothing today is said directly, with the last real activity", async () => {
+  // Workforce V2: sourcing tasks (backend `scout`) are Atlas's.
+  const { a } = await ask("What has Atlas been working on today?");
+  assertMatch(a.text, /^Atlas hasn't worked on anything today \(UTC\)\./);
   assertStringIncludes(a.text, "salvosoftware");
   assertStringIncludes(a.text, "on 30 Sept 2026");
-  const busy = await ask("What has Lyra been working on today?", { tables: { ...BASE, tasks: [
+  const busy = await ask("What has Atlas been working on today?", { tables: { ...BASE, tasks: [
     { id: "t-today", workspace_id: WS, agent_slug: "scout", status: "running", plan_id: "p-x", created_at: "2026-10-01T09:30:00Z",
       updated_at: "2026-10-01T09:31:00Z", completed_at: null, finished_at: null, query: "Find fintech companies hiring SDRs", mission_view: null },
     ...TASKS,
   ] } });
-  assertStringIncludes(busy.a.text, "Lyra — 1 task today");
+  assertStringIncludes(busy.a.text, "Atlas — 1 task today");
   assertStringIncludes(busy.a.text, "Find fintech companies hiring SDRs");
   assertFalse(busy.a.text.includes("salvosoftware"), "yesterday's work is not today's");
 });
@@ -258,7 +259,7 @@ Deno.test("6. workforce today: nothing today is said directly; activity today is
     tasks: [{ ...TASKS[0], id: "t-now", created_at: "2026-10-01T10:00:00Z", updated_at: "2026-10-01T10:05:00Z" }, ...TASKS.slice(1)],
     task_plans: [{ ...PLANS[0], completed_at: "2026-10-01T10:05:00Z" }, ...PLANS.slice(1)] } });
   assertStringIncludes(busy.a.text, "Your AI workforce — 1 task today");
-  assertStringIncludes(busy.a.text, "Lyra: 1 task");
+  assertStringIncludes(busy.a.text, "Atlas: 1 task");
   assertStringIncludes(busy.a.text, "1 qualified, 0 pending, 0 ruled out");
   assertStringIncludes(busy.a.text, "1 workflow completed");
 });
@@ -404,10 +405,10 @@ Deno.test("TODAY: midnight in the client's zone, from real timestamps; an unknow
   assertEquals(safeTimeZone(undefined), "UTC");
   const lateTask = { ...TASKS[0], id: "t-late", created_at: "2026-09-30T20:00:00Z", updated_at: "2026-09-30T20:00:00Z" };
   const tables = { ...BASE, tasks: [lateTask, ...TASKS.slice(1)] };
-  const ktm = await ask("What has Lyra been working on today?", { tables, tz: "Asia/Kathmandu", now });
-  assertStringIncludes(ktm.a.text, "Lyra — 1 task today:");
-  const utc = await ask("What has Lyra been working on today?", { tables, tz: "UTC", now });
-  assertMatch(utc.a.text, /^Lyra hasn't worked on anything today \(UTC\)/);
+  const ktm = await ask("What has Atlas been working on today?", { tables, tz: "Asia/Kathmandu", now });
+  assertStringIncludes(ktm.a.text, "Atlas — 1 task today:");
+  const utc = await ask("What has Atlas been working on today?", { tables, tz: "UTC", now });
+  assertMatch(utc.a.text, /^Atlas hasn't worked on anything today \(UTC\)/);
 });
 
 // ══ 5. THE GUARANTEES ══════════════════════════════════════════════════════
@@ -419,7 +420,7 @@ Deno.test("ZERO SPEND: the module imports nothing — no provider, registry, eng
 
 Deno.test("PILOT-CHAT answers these BEFORE Chat Brain, as a reply — never a Start card", () => {
   const src = Deno.readTextFileSync(new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
-  const gate = src.indexOf("const workspaceQuestion =");
+  const gate = src.indexOf("let workspaceQuestion =");
   const brain = src.indexOf("await understandRequest(");
   assert(gate > 0 && src.slice(gate, gate + 200).includes("classifyWorkspaceQuestion(message)"),
     "pilot-chat must consult the workspace-question recogniser");
@@ -438,8 +439,11 @@ Deno.test("AGENT NAMES mirror the public registry (src/config/agentRegistry.ts)"
     const block = src.slice(src.indexOf(`id: '${id}'`));
     const m = block.match(/legacySlugs:\s*\[([^\]]*)\]/);
     assert(m, id);
-    assertEquals(m[1].match(/'([a-z]+)'/g)!.map((x) => x.replace(/'/g, "")), [...slugs], id);
+    assertEquals((m[1].match(/'([a-z]+)'/g) ?? []).map((x) => x.replace(/'/g, "")), [...slugs], id);
   }
-  assertEquals(publicAgentOf("scout"), "lyra");
+  // Workforce V2: sourcing is ATLAS's, content LYRA's, the coordinator ORION.
+  assertEquals(publicAgentOf("scout"), "atlas");
+  assertEquals(publicAgentOf("scribe"), "lyra");
+  assertEquals(publicAgentOf("pilot"), "orion");
   assertEquals(publicAgentOf("Lyra"), "lyra");
 });

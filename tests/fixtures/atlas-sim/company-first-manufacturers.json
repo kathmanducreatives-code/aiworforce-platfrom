@@ -1,0 +1,154 @@
+{
+ "name": "company-first-manufacturers",
+ "description": "Company-first discovery (flag on): US manufacturers, 20–200 employees. Location, industry and size narrow the search at the source; HQ and size are re-proven by each company record; industry stays a claim.",
+ "covers": [
+  "company-first discovery by industry, size and location",
+  "a leaked off-industry row is not qualified",
+  "a foreign HQ or wrong size never qualifies"
+ ],
+ "query": "Find 5 US B2B manufacturers with 20–200 employees.",
+ "requestedCount": 5,
+ "interpretation": {
+  "understanding": {
+   "roles": [],
+   "role_match": "any",
+   "places": [
+    {
+     "span": "US",
+     "place": "united states",
+     "other_place": null,
+     "scope": "headquarters",
+     "necessity": "required"
+    }
+   ],
+   "industries": [
+    {
+     "span": "B2B",
+     "industry": "B2B",
+     "necessity": "required"
+    },
+    {
+     "span": "manufacturers",
+     "industry": "manufacturing",
+     "necessity": "required"
+    }
+   ],
+   "signals": [],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": []
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": 5,
+   "count_span": "5",
+   "person_roles": []
+  },
+  "company_size": {
+   "min": 20,
+   "max": 200,
+   "necessity": "required",
+   "span": "20–200 employees"
+  },
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [
+  {
+   "slug": "ridgeline",
+   "name": "Ridgeline Fabrication",
+   "site": "ridgeline.example",
+   "industry": "Manufacturing",
+   "employees": 120,
+   "model": "b2b_service",
+   "page": "Ridgeline Fabrication builds steel enclosures for OEMs and industrial equipment makers."
+  },
+  {
+   "slug": "kettle",
+   "name": "Kettle Valve Works",
+   "site": "kettle.example",
+   "industry": "Manufacturing",
+   "employees": 60,
+   "model": "b2b_service",
+   "page": "Kettle Valve Works manufactures valves for process plants and engineering firms."
+  },
+  {
+   "slug": "brightcast",
+   "name": "Brightcast Plastics",
+   "site": "brightcast.example",
+   "industry": "Manufacturing",
+   "employees": 180,
+   "model": "b2b_service",
+   "page": "Brightcast Plastics molds parts for automotive suppliers and manufacturers."
+  },
+  {
+   "slug": "northforge",
+   "name": "Northforge Metals",
+   "site": "northforge.example",
+   "industry": "Manufacturing",
+   "employees": 90,
+   "model": "b2b_service",
+   "page": "Northforge supplies metal stampings to manufacturers.",
+   "hq": {
+    "text": "Hamilton, Ontario, Canada",
+    "country": "CA",
+    "countryFull": "Canada",
+    "city": "Hamilton"
+   }
+  },
+  {
+   "slug": "megamill",
+   "name": "MegaMill Industries",
+   "site": "megamill.example",
+   "industry": "Manufacturing",
+   "employees": 4000,
+   "model": "b2b_service",
+   "page": "MegaMill is a global industrial conglomerate."
+  },
+  {
+   "slug": "appnest",
+   "name": "AppNest Software",
+   "site": "appnest.example",
+   "industry": "Software Development",
+   "employees": 70,
+   "model": "b2b_software",
+   "page": "AppNest builds scheduling software for clinics.",
+   "leaksThroughFilter": true
+  },
+  {
+   "slug": "cozyhome",
+   "name": "CozyHome Candles",
+   "site": "cozyhome.example",
+   "industry": "Manufacturing",
+   "employees": 40,
+   "model": "consumer",
+   "page": "CozyHome Candles makes scented candles for homeowners and gift shoppers."
+  }
+ ],
+ "flags": {
+  "LEAD_PIPELINE_COMPANY_SEARCH": "true"
+ },
+ "allowReviewOnly": true,
+ "expect": {
+  "planStatus": 200,
+  "planState": "ready",
+  "runStatuses": [
+   200
+  ],
+  "outcome": "needs_verification",
+  "qualified": [],
+  "needsVerification": [
+   "AppNest Software",
+   "Brightcast Plastics",
+   "CozyHome Candles",
+   "Kettle Valve Works",
+   "Ridgeline Fabrication"
+  ],
+  "excluded": 0,
+  "leadsSaved": 5,
+  "actorCalls": 2,
+  "persistFailed": 0,
+  "rejected": []
+ }
+}
